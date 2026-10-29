@@ -1243,2537 +1243,6 @@
   },
   {
     "type": "dependency",
-    "from": "src/modules/api-reference/components/ApiOperationDetail.vue",
-    "to": "src/modules/documents/components/MarkdownView.vue",
-    "unresolvedTo": "@/modules/documents/components/MarkdownView.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/api-reference/components/ApiReferenceView.vue",
-    "to": "src/modules/documents/components/MarkdownView.vue",
-    "unresolvedTo": "@/modules/documents/components/MarkdownView.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/api-reference/components/TestFixtureView.vue",
-    "to": "src/modules/documents/components/MarkdownView.vue",
-    "unresolvedTo": "@/modules/documents/components/MarkdownView.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/assistant/components/AgentLearningsPanel.vue",
-    "to": "src/modules/merge-requests/model/use-agent-names.ts",
-    "unresolvedTo": "@/modules/merge-requests/model/use-agent-names",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/assistant/components/AiSkillsPanel.vue",
-    "to": "src/modules/documents/components/DiffView.vue",
-    "unresolvedTo": "@/modules/documents/components/DiffView.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/assistant/components/AiUsagePanel.vue",
-    "to": "src/modules/insights/components/DailyBars.vue",
-    "unresolvedTo": "@/modules/insights/components/DailyBars.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/assistant/components/ChatComposer.vue",
-    "to": "src/modules/documents/components/DocumentPickerWidget.vue",
-    "unresolvedTo": "@/modules/documents/components/DocumentPickerWidget.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "type-only",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/assistant/components/ChatMessage.vue",
-    "to": "src/modules/documents/components/GenerativeUiBlock.vue",
-    "unresolvedTo": "@/modules/documents/components/GenerativeUiBlock.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/assistant/components/ChatMessage.vue",
-    "to": "src/modules/documents/components/MarkdownView.vue",
-    "unresolvedTo": "@/modules/documents/components/MarkdownView.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/assistant/components/ChatTranscript.vue",
-    "to": "src/modules/documents/components/GenerativeUiBlock.vue",
-    "unresolvedTo": "@/modules/documents/components/GenerativeUiBlock.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/assistant/components/ChatTranscript.vue",
-    "to": "src/modules/documents/components/MarkdownView.vue",
-    "unresolvedTo": "@/modules/documents/components/MarkdownView.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/assistant/components/TeachAgentDialog.vue",
-    "to": "src/modules/merge-requests/model/use-agent-names.ts",
-    "unresolvedTo": "@/modules/merge-requests/model/use-agent-names",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/assistant/model/citations.ts",
-    "to": "src/modules/documents/model/verification-tone.ts",
-    "unresolvedTo": "@/modules/documents/model/verification-tone",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "export"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/connectors/components/ChatSubscriptionEditor.vue",
-    "to": "src/modules/documents/model/tag-options.ts",
-    "unresolvedTo": "@/modules/documents/model/tag-options",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/connectors/components/ConnectDialog.vue",
-    "to": "src/modules/editor/components/ImportStepper.vue",
-    "unresolvedTo": "@/modules/editor/components/ImportStepper.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/connectors/components/ConnectionList.vue",
-    "to": "src/modules/assistant/components/AiEmptyState.vue",
-    "unresolvedTo": "@/modules/assistant/components/AiEmptyState.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/connectors/components/ConnectorItemReview.vue",
-    "to": "src/modules/documents/components/DiffView.vue",
-    "unresolvedTo": "@/modules/documents/components/DiffView.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/connectors/components/ConnectorItemReview.vue",
-    "to": "src/modules/editor/components/RichEditor.vue",
-    "unresolvedTo": "@/modules/editor/components/RichEditor.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/connectors/components/ConnectorLinks.vue",
-    "to": "src/modules/assistant/components/AiEmptyState.vue",
-    "unresolvedTo": "@/modules/assistant/components/AiEmptyState.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/connectors/components/ConnectorList.vue",
-    "to": "src/modules/assistant/components/AiEmptyState.vue",
-    "unresolvedTo": "@/modules/assistant/components/AiEmptyState.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/connectors/components/ConnectorRail.vue",
-    "to": "src/modules/api-reference/components/ApiDriftCheck.vue",
-    "unresolvedTo": "@/modules/api-reference/components/ApiDriftCheck.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/connectors/components/ConnectorRuns.vue",
-    "to": "src/modules/assistant/components/AiEmptyState.vue",
-    "unresolvedTo": "@/modules/assistant/components/AiEmptyState.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/connectors/components/ConnectorRunTree.vue",
-    "to": "src/modules/assistant/components/AiEmptyState.vue",
-    "unresolvedTo": "@/modules/assistant/components/AiEmptyState.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/connectors/components/ConnectorSetupDialog.vue",
-    "to": "src/modules/editor/components/ImportStepper.vue",
-    "unresolvedTo": "@/modules/editor/components/ImportStepper.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/connectors/components/ConnectorTrackerSettings.vue",
-    "to": "src/modules/documents/components/OwnerPicker.vue",
-    "unresolvedTo": "@/modules/documents/components/OwnerPicker.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/connectors/pages/ConnectorRunPage.vue",
-    "to": "src/modules/assistant/components/AiEmptyState.vue",
-    "unresolvedTo": "@/modules/assistant/components/AiEmptyState.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/connectors/pages/ConnectorRunPage.vue",
-    "to": "src/modules/editor/components/ParseProgress.vue",
-    "unresolvedTo": "@/modules/editor/components/ParseProgress.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/components/ActivityFeed.vue",
-    "to": "src/modules/merge-requests/model/mr-ui.ts",
-    "unresolvedTo": "@/modules/merge-requests/model/mr-ui",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/components/ActivityFeed.vue",
-    "to": "src/modules/merge-requests/model/use-members.ts",
-    "unresolvedTo": "@/modules/merge-requests/model/use-members",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/components/AskAssistant.vue",
-    "to": "src/modules/assistant/components/AnswerFeedback.vue",
-    "unresolvedTo": "@/modules/assistant/components/AnswerFeedback.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/components/DiffView.vue",
-    "to": "src/modules/merge-requests/model/thread-anchors.ts",
-    "unresolvedTo": "@/modules/merge-requests/model/thread-anchors",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/components/DocumentCanvas.vue",
-    "to": "src/modules/editor/components/extensions/comment-anchors.ts",
-    "unresolvedTo": "@/modules/editor/components/extensions/comment-anchors",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/components/DocumentCanvas.vue",
-    "to": "src/modules/editor/components/RichEditor.vue",
-    "unresolvedTo": "@/modules/editor/components/RichEditor.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/components/DocumentCanvas.vue",
-    "to": "src/modules/editor/model/use-embed-status.ts",
-    "unresolvedTo": "@/modules/editor/model/use-embed-status",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/components/DocumentCanvas.vue",
-    "to": "src/modules/merge-requests/components/CommentComposer.vue",
-    "unresolvedTo": "@/modules/merge-requests/components/CommentComposer.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/components/DocumentCanvas.vue",
-    "to": "src/modules/merge-requests/components/ThreadCard.vue",
-    "unresolvedTo": "@/modules/merge-requests/components/ThreadCard.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/components/DocumentCanvas.vue",
-    "to": "src/modules/merge-requests/model/use-members.ts",
-    "unresolvedTo": "@/modules/merge-requests/model/use-members",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/components/GraphCanvas.vue",
-    "to": "src/modules/api-reference/model/use-operation.ts",
-    "unresolvedTo": "@/modules/api-reference/model/use-operation",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/components/KnowledgeIssuesRail.vue",
-    "to": "src/modules/assistant/model/feedback.store.ts",
-    "unresolvedTo": "@/modules/assistant/model/feedback.store",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/components/MarkdownView.vue",
-    "to": "src/modules/editor/model/embeds.ts",
-    "unresolvedTo": "@/modules/editor/model/embeds",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/components/OwnerPicker.vue",
-    "to": "src/modules/merge-requests/model/use-members.ts",
-    "unresolvedTo": "@/modules/merge-requests/model/use-members",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/components/PageAiActions.vue",
-    "to": "src/modules/access/model/mcp-clients.ts",
-    "unresolvedTo": "@/modules/access/model/mcp-clients",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/components/ReportIssueDialog.vue",
-    "to": "src/modules/assistant/model/feedback.store.ts",
-    "unresolvedTo": "@/modules/assistant/model/feedback.store",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/components/RevisionsView.vue",
-    "to": "src/modules/api-reference/components/ApiChangesPanel.vue",
-    "unresolvedTo": "@/modules/api-reference/components/ApiChangesPanel.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/components/TreeRowMenu.vue",
-    "to": "src/modules/access/components/PageAccessDialog.vue",
-    "unresolvedTo": "@/modules/access/components/PageAccessDialog.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "dynamic-import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/components/TreeRowMenu.vue",
-    "to": "src/modules/templates/model/templates.store.ts",
-    "unresolvedTo": "@/modules/templates/model/templates.store",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/components/VerificationBar.vue",
-    "to": "src/modules/merge-requests/model/use-members.ts",
-    "unresolvedTo": "@/modules/merge-requests/model/use-members",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/model/ai-actions.ts",
-    "to": "src/modules/access/model/mcp-clients.ts",
-    "unresolvedTo": "../../access/model/mcp-clients",
-    "dependencyTypes": [
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/access/components/PageAccessDialog.vue",
-    "unresolvedTo": "@/modules/access/components/PageAccessDialog.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/access/components/RequestAccessCard.vue",
-    "unresolvedTo": "@/modules/access/components/RequestAccessCard.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/access/model/mention-access.ts",
-    "unresolvedTo": "@/modules/access/model/mention-access",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/api-reference/components/ApiOperationIndex.vue",
-    "unresolvedTo": "@/modules/api-reference/components/ApiOperationIndex.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/api-reference/components/ApiReferenceView.vue",
-    "unresolvedTo": "@/modules/api-reference/components/ApiReferenceView.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "dynamic-import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/api-reference/components/TestFixtureView.vue",
-    "unresolvedTo": "@/modules/api-reference/components/TestFixtureView.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "dynamic-import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/api-reference/model/use-api-reference.ts",
-    "unresolvedTo": "@/modules/api-reference/model/use-api-reference",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/connectors/components/ComponentDeclarationNotice.vue",
-    "unresolvedTo": "@/modules/connectors/components/ComponentDeclarationNotice.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/connectors/components/ConnectorRail.vue",
-    "unresolvedTo": "@/modules/connectors/components/ConnectorRail.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/connectors/components/UsedByRail.vue",
-    "unresolvedTo": "@/modules/connectors/components/UsedByRail.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/editor/components/CollabDraftBadge.vue",
-    "unresolvedTo": "@/modules/editor/components/CollabDraftBadge.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/editor/model/working-copy.ts",
-    "unresolvedTo": "@/modules/editor/model/working-copy",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/insights/components/PageInsightsRail.vue",
-    "unresolvedTo": "@/modules/insights/components/PageInsightsRail.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/insights/components/QualityRail.vue",
-    "unresolvedTo": "@/modules/insights/components/QualityRail.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/insights/model/use-page-view.ts",
-    "unresolvedTo": "@/modules/insights/model/use-page-view",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/merge-requests/components/MergeRequestList.vue",
-    "unresolvedTo": "@/modules/merge-requests/components/MergeRequestList.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/merge-requests/components/ThreadCard.vue",
-    "unresolvedTo": "@/modules/merge-requests/components/ThreadCard.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/merge-requests/model/use-members.ts",
-    "unresolvedTo": "@/modules/merge-requests/model/use-members",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/templates/components/SaveAsTemplateDialog.vue",
-    "unresolvedTo": "@/modules/templates/components/SaveAsTemplateDialog.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "type-only",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/templates/model/templates.store.ts",
-    "unresolvedTo": "@/modules/templates/model/templates.store",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/workflows/components/WorkflowRail.vue",
-    "unresolvedTo": "@/modules/workflows/components/WorkflowRail.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/GlossaryPage.vue",
-    "to": "src/modules/editor/components/RichEditor.vue",
-    "unresolvedTo": "@/modules/editor/components/RichEditor.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/components/EditorAiPanel.vue",
-    "to": "src/modules/assistant/components/ChatPane.vue",
-    "unresolvedTo": "@/modules/assistant/components/ChatPane.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/components/EditorAiPanel.vue",
-    "to": "src/modules/assistant/components/ChatRail.vue",
-    "unresolvedTo": "@/modules/assistant/components/ChatRail.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/components/EditorAiPanel.vue",
-    "to": "src/modules/assistant/components/ThreadDialogs.vue",
-    "unresolvedTo": "@/modules/assistant/components/ThreadDialogs.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/components/EditorAiPanel.vue",
-    "to": "src/modules/assistant/model/assistant.store.ts",
-    "unresolvedTo": "@/modules/assistant/model/assistant.store",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/components/EditorAiPanel.vue",
-    "to": "src/modules/assistant/model/thread-label.ts",
-    "unresolvedTo": "@/modules/assistant/model/thread-label",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/components/extensions/glossary-terms.ts",
-    "to": "src/modules/documents/model/glossary.ts",
-    "unresolvedTo": "@/modules/documents/model/glossary",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/components/ImportReview.vue",
-    "to": "src/modules/templates/model/templates.store.ts",
-    "unresolvedTo": "@/modules/templates/model/templates.store",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/components/nodes/ApiContractNode.vue",
-    "to": "src/modules/api-reference/components/ApiOperationEmbed.vue",
-    "unresolvedTo": "@/modules/api-reference/components/ApiOperationEmbed.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/components/nodes/ApiContractNode.vue",
-    "to": "src/modules/api-reference/components/ApiOperationPicker.vue",
-    "unresolvedTo": "@/modules/api-reference/components/ApiOperationPicker.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "type-only",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/components/nodes/ApiContractNode.vue",
-    "to": "src/modules/api-reference/model/api-spec.ts",
-    "unresolvedTo": "@/modules/api-reference/model/api-spec",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/components/nodes/ApiContractNode.vue",
-    "to": "src/modules/api-reference/model/use-operation.ts",
-    "unresolvedTo": "@/modules/api-reference/model/use-operation",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/components/nodes/ApiSectionNode.vue",
-    "to": "src/modules/api-reference/components/ApiBlockRows.vue",
-    "unresolvedTo": "@/modules/api-reference/components/ApiBlockRows.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/components/nodes/ApiSectionNode.vue",
-    "to": "src/modules/api-reference/components/ApiDisclosure.vue",
-    "unresolvedTo": "@/modules/api-reference/components/ApiDisclosure.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/components/nodes/ApiSectionNode.vue",
-    "to": "src/modules/api-reference/model/api-block-rows.ts",
-    "unresolvedTo": "@/modules/api-reference/model/api-block-rows",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/components/RichEditor.vue",
-    "to": "src/modules/documents/model/page-refs.ts",
-    "unresolvedTo": "@/modules/documents/model/page-refs",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "type-only",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/components/RichEditor.vue",
-    "to": "src/modules/templates/model/templates.store.ts",
-    "unresolvedTo": "@/modules/templates/model/templates.store",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/model/use-working-copy.ts",
-    "to": "src/modules/documents/model/page-source.ts",
-    "unresolvedTo": "@/modules/documents/model/page-source",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/model/working-copy.spec.ts",
-    "to": "src/modules/documents/model/page-source.ts",
-    "unresolvedTo": "../../documents/model/page-source",
-    "dependencyTypes": [
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/model/working-copy.ts",
-    "to": "src/modules/documents/model/page-source.ts",
-    "unresolvedTo": "../../documents/model/page-source",
-    "dependencyTypes": [
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/pages/EditorPage.vue",
-    "to": "src/modules/access/components/PageAccessDialog.vue",
-    "unresolvedTo": "@/modules/access/components/PageAccessDialog.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/pages/EditorPage.vue",
-    "to": "src/modules/api-reference/components/ApiOperationPicker.vue",
-    "unresolvedTo": "@/modules/api-reference/components/ApiOperationPicker.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "type-only",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/pages/EditorPage.vue",
-    "to": "src/modules/api-reference/components/ApiOperationRef.vue",
-    "unresolvedTo": "@/modules/api-reference/components/ApiOperationRef.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/pages/EditorPage.vue",
-    "to": "src/modules/assistant/model/assistant.store.ts",
-    "unresolvedTo": "@/modules/assistant/model/assistant.store",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/pages/EditorPage.vue",
-    "to": "src/modules/documents/components/DiffView.vue",
-    "unresolvedTo": "@/modules/documents/components/DiffView.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/pages/EditorPage.vue",
-    "to": "src/modules/documents/model/page-source.ts",
-    "unresolvedTo": "@/modules/documents/model/page-source",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/pages/EditorPage.vue",
-    "to": "src/modules/templates/components/SaveAsTemplateDialog.vue",
-    "unresolvedTo": "@/modules/templates/components/SaveAsTemplateDialog.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "type-only",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/pages/EditorPage.vue",
-    "to": "src/modules/templates/model/templates.store.ts",
-    "unresolvedTo": "@/modules/templates/model/templates.store",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/pages/ImportPage.vue",
-    "to": "src/modules/templates/components/SaveAsTemplateDialog.vue",
-    "unresolvedTo": "@/modules/templates/components/SaveAsTemplateDialog.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "type-only",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/pages/ImportPage.vue",
-    "to": "src/modules/templates/model/templates.store.ts",
-    "unresolvedTo": "@/modules/templates/model/templates.store",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/help/pages/DocsArticlePage.vue",
-    "to": "src/modules/documents/components/MarkdownView.vue",
-    "unresolvedTo": "@/modules/documents/components/MarkdownView.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/insights/components/AgentOutcomesPanel.vue",
-    "to": "src/modules/merge-requests/model/use-agent-names.ts",
-    "unresolvedTo": "@/modules/merge-requests/model/use-agent-names",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/insights/components/HealthBulkBar.vue",
-    "to": "src/modules/documents/components/OwnerPicker.vue",
-    "unresolvedTo": "@/modules/documents/components/OwnerPicker.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/insights/components/HealthBulkBar.vue",
-    "to": "src/modules/documents/model/verification-ui.ts",
-    "unresolvedTo": "@/modules/documents/model/verification-ui",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/insights/components/HealthFilters.vue",
-    "to": "src/modules/merge-requests/model/use-members.ts",
-    "unresolvedTo": "@/modules/merge-requests/model/use-members",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/insights/components/HealthPreviewSheet.vue",
-    "to": "src/modules/documents/components/MarkdownView.vue",
-    "unresolvedTo": "@/modules/documents/components/MarkdownView.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/insights/components/HealthPreviewSheet.vue",
-    "to": "src/modules/documents/components/VerificationBar.vue",
-    "unresolvedTo": "@/modules/documents/components/VerificationBar.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/insights/components/HealthTable.vue",
-    "to": "src/modules/documents/components/VerificationBadge.vue",
-    "unresolvedTo": "@/modules/documents/components/VerificationBadge.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/insights/components/HealthTable.vue",
-    "to": "src/modules/merge-requests/model/use-members.ts",
-    "unresolvedTo": "@/modules/merge-requests/model/use-members",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/merge-requests/components/CommentComposer.vue",
-    "to": "src/modules/editor/components/RichEditor.vue",
-    "unresolvedTo": "@/modules/editor/components/RichEditor.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/merge-requests/components/MrSidebar.vue",
-    "to": "src/modules/editor/components/CollabDraftBadge.vue",
-    "unresolvedTo": "@/modules/editor/components/CollabDraftBadge.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/merge-requests/components/ThreadCard.vue",
-    "to": "src/modules/assistant/components/TeachAgentDialog.vue",
-    "unresolvedTo": "@/modules/assistant/components/TeachAgentDialog.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/merge-requests/components/ThreadCard.vue",
-    "to": "src/modules/documents/components/MarkdownView.vue",
-    "unresolvedTo": "@/modules/documents/components/MarkdownView.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/merge-requests/pages/MergeRequestDetailPage.vue",
-    "to": "src/modules/access/model/mention-access.ts",
-    "unresolvedTo": "@/modules/access/model/mention-access",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/merge-requests/pages/MergeRequestDetailPage.vue",
-    "to": "src/modules/api-reference/components/ApiChangesPanel.vue",
-    "unresolvedTo": "@/modules/api-reference/components/ApiChangesPanel.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/merge-requests/pages/MergeRequestDetailPage.vue",
-    "to": "src/modules/documents/components/DiffView.vue",
-    "unresolvedTo": "@/modules/documents/components/DiffView.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/merge-requests/pages/MergeRequestDetailPage.vue",
-    "to": "src/modules/documents/components/DocumentCanvas.vue",
-    "unresolvedTo": "@/modules/documents/components/DocumentCanvas.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/merge-requests/pages/MergeRequestDetailPage.vue",
-    "to": "src/modules/documents/components/MarkdownView.vue",
-    "unresolvedTo": "@/modules/documents/components/MarkdownView.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/notifications/components/NotificationRow.vue",
-    "to": "src/modules/merge-requests/model/mr-ui.ts",
-    "unresolvedTo": "@/modules/merge-requests/model/mr-ui",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/notifications/components/NotificationRow.vue",
-    "to": "src/modules/merge-requests/model/use-members.ts",
-    "unresolvedTo": "@/modules/merge-requests/model/use-members",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/projects/pages/ProjectDetailPage.vue",
-    "to": "src/modules/access/components/AvatarPicker.vue",
-    "unresolvedTo": "@/modules/access/components/AvatarPicker.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/projects/pages/ProjectDetailPage.vue",
-    "to": "src/modules/access/components/PageAccessDialog.vue",
-    "unresolvedTo": "@/modules/access/components/PageAccessDialog.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/projects/pages/ProjectDetailPage.vue",
-    "to": "src/modules/access/components/RequestAccessCard.vue",
-    "unresolvedTo": "@/modules/access/components/RequestAccessCard.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/projects/pages/ProjectOverviewPage.vue",
-    "to": "src/modules/connectors/components/ConnectorList.vue",
-    "unresolvedTo": "@/modules/connectors/components/ConnectorList.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/projects/pages/ProjectOverviewPage.vue",
-    "to": "src/modules/documents/components/ActivityFeed.vue",
-    "unresolvedTo": "@/modules/documents/components/ActivityFeed.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/projects/pages/ProjectOverviewPage.vue",
-    "to": "src/modules/documents/components/ExportDialog.vue",
-    "unresolvedTo": "@/modules/documents/components/ExportDialog.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/projects/pages/ProjectOverviewPage.vue",
-    "to": "src/modules/documents/components/MarkdownView.vue",
-    "unresolvedTo": "@/modules/documents/components/MarkdownView.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/projects/pages/ProjectOverviewPage.vue",
-    "to": "src/modules/insights/components/ProjectAnalyticsSection.vue",
-    "unresolvedTo": "@/modules/insights/components/ProjectAnalyticsSection.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/projects/pages/ProjectOverviewPage.vue",
-    "to": "src/modules/insights/components/QualityDistribution.vue",
-    "unresolvedTo": "@/modules/insights/components/QualityDistribution.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/projects/pages/ProjectOverviewPage.vue",
-    "to": "src/modules/insights/model/quality-ui.ts",
-    "unresolvedTo": "@/modules/insights/model/quality-ui",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/reader/components/ShareDownload.vue",
-    "to": "src/modules/documents/components/ExportFormatPicker.vue",
-    "unresolvedTo": "@/modules/documents/components/ExportFormatPicker.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/reader/components/SiteAsk.vue",
-    "to": "src/modules/assistant/model/citations.ts",
-    "unresolvedTo": "@/modules/assistant/model/citations",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "dynamic-import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/reader/components/SiteSearch.vue",
-    "to": "src/modules/documents/components/FacetFields.vue",
-    "unresolvedTo": "@/modules/documents/components/FacetFields.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/reader/components/SiteSearch.vue",
-    "to": "src/modules/documents/components/SearchSheetFrame.vue",
-    "unresolvedTo": "@/modules/documents/components/SearchSheetFrame.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/reader/components/SiteSearch.vue",
-    "to": "src/modules/documents/model/use-search.ts",
-    "unresolvedTo": "@/modules/documents/model/use-search",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/reader/components/SiteTreeNode.vue",
-    "to": "src/modules/documents/components/TreeBranch.vue",
-    "unresolvedTo": "@/modules/documents/components/TreeBranch.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/reader/components/SiteTreeNode.vue",
-    "to": "src/modules/documents/components/TreeRow.vue",
-    "unresolvedTo": "@/modules/documents/components/TreeRow.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/reader/model/site-search-source.spec.ts",
-    "to": "src/modules/documents/model/use-search.ts",
-    "unresolvedTo": "@/modules/documents/model/use-search",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/reader/model/site-search-source.ts",
-    "to": "src/modules/documents/model/use-search.ts",
-    "unresolvedTo": "@/modules/documents/model/use-search",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/templates/components/TemplateEditor.vue",
-    "to": "src/modules/editor/components/RichEditor.vue",
-    "unresolvedTo": "@/modules/editor/components/RichEditor.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/templates/components/TemplateGalleryDialog.vue",
-    "to": "src/modules/documents/components/MarkdownView.vue",
-    "unresolvedTo": "@/modules/documents/components/MarkdownView.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/templates/components/TemplateGalleryDialog.vue",
-    "to": "src/modules/merge-requests/model/use-members.ts",
-    "unresolvedTo": "@/modules/merge-requests/model/use-members",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/templates/components/TemplateHistory.vue",
-    "to": "src/modules/documents/components/DiffView.vue",
-    "unresolvedTo": "@/modules/documents/components/DiffView.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/templates/components/TemplateHistory.vue",
-    "to": "src/modules/merge-requests/model/use-members.ts",
-    "unresolvedTo": "@/modules/merge-requests/model/use-members",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/templates/components/TemplatePlaceholderForm.vue",
-    "to": "src/modules/merge-requests/model/use-members.ts",
-    "unresolvedTo": "@/modules/merge-requests/model/use-members",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/templates/pages/TemplatesSettingsPage.vue",
-    "to": "src/modules/documents/components/MarkdownView.vue",
-    "unresolvedTo": "@/modules/documents/components/MarkdownView.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/workflows/components/WorkflowMap.vue",
-    "to": "src/modules/documents/model/graph-theme.ts",
-    "unresolvedTo": "@/modules/documents/model/graph-theme",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/workflows/components/WorkflowNodePanel.vue",
-    "to": "src/modules/api-reference/components/ApiOperationRef.vue",
-    "unresolvedTo": "@/modules/api-reference/components/ApiOperationRef.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/workflows/components/WorkflowNodePanel.vue",
-    "to": "src/modules/documents/components/MarkdownView.vue",
-    "unresolvedTo": "@/modules/documents/components/MarkdownView.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/workflows/components/WorkflowStepForm.vue",
-    "to": "src/modules/templates/model/templates.store.ts",
-    "unresolvedTo": "@/modules/templates/model/templates.store",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "module-via-index-only"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/modules/projects/pages/ProjectsPage.vue",
     "to": "src/app/shell/SwitcherCreateDialog.vue",
     "unresolvedTo": "@/app/shell/SwitcherCreateDialog.vue",
@@ -3973,6 +1442,2588 @@
   },
   {
     "type": "dependency",
+    "from": "src/modules/api-reference/components/ApiOperationDetail.vue",
+    "to": "src/modules/documents/components/MarkdownView.vue",
+    "unresolvedTo": "@/modules/documents/components/MarkdownView.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/api-reference/components/ApiReferenceView.vue",
+    "to": "src/modules/documents/components/MarkdownView.vue",
+    "unresolvedTo": "@/modules/documents/components/MarkdownView.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/api-reference/components/TestFixtureView.vue",
+    "to": "src/modules/documents/components/MarkdownView.vue",
+    "unresolvedTo": "@/modules/documents/components/MarkdownView.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/assistant/components/AgentLearningsPanel.vue",
+    "to": "src/modules/merge-requests/model/use-agent-names.ts",
+    "unresolvedTo": "@/modules/merge-requests/model/use-agent-names",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/assistant/components/AiSkillsPanel.vue",
+    "to": "src/modules/documents/components/DiffView.vue",
+    "unresolvedTo": "@/modules/documents/components/DiffView.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/assistant/components/AiUsagePanel.vue",
+    "to": "src/modules/insights/components/DailyBars.vue",
+    "unresolvedTo": "@/modules/insights/components/DailyBars.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/assistant/components/ChatComposer.vue",
+    "to": "src/modules/documents/components/DocumentPickerWidget.vue",
+    "unresolvedTo": "@/modules/documents/components/DocumentPickerWidget.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "type-only",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/assistant/components/ChatMessage.vue",
+    "to": "src/modules/documents/components/GenerativeUiBlock.vue",
+    "unresolvedTo": "@/modules/documents/components/GenerativeUiBlock.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/assistant/components/ChatMessage.vue",
+    "to": "src/modules/documents/components/MarkdownView.vue",
+    "unresolvedTo": "@/modules/documents/components/MarkdownView.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/assistant/components/ChatTranscript.vue",
+    "to": "src/modules/documents/components/GenerativeUiBlock.vue",
+    "unresolvedTo": "@/modules/documents/components/GenerativeUiBlock.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/assistant/components/ChatTranscript.vue",
+    "to": "src/modules/documents/components/MarkdownView.vue",
+    "unresolvedTo": "@/modules/documents/components/MarkdownView.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/assistant/components/TeachAgentDialog.vue",
+    "to": "src/modules/merge-requests/model/use-agent-names.ts",
+    "unresolvedTo": "@/modules/merge-requests/model/use-agent-names",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/assistant/model/citations.ts",
+    "to": "src/modules/documents/model/verification-tone.ts",
+    "unresolvedTo": "@/modules/documents/model/verification-tone",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "export"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/connectors/components/ChatSubscriptionEditor.vue",
+    "to": "src/modules/documents/model/tag-options.ts",
+    "unresolvedTo": "@/modules/documents/model/tag-options",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/connectors/components/ConnectDialog.vue",
+    "to": "src/modules/editor/components/ImportStepper.vue",
+    "unresolvedTo": "@/modules/editor/components/ImportStepper.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/connectors/components/ConnectionList.vue",
+    "to": "src/modules/assistant/components/AiEmptyState.vue",
+    "unresolvedTo": "@/modules/assistant/components/AiEmptyState.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/connectors/components/ConnectorItemReview.vue",
+    "to": "src/modules/documents/components/DiffView.vue",
+    "unresolvedTo": "@/modules/documents/components/DiffView.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/connectors/components/ConnectorItemReview.vue",
+    "to": "src/modules/editor/components/RichEditor.vue",
+    "unresolvedTo": "@/modules/editor/components/RichEditor.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/connectors/components/ConnectorLinks.vue",
+    "to": "src/modules/assistant/components/AiEmptyState.vue",
+    "unresolvedTo": "@/modules/assistant/components/AiEmptyState.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/connectors/components/ConnectorList.vue",
+    "to": "src/modules/assistant/components/AiEmptyState.vue",
+    "unresolvedTo": "@/modules/assistant/components/AiEmptyState.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/connectors/components/ConnectorRail.vue",
+    "to": "src/modules/api-reference/components/ApiDriftCheck.vue",
+    "unresolvedTo": "@/modules/api-reference/components/ApiDriftCheck.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/connectors/components/ConnectorRuns.vue",
+    "to": "src/modules/assistant/components/AiEmptyState.vue",
+    "unresolvedTo": "@/modules/assistant/components/AiEmptyState.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/connectors/components/ConnectorRunTree.vue",
+    "to": "src/modules/assistant/components/AiEmptyState.vue",
+    "unresolvedTo": "@/modules/assistant/components/AiEmptyState.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/connectors/components/ConnectorSetupDialog.vue",
+    "to": "src/modules/editor/components/ImportStepper.vue",
+    "unresolvedTo": "@/modules/editor/components/ImportStepper.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/connectors/components/ConnectorTrackerSettings.vue",
+    "to": "src/modules/documents/components/OwnerPicker.vue",
+    "unresolvedTo": "@/modules/documents/components/OwnerPicker.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/connectors/pages/ConnectorRunPage.vue",
+    "to": "src/modules/assistant/components/AiEmptyState.vue",
+    "unresolvedTo": "@/modules/assistant/components/AiEmptyState.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/connectors/pages/ConnectorRunPage.vue",
+    "to": "src/modules/editor/components/ParseProgress.vue",
+    "unresolvedTo": "@/modules/editor/components/ParseProgress.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/components/ActivityFeed.vue",
+    "to": "src/modules/merge-requests/model/mr-ui.ts",
+    "unresolvedTo": "@/modules/merge-requests/model/mr-ui",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/components/ActivityFeed.vue",
+    "to": "src/modules/merge-requests/model/use-members.ts",
+    "unresolvedTo": "@/modules/merge-requests/model/use-members",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/components/AskAssistant.vue",
+    "to": "src/modules/assistant/components/AnswerFeedback.vue",
+    "unresolvedTo": "@/modules/assistant/components/AnswerFeedback.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/components/DiffView.vue",
+    "to": "src/modules/merge-requests/model/thread-anchors.ts",
+    "unresolvedTo": "@/modules/merge-requests/model/thread-anchors",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/components/DocumentCanvas.vue",
+    "to": "src/modules/editor/components/extensions/comment-anchors.ts",
+    "unresolvedTo": "@/modules/editor/components/extensions/comment-anchors",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/components/DocumentCanvas.vue",
+    "to": "src/modules/editor/components/RichEditor.vue",
+    "unresolvedTo": "@/modules/editor/components/RichEditor.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/components/DocumentCanvas.vue",
+    "to": "src/modules/editor/model/use-embed-status.ts",
+    "unresolvedTo": "@/modules/editor/model/use-embed-status",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/components/DocumentCanvas.vue",
+    "to": "src/modules/merge-requests/components/CommentComposer.vue",
+    "unresolvedTo": "@/modules/merge-requests/components/CommentComposer.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/components/DocumentCanvas.vue",
+    "to": "src/modules/merge-requests/components/ThreadCard.vue",
+    "unresolvedTo": "@/modules/merge-requests/components/ThreadCard.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/components/DocumentCanvas.vue",
+    "to": "src/modules/merge-requests/model/use-members.ts",
+    "unresolvedTo": "@/modules/merge-requests/model/use-members",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/components/GraphCanvas.vue",
+    "to": "src/modules/api-reference/model/use-operation.ts",
+    "unresolvedTo": "@/modules/api-reference/model/use-operation",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/components/KnowledgeIssuesRail.vue",
+    "to": "src/modules/assistant/model/feedback.store.ts",
+    "unresolvedTo": "@/modules/assistant/model/feedback.store",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/components/MarkdownView.vue",
+    "to": "src/modules/editor/model/embeds.ts",
+    "unresolvedTo": "@/modules/editor/model/embeds",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/components/OwnerPicker.vue",
+    "to": "src/modules/merge-requests/model/use-members.ts",
+    "unresolvedTo": "@/modules/merge-requests/model/use-members",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/components/PageAiActions.vue",
+    "to": "src/modules/access/model/mcp-clients.ts",
+    "unresolvedTo": "@/modules/access/model/mcp-clients",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/components/ReportIssueDialog.vue",
+    "to": "src/modules/assistant/model/feedback.store.ts",
+    "unresolvedTo": "@/modules/assistant/model/feedback.store",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/components/RevisionsView.vue",
+    "to": "src/modules/api-reference/components/ApiChangesPanel.vue",
+    "unresolvedTo": "@/modules/api-reference/components/ApiChangesPanel.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/components/TreeRowMenu.vue",
+    "to": "src/modules/access/components/PageAccessDialog.vue",
+    "unresolvedTo": "@/modules/access/components/PageAccessDialog.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "dynamic-import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/components/TreeRowMenu.vue",
+    "to": "src/modules/templates/model/templates.store.ts",
+    "unresolvedTo": "@/modules/templates/model/templates.store",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/components/VerificationBar.vue",
+    "to": "src/modules/merge-requests/model/use-members.ts",
+    "unresolvedTo": "@/modules/merge-requests/model/use-members",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/model/ai-actions.ts",
+    "to": "src/modules/access/model/mcp-clients.ts",
+    "unresolvedTo": "../../access/model/mcp-clients",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
+    "to": "src/modules/access/components/PageAccessDialog.vue",
+    "unresolvedTo": "@/modules/access/components/PageAccessDialog.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
+    "to": "src/modules/access/components/RequestAccessCard.vue",
+    "unresolvedTo": "@/modules/access/components/RequestAccessCard.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
+    "to": "src/modules/access/model/mention-access.ts",
+    "unresolvedTo": "@/modules/access/model/mention-access",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
+    "to": "src/modules/api-reference/components/ApiOperationIndex.vue",
+    "unresolvedTo": "@/modules/api-reference/components/ApiOperationIndex.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
+    "to": "src/modules/api-reference/components/ApiReferenceView.vue",
+    "unresolvedTo": "@/modules/api-reference/components/ApiReferenceView.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "dynamic-import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
+    "to": "src/modules/api-reference/components/TestFixtureView.vue",
+    "unresolvedTo": "@/modules/api-reference/components/TestFixtureView.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "dynamic-import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
+    "to": "src/modules/api-reference/model/use-api-reference.ts",
+    "unresolvedTo": "@/modules/api-reference/model/use-api-reference",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
+    "to": "src/modules/connectors/components/ComponentDeclarationNotice.vue",
+    "unresolvedTo": "@/modules/connectors/components/ComponentDeclarationNotice.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
+    "to": "src/modules/connectors/components/ConnectorRail.vue",
+    "unresolvedTo": "@/modules/connectors/components/ConnectorRail.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
+    "to": "src/modules/connectors/components/UsedByRail.vue",
+    "unresolvedTo": "@/modules/connectors/components/UsedByRail.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
+    "to": "src/modules/editor/components/CollabDraftBadge.vue",
+    "unresolvedTo": "@/modules/editor/components/CollabDraftBadge.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
+    "to": "src/modules/editor/model/working-copy.ts",
+    "unresolvedTo": "@/modules/editor/model/working-copy",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
+    "to": "src/modules/insights/components/PageInsightsRail.vue",
+    "unresolvedTo": "@/modules/insights/components/PageInsightsRail.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
+    "to": "src/modules/insights/components/QualityRail.vue",
+    "unresolvedTo": "@/modules/insights/components/QualityRail.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
+    "to": "src/modules/insights/model/use-page-view.ts",
+    "unresolvedTo": "@/modules/insights/model/use-page-view",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
+    "to": "src/modules/merge-requests/components/MergeRequestList.vue",
+    "unresolvedTo": "@/modules/merge-requests/components/MergeRequestList.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
+    "to": "src/modules/merge-requests/components/ThreadCard.vue",
+    "unresolvedTo": "@/modules/merge-requests/components/ThreadCard.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
+    "to": "src/modules/merge-requests/model/use-members.ts",
+    "unresolvedTo": "@/modules/merge-requests/model/use-members",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
+    "to": "src/modules/notifications/index.ts",
+    "unresolvedTo": "@/modules/notifications",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
+    "to": "src/modules/templates/components/SaveAsTemplateDialog.vue",
+    "unresolvedTo": "@/modules/templates/components/SaveAsTemplateDialog.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "type-only",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
+    "to": "src/modules/templates/model/templates.store.ts",
+    "unresolvedTo": "@/modules/templates/model/templates.store",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
+    "to": "src/modules/workflows/components/WorkflowRail.vue",
+    "unresolvedTo": "@/modules/workflows/components/WorkflowRail.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/documents/pages/GlossaryPage.vue",
+    "to": "src/modules/editor/components/RichEditor.vue",
+    "unresolvedTo": "@/modules/editor/components/RichEditor.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/editor/components/EditorAiPanel.vue",
+    "to": "src/modules/assistant/components/ChatPane.vue",
+    "unresolvedTo": "@/modules/assistant/components/ChatPane.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/editor/components/EditorAiPanel.vue",
+    "to": "src/modules/assistant/components/ChatRail.vue",
+    "unresolvedTo": "@/modules/assistant/components/ChatRail.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/editor/components/EditorAiPanel.vue",
+    "to": "src/modules/assistant/components/ThreadDialogs.vue",
+    "unresolvedTo": "@/modules/assistant/components/ThreadDialogs.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/editor/components/EditorAiPanel.vue",
+    "to": "src/modules/assistant/model/assistant.store.ts",
+    "unresolvedTo": "@/modules/assistant/model/assistant.store",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/editor/components/EditorAiPanel.vue",
+    "to": "src/modules/assistant/model/thread-label.ts",
+    "unresolvedTo": "@/modules/assistant/model/thread-label",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/editor/components/extensions/glossary-terms.ts",
+    "to": "src/modules/documents/model/glossary.ts",
+    "unresolvedTo": "@/modules/documents/model/glossary",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/editor/components/ImportReview.vue",
+    "to": "src/modules/templates/model/templates.store.ts",
+    "unresolvedTo": "@/modules/templates/model/templates.store",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/editor/components/nodes/ApiContractNode.vue",
+    "to": "src/modules/api-reference/components/ApiOperationEmbed.vue",
+    "unresolvedTo": "@/modules/api-reference/components/ApiOperationEmbed.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/editor/components/nodes/ApiContractNode.vue",
+    "to": "src/modules/api-reference/components/ApiOperationPicker.vue",
+    "unresolvedTo": "@/modules/api-reference/components/ApiOperationPicker.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "type-only",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/editor/components/nodes/ApiContractNode.vue",
+    "to": "src/modules/api-reference/model/api-spec.ts",
+    "unresolvedTo": "@/modules/api-reference/model/api-spec",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/editor/components/nodes/ApiContractNode.vue",
+    "to": "src/modules/api-reference/model/use-operation.ts",
+    "unresolvedTo": "@/modules/api-reference/model/use-operation",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/editor/components/nodes/ApiSectionNode.vue",
+    "to": "src/modules/api-reference/components/ApiBlockRows.vue",
+    "unresolvedTo": "@/modules/api-reference/components/ApiBlockRows.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/editor/components/nodes/ApiSectionNode.vue",
+    "to": "src/modules/api-reference/components/ApiDisclosure.vue",
+    "unresolvedTo": "@/modules/api-reference/components/ApiDisclosure.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/editor/components/nodes/ApiSectionNode.vue",
+    "to": "src/modules/api-reference/model/api-block-rows.ts",
+    "unresolvedTo": "@/modules/api-reference/model/api-block-rows",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/editor/components/RichEditor.vue",
+    "to": "src/modules/documents/model/page-refs.ts",
+    "unresolvedTo": "@/modules/documents/model/page-refs",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "type-only",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/editor/components/RichEditor.vue",
+    "to": "src/modules/templates/model/templates.store.ts",
+    "unresolvedTo": "@/modules/templates/model/templates.store",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/editor/model/use-working-copy.ts",
+    "to": "src/modules/documents/model/page-source.ts",
+    "unresolvedTo": "@/modules/documents/model/page-source",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/editor/model/working-copy.spec.ts",
+    "to": "src/modules/documents/model/page-source.ts",
+    "unresolvedTo": "../../documents/model/page-source",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/editor/model/working-copy.ts",
+    "to": "src/modules/documents/model/page-source.ts",
+    "unresolvedTo": "../../documents/model/page-source",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/editor/pages/EditorPage.vue",
+    "to": "src/modules/access/components/PageAccessDialog.vue",
+    "unresolvedTo": "@/modules/access/components/PageAccessDialog.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/editor/pages/EditorPage.vue",
+    "to": "src/modules/api-reference/components/ApiOperationPicker.vue",
+    "unresolvedTo": "@/modules/api-reference/components/ApiOperationPicker.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "type-only",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/editor/pages/EditorPage.vue",
+    "to": "src/modules/api-reference/components/ApiOperationRef.vue",
+    "unresolvedTo": "@/modules/api-reference/components/ApiOperationRef.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/editor/pages/EditorPage.vue",
+    "to": "src/modules/assistant/model/assistant.store.ts",
+    "unresolvedTo": "@/modules/assistant/model/assistant.store",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/editor/pages/EditorPage.vue",
+    "to": "src/modules/documents/components/DiffView.vue",
+    "unresolvedTo": "@/modules/documents/components/DiffView.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/editor/pages/EditorPage.vue",
+    "to": "src/modules/documents/model/page-source.ts",
+    "unresolvedTo": "@/modules/documents/model/page-source",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/editor/pages/EditorPage.vue",
+    "to": "src/modules/templates/components/SaveAsTemplateDialog.vue",
+    "unresolvedTo": "@/modules/templates/components/SaveAsTemplateDialog.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "type-only",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/editor/pages/EditorPage.vue",
+    "to": "src/modules/templates/model/templates.store.ts",
+    "unresolvedTo": "@/modules/templates/model/templates.store",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/editor/pages/ImportPage.vue",
+    "to": "src/modules/templates/components/SaveAsTemplateDialog.vue",
+    "unresolvedTo": "@/modules/templates/components/SaveAsTemplateDialog.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "type-only",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/editor/pages/ImportPage.vue",
+    "to": "src/modules/templates/model/templates.store.ts",
+    "unresolvedTo": "@/modules/templates/model/templates.store",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/help/pages/DocsArticlePage.vue",
+    "to": "src/modules/documents/components/MarkdownView.vue",
+    "unresolvedTo": "@/modules/documents/components/MarkdownView.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/insights/components/AgentOutcomesPanel.vue",
+    "to": "src/modules/merge-requests/model/use-agent-names.ts",
+    "unresolvedTo": "@/modules/merge-requests/model/use-agent-names",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/insights/components/HealthBulkBar.vue",
+    "to": "src/modules/documents/components/OwnerPicker.vue",
+    "unresolvedTo": "@/modules/documents/components/OwnerPicker.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/insights/components/HealthBulkBar.vue",
+    "to": "src/modules/documents/model/verification-ui.ts",
+    "unresolvedTo": "@/modules/documents/model/verification-ui",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/insights/components/HealthFilters.vue",
+    "to": "src/modules/merge-requests/model/use-members.ts",
+    "unresolvedTo": "@/modules/merge-requests/model/use-members",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/insights/components/HealthPreviewSheet.vue",
+    "to": "src/modules/documents/components/MarkdownView.vue",
+    "unresolvedTo": "@/modules/documents/components/MarkdownView.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/insights/components/HealthPreviewSheet.vue",
+    "to": "src/modules/documents/components/VerificationBar.vue",
+    "unresolvedTo": "@/modules/documents/components/VerificationBar.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/insights/components/HealthTable.vue",
+    "to": "src/modules/documents/components/VerificationBadge.vue",
+    "unresolvedTo": "@/modules/documents/components/VerificationBadge.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/insights/components/HealthTable.vue",
+    "to": "src/modules/merge-requests/model/use-members.ts",
+    "unresolvedTo": "@/modules/merge-requests/model/use-members",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/merge-requests/components/CommentComposer.vue",
+    "to": "src/modules/editor/components/RichEditor.vue",
+    "unresolvedTo": "@/modules/editor/components/RichEditor.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/merge-requests/components/MrProvenance.vue",
+    "to": "src/modules/captures/index.ts",
+    "unresolvedTo": "@/modules/captures",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/merge-requests/components/MrSidebar.vue",
+    "to": "src/modules/editor/components/CollabDraftBadge.vue",
+    "unresolvedTo": "@/modules/editor/components/CollabDraftBadge.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/merge-requests/components/MrSidebar.vue",
+    "to": "src/modules/notifications/index.ts",
+    "unresolvedTo": "@/modules/notifications",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/merge-requests/components/ThreadCard.vue",
+    "to": "src/modules/assistant/components/TeachAgentDialog.vue",
+    "unresolvedTo": "@/modules/assistant/components/TeachAgentDialog.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/merge-requests/components/ThreadCard.vue",
+    "to": "src/modules/documents/components/MarkdownView.vue",
+    "unresolvedTo": "@/modules/documents/components/MarkdownView.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/merge-requests/pages/MergeRequestDetailPage.vue",
+    "to": "src/modules/access/model/mention-access.ts",
+    "unresolvedTo": "@/modules/access/model/mention-access",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/merge-requests/pages/MergeRequestDetailPage.vue",
+    "to": "src/modules/api-reference/components/ApiChangesPanel.vue",
+    "unresolvedTo": "@/modules/api-reference/components/ApiChangesPanel.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/merge-requests/pages/MergeRequestDetailPage.vue",
+    "to": "src/modules/documents/components/DiffView.vue",
+    "unresolvedTo": "@/modules/documents/components/DiffView.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/merge-requests/pages/MergeRequestDetailPage.vue",
+    "to": "src/modules/documents/components/DocumentCanvas.vue",
+    "unresolvedTo": "@/modules/documents/components/DocumentCanvas.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/merge-requests/pages/MergeRequestDetailPage.vue",
+    "to": "src/modules/documents/components/MarkdownView.vue",
+    "unresolvedTo": "@/modules/documents/components/MarkdownView.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/notifications/components/NotificationRow.vue",
+    "to": "src/modules/merge-requests/model/mr-ui.ts",
+    "unresolvedTo": "@/modules/merge-requests/model/mr-ui",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/notifications/components/NotificationRow.vue",
+    "to": "src/modules/merge-requests/model/use-members.ts",
+    "unresolvedTo": "@/modules/merge-requests/model/use-members",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/projects/pages/ProjectDetailPage.vue",
+    "to": "src/modules/access/components/AvatarPicker.vue",
+    "unresolvedTo": "@/modules/access/components/AvatarPicker.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/projects/pages/ProjectDetailPage.vue",
+    "to": "src/modules/access/components/PageAccessDialog.vue",
+    "unresolvedTo": "@/modules/access/components/PageAccessDialog.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/projects/pages/ProjectDetailPage.vue",
+    "to": "src/modules/access/components/RequestAccessCard.vue",
+    "unresolvedTo": "@/modules/access/components/RequestAccessCard.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/projects/pages/ProjectOverviewPage.vue",
+    "to": "src/modules/connectors/components/ConnectorList.vue",
+    "unresolvedTo": "@/modules/connectors/components/ConnectorList.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/projects/pages/ProjectOverviewPage.vue",
+    "to": "src/modules/documents/components/ActivityFeed.vue",
+    "unresolvedTo": "@/modules/documents/components/ActivityFeed.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/projects/pages/ProjectOverviewPage.vue",
+    "to": "src/modules/documents/components/ExportDialog.vue",
+    "unresolvedTo": "@/modules/documents/components/ExportDialog.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/projects/pages/ProjectOverviewPage.vue",
+    "to": "src/modules/documents/components/MarkdownView.vue",
+    "unresolvedTo": "@/modules/documents/components/MarkdownView.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/projects/pages/ProjectOverviewPage.vue",
+    "to": "src/modules/insights/components/ProjectAnalyticsSection.vue",
+    "unresolvedTo": "@/modules/insights/components/ProjectAnalyticsSection.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/projects/pages/ProjectOverviewPage.vue",
+    "to": "src/modules/insights/components/QualityDistribution.vue",
+    "unresolvedTo": "@/modules/insights/components/QualityDistribution.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/projects/pages/ProjectOverviewPage.vue",
+    "to": "src/modules/insights/model/quality-ui.ts",
+    "unresolvedTo": "@/modules/insights/model/quality-ui",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/reader/components/ShareDownload.vue",
+    "to": "src/modules/documents/components/ExportFormatPicker.vue",
+    "unresolvedTo": "@/modules/documents/components/ExportFormatPicker.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/reader/components/SiteAsk.vue",
+    "to": "src/modules/assistant/model/citations.ts",
+    "unresolvedTo": "@/modules/assistant/model/citations",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "dynamic-import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/reader/components/SiteSearch.vue",
+    "to": "src/modules/documents/components/FacetFields.vue",
+    "unresolvedTo": "@/modules/documents/components/FacetFields.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/reader/components/SiteSearch.vue",
+    "to": "src/modules/documents/components/SearchSheetFrame.vue",
+    "unresolvedTo": "@/modules/documents/components/SearchSheetFrame.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/reader/components/SiteSearch.vue",
+    "to": "src/modules/documents/model/use-search.ts",
+    "unresolvedTo": "@/modules/documents/model/use-search",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/reader/components/SiteTreeNode.vue",
+    "to": "src/modules/documents/components/TreeBranch.vue",
+    "unresolvedTo": "@/modules/documents/components/TreeBranch.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/reader/components/SiteTreeNode.vue",
+    "to": "src/modules/documents/components/TreeRow.vue",
+    "unresolvedTo": "@/modules/documents/components/TreeRow.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/reader/model/site-search-source.spec.ts",
+    "to": "src/modules/documents/model/use-search.ts",
+    "unresolvedTo": "@/modules/documents/model/use-search",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/reader/model/site-search-source.ts",
+    "to": "src/modules/documents/model/use-search.ts",
+    "unresolvedTo": "@/modules/documents/model/use-search",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/templates/components/TemplateEditor.vue",
+    "to": "src/modules/editor/components/RichEditor.vue",
+    "unresolvedTo": "@/modules/editor/components/RichEditor.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/templates/components/TemplateGalleryDialog.vue",
+    "to": "src/modules/documents/components/MarkdownView.vue",
+    "unresolvedTo": "@/modules/documents/components/MarkdownView.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/templates/components/TemplateGalleryDialog.vue",
+    "to": "src/modules/merge-requests/model/use-members.ts",
+    "unresolvedTo": "@/modules/merge-requests/model/use-members",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/templates/components/TemplateHistory.vue",
+    "to": "src/modules/documents/components/DiffView.vue",
+    "unresolvedTo": "@/modules/documents/components/DiffView.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/templates/components/TemplateHistory.vue",
+    "to": "src/modules/merge-requests/model/use-members.ts",
+    "unresolvedTo": "@/modules/merge-requests/model/use-members",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/templates/components/TemplatePlaceholderForm.vue",
+    "to": "src/modules/merge-requests/model/use-members.ts",
+    "unresolvedTo": "@/modules/merge-requests/model/use-members",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/templates/pages/TemplatesSettingsPage.vue",
+    "to": "src/modules/documents/components/MarkdownView.vue",
+    "unresolvedTo": "@/modules/documents/components/MarkdownView.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/workflows/components/WorkflowMap.vue",
+    "to": "src/modules/documents/model/graph-theme.ts",
+    "unresolvedTo": "@/modules/documents/model/graph-theme",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/workflows/components/WorkflowNodePanel.vue",
+    "to": "src/modules/api-reference/components/ApiOperationRef.vue",
+    "unresolvedTo": "@/modules/api-reference/components/ApiOperationRef.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/workflows/components/WorkflowNodePanel.vue",
+    "to": "src/modules/documents/components/MarkdownView.vue",
+    "unresolvedTo": "@/modules/documents/components/MarkdownView.vue",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/modules/workflows/components/WorkflowStepForm.vue",
+    "to": "src/modules/templates/model/templates.store.ts",
+    "unresolvedTo": "@/modules/templates/model/templates.store",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-module-to-module"
+    }
+  },
+  {
+    "type": "dependency",
     "from": "src/stores/events.ts",
     "to": "src/modules/assistant/model/assistant.store.ts",
     "unresolvedTo": "@/modules/assistant/model/assistant.store",
@@ -4053,7 +4104,7 @@
     ],
     "rule": {
       "severity": "error",
-      "name": "widgets-import-no-module"
+      "name": "widgets-import-no-domain"
     }
   },
   {
@@ -4070,7 +4121,7 @@
     ],
     "rule": {
       "severity": "error",
-      "name": "widgets-import-no-module"
+      "name": "widgets-import-no-domain"
     }
   },
   {
@@ -4087,7 +4138,7 @@
     ],
     "rule": {
       "severity": "error",
-      "name": "widgets-import-no-module"
+      "name": "widgets-import-no-domain"
     }
   },
   {
@@ -4104,7 +4155,7 @@
     ],
     "rule": {
       "severity": "error",
-      "name": "widgets-import-no-module"
+      "name": "widgets-import-no-domain"
     }
   }
 ]

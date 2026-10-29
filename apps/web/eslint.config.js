@@ -118,6 +118,25 @@ export default [
     rules: { 'no-restricted-syntax': 'off' },
   },
   {
+    // A module's or an entity's index.ts is its public surface and nothing else
+    // (docs/architecture/11): named re-exports from the module's own files. The
+    // build marks it side-effect free (vite.config.ts), which only pays off while
+    // it declares nothing itself: an importer of one declaration would include
+    // the whole index, eager re-exports and all. A lazily loaded component is
+    // declared in components/lazy.ts and re-exported.
+    files: ['src/modules/*/index.ts', 'src/entities/*/index.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        { selector: 'ExportAllDeclaration', message: 'Name each export: an index never re-exports with `export *`.' },
+        {
+          selector: 'Program > :not(ExportNamedDeclaration[source])',
+          message: 'A module index only re-exports (`export { x } from …`): declare in the module, re-export here.',
+        },
+      ],
+    },
+  },
+  {
     // core/ is plain TypeScript (#566, docs/architecture/11): the import half
     // of that is `core-is-pure` in .dependency-cruiser.cjs, the DOM half is here.
     files: ['src/core/**/*.ts'],

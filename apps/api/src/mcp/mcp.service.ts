@@ -2306,7 +2306,8 @@ export class McpService {
         description:
           'Create a new page from markdown in a project, optionally nested under another page. It is indexed in the background (poll knowledge_get_document for status "indexed"). To change an existing page, branch and open a merge request instead. ' +
           'To start from a template (an ADR, RFC, runbook…), pass templateRef and the placeholder values knowledge_get_template lists — with no content the server fills the template in; with content, yours wins and the template is recorded as where the page came from. ' +
-          'kind test-fixture creates a QA test fixture: content is its YAML or JSON body (fixture: 1, steps with call / manual, optional inputs and teardown; credentials only as {{secret.x}}), validated against the specs you can open; openapi / asyncapi create a spec. None of these take a template.',
+          'kind test-fixture creates a QA test fixture: content is its YAML or JSON body (fixture: 1, steps with call / manual, optional inputs and teardown; credentials only as {{secret.x}}), validated against the specs you can open; openapi / asyncapi create a spec. None of these take a template. ' +
+          'To create the page from a local file instead of pasting it, pass upload: true and no content: the reply carries an upload URL, then call knowledge_finalize_upload.',
         inputSchema: {
           workspaceId: z.string().uuid(),
           projectId: z.string().uuid().describe('From knowledge_whoami or knowledge_list_projects'),
@@ -2315,7 +2316,8 @@ export class McpService {
             .string()
             .min(1)
             .optional()
-            .describe('Markdown body; YAML frontmatter is allowed and indexed. Required unless templateRef is given'),
+            .describe('Markdown body; YAML frontmatter is allowed and indexed. Required unless templateRef or upload is given'),
+          upload: z.boolean().optional().describe('Create the page empty and return an upload URL for its first revision (as knowledge_start_upload)'),
           parentId: z.string().uuid().optional().describe('Nest under this page'),
           category: z.enum(DOCUMENT_CATEGORIES).optional().describe('Defaults to the template’s category'),
           templateRef: z
@@ -2337,32 +2339,82 @@ export class McpService {
             ),
         },
       },
-      async ({ workspaceId, projectId, title, content, parentId, category, templateRef, templateVersion, values, kind, syntax, visibility }) => {
+      async ({ workspaceId, projectId, title, content, upload, parentId, category, templateRef, templateVersion, values, kind, syntax, visibility }) => {
         await guard.ws(workspaceId, 'editor');
-        if (!content && !templateRef) throw new Error('Pass content, or a templateRef to start from.');
+        if (upload && (content || templateRef)) throw new Error('upload replaces content and templateRef: pass one of them.');
+        if (!content && !templateRef && !upload) throw new Error('Pass content, a templateRef to start from, or upload: true.');
         await this.permissions.requireCreateUnder(await guard.scope(workspaceId), {
           projectId,
           ...(parentId ? { parentId } : {}),
         });
-        return this.json(
-          await this.documents.createDocument(
-            {
-              workspaceId,
-              projectId,
-              title,
-              ...(kind ? { kind } : {}),
-              ...(content
-                ? { content: { mode: 'inline', format: isStructuredKind(kind) ? (syntax ?? 'yaml') : 'markdown', text: content } }
-                : {}),
-              ...(parentId ? { parentId } : {}),
-              ...(category ? { category } : {}),
-              ...(templateRef ? { template: { ref: templateRef, version: templateVersion, values } } : {}),
-              // An agent writing for a person starts a private draft, as the REST route does (#474).
-              visibility: visibility ?? 'private',
-            },
-            principal.userId,
-          ),
+        const created = await this.documents.createDocument(
+          {
+            workspaceId,
+            projectId,
+            title,
+            ...(kind ? { kind } : {}),
+            ...(content
+              ? { content: { mode: 'inline', format: isStructuredKind(kind) ? (syntax ?? 'yaml') : 'markdown', text: content } }
+              : {}),
+            ...(parentId ? { parentId } : {}),
+            ...(category ? { category } : {}),
+            ...(templateRef ? { template: { ref: templateRef, version: templateVersion, values } } : {}),
+            // An agent writing for a person starts a private draft, as the REST route does (#474).
+            visibility: visibility ?? 'private',
+          },
+          principal.userId,
         );
+        if (!upload) return this.json(created);
+        // With no content the page is created with an empty draft revision: that is the one to upload into.
+        return this.json({ ...created, ...(await this.uploadTicket(created.documentId, created.revisionId)) });
+      },
+    );
+
+    // #602: a page from a file on the agent's machine. MCP carries no files,
+    // and the API never streams bodies — so the agent PUTs the bytes to a
+    // presigned URL itself and then finalizes, the REST upload flow in two tools.
+    server.registerTool(
+      'knowledge_start_upload',
+      {
+        description:
+          'Write a new revision of a page from a local file instead of pasting it: returns a presigned PUT URL (valid 15 minutes) and a curl command. ' +
+          'Upload the file with it, then call knowledge_finalize_upload with the revisionId. The file is the whole page, as with knowledge_create_revision: ' +
+          'a markdown file without a frontmatter block keeps the current tags and relations. Pass baseRevisionId to be refused when the branch head has moved. ' +
+          'For a new page, use knowledge_create_document with upload: true.',
+        inputSchema: {
+          documentId: z.string().uuid(),
+          branch: z.string().optional().describe('The default branch when omitted'),
+          baseRevisionId: z.string().uuid().optional(),
+          message: z.string().optional(),
+          syntax: z.enum(API_SPEC_SYNTAXES).optional().describe('API spec and test fixture documents only: yaml (default) or json'),
+        },
+      },
+      async ({ documentId, branch, baseRevisionId, message, syntax }) => {
+        await guard.doc(documentId, 'editor');
+        await guard.branches(
+          documentId,
+          { ...(branch ? { branchNames: [branch] } : {}), ...(baseRevisionId ? { revisionIds: [baseRevisionId] } : {}) },
+          'editor',
+        );
+        return this.json(await this.startUpload(documentId, { branch, baseRevisionId, message, syntax }, principal.userId));
+      },
+    );
+
+    server.registerTool(
+      'knowledge_finalize_upload',
+      {
+        description:
+          'Finish a knowledge_start_upload (or knowledge_create_document upload: true) once the file is uploaded: the revision becomes the branch head and is indexed. ' +
+          'An API spec or test fixture that does not validate is refused with the validator\'s messages; upload a corrected file to the same URL and call this again.',
+        inputSchema: {
+          documentId: z.string().uuid(),
+          revisionId: z.string().uuid(),
+        },
+      },
+      async ({ documentId, revisionId }) => {
+        await guard.doc(documentId, 'editor');
+        await guard.branches(documentId, { revisionIds: [revisionId] }, 'editor');
+        return this.json(await this.finalizeUpload(documentId, revisionId));
       },
     );
 
@@ -2744,6 +2796,60 @@ export class McpService {
     const row = await this.prisma.documentRevision.findUniqueOrThrow({ where: { id: draft.revisionId } });
     await this.storage.putObjectText(row.s3Key, content, row.contentType);
     return this.documents.finalizeRevision(documentId, draft.revisionId);
+  }
+
+  /** A draft revision plus a presigned PUT for its object (#602). */
+  private async startUpload(
+    documentId: string,
+    opts: { branch?: string; baseRevisionId?: string; message?: string; syntax?: ApiSpecSyntax },
+    authorId: string,
+  ) {
+    const document = await this.prisma.document.findUniqueOrThrow({ where: { id: documentId }, select: { kind: true } });
+    const draft = await this.documents.createRevision(
+      documentId,
+      {
+        branch: opts.branch,
+        message: opts.message,
+        // A page is markdown; a spec or fixture says its syntax (createRevision's own choice is yaml).
+        ...(isStructuredKind(document.kind) && opts.syntax ? { contentType: `application/${opts.syntax}` } : {}),
+      },
+      opts.baseRevisionId,
+      authorId,
+    );
+    return this.uploadTicket(documentId, draft.revisionId);
+  }
+
+  /** The presigned PUT for an existing draft revision's object. */
+  private async uploadTicket(documentId: string, revisionId: string) {
+    const row = await this.prisma.documentRevision.findUniqueOrThrow({ where: { id: revisionId } });
+    const url = await this.storage.presignPut(row.s3Key, row.contentType);
+    return {
+      revisionId: row.id,
+      upload: { method: 'PUT', url, headers: { 'Content-Type': row.contentType }, expiresInSeconds: 900 },
+      curl: `curl -fsS -X PUT -H 'Content-Type: ${row.contentType}' --upload-file <path-to-file> '${url}'`,
+      next: `knowledge_finalize_upload { documentId: "${documentId}", revisionId: "${row.id}" }`,
+    };
+  }
+
+  /**
+   * Finalize an uploaded draft. A markdown file without a frontmatter block
+   * gets its parent's put back first, as `createRevision` does for a pasted
+   * body — otherwise uploading a page's own export would drop its relations.
+   */
+  private async finalizeUpload(documentId: string, revisionId: string) {
+    const row = await this.prisma.documentRevision.findFirst({
+      where: { id: revisionId, documentId },
+      include: { document: { select: { kind: true } }, parents: { select: { parentRevisionId: true }, orderBy: { parentOrder: 'asc' }, take: 1 } },
+    });
+    if (!row) throw new Error(`Revision ${revisionId} not found on document ${documentId}`);
+    const parentId = row.parents[0]?.parentRevisionId;
+    if (row.status === 'draft' && parentId && !isStructuredKind(row.document.kind) && (await this.storage.headObject(row.s3Key))) {
+      const text = await this.storage.getObjectText(row.s3Key);
+      const base = await this.documents.getContent(documentId, parentId).catch(() => null);
+      const kept = keepFrontmatter(text, base?.frontmatter);
+      if (kept !== text) await this.storage.putObjectText(row.s3Key, kept, row.contentType);
+    }
+    return this.documents.finalizeRevision(documentId, revisionId);
   }
 
   private json(value: unknown) {

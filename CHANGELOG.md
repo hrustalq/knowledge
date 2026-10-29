@@ -17,7 +17,15 @@ in the pull request that introduces them — see
 
 ### Added
 
+### Changed
+
+- **Knowledge health, Analytics, Captures and Contradictions sit under one "Knowledge base" node in
+  the sidebar** (#605). The node opens like a page-tree node, opens on its own when you land on one of
+  its pages, and stays as you left it for the rest of the session. While it is closed, the node is
+  highlighted if the current page is inside it. Analytics is still listed for workspace admins only.
+
 - **Agents can change a few lines of a page without resending it** (#603): the new MCP tool
+
   `knowledge_patch_document` takes a `baseRevisionId` and a list of line-range edits
   (`startLine`..`endLine`, 1-based and inclusive, replaced by `content`; an empty `content` deletes the range,
   `endLine = startLine - 1` inserts, and `startLine` one past the last line appends). It writes a new revision
@@ -26,12 +34,16 @@ in the pull request that introduces them — see
   branch head has moved past `baseRevisionId`, when edits overlap, or when a line lies outside the page. It is a write tool, so
   read-only keys do not see it.
 
-### Changed
+- **Agents can write a page from a file instead of pasting it** (#602): the new MCP tool `knowledge_start_upload`
 
-- **Knowledge health, Analytics, Captures and Contradictions sit under one "Knowledge base" node in
-  the sidebar** (#605). The node opens like a page-tree node, opens on its own when you land on one of
-  its pages, and stays as you left it for the rest of the session. While it is closed, the node is
-  highlighted if the current page is inside it. Analytics is still listed for workspace admins only.
+  opens a draft revision and returns a presigned PUT URL, valid for 15 minutes, with a ready-to-run
+  `curl --upload-file` command. Once the agent has uploaded the file from its own machine,
+  `knowledge_finalize_upload` makes it the branch head and indexes it. The API still never streams a file
+  body: this is the REST upload flow (`POST :id/uploads` → PUT → finalize) exposed as two tools, and it works
+  over stdio and HTTP alike. For a new page, `knowledge_create_document` takes `upload: true` in place of
+  `content`. A markdown file without a frontmatter block keeps the page's current tags and relations, as a pasted
+  body does. `baseRevisionId` refuses the upload when the branch head has moved, and a spec or fixture that fails
+  validation is refused at finalize, with the draft kept for a corrected upload.
 
 ### Fixed
 

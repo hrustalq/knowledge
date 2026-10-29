@@ -43,7 +43,13 @@ export const WRITE_TOOLS: ReadonlySet<string> = new Set([
   'knowledge_create_document',
   'knowledge_create_branch',
   'knowledge_create_revision',
+<<<<<<< HEAD
   'knowledge_patch_document',
+=======
+  // A presigned upload of a local file, then its finalize (#602).
+  'knowledge_start_upload',
+  'knowledge_finalize_upload',
+>>>>>>> 3d62cdf2 (feat(mcp): write a page from a local file via a presigned upload)
   'knowledge_create_merge_request',
   'knowledge_approve_merge_request',
   'knowledge_close_merge_request',

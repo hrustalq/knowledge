@@ -24,6 +24,7 @@ import {
   CAPTURE_KIT_CLIENTS,
   MCP_LEARNING_TARGET,
   WORK_ITEM_SOURCE_KINDS,
+  RELATION_EDGE_TYPES,
   type CaptureKitClient,
 } from '@knowledge/contracts';
 import type { AiAgentChoice, CaptureKitResponse, McpToolSummary, WorkspaceRole } from '@knowledge/contracts';
@@ -1965,10 +1966,22 @@ export class McpService {
       {
         description:
           'TRUSTED-OPERATOR ONLY (plan.md §9): read-only SQL over the graph store. Single SELECT statement, ' +
-          'row-limited, workspace predicate enforced server-side; every call is written to the audit log.',
+          'row-limited; every call is written to the audit log. Each FROM <Type> is narrowed to the workspace ' +
+          'before the query reads it, so count(*), GROUP BY, LIMIT and subqueries work as written. ' +
+          'FROM may name a subquery or one of these types (key fields in brackets): ' +
+          'Document [documentId, title], DocumentRevision [revisionId, documentId], ' +
+          'Chunk [chunkId, documentId, revisionId, idx, text, headingPath, live], ' +
+          'Entity [entityKey e.g. op:* / component:* / service:*, entityType, name], ' +
+          'Community [communityId, level, parentId, title, summary, members], ChatChunk [chunkId, bindingId], ' +
+          `and the relation edges ${RELATION_EDGE_TYPES.join(', ')} ` +
+          '[documentId, revisionId, targetKey, live, extractor, confidence, snippet; out = Document, in = Entity]. ' +
+          'Use @type (not @class) for the type name. Refused: other targets (V, schema:*, record ids), comments, MATCH.',
         inputSchema: {
           workspaceId: z.string().uuid(),
-          query: z.string().min(1).describe('A single read-only SELECT (ArcadeDB SQL)'),
+          query: z
+            .string()
+            .min(1)
+            .describe('A single read-only SELECT (ArcadeDB SQL), e.g. SELECT entityKey FROM Entity WHERE entityKey LIKE \'op:%\''),
           limit: z.number().int().min(1).max(1000).optional(),
         },
       },

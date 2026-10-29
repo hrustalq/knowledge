@@ -67,7 +67,7 @@ export class ArcadeClient {
     const text = await res.text();
     if (!res.ok) {
       this.logger.error(`ArcadeDB ${kind} failed (${res.status}): ${text.slice(0, 500)}`);
-      throw new Error(`ArcadeDB ${kind} failed with ${res.status}: ${text.slice(0, 200)}`);
+      throw new Error(`ArcadeDB ${kind} failed with ${res.status}: ${text.slice(0, 500)}`);
     }
     return (JSON.parse(text) as ArcadeResponse<T>).result;
   }

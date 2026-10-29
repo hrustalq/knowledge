@@ -13,6 +13,22 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Fixed
+
+- **Trusted-operator graph queries return what they ask for** (#589): `POST /v1/graph/query` and the
+  `knowledge_query_graph` tool returned no rows for `count(*)`, `GROUP BY` or any query that projected
+  away `workspaceId`, and `SELECT FROM Entity LIMIT 3` could come back empty when the first three
+  entities in the store belonged to another workspace. The workspace scope now narrows each type the
+  query reads, so aggregates, grouping, limits and subqueries behave as written. The tool description
+  lists the queryable types and their key fields (`Entity.entityKey` holds `op:*`, `component:*` and the
+  like). A query naming anything else after `FROM`, such as `V`, `schema:types` or a record id, is
+  refused with a 400 that lists the allowed types. So is a comment, a `#`, `MATCH`, or a function that
+  reads an index by name (`vector.neighbors`, `search_index`, `eval`), which could reach another
+  workspace's rows past the scope. A query ArcadeDB
+  rejects (a syntax error, an unknown property) is now a 400 carrying ArcadeDB's reason, not a 500.
+
 ## [0.38.0] — 2026-10-28
 
 ### Added

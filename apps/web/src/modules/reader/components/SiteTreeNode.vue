@@ -10,7 +10,7 @@ import type { PublicSiteTreeNode } from '@knowledge/contracts'
 import TreeBranch from '@/modules/documents/components/TreeBranch.vue'
 import TreeRow from '@/modules/documents/components/TreeRow.vue'
 import { TreeWindowKey } from '@/shared/utils/tree-window'
-import { SiteTreeKey } from './site-tree'
+import { SiteTreeKey } from '../model/site-tree'
 
 defineOptions({ name: 'SiteTreeNode' })
 const props = defineProps<{ node: PublicSiteTreeNode; depth: number; href: (node: PublicSiteTreeNode) => string }>()

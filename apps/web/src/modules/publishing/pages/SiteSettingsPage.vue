@@ -48,8 +48,8 @@ import { Input } from '@/shared/ui/input'
 import { Textarea } from '@/shared/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import { PageState, PageTabs, panelId, tabId, type PageTab } from '@/widgets/page'
-import SiteAskPanel from '@/modules/projects/components/SiteAskPanel.vue'
-import SiteAudiencePanel from '@/modules/projects/components/SiteAudiencePanel.vue'
+import SiteAskPanel from '@/modules/publishing/components/SiteAskPanel.vue'
+import SiteAudiencePanel from '@/modules/publishing/components/SiteAudiencePanel.vue'
 
 const { t } = useI18n()
 const route = useRoute()

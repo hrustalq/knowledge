@@ -22,7 +22,7 @@ import {
   type PublicShareExport,
 } from '@knowledge/contracts'
 import { publicShareExportPath, publicShareExportsPath } from '@knowledge/contracts/publishing'
-import { exportFormatAvailable } from '@/modules/publishing/model/export-formats'
+import { exportFormatAvailable } from '@/core/export-formats'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/ui/dialog'
 import ExportFormatPicker from '@/modules/documents/components/ExportFormatPicker.vue'

@@ -339,7 +339,7 @@ have been a second copy of the snapshot to keep in step).
   a build that swapped in meanwhile is not overwritten. It never rebuilds a
   version, so a frozen version stays frozen. A row with no tags yet is never a
   source for the per-revision text copy.
-- **Reader.** `modules/publishing/reader/SiteSearch.vue` renders the app's own search
+- **Reader.** `modules/reader/components/SiteSearch.vue` renders the app's own search
   components (#205): `SearchSheetFrame` (the sheet, focus handling, the
   re-run on a facet change), `SearchPanel`, `SearchResults` and `FacetFields`,
   all store-free. The app's `SearchSheet` mounts the same frame over its

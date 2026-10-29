@@ -13,10 +13,10 @@ import { useI18n } from 'vue-i18n'
 import { FileText, Moon, Sun } from 'lucide-vue-next'
 import { formatDate } from '@/shared/utils/format'
 import { toggleTheme } from '@/shared/utils/theme'
-import PublicMarkdown from '@/modules/publishing/reader/PublicMarkdown.vue'
-import PublicPasswordGate from '@/modules/publishing/reader/PublicPasswordGate.vue'
-import { shareHref, treeRows, type PublicReaderState } from './reader-state'
-import ShareDownload from './ShareDownload.vue'
+import PublicMarkdown from '@/modules/reader/components/PublicMarkdown.vue'
+import PublicPasswordGate from '@/modules/reader/components/PublicPasswordGate.vue'
+import { shareHref, treeRows, type PublicReaderState } from '../model/reader-state'
+import ShareDownload from '../components/ShareDownload.vue'
 
 const props = defineProps<{ state: PublicReaderState }>()
 

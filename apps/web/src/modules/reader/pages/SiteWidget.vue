@@ -14,8 +14,8 @@
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { X } from 'lucide-vue-next'
-import SiteAsk from './SiteAsk.vue'
-import type { PublicReaderState } from './reader-state'
+import SiteAsk from '../components/SiteAsk.vue'
+import type { PublicReaderState } from '../model/reader-state'
 
 /** The protocol widget.js listens for; kept in step with server/site-widget.js. */
 const MESSAGE_SOURCE = 'kn-site-ask'

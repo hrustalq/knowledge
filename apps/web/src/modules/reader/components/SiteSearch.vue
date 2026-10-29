@@ -22,8 +22,8 @@ import { useSearch } from '@/modules/documents/model/use-search'
 import type { AutocompleteOption } from '@/shared/ui/autocomplete'
 import { labelFor } from '@/shared/i18n/labels'
 import { isSearchShortcut } from '@/shared/utils/search-shortcut'
-import type { PublicSiteChrome } from './reader-state'
-import { loadSiteFacets, siteSearchSource } from './site-search-source'
+import type { PublicSiteChrome } from '../model/reader-state'
+import { loadSiteFacets, siteSearchSource } from '../model/site-search-source'
 
 const props = defineProps<{ site: PublicSiteChrome; apiBase: string }>()
 

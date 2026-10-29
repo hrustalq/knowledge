@@ -77,11 +77,9 @@ modules/<name>/
   mounts those under `/settings`.
 - A feature store is `model/<name>.store.ts` (`templates.store.ts`), so it
   never collides with the plain helper of the same name (`templates.ts`).
-- Folders a module does not need are not created. Two modules carry one more:
-  `help/docs/` (the articles, globbed by `registry.ts`, and the generated
-  reference) and `publishing/reader/` (the public reader's pages and parts,
-  the separate SSR entry of features 43–44, allowlisted for raw `fetch` as a
-  whole).
+- Folders a module does not need are not created. `help` carries one more,
+  `help/docs/`: the articles, globbed by `registry.ts`, and the generated
+  reference.
 
 ## The import rules
 
@@ -211,13 +209,20 @@ From the folders before the move (phase 1). `components/X` meant
 | `insights`       | `analytics`, `health`, `quality`                                              | Analytics, KnowledgeHealth                                                                    |
 | `access`         | `access`, `security`, `profile`, `connect`, `people` (list and profile parts) | AccessControl, SecuritySettings, Profile, ProfileSettings, ConnectAi                          |
 | `auth`           | —                                                                             | Login, Signup, ForgotPassword, ResetPassword, VerifyEmail, SsoComplete, Forbidden, SiteSignIn |
-| `publishing`     | `public`                                                                      | SiteSettings, PublishingSettings, Exports, ReleasesSettings, `pages/public`                   |
+| `publishing` | — | SiteSettings, PublishingSettings, Exports, ReleasesSettings |
+| `reader` | `public` | `pages/public` (SharePage, SitePage, SiteWidget) |
 | `help`           | `docs`                                                                        | Docs, DocsArticle, `pages/docs`                                                               |
 | `notifications`  | `notifications`                                                               | Notifications, NotificationSettings                                                           |
 | `projects`       | `projects`                                                                    | Projects, ProjectDetail, ProjectOverview                                                      |
 | `templates`      | `templates`                                                                   | TemplatesSettings                                                                             |
 | `captures`       | `captures`                                                                    | Captures                                                                                      |
 | `memos`          | `memos`                                                                       | Memos, MemoDetail                                                                             |
+
+`reader` is the public reader (features 43–44): a second app with its own
+entries (`public-main.ts`, `entry-public.ts`), its own catalogue and a raw-`fetch`
+allowlist glob of its own. It started inside `publishing` and was split out in
+its phase so that its entries import an index the member app never imports,
+and the member app's imports of `publishing` never pull reader views in.
 
 Added since #566 was filed, or missing from its map: `memos` (shipped in
 v0.38.0, feature 68) is its own module; Search → `documents`; OauthLanding →

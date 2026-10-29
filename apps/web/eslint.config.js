@@ -56,7 +56,7 @@ const RAW_FETCH_OK = [
   'src/modules/api-reference/components/ApiTryConsole.vue', // try-it: the request is the reader's own
   'src/modules/api-reference/components/ApiTestRun.vue', // the same, for a suite run in the browser
   'src/entry-public.ts', // the public SSR entry: no member client, no credential
-  'src/modules/publishing/reader/**',
+  'src/modules/reader/**',
 ]
 
 // The app's catalogs, and the public reader's own small one (docs/features/43):

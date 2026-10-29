@@ -9,6 +9,10 @@
  *   components/  presentation
  *   api/ lib/ i18n/   leaf utilities — may use none of the above
  *
+ * #566 replaces this with the layered module layout in
+ * docs/architecture/11-web-modules.md. Its rules are below already, written
+ * against the new paths; until the move lands they match nothing.
+ *
  * Existing violations are grandfathered in
  * `.dependency-cruiser-known-violations.json` (see `pnpm depcruise:baseline`).
  * The baseline is shrink-only: a fixed violation drops out of it and can never
@@ -49,6 +53,93 @@ module.exports = {
       severity: 'error',
       from: { path: '^src/components/ui/' },
       to: { path: '^src/(pages|stores)/' },
+    },
+
+    // ---------------------------------------------------------------- layers (#566, docs/architecture/11)
+    //
+    //   app → modules → widgets → stores → shared → core     (assets/ from anywhere)
+    //
+    // Left may import right, never the reverse; a layer may import itself. The
+    // entry files at the src/ root sit above app/.
+    {
+      name: 'modules-import-no-app',
+      comment:
+        'app/ composes the modules (the shell, the router). A module reaching back into app/ ' +
+        'makes the shell a dependency of every feature it hosts.',
+      severity: 'error',
+      from: { path: '^src/modules/' },
+      to: { path: '^src/app/' },
+    },
+    {
+      name: 'widgets-import-no-module',
+      comment:
+        'A widget is a domain-less block used by two or more modules. One that imports a module ' +
+        'has a domain: it belongs in that module and is exported from its index.ts.',
+      severity: 'error',
+      from: { path: '^src/widgets/' },
+      to: { path: '^src/(app|modules)/' },
+    },
+    {
+      name: 'stores-import-only-shared',
+      comment:
+        'stores/ holds only cross-cutting state. A cross-cutting store that calls a feature store ' +
+        '(projects rescoping templates, events refreshing notifications) inverts: the feature ' +
+        'registers with it instead.',
+      severity: 'error',
+      from: { path: '^src/stores/' },
+      to: { path: '^src/(app|modules|widgets)/' },
+    },
+    {
+      name: 'shared-is-business-agnostic',
+      comment:
+        'shared/ (the generated client, the ui kit, i18n, generic composables and utils) knows ' +
+        'no feature. A shared helper that imports a store or a module has a domain now.',
+      severity: 'error',
+      from: { path: '^src/shared/' },
+      to: { path: '^src/(app|modules|widgets|stores)/' },
+    },
+    {
+      name: 'core-is-pure',
+      comment:
+        'core/ is plain TypeScript: no Vue, no Pinia, nothing from src/ outside core/ — so it ' +
+        'runs under SSR, in a spec and in the service worker alike. DOM globals are refused by ' +
+        'eslint (eslint.config.js). Logic the API needs too belongs in @knowledge/contracts.',
+      severity: 'error',
+      from: { path: '^src/core/' },
+      // Any package with `vue` in its name, scoped or not (vue-i18n, @tiptap/vue-3), and Pinia.
+      // Spelled as flat alternatives: safe-regex refuses a quantifier inside an optional group.
+      to: {
+        path: '^src/|node_modules/[^/]*vue|node_modules/@[^/]*/[^/]*vue|node_modules/pinia/',
+        pathNot: '^src/core/',
+      },
+    },
+    {
+      name: 'module-via-index-only',
+      comment:
+        "A module's index.ts is its only public surface. Importing another module's file " +
+        'directly couples you to its internals, which its own PR can then not move.',
+      severity: 'error',
+      from: { path: '^src/modules/([^/]+)/' },
+      to: { path: '^src/modules/', pathNot: '^src/modules/($1/|[^/]+/index\\.ts$)' },
+    },
+    {
+      name: 'app-via-module-index',
+      comment: 'module-via-index-only, for app/ and the entry files.',
+      severity: 'error',
+      from: { path: '^src/(app/|[^/]+$)' },
+      to: { path: '^src/modules/', pathNot: '^src/modules/[^/]+/index\\.ts$' },
+    },
+    {
+      name: 'no-module-cycles',
+      comment:
+        'Module-level cycles: a imports b and b imports a, each through the other\'s index.ts. ' +
+        'No file-level cycle need exist for this one, which is why no-circular misses it. ' +
+        'Break it by moving the shared piece down (a widget, shared/, core/) or by inverting ' +
+        'the call (an event, a registered callback).',
+      severity: 'error',
+      scope: 'folder',
+      from: { path: '^src/modules/[^/]+$' },
+      to: { circular: true, path: '^src/modules/[^/]+$' },
     },
 
     // ---------------------------------------------------------------- cycles & hygiene

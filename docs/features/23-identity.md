@@ -3,7 +3,7 @@
 Two halves of one problem: the product rendered identities it could not
 describe.
 
-`lib/avatar.ts` said so in its own header — *"the product has no avatar
+`core/avatar.ts` said so in its own header — *"the product has no avatar
 storage"* — and the global activity feed did not get even that far. It printed
 `e.actor.slice(0, 8)`: eight characters of a UUID, where a person's name belongs.
 
@@ -66,18 +66,18 @@ initials on its own page.
 
 ### Fallbacks are not placeholders
 
-Initials on a stable per-user hue (`lib/avatar.ts`) and the two-letter monogram
-for scopes (`lib/monogram.ts`) are the normal state, not a gap waiting to be
+Initials on a stable per-user hue (`core/avatar.ts`) and the two-letter monogram
+for scopes (`core/monogram.ts`) are the normal state, not a gap waiting to be
 filled. Most people never upload anything, and "no picture" still has to read as
 *someone in particular* — the hue is what makes a tile the thing you recognise
 before you have read the label.
 
 People, project and workspace monograms and cited sites all take their colour
-from one function, `avatarColor` in `lib/avatar.ts`. It keeps the hue hashed
+from one function, `avatarColor` in `core/avatar.ts`. It keeps the hue hashed
 from the id and lowers the lightness only as far as that hue needs for white
 initials to reach 4.5:1 (WCAG 1.4.3). HSL lightness is not perceptual: at a
 fixed 45% a yellow-green measured 2.3:1 while a blue measured 9:1.
-`lib/avatar.spec.ts` checks all 360 hues.
+`core/avatar.spec.ts` checks all 360 hues.
 
 ## Hover cards
 
@@ -121,8 +121,8 @@ there is nothing to mismatch.
 | Service + routes | `apps/api/src/avatars/` |
 | URL shape | `apps/api/src/common/avatar-url.ts` (`userAvatarUrl`, `projectAvatarUrl`) |
 | Key layout | `StorageService.avatarObjectKey` |
-| Upload | `components/people/use-avatar-upload.ts`, `AvatarPicker.vue` (shares `lib/presigned-put.ts`) |
-| Identity | `components/people/UserChip.vue`, `UserCard.vue`, `projects/ProjectAvatar.vue` |
+| Upload | `modules/access/model/use-avatar-upload.ts`, `AvatarPicker.vue` (shares `shared/api/presigned-put.ts`) |
+| Identity | `widgets/person/UserChip.vue`, `UserCard.vue`, `projects/ProjectAvatar.vue` |
 
 `avatarUrl` is carried on `Principal` because three separate places answer
 `GET /v1/me` from one, and the topbar avatar is the first thing rendered on every

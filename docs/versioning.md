@@ -46,7 +46,7 @@ consumers — and the bump rules below are derived from what breaks _them_, not 
 how big the diff felt.
 
 1. **The HTTP API** — 152 paths, described by the committed `apps/api/openapi.json`.
-   Consumed by the generated web client (`apps/web/src/api/schema.d.ts`) and by
+   Consumed by the generated web client (`apps/web/src/shared/api/schema.d.ts`) and by
    anything else holding an API key.
 2. **The MCP tool surface** — the `knowledge_*` tools served over stdio. These are
    consumed by agent clients _outside this repository_, which is the most public

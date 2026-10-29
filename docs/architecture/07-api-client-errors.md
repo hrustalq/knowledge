@@ -4,7 +4,7 @@
 
 The web app never hand-writes a request shape and never branches on an error
 message. One OpenAPI document is emitted from the API's own route metadata,
-`openapi-typescript` turns it into `apps/web/src/api/schema.d.ts`, and a thin
+`openapi-typescript` turns it into `apps/web/src/shared/api/schema.d.ts`, and a thin
 axios layer is typed against it — so a renamed route, a dropped query parameter
 or a changed request body is a compile error in the browser bundle rather than a
 404 at runtime.
@@ -21,12 +21,12 @@ in the app.
 | Step                   | What happens                                                                                                                  |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | `make api-schema`      | `apps/api` builds, then `node --env-file=apps/api/.env apps/api/dist/scripts/generate-openapi.main.js --out apps/api/openapi.json` |
-| `make docs-reference`  | `pnpm --filter @knowledge/web run generate:docs` → `apps/web/scripts/generate-docs-reference.mjs` → `apps/web/src/pages/docs/reference.generated.json` |
-| `generate:api`         | `openapi-typescript ../api/openapi.json -o src/api/schema.d.ts`                                                               |
+| `make docs-reference`  | `pnpm --filter @knowledge/web run generate:docs` → `apps/web/scripts/generate-docs-reference.mjs` → `apps/web/src/modules/help/docs/reference.generated.json` |
+| `generate:api`         | `openapi-typescript ../api/openapi.json -o src/shared/api/schema.d.ts`                                                               |
 | `typecheck`            | `vue-tsc -b` over the web app, against the schema that was just emitted                                                       |
 
 All three generated artifacts — `apps/api/openapi.json`,
-`apps/web/src/api/schema.d.ts` and `reference.generated.json` — are committed.
+`apps/web/src/shared/api/schema.d.ts` and `reference.generated.json` — are committed.
 The typecheck is part of the target rather than a separate courtesy: the point
 of regenerating is to find out immediately which call sites the API change
 broke.
@@ -130,7 +130,7 @@ from `@knowledge/contracts`:
 
 ## statusCode 0: a network failure is an error with a code
 
-`toApiRequestError` in `apps/web/src/api/http.ts` is the client-side twin. A
+`toApiRequestError` in `apps/web/src/shared/api/http.ts` is the client-side twin. A
 conforming body (`isApiErrorPayload`) passes through verbatim; a non-conforming
 one — a proxy error page, a legacy shape — is synthesized from the status. What
 matters is the third case: a failure that never produced a response becomes
@@ -148,7 +148,7 @@ a raw axios error.
 
 ## The web stack
 
-Three files under `apps/web/src/api/`, each with one job:
+Three files under `apps/web/src/shared/api/`, each with one job:
 
 - **`http.ts`** — the axios instance. `baseURL` follows the SSR split
   (`process.env.API_URL_INTERNAL` on the server, the Vite `/api` proxy in the
@@ -174,7 +174,7 @@ optimistic-write composable `useApiMutation` is documented with the live cache
 it cooperates with, in [08-events-live.md](08-events-live.md).
 
 This is the web app's **only** API client (#472). The older untyped
-`apiFetch` / `apiFetchText` / `apiFetchBlob` in `lib/api.ts` are gone. Stores
+`apiFetch` / `apiFetchText` / `apiFetchBlob` in `shared/api/api.ts` are gone. Stores
 read through `fetchApi` and `bindStoreQuery`, files through `requestFile`, and a
 raw `fetch(` fails lint outside the allowlist in `eslint.config.js`. How long
 each answer stays fresh, and how stores share the cache with components, is in

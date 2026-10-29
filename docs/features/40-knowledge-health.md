@@ -121,7 +121,7 @@ and says so when trust ranking is off and the weights change nothing
 ## On the dashboard
 
 `/knowledge-health` is in the rail beside merge requests and workflows, the
-other two places a page is acted on in bulk. `pages/KnowledgeHealthPage.vue`
+other two places a page is acted on in bulk. `modules/insights/pages/KnowledgeHealthPage.vue`
 and `components/health/`:
 
 - **Tabs**, `?tab=`: **Pages**, **Settings**, since #74 **Quality** (the

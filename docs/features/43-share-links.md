@@ -156,7 +156,7 @@ both whole app catalogs into the reader's bundle. That one import was 377 KB.
   opens a link is anonymous there too.
 - **The body renders on the server.** `MarkdownView` renders nothing during SSR
   (DOMPurify needs a DOM), which is fine behind a login and useless for a cold
-  link. `lib/markdown/public-render.server.ts` runs the same `markdownToHtml`
+  link. `core/markdown/public-render.server.ts` runs the same `markdownToHtml`
   and `SANITIZE_CONFIG` against a jsdom window, the DOM DOMPurify officially
   supports. It then does MarkdownView's passes: heading ids, table wrappers,
   file cards, drawings and the TOC block.
@@ -171,7 +171,7 @@ both whole app catalogs into the reader's bundle. That one import was 377 KB.
   always what the API just authorised.
 - **Download** (`ShareDownload.vue`) sits in the header when the link allows
   it. It is the app's format choice (`ExportFormatPicker.vue`, which the
-  member export dialog also renders, with `lib/export-formats.ts`), but it
+  member export dialog also renders, with `modules/publishing/model/export-formats.ts`), but it
   talks to the API with plain `fetch` and the unlock cookie, polls the job and
   then navigates to the download route. The `export.*` strings it shares with
   the app are copied into the reader catalog. There, `export.pdfUnavailable`

@@ -27,7 +27,7 @@ functionality similar to assistant page»
   above the composer summarizing everything pending (`Keep all` = `⌘↵`).
 - **Text arrives the way Notion's does.** Each newly revealed run resolves out
   of a violet blur into ink — in the page and in the chat reply alike
-  (`lib/stream-reveal.ts`, class `.kn-reveal`).
+  (`shared/utils/stream-reveal.ts`, class `.kn-reveal`).
 - **The formatting toolbar and header fold down at narrow widths** instead of
   overflowing: the toolbar measures itself and moves groups into a "More" menu;
   below `sm` the header keeps the assistant, a "More actions" menu and Publish.

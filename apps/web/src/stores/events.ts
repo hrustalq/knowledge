@@ -4,11 +4,11 @@ import { defineStore } from 'pinia'
 import { toast } from 'vue-sonner'
 import type { ComposerTranslation } from 'vue-i18n'
 import type { KnowledgeEvent } from '@knowledge/contracts'
-import { api, isApiRequestError } from '@/api/queries'
-import { getToken, getWorkspaceId } from '@/lib/api'
-import { useAssistantStore } from '@/stores/assistant'
+import { api, isApiRequestError } from '@/shared/api/queries'
+import { getToken, getWorkspaceId } from '@/shared/api/api'
+import { useAssistantStore } from '@/modules/assistant/model/assistant.store'
 import { useDocumentsStore } from '@/stores/documents'
-import { useNotificationsStore } from '@/stores/notifications'
+import { useNotificationsStore } from '@/modules/notifications/model/notifications.store'
 
 /** Reconnect backoff after the stream drops: 1 s, doubling, capped at 30 s. */
 const RETRY_MIN_MS = 1_000

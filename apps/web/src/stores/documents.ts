@@ -6,8 +6,8 @@ import type {
   DocumentTreeNode,
   WorkspaceGraphResponse,
 } from '@knowledge/contracts'
-import { api, fetchApi } from '@/api/queries'
-import { getProjectId, getWorkspaceId } from '@/lib/api'
+import { api, fetchApi } from '@/shared/api/queries'
+import { getProjectId, getWorkspaceId } from '@/shared/api/api'
 
 /**
  * The scope every read here carries: the workspace, the active project when

@@ -1,0 +1,276 @@
+// Live data patching: binds LiveClient events to the vue-query cache so
+// tracked entities update on screen without a refetch. Two mechanisms:
+//  - patch: events carrying `patch` (e.g. document.updated) are shallow-merged
+//    into every cached query for that entity — instant, no network.
+//  - invalidate: everything else marks the mapped query keys stale, letting
+//    vue-query refetch what is actually on screen.
+// Rules are data ("tracking configuration" client-side) — extend or replace
+// them per app via startLive({ rules }).
+import type { QueryClient } from '@tanstack/vue-query'
+import type { KnowledgeEvent, LiveTrackingConfig } from '@knowledge/contracts'
+import { getWorkspaceId } from '@/shared/api/api'
+import { LiveClient } from './live'
+
+export interface LiveCacheRule {
+  /** Event type to react to — exact ('document.updated') or glob prefix ('revision.*'). */
+  on: string
+  /** Query-key prefixes to invalidate (matched with startsWith semantics by vue-query). */
+  invalidate?: (event: KnowledgeEvent) => ReadonlyArray<ReadonlyArray<unknown>>
+  /** Live patch: applied to the cache immediately (before any refetch). */
+  patch?: (event: KnowledgeEvent, queryClient: QueryClient) => void
+}
+
+function matchesType(pattern: string, type: string): boolean {
+  return pattern === '*' || pattern === type || (pattern.endsWith('.*') && type.startsWith(pattern.slice(0, -1)))
+}
+
+/** Shallow-merge an event patch into every cached detail query of a document. */
+function patchDocumentQueries(event: KnowledgeEvent, queryClient: QueryClient): void {
+  if (!event.patch || !event.documentId) return
+  queryClient.setQueriesData(
+    {
+      predicate: (query) => {
+        const [url, path] = query.queryKey as [unknown, unknown, unknown]
+        return (
+          typeof url === 'string' &&
+          url.startsWith('/v1/documents/{') &&
+          typeof path === 'object' &&
+          path !== null &&
+          (path as Record<string, unknown>).id === event.documentId
+        )
+      },
+    },
+    (old: unknown) => {
+      if (typeof old !== 'object' || old === null) return old
+      // Merge into the entity wherever the response nests it.
+      const record = old as Record<string, unknown>
+      if (typeof record.document === 'object' && record.document !== null) {
+        return { ...record, document: { ...(record.document as object), ...event.patch } }
+      }
+      return { ...record, ...event.patch }
+    },
+  )
+}
+
+/** Default tracking rules for the knowledge platform's event vocabulary. */
+export const defaultLiveCacheRules: LiveCacheRule[] = [
+  {
+    on: 'document.updated',
+    patch: patchDocumentQueries,
+    invalidate: () => [['/v1/documents'], ['/v1/documents/tree']],
+  },
+  {
+    // Page comments (docs/features/15) and the agent replies that land in them
+    // (docs/features/21). The generic document.* rule below refreshes the
+    // roster and the tree, neither of which is where a discussion lives — and
+    // `.updated` is what carries an agent's answer into a comment that was
+    // posted empty, so a reader watching a placeholder needs this to arrive.
+    on: 'document.comment.*',
+    invalidate: (e) =>
+      e.documentId ? [['/v1/documents/{id}/threads', { id: e.documentId }]] : [],
+  },
+  {
+    // The knowledge-health dashboard (docs/features/40) derives every row's
+    // state from the same columns a document.* event announces a change to —
+    // the stamp, the flag, the owner, the archive mark — and the counts on its
+    // strip from the same rows. The summary is a second key, not a prefix of
+    // the first: a query key's leading element is matched whole.
+    on: 'document.*',
+    invalidate: () => [['/v1/documents'], ['/v1/documents/tree'], ['/v1/knowledge-health'], ['/v1/knowledge-health/summary']],
+  },
+  {
+    // A branch's shared draft (#80): joined, left, checkpointed or discarded.
+    // Its own prefix, not `document.*`, so none of the page rules above fire.
+    on: 'draft.*',
+    invalidate: (e) => (e.documentId ? [['/v1/documents/{id}/drafts', { id: e.documentId }]] : []),
+  },
+  {
+    on: 'revision.*',
+    invalidate: (e) => [
+      ['/v1/documents'],
+      // A finalized revision moves last_activity_at and body_chars, which are
+      // the dashboard's "inactive" and "empty".
+      ['/v1/knowledge-health'],
+      ['/v1/knowledge-health/summary'],
+      ...(e.documentId
+        ? [
+            ['/v1/documents/{id}', { id: e.documentId }],
+            ['/v1/documents/{id}/revisions', { id: e.documentId }],
+            ['/v1/documents/{id}/content', { id: e.documentId }],
+            ['/v1/documents/{id}/graph', { id: e.documentId }],
+            // A publish from a draft rebases it: nothing unpublished any more.
+            ['/v1/documents/{id}/drafts', { id: e.documentId }],
+          ]
+        : []),
+    ],
+  },
+  {
+    // subjectId carries the merge-request id on every merge-request.* event.
+    on: 'merge-request.*',
+    invalidate: (e) => [
+      ['/v1/merge-requests'],
+      ...(e.subjectId
+        ? [
+            ['/v1/merge-requests/{id}', { id: e.subjectId }],
+            ['/v1/merge-requests/{id}/diff', { id: e.subjectId }],
+            ['/v1/merge-requests/{id}/threads', { id: e.subjectId }],
+          ]
+        : []),
+      ...(e.documentId ? [['/v1/documents/{id}/merge-requests', { id: e.documentId }]] : []),
+      // A capture's merged/closed state is its merge request's (captureStateFor),
+      // so the inbox reads stale the moment one is merged or closed.
+      ['/v1/captures'],
+    ],
+  },
+  {
+    // Contradictions (#81): found by the arbiter, superseded by a new head, or
+    // closed by a person. Every list is keyed by query, so one prefix covers
+    // the /conflicts tabs and each page's rail.
+    on: 'conflict.*',
+    invalidate: () => [['/v1/conflicts']],
+  },
+  {
+    // The captures inbox (issue #73): proposed from an agent session, approved
+    // or rejected by a person. subjectId is the capture.
+    on: 'capture.*',
+    invalidate: (e) => [['/v1/captures'], ...(e.subjectId ? [['/v1/captures/{id}', { id: e.subjectId }]] : [])],
+  },
+  {
+    // subjectId carries the run id on every workflow-run.*/workflow-node.* event.
+    // A run's node tree changes far more often than the run row itself, so the
+    // detail query is invalidated on node events too.
+    on: 'workflow-run.*',
+    invalidate: (e) => [
+      ['/v1/workflows/runs'],
+      ...(e.subjectId ? [['/v1/workflows/runs/{id}', { id: e.subjectId }]] : []),
+      ...(e.documentId ? [['/v1/documents/{id}/workflow-runs', { id: e.documentId }]] : []),
+    ],
+  },
+  {
+    // Background agent runs (docs/features/20). `subjectId` is the run id on
+    // every agent event, so one rule refreshes the list and that run's detail.
+    on: 'agent.run.*',
+    invalidate: (e) => [
+      ['/v1/ai/agents/runs'],
+      ...(e.subjectId ? [['/v1/ai/agents/runs/{id}', { id: e.subjectId }]] : []),
+    ],
+  },
+  {
+    // Connectors (docs/features/19, extended by 26).
+    //
+    // `subjectId` means two different things on this prefix, and the asymmetry
+    // is load-bearing rather than an oversight: `connector.run.started`,
+    // `.succeeded` and `.failed` are *about a connector* and carry its id,
+    // while the staging events — `connector.run.paused|resumed|awaiting-review`
+    // and every `connector.item.*` — are about one run and carry the run id.
+    // A key built from the wrong one silently never matches, so both readings
+    // are invalidated: the id is a uuid either way, and a miss costs nothing
+    // beyond a query key nobody is holding.
+    on: 'connector.*',
+    invalidate: (e) => [
+      ['/v1/connectors'],
+      ...(e.subjectId
+        ? [
+            // subjectId as a connector id.
+            ['/v1/connectors/{id}/runs', { id: e.subjectId }],
+            ['/v1/connectors/{id}/links', { id: e.subjectId }],
+            // subjectId as a run id. The item tree changes far more often than
+            // the run row, exactly as a workflow run's nodes do.
+            ['/v1/connectors/runs/{runId}', { runId: e.subjectId }],
+            ['/v1/connectors/runs/{runId}/items', { runId: e.subjectId }],
+          ]
+        : []),
+      ...(e.documentId ? [['/v1/documents/{id}/connectors', { id: e.documentId }]] : []),
+    ],
+  },
+  {
+    on: 'workflow-node.*',
+    invalidate: (e) => [
+      ['/v1/workflows/runs'],
+      ...(e.subjectId ? [['/v1/workflows/runs/{id}', { id: e.subjectId }]] : []),
+      ...(e.documentId ? [['/v1/documents/{id}/workflow-runs', { id: e.documentId }]] : []),
+    ],
+  },
+  { on: 'workflow.*', invalidate: () => [['/v1/workflows']] },
+  // The glossary and template rosters (#472): their stores follow these keys,
+  // so a term or template edited in another tab reaches every page's copy.
+  { on: 'glossary.*', invalidate: () => [['/v1/glossary']] },
+  { on: 'template.*', invalidate: () => [['/v1/templates']] },
+  // A project rename/delete changes the switcher, and re-scopes the page tree.
+  { on: 'project.*', invalidate: () => [['/v1/projects'], ['/v1/documents'], ['/v1/documents/tree']] },
+  { on: 'relations.*', invalidate: (e) => [['/v1/entities'], ...(e.documentId ? [['/v1/documents/{id}/graph', { id: e.documentId }]] : [])] },
+  { on: 'branch.created', invalidate: (e) => (e.documentId ? [['/v1/documents/{id}', { id: e.documentId }]] : []) },
+  // The inbox. Addressed frames only ever reach their recipient (the server
+  // filters on `event.userId`), so this fires on somebody's own notification
+  // and never on a peer's.
+  {
+    on: 'notification.created',
+    invalidate: () => [['/v1/notifications'], ['/v1/notifications/unread-count']],
+  },
+  // Who sees what changed (#76): the tree, lists and search answer differently
+  // now, and an access request may have been decided. The event names no page
+  // — everything the reader holds about pages is re-asked.
+  {
+    on: 'acl.changed',
+    invalidate: () => [
+      ['/v1/documents'],
+      ['/v1/documents/tree'],
+      ['/v1/projects'],
+      ['/v1/search'],
+      ['/v1/access-requests'],
+    ],
+  },
+  { on: '*', invalidate: () => [['/v1/activity']] },
+]
+
+/** Apply every matching rule for one event. */
+export function applyLiveEvent(event: KnowledgeEvent, queryClient: QueryClient, rules: LiveCacheRule[]): void {
+  for (const rule of rules) {
+    if (!matchesType(rule.on, event.type)) continue
+    rule.patch?.(event, queryClient)
+    for (const key of rule.invalidate?.(event) ?? []) {
+      void queryClient.invalidateQueries({ queryKey: key })
+    }
+  }
+}
+
+let singleton: LiveClient | null = null
+let unbind: (() => void) | null = null
+
+export interface StartLiveOptions {
+  queryClient: QueryClient
+  /** Per-subscription tracking configuration sent to the server (events/documents filters). */
+  tracking?: LiveTrackingConfig
+  /** Cache rules; defaults to defaultLiveCacheRules. */
+  rules?: LiveCacheRule[]
+  /** Workspace to track; defaults to the active workspace. */
+  workspaceId?: string
+}
+
+/**
+ * Idempotent bootstrap: connect the singleton LiveClient, bind it to the
+ * query cache and subscribe to the workspace. Call once the user is
+ * authenticated (app/App.vue); call again with a different tracking config to
+ * retune the subscription live.
+ */
+export function startLive(options: StartLiveOptions): LiveClient {
+  if (import.meta.env.SSR) throw new Error('startLive is client-only')
+  const rules = options.rules ?? defaultLiveCacheRules
+  if (!singleton) singleton = new LiveClient()
+  unbind?.()
+  unbind = singleton.onEvent((event) => applyLiveEvent(event, options.queryClient, rules))
+  singleton.connect()
+  singleton.subscribe(options.workspaceId ?? getWorkspaceId(), options.tracking)
+  return singleton
+}
+
+export function stopLive(): void {
+  unbind?.()
+  unbind = null
+  singleton?.close()
+  singleton = null
+}
+
+export function liveClient(): LiveClient | null {
+  return singleton
+}

@@ -6,7 +6,7 @@ import type { DocumentCategory } from '@knowledge/contracts/documents';
  * Word boundaries for term matching, as lookaround sources.
  *
  * Shared because two implementations must agree: the read-side linker in
- * `apps/web/src/lib/glossary.ts` decides what a reader sees, and
+ * `apps/web/src/modules/documents/model/glossary.ts` decides what a reader sees, and
  * `countOccurrences` in the API's glossary service decides which AI proposals
  * are grounded enough to offer. They drifted the moment one was fixed alone.
  *

@@ -88,7 +88,7 @@ the page's own beacon:
   - the time only grows, and is capped at `ANALYTICS_READ_TIME_CAP_MS`;
   - it only touches `channel = 'web'` rows carrying the caller's reader key.
 
-The tracker (`apps/web/src/lib/page-view.ts`) pauses while the tab is hidden
+The tracker (`apps/web/src/modules/insights/model/page-view.ts`) pauses while the tab is hidden
 and flushes on `pagehide`. Both routes go through `PublicRateLimiter`
 (120/min per principal, failing open) and answer 204 even when the hit is
 dropped. `AnalyticsRecorder.view()` drops `web` on purpose.
@@ -239,7 +239,7 @@ key.
 
 `components/analytics/`: `DailyBars.vue` (lifted from `AiUsagePanel.vue`),
 `PageInsightsWidget.vue` and `ProjectAnalyticsSection.vue`, plus
-`pages/AnalyticsPage.vue` at `/analytics`. The nav item is admin-only, and the
+`modules/insights/pages/AnalyticsPage.vue` at `/analytics`. The nav item is admin-only, and the
 route shows the forbidden state to anyone else.
 
 ## Operations
@@ -283,7 +283,7 @@ route shows the forbidden state to anyone else.
   - `mcp-http.spec.ts`: one tool-call row per call, and the two tools' guards,
     read-key refusal and untrusted wrapper.
 
-  Web: `lib/page-view.spec.ts` (hidden tabs pause the timer, `pagehide`
+  Web: `modules/insights/model/page-view.spec.ts` (hidden tabs pause the timer, `pagehide`
   flushes).
 - e2e against live infra (`pnpm --filter @knowledge/api run test:e2e`, not in
   CI):

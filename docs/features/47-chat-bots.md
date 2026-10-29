@@ -304,9 +304,9 @@ pages carrying any of some tags) and when (right away, or an hourly / 4-hourly
   selected in SQL: instant rules always, digests once `next_due_at` has
   passed, bots switched off never.
 
-The web editor is `components/chat-bots/ChatSubscriptionEditor.vue`, opened
+The web editor is `modules/connectors/components/ChatSubscriptionEditor.vue`, opened
 from **Notifications (n)** under each group in `ChatBindingTable.vue`. Its tag
-field is the search sheet's (`lib/tag-options.ts`).
+field is the search sheet's (`modules/documents/model/tag-options.ts`).
 
 ## The adapter seam
 

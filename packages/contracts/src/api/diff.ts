@@ -2,7 +2,7 @@
 // The spec diff's vocabulary (#78, phase 6).
 //
 // A leaf with no imports: `CompareResponse` (documents) carries an `api` diff,
-// and documents is reached from graph, which `api/index.ts` imports at
+// and documents is reached from graph, which `shared/api/index.ts` imports at
 // runtime — so the diff types living there would close a runtime cycle.
 // ---------------------------------------------------------------------------
 

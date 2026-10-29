@@ -250,7 +250,7 @@ const PLACEHOLDER_RE = /(\\)?\{\{\s*([A-Za-z][A-Za-z0-9_-]{0,63})\s*\}\}/g;
 const BCP47: Record<Locale, string> = { en: 'en-GB', ru: 'ru-RU' };
 
 /**
- * A date the way `apps/web/src/lib/format.ts#formatDate` writes one, pinned to
+ * A date the way `apps/web/src/shared/utils/format.ts#formatDate` writes one, pinned to
  * UTC: a template rendered on the server and previewed in a browser in another
  * zone must produce the same day.
  */

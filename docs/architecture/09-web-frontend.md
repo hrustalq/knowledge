@@ -47,7 +47,7 @@ unlocks and site sign-ins, both scoped to one link or site) and the visitor's
 `kn_site_*` cookie skips the site render cache: its render is one reader's. The render
 returns its own headers (a share's no-referrer/noindex/no-store, a site's
 robots rule) and may answer with a redirect to a page's one canonical URL. Its
-page body is HTML from `lib/markdown/public-render.server.ts`, which sanitizes
+page body is HTML from `core/markdown/public-render.server.ts`, which sanitizes
 with `SANITIZE_CONFIG` over a jsdom window. That is the one server-side
 sanitizer, and the reason `MarkdownView` can keep rendering nothing during SSR.
 Vite builds both apps in one pass (`rolldownOptions.input`), and the reader
@@ -101,9 +101,9 @@ the AI-readable routes use.
 the host check) is how the worker gets an export's HTML
 ([feature 45](../features/45-export.md)). It calls a third SSR module,
 `src/export-render.ts`, which renders each page with `renderPublicMarkdown`
-and wraps the pages in the app's own stylesheets: `styles/tokens.css` (the
-palette, kept out of `style.css`'s Tailwind entry so it can be inlined) and
-`styles/editor.css`. It answers only an internal peer whose request carries no
+and wraps the pages in the app's own stylesheets: `assets/styles/tokens.css` (the
+palette, kept out of `assets/style.css`'s Tailwind entry so it can be inlined) and
+`assets/styles/editor.css`. It answers only an internal peer whose request carries no
 `X-Forwarded-*` header, which is never a request through Caddy. The module is a
 third SSR input in `vite.config.ts`.
 
@@ -144,7 +144,7 @@ user's documents to the next.
 
 ## Per-request context without module state
 
-`lib/api.ts` is imported by everything and has to answer "what is the current
+`shared/api/api.ts` is imported by everything and has to answer "what is the current
 token / workspace / locale" in both environments. In the browser those live in
 module variables hydrated from `localStorage`. On the server they come from an
 `AsyncLocalStorage` scope installed by `entry-server.ts`:
@@ -207,7 +207,7 @@ const base = import.meta.env.SSR
 The server talks to the API directly; the browser goes through the Vite dev
 proxy, which rewrites `/api` away and forwards to `API_URL_INTERNAL` — so the
 browser is always same-origin and there is no CORS configuration anywhere. There
-is one HTTP stack, `api/http.ts`'s axios instance, which attaches
+is one HTTP stack, `shared/api/http.ts`'s axios instance, which attaches
 `Authorization`, `Accept-Language` and `x-request-id` (#472 removed the older
 `apiFetch`; raw `fetch` is a lint error outside an allowlist,
 [10](10-caching.md#the-web-client-one-client-one-cache)).
@@ -284,7 +284,7 @@ a key of `this` never matched and every caller sent its own request.
 
 ## Intl wrappers, because "no locale" means "the host"
 
-`lib/format.ts` wraps every date, number, relative-time and byte-size format.
+`shared/utils/format.ts` wraps every date, number, relative-time and byte-size format.
 The reason is precise: a bare `toLocaleString()` / `toLocaleDateString()` call
 passes no locale, which means _follow the host_ — the browser on the client and
 **the server's own locale during SSR**. The two disagree the moment a user picks
@@ -305,7 +305,7 @@ Anything that touches `window` or produces markup the client would discard has
 to be kept out of the SSR pass, and the pattern is always the same: a `mounted`
 ref, flipped in `onMounted`, guarding the element.
 
-`@vue-flow/core` in `components/workflows/WorkflowGraphEditor.vue` is the
+`@vue-flow/core` in `modules/workflows/components/WorkflowGraphEditor.vue` is the
 canonical case — Vue Flow is client-only, so the canvas renders nothing on the
 server; `Autocomplete.vue` guards its `<Teleport>` for the same reason. Vue Flow
 also ships unstyled and its node positioning _is_ CSS, so both
@@ -318,7 +318,7 @@ cytoscape because cytoscape nodes cannot be Vue components;
 neither an `EventSource` nor a `WebSocket` has any meaning during a render.
 
 Co-editing ([56](../features/56-realtime-coediting.md)) goes one step further:
-`components/editor/use-collab.ts` (Yjs, the Hocuspocus provider, IndexedDB) is
+`modules/editor/model/use-collab.ts` (Yjs, the Hocuspocus provider, IndexedDB) is
 a **dynamic import** that `EditorPage` makes in `onMounted`, and only after
 `GET /v1/collab/capabilities` says `enabled`. The server render and a
 deployment with the flag off never load Yjs at all; the SSR pass renders the

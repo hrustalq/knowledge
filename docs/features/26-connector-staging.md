@@ -160,7 +160,7 @@ what the merge assist writes into.
 **A local differ rather than a diffing dependency.** Every diff in the product
 until now was between two revisions, and the server computes those. A staged
 item is neither side of that: markdown that does not exist yet, against a page
-head that does — no revision id, so no endpoint to call. `lib/line-diff.ts`
+head that does — no revision id, so no endpoint to call. `core/line-diff.ts`
 produces `DiffHunk[]`, the same shape the compare endpoint returns, and
 `DiffView` renders it unchanged. Myers is not implemented: trimming the common
 prefix and suffix collapses the realistic case to a few lines either side, and
@@ -209,7 +209,7 @@ it bites.
 as plain assert scripts, the house pattern where there is no test runner:
 
 ```bash
-node --experimental-strip-types apps/web/src/components/connectors/setup-machines.check.ts
+node --experimental-strip-types apps/web/src/modules/connectors/model/setup-machines.check.ts
 ```
 
 covering the wizard spine, Back in every position, the persistence round trip,

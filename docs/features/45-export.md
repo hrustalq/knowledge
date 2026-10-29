@@ -105,7 +105,7 @@ the finished file after it is built.
 
 ## Rendering: the web renders, the worker packages
 
-The markdown parser lives in the web (`lib/markdown/render.ts`), and so does
+The markdown parser lives in the web (`core/markdown/render.ts`), and so does
 the sanitised server render the public reader uses (`renderPublicMarkdown`).
 An export asks it for HTML rather than keeping a second renderer in the API:
 
@@ -138,9 +138,9 @@ In a PDF every page shares one document, so heading ids get a per-page prefix
 (`idPrefix: 'p<n>-'`). A cross-page link to a heading lands on the start of
 that page.
 
-**Styles.** The app's own: `styles/tokens.css` (the palette, moved out of
-`style.css` so it can be inlined without Tailwind), `styles/editor.css` (the
-read view's stylesheet) and `styles/export.css` (cover, contents, breadcrumbs,
+**Styles.** The app's own: `assets/styles/tokens.css` (the palette, moved out of
+`assets/style.css` so it can be inlined without Tailwind), `assets/styles/editor.css` (the
+read view's stylesheet) and `assets/styles/export.css` (cover, contents, breadcrumbs,
 print rules). No web fonts, because an export opens offline and Gotenberg's
 Chromium makes no network request.
 

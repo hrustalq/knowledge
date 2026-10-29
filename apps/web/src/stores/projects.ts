@@ -1,11 +1,11 @@
 import { defineStore } from 'pinia'
 import type { ListProjectsResponse, ProjectSummary } from '@knowledge/contracts'
-import { apiQueryOptions, bindStoreQuery } from '@/api/queries'
-import { getProjectId, getWorkspaceId, setActiveProject } from '@/lib/api'
+import { apiQueryOptions, bindStoreQuery } from '@/shared/api/queries'
+import { getProjectId, getWorkspaceId, setActiveProject } from '@/shared/api/api'
 import { useDocumentsStore } from '@/stores/documents'
-import { useGlossaryStore } from '@/stores/glossary'
-import { useWorkflowsStore } from '@/stores/workflows'
-import { useTemplatesStore } from '@/stores/templates'
+import { useGlossaryStore } from '@/modules/documents/model/glossary.store'
+import { useWorkflowsStore } from '@/modules/workflows/model/workflows.store'
+import { useTemplatesStore } from '@/modules/templates/model/templates.store'
 import { useSidebarNavStore } from '@/stores/sidebar-nav'
 
 /**

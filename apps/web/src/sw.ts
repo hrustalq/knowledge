@@ -26,7 +26,7 @@ self.addEventListener('fetch', (event) => {
   )
 })
 
-// The update toast's Reload (lib/pwa.ts): the waiting worker takes over, and
+// The update toast's Reload (shared/utils/pwa.ts): the waiting worker takes over, and
 // the page reloads onto the new build once it controls it.
 self.addEventListener('message', (event) => {
   if (event.data?.type === 'SKIP_WAITING') void self.skipWaiting()

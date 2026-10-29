@@ -6,9 +6,9 @@
 # so Caddy serves plain HTTP and issues no certificates.
 #
 # The whole browser surface of this app is /api/* — verified in three places:
-#   apps/web/src/api/http.ts:86-88   baseURL defaults to '/api'
-#   apps/web/src/api/live.ts:24-25   WebSocket is wss://<host>/api/v1/events/ws
-#   apps/web/src/lib/api.ts:378-384  resolveAssetUrl prefixes attachments/avatars
+#   apps/web/src/shared/api/http.ts:86-88   baseURL defaults to '/api'
+#   apps/web/src/shared/api/live.ts:24-25   WebSocket is wss://<host>/api/v1/events/ws
+#   apps/web/src/shared/api/api.ts:378-384  resolveAssetUrl prefixes attachments/avatars
 # In development the Vite middleware strips that prefix (vite.config.ts:19).
 # The one other path a browser follows is a presigned object URL under
 # /<S3_BUCKET>/, which goes straight to MinIO (#144, route below).

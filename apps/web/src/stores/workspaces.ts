@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import type { ListWorkspacesResponse, WorkspaceSummary } from '@knowledge/contracts'
-import { apiQueryOptions, bindStoreQuery } from '@/api/queries'
-import { getWorkspaceId, setActiveWorkspace } from '@/lib/api'
+import { apiQueryOptions, bindStoreQuery } from '@/shared/api/queries'
+import { getWorkspaceId, setActiveWorkspace } from '@/shared/api/api'
 
 /**
  * Workspace roster + the one place the active workspace is switched. Mirrors

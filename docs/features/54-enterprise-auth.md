@@ -16,7 +16,7 @@ over SCIM 2.0, and can refuse every session its provider did not open.
 This document is the product layer. The mechanics live in
 [06 — Auth & ACLs](../architecture/06-auth-acl.md#single-sign-on-75), and the
 operator's setup recipes in the in-app manual (**Settings → Docs → Single
-sign-on & SCIM**, `apps/web/src/pages/docs/content/46-sso-scim.md`).
+sign-on & SCIM**, `apps/web/src/modules/help/docs/content/46-sso-scim.md`).
 
 ## What
 
@@ -305,15 +305,15 @@ it only picks a login button.
     `admin-sessions.spec.ts` (an admin's list/revoke-one/revoke-all, the 404,
     the 403, a revoked token's 401), `audit.service.spec.ts`;
   - `scim-filter.spec.ts` in `src/scim/`.
-- Web: `lib/sso.spec.ts` covers the fragment-only exchange code, the
+- Web: `modules/auth/model/sso.spec.ts` covers the fragment-only exchange code, the
   `?reauth=` redirect, `returnTo` confinement, and that every callback error has
   an en and ru message; it also pins `completeSso` (the `/sso/complete`
   sequence): the fragment is wiped before the exchange, no code means no
   exchange, a foreign `returnTo` lands on `/documents`, and a refused code goes
-  to `/login?error=`. `lib/reauth.spec.ts` (jsdom) pins `redirectForReauth`:
+  to `/login?error=`. `shared/api/reauth.spec.ts` (jsdom) pins `redirectForReauth`:
   one navigation per page load, none from `/login` or `/auth/*`, none for a
   non-re-auth 403, and its wiring from the API client's response interceptor
-  (`api/http.ts`).
+  (`shared/api/http.ts`).
 - Live, per phase: Keycloak 26 for OIDC, SAML and back-channel logout
   (`make infra-up-keycloak`), lldap for LDAP, and SCIM driven with curl. The
   phase handoffs on #75 record the recipes.

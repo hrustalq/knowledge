@@ -115,7 +115,7 @@ confirming the gain is real rather than an artifact of the metric. It is a
 remarkably high yield for its simplicity, and it costs exactly N× one
 generation — a number the budget above can hold.
 
-**The anchoring primitive already exists.** `apps/web/src/lib/anchor-match.ts`
+**The anchoring primitive already exists.** `apps/web/src/core/anchor-match.ts`
 (feature 15) normalizes, finds all occurrences, scores by surviving
 prefix/suffix, and reports _outdated_ rather than silently re-anchoring — the
 W3C TextQuoteSelector shape. A web citation that carries a quote can be verified

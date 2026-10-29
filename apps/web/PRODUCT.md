@@ -118,7 +118,7 @@ landing on the API and has no web surface yet.
   assumptions in onboarding).
 - Existing identity artifacts are incumbent, not committed: `favicon.svg`, a Sora
   display face loaded from Google Fonts, and an OKLCH token palette described in
-  `src/style.css` as "ink on paper, graph glow."
+  `src/assets/style.css` as "ink on paper, graph glow."
 - Voice in the interface today is plain, technical and unhurried, with GitLab and
   Confluence as the vocabulary users are expected to already know.
 

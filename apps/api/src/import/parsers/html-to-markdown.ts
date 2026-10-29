@@ -7,7 +7,7 @@ import { countWords } from './parser.types.js';
 /**
  * HTML → markdown, server side.
  *
- * The settings mirror `apps/web/src/lib/markdown/serialize.ts` deliberately:
+ * The settings mirror `apps/web/src/core/markdown/serialize.ts` deliberately:
  * imported markdown has to be indistinguishable from markdown the WYSIWYG
  * editor wrote, or the first save of an imported page would produce a diff full
  * of formatting churn nobody asked for.

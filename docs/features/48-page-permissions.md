@@ -122,7 +122,7 @@ grants, so a re-added person or a reused id inherits nothing.
 
 ## Where people meet it
 
-- **Access dialog** (`components/access/PageAccessDialog.vue`), from the page
+- **Access dialog** (`modules/access/components/PageAccessDialog.vue`), from the page
   header and the tree row menu. It has the restricted switch, a person/group
   picker with a level per grantee, and the inherited chain shown read-only
   ("Restricted by *Parent* · 3 people"). Grants a connector mirrored appear with

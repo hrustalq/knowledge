@@ -1,15 +1,15 @@
 import type { ExportRenderPage, ExportRenderRequest, ExportRenderResponse, Locale } from '@knowledge/contracts'
 import { EXPORT_PRINT_READY_FLAG } from '@knowledge/contracts/publishing'
-import { formatBytes, formatDate, pluralCategory } from './lib/format'
-import { escapeHtml, KN } from './lib/markdown/nodes'
-import { mermaidConfig } from './lib/mermaid'
-import { renderPublicMarkdown, type PublicRenderOptions } from './lib/markdown/public-render.server'
+import { formatBytes, formatDate, pluralCategory } from './shared/utils/format'
+import { escapeHtml, KN } from './core/markdown/nodes'
+import { mermaidConfig } from './shared/utils/mermaid'
+import { renderPublicMarkdown, type PublicRenderOptions } from './core/markdown/public-render.server'
 // The reader's catalog: an export is read by whoever it is handed to, like a share.
-import en from './i18n/reader/en.json'
-import ruCatalog from './i18n/reader/ru.json'
-import tokensCss from './styles/tokens.css?raw'
-import editorCss from './styles/editor.css?raw'
-import exportCss from './styles/export.css?raw'
+import en from './shared/i18n/reader/en.json'
+import ruCatalog from './shared/i18n/reader/ru.json'
+import tokensCss from './assets/styles/tokens.css?raw'
+import editorCss from './assets/styles/editor.css?raw'
+import exportCss from './assets/styles/export.css?raw'
 
 /**
  * An export's HTML (docs/features/45), rendered here because this is where the

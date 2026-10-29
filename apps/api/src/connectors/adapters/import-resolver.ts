@@ -416,7 +416,7 @@ export type ImportEdges = Map<string, Map<string, Set<string>>>;
 /**
  * Carry each import through the barrels it lands on (#236).
  *
- * `import { ResponsivePopover } from '@/components/ui/popover'` names a barrel
+ * `import { ResponsivePopover } from '@/shared/ui/popover'` names a barrel
  * that re-exports `default` from `ResponsivePopover.vue`; the file the importer
  * uses is that one, and an index that stopped at the barrel would answer
  * "nothing uses this component" for every component behind an `index.ts`. So

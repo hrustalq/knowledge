@@ -278,7 +278,7 @@ client drops the card instead of rendering an empty one.
 Anchors are best-effort. A `line` anchor pins `revisionId` + `line` + `excerpt`
 at comment time; once the branch advances the client shows the thread as
 **outdated** rather than re-anchoring it (client matching in
-`apps/web/src/components/merge-requests/thread-anchors.ts`; server-side
+`apps/web/src/modules/merge-requests/model/thread-anchors.ts`; server-side
 re-anchoring is future work). The quote-based `text` anchor that review mode and
 page comments use is the same `ReviewThreadAnchor` union — see
 [../features/13-review-mode.md](../features/13-review-mode.md) and
@@ -424,8 +424,8 @@ before it is proposed.
 `/merge-requests` (`MergeRequestsPage.vue`) and `/merge-requests/:id`
 (`MergeRequestDetailPage.vue`, tabs overview/changes/structure/impact per
 [plan.md §8](../../plan.md), plus review mode and, on a spec only, **API
-changes** from `components/api-reference/ApiChangesPanel.vue`) were the first consumers of the generated
-vue-query client. `components/knowledge/DiffView.vue` was extracted from the
+changes** from `modules/api-reference/components/ApiChangesPanel.vue`) were the first consumers of the generated
+vue-query client. `modules/documents/components/DiffView.vue` was extracted from the
 revisions view and takes inline threads through a slot;
 `components/merge-requests/` holds `MergeRequestCard.vue`,
 `MergeRequestList.vue`, `MergeRequestSearchBar.vue`, `MrSidebar.vue` (assignee +

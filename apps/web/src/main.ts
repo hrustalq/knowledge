@@ -1,12 +1,12 @@
 import { createSSRApp, markRaw } from 'vue'
 import { createPinia } from 'pinia'
 import { VueQueryPlugin } from '@tanstack/vue-query'
-import App from './App.vue'
-import { createRouter, installAuthGuard, installViewTransitions } from './router'
-import { createQueryClient } from './api/queries'
-import { createI18nFor } from './i18n'
-import { getLocale } from './lib/api'
-import './style.css'
+import App from './app/App.vue'
+import { createRouter, installAuthGuard, installViewTransitions } from './app/router'
+import { createQueryClient } from './shared/api/queries'
+import { createI18nFor } from './shared/i18n'
+import { getLocale } from './shared/api/api'
+import './assets/style.css'
 
 // Fresh app/router/pinia/query-client per request (SSR) or per page load (client).
 export function createApp() {

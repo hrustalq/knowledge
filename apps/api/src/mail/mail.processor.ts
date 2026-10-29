@@ -151,7 +151,7 @@ function recipientOf(user: User): Recipient {
 
 /**
  * Where a mailed notification points. Mirrors the directed branches of the
- * web's `notificationLink` (components/notifications/notification-ui.ts): a
+ * web's `notificationLink` (modules/notifications/model/notification-ui.ts): a
  * merge request opens on the discussion that named you, anything else opens
  * its page, and a row with neither opens the inbox.
  */

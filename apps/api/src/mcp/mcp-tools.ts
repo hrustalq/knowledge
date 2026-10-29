@@ -43,6 +43,7 @@ export const WRITE_TOOLS: ReadonlySet<string> = new Set([
   'knowledge_create_document',
   'knowledge_create_branch',
   'knowledge_create_revision',
+  'knowledge_patch_document',
   'knowledge_create_merge_request',
   'knowledge_approve_merge_request',
   'knowledge_close_merge_request',

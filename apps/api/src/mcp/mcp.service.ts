@@ -65,6 +65,7 @@ import { ShareLinksService } from '../publishing/share-links.service.js';
 import { ExportService } from '../export/export.service.js';
 import { currentTrace, newTraceId } from '@knowledge/observability';
 import { keepFrontmatter } from '../common/frontmatter.js';
+import { applyLineEdits } from './line-patch.js';
 import { t } from '../i18n/t.js';
 import { DEV_PRINCIPAL, type Principal } from '../auth/principal.js';
 import { CAPTURE_TOOLS, MCP_AS_OF, MCP_INSTRUCTIONS, MCP_KNOWN_AT, MCP_SERVER_NAME, settleTools, trackTools } from './mcp-tools.js';
@@ -134,6 +135,7 @@ export const MCP_SERVER_VERSION = '0.38.0';
  *   knowledge_compare_revisions → knowledge.compare_revisions (Phase 2)
  *   knowledge_create_branch     → knowledge.create_branch     (Phase 2)
  *   knowledge_create_revision   → knowledge.create_revision   (Phase 2)
+ *   knowledge_patch_document    → (#603, line-range edits)
  *   knowledge_find_relations    → knowledge.find_relations    (Phase 4)
  *   knowledge_impact_analysis   → knowledge.impact_analysis   (Phase 4)
  *   knowledge_trace_relation    → knowledge.trace_relation    (Phase 4)
@@ -1827,6 +1829,45 @@ export class McpService {
         return this.json(
           await this.createRevision(documentId, { branch, baseRevisionId, content, message, syntax }, principal.userId),
         );
+      },
+    );
+
+    // #603: change a few lines without resending the page. The lines are the
+    // base revision's, so the base must still be the branch head.
+    server.registerTool(
+      'knowledge_patch_document',
+      {
+        description:
+          'Change some lines of a page instead of rewriting it: a new revision on a branch, like knowledge_create_revision. ' +
+          'Line numbers are 1-based and count the `markdown` that knowledge_get_document_content returned for baseRevisionId (the body without its frontmatter, which is kept; a spec or fixture is numbered whole). ' +
+          'Each edit replaces startLine..endLine (inclusive) with content; endLine = startLine - 1 inserts before startLine, startLine = line count + 1 appends, empty content deletes. ' +
+          'Number every edit off that one read, not off each other; edits may not overlap. Refused when the branch head has moved past baseRevisionId: read again and renumber.',
+        inputSchema: {
+          documentId: z.string().uuid(),
+          baseRevisionId: z.string().uuid().describe('The revision your line numbers come from; must be the branch head'),
+          branch: z.string().optional().describe('The default branch when omitted'),
+          edits: z
+            .array(
+              z.object({
+                startLine: z.number().int().min(1),
+                endLine: z.number().int().min(0),
+                content: z.string(),
+              }),
+            )
+            .min(1)
+            .max(100),
+          message: z.string().optional(),
+        },
+      },
+      async ({ documentId, baseRevisionId, branch, edits, message }) => {
+        await guard.doc(documentId, 'editor');
+        await guard.branches(documentId, { ...(branch ? { branchNames: [branch] } : {}), revisionIds: [baseRevisionId] }, 'editor');
+        const base = await this.documents.getContent(documentId, baseRevisionId);
+        const content = applyLineEdits(base.markdown, edits);
+        if (content.trim() === '') throw new Error('The edits leave the page empty; archive it instead.');
+        // Read only for a spec or fixture: a page's content type is markdown.
+        const syntax = base.contentType.includes('json') ? 'json' : 'yaml';
+        return this.json(await this.createRevision(documentId, { branch, baseRevisionId, content, message, syntax }, principal.userId));
       },
     );
 

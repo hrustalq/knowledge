@@ -6,8 +6,10 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
   AudioLines,
+  BookMarked,
   BookmarkPlus,
   ChartColumn,
+  ChevronRight,
   FlaskConical,
   GitPullRequestArrow,
   HeartPulse,
@@ -19,7 +21,9 @@ import {
   Workflow,
 } from 'lucide-vue-next'
 import { SwitcherCreateDialog, type ScopeCreated } from '@/modules/projects'
+import { Collapse } from '@/shared/ui/collapse'
 import { useAuthStore } from '@/stores/auth'
+import { useLayoutStore } from '@/stores/layout'
 import ScopeSwitcher from './ScopeSwitcher.vue'
 import SidebarPanes from './SidebarPanes.vue'
 import SidebarResizeHandle from './SidebarResizeHandle.vue'
@@ -62,29 +66,42 @@ const links = computed<NavLink[]>(() => [
   // Search is not a destination — it is the topbar trigger's sheet ("/" or ⌘K).
   { to: '/merge-requests', label: t('nav.mergeRequests'), icon: GitPullRequestArrow },
   { to: '/workflows', label: t('nav.workflows'), icon: Workflow },
-  // The trust loop's review surface (docs/features/40): beside merge requests
-  // and workflows, which are the other two places a page is acted on in bulk.
-  { to: '/knowledge-health', label: t('nav.knowledgeHealth'), icon: HeartPulse },
-  // Which operations are ready to test (#483), beside health: both are a sweep for what needs work.
+  // Which operations are ready to test (#483).
   { to: '/qa', label: t('nav.qa'), icon: FlaskConical },
-  // Usage analytics (#79): beside health, which reads its unread/dead signals.
-  // Admins only — it carries what people searched for.
+  // Recordings of your own (#551): proposals you then review.
+  { to: '/memos', label: t('nav.memos'), icon: AudioLines },
+  { to: '/assistant', label: t('nav.assistant'), icon: Sparkles },
+])
+
+// The surfaces that look after the knowledge base as a whole rather than one
+// page (#605), folded under one node so the rail stays short.
+const knowledgeLinks = computed<NavLink[]>(() => [
+  // The trust loop's review surface (docs/features/40).
+  { to: '/knowledge-health', label: t('nav.knowledgeHealth'), icon: HeartPulse },
+  // Usage analytics (#79): admins only — it carries what people searched for.
   ...(auth.canAdminWorkspace ? [{ to: '/analytics', label: t('nav.analytics'), icon: ChartColumn }] : []),
   // What agents proposed from their sessions (issue #73): page captures are
   // decided on merge requests, but terms and stranded captures only here.
   { to: '/captures', label: t('nav.captures'), icon: BookmarkPlus },
-  // Recordings of your own (#551): like captures, proposals you then review.
-  { to: '/memos', label: t('nav.memos'), icon: AudioLines },
   // Contradictions the arbiter found between pages (#81).
   { to: '/conflicts', label: t('nav.conflicts'), icon: Scale },
-  { to: '/assistant', label: t('nav.assistant'), icon: Sparkles },
-  // Projects, users, access and activity live under the settings shell.
-  { to: '/settings', label: t('nav.settings'), icon: Settings },
 ])
+
+const CURRENT = 'bg-primary/10 font-medium text-primary'
+const IDLE = 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground'
 
 function isCurrent(to: string): boolean {
   return to === '/documents' ? route.path === '/documents' : route.path.startsWith(to)
 }
+
+// Closed until you open it or land on one of its pages, then kept for the
+// session (the layout store is serialized with SSR, so both sides agree).
+const layout = useLayoutStore()
+const inKnowledge = computed(() => knowledgeLinks.value.some((l) => isCurrent(l.to)))
+const knowledgeOpen = computed(() => layout.isSubRailOpen('nav.knowledge', false))
+watch(inKnowledge, (inside) => {
+  if (inside) layout.setSubRailOpen('nav.knowledge', true)
+}, { immediate: true })
 </script>
 
 <template>
@@ -108,12 +125,50 @@ function isCurrent(to: string): boolean {
         :key="l.to"
         :to="l.to"
         class="flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors"
-        :class="isCurrent(l.to)
-          ? 'bg-primary/10 font-medium text-primary'
-          : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground'"
+        :class="isCurrent(l.to) ? CURRENT : IDLE"
       >
         <component :is="l.icon" class="size-4 shrink-0" />
         {{ l.label }}
+      </RouterLink>
+
+      <button
+        type="button"
+        class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-sm transition-colors"
+        :class="inKnowledge && !knowledgeOpen ? CURRENT : IDLE"
+        :aria-expanded="knowledgeOpen"
+        @click="layout.setSubRailOpen('nav.knowledge', !knowledgeOpen)"
+      >
+        <BookMarked class="size-4 shrink-0" />
+        <span class="min-w-0 flex-1 truncate">{{ t('nav.knowledgeBase') }}</span>
+        <ChevronRight
+          class="text-muted-foreground size-3.5 shrink-0 transition-transform motion-reduce:transition-none"
+          :class="knowledgeOpen ? 'rotate-90' : ''"
+          aria-hidden="true"
+        />
+      </button>
+      <Collapse :open="knowledgeOpen">
+        <div class="space-y-px pt-px">
+          <RouterLink
+            v-for="l in knowledgeLinks"
+            :key="l.to"
+            :to="l.to"
+            class="flex items-center gap-2.5 rounded-md py-1.5 pr-2.5 pl-7 text-sm transition-colors"
+            :class="isCurrent(l.to) ? CURRENT : IDLE"
+          >
+            <component :is="l.icon" class="size-4 shrink-0" />
+            {{ l.label }}
+          </RouterLink>
+        </div>
+      </Collapse>
+
+      <!-- Projects, users, access and activity live under the settings shell. -->
+      <RouterLink
+        to="/settings"
+        class="flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors"
+        :class="isCurrent('/settings') ? CURRENT : IDLE"
+      >
+        <Settings class="size-4 shrink-0" />
+        {{ t('nav.settings') }}
       </RouterLink>
     </nav>
 

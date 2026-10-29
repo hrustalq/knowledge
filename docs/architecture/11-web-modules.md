@@ -246,8 +246,8 @@ extraction phase confirms its entity's contents against the import graph.
 
 | Entity           | From                                                                                                                                         |
 | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `document`       | documents' MarkdownView, DiffView, DocumentCanvas, TreeRow/TreeBranch, the verification badge/bar/tone/OwnerPicker, page-refs, glossary, page-source, tag-options, ActivityFeed, the export dialog and picker, GenerativeUiBlock, DocumentPickerWidget |
-| `search`         | documents' use-search, SearchSheetFrame, FacetFields (also the reader's)                                                                     |
+| `document`       | **partly done:** MarkdownView, DiffView, page-refs, glossary, embeds, thread-anchors, page-source, the verification badge/ui/tone, tag-options, ActivityFeed. Still in documents: DocumentCanvas, TreeRow/TreeBranch, the verification bar, OwnerPicker, the export dialog and picker. GenerativeUiBlock and DocumentPickerWidget go to `assistant` instead (only the assistant renders them, and GenerativeUiBlock reads search and graph, which read document) |
+| `search`         | **done:** use-search, app-search-source, SearchWidget with its filters, panel, results and facets, SearchSheetFrame, FacetFields; the reader and the documents search page read them. SearchSheet, ChatSearchWidget and search-ui.store stay in documents |
 | `person`         | **done:** UserChip, UserCard, UserAvatar (out of `widgets/`: they read the members composable), use-members and use-agent-names, the actor helpers split out of `mr-ui`, AvatarPicker |
 | `merge-request`  | merge-requests' MergeRequestList, ThreadCard, CommentComposer, thread-anchors, mr-ui                                                          |
 | `rich-editor`    | **done:** RichEditor with its extensions, nodes, menus and dialogs, CollabDraftBadge, use-collab (behind `loadCollab()`), editor-streams, working-copy, use-embed-status, use-attachments, ImportStepper/ParseProgress; the module keeps EditorPage, ImportPage, the import wizard parts, CollabPresence/CollabStatus, EditorAiPanel and use-working-copy; page-source went to `document` |
@@ -259,7 +259,7 @@ extraction phase confirms its entity's contents against the import graph.
 | `insight`        | insights' PageInsightsRail, QualityRail, ProjectAnalyticsSection, QualityDistribution, scoreTone, usePageView                               |
 | `notification`   | WatchButton                                                                                                                                  |
 | `capture`        | CaptureOriginParts, clientLabel, repoAtCommit                                                                                                |
-| `workflow`       | WorkflowRail, graph-theme                                                                                                                    |
+| `workflow`       | **done:** WorkflowRail, the workflows store, workflow-ui. graph-theme went to `graph`, which since took the graph view too: GraphView (also as `LazyGraphView`), GraphCanvas, KnowledgeGraph, GraphControls, GraphTimeSlider, graph-model, graph-time, use-graph-time |
 
 `DailyBars` and `AiEmptyState` have no domain and move to `shared/`.
 

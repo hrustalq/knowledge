@@ -3,7 +3,6 @@ import type { ListProjectsResponse, ProjectSummary } from '@knowledge/contracts'
 import { apiQueryOptions, bindStoreQuery } from '@/shared/api/queries'
 import { getProjectId, getWorkspaceId, setActiveProject } from '@/shared/api/api'
 import { useDocumentsStore } from '@/stores/documents'
-import { useGlossaryStore } from '@/modules/documents/model/glossary.store'
 import { useSidebarNavStore } from '@/stores/sidebar-nav'
 
 /**
@@ -85,7 +84,6 @@ export const useProjectsStore = defineStore('projects', {
       // project you just left.
       await Promise.all([
         useDocumentsStore().rescope(),
-        useGlossaryStore().rescope(),
         ...[...projectScoped].map((useStore) => useStore().rescope()),
       ])
     },

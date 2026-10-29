@@ -306,7 +306,7 @@ pages carrying any of some tags) and when (right away, or an hourly / 4-hourly
 
 The web editor is `modules/connectors/components/ChatSubscriptionEditor.vue`, opened
 from **Notifications (n)** under each group in `ChatBindingTable.vue`. Its tag
-field is the search sheet's (`modules/documents/model/tag-options.ts`).
+field is the search sheet's (`entities/document/model/tag-options.ts`).
 
 ## The adapter seam
 

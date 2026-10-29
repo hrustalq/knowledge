@@ -10,10 +10,10 @@ import { ExternalLink } from 'lucide-vue-next'
 import { useProjectsStore } from '@/stores/projects'
 import { useSearchUiStore } from '@/modules/documents/model/search-ui.store'
 import { useWorkspacesStore } from '@/stores/workspaces'
-import { appSearchSource } from '../model/app-search-source'
-import SearchFilters from './SearchFilters.vue'
-import SearchSheetFrame from './SearchSheetFrame.vue'
-import { useSearch } from '../model/use-search'
+import { appSearchSource } from '@/entities/search'
+import { SearchFilters } from '@/entities/search'
+import { SearchSheetFrame } from '@/entities/search'
+import { useSearch } from '@/entities/search'
 
 const { t } = useI18n()
 

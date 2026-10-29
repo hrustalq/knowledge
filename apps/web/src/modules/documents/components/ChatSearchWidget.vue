@@ -5,8 +5,8 @@
 import { useI18n } from 'vue-i18n'
 import { onMounted } from 'vue'
 import { chatSearchSource } from '../model/chat-search-source'
-import SearchPanel from './SearchPanel.vue'
-import { useSearch } from '../model/use-search'
+import { SearchPanel } from '@/entities/search'
+import { useSearch } from '@/entities/search'
 
 const { t } = useI18n()
 

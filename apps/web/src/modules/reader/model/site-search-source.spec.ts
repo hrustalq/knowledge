@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PublicSiteSearchResponse } from '@knowledge/contracts'
-import { SearchNotice, type SearchSnapshot } from '@/modules/documents/model/use-search'
+import { SearchNotice, type SearchSnapshot } from '@/entities/search'
 import type { PublicSiteChrome } from './reader-state'
 import { loadSiteFacets, siteSearchParams, siteSearchSource } from './site-search-source'
 

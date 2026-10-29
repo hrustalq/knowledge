@@ -26,7 +26,7 @@ import { Checkbox } from '@/shared/ui/checkbox'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 import { PageState } from '@/shared/layout'
 import { UserChip } from '@/entities/person'
-import VerificationBadge from '@/modules/documents/components/VerificationBadge.vue'
+import { VerificationBadge } from '@/entities/document'
 import { useMembers } from '@/entities/person'
 import { headerState, type HealthSelection, type SelectModifiers } from '../model/health-selection'
 

@@ -1,0 +1,8 @@
+export { default as DocumentFacets } from './components/DocumentFacets.vue'
+export { default as FacetFields } from './components/FacetFields.vue'
+export { default as SearchFilters } from './components/SearchFilters.vue'
+export { default as SearchPanel } from './components/SearchPanel.vue'
+export { default as SearchSheetFrame } from './components/SearchSheetFrame.vue'
+export { default as SearchWidget } from './components/SearchWidget.vue'
+export { appSearchSource } from './model/app-search-source'
+export { SearchNotice, type SearchSnapshot, type SearchSource, useSearch } from './model/use-search'

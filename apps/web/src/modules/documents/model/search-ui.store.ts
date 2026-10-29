@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { getWorkspaceId } from '@/shared/api/api'
-import type { SearchSnapshot } from '@/modules/documents/model/use-search'
+import type { SearchSnapshot } from '@/entities/search'
 
 const PENDING_KEY = 'kn_search_pending'
 

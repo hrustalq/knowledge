@@ -54,7 +54,7 @@ import {
 } from '@/shared/ui/alert-dialog'
 import OwnerPicker from './OwnerPicker.vue'
 import WorkItemChips from '@/modules/documents/components/WorkItemChips.vue'
-import { INTERVAL_CHOICES, flagSourceWho, intervalFromKey, intervalKey, verificationDotClass } from '../model/verification-ui'
+import { INTERVAL_CHOICES, flagSourceWho, intervalFromKey, intervalKey, verificationDotClass } from '@/entities/document'
 
 const props = defineProps<{ detail: DocumentDetailResponse }>()
 const emit = defineEmits<{

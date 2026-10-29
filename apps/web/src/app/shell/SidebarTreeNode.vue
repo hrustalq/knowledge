@@ -18,7 +18,7 @@ import { useDocumentsStore } from '@/stores/documents'
 import { useSidebarStore } from '@/stores/sidebar'
 import TreeRowMenu from '@/modules/documents/components/TreeRowMenu.vue'
 import { TREE_INDENT, TreeWindowKey } from '@/shared/utils/tree-window'
-import { VERIFICATION_MARK_CLASS, needsAttention, verificationDotClass } from '@/modules/documents/model/verification-ui'
+import { VERIFICATION_MARK_CLASS, needsAttention, verificationDotClass } from '@/entities/document'
 
 defineOptions({ name: 'SidebarTreeNode' })
 const { t } = useI18n()

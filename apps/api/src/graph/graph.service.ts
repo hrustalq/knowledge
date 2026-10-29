@@ -1655,30 +1655,79 @@ export class GraphService {
 
   /**
    * Phase 5 trusted-operator queries (plan.md §9): read-only, single
-   * statement, row-capped. The caller's query is wrapped in an outer SELECT
-   * carrying the mandatory workspace predicate, so rows without a matching
-   * workspaceId property are filtered out — deny by default.
+   * statement, row-capped, every FROM narrowed to the workspace by
+   * `scopeOperatorQuery` (#589). A row that still carries someone else's
+   * `workspaceId` is dropped — the fence's second line, not its first.
    */
   async operatorQuery(
     workspaceId: string,
     query: string,
     limit: number,
   ): Promise<{ rows: Record<string, unknown>[]; truncated: boolean }> {
-    const q = query.trim().replace(/;+\s*$/, '');
-    if (!/^select\b/i.test(q)) throw new BadRequestException(t('error.graph.selectOnly'));
-    if (q.includes(';')) throw new BadRequestException(t('error.graph.singleStatement'));
-    const forbidden = /\b(insert|update|delete|create|drop|alter|truncate|grant|revoke|backup|import|export)\b/i;
-    if (forbidden.test(q)) {
-      throw new BadRequestException(t('error.graph.writeKeyword'));
-    }
+    const scoped = scopeOperatorQuery(query);
     const cap = Math.max(1, Math.floor(limit));
-    const rows = await this.arcade.query<Record<string, unknown>>(
-      'sql',
-      `SELECT FROM ( ${q} ) WHERE workspaceId = :workspaceId LIMIT ${cap + 1}`,
-      { workspaceId },
-    );
+    let rows: Record<string, unknown>[];
+    try {
+      rows = await this.arcade.query<Record<string, unknown>>('sql', `SELECT FROM ( ${scoped} ) LIMIT ${cap + 1}`, {
+        workspaceId,
+      });
+    } catch (e) {
+      // ArcadeDB's own refusal of the query (a parse error, an unknown
+      // property) is the operator's to read; an unreachable store is not a 400.
+      const failed = /^ArcadeDB query failed with (400|500): ([\s\S]*)$/.exec((e as Error).message);
+      if (!failed) throw e;
+      const reason = /"detail":"((?:[^"\\]|\\.)*)/.exec(failed[2])?.[1] ?? failed[2];
+      throw new BadRequestException(t('error.graph.queryFailed', { reason, query: scoped }));
+    }
+    rows = rows.filter((r) => !('workspaceId' in r) || r.workspaceId === workspaceId);
     return { rows: rows.slice(0, cap), truncated: rows.length > cap };
   }
+}
+
+/** The only FROM targets an operator query may name: the types whose rows store `workspaceId` (#589). */
+const OPERATOR_QUERY_TYPES: readonly string[] = [...WORKSPACE_VERTEX_TYPES, ...RELATION_EDGE_TYPES];
+
+/**
+ * The tenant fence of the trusted-operator query (#589). Every `FROM <Type>`
+ * becomes `FROM (SELECT FROM <Type> WHERE workspaceId = :workspaceId)`, so the
+ * predicate narrows what the query reads rather than what it returns — a
+ * count, a GROUP BY or an inner LIMIT then means what it says. Any other
+ * target (a RID, `schema:`, an unscoped type such as HAS_CHUNK) is refused,
+ * and so is syntax that could reach a record past a FROM this scan sees:
+ * comments, `#` (RID literals), MATCH and the by-name readers. String literals are not parsed, so
+ * one holding `from x` or `--` is refused too — the fence errs closed.
+ */
+export function scopeOperatorQuery(query: string): string {
+  const q = query.trim().replace(/;+\s*$/, '');
+  if (!/^select\b/i.test(q)) throw new BadRequestException(t('error.graph.selectOnly'));
+  if (q.includes(';')) throw new BadRequestException(t('error.graph.singleStatement'));
+  const forbidden = /\b(insert|update|delete|create|drop|alter|truncate|grant|revoke|backup|import|export)\b/i;
+  if (forbidden.test(q)) {
+    throw new BadRequestException(t('error.graph.writeKeyword'));
+  }
+  // Besides comments, RIDs and MATCH: backtick-quoted names, and the
+  // functions that read an index or a type by name rather than through a FROM
+  // (ArcadeDB 26: eval, search_*, vector.neighbors & co, promql, ts.*, load csv).
+  const syntax = /\/\*|\*\/|--|\/\/|#|`|\bmatch\b|\beval\s*\(|\bsearch_\w+|\bvector\w*\s*[.(]|\bpromql\b|\bts\s*[._]|\bload_?csv/i.exec(q);
+  if (syntax) throw new BadRequestException(t('error.graph.unsupportedSyntax', { syntax: syntax[0] }));
+
+  const types = OPERATOR_QUERY_TYPES.join(', ');
+  let targets = 0;
+  const scoped = q.replace(/\bfrom\b(\s*)([A-Za-z_]\w*)?/gi, (match, gap: string, name: string | undefined, at: number) => {
+    targets++;
+    const rest = q.slice(at + match.length);
+    // A subquery: its own FROMs are scanned as the replace walks on.
+    if (!name && /^\(\s*(select|traverse)\b/i.test(rest)) return match;
+    const type = name && OPERATOR_QUERY_TYPES.find((known) => known.toLowerCase() === name.toLowerCase());
+    // What may follow a type: the end, a closing paren, or the next clause's keyword.
+    if (!type || !/^\s*($|\)|[A-Za-z])/.test(rest)) {
+      const target = (name ?? '') + (rest.match(/^\S*/)?.[0] ?? '');
+      throw new BadRequestException(t('error.graph.unscopedTarget', { target: target.slice(0, 60) || '∅', types }));
+    }
+    return `FROM${gap}(SELECT FROM ${type} WHERE workspaceId = :workspaceId)`;
+  });
+  if (!targets) throw new BadRequestException(t('error.graph.noTarget', { types }));
+  return scoped;
 }
 
 export function cosine(a: number[], b: number[]): number {

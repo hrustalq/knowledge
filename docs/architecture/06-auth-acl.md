@@ -356,9 +356,23 @@ the graph an arbitrary question. It is fenced on five sides:
 
 1. **Single `SELECT` only**, enforced by a keyword blocklist.
 2. **Row-capped** by `GRAPH_QUERY_MAX_ROWS`.
-3. Wrapped in an **outer `SELECT` carrying the mandatory workspace predicate**.
-4. **Rows without a `workspaceId` are dropped** — deny by default, so a query
-   that projects away the tenant column returns nothing rather than everything.
+3. **Every `FROM` is narrowed to the workspace before the query reads it**
+   (`scopeOperatorQuery`, #589): `FROM Entity` runs as
+   `FROM (SELECT FROM Entity WHERE workspaceId = :workspaceId)`, so `count(*)`,
+   `GROUP BY`, an inner `LIMIT` and subqueries mean what they say. Until #589
+   the predicate wrapped the _output_ instead, which dropped every aggregate row
+   and applied an inner `LIMIT` across all tenants before filtering.
+4. **Only workspace-scoped targets** — the vertex types in
+   `WORKSPACE_VERTEX_TYPES` and the relation edges in `RELATION_EDGE_TYPES`
+   (`OPERATOR_QUERY_TYPES`). Anything else after `FROM` (a RID, `schema:types`,
+   `HAS_CHUNK`, which stores no `workspaceId`) is a 400 that lists the allowed
+   types, and so is syntax that could reach a record past a `FROM` the scan
+   sees: comments, `#`, backticks, `MATCH`, and the functions that read an
+   index or a type by name (`eval`, `search_*`, `vector.neighbors` and its
+   siblings, `promql`, `ts.*`, CSV loading). That list is ArcadeDB 26's; an
+   ArcadeDB upgrade that adds a by-name reader must add it there. String
+   literals are not parsed, so the fence errs closed. As a second line, a returned row carrying another
+   tenant's `workspaceId` is dropped.
 5. **Audited** into `audit_logs`, readable at `GET /v1/audit-logs` (admin).
    The row carries `aclBypass: true`: the query reads the stores past every page
    restriction, as only an admin operator may.

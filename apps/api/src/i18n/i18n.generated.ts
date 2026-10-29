@@ -835,6 +835,10 @@ export type I18nTranslations = {
             "selectOnly": string;
             "singleStatement": string;
             "writeKeyword": string;
+            "unsupportedSyntax": string;
+            "unscopedTarget": string;
+            "noTarget": string;
+            "queryFailed": string;
         };
         "glossary": {
             "notFound": string;

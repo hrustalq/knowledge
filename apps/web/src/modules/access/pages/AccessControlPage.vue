@@ -74,7 +74,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shar
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/shared/ui/table'
-import { PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@/widgets/page'
+import { PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@/shared/layout'
 import AccessRoles from '@/modules/access/components/AccessRoles.vue'
 import AccessAccounts from '@/modules/access/components/AccessAccounts.vue'
 import AccessGroups from '@/modules/access/components/AccessGroups.vue'

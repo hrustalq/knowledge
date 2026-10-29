@@ -37,7 +37,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/shared/ui/alert-dialog'
-import { PageState } from '@/widgets/page'
+import { PageState } from '@/shared/layout'
 
 const { t } = useI18n()
 const auth = useAuthStore()

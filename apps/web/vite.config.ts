@@ -8,7 +8,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 export default defineConfig(({ isSsrBuild }) => ({
   plugins: [
     {
-      // A module's or an entity's index.ts only re-exports (eslint.config.js holds it to that),
+      // A module's, an entity's or a widget's index.ts only re-exports (eslint.config.js holds it to that),
       // so it is side-effect free — and saying so lets the bundler bind an
       // importer straight to the files it uses. Without it, every page importing
       // an index pulled in every module that index re-exports: the bundler
@@ -16,7 +16,7 @@ export default defineConfig(({ isSsrBuild }) => ({
       // tree-shaken (docs/architecture/11).
       name: 'module-index-pure',
       transform(code, id) {
-        if (/\/src\/(modules|entities)\/[^/]+\/index\.ts$/.test(id)) return { code, moduleSideEffects: false }
+        if (/\/src\/(modules|entities|widgets)\/[^/]+\/index\.ts$/.test(id)) return { code, moduleSideEffects: false }
       },
     },
     vue(),

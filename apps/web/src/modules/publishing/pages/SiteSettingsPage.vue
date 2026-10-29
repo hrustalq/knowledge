@@ -47,7 +47,7 @@ import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Textarea } from '@/shared/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
-import { PageState, PageTabs, panelId, tabId, type PageTab } from '@/widgets/page'
+import { PageState, PageTabs, panelId, tabId, type PageTab } from '@/shared/layout'
 import SiteAskPanel from '@/modules/publishing/components/SiteAskPanel.vue'
 import SiteAudiencePanel from '@/modules/publishing/components/SiteAudiencePanel.vue'
 

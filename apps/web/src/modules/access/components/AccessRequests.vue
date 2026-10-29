@@ -38,7 +38,7 @@ import {
 import { Label } from '@/shared/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import { Textarea } from '@/shared/ui/textarea'
-import PageState from '@/widgets/page/PageState.vue'
+import PageState from '@/shared/layout/PageState.vue'
 import { UserChip } from '@/entities/person'
 
 const { t } = useI18n()

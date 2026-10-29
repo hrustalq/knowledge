@@ -15,7 +15,7 @@ import { isCallStep as isCall, type FixtureCallStep, type FixtureStep, type Test
 import { apiQueryOptions } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
 import MarkdownView from '@/modules/documents/components/MarkdownView.vue'
-import { PageState } from '@/widgets/page'
+import { PageState } from '@/shared/layout'
 import ApiEndpoint from './ApiEndpoint.vue'
 import ApiTone from './ApiTone.vue'
 

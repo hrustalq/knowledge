@@ -96,7 +96,7 @@ import {
 } from '@/shared/ui/dropdown-menu'
 import SaveAsTemplateDialog, { type SaveAsTemplatePage } from '@/modules/templates/components/SaveAsTemplateDialog.vue'
 import ExportDialog from '@/modules/documents/components/ExportDialog.vue'
-import { PageLayout, PageRail, PageState } from '@/widgets/page'
+import { PageLayout, PageRail, PageState } from '@/shared/layout'
 import TocRail from '@/modules/documents/components/TocRail.vue'
 import DocumentCanvas from '@/modules/documents/components/DocumentCanvas.vue'
 import ThreadCard from '@/modules/merge-requests/components/ThreadCard.vue'

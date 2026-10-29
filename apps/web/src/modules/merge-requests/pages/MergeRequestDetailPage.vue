@@ -49,7 +49,7 @@ import CommentComposer from '@/modules/merge-requests/components/CommentComposer
 import { matchAnchoredThreads } from '@/modules/merge-requests/model/thread-anchors'
 import { mrIcon } from '@/modules/merge-requests/model/mr-ui'
 import { UserChip } from '@/entities/person'
-import { PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@/widgets/page'
+import { PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@/shared/layout'
 
 const { t } = useI18n()
 

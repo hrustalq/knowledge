@@ -29,7 +29,7 @@ import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Combobox, type ComboboxOption } from '@/shared/ui/combobox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
-import { PageState } from '@/widgets/page'
+import { PageState } from '@/shared/layout'
 
 const props = defineProps<{ canManage: boolean }>()
 

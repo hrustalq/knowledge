@@ -23,7 +23,7 @@ import {
   UserRound,
   Workflow,
 } from 'lucide-vue-next'
-import { PageLayout, PageSubRail } from '@/widgets/page'
+import { PageLayout, PageSubRail } from '@/shared/layout'
 import { useAuthStore } from '@/stores/auth'
 
 const { t } = useI18n()

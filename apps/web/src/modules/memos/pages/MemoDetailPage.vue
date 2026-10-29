@@ -29,7 +29,7 @@ import { Button } from '@/shared/ui/button'
 import { confirm } from '@/shared/ui/confirm'
 import { apiUrl } from '@/shared/api/api'
 import { formatDateTime, formatDuration } from '@/shared/utils/format'
-import { PageLayout, PageState } from '@/widgets/page'
+import { PageLayout, PageState } from '@/shared/layout'
 import { MEMO_STATUS_CLASS, MEMO_STATUS_ICON, isMemoInFlight, segmentAt } from '@/modules/memos/model/memo-ui'
 
 const { t } = useI18n()

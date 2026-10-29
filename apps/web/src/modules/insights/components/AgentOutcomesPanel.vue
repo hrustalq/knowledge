@@ -18,7 +18,7 @@ import { Bot } from 'lucide-vue-next'
 import { AGENT_OUTCOME_SPLITS, AGENT_OUTCOMES, type AgentOutcome, type AgentOutcomeGroup, type AgentOutcomeSplit, type AgentOutcomesResponse } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { formatDate, formatPercent } from '@/shared/utils/format'
-import { PageState } from '@/widgets/page'
+import { PageState } from '@/shared/layout'
 import { useAgentNames } from '@/entities/person'
 import { outcomeShare, outcomesFor, shortHash, totalOf } from '../model/agent-outcomes-ui'
 

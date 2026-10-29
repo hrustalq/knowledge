@@ -12,7 +12,8 @@
  * Two things are better for the move.
  *
  * **The rail remembers.** Open state lives in the layout store keyed by
- * surface, so a reader who always checks History finds it open on the next page
+ * surface (provided by the app as `RAIL_MEMORY`, since shared/ cannot import a store),
+ * so a reader who always checks History finds it open on the next page
  * instead of opening it again on every one. Session-scoped, not persisted — see
  * stores/layout.ts for why a remembered set restored after hydration would push
  * the page down under the reader.
@@ -30,11 +31,10 @@
  * frame of its own. A rail that owned the dialog would have to be told about
  * every exception, which is the page's knowledge, not the rail's.
  */
-import { computed, watch } from 'vue'
+import { computed, inject, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import RailSection from '@/widgets/page/RailSection.vue'
-import { useLayoutStore } from '@/stores/layout'
-import type { RailWidget } from './page-chrome'
+import RailSection from '@/shared/layout/RailSection.vue'
+import { RAIL_MEMORY, type RailWidget } from './page-chrome'
 
 const props = withDefaults(
   defineProps<{
@@ -57,7 +57,8 @@ const props = withDefaults(
 const emit = defineEmits<{ expand: [K] }>()
 
 const route = useRoute()
-const layout = useLayoutStore()
+// Provided by App.vue, which every page with a rail renders under.
+const layout = inject(RAIL_MEMORY)!
 
 const defaults = computed<string[]>(() => {
   if (props.defaultOpen) return [...props.defaultOpen]

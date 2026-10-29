@@ -11,7 +11,7 @@ import { Badge } from '@/shared/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import { Skeleton } from '@/shared/ui/skeleton'
 import AiEmptyState from '@/modules/assistant/components/AiEmptyState.vue'
-import { PageScrollList } from '@/widgets/page'
+import { PageScrollList } from '@/shared/layout'
 import { getWorkspaceId, relativeTime } from '@/shared/api/api'
 import { PHASE_LABEL, RUN_STATUS_CLASS, RUN_STATUS_ICON, RUN_STATUS_LABEL } from '../model/connector-ui'
 

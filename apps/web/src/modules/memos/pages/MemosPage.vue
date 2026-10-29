@@ -18,7 +18,7 @@ import { apiQueryOptions } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
 import { formatDateTime, formatDuration, formatRelative } from '@/shared/utils/format'
 import { useProjectsStore } from '@/stores/projects'
-import { PageLayout, PageState } from '@/widgets/page'
+import { PageLayout, PageState } from '@/shared/layout'
 import MemoUpload from '@/modules/memos/components/MemoUpload.vue'
 import { MEMO_STATUS_CLASS, MEMO_STATUS_ICON, isMemoInFlight } from '@/modules/memos/model/memo-ui'
 

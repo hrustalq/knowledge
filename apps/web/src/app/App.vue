@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch, watchEffect } from 'vue'
+import { onMounted, provide, ref, watch, watchEffect } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import { Library } from 'lucide-vue-next'
 import { useQueryClient } from '@tanstack/vue-query'
@@ -8,6 +8,8 @@ import { ConfirmDialog } from '@/shared/ui/confirm'
 import AppShell from '@/app/shell/AppShell.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useEventsStore } from '@/stores/events'
+import { useLayoutStore } from '@/stores/layout'
+import { RAIL_MEMORY } from '@/shared/layout'
 import { useSearchUiStore } from '@/modules/documents/model/search-ui.store'
 import { startLive } from '@/shared/api'
 import { startPwa } from '@/shared/utils/pwa'
@@ -19,6 +21,8 @@ const { t } = useI18n()
 const auth = useAuthStore()
 const events = useEventsStore()
 const searchUi = useSearchUiStore()
+// The page rail's remembered open state (shared/layout cannot import a store).
+provide(RAIL_MEMORY, useLayoutStore())
 
 // A workspace switch from inside the search sheet reloads the app; pick the
 // query back up on the other side.

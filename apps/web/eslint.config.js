@@ -118,13 +118,13 @@ export default [
     rules: { 'no-restricted-syntax': 'off' },
   },
   {
-    // A module's or an entity's index.ts is its public surface and nothing else
+    // A module's, an entity's or a widget's index.ts is its public surface and nothing else
     // (docs/architecture/11): named re-exports from the module's own files. The
     // build marks it side-effect free (vite.config.ts), which only pays off while
     // it declares nothing itself: an importer of one declaration would include
     // the whole index, eager re-exports and all. A lazily loaded component is
     // declared in components/lazy.ts and re-exported.
-    files: ['src/modules/*/index.ts', 'src/entities/*/index.ts'],
+    files: ['src/{modules,entities,widgets}/*/index.ts'],
     rules: {
       'no-restricted-syntax': [
         'error',

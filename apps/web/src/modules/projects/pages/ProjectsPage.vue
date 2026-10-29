@@ -21,7 +21,7 @@ import { useProjectsStore } from '@/stores/projects'
 import { Autocomplete, type AutocompleteOption } from '@/shared/ui/autocomplete'
 import { Button } from '@/shared/ui/button'
 import { Skeleton } from '@/shared/ui/skeleton'
-import SwitcherCreateDialog from '@/app/shell/SwitcherCreateDialog.vue'
+import SwitcherCreateDialog from '@/modules/projects/components/SwitcherCreateDialog.vue'
 
 const { t } = useI18n()
 

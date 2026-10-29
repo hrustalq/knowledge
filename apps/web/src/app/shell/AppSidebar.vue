@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Left navigation rail: brand, workspace switcher, primary nav, and the
 // Projects → Pages navigation stack (Confluence-style space sidebar).
-import { computed, defineAsyncComponent, ref, watch, type Component } from 'vue'
+import { computed, ref, watch, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
@@ -18,7 +18,7 @@ import {
   Sparkles,
   Workflow,
 } from 'lucide-vue-next'
-import type { ScopeCreated } from '@/modules/projects/model/scopes'
+import { SwitcherCreateDialog, type ScopeCreated } from '@/modules/projects'
 import { useAuthStore } from '@/stores/auth'
 import ScopeSwitcher from './ScopeSwitcher.vue'
 import SidebarPanes from './SidebarPanes.vue'
@@ -37,7 +37,6 @@ const seedName = ref('')
 
 // Loaded on first open and kept after, so closing still animates: its steps,
 // pickers and member search are not what a first load needs (#279).
-const SwitcherCreateDialog = defineAsyncComponent(() => import('./SwitcherCreateDialog.vue'))
 const createMounted = ref(false)
 watch(creating, (kind) => {
   if (kind) createMounted.value = true

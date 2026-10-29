@@ -13,6 +13,7 @@ import { reauthKindOf } from '@/modules/auth/model/sso'
 import * as captures from '@/modules/captures/routes'
 import * as help from '@/modules/help/routes'
 import * as notifications from '@/modules/notifications/routes'
+import * as projects from '@/modules/projects/routes'
 import * as publishing from '@/modules/publishing/routes'
 
 export function createRouter() {
@@ -156,13 +157,11 @@ export function createRouter() {
           // `?client=` still opens the client it named.
           { path: 'connect', redirect: '/settings/ai/connect' },
           {
-            path: 'projects',
-            component: () => import('@/modules/projects/pages/ProjectsPage.vue'),
-            // Third rail: the roster lives in the shell, the selection here.
-            children: [
-              ...publishing.projectSiteRoutes,
-              { path: ':id?', component: () => import('@/modules/projects/pages/ProjectDetailPage.vue') },
-            ],
+            ...projects.settingsRoute,
+            // Third rail: the roster lives in the shell, the selection here. A
+            // project's site settings are publishing's page; nesting it is the
+            // router's job, since modules never import each other.
+            children: [...publishing.projectSiteRoutes, projects.projectDetailRoute],
           },
           // Glossary: workspace vocabulary; the page gates writes on the
           // editor role, and reading it is open to any member.
@@ -259,13 +258,8 @@ export function createRouter() {
           ...help.settingsRoutes,
         ],
       },
-      // A project as something you read (docs/features/24) — the counterpart to
-      // /settings/projects/:id, which is the form you edit it in. Declared
-      // before the redirect below so the bare roster path still lands in
-      // settings while an id opens the overview.
-      { path: '/projects/:id', component: () => import('@/modules/projects/pages/ProjectOverviewPage.vue') },
+      ...projects.routes,
       // Legacy top-level paths → their settings home
-      { path: '/projects', redirect: '/settings/projects' },
       { path: '/glossary', redirect: '/settings/glossary' },
       { path: '/activity', redirect: '/settings/activity' },
       { path: '/access', redirect: '/settings/access' },

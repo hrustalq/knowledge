@@ -29,7 +29,7 @@ import {
 import { Collapse } from '@/shared/ui/collapse'
 import ApiEndpoint from './ApiEndpoint.vue'
 import ApiTone from './ApiTone.vue'
-import type { ApiTone as Tone } from '@/modules/api-reference/model/api-spec'
+import type { ApiTone as Tone } from '@/entities/api-operation/model/api-spec'
 
 const props = withDefaults(
   defineProps<{

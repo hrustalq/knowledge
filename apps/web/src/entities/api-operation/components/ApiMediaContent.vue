@@ -13,7 +13,7 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { exampleForSchema } from '@knowledge/contracts'
-import { schemaTree, typeLabel, type ContentView } from '@/modules/api-reference/model/api-spec'
+import { schemaTree, typeLabel, type ContentView } from '@/entities/api-operation/model/api-spec'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import ApiCode, { type ApiCodeLang } from './ApiCode.vue'
 import ApiSchema from './ApiSchema.vue'

@@ -53,8 +53,8 @@ const RAW_FETCH_OK = [
   'src/modules/assistant/model/assistant-stream.ts', // a streamed response body
   'src/entities/insight/model/use-page-view.ts', // a keepalive beacon that outlives the tab
   'src/sw.ts', // the service worker passes a navigation through; there is no client in it
-  'src/modules/api-reference/components/ApiTryConsole.vue', // try-it: the request is the reader's own
-  'src/modules/api-reference/components/ApiTestRun.vue', // the same, for a suite run in the browser
+  'src/entities/api-operation/components/ApiTryConsole.vue', // try-it: the request is the reader's own
+  'src/entities/api-operation/components/ApiTestRun.vue', // the same, for a suite run in the browser
   'src/entry-public.ts', // the public SSR entry: no member client, no credential
   'src/modules/reader/**',
 ]

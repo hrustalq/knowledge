@@ -14,7 +14,7 @@ import type { DocumentConnectorResponse } from '@knowledge/contracts'
 import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { Button } from '@/shared/ui/button'
 import { relativeTime } from '@/shared/api/api'
-import ApiDriftCheck from '@/modules/api-reference/components/ApiDriftCheck.vue'
+import { ApiDriftCheck } from '@/entities/api-operation'
 
 // `driftCheck`: an OpenAPI spec the reader may edit (#78, phase 8). Offered only
 // under a repository link, where there is code to compare it with.

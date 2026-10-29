@@ -3,7 +3,7 @@ import { useRoute } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
 import type { ApiOperationInfo, ApiSpecDocumentResponse, ListApiOperationsResponse } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/shared/api/queries'
-import { groupByTag, operationRowKey } from '@/modules/api-reference/model/api-spec'
+import { groupByTag, operationRowKey } from '@/entities/api-operation/model/api-spec'
 
 /** The element id an operation's card carries: stable, so `#op-…` links keep working. */
 export function operationDomId(o: { entityKey: string; method: string | null }): string {

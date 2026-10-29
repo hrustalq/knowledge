@@ -1340,23 +1340,6 @@
   },
   {
     "type": "dependency",
-    "from": "src/modules/connectors/components/ConnectorRail.vue",
-    "to": "src/modules/api-reference/components/ApiDriftCheck.vue",
-    "unresolvedTo": "@/modules/api-reference/components/ApiDriftCheck.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/modules/connectors/components/ConnectorSetupDialog.vue",
     "to": "src/modules/editor/components/ImportStepper.vue",
     "unresolvedTo": "@/modules/editor/components/ImportStepper.vue",
@@ -1510,23 +1493,6 @@
   },
   {
     "type": "dependency",
-    "from": "src/modules/documents/components/GraphCanvas.vue",
-    "to": "src/modules/api-reference/model/use-operation.ts",
-    "unresolvedTo": "@/modules/api-reference/model/use-operation",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/modules/documents/components/KnowledgeIssuesRail.vue",
     "to": "src/modules/assistant/model/feedback.store.ts",
     "unresolvedTo": "@/modules/assistant/model/feedback.store",
@@ -1547,91 +1513,6 @@
     "from": "src/modules/documents/components/ReportIssueDialog.vue",
     "to": "src/modules/assistant/model/feedback.store.ts",
     "unresolvedTo": "@/modules/assistant/model/feedback.store",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/components/RevisionsView.vue",
-    "to": "src/modules/api-reference/components/ApiChangesPanel.vue",
-    "unresolvedTo": "@/modules/api-reference/components/ApiChangesPanel.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/api-reference/components/ApiOperationIndex.vue",
-    "unresolvedTo": "@/modules/api-reference/components/ApiOperationIndex.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/api-reference/components/ApiReferenceView.vue",
-    "unresolvedTo": "@/modules/api-reference/components/ApiReferenceView.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "dynamic-import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/api-reference/components/TestFixtureView.vue",
-    "unresolvedTo": "@/modules/api-reference/components/TestFixtureView.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "dynamic-import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/documents/pages/DocumentDetailPage.vue",
-    "to": "src/modules/api-reference/model/use-api-reference.ts",
-    "unresolvedTo": "@/modules/api-reference/model/use-api-reference",
     "dependencyTypes": [
       "aliased",
       "aliased-tsconfig",
@@ -1833,126 +1714,6 @@
   },
   {
     "type": "dependency",
-    "from": "src/modules/editor/components/nodes/ApiContractNode.vue",
-    "to": "src/modules/api-reference/components/ApiOperationEmbed.vue",
-    "unresolvedTo": "@/modules/api-reference/components/ApiOperationEmbed.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/components/nodes/ApiContractNode.vue",
-    "to": "src/modules/api-reference/components/ApiOperationPicker.vue",
-    "unresolvedTo": "@/modules/api-reference/components/ApiOperationPicker.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "type-only",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/components/nodes/ApiContractNode.vue",
-    "to": "src/modules/api-reference/model/api-spec.ts",
-    "unresolvedTo": "@/modules/api-reference/model/api-spec",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/components/nodes/ApiContractNode.vue",
-    "to": "src/modules/api-reference/model/use-operation.ts",
-    "unresolvedTo": "@/modules/api-reference/model/use-operation",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/components/nodes/ApiSectionNode.vue",
-    "to": "src/modules/api-reference/components/ApiBlockRows.vue",
-    "unresolvedTo": "@/modules/api-reference/components/ApiBlockRows.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/components/nodes/ApiSectionNode.vue",
-    "to": "src/modules/api-reference/components/ApiDisclosure.vue",
-    "unresolvedTo": "@/modules/api-reference/components/ApiDisclosure.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/components/nodes/ApiSectionNode.vue",
-    "to": "src/modules/api-reference/model/api-block-rows.ts",
-    "unresolvedTo": "@/modules/api-reference/model/api-block-rows",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/modules/editor/model/use-working-copy.ts",
     "to": "src/modules/documents/model/page-source.ts",
     "unresolvedTo": "@/modules/documents/model/page-source",
@@ -1988,41 +1749,6 @@
     "to": "src/modules/documents/model/page-source.ts",
     "unresolvedTo": "../../documents/model/page-source",
     "dependencyTypes": [
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/pages/EditorPage.vue",
-    "to": "src/modules/api-reference/components/ApiOperationPicker.vue",
-    "unresolvedTo": "@/modules/api-reference/components/ApiOperationPicker.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "type-only",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/editor/pages/EditorPage.vue",
-    "to": "src/modules/api-reference/components/ApiOperationRef.vue",
-    "unresolvedTo": "@/modules/api-reference/components/ApiOperationRef.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
       "local",
       "import"
     ],
@@ -2172,23 +1898,6 @@
     "from": "src/modules/merge-requests/components/ThreadCard.vue",
     "to": "src/modules/assistant/components/TeachAgentDialog.vue",
     "unresolvedTo": "@/modules/assistant/components/TeachAgentDialog.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/merge-requests/pages/MergeRequestDetailPage.vue",
-    "to": "src/modules/api-reference/components/ApiChangesPanel.vue",
-    "unresolvedTo": "@/modules/api-reference/components/ApiChangesPanel.vue",
     "dependencyTypes": [
       "aliased",
       "aliased-tsconfig",
@@ -2427,23 +2136,6 @@
     "from": "src/modules/templates/components/TemplateEditor.vue",
     "to": "src/modules/editor/components/RichEditor.vue",
     "unresolvedTo": "@/modules/editor/components/RichEditor.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-module-to-module"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/workflows/components/WorkflowNodePanel.vue",
-    "to": "src/modules/api-reference/components/ApiOperationRef.vue",
-    "unresolvedTo": "@/modules/api-reference/components/ApiOperationRef.vue",
     "dependencyTypes": [
       "aliased",
       "aliased-tsconfig",

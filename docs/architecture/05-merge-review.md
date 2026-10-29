@@ -424,7 +424,7 @@ before it is proposed.
 `/merge-requests` (`MergeRequestsPage.vue`) and `/merge-requests/:id`
 (`MergeRequestDetailPage.vue`, tabs overview/changes/structure/impact per
 [plan.md §8](../../plan.md), plus review mode and, on a spec only, **API
-changes** from `modules/api-reference/components/ApiChangesPanel.vue`) were the first consumers of the generated
+changes** from `entities/api-operation/components/ApiChangesPanel.vue`) were the first consumers of the generated
 vue-query client. `modules/documents/components/DiffView.vue` was extracted from the
 revisions view and takes inline threads through a slot;
 `components/merge-requests/` holds `MergeRequestCard.vue`,

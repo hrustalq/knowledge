@@ -142,7 +142,7 @@ through a small reader on js-yaml with the same normalize and dereference.
 
 **`GET /v1/api-specs/:id` keeps internal `$ref`s.** A recursive schema
 dereferences to a cyclic object, which JSON cannot carry. The reader resolves
-refs one hop at a time (`modules/api-reference/model/api-spec.ts`) and marks a recursive type instead
+refs one hop at a time (`entities/api-operation/model/api-spec.ts`) and marks a recursive type instead
 of following it. `GET /v1/documents/:id/content` returns a spec verbatim,
 because gray-matter would take a YAML `---` for frontmatter.
 

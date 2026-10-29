@@ -16,7 +16,7 @@ import type { AgentRunSummary, ApiDriftKind, ApiDriftMismatch } from '@knowledge
 import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { Button } from '@/shared/ui/button'
 import { getWorkspaceId } from '@/shared/api/api'
-import type { ApiTone as Tone } from '@/modules/api-reference/model/api-spec'
+import type { ApiTone as Tone } from '@/entities/api-operation/model/api-spec'
 import ApiTone from './ApiTone.vue'
 
 const props = defineProps<{ documentId: string }>()

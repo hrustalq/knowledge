@@ -13,9 +13,9 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { NodeViewContent, NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
-import ApiDisclosure from '@/modules/api-reference/components/ApiDisclosure.vue'
-import ApiBlockRows from '@/modules/api-reference/components/ApiBlockRows.vue'
-import { isApiSectionKind, readApiBlockRows } from '@/modules/api-reference/model/api-block-rows'
+import { ApiDisclosure } from '@/entities/api-operation'
+import { ApiBlockRows } from '@/entities/api-operation'
+import { isApiSectionKind, readApiBlockRows } from '@/entities/api-operation'
 import { sectionLabel, sectionTable, writtenText } from './api-block-text'
 
 const props = defineProps(nodeViewProps)

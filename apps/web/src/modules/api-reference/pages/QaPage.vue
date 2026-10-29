@@ -37,12 +37,12 @@ import {
 import { apiQueryOptions } from '@/shared/api/queries'
 import { getProjectId, getWorkspaceId } from '@/shared/api/api'
 import { formatNumber, formatRelative } from '@/shared/utils/format'
-import type { ApiTone } from '@/modules/api-reference/model/api-spec'
+import type { ApiTone } from '@/entities/api-operation'
 import { Button } from '@/shared/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import { PageLayout, PageState, PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@/shared/layout'
-import ApiEndpoint from '@/modules/api-reference/components/ApiEndpoint.vue'
-import { operationHref } from '@/modules/api-reference/model/use-operation'
+import { ApiEndpoint } from '@/entities/api-operation'
+import { operationHref } from '@/entities/api-operation'
 import QaEnvironments from '@/modules/api-reference/components/QaEnvironments.vue'
 
 const { t } = useI18n()

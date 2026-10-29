@@ -27,6 +27,19 @@ A render failure logs the stack and returns a bare `500 Internal Server Error`.
 It used to send the stack as the response body, which hands anyone who can
 trigger a render error the server's internal paths and dependency layout.
 
+The server bundle is built with `output.strictExecutionOrder` (`vite.config.ts`,
+SSR only). Its chunks import each other in cycles — a component a page imports
+statically while an entity's `lazy.ts` also imports it dynamically — and
+Rolldown inlines its runtime helpers into whichever chunk first needs them, so
+without it a chunk could evaluate before the helper it imports back was
+assigned: `__exportAll is not a function`, a 500 on the first cold render of
+the document page, the editor, the assistant and the project pages (#630). The
+option costs about 7% of server bundle size and nothing on the client.
+`build:server` then runs `scripts/check-ssr-chunks.mjs`, which imports every
+server chunk in its own worker and fails the build if any cannot evaluate on its
+own — the Vite dev server does not bundle, and typecheck never sees the output,
+so the build is the only place this can be caught.
+
 `traceMiddleware` is registered **first**, before Vite's middlewares and the SSR
 handler, so every response carries `x-request-id` — static-asset 404s included —
 and the id is passed into the render, which is what puts the browser's request,

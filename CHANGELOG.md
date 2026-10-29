@@ -32,6 +32,13 @@ in the pull request that introduces them — see
 - **Workflows and Memos moved under Knowledge base** in the sidebar, and the Knowledge base group now sits
   right below Home (#627).
 
+### Fixed
+
+- **Opening a page, the editor, the assistant or a project page directly no longer fails with a server
+  error** (#630): since 0.39.0, reloading or following a link straight to one of these pages could answer 500
+  while clicking to it inside the app worked. The server bundle now keeps its modules' execution order, and
+  the build fails if any of its chunks cannot load on its own.
+
 ## [0.39.0] — 2026-10-29
 
 ### Added

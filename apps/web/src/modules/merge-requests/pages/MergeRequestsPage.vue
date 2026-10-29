@@ -33,7 +33,7 @@ import {
   type PageTab,
 } from '@/shared/layout'
 import type { ActiveFilter } from '@/shared/ui/filter-bar'
-import MergeRequestList from '@/modules/merge-requests/components/MergeRequestList.vue'
+import { MergeRequestList } from '@/entities/merge-request'
 import MergeRequestSearchBar from '@/modules/merge-requests/components/MergeRequestSearchBar.vue'
 import SavedFilterRail from '@/modules/merge-requests/components/SavedFilterRail.vue'
 import {

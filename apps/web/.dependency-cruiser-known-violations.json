@@ -733,57 +733,6 @@
   {
     "type": "dependency",
     "from": "src/app/router/index.ts",
-    "to": "src/modules/projects/pages/ProjectDetailPage.vue",
-    "unresolvedTo": "@/modules/projects/pages/ProjectDetailPage.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "dynamic-import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "app-via-module-index"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/app/router/index.ts",
-    "to": "src/modules/projects/pages/ProjectOverviewPage.vue",
-    "unresolvedTo": "@/modules/projects/pages/ProjectOverviewPage.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "dynamic-import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "app-via-module-index"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/app/router/index.ts",
-    "to": "src/modules/projects/pages/ProjectsPage.vue",
-    "unresolvedTo": "@/modules/projects/pages/ProjectsPage.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "dynamic-import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "app-via-module-index"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/app/router/index.ts",
     "to": "src/modules/templates/pages/TemplatesSettingsPage.vue",
     "unresolvedTo": "@/modules/templates/pages/TemplatesSettingsPage.vue",
     "dependencyTypes": [
@@ -987,24 +936,6 @@
   },
   {
     "type": "dependency",
-    "from": "src/app/shell/AppSidebar.vue",
-    "to": "src/modules/projects/model/scopes.ts",
-    "unresolvedTo": "@/modules/projects/model/scopes",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "type-only",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "app-via-module-index"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/app/shell/AppTopbar.vue",
     "to": "src/modules/documents/model/search-ui.store.ts",
     "unresolvedTo": "@/modules/documents/model/search-ui.store",
@@ -1056,23 +987,6 @@
   },
   {
     "type": "dependency",
-    "from": "src/app/shell/CreateProjectStep.vue",
-    "to": "src/modules/projects/model/scopes.ts",
-    "unresolvedTo": "@/modules/projects/model/scopes",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "app-via-module-index"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/app/shell/SidebarPagesPane.vue",
     "to": "src/modules/documents/components/TreeDragLayer.vue",
     "unresolvedTo": "@/modules/documents/components/TreeDragLayer.vue",
@@ -1110,23 +1024,6 @@
     "from": "src/app/shell/SidebarPagesPane.vue",
     "to": "src/modules/templates/model/templates.store.ts",
     "unresolvedTo": "@/modules/templates/model/templates.store",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "app-via-module-index"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/app/shell/SidebarProjectsPane.vue",
-    "to": "src/modules/projects/components/ProjectAvatar.vue",
-    "unresolvedTo": "@/modules/projects/components/ProjectAvatar.vue",
     "dependencyTypes": [
       "aliased",
       "aliased-tsconfig",
@@ -1222,40 +1119,6 @@
     "rule": {
       "severity": "error",
       "name": "app-via-module-index"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/app/shell/SwitcherCreateDialog.vue",
-    "to": "src/modules/projects/model/scopes.ts",
-    "unresolvedTo": "@/modules/projects/model/scopes",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "app-via-module-index"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/modules/projects/pages/ProjectsPage.vue",
-    "to": "src/app/shell/SwitcherCreateDialog.vue",
-    "unresolvedTo": "@/app/shell/SwitcherCreateDialog.vue",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "modules-import-no-app"
     }
   },
   {

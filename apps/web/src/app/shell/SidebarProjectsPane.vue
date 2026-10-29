@@ -10,7 +10,7 @@
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useProjectsStore } from '@/stores/projects'
-import ProjectAvatar from '@/modules/projects/components/ProjectAvatar.vue'
+import { ProjectAvatar } from '@/modules/projects'
 import { ChevronRight, Plus } from 'lucide-vue-next'
 import { Skeleton } from '@/shared/ui/skeleton'
 

@@ -68,11 +68,19 @@ in the pull request that introduces them — see
   SKILL.md explains branches that span pages and, where the git remote is enabled, gains a **Git** section:
   the clone URL, a credential helper that reads `KNOWLEDGE_API_KEY` so the key never sits in a URL or
   `.git/config`, and how push options, `git mv` / `git rm` and refusals behave. A push now appears in the
-  project's activity as one `git.pushed` entry per branch pushed, beside the revisions it wrote. The web
-  label for that entry comes with the web half of this phase.
+  project's activity as one `git.pushed` entry per branch pushed, beside the revisions it wrote. The feed
+  reads it as "pushed 3 commits to `fix-terms`".
 - API: `GET /v1/projects/:id/branches` (viewer) returns the same list as `knowledge_list_branches`.
   Merge request rows carry `pageCount`, the number of pages their branch wrote. `GET /v1/merge-requests`
   takes `projectId`.
+- **Clone a project from its page** (#636). Where the git remote is enabled and the workspace has git on, the
+  project page's header has a **Clone** button. Its panel holds the clone URL, makes an API key for this
+  workspace on the spot (read-only, or read and write for an editor; shown once), and gives the commands that
+  clone with it through the credential helper SKILL.md uses. A new **Branches** widget on the project page
+  lists every branch but the default one: its pages, its open merge request, and who wrote it last. Merge
+  request cards say how many pages a change spans when it is more than one.
+- API: `GET /v1/projects/:id/git` (viewer) returns the clone URL, or `url: null` while the git remote is off.
+  It answers 404 with the workspace's `git` feature off.
 
 ### Changed
 

@@ -4432,6 +4432,16 @@
     },
     {
       "method": "GET",
+      "path": "/v1/projects/{id}/git",
+      "tag": "projects",
+      "summary": "A project's git clone URL (#636); url is null while the git remote is off",
+      "role": "viewer",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/projects/{id}/overview",
       "tag": "projects",
       "summary": "Project overview: counts, contributors, recent pages",

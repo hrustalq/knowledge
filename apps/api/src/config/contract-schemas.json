@@ -17325,6 +17325,18 @@
       "cascade"
     ]
   },
+  "ProjectGitResponse": {
+    "type": "object",
+    "properties": {
+      "url": {
+        "type": "string",
+        "nullable": true
+      }
+    },
+    "required": [
+      "url"
+    ]
+  },
   "ProjectOverviewResponse": {
     "type": "object",
     "properties": {

@@ -195,6 +195,10 @@ describe('git remote (e2e, #636)', () => {
       KNOWLEDGE_API_KEY: people.bob.read,
     });
     expect(await git(['rev-parse', 'HEAD'], join(work, 'helper'))).toBe(await git(['rev-parse', 'HEAD'], bob));
+    // The web's Clone button reads its URL here; a guest without a grant gets the 404 a guest always gets.
+    const info = await http().get(`/v1/projects/${projectId}/git`).set(as(people.bob.read)).expect(ok(200));
+    expect(info.body.url).toMatch(new RegExp(`/git/${WORKSPACE}/${projectId}\\.git$`));
+    await http().get(`/v1/projects/${projectId}/git`).set(as(people.gus.key)).expect(404);
   });
 
   it('shows a web edit on the next fetch', async () => {
@@ -439,12 +443,14 @@ describe('git remote (e2e, #636)', () => {
 
   it('404s with the workspace toggle off', async () => {
     const { FeaturesService } = await import('../src/auth/features.service.js');
-    const features = gitApp.get(FeaturesService);
-    await features.set(WORKSPACE, ['git'], people.admin.id);
+    // Each process caches the toggle, so both are told.
+    const both = (off: 'git'[]) => Promise.all([gitApp, app].map((a) => a.get(FeaturesService).set(WORKSPACE, off, people.admin.id)));
+    await both(['git']);
     try {
       expect((await refs(people.bob.read)).status).toBe(404);
+      await http().get(`/v1/projects/${projectId}/git`).set(as(people.bob.read)).expect(404);
     } finally {
-      await features.set(WORKSPACE, [], people.admin.id);
+      await both([]);
     }
   });
 });

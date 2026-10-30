@@ -743,6 +743,35 @@ pages, the `projectId` filter, the `git.pushed` row, and a clone through the
 credential helper. Over MCP, `knowledge_list_branches` and a merge request
 opened by project and branch name.
 
+**As built, 5b.**
+  - **The flag.** `GET /v1/projects/:id/git` answers `{ url }`, the web origin's
+    `/git/<workspaceId>/<projectId>.git` as SKILL.md writes it, or `url: null`
+    with `GIT_REMOTE_ENABLED` off. `@Feature('git')` 404s it with the workspace
+    toggle off, and it has no `guests` opt-in, so a guest gets the 404 every
+    guest gets, as from the remote. The web asks only with the feature on.
+  - **Clone** sits in the project header (`modules/projects/components/CloneButton.vue`,
+    a `ResponsivePopover`). It shows the URL, then a key, then one Terminal block
+    with SKILL.md's recipe, empty `credential.helper=` first. The key is minted
+    through `POST /v1/me/api-keys`, pinned to the workspace, named
+    `git: <project>`, and shown once as an `export KNOWLEDGE_API_KEY=…` line.
+    Write is offered to editors only. In dev mode (`AUTH_MODE=none`) there is no
+    key step. Keys are listed and revoked on Connect AI, whose `CopyBlock` moved
+    to `entities/access` so both pages share it.
+  - **Branches** is a project-page rail widget over `GET /v1/projects/:id/branches`,
+    shown once the project has one: name, open merge request (Draft badge),
+    the first three pages, last writer and time.
+  - **Merge request cards** add "· N pages" when `pageCount > 1`.
+  - **Feed**: `activity.action.git.pushed` is plural on `metadata.commits`
+    (four Russian forms), and the row names `metadata.branch` where a page
+    row names its page.
+
+Checked: `test/git-remote.e2e-spec.ts` 12/12, including the route for a
+reader, a guest and the toggle off. The project page and the Clone panel were
+checked in Chrome at 1280 and 390 px, in en and ru, in dev mode, which has no
+key step. The 390 px check found the header's button row running off-screen in
+Russian, and it now wraps. Not tried: minting a key from the panel in a
+signed-in session.
+
 ## Numbers
 
 Synthetic projects from `synth.mjs`, with a nested page tree, edits, two-page

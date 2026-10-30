@@ -41,6 +41,8 @@ const state = computed(() => mrIcon(mr.value))
         </div>
         <p class="mt-0.5 truncate text-xs text-muted-foreground">
           <span class="font-mono">{{ mr.sourceBranch }} → {{ mr.targetBranch }}</span>
+          <!-- A project branch can change several pages (#636); one is the old normal, so it goes unsaid. -->
+          <template v-if="mr.pageCount > 1"> · {{ t('count.pages', { n: mr.pageCount }, mr.pageCount) }}</template>
           · {{ t('mr.openedByAt', { when: relativeTime(mr.createdAt), who: nameOf(mr.authorId) }) }}
         </p>
       </div>

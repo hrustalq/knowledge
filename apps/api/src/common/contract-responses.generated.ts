@@ -247,6 +247,7 @@ import type {
   PostAssistantMessageResponse,
   ProjectAnalyticsResponse,
   ProjectDeletionPreview,
+  ProjectGitResponse,
   ProjectOverviewResponse,
   ProjectSiteResponse,
   ProjectSummary,
@@ -585,6 +586,7 @@ export interface ContractResponses {
   PostAssistantMessageResponse: PostAssistantMessageResponse;
   ProjectAnalyticsResponse: ProjectAnalyticsResponse;
   ProjectDeletionPreview: ProjectDeletionPreview;
+  ProjectGitResponse: ProjectGitResponse;
   ProjectOverviewResponse: ProjectOverviewResponse;
   ProjectSiteResponse: ProjectSiteResponse;
   ProjectSummary: ProjectSummary;

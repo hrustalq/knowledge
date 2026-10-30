@@ -8,10 +8,11 @@ import type {
 } from '@knowledge/contracts';
 import { VERIFICATION_NOTE_MAX_CHARS } from '@knowledge/contracts';
 import { ActivityService } from '../activity/activity.service.js';
-import { DocumentsService, hasRealPath } from '../documents/documents.service.js';
+import { DocumentsService, subtreeWhere } from '../documents/documents.service.js';
 import { t } from '../i18n/t.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { ProjectCommitsService } from '../git/project-commits.service.js';
 import { expiryFor, VerificationPolicyService } from './verification-policy.service.js';
 
 /** `details.reason` on the 409s this service raises, so a bulk caller can file them without parsing text. */
@@ -64,6 +65,7 @@ export class VerificationService {
     private readonly notifications: NotificationsService,
     private readonly policy: VerificationPolicyService,
     private readonly documents: DocumentsService,
+    private readonly commits: ProjectCommitsService,
   ) {}
 
   /**
@@ -271,10 +273,7 @@ export class VerificationService {
     const document = await this.row(documentId);
     if (document.archivedAt) return { documentId, archivedAt: document.archivedAt.toISOString(), affected: 0 };
     const archivedAt = new Date();
-    const { count } = await this.prisma.document.updateMany({
-      where: { ...this.subtreeWhere(document, includeDescendants), archivedAt: null },
-      data: { archivedAt, archivedBy: actorId },
-    });
+    const count = await this.setArchived(document, includeDescendants, { archivedAt, archivedBy: actorId }, actorId);
     void this.activity.record({
       workspaceId: document.workspaceId,
       actor: actorId,
@@ -291,10 +290,7 @@ export class VerificationService {
   async unarchive(documentId: string, actorId: string, includeDescendants = true): Promise<ArchiveDocumentResponse> {
     const document = await this.row(documentId);
     if (!document.archivedAt) return { documentId, archivedAt: null, affected: 0 };
-    const { count } = await this.prisma.document.updateMany({
-      where: { ...this.subtreeWhere(document, includeDescendants), archivedAt: { not: null } },
-      data: { archivedAt: null, archivedBy: null },
-    });
+    const count = await this.setArchived(document, includeDescendants, { archivedAt: null, archivedBy: null }, actorId);
     void this.activity.record({
       workspaceId: document.workspaceId,
       actor: actorId,
@@ -307,14 +303,31 @@ export class VerificationService {
     return { documentId, archivedAt: null, affected: count };
   }
 
-  /** The page and its subtree, scoped to its workspace. A rollback-sentinel path means the page alone. */
-  private subtreeWhere(document: Document, includeDescendants: boolean) {
-    const subtree = includeDescendants && hasRealPath(document.path);
-    return {
-      workspaceId: document.workspaceId,
-      ...(subtree ? { OR: [{ id: document.id }, { path: { startsWith: document.path } }] } : { id: document.id }),
-    };
+  /**
+   * Flip the archive stamp on the page (and its subtree) where it differs, and
+   * record the pages it flipped as one project commit (#636): an archive takes
+   * them out of the git tree, an unarchive puts them back.
+   */
+  private async setArchived(
+    document: Document,
+    includeDescendants: boolean,
+    data: { archivedAt: Date | null; archivedBy: string | null },
+    actorId: string,
+  ): Promise<number> {
+    return this.prisma.withTransaction(async () => {
+      await this.commits.lock(document.projectId);
+      const rows = await this.prisma.document.findMany({
+        where: { ...subtreeWhere(document, includeDescendants), archivedAt: data.archivedAt ? null : { not: null } },
+        select: { id: true },
+      });
+      const ids = rows.map((r) => r.id);
+      await this.prisma.document.updateMany({ where: { id: { in: ids } }, data });
+      const verb = data.archivedAt ? 'Archive' : 'Unarchive';
+      await this.commits.recordState(document.projectId, ids, { actorId, message: `${verb} ${document.slug ?? document.title}` });
+      return ids.length;
+    });
   }
+
 
   private async row(documentId: string): Promise<Document> {
     const doc = await this.prisma.document.findUnique({ where: { id: documentId } });

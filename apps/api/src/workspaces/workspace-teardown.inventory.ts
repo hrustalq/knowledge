@@ -83,6 +83,8 @@ export const WORKSPACE_TEARDOWN = {
   ApiKey: 'workspace',
   // Projects, once every table that RESTRICTs on them is empty.
   GlossaryTerm: 'workspace',
+  // Cascades from its project too; deleted first so the project row is light.
+  ProjectCommit: 'workspace',
   Project: 'workspace',
   // No FK in either direction.
   ActivityLog: 'workspace',
@@ -136,6 +138,8 @@ export const WORKSPACE_TEARDOWN = {
   SiteVersionPage: 'page',
 
   AssistantMessage: 'parent',
+  ProjectCommitParent: 'parent',
+  ProjectCommitChange: 'parent',
   WorkflowRunNode: 'parent',
   ConnectorRunItem: 'parent',
   ChatBufferedMessage: 'parent',

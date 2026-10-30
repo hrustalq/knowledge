@@ -40,6 +40,7 @@ import { AuditService } from '../auth/audit.service.js';
 import { ConflictsService } from '../conflicts/conflicts.service.js';
 import { LintChecksService } from './lint/lint-checks.service.js';
 import { lintGateEnforced, overridable } from './lint/lint-check.js';
+import { ProjectCommitsService } from '../git/project-commits.service.js';
 
 /** Fallback author when no principal is supplied (AUTH_MODE=none, MCP stdio). */
 export const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
@@ -94,6 +95,7 @@ export class MergeRequestsService {
     private readonly lint: LintChecksService,
     private readonly audit: AuditService,
     private readonly conflicts: ConflictsService,
+    private readonly commits: ProjectCommitsService,
   ) {}
 
   /**
@@ -730,8 +732,13 @@ export class MergeRequestsService {
     // finalizeRevision's HEAD + GET), hence the raised timeout — the
     // ConnectorStagingService.createPage precedent, and the same numbers: one
     // document body, not a fan-out.
+    const { projectId } = await this.prisma.document.findUniqueOrThrow({ where: { id: mr.documentId }, select: { projectId: true } });
     const finalized = await this.prisma.withTransaction(
       async () => {
+        // The project's commit lock (#636) comes before the branch-row lock:
+        // finalizeRevision takes it first too, so the order is the same for
+        // every writer and a merge never deadlocks against a plain save.
+        await this.commits.lock(projectId);
         // The branch-row lock this method has wanted since Phase 3. The
         // fast-forward precondition above is an unlocked read: under READ
         // COMMITTED it sees the last committed head and NOT a concurrent
@@ -780,7 +787,12 @@ export class MergeRequestsService {
         await this.storage.putObjectText(draftRow.s3Key, text, sourceHead.contentType);
 
         // Normal pipeline: hash → (branch-scoped) dedupe → branch head advance → outbox → reindex.
-        const result = await this.documents.finalizeRevision(mr.documentId, draft.revisionId);
+        // The project commit is the merger's, and a merge commit's second
+        // parent is the source head's commit; a squash has one parent, as in git.
+        const result = await this.documents.finalizeRevision(mr.documentId, draft.revisionId, {
+          authorId: principal?.userId,
+          mergedFrom: strategy === 'merge-commit' ? sourceHeadId : undefined,
+        });
 
         // Guarded status flip: a concurrent merge/close of THIS MR loses the race and 409s.
         // Now a rollback too, so the merge revision it would have orphaned goes with it.

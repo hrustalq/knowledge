@@ -86,6 +86,12 @@ model Document {
   /// an API spec, `openapi` | `asyncapi` (API_DOCUMENT_KINDS). Set at create
   /// and never changed — a revision is parsed by its document's kind.
   kind                  String    @default("page")
+  /// The page's file name in its project's git tree (#636), without the
+  /// extension: derived from the title by `slugFor`, made unique among its
+  /// siblings case-folded, and stored so the decision never flips. Rewritten
+  /// on a rename or a move, under the project's commit lock. Null only for a
+  /// row an older image wrote; the next commit derives one.
+  slug                  String?
   /// A spec's operation-key slug (`op:<slug>:…`), pinned at its first indexed
   /// revision so editing `info.title` does not fork every operation entity.
   /// Only an explicit `x-knowledge-key` on the default-branch head re-pins it.
@@ -212,9 +218,9 @@ model DocumentRevision {
   children RevisionParent[] @relation("parent")
 
   @@unique([documentId, revisionNumber])
-  // Branch-scoped: a merge revision legitimately repeats the source head's
-  // content on the target branch (plan.md §8); dedupe stays per-branch.
-  @@unique([documentId, branchId, contentHash])
+  // Not unique (#636): a branch may return to content it once held — a revert.
+  // Finalize dedupes against the branch head only.
+  @@index([documentId, branchId, contentHash])
   @@index([fulltextStaleAt])
   @@map("document_revisions")
 }
@@ -293,6 +299,68 @@ model RevisionParent {
 
   @@id([revisionId, parentRevisionId])
   @@map("revision_parents")
+}
+
+/// A project-level commit (#636, docs/features/71): one per state-changing
+/// write in a project — a finalize, a merge, a move, a rename, an archive or
+/// unarchive, a publish — written inside that write's own transaction under
+/// the project's commit lock (`ProjectCommitsService.lock`). The SHA is never
+/// stored: it is a function of the commits and the reader's visible set.
+model ProjectCommit {
+  id          String   @id @default(uuid()) @db.Uuid
+  /// Write order. A parent always has a lower `seq` than its children.
+  seq         BigInt   @unique @default(autoincrement())
+  workspaceId String   @map("workspace_id") @db.Uuid
+  projectId   String   @map("project_id") @db.Uuid
+  /// The branch name it was written on. Legacy per-page branches group by
+  /// (project, name) until project branches exist (phase 1b).
+  branch      String
+  /// Everything a git commit carries after its `tree` and `parent` lines —
+  /// author, committer, message, trailers — as bytes, frozen at write time.
+  header      Bytes
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  project  Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parents  ProjectCommitParent[] @relation("commitChild")
+  children ProjectCommitParent[] @relation("commitParent")
+  changes  ProjectCommitChange[]
+
+  @@index([projectId, branch, seq])
+  @@index([workspaceId])
+  @@map("project_commits")
+}
+
+/// Ordered commit parents: order 1 = first parent, as `revision_parents`.
+model ProjectCommitParent {
+  commitId       String @map("commit_id") @db.Uuid
+  parentCommitId String @map("parent_commit_id") @db.Uuid
+  parentOrder    Int    @map("parent_order") @db.SmallInt
+
+  commit ProjectCommit @relation("commitChild", fields: [commitId], references: [id], onDelete: Cascade)
+  parent ProjectCommit @relation("commitParent", fields: [parentCommitId], references: [id], onDelete: Cascade)
+
+  @@id([commitId, parentOrder])
+  @@index([parentCommitId])
+  @@map("project_commit_parents")
+}
+
+/// One page a commit touched, holding that page's full tree state after it.
+/// No FK on the page or the revision: a hard-deleted page's rows stay as
+/// tombstones nobody can see, so a commit never turns empty under its children.
+model ProjectCommitChange {
+  commitId         String  @map("commit_id") @db.Uuid
+  documentId       String  @map("document_id") @db.Uuid
+  revisionId       String  @map("revision_id") @db.Uuid
+  parentDocumentId String? @map("parent_document_id") @db.Uuid
+  slug             String
+  /// Not in the tree after this commit: archived, or moved to another project.
+  removed          Boolean @default(false)
+
+  commit ProjectCommit @relation(fields: [commitId], references: [id], onDelete: Cascade)
+
+  @@id([commitId, documentId])
+  @@index([revisionId])
+  @@map("project_commit_changes")
 }
 
 // Table created in Phase 1; compare endpoints land in Phase 2.
@@ -646,6 +714,7 @@ model Project {
   connectors    Connector[]
   trackerRoute  ProjectTrackerRoute?
   site          PublishedSite?
+  commits       ProjectCommit[]
 
   @@index([workspaceId, createdAt])
   @@map("projects")

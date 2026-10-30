@@ -371,6 +371,23 @@ It is too large for one reviewable PR.
   ([finding 1](#1-the-per-branch-content-hash-unique-blocks-git-revert)) and
   extract `MergeRequestsCoreModule` ([finding 6](#6-mergerequestsservice-lives-behind-controllers)).
   Every new model goes into `workspace-teardown.inventory.ts`.
+  **As built:** `ProjectCommitsService` (`apps/api/src/git/`). It takes a
+  per-project advisory lock, first in every writing transaction (a merge takes
+  it before its branch-row lock), and every writer goes through it. Where the
+  build differs from the plan above:
+  - A change row stores `removed` (archived, or moved to another project)
+    instead of `archived`.
+  - `ext` and the id-line `form` are not stored. `ext` follows from the
+    revision's content type, and `form` arrives with pushes in phase 4.
+  - `finalizeRevision` takes the merge's commit attribution, not an open commit.
+    One commit per revision is all 1a needs, so 1b widens it to N pages.
+  - `GIT_NOREPLY_DOMAIN` ships here rather than in phase 3, because headers are
+    frozen as they are written.
+  - A cross-project move writes a removal in the old project and an add in the
+    new one.
+  - `MergeRequestsCoreModule` is deferred to the phase whose git process first
+    needs it. `MergeRequestsService` injects `AccessService`, so the extraction
+    has to solve that, and nothing in 1a consumes it.
 - **1b, project branches and multi-page merge requests.** `project_branches`
   (name, fixed base commit, head commit, owner, protected, restricted).
   `document_branches.project_branch_id` is nullable, backfilled, then `NOT

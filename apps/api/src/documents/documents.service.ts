@@ -78,6 +78,7 @@ import { AclEventsService } from '../permissions/acl-events.service.js';
 import { canSee, visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
 import { LISTED_PAGE } from '../common/listed-page.js';
 import { ReadCache, READ_CACHE_FAMILIES } from '../cache/read-cache.service.js';
+import { ProjectCommitsService } from '../git/project-commits.service.js';
 
 /** Fallback author when no principal is supplied (AUTH_MODE=none, MCP stdio). */
 const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
@@ -106,6 +107,15 @@ export function hasRealPath(path: string): boolean {
   return path !== PENDING_PATH && path.length > 1;
 }
 
+/** The page and, by default, its subtree, scoped to its workspace. A rollback-sentinel path means the page alone. */
+export function subtreeWhere(document: { id: string; workspaceId: string; path: string }, includeDescendants = true) {
+  const subtree = includeDescendants && hasRealPath(document.path);
+  return {
+    workspaceId: document.workspaceId,
+    ...(subtree ? { OR: [{ id: document.id }, { path: { startsWith: document.path } }] } : { id: document.id }),
+  };
+}
+
 /** `details.reason` of the 409 every write to an archived page raises (docs/features/39). */
 export const DOCUMENT_ARCHIVED = 'document_archived';
 
@@ -127,6 +137,7 @@ export class DocumentsService {
     private readonly apiFixtures: ApiFixturesService,
     private readonly aclEvents: AclEventsService,
     private readonly cache: ReadCache,
+    private readonly commits: ProjectCommitsService,
   ) {}
 
   async createDocument(input: CreateDocumentDto, authorId: string = AUTHOR_ID_STUB): Promise<CreateDocumentResponse> {
@@ -185,12 +196,15 @@ export class DocumentsService {
     // regardless of the caller, so an import or connector pull whose outer
     // boundary later rolled back still left the page durably created.
     const { document, revision } = await this.prisma.withTransaction(async () => {
+      // The project's commit lock (#636) makes the slug's sibling check race-free.
+      await this.commits.lock(dto.projectId);
       const document = await this.prisma.document.create({
         data: {
           id,
           workspaceId: dto.workspaceId,
           projectId: dto.projectId,
           title: dto.title,
+          slug: await this.commits.uniqueSlug(dto.projectId, dto.parentId ?? null, id, dto.title),
           category: dto.category ?? (isStructuredKind(kind) ? 'reference' : 'other'),
           kind,
           parentId: dto.parentId ?? null,
@@ -481,7 +495,16 @@ export class DocumentsService {
     });
   }
 
-  async finalizeRevision(documentId: string, revisionId: string): Promise<FinalizeRevisionResponse> {
+  /**
+   * `commit` is how a merge attributes its project commit (#636): to the person
+   * merging rather than the merge revision's author, with the source head's
+   * commit as second parent.
+   */
+  async finalizeRevision(
+    documentId: string,
+    revisionId: string,
+    commit?: { authorId?: string; mergedFrom?: string },
+  ): Promise<FinalizeRevisionResponse> {
     const document = await this.getDocumentOrThrow(documentId);
     this.assertNotArchived(document);
     const revision = await this.getRevisionOrThrow(documentId, revisionId);
@@ -508,12 +531,18 @@ export class DocumentsService {
     }
     const contentHash = createHash('sha256').update(text, 'utf-8').digest('hex');
 
-    // Content-hash idempotency (plan.md §4), scoped per branch: a merge
+    // Content-hash idempotency (plan.md §4), against the branch head only
+    // (#636): a body equal to the head is a no-op, while one equal to an older
+    // revision is a revert and advances the head like any other edit. A merge
     // revision legitimately repeats the source head's content on the target
-    // branch (plan.md §8), so dedupe only within this revision's branch.
-    const existing = await this.prisma.documentRevision.findFirst({
-      where: { documentId, branchId: revision.branchId, contentHash },
+    // branch (plan.md §8), so another branch's revisions never count.
+    const branchHead = await this.prisma.documentBranch.findFirst({
+      where: revision.branchId ? { id: revision.branchId } : { documentId, name: document.defaultBranch },
+      select: { headRevisionId: true },
     });
+    const existing = branchHead?.headRevisionId
+      ? await this.prisma.documentRevision.findFirst({ where: { id: branchHead.headRevisionId, contentHash } })
+      : null;
     if (existing && existing.id !== revision.id) {
       await this.prisma.withTransaction(async () => {
         await this.prisma.revisionParent.deleteMany({ where: { revisionId: revision.id } });
@@ -535,6 +564,7 @@ export class DocumentsService {
     // `idle in transaction` rather than blocked, so its deadlock detector never
     // fires and the request hangs until something kills the connection.
     const { job, privateBranch } = await this.prisma.withTransaction(async () => {
+      await this.commits.lock(document.projectId);
       await this.prisma.documentRevision.update({
         where: { id: revision.id },
         data: {
@@ -554,6 +584,7 @@ export class DocumentsService {
         select: { restricted: true },
       });
       if (revision.collabDraftId) await this.markPublished(revision.collabDraftId, revision.id, revision.collabSnapshot, true);
+      await this.commits.recordRevision(revision.id, commit);
       // Outbox (plan.md §5): the job row commits atomically with the status change;
       // enqueue happens after commit, the sweeper covers enqueue failures.
       const job = await this.prisma.ingestionJob.create({
@@ -1188,6 +1219,7 @@ export class DocumentsService {
   async publishDraft(documentId: string, actorId: string): Promise<DocumentDetailResponse> {
     const document = await this.getDocumentOrThrow(documentId);
     const published = await this.prisma.withTransaction(async () => {
+      await this.commits.lock(document.projectId);
       const { count } = await this.prisma.document.updateMany({
         where: { id: documentId, draftOwnerId: { not: null } },
         data: { draftOwnerId: null, restricted: false },
@@ -1197,6 +1229,17 @@ export class DocumentsService {
         where: { resourceType: 'document', resourceId: documentId, origin: 'manual' },
       });
       await this.permissions.recomputeRestrictedBy({ documentId });
+      // A draft's revisions wrote no commit (#636): this one adds the page, and
+      // whatever under it was waiting on it, at their heads.
+      const subtree = await this.prisma.document.findMany({
+        where: { ...subtreeWhere(document), archivedAt: null },
+        select: { id: true },
+      });
+      await this.commits.recordState(
+        document.projectId,
+        subtree.map((d) => d.id),
+        { actorId, message: `Publish ${document.slug ?? document.title}` },
+      );
       return true;
     });
     if (published) {
@@ -1282,7 +1325,18 @@ export class DocumentsService {
     // project. The subtree re-project used to sit outside any explicit
     // transaction, so a failure between the two left children in a project
     // their parent had already left.
+    const renamed = data.title !== undefined && data.title !== document.title;
+    const placed = reparented || data.projectId !== undefined;
     const updated = await this.prisma.withTransaction(async () => {
+      // A rename or a move renames or moves the page's file (#636): a fresh
+      // slug under its new parent, and one commit, under the commit lock.
+      let slug: string | undefined;
+      if (renamed || placed) {
+        await this.commits.lock(document.projectId, targetProject);
+        const parentAfter = data.parentId !== undefined ? data.parentId : document.parentId;
+        slug = await this.commits.uniqueSlug(targetProject, parentAfter, documentId, data.title ?? document.title, document.slug);
+      }
+
       // A reparent lands the page at the end of its new siblings. Without this
       // it kept the index it held under its old parent, which collides with
       // whoever already holds that index there and leaves the tie to be broken
@@ -1295,7 +1349,11 @@ export class DocumentsService {
 
       const row = await this.prisma.document.update({
         where: { id: documentId },
-        data: reparented ? { ...data, path: newPath, depth: document.depth + depthDelta, position } : data,
+        data: {
+          ...data,
+          ...(slug !== undefined ? { slug } : {}),
+          ...(reparented ? { path: newPath, depth: document.depth + depthDelta, position } : {}),
+        },
       });
 
       if (reparented) await this.repathSubtree(document.workspaceId, documentId, oldPath, newPath, depthDelta);
@@ -1312,6 +1370,16 @@ export class DocumentsService {
       // whole subtree, in this transaction, so nobody reads the page in between
       // with the old ones (#76).
       if (reparented || data.projectId) await this.permissions.recomputeRestrictedBy({ documentId });
+
+      if (data.projectId) {
+        // Gone from one project's tree, added to the other's, subtree and all.
+        const moved = [documentId, ...movedSubtree];
+        await this.commits.recordState(document.projectId, moved, { actorId, message: `Move ${slug} to another project`, removed: true });
+        await this.commits.recordState(data.projectId, moved, { actorId, message: `Move ${slug} from another project` });
+      } else if (slug !== undefined && (reparented || slug !== document.slug)) {
+        const message = reparented ? `Move ${slug}` : `Rename ${document.slug ?? document.title} to ${slug}`;
+        await this.commits.recordState(document.projectId, [documentId], { actorId, message });
+      }
       return row;
     });
     if (data.title && data.title !== document.title) {
@@ -1340,6 +1408,7 @@ export class DocumentsService {
     });
     return this.toSummary(updated);
   }
+
 
   /**
    * Re-point a moved page's descendants at its new path, in one statement for a
@@ -1418,6 +1487,13 @@ export class DocumentsService {
     const depthDelta = reparented ? (newParent?.depth ?? -1) + 1 - document.depth : 0;
 
     const updated = await this.prisma.withTransaction(async () => {
+      // A reparent moves the page's file (#636): see updateDocument.
+      let slug: string | undefined;
+      if (reparented) {
+        await this.commits.lock(document.projectId);
+        slug = await this.commits.uniqueSlug(document.projectId, parentId, documentId, document.title, document.slug);
+      }
+
       // The destination run in the order the tree draws it, read inside the
       // transaction: that is what makes `beforeId` mean something. A sibling
       // that left between the client's copy of the tree and this call is a 409
@@ -1459,12 +1535,13 @@ export class DocumentsService {
 
       const row = await this.prisma.document.update({
         where: { id: documentId },
-        data: reparented ? { parentId, path: newPath, depth: document.depth + depthDelta } : { parentId },
+        data: reparented ? { parentId, slug, path: newPath, depth: document.depth + depthDelta } : { parentId },
       });
 
       if (reparented) {
         await this.repathSubtree(document.workspaceId, documentId, oldPath, newPath, depthDelta);
         await this.permissions.recomputeRestrictedBy({ documentId });
+        await this.commits.recordState(document.projectId, [documentId], { actorId, message: `Move ${slug}` });
       }
       return row;
     });

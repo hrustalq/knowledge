@@ -43,6 +43,8 @@ in the pull request that introduces them — see
   error** (#630): since 0.39.0, reloading or following a link straight to one of these pages could answer 500
   while clicking to it inside the app worked. The server bundle now keeps its modules' execution order, and
   the build fails if any of its chunks cannot load on its own.
+- **A collapsed comment thread shows who started it again**: the one-line summary of a folded thread, on a
+  page and in a merge request, had lost the opener's avatar and left an empty gap before the text.
 
 ## [0.39.0] — 2026-10-29
 

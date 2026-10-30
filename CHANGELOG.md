@@ -26,6 +26,11 @@ in the pull request that introduces them — see
 - **A slow navigation now says so** (#627): when a page takes longer than a moment to arrive, a thin bar runs
   along the top of the content and the link you clicked shows a spinner. A page whose code was removed by a
   deploy while the tab was open now loads by a full reload instead of doing nothing.
+- **A page opened from the tree draws at once instead of showing a placeholder** (#628): resting the pointer
+  or focus on a link to a page for a tenth of a second reads that page ahead of the click, and going back to a
+  page you just read shows it immediately while it checks for changes. A pointer sweeping down the tree reads
+  nothing, at most two pages are read ahead at a time, and nothing is read ahead on a Save-Data or 2G
+  connection. A page you cannot open is refused on the click exactly as before; reading ahead shows nothing.
 
 ### Changed
 

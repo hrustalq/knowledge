@@ -1,7 +1,8 @@
 # 71 — A project is a git remote (decision record, draft)
 
 Issue [#636](https://github.com/hrustalq/knowledge/issues/636). **Status: phase 0
-(spike) done, verdict GO.** This document records what the spike measured, the
+(spike) done, verdict GO; phases 1–3 built, so a project clones and fetches
+read-only. Push is phase 4.** This document records what the spike measured, the
 model it settled on, and which parts of the plan in #636 it changes. Phase 6
 rewrites it into the usual feature document once the feature ships.
 
@@ -546,6 +547,54 @@ at the last default-branch commit at or before `release_tags.at` (tags are
 timestamps, not revisions). A workspace-level tag appears in every project. A
 name git refuses (`git check-ref-format`) is skipped and logged. Repack a cache
 after a cold build and then by `git gc --auto`.
+
+**As built** (one PR). `git.main.ts` composes `GitModule`: `GitController`
+(`GET /git/:ws/:project.git/info/refs`, `POST …/git-upload-pack`, and
+`…/git-receive-pack`, which is refused), `GitAccessService` and
+`GitRepoService` (`apps/api/src/git/`). `git-view.ts` is the spike's
+`view.mjs` ported over the stored rows, and `git-objects.ts` holds the object
+bytes. Both are pinned by `git-view.spec.ts`, which runs the real `git`
+binary (`fsck --strict`, a clone, a hidden reader's log). `test/git-remote.e2e-spec.ts`
+clones through the process with real keys. Where the build differs from the
+plan above:
+  - **A reader's view hides private page branches as well as pages.** A change
+    is visible when its page passes `visibilitySql` **and** its revision's
+    page branch is not restricted from the reader (`branchLevel`, #474). Without
+    the second rule, a `draft/<userId>` branch, which commits as any branch does,
+    would reach every clone. The cache key is the hash of both sets.
+  - **A ref is advertised only when its branch has a commit of its own in
+    view**, so a branch whose every change is hidden does not surface as a name
+    pointing into `main`. An Update branch merge on such a branch collapses
+    onto its second parent.
+  - **Each cache holds only its own view's objects** (no shared object store, no
+    alternates). A `want` therefore cannot reach a blob outside the view,
+    whatever upload-pack allows. `uploadpack.allowReachableSHA1InWant` is on, so
+    a tip that moved between the advertisement and the pack request still
+    serves.
+  - **"Restart is never a cold build"** is kept by persisting revision → blob
+    SHA (`<GIT_CACHE_DIR>/<project>/blobs-v1.tsv`), not the in-memory trees. A
+    restarted process re-hashes trees and commits from Postgres rows. It reads
+    nothing from MinIO and writes nothing, because `cat-file --batch-check`
+    finds every object already there. Only a new visible set reads page bodies.
+  - **The commit graph is read incrementally** (`seq > lastSeq`) on every ref
+    advertisement. A pack request serves the repository as it stands. There is
+    no push of new commits into built caches as they are written: a fetch is
+    what syncs.
+  - Guests are refused 403 only when they hold a grant on the project; one
+    with none gets `requireResource`'s 404, as everywhere. A capture key is 403,
+    and `ks_` and `kt_` credentials are 401. Every credentialed request counts
+    against `PUBLIC_RATE_LIMIT_PER_MIN` per IP (fail closed).
+  - Off is two switches with one answer: `GIT_REMOTE_ENABLED=false` makes the
+    process 404 everything, and with the `git` compose profile off the
+    Caddyfile's `handle_errors` turns the failed dial on `/git/*` into a 404.
+  - `GIT_PORT` (default 3002) joins the env block. `GIT_CACHE_DIR` defaults to
+    `<os tmpdir>/knowledge-git` and is `/var/cache/knowledge-git` on the
+    `gitcache` volume in production.
+  - `Dockerfile.api`'s `git-runtime` stage is its last, so the api build names
+    `--target runtime`. The binary-only copy finding 5 suggests was not
+    measured; the stage installs apt's git.
+  - Ref names git refuses are left out by `isValidRefName`, a port of
+    `check-ref-format`'s rules, not one `git` call per name.
 
 ### Phase 4 — write side
 

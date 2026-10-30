@@ -29,6 +29,7 @@ make kill               # kill this repo's dev processes; kill-all also stops in
 make dev-worker         # only the BullMQ ingestion worker (already part of `make dev`)
 make dev-mcp            # MCP server on stdio (knowledge_* tools); the API also serves them at POST /v1/mcp
 make dev-learner        # the learner (#305); idles unless LEARNER_ENABLED=true
+make dev-git            # the git remote (#636) on :3002; 404s unless GIT_REMOTE_ENABLED=true
 
 make verify             # PRE-PUSH GATE: db-generate + lint + typecheck + deps + test (no build)
 make check              # CI gate: lint + typecheck + deps + test + build
@@ -68,9 +69,9 @@ Three-store separation (never mix responsibilities):
 
 Write path: `POST /v1/documents` → `POST :id/uploads` (presigned PUT) → `POST .../finalize` (SHA-256 hash, dedupe, revision → `finalized`, `ingestion_jobs` row committed in the same transaction = outbox) → BullMQ job → worker pipeline → revision `indexed`. Status lifecycle: `draft → finalized → indexing → indexed | failed`.
 
-**The worker is a second entrypoint of `apps/api`, not a separate app** — `src/main.ts` (HTTP) vs `src/worker.main.ts` (`createApplicationContext(WorkerModule)`, no HTTP), alongside `src/mcp.main.ts` (third), `src/scripts/generate-openapi.main.ts` (fourth) and `src/learner.main.ts` (fifth, `createApplicationContext(LearnerModule)`: the learning-loop timer, no HTTP, no Redis). `IngestionModule` (producer) is imported by both; **`IngestionWorkerModule` only by the worker** — import it into `AppModule` and the API process starts consuming jobs.
+**The worker is a second entrypoint of `apps/api`, not a separate app** — `src/main.ts` (HTTP) vs `src/worker.main.ts` (`createApplicationContext(WorkerModule)`, no HTTP), alongside `src/mcp.main.ts` (third), `src/scripts/generate-openapi.main.ts` (fourth), `src/learner.main.ts` (fifth, `createApplicationContext(LearnerModule)`: the learning-loop timer, no HTTP, no Redis) and `src/git.main.ts` (sixth, `GitModule`: the smart-HTTP git remote, its own HTTP process on `GIT_PORT`, `make dev-git`). `IngestionModule` (producer) is imported by both; **`IngestionWorkerModule` only by the worker** — import it into `AppModule` and the API process starts consuming jobs.
 
-See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypoints-modules.md) for the module-split rules the dependency-cruiser configs enforce.
+See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypoints-modules.md) for the six entrypoints and the module-split rules the dependency-cruiser configs enforce.
 
 ## Where each area is documented
 

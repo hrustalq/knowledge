@@ -148,8 +148,8 @@ await import('@knowledge/editor-schema/suggestions'); \
 await import('@knowledge/editor-schema/suggestion-entries'); \
 console.log('type stripping OK');"
 
-# The learner (#305) is a fifth entrypoint of this image, and the one most
-# likely to be broken unnoticed: it is off by default, so nothing exercises it
+# The learner (#305) and the git remote (#636) are the fifth and sixth
+# entrypoints of this image, and the ones most likely to be broken unnoticed: it is off by default, so nothing exercises it
 # on deploy. Resolve its whole import graph here (the entry itself would boot
 # the app, so its root module is imported instead), as a build failure.
 # Importing the module evaluates `ConfigModule.forRoot({ validate })`, and the
@@ -161,7 +161,8 @@ RUN DATABASE_URL=postgresql://build@localhost/build REDIS_URL=redis://localhost:
     node --input-type=module -e "\
 await import('./dist/learner/learner.module.js'); \
 await import('./dist/learner/learner-derive.js'); \
-console.log('learner entry OK');"
+await import('./dist/git/git.module.js'); \
+console.log('learner and git entries OK');"
 
 EXPOSE 3000
 
@@ -174,3 +175,22 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 CMD \
 
 # The worker service overrides this with: node dist/worker.main
 CMD ["node", "dist/main"]
+
+# The git remote (#636, docs/features/71 finding 5): this image plus the `git`
+# binary whose upload-pack serves fetches. apt's git adds ~96 MB (perl,
+# git-man), so it is a stage of its own and the api and worker images stay as
+# they are. LAST on purpose, which is why every other build of this file names
+# `--target runtime`: an untargeted build takes the last stage.
+FROM runtime AS git-runtime
+USER root
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends git \
+ && rm -rf /var/lib/apt/lists/* \
+ && git --version \
+ && mkdir -p /var/cache/knowledge-git && chown node:node /var/cache/knowledge-git
+USER node
+ENV GIT_CACHE_DIR=/var/cache/knowledge-git
+EXPOSE 3002
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD \
+  node -e "fetch('http://127.0.0.1:'+(process.env.GIT_PORT||3002)+'/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+CMD ["node", "dist/git.main"]

@@ -1537,6 +1537,7 @@ export const WORKSPACE_FEATURES = [
   'memos',
   'conflicts',
   'assistant',
+  'git',
 ] as const;
 export type WorkspaceFeature = (typeof WORKSPACE_FEATURES)[number];
 

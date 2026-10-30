@@ -17,6 +17,18 @@ in the pull request that introduces them — see
 
 ### Added
 
+- **A project can be cloned and fetched with git** (#636). `git clone https://<host>/git/<workspace id>/<project
+  id>.git` with any username and a `kn_` API key as the password gives the project's pages as files: a page is
+  `<slug>.md`, its children sit in `<slug>/`, and an API spec is `<slug>.yaml` or `.json`. Each file's first
+  frontmatter line is `knowledge-id: <page id>`. The history is the page history: one commit per save, merge
+  requests as merge commits, every branch, and release tags as tags. Commit authors are noreply addresses,
+  never anyone's email. A clone holds only what the key's owner may open. A restricted page, and another
+  person's private draft, are in neither their files nor their history. That means people with different
+  access get different commit SHAs for the same history, and gaining or losing access to a page rewrites your
+  history on the next fetch. Edits made in the web or over MCP arrive on the next `git fetch`. This release
+  is read-only: a push is refused with a message saying so. A capture key and a guest are refused too. It is
+  off unless the operator enables it (see Operations), and a workspace admin can switch it off under
+  Settings → Features.
 - **Merge requests merge when the target moved, as long as the edits do not overlap** (#636). Two people
   editing different paragraphs of one page can now both merge: each page is merged 3-way against the point
   its branch started from, the way `git merge` does. Edits to the same or adjacent lines still refuse the
@@ -84,8 +96,7 @@ in the pull request that introduces them — see
   plus one per archived page, at today's page paths. It also replaces the unique index on
   `document_revisions (document_id, branch_id, content_hash)` with a plain one. It survives a rollback: the
   previous image never reads the new tables and never relied on the unique index. Commits for writes made
-  while it runs are missing from the history the git remote (#636, later phases) will serve. Nothing reads
-  the commits yet. On the laptop's dev copy (202 pages, 258 revisions) the backfill wrote 398 commits.
+  while it runs are missing from the history the git remote serves. On the laptop's dev copy (202 pages, 258 revisions) the backfill wrote 398 commits.
 - Migration `20261222100000_project_branches` adds `project_branches` and a nullable
   `document_branches.project_branch_id`, and backfills one project branch per (project, branch name). Where a
   merge request came from a branch name that several pages in one project share, those pages' branches are
@@ -93,8 +104,8 @@ in the pull request that introduces them — see
   merge request, and a `?branch=` link to a renamed branch stops resolving. A page's default branch is never
   renamed. The dev copy (202 pages, 214 branches) got 55 project branches and two renames. It survives a
   rollback: the previous image never reads the new column, and branches it creates meanwhile are filled in on
-  the next cross-project move or by the release that makes the column NOT NULL. Nothing reads project branches
-  yet.
+  the next cross-project move or by the release that makes the column NOT NULL. Multi-page merge requests and
+  the shared draft read them.
 - Migration `20261223100000_breaking_ack_commit` adds a nullable `merge_requests.breaking_ack_commit_id` and
   fills it for every open merge request whose breaking-API acknowledgement is current, so none needs to be
   given again. It survives a rollback: the previous image never reads the column, and this release keeps
@@ -103,6 +114,20 @@ in the pull request that introduces them — see
 - New env var `GIT_NOREPLY_DOMAIN` (default `knowledge`): commit emails are
   `<userId>@users.noreply.<domain>`, never a person's address. Each commit keeps the domain it was written
   with, so a change applies to new commits only. Set it before this release if the domain should differ.
+- The git remote is a sixth process of the api image and is **off by default** twice. To turn it on: add
+  `git` to `COMPOSE_PROFILES` and set `GIT_REMOTE_ENABLED=true` in the GitHub `production` environment, then
+  deploy. With the profile on, the deploy also builds `knowledge-api-git` (the `git-runtime` stage of
+  `Dockerfile.api`: the api image plus the `git` binary, about 96 MB more), and compose starts the `git`
+  service with a new `gitcache` volume. The Caddyfile now routes `/git/*` to it and answers 404 there while
+  it is not running, so leaving it off changes nothing. New env vars, with defaults: `GIT_REMOTE_ENABLED`
+  (`false`), `GIT_PORT` (`3002`), `GIT_CACHE_DIR` (the OS temp dir; `/var/cache/knowledge-git` in the image).
+  The volume is a cache: deleting it costs one rebuild per project and access set from Postgres and MinIO,
+  and nothing else. Fetches go through the Cloudflare Worker, which gives up after about 100 s, so the first
+  clone of a very large project can time out; the repository keeps building, and a retry finishes it. Rolling
+  back is safe: nothing writes to the database, and the previous image has no `git` service.
+- `Dockerfile.api` now ends with the `git-runtime` stage, so an untargeted `docker build -f Dockerfile.api`
+  builds the git image. The deploy and the dev compose file name `--target runtime` for the api image; any
+  other script that builds it must too.
 
 ## [0.40.0] — 2026-10-30
 

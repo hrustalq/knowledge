@@ -161,8 +161,20 @@ jobs:
       #   docker tag knowledge-api:v0.4.0 knowledge-api:latest && compose up -d
       - name: Build api image
         run: |
-          docker build -f Dockerfile.api \
+          docker build -f Dockerfile.api --target runtime \
             -t "knowledge-api:$VERSION" -t "knowledge-api:$SHA" -t knowledge-api:latest .
+
+      # The git remote's image (#636): the api image plus the git binary, from
+      # the same cache, so only the apt layer is new. Built only when the
+      # `git` compose profile is on, since each version's copy keeps ~96 MB.
+      - name: Build git image
+        run: |
+          if grep -Eq '^COMPOSE_PROFILES=(.*,)?git(,|$)' "$DEPLOY_DIR/.env"; then
+            docker build -f Dockerfile.api --target git-runtime \
+              -t "knowledge-api-git:$VERSION" -t "knowledge-api-git:$SHA" -t knowledge-api-git:latest .
+          else
+            echo "COMPOSE_PROFILES has no git: skipped"
+          fi
 
       - name: Build web image
         run: |

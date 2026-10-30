@@ -39400,7 +39400,8 @@
                 "captures",
                 "memos",
                 "conflicts",
-                "assistant"
+                "assistant",
+                "git"
               ]
             }
           }
@@ -69413,7 +69414,8 @@
           "captures",
           "memos",
           "conflicts",
-          "assistant"
+          "assistant",
+          "git"
         ]
       },
       "WorkspaceFeaturesResponse": {

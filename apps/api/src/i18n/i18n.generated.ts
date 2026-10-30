@@ -1547,6 +1547,14 @@ export type I18nTranslations = {
         "feature": {
             "disabled": string;
         };
+        "git": {
+            "notFound": string;
+            "credentials": string;
+            "captureKey": string;
+            "guest": string;
+            "pushUnavailable": string;
+            "smartHttpOnly": string;
+        };
     };
     "export": {
         "docx": {

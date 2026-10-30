@@ -1,3 +1,5 @@
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { z } from 'zod';
 import { DEFAULT_EMBED_MAX_ITEMS } from '@knowledge/contracts/embeds';
 
@@ -732,6 +734,18 @@ export const envSchema = z.object({
    * each commit as it is written, so a change applies to new commits only.
    */
   GIT_NOREPLY_DOMAIN: z.string().min(1).default('knowledge'),
+  /**
+   * The env ceiling over the workspace toggle `git` (#636, phase 3). Off, the
+   * git process (`git.main.ts`) answers 404 to every `/git/*` request.
+   */
+  GIT_REMOTE_ENABLED: boolish(false),
+  /** The git process's HTTP port; Caddy routes `/git/*` to it. */
+  GIT_PORT: z.coerce.number().int().positive().default(3002),
+  /**
+   * Bare repositories, one per project and visible set, rebuilt from Postgres
+   * when missing. A volume in production, so a restart is not a cold build.
+   */
+  GIT_CACHE_DIR: z.string().min(1).default(join(tmpdir(), 'knowledge-git')),
 
   /**
    * Connectors (docs/features/19). Allow connector base URLs and git remotes on

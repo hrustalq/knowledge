@@ -7297,7 +7297,11 @@
       "captures": "The captures inbox and the agent-memory tools that stage them.",
       "memos": "Uploading meeting recordings and the merge requests proposed from them.",
       "conflicts": "The list of contradictions between pages and resolving them.",
-      "assistant": "The Assistant page, its saved conversations and the chat panel beside the editor. Review, lint and suggestion helpers stay."
+      "assistant": "The Assistant page, its saved conversations and the chat panel beside the editor. Review, lint and suggestion helpers stay.",
+      "git": "Cloning and fetching this workspace's projects with git, over HTTPS with an API key."
+    },
+    "names": {
+      "git": "Git remote"
     }
   }
 }

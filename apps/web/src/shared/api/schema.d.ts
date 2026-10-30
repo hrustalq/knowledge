@@ -7522,7 +7522,7 @@ export interface components {
         };
         UpdateWorkspaceFeaturesDto: {
             /** @description The sections to switch off; every one not listed is on. An empty list turns everything back on. */
-            disabled: ("workflows" | "knowledge-health" | "qa" | "analytics" | "captures" | "memos" | "conflicts" | "assistant")[];
+            disabled: ("workflows" | "knowledge-health" | "qa" | "analytics" | "captures" | "memos" | "conflicts" | "assistant" | "git")[];
         };
         UpdateWorkspaceDto: {
             /** @example Platform Team */
@@ -15355,7 +15355,7 @@ export interface components {
             counts: components["schemas"]["WorkspaceDeletionCounts"];
         };
         /** @enum {string} */
-        WorkspaceFeature: "workflows" | "knowledge-health" | "qa" | "analytics" | "captures" | "memos" | "conflicts" | "assistant";
+        WorkspaceFeature: "workflows" | "knowledge-health" | "qa" | "analytics" | "captures" | "memos" | "conflicts" | "assistant" | "git";
         WorkspaceFeaturesResponse: {
             workspaceId: string;
             disabled: components["schemas"]["WorkspaceFeature"][];

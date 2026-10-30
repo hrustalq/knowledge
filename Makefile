@@ -57,6 +57,10 @@ dev-worker: ## Run only the ingestion worker in watch mode (already part of 'mak
 dev-learner: ## Run the learner (#305) in watch mode; idles unless LEARNER_ENABLED=true (needs infra up)
 	$(DEV_ENV) $(API) run dev:learner
 
+.PHONY: dev-git
+dev-git: ## Run the git remote (#636) on :3002 in watch mode; 404s unless GIT_REMOTE_ENABLED=true (needs infra up + git)
+	$(DEV_ENV) $(API) run dev:git
+
 .PHONY: dev-mcp
 dev-mcp: ## Run the MCP server (stdio) in watch mode (needs infra up)
 	$(DEV_ENV) $(API) run dev:mcp

@@ -874,5 +874,13 @@
   },
   "feature": {
     "disabled": "The {feature} feature is switched off in this workspace."
+  },
+  "git": {
+    "notFound": "Repository not found.",
+    "credentials": "Sign in with an API key: any username, and a kn_ key as the password.",
+    "captureKey": "A capture key cannot use git. Fetch with a read or write key.",
+    "guest": "Guests cannot use git yet. Ask a workspace admin to make you a member.",
+    "pushUnavailable": "Pushing is not available yet: this remote is read-only for now.",
+    "smartHttpOnly": "Only smart HTTP is served. Use git 1.6.6 or later."
   }
 }

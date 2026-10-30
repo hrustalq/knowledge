@@ -10,6 +10,7 @@
  *   worker.main.ts  → WorkerModule  (BullMQ processors, no HTTP)
  *   mcp.main.ts     → McpModule     (stdio JSON-RPC)
  *   learner.main.ts → LearnerModule (#305: a timer that proposes learnings)
+ *   git.main.ts     → GitModule     (#636: smart-HTTP git remote, its own controller only)
  *
  * Nothing in the type system stops AppModule from importing a module that
  * transitively pulls in a BullMQ processor — and the failure is silent and
@@ -193,12 +194,60 @@ module.exports = {
       to: { path: '^src/learner/learner\\.(module|ticker|service)\\.ts$' },
     },
     {
+      name: 'git-loads-no-other-controller',
+      comment:
+        'The git process (#636) authenticates in GitAccessService, not through AuthModule\'s global ' +
+        'guards, so any controller but its own would boot without the guard it relies on. It loads ' +
+        'controller-free core modules (AuthCoreModule, PermissionsCoreModule, ...) only.',
+      severity: 'error',
+      from: { path: '^src/git/git\\.module\\.ts$' },
+      to: { path: '\\.controller\\.ts$', pathNot: '^src/git/git\\.controller\\.ts$', reachable: true },
+    },
+    {
+      name: 'git-loads-no-gateway',
+      comment: 'No WebSocket or collab gateway: the git process serves smart HTTP and nothing else.',
+      severity: 'error',
+      from: { path: '^src/git/git\\.module\\.ts$' },
+      to: { path: '\\.gateway\\.ts$', reachable: true },
+    },
+    {
+      name: 'git-loads-no-processor',
+      comment: 'A processor here would make the git process a second consumer of BullMQ jobs beside the worker.',
+      severity: 'error',
+      from: { path: '^src/git/git\\.module\\.ts$' },
+      to: { path: '\\.processor\\.ts$', reachable: true },
+    },
+    {
+      name: 'git-loads-no-sweeper',
+      comment: 'Sweepers belong to the API or the worker; one here would race them for the same rows.',
+      severity: 'error',
+      from: { path: '^src/git/git\\.module\\.ts$' },
+      to: { path: '\\.sweeper\\.ts$', reachable: true },
+    },
+    {
+      name: 'git-loads-no-worker-module',
+      comment: 'Worker-only modules (*-worker.module.ts) belong to WorkerModule alone.',
+      severity: 'error',
+      from: { path: '^src/git/git\\.module\\.ts$' },
+      to: { path: '-worker\\.module\\.ts$', reachable: true },
+    },
+    {
+      name: 'git-stays-out-of-the-other-processes',
+      comment:
+        'Nothing but git.main.ts may load GitModule or its controller: in AppModule the API would ' +
+        'serve packs, which the house rule "the API never streams file bodies" forbids. ' +
+        'GitCoreModule (stored commits) is the half every process imports.',
+      severity: 'error',
+      from: { path: '^src/', pathNot: '^src/(git/|git\\.main\\.ts$)' },
+      to: { path: '^src/git/(git\\.module|git\\.controller|git-access\\.service|git-repo\\.service)\\.ts$' },
+    },
+    {
       name: 'entrypoints-stay-separate',
       comment:
-        'worker.main.ts, mcp.main.ts and learner.main.ts must never reach AppModule — that would ' +
-        'boot the whole HTTP application inside a context that has no HTTP listener.',
+        'worker.main.ts, mcp.main.ts, learner.main.ts and git.main.ts must never reach AppModule — ' +
+        'that would boot the whole HTTP application inside another process.',
       severity: 'error',
-      from: { path: '^src/(worker|mcp|learner)\\.main\\.ts$' },
+      from: { path: '^src/(worker|mcp|learner|git)\\.main\\.ts$' },
       to: { path: '^src/app\\.module\\.ts$', reachable: true },
     },
 

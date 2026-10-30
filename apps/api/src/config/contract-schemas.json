@@ -23539,7 +23539,8 @@
       "captures",
       "memos",
       "conflicts",
-      "assistant"
+      "assistant",
+      "git"
     ]
   },
   "WorkspaceFeaturesResponse": {

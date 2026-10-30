@@ -82,9 +82,25 @@
 		}
 	}
 
+	# The git remote (#636, docs/features/71): smart HTTP for `git clone` and
+	# `git fetch`. `handle`, not `handle_path`: the git process routes on the
+	# full /git/<workspace>/<project>.git path. It runs only under the `git`
+	# compose profile; when it is not running, handle_errors below turns the
+	# failed dial into the 404 a switched-off remote promises.
+	handle /git/* {
+		reverse_proxy git:3002
+	}
+
 	# Everything else is the SSR app.
 	handle {
 		reverse_proxy web:5173
+	}
+
+	# reverse_proxy errors only when it cannot reach its upstream (an upstream's
+	# own 4xx/5xx passes through), so an error on /git/* means no git service.
+	handle_errors {
+		@git path /git/*
+		respond @git "Not found" 404
 	}
 
 	# `?token=` still authenticates SSE and <img> requests (the @QueryTokenOk

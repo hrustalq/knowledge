@@ -12,9 +12,7 @@ import { AuthFlowService } from './auth-flow.service.js';
 import { AuthGuard } from './auth.guard.js';
 import { AuthRateLimitGuard } from './auth-rate-limit.guard.js';
 import { MeController } from './me.controller.js';
-import { SessionsService } from './sessions.service.js';
-import { TokenAuthService } from './token-auth.service.js';
-import { UrlTicketsService } from './url-tickets.service.js';
+import { AuthTokensModule } from './auth-tokens.module.js';
 import { PublicRateLimiter } from '../public/public-rate-limit.js';
 import { PublicStore } from '../public/public-store.js';
 
@@ -27,13 +25,10 @@ import { PublicStore } from '../public/public-store.js';
 @Global()
 @Module({
   // PermissionsCoreModule: AclGuard asks it about the page behind a `:id` (#76).
-  imports: [PrismaModule, AuthCoreModule, PermissionsCoreModule, MailQueueModule],
+  imports: [PrismaModule, AuthCoreModule, AuthTokensModule, PermissionsCoreModule, MailQueueModule],
   controllers: [AuthController, AuthFlowController, MeController],
   providers: [
     ApiKeysService,
-    SessionsService,
-    TokenAuthService,
-    UrlTicketsService,
     AuthFlowService,
     // The anonymous auth routes' budgets (#75): the same Redis fixed window the
     // public routes count with, registered here as api-specs registers it.
@@ -43,9 +38,10 @@ import { PublicStore } from '../public/public-store.js';
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: AclGuard },
   ],
-  // AuthCoreModule is re-exported so existing importers keep getting AccessService.
+  // AuthCoreModule is re-exported so existing importers keep getting AccessService,
+  // and AuthTokensModule so they keep getting SessionsService and TokenAuthService.
   // AuthFlowService + the limiter: SSO sign-in (#75) opens its sessions and
   // counts its routes the way a password login does.
-  exports: [AuthCoreModule, SessionsService, TokenAuthService, AuthFlowService, PublicRateLimiter, AuthRateLimitGuard],
+  exports: [AuthCoreModule, AuthTokensModule, AuthFlowService, PublicRateLimiter, AuthRateLimitGuard],
 })
 export class AuthModule {}

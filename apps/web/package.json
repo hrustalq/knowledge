@@ -7,7 +7,7 @@
     "dev": "node server",
     "build": "npm run build:client && npm run build:server",
     "build:client": "vite build --outDir dist/client",
-    "build:server": "vite build --ssr --outDir dist/server",
+    "build:server": "vite build --ssr --outDir dist/server && node scripts/check-ssr-chunks.mjs",
     "preview": "cross-env NODE_ENV=production node server",
     "lint": "eslint src",
     "depcruise": "depcruise src --output-type err-long --ignore-known",

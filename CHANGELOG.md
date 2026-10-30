@@ -13,6 +13,39 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.40.0] — 2026-10-30
+
+### Added
+
+- **The first click on a page no longer sits there on a cold cache** (#627): once the app has loaded and
+  gone idle, the browser fetches the code for the five places you open most — kept per person, in your own
+  browser, as route shapes only (`/documents/:id`, never a page id or a search) — or, in a new browser, for a
+  page and the sidebar's destinations. Hovering or focusing a link starts its code too. On a throttled cold
+  load a sidebar link went from about 0.8 s to 0.1 s and a page in the tree from 2.7 s to 0.1 s. Nothing is
+  fetched for a section the workspace switched off, or on a Save-Data or 2G connection.
+- **A slow navigation now says so** (#627): when a page takes longer than a moment to arrive, a thin bar runs
+  along the top of the content and the link you clicked shows a spinner. A page whose code was removed by a
+  deploy while the tab was open now loads by a full reload instead of doing nothing.
+- **A page opened from the tree draws at once instead of showing a placeholder** (#628): resting the pointer
+  or focus on a link to a page for a tenth of a second reads that page ahead of the click, and going back to a
+  page you just read shows it immediately while it checks for changes. A pointer sweeping down the tree reads
+  nothing, at most two pages are read ahead at a time, and nothing is read ahead on a Save-Data or 2G
+  connection. A page you cannot open is refused on the click exactly as before; reading ahead shows nothing.
+
+### Changed
+
+- **Workflows and Memos moved under Knowledge base** in the sidebar, and the Knowledge base group now sits
+  right below Home (#627).
+
+### Fixed
+
+- **Opening a page, the editor, the assistant or a project page directly no longer fails with a server
+  error** (#630): since 0.39.0, reloading or following a link straight to one of these pages could answer 500
+  while clicking to it inside the app worked. The server bundle now keeps its modules' execution order, and
+  the build fails if any of its chunks cannot load on its own.
+- **A collapsed comment thread shows who started it again**: the one-line summary of a folded thread, on a
+  page and in a merge request, had lost the opener's avatar and left an empty gap before the text.
+
 ## [0.39.0] — 2026-10-29
 
 ### Added
@@ -5271,7 +5304,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.39.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.40.0...HEAD
+[0.40.0]: https://github.com/hrustalq/knowledge/compare/v0.39.0...v0.40.0
 [0.39.0]: https://github.com/hrustalq/knowledge/compare/v0.38.0...v0.39.0
 [0.38.0]: https://github.com/hrustalq/knowledge/compare/v0.37.0...v0.38.0
 [0.37.0]: https://github.com/hrustalq/knowledge/compare/v0.36.0...v0.37.0

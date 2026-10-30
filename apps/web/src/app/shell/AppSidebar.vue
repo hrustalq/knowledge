@@ -1,34 +1,20 @@
 <script setup lang="ts">
 // Left navigation rail: brand, workspace switcher, primary nav, and the
 // Projects → Pages navigation stack (Confluence-style space sidebar).
-import { computed, ref, watch, type Component } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import {
-  AudioLines,
-  BookMarked,
-  BookmarkPlus,
-  ChartColumn,
-  ChevronRight,
-  FlaskConical,
-  GitPullRequestArrow,
-  HeartPulse,
-  House,
-  Library,
-  Scale,
-  Settings,
-  Sparkles,
-  Workflow,
-} from 'lucide-vue-next'
+import { BookMarked, ChevronRight, Library } from 'lucide-vue-next'
 import { SwitcherCreateDialog, type ScopeCreated } from '@/modules/projects'
 import { Collapse } from '@/shared/ui/collapse'
 import { useAuthStore } from '@/stores/auth'
 import { useFeaturesStore } from '@/stores/features'
 import { useLayoutStore } from '@/stores/layout'
-import type { WorkspaceFeature } from '@knowledge/contracts'
 import ScopeSwitcher from './ScopeSwitcher.vue'
 import SidebarPanes from './SidebarPanes.vue'
 import SidebarResizeHandle from './SidebarResizeHandle.vue'
+import SidebarNavLink from './SidebarNavLink.vue'
+import { HOME_NAV, KNOWLEDGE_NAV, NAV_CURRENT, NAV_IDLE, PRIMARY_NAV, SETTINGS_NAV, type NavItem } from './nav'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -63,47 +49,17 @@ function onCreated(created: ScopeCreated) {
   if (created.kind === 'project') void router.push('/documents')
 }
 
-interface NavLink { to: string; label: string; icon: Component; feature?: WorkspaceFeature }
 /** A link to a section the workspace switched off (#604) is not drawn. */
-const shown = (list: NavLink[]) => list.filter((l) => !l.feature || features.isOn(l.feature))
+const shown = (list: NavItem[]) =>
+  list.filter((l) => (!l.feature || features.isOn(l.feature)) && (!l.workspaceAdmin || auth.canAdminWorkspace))
 
-const links = computed<NavLink[]>(() => shown([
-  { to: '/documents', label: t('nav.home'), icon: House },
-  // Search is not a destination — it is the topbar trigger's sheet ("/" or ⌘K).
-  { to: '/merge-requests', label: t('nav.mergeRequests'), icon: GitPullRequestArrow },
-  { to: '/workflows', label: t('nav.workflows'), icon: Workflow, feature: 'workflows' },
-  // Which operations are ready to test (#483).
-  { to: '/qa', label: t('nav.qa'), icon: FlaskConical, feature: 'qa' },
-  // Recordings of your own (#551): proposals you then review.
-  { to: '/memos', label: t('nav.memos'), icon: AudioLines, feature: 'memos' },
-  { to: '/assistant', label: t('nav.assistant'), icon: Sparkles, feature: 'assistant' },
-]))
-
-// The surfaces that look after the knowledge base as a whole rather than one
-// page (#605), folded under one node so the rail stays short.
-const knowledgeLinks = computed<NavLink[]>(() => shown([
-  // The trust loop's review surface (docs/features/40).
-  { to: '/knowledge-health', label: t('nav.knowledgeHealth'), icon: HeartPulse, feature: 'knowledge-health' },
-  // Usage analytics (#79): admins only — it carries what people searched for.
-  ...(auth.canAdminWorkspace ? [{ to: '/analytics', label: t('nav.analytics'), icon: ChartColumn, feature: 'analytics' as const }] : []),
-  // What agents proposed from their sessions (issue #73): page captures are
-  // decided on merge requests, but terms and stranded captures only here.
-  { to: '/captures', label: t('nav.captures'), icon: BookmarkPlus, feature: 'captures' },
-  // Contradictions the arbiter found between pages (#81).
-  { to: '/conflicts', label: t('nav.conflicts'), icon: Scale, feature: 'conflicts' },
-]))
-
-const CURRENT = 'bg-primary/10 font-medium text-primary'
-const IDLE = 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground'
-
-function isCurrent(to: string): boolean {
-  return to === '/documents' ? route.path === '/documents' : route.path.startsWith(to)
-}
+const links = computed(() => shown(PRIMARY_NAV))
+const knowledgeLinks = computed(() => shown(KNOWLEDGE_NAV))
 
 // Closed until you open it or land on one of its pages, then kept for the
 // session (the layout store is serialized with SSR, so both sides agree).
 const layout = useLayoutStore()
-const inKnowledge = computed(() => knowledgeLinks.value.some((l) => isCurrent(l.to)))
+const inKnowledge = computed(() => knowledgeLinks.value.some((l) => route.path.startsWith(l.to)))
 const knowledgeOpen = computed(() => layout.isSubRailOpen('nav.knowledge', false))
 watch(inKnowledge, (inside) => {
   if (inside) layout.setSubRailOpen('nav.knowledge', true)
@@ -126,22 +82,13 @@ watch(inKnowledge, (inside) => {
     </div>
 
     <nav class="space-y-px px-2" :aria-label="t('nav.primary')">
-      <RouterLink
-        v-for="l in links"
-        :key="l.to"
-        :to="l.to"
-        class="flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors"
-        :class="isCurrent(l.to) ? CURRENT : IDLE"
-      >
-        <component :is="l.icon" class="size-4 shrink-0" />
-        {{ l.label }}
-      </RouterLink>
+      <SidebarNavLink :item="HOME_NAV" />
 
       <template v-if="knowledgeLinks.length">
         <button
           type="button"
           class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-sm transition-colors"
-          :class="inKnowledge && !knowledgeOpen ? CURRENT : IDLE"
+          :class="inKnowledge && !knowledgeOpen ? NAV_CURRENT : NAV_IDLE"
           :aria-expanded="knowledgeOpen"
           @click="layout.setSubRailOpen('nav.knowledge', !knowledgeOpen)"
         >
@@ -155,29 +102,13 @@ watch(inKnowledge, (inside) => {
         </button>
         <Collapse :open="knowledgeOpen">
           <div class="space-y-px pt-px">
-            <RouterLink
-              v-for="l in knowledgeLinks"
-              :key="l.to"
-              :to="l.to"
-              class="flex items-center gap-2.5 rounded-md py-1.5 pr-2.5 pl-7 text-sm transition-colors"
-              :class="isCurrent(l.to) ? CURRENT : IDLE"
-            >
-              <component :is="l.icon" class="size-4 shrink-0" />
-              {{ l.label }}
-            </RouterLink>
+            <SidebarNavLink v-for="l in knowledgeLinks" :key="l.to" :item="l" nested />
           </div>
         </Collapse>
       </template>
 
-      <!-- Projects, users, access and activity live under the settings shell. -->
-      <RouterLink
-        to="/settings"
-        class="flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors"
-        :class="isCurrent('/settings') ? CURRENT : IDLE"
-      >
-        <Settings class="size-4 shrink-0" />
-        {{ t('nav.settings') }}
-      </RouterLink>
+      <SidebarNavLink v-for="l in links" :key="l.to" :item="l" />
+      <SidebarNavLink :item="SETTINGS_NAV" />
     </nav>
 
     <SidebarPanes @create="openCreate('project')" />

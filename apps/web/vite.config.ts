@@ -55,6 +55,15 @@ export default defineConfig(({ isSsrBuild }) => ({
             'export-render': 'src/export-render.ts',
           }
         : { main: 'index.html', reader: 'reader.html' }) as Record<string, string>,
+      // The server bundle's chunks import each other in cycles (a component a
+      // page imports and a `lazy.ts` also imports dynamically), and Rolldown
+      // inlines its runtime helpers into whichever chunk first needs them — so a
+      // chunk could evaluate before the helper it imports back was assigned, and
+      // the route 500'd on a cold render (#630). This keeps source order across
+      // chunks; scripts/check-ssr-chunks.mjs fails the build if it ever does not.
+      // The client is spared: its runtime is shared by two entries and so gets a
+      // chunk of its own.
+      output: isSsrBuild ? { strictExecutionOrder: true } : {},
     },
   },
   server: {

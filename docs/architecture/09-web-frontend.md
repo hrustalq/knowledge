@@ -27,6 +27,19 @@ A render failure logs the stack and returns a bare `500 Internal Server Error`.
 It used to send the stack as the response body, which hands anyone who can
 trigger a render error the server's internal paths and dependency layout.
 
+The server bundle is built with `output.strictExecutionOrder` (`vite.config.ts`,
+SSR only). Its chunks import each other in cycles — a component a page imports
+statically while an entity's `lazy.ts` also imports it dynamically — and
+Rolldown inlines its runtime helpers into whichever chunk first needs them, so
+without it a chunk could evaluate before the helper it imports back was
+assigned: `__exportAll is not a function`, a 500 on the first cold render of
+the document page, the editor, the assistant and the project pages (#630). The
+option costs about 7% of server bundle size and nothing on the client.
+`build:server` then runs `scripts/check-ssr-chunks.mjs`, which imports every
+server chunk in its own worker and fails the build if any cannot evaluate on its
+own — the Vite dev server does not bundle, and typecheck never sees the output,
+so the build is the only place this can be caught.
+
 `traceMiddleware` is registered **first**, before Vite's middlewares and the SSR
 handler, so every response carries `x-request-id` — static-asset 404s included —
 and the id is passed into the render, which is what puts the browser's request,
@@ -324,6 +337,69 @@ a **dynamic import** behind the entity's `loadCollab()`, which `EditorPage` call
 deployment with the flag off never load Yjs at all; the SSR pass renders the
 editor's existing skeleton. In collab mode the editor never calls
 `setContent`, because the Y.Doc is the only writer of the body.
+
+## Route prefetch and pending navigation
+
+Every member route is a lazy `import()`, and a navigation waits for its chunk
+with the old page still drawn (the view transition starts in `beforeResolve`,
+after the chunk, for exactly that reason). Vite's modulepreload covers only the
+entry's static imports, so on a cold cache the first click on each area used to
+wait for the network with nothing on screen saying so (#627).
+
+`app/router/navigation.ts` handles that, and it is client-only by construction:
+`entry-client.ts` calls `installNavigation(router, pinia)` after `app.mount`, so
+none of it runs in the SSR pass or competes with hydration, and the public entry
+never imports it.
+
+- **History.** `afterEach` appends the leaf record's `path` _pattern_
+  (`/documents/:id`, never an id, a query or a hash) to a 50-entry ring under
+  `kn_route_visits:<userId>` in localStorage. A navigation that only changes the
+  query is not a visit. Every read and write is in a `try`; blocked storage
+  means an empty history, not a broken app.
+- **Idle prefetch.** Once the browser is idle (`requestIdleCallback`, else a
+  timer) the five most-visited patterns are fetched, topped up from the seed:
+  `/documents/:id` (every tree row), then the rail's destinations in
+  `app/shell/nav.ts` — the same list `AppSidebar` draws, so the guess and the
+  rail cannot drift. `likelyRoutes` is the pure ranking (`navigation.spec.ts`).
+- **Intent.** A delegated `pointerover`/`focusin` on `document` starts the
+  chunks of any same-origin link — rail, tree, breadcrumbs and links inside a
+  page alike.
+- **Permission.** A route is prefetched only if `refusal(route, auth, features)`
+  (`app/router/index.ts`) returns null — the same predicate the auth guard
+  answers with, so a switched-off section (#604) or an admin-only route is
+  never fetched for someone the guard would turn away. A workspace-admin-only
+  rail item (`workspaceAdmin`, Analytics) is left out of the guesses too.
+- **Save-Data / 2g.** `navigator.connection.saveData` or a `2g` effective type
+  skips every prefetch, idle and intent.
+
+Loading a record's lazy component ourselves is enough: the browser's module map
+dedupes the `import()`, so the router's own call later resolves at once. A
+`Set` of started loaders keeps the hover path from re-resolving; a failed one is
+dropped from it so the click can retry.
+
+**Pending state.** `beforeEach` starts a 150 ms timer; when it fires,
+`slowNavigation` (a module-level `shallowRef`, written only on the client)
+holds the target. `AppShell` draws `.kn-route-progress` — a 2 px ink run along
+the top of the content pane, a zero-height host so nothing moves — while it is
+set, and `SidebarNavLink` / `SidebarTreeNode` swap their icon for a spinner and
+set `aria-busy` on the link whose path (or redirect source) it names. A fast or
+warm navigation settles before the timer and draws nothing. `afterEach` settles
+only the navigation it belongs to: a superseded one still gets an `afterEach`
+after its successor has started. The bar's CSS lives in `AppShell.vue`, not
+`style.css`, because the public reader ships that stylesheet too.
+
+**A chunk that will not load** — usually one a deploy removed under an open tab
+— reaches `router.onError`, which settles the pending state and does
+`location.assign(to.fullPath)`. The full load is rendered by the server with the
+current build's chunk names, and the service worker answers navigations from the
+network ([10](10-caching.md#the-service-worker)), so the reload cannot replay
+the stale build. The handler is installed after mount, so a first load whose
+chunk fails cannot reload itself in a loop.
+
+Measured on a production build (cold cache, Fast 4G, service worker blocked),
+click-to-paint went from 776 ms to 113 ms for a rail link and from 2.75 s to
+97 ms for a tree row; the idle prefetch costs ~114 chunk files right after the
+shell settles.
 
 ## Limits
 

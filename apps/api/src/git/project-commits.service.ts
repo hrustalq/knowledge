@@ -5,13 +5,16 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { slugFor } from './slug.js';
 
 /** One page's tree state after a commit (`project_commit_changes`). */
-interface CommitChange {
+export interface CommitChange {
   documentId: string;
   revisionId: string;
   parentDocumentId: string | null;
   slug: string;
   removed: boolean;
 }
+
+/** A page and its place: a tree change to apply or record. */
+export type PagePlace = Place & { documentId: string };
 
 interface CommitInput {
   workspaceId: string;
@@ -28,7 +31,25 @@ interface CommitInput {
   changes: CommitChange[];
 }
 
+/** A pushed commit (#636 phase 4): parents and header bytes as the pusher's git wrote them. */
+export interface PushedCommit {
+  workspaceId: string;
+  projectId: string;
+  branch: string;
+  /** Commit ids, ordered: order 1 first. */
+  parents: string[];
+  header: Buffer;
+  changes: CommitChange[];
+}
+
 type PageRow = { id: string; path: string };
+
+/** Where a commit puts a page in its project's tree. */
+export interface Place {
+  parentDocumentId: string | null;
+  slug: string;
+  removed: boolean;
+}
 
 /** Fallback author when no principal is supplied (AUTH_MODE=none, system writers). */
 const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
@@ -126,7 +147,10 @@ export class ProjectCommitsService {
    * save, and one for every page of a merge (#636). `mergedFrom` names the
    * merged source branch, whose head commit becomes the second parent.
    */
-  async recordRevisions(revisionIds: string[], opts: { authorId?: string; mergedFrom?: string } = {}): Promise<void> {
+  async recordRevisions(
+    revisionIds: string[],
+    opts: { authorId?: string; mergedFrom?: string; placed?: string[] } = {},
+  ): Promise<void> {
     const revisions = await this.prisma.documentRevision.findMany({
       where: { id: { in: revisionIds } },
       include: {
@@ -141,25 +165,65 @@ export class ProjectCommitsService {
     if (kept.length === 0) return;
     const [r] = kept;
     const doc = r.document;
+    const branch = r.branch?.name ?? doc.defaultBranch;
     const slugOf = (d: typeof doc) => d.slug ?? slugFor(d.title);
+    // A branch carries its own tree (#636 phase 4): a page a push moved there
+    // stays where the branch put it when the web edits it there.
+    const places = branch === doc.defaultBranch ? new Map<string, Place>() : await this.branchPlaces(doc.projectId, branch, kept.map((k) => k.document.id));
+    // Pages a merge moved, renamed or archived without a revision of their own.
+    const placed = opts.placed?.length ? await this.statesOf(opts.placed.filter((id) => !kept.some((k) => k.document.id === id))) : [];
     await this.write({
       workspaceId: doc.workspaceId,
       projectId: doc.projectId,
-      branch: r.branch?.name ?? doc.defaultBranch,
+      branch,
       authorId: opts.authorId ?? r.authorId,
       at: r.finalizedAt ?? new Date(),
       message: r.message?.trim() || `Update ${slugOf(doc)}`,
       coAuthorIds: kept.flatMap((k) => (Array.isArray(k.coAuthorIds) ? (k.coAuthorIds as string[]) : [])),
       forkRevisionId: r.parents[0]?.parentRevisionId,
       mergedFrom: opts.mergedFrom,
-      changes: kept.map((k) => ({
-        documentId: k.document.id,
-        revisionId: k.id,
-        parentDocumentId: k.document.parentId,
-        slug: slugOf(k.document),
-        removed: false,
-      })),
+      changes: [
+        ...kept.map((k) => ({
+          documentId: k.document.id,
+          revisionId: k.id,
+          parentDocumentId: places.get(k.document.id)?.parentDocumentId ?? k.document.parentId,
+          slug: places.get(k.document.id)?.slug ?? slugOf(k.document),
+          removed: false,
+        })),
+        ...placed,
+      ],
     });
+  }
+
+  /** A pushed commit, as git wrote it; its id. Call under `lock`, in the push's transaction. */
+  async recordPushed(input: PushedCommit): Promise<string> {
+    const row = await this.prisma.projectCommit.create({
+      data: {
+        workspaceId: input.workspaceId,
+        projectId: input.projectId,
+        branch: input.branch,
+        header: new Uint8Array(input.header),
+        parents: { create: input.parents.map((parentCommitId, i) => ({ parentCommitId, parentOrder: i + 1 })) },
+        changes: { createMany: { data: input.changes } },
+      },
+      select: { id: true },
+    });
+    return row.id;
+  }
+
+  /**
+   * Where `branch` last placed each of these pages (#636 phase 4): its
+   * latest change row on that branch. A page the branch never wrote is not
+   * in the map, and reads as the default branch places it.
+   */
+  async branchPlaces(projectId: string, branch: string, documentIds: string[]): Promise<Map<string, Place>> {
+    if (documentIds.length === 0) return new Map();
+    const rows = await this.prisma.$queryRaw<{ document_id: string; parent_document_id: string | null; slug: string; removed: boolean }[]>`
+      SELECT DISTINCT ON (c.document_id) c.document_id, c.parent_document_id, c.slug, c.removed
+      FROM project_commit_changes c JOIN project_commits pc ON pc.id = c.commit_id
+      WHERE pc.project_id = ${projectId}::uuid AND pc.branch = ${branch} AND c.document_id = ANY(${documentIds}::uuid[])
+      ORDER BY c.document_id, pc.seq DESC`;
+    return new Map(rows.map((r) => [r.document_id, { parentDocumentId: r.parent_document_id, slug: r.slug, removed: r.removed }]));
   }
 
   /** The latest commit on a project branch, or null while nothing was written on it. */
@@ -179,10 +243,24 @@ export class ProjectCommitsService {
    * left out; nothing left means no commit. `removed` overrides the archive
    * flag: a page moved to another project is gone from this one's tree.
    */
+  /** These pages' current place on the default branch, at its head: a commit's change rows for a tree-only change. */
+  private async statesOf(documentIds: string[]): Promise<CommitChange[]> {
+    if (documentIds.length === 0) return [];
+    const docs = await this.prisma.document.findMany({
+      where: { id: { in: documentIds } },
+      include: { branches: { select: { name: true, headRevisionId: true } } },
+      orderBy: { path: 'asc' },
+    });
+    return docs.flatMap((d) => {
+      const head = d.branches.find((b) => b.name === d.defaultBranch)?.headRevisionId;
+      return head ? [{ documentId: d.id, revisionId: head, parentDocumentId: d.parentId, slug: d.slug ?? slugFor(d.title), removed: d.archivedAt !== null }] : [];
+    });
+  }
+
   async recordState(
     projectId: string,
     documentIds: string[],
-    opts: { actorId?: string; message: string; removed?: boolean },
+    opts: { actorId?: string; message: string; removed?: boolean; mergedFrom?: string },
   ): Promise<void> {
     if (documentIds.length === 0) return;
     const docs = await this.prisma.document.findMany({
@@ -211,6 +289,7 @@ export class ProjectCommitsService {
       authorId: opts.actorId ?? AUTHOR_ID_STUB,
       at: new Date(),
       message: opts.message,
+      mergedFrom: opts.mergedFrom,
       changes,
     });
   }

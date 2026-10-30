@@ -218,6 +218,11 @@ model DocumentRevision {
   collabDraftId   String?   @map("collab_draft_id") @db.Uuid
   collabSnapshot  Bytes?    @map("collab_snapshot")
   coAuthorIds     Json?     @map("co_author_ids")
+  // #636 phase 4: the id line a push carried, as `{ offset, text }` (byte
+  // offset into the stored body; `text: ""` when the file had none), so the
+  // served blob is the pushed one byte for byte. Null = the canonical line a
+  // web-written revision is served with (`withIdLine`).
+  idLine          Json?     @map("id_line")
 
   document Document         @relation(fields: [documentId], references: [id])
   branch   DocumentBranch?  @relation(fields: [branchId], references: [id])

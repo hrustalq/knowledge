@@ -27,7 +27,11 @@ it is a separate process behind `/git/*` in the `Caddyfile`, built from the
 binary). It loads `*CoreModule`s and `AuthTokensModule` only, plus its own
 controller, and authenticates in `GitAccessService` rather than through
 `AuthModule`'s global guards; dependency-cruiser holds it to that
-(`git-loads-no-other-controller`, `git-stays-out-of-the-other-processes`). The schema script exists so `make api-schema` can scan route metadata
+(`git-loads-no-other-controller`, `git-stays-out-of-the-other-processes`). A
+push makes it a principal-bearing writer, on the API's side of "the worker
+generates, the API publishes": it writes revisions, pages and merge requests
+as the key's owner through `DocumentsCoreModule` and `MergeRequestsCoreModule`,
+the controller-free halves of `DocumentsModule` (#636 phase 4). The schema script exists so `make api-schema` can scan route metadata
 without touching infrastructure — it creates the Nest app **without `init()` or
 `listen()`**, though the env file is still required because `src/config/env.ts`
 validates with zod at import time. That is why **every new env var needs a

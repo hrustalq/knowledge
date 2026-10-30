@@ -1552,8 +1552,36 @@ export type I18nTranslations = {
             "credentials": string;
             "captureKey": string;
             "guest": string;
-            "pushUnavailable": string;
             "smartHttpOnly": string;
+            "push": {
+                "readOnly": string;
+                "notBranch": string;
+                "deleteRefused": string;
+                "stale": string;
+                "nonFastForward": string;
+                "nothingNew": string;
+                "unknownParent": string;
+                "mode": string;
+                "notPage": string;
+                "binary": string;
+                "idChanged": string;
+                "unknownId": string;
+                "duplicateId": string;
+                "noParentPage": string;
+                "badName": string;
+                "nameTaken": string;
+                "kindChanged": string;
+                "notSpec": string;
+                "protected": string;
+                "newOnDefault": string;
+                "cannotEdit": string;
+                "cannotRepresent": string;
+                "rejected": string;
+                "mrCreated": string;
+                "mrUpdated": string;
+                "mrMerged": string;
+            };
+            "tooLarge": string;
         };
     };
     "export": {

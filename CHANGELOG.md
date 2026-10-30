@@ -25,10 +25,23 @@ in the pull request that introduces them — see
   never anyone's email. A clone holds only what the key's owner may open. A restricted page, and another
   person's private draft, are in neither their files nor their history. That means people with different
   access get different commit SHAs for the same history, and gaining or losing access to a page rewrites your
-  history on the next fetch. Edits made in the web or over MCP arrive on the next `git fetch`. This release
-  is read-only: a push is refused with a message saying so. A capture key and a guest are refused too. It is
-  off unless the operator enables it (see Operations), and a workspace admin can switch it off under
+  history on the next fetch. Edits made in the web or over MCP arrive on the next `git fetch`. A capture key and a guest are refused.
+  It is off unless the operator enables it (see Operations), and a workspace admin can switch it off under
   Settings → Features.
+- **Pushing to a project works like pushing to GitLab** (#636). `git push origin HEAD:fix-terms` with a write
+  key writes one revision per changed page, attributed to the key's owner; the commit keeps its SHA, so the
+  next fetch fast-forwards. `-o merge_request.create` opens a merge request across every page the branch
+  changed (`.target=`, `.title=`, `.description=` and `.draft` work as on GitLab), the remote prints its URL,
+  and a later push to the branch reports the open one as updated. A new file on a branch becomes a new page
+  behind its merge request, and a push that adds one with no merge request open opens a draft. `git mv`
+  moves or renames a page and `git rm` archives it, both when the branch merges into the default branch.
+  Merging a branch, in the web as well, now carries its moves, renames and archives. Pushing straight to the
+  default branch works where you may edit every page it touches and none of them is protected. Pushing a
+  local merge commit whose second parent is an open merge request's branch merges that merge request if every
+  gate passes, and otherwise is refused with the gate's reason. A read key, a stale or force push, a deleted
+  branch, a non-page or binary file, a changed `knowledge-id` and a directory without its page are refused
+  with a `remote:` line saying why, in English or Russian. Pushed author lines are kept as your git config
+  wrote them; the knowledge base always attributes a push to the key's owner.
 - **Merge requests merge when the target moved, as long as the edits do not overlap** (#636). Two people
   editing different paragraphs of one page can now both merge: each page is merged 3-way against the point
   its branch started from, the way `git merge` does. Edits to the same or adjacent lines still refuse the
@@ -111,6 +124,14 @@ in the pull request that introduces them — see
   given again. It survives a rollback: the previous image never reads the column, and this release keeps
   writing `breaking_ack_revision_id` for it. An acknowledgement given while rolled back is not current after
   upgrading again and has to be given once more.
+- Migration `20261224100000_revision_id_line` adds a nullable `document_revisions.id_line`, the id line a
+  pushed file carried, so the remote serves it back byte for byte. No backfill. It survives a rollback: the
+  previous image never reads it, and a pushed revision it serves gets the canonical id line, which changes
+  that file's SHA for anyone who fetches from the rolled-back remote.
+- With the git remote on, the `git` service now writes: revisions, pages, branches and merge requests, through
+  the same code the API uses, so it needs the same Postgres, MinIO and Redis access it already has from
+  `.env`. Pushes count against `PUBLIC_RATE_LIMIT_PER_MIN` per IP, as fetches do. A push is read into memory
+  whole and capped at 256 MB.
 - New env var `GIT_NOREPLY_DOMAIN` (default `knowledge`): commit emails are
   `<userId>@users.noreply.<domain>`, never a person's address. Each commit keeps the domain it was written
   with, so a change applies to new commits only. Set it before this release if the domain should differ.

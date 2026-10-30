@@ -15,6 +15,13 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Changed
+
+- **A new private draft is numbered across the whole project** (#636). Starting a draft of a page used to
+  name it `draft/<you>`, then `draft/<you>-2` and so on, counted per page. The number is now the first one free
+  in the page's project, so a draft never shares a name with a draft you have on another page. Nothing else
+  about drafts changes yet.
+
 ### Fixed
 
 - **Reverting a page to an earlier version now saves it** (#636). Saving text a branch had held before (undoing
@@ -31,6 +38,15 @@ in the pull request that introduces them — see
   previous image never reads the new tables and never relied on the unique index. Commits for writes made
   while it runs are missing from the history the git remote (#636, later phases) will serve. Nothing reads
   the commits yet. On the laptop's dev copy (202 pages, 258 revisions) the backfill wrote 398 commits.
+- Migration `20261222100000_project_branches` adds `project_branches` and a nullable
+  `document_branches.project_branch_id`, and backfills one project branch per (project, branch name). Where a
+  merge request came from a branch name that several pages in one project share, those pages' branches are
+  split and every one but the earliest is renamed `<name>-<first 8 characters of the page id>`. Each keeps its
+  merge request, and a `?branch=` link to a renamed branch stops resolving. A page's default branch is never
+  renamed. The dev copy (202 pages, 214 branches) got 55 project branches and two renames. It survives a
+  rollback: the previous image never reads the new column, and branches it creates meanwhile are filled in on
+  the next cross-project move or by the release that makes the column NOT NULL. Nothing reads project branches
+  yet.
 - New env var `GIT_NOREPLY_DOMAIN` (default `knowledge`): commit emails are
   `<userId>@users.noreply.<domain>`, never a person's address. Each commit keeps the domain it was written
   with, so a change applies to new commits only. Set it before this release if the domain should differ.

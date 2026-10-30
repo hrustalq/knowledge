@@ -236,7 +236,12 @@ export class DocumentsService {
       // A page is born under its parent's and project's restrictions (#76).
       await this.permissions.recomputeRestrictedBy({ documentId: id });
       const branch = await this.prisma.documentBranch.create({
-        data: { documentId: document.id, name: 'main', headRevisionId: null },
+        data: {
+          documentId: document.id,
+          name: 'main',
+          headRevisionId: null,
+          projectBranchId: await this.commits.projectBranch(document.projectId, 'main'),
+        },
       });
       const revision = await this.prisma.documentRevision.create({
         data: {
@@ -923,7 +928,14 @@ export class DocumentsService {
 
     const isPrivate = dto.visibility === 'private';
     const branch = await this.prisma.documentBranch.create({
-      data: { documentId, name: dto.name, headRevisionId: head, ownerId: ownerId ?? null, restricted: isPrivate },
+      data: {
+        documentId,
+        name: dto.name,
+        headRevisionId: head,
+        ownerId: ownerId ?? null,
+        restricted: isPrivate,
+        projectBranchId: await this.commits.projectBranch(document.projectId, dto.name),
+      },
     });
     if (isPrivate) return { branch: this.toBranchInfo(branch) };
     // Post-commit: publishes onto the bus (see createDocument above).
@@ -959,8 +971,16 @@ export class DocumentsService {
       orderBy: { createdAt: 'desc' },
     });
     if (!mine) {
-      const spent = await this.prisma.documentBranch.count({ where: { documentId, name: { startsWith: prefix } } });
-      const name = spent === 0 ? prefix : `${prefix}-${spent + 1}`;
+      // The first name free in the whole project (#636): a branch name is the
+      // project's, so reusing one another page spent or holds would join its branch.
+      const held = await this.prisma.projectBranch.findMany({
+        where: { projectId: document.projectId, name: { startsWith: prefix } },
+        select: { name: true },
+      });
+      const own = await this.prisma.documentBranch.findMany({ where: { documentId, name: { startsWith: prefix } }, select: { name: true } });
+      const taken = new Set([...held, ...own].map((b) => b.name));
+      let name = prefix;
+      for (let n = 2; taken.has(name); n++) name = `${prefix}-${n}`;
       try {
         return await this.createBranch(documentId, { name, visibility: 'private' }, userId);
       } catch (e) {
@@ -1366,6 +1386,8 @@ export class DocumentsService {
           data: { projectId: data.projectId },
         });
       }
+      // Their branches join the new project's branches of the same names.
+      if (data.projectId) await this.commits.rehomeBranches(data.projectId);
       // New ancestors or a new project mean a new chain of restrictions for the
       // whole subtree, in this transaction, so nobody reads the page in between
       // with the old ones (#76).

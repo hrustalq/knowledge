@@ -54,7 +54,9 @@ dialog, and **Publish**.
 editor role) returns the caller's working branch for the page. It creates the
 branch on the first call.
 
-- **Name.** `draft/<userId>`, then `draft/<userId>-<n>`.
+- **Name.** `draft/<userId>`, then `draft/<userId>-<n>`, taking the first name
+  free in the page's project, not just on the page: a branch name belongs to
+  the project ([71](71-git-remote.md), #636).
   `DRAFT_BRANCH_PREFIX` (`@knowledge/contracts`) is the one spelling, and both
   the API and the editor read it.
 - **Private** (`restricted`, `owner_id` = the caller), so the branch rules of

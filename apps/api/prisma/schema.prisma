@@ -153,26 +153,33 @@ model Document {
 }
 
 model DocumentBranch {
-  id             String   @id @default(uuid()) @db.Uuid
-  documentId     String   @map("document_id") @db.Uuid
-  name           String
-  headRevisionId String?  @map("head_revision_id") @db.Uuid
-  protected      Boolean  @default(false)
+  id              String   @id @default(uuid()) @db.Uuid
+  documentId      String   @map("document_id") @db.Uuid
+  name            String
+  headRevisionId  String?  @map("head_revision_id") @db.Uuid
+  protected       Boolean  @default(false)
   /// A private branch (#474): only its owner, the people `access_grants`
   /// (resource_type 'branch') name, and admins read it or its revisions.
   /// Opening a merge request from it clears `restricted`; `owner_id` stays as
   /// who started it. Null owner = a branch from before #474. No FK, house policy.
-  ownerId        String?  @map("owner_id") @db.Uuid
-  restricted     Boolean  @default(false)
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  ownerId         String?  @map("owner_id") @db.Uuid
+  restricted      Boolean  @default(false)
+  /// The project branch this page branch belongs to (#636 phase 1b): every
+  /// page's branch of one name in a project is one branch. Nullable for one
+  /// release only, because the previous image inserts branches without it;
+  /// `ProjectCommitsService.rehomeBranches` fills a null it meets.
+  projectBranchId String?  @map("project_branch_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  document     Document           @relation(fields: [documentId], references: [id])
-  revisions    DocumentRevision[]
-  mrAsSource   MergeRequest[]     @relation("mrSource")
-  mrAsTarget   MergeRequest[]     @relation("mrTarget")
-  collabDrafts CollabDraft[]
+  document      Document           @relation(fields: [documentId], references: [id])
+  projectBranch ProjectBranch?     @relation(fields: [projectBranchId], references: [id], onDelete: SetNull)
+  revisions     DocumentRevision[]
+  mrAsSource    MergeRequest[]     @relation("mrSource")
+  mrAsTarget    MergeRequest[]     @relation("mrTarget")
+  collabDrafts  CollabDraft[]
 
   @@unique([documentId, name])
+  @@index([projectBranchId])
   @@map("document_branches")
 }
 
@@ -328,6 +335,25 @@ model ProjectCommit {
   @@index([projectId, branch, seq])
   @@index([workspaceId])
   @@map("project_commits")
+}
+
+/// A branch of a project (#636 phase 1b, docs/features/71): the identity that
+/// every page's branch of the same name in the project shares, and what git
+/// will serve as a ref. A page's own head stays on its `document_branches`
+/// row; `protected`, `restricted` and the owner stay there too, per page.
+model ProjectBranch {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  projectId   String   @map("project_id") @db.Uuid
+  name        String
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  project  Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  branches DocumentBranch[]
+
+  @@unique([projectId, name])
+  @@index([workspaceId])
+  @@map("project_branches")
 }
 
 /// Ordered commit parents: order 1 = first parent, as `revision_parents`.
@@ -715,6 +741,7 @@ model Project {
   trackerRoute  ProjectTrackerRoute?
   site          PublishedSite?
   commits       ProjectCommit[]
+  branches      ProjectBranch[]
 
   @@index([workspaceId, createdAt])
   @@map("projects")

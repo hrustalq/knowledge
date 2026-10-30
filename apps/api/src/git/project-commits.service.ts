@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { slugFor } from './slug.js';
 
@@ -78,6 +79,46 @@ export class ProjectCommitsService {
       where: { projectId, parentId, id: { not: documentId }, slug: { equals: wanted, mode: 'insensitive' } },
     });
     return taken ? suffixed : wanted;
+  }
+
+  /**
+   * The id of the project branch called `name` (#636 phase 1b), created on
+   * first ask. One statement, so two writers asking at once get the same row.
+   */
+  async projectBranch(projectId: string, name: string): Promise<string> {
+    const rows = await this.prisma.$queryRaw<{ id: string }[]>`
+      INSERT INTO project_branches (id, workspace_id, project_id, name)
+      SELECT gen_random_uuid(), workspace_id, id, ${name} FROM projects WHERE id = ${projectId}::uuid
+      ON CONFLICT (project_id, name) DO UPDATE SET name = EXCLUDED.name
+      RETURNING id`;
+    if (!rows[0]) throw new Error(`Project ${projectId} not found`);
+    return rows[0].id;
+  }
+
+  /**
+   * Point every page branch in `projectId` at that project's branch of the
+   * same name: after pages moved in from another project, or where a branch
+   * has none yet (one the previous image created). `db` is for a caller in a
+   * `$transaction` callback, which has no ambient transaction.
+   */
+  async rehomeBranches(projectId: string, db: Prisma.TransactionClient = this.prisma): Promise<void> {
+    await db.$executeRaw`
+      INSERT INTO project_branches (id, workspace_id, project_id, name)
+      SELECT gen_random_uuid(), x.workspace_id, x.project_id, x.name
+      FROM (
+        SELECT DISTINCT d.workspace_id, d.project_id, b.name
+        FROM document_branches b
+        JOIN documents d ON d.id = b.document_id
+        LEFT JOIN project_branches pb ON pb.id = b.project_branch_id
+        WHERE d.project_id = ${projectId}::uuid AND pb.project_id IS DISTINCT FROM d.project_id
+      ) x
+      ON CONFLICT (project_id, name) DO NOTHING`;
+    await db.$executeRaw`
+      UPDATE document_branches b SET project_branch_id = pb.id
+      FROM documents d, project_branches pb
+      WHERE d.id = b.document_id AND d.project_id = ${projectId}::uuid
+        AND pb.project_id = d.project_id AND pb.name = b.name
+        AND b.project_branch_id IS DISTINCT FROM pb.id`;
   }
 
   /** The commit for a revision `finalizeRevision` just finalized, in its transaction. */

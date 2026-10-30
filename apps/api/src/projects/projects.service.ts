@@ -11,6 +11,7 @@ import type {
 import type { Prisma, Project } from '@prisma/client';
 import { visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
 import { ActivityService } from '../activity/activity.service.js';
+import { ProjectCommitsService } from '../git/project-commits.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { projectAvatarUrl } from '../common/avatar-url.js';
@@ -74,6 +75,7 @@ export class ProjectsService {
     private readonly prisma: PrismaService,
     private readonly activity: ActivityService,
     private readonly permissions: PermissionService,
+    private readonly commits: ProjectCommitsService,
   ) {}
 
   /**
@@ -345,6 +347,9 @@ export class ProjectsService {
       // move: the whole forest travels at once, so every parent_id still points
       // at a document inside the same project.
       await tx.document.updateMany({ where: { projectId }, data: { projectId: moveContentsTo } });
+      // Their branches join the destination's branches of the same names (#636)
+      // before this project's own go with it below.
+      await this.commits.rehomeBranches(moveContentsTo, tx);
       // The pages leave this project's restriction and enter the destination's
       // (#76); the project's own grants go with it.
       await tx.accessGrant.deleteMany({ where: { resourceType: 'project', resourceId: projectId } });

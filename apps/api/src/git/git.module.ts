@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { BootstrapModule } from '../config/bootstrap.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
+import { ActivityCoreModule } from '../activity/activity-core.module.js';
 import { AuthCoreModule } from '../auth/auth-core.module.js';
 import { AuthTokensModule } from '../auth/auth-tokens.module.js';
 import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
@@ -34,6 +35,7 @@ import { GitPushService } from './git-push.service.js';
     // A push writes through the ordinary paths (#636 phase 4): finalize, pages, merge requests.
     DocumentsCoreModule,
     MergeRequestsCoreModule,
+    ActivityCoreModule,
   ],
   controllers: [GitController],
   providers: [GitAccessService, GitRepoService, GitPushService, PublicStore, PublicRateLimiter],

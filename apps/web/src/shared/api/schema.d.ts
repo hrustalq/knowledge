@@ -1597,7 +1597,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List merge requests of a document (newest first) */
+        /** List merge requests whose branch changed a document (newest first) */
         get: operations["MergeRequestsController_list"];
         put?: never;
         /** Open a merge request between two branches of a document */
@@ -1622,6 +1622,26 @@ export interface paths {
          * @description Opens a merge request from the branch (or reuses its open one) and merges it at once. When a gate refuses — `protected`, `approvals`, `lint`, `breaking-api`, `draft` — the merge request stays open and `merged` is false. 400 when there is nothing to publish; 409 `conflict` (naming the pages and hunks) when a default head moved past the branch, the 3-way merge overlaps it and `onTopOf` does not list it. Publishes every page the branch has revisions on (#636). The guard holds the caller to edit on the branch.
          */
         post: operations["MergeRequestsController_publishBranch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{id}/branches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a project's branches (#636)
+         * @description Every branch but the default one, newest first, with the pages it wrote that the caller may open and its open merge request. A branch with no such page is left out.
+         */
+        get: operations["MergeRequestsController_projectBranches"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -13363,6 +13383,10 @@ export interface components {
             entries: components["schemas"]["AuditLogEntry"][];
             nextCursor: string | null;
         };
+        ListProjectBranchesResponse: {
+            projectId: string;
+            branches: components["schemas"]["ProjectBranchInfo"][];
+        };
         ListProjectsResponse: {
             projects: components["schemas"]["ProjectSummary"][];
             nextCursor: string | null;
@@ -13662,6 +13686,7 @@ export interface components {
             closedAt: string | null;
             provenance: components["schemas"]["MergeRequestProvenance"];
             captureId: string | null;
+            pageCount: number;
         };
         MergeRequestPage: {
             documentId: string;
@@ -13840,6 +13865,21 @@ export interface components {
             medianReadMs: number | null;
             series: components["schemas"]["AnalyticsDayPoint"][];
             projectId: string;
+        };
+        ProjectBranchInfo: {
+            projectBranchId: string;
+            name: string;
+            pages: {
+                documentId: string;
+                title: string;
+            }[];
+            updatedAt: string;
+            updatedBy: string;
+            openMergeRequest: {
+                mergeRequestId: string;
+                title: string;
+                isDraft: boolean;
+            } | null;
         };
         ProjectCascadeCounts: {
             documents: number;
@@ -21082,6 +21122,48 @@ export interface operations {
             };
         };
     };
+    MergeRequestsController_projectBranches: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListProjectBranchesResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     MergeRequestsController_listWorkspace: {
         parameters: {
             query: {
@@ -21092,7 +21174,10 @@ export interface operations {
                 assigneeId?: string;
                 /** @description Only merge requests with this user assigned as reviewer */
                 reviewerId?: string;
+                /** @description Merge requests whose source branch changed this page, not only the ones opened from it */
                 documentId?: string;
+                /** @description Merge requests of this project's branches */
+                projectId?: string;
                 /** @description Case-insensitive substring match on the source branch name */
                 sourceBranch?: string;
                 /** @description Case-insensitive substring match on the target branch name */

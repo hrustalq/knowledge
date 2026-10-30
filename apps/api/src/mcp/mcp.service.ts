@@ -1879,19 +1879,49 @@ export class McpService {
     );
 
     server.registerTool(
+      'knowledge_list_branches',
+      {
+        description:
+          "List a project's branches (#636): each with the pages it changed that you can open, who wrote it last and when, " +
+          'and its open merge request. The default branch is left out. A branch is the project\'s: the same name on any page ' +
+          'of the project is one branch, and one merge request carries all of it.',
+        inputSchema: { projectId: z.string().uuid() },
+      },
+      async ({ projectId }) => {
+        await guard.project(projectId, 'viewer');
+        return this.json(
+          await this.mergeRequests.projectBranches(projectId, await guard.scope(await this.access.workspaceOfProject(projectId))),
+        );
+      },
+    );
+
+    server.registerTool(
       'knowledge_create_merge_request',
       {
         description:
-          'Open a GitLab-style merge request between two branches of a document. Target defaults to the default branch.',
+          'Open a GitLab-style merge request from a branch. A branch is its project\'s, so the merge request carries every page ' +
+          'the branch changed. Name the branch by projectId (see knowledge_list_branches) or by one documentId it changed. ' +
+          'Target defaults to the default branch.',
         inputSchema: {
-          documentId: z.string().uuid(),
+          documentId: z.string().uuid().optional().describe('A page the branch changed; or pass projectId'),
+          projectId: z.string().uuid().optional().describe('The project whose branch sourceBranch is; or pass documentId'),
           sourceBranch: z.string().min(1),
           targetBranch: z.string().min(1).optional(),
           title: z.string().min(1),
           description: z.string().optional(),
         },
       },
-      async ({ documentId, sourceBranch, targetBranch, title, description }) => {
+      async ({ documentId: pageId, projectId, sourceBranch, targetBranch, title, description }) => {
+        // By project: opened from the first page, by title, the branch wrote that the caller may open.
+        const anchorOf = async (id: string) => {
+          await guard.project(id, 'editor');
+          const { branches } = await this.mergeRequests.projectBranches(id, await guard.scope(await this.access.workspaceOfProject(id)));
+          const page = branches.find((b) => b.name === sourceBranch)?.pages[0]?.documentId;
+          if (!page) throw new Error(`Branch "${sourceBranch}" has changed no page you can open in this project.`);
+          return page;
+        };
+        if (!pageId && !projectId) throw new Error('Pass documentId or projectId.');
+        const documentId = pageId ?? (await anchorOf(projectId!));
         await guard.doc(documentId, 'editor');
         await guard.branches(documentId, { branchNames: [sourceBranch, ...(targetBranch ? [targetBranch] : [])] }, 'editor');
         return this.json(await this.mergeRequests.create(documentId, { sourceBranch, targetBranch, title, description }, principal.userId));
@@ -1906,7 +1936,8 @@ export class McpService {
           'Cursor-paginated; mergeBaseRevisionId is null in list rows (fetch one MR for it).',
         inputSchema: {
           workspaceId: z.string().uuid(),
-          documentId: z.string().uuid().optional(),
+          documentId: z.string().uuid().optional().describe('Merge requests whose branch changed this page'),
+          projectId: z.string().uuid().optional(),
           status: z.enum(['open', 'merged', 'closed']).optional(),
           authorId: z.string().uuid().optional(),
           reviewerId: z.string().uuid().optional(),
@@ -2597,6 +2628,7 @@ export class McpService {
       whoami,
       tools: this.toolsFor(principal, extras),
       learnings: await this.learningsFor(whoami),
+      git: this.config.get('GIT_REMOTE_ENABLED') === true,
     });
   }
 

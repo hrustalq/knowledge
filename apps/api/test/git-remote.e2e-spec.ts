@@ -8,10 +8,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import request from 'supertest';
+import { vi } from 'vitest';
 import type { PrismaService } from '../src/prisma/prisma.service.js';
 
 /**
- * #636 phases 3 and 4 acceptance: a project is a git remote. Real `git`
+ * #636 phases 3, 4 and 5a acceptance: a project is a git remote. Real `git`
  * against the git process (in this process, on a random port), with real
  * people and keys in `AUTH_MODE=api-key`, because the dev principal sees
  * everything:
@@ -58,6 +59,10 @@ describe('git remote (e2e, #636)', () => {
     GIT_AUTHOR_EMAIL: 'alice@laptop.test',
     GIT_COMMITTER_NAME: 'Alice Laptop',
     GIT_COMMITTER_EMAIL: 'alice@laptop.test',
+    // No credential helper (osxkeychain on a Mac): this spec's keys stay out of the keychain.
+    GIT_CONFIG_COUNT: '1',
+    GIT_CONFIG_KEY_0: 'credential.helper',
+    GIT_CONFIG_VALUE_0: '',
     ...extra,
   });
   const git = async (args: string[], cwd = work) => (await run('git', args, { cwd, env: env() })).stdout.trim();
@@ -184,6 +189,12 @@ describe('git remote (e2e, #636)', () => {
     expect(await git(['rev-parse', 'HEAD'], bob)).not.toBe(await git(['rev-parse', 'HEAD'], alice));
     expect(await git(['log', '--all', '--format=%H', '--', `${slugs.secret}.md`], bob)).toBe('');
     await git(['fsck', '--strict'], alice);
+    // The credential helper SKILL.md hands out: the key from the environment, never in a URL.
+    const helper = '!f() { echo username=knowledge; echo "password=$KNOWLEDGE_API_KEY"; }; f';
+    await gitAll(['-c', 'credential.helper=', '-c', `credential.helper=${helper}`, 'clone', '-q', `http://127.0.0.1:${port}/git/${WORKSPACE}/${projectId}.git`, 'helper'], work, {
+      KNOWLEDGE_API_KEY: people.bob.read,
+    });
+    expect(await git(['rev-parse', 'HEAD'], join(work, 'helper'))).toBe(await git(['rev-parse', 'HEAD'], bob));
   });
 
   it('shows a web edit on the next fetch', async () => {
@@ -253,6 +264,25 @@ describe('git remote (e2e, #636)', () => {
     // Pushed revisions are attributed to the key's owner, whatever the commit's author line says.
     const rev = await prisma.documentRevision.findFirstOrThrow({ where: { documentId: guide.id, branch: { name: 'fix-terms' }, status: { not: 'draft' } } });
     expect(rev.authorId).toBe(people.alice.id);
+
+    // Phase 5a: the branch is the project's — listed with both pages, its MR on each page and in the project's list.
+    const branches = await http().get(`/v1/projects/${projectId}/branches`).set(as(people.bob.read)).expect(ok(200));
+    const fix = branches.body.branches.find((b: { name: string }) => b.name === 'fix-terms');
+    expect(fix.pages.map((p: { documentId: string }) => p.documentId).sort()).toEqual([ids.open, guide.id].sort());
+    expect(fix).toMatchObject({ updatedBy: people.alice.id, openMergeRequest: { mergeRequestId: mrId } });
+    // Alice's private draft branch on the same page is hers alone; main is every page's and never listed.
+    expect(branches.body.branches.map((b: { name: string }) => b.name)).not.toContain(`draft/${people.alice.id}`);
+    expect(branches.body.branches.map((b: { name: string }) => b.name)).not.toContain('main');
+    for (const doc of [ids.open, guide.id]) {
+      const list = await http().get(`/v1/documents/${doc}/merge-requests`).set(as(people.bob.read)).expect(ok(200));
+      expect(list.body.mergeRequests.find((m: { mergeRequestId: string }) => m.mergeRequestId === mrId)).toMatchObject({ pageCount: 2 });
+    }
+    const inProject = await http().get('/v1/merge-requests').query({ workspaceId: WORKSPACE, projectId }).set(as(people.bob.read)).expect(ok(200));
+    expect(inProject.body.mergeRequests.map((m: { mergeRequestId: string }) => m.mergeRequestId)).toContain(mrId);
+    await vi.waitFor(async () => {
+      const row = await prisma.activityLog.findFirstOrThrow({ where: { projectId, action: 'git.pushed', actor: people.alice.id } });
+      expect(row.metadata).toMatchObject({ branch: 'fix-terms', commits: 1, pages: 2, sha: pushed });
+    });
 
     expect((await approveAndMerge(mrId!)).status).toBe(201);
     await git(['pull', '-q', '--ff-only', 'origin', 'main'], dir);
@@ -386,6 +416,25 @@ describe('git remote (e2e, #636)', () => {
     expect(existsSync(join(dir, slugs.open, 'fresh-page.md'))).toBe(true);
     expect(existsSync(join(dir, `${stale.slug}.md`))).toBe(false);
     await git(['fsck', '--strict'], dir);
+  });
+
+  it('opens a merge request over MCP by project and branch name, and lists the branch', async () => {
+    const mcp = (name: string, args: Record<string, unknown>) =>
+      http()
+        .post('/v1/mcp')
+        .set({ ...as(people.bob.key), Accept: 'application/json, text/event-stream' })
+        .send({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } })
+        .expect(ok(200))
+        .then((res) => {
+          expect(res.body.result.isError).toBeFalsy();
+          return JSON.parse(res.body.result.content[0].text);
+        });
+    await mcp('knowledge_create_branch', { documentId: guide.id, name: 'mcp-terms' });
+    await write(people.bob, guide.id, 'mcp-terms', `# Style guide ${nonce}\n\nOne, from MCP.\n`);
+    const listed = await mcp('knowledge_list_branches', { projectId });
+    expect(listed.branches.find((b: { name: string }) => b.name === 'mcp-terms').pages).toEqual([{ documentId: guide.id, title: `Style guide ${nonce}` }]);
+    const opened = await mcp('knowledge_create_merge_request', { projectId, sourceBranch: 'mcp-terms', title: 'Terms over MCP' });
+    expect(opened.mergeRequest).toMatchObject({ documentId: guide.id, pageCount: 1 });
   });
 
   it('404s with the workspace toggle off', async () => {

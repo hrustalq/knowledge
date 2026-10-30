@@ -9008,7 +9008,7 @@
             }
           }
         },
-        "summary": "List merge requests of a document (newest first)",
+        "summary": "List merge requests whose branch changed a document (newest first)",
         "tags": [
           "merge-requests"
         ]
@@ -9097,6 +9097,71 @@
         ]
       }
     },
+    "/v1/projects/{id}/branches": {
+      "get": {
+        "description": "Every branch but the default one, newest first, with the pages it wrote that the caller may open and its open merge request. A branch with no such page is left out.",
+        "operationId": "MergeRequestsController_projectBranches",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListProjectBranchesResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List a project's branches (#636)",
+        "tags": [
+          "merge-requests"
+        ]
+      }
+    },
     "/v1/merge-requests": {
       "get": {
         "operationId": "MergeRequestsController_listWorkspace",
@@ -9152,6 +9217,16 @@
             "name": "documentId",
             "required": false,
             "in": "query",
+            "description": "Merge requests whose source branch changed this page, not only the ones opened from it",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": false,
+            "in": "query",
+            "description": "Merge requests of this project's branches",
             "schema": {
               "type": "string"
             }
@@ -60868,6 +60943,24 @@
           "nextCursor"
         ]
       },
+      "ListProjectBranchesResponse": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string"
+          },
+          "branches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProjectBranchInfo"
+            }
+          }
+        },
+        "required": [
+          "projectId",
+          "branches"
+        ]
+      },
       "ListProjectsResponse": {
         "type": "object",
         "properties": {
@@ -62174,6 +62267,9 @@
           "captureId": {
             "type": "string",
             "nullable": true
+          },
+          "pageCount": {
+            "type": "number"
           }
         },
         "required": [
@@ -62199,7 +62295,8 @@
           "mergedAt",
           "closedAt",
           "provenance",
-          "captureId"
+          "captureId",
+          "pageCount"
         ]
       },
       "MergeRequestPage": {
@@ -62975,6 +63072,73 @@
           "traffic",
           "uniqueReaders",
           "views"
+        ]
+      },
+      "ProjectBranchInfo": {
+        "type": "object",
+        "properties": {
+          "projectBranchId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "pages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "documentId": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "documentId",
+                "title"
+              ]
+            }
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "updatedBy": {
+            "type": "string"
+          },
+          "openMergeRequest": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "mergeRequestId": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "isDraft": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "mergeRequestId",
+                  "title",
+                  "isDraft"
+                ]
+              }
+            ],
+            "nullable": true
+          }
+        },
+        "required": [
+          "projectBranchId",
+          "name",
+          "pages",
+          "updatedAt",
+          "updatedBy",
+          "openMergeRequest"
         ]
       },
       "ProjectCascadeCounts": {

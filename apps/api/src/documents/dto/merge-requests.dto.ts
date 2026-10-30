@@ -180,10 +180,15 @@ export class ListMergeRequestsQueryDto {
   @Matches(UUID_RE)
   reviewerId?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Merge requests whose source branch changed this page, not only the ones opened from it' })
   @IsOptional()
   @Matches(UUID_RE)
   documentId?: string;
+
+  @ApiPropertyOptional({ description: "Merge requests of this project's branches" })
+  @IsOptional()
+  @Matches(UUID_RE)
+  projectId?: string;
 
   @ApiPropertyOptional({ description: 'Case-insensitive substring match on the source branch name' })
   @IsOptional()

@@ -14993,6 +14993,24 @@
       "nextCursor"
     ]
   },
+  "ListProjectBranchesResponse": {
+    "type": "object",
+    "properties": {
+      "projectId": {
+        "type": "string"
+      },
+      "branches": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/ProjectBranchInfo"
+        }
+      }
+    },
+    "required": [
+      "projectId",
+      "branches"
+    ]
+  },
   "ListProjectsResponse": {
     "type": "object",
     "properties": {
@@ -16299,6 +16317,9 @@
       "captureId": {
         "type": "string",
         "nullable": true
+      },
+      "pageCount": {
+        "type": "number"
       }
     },
     "required": [
@@ -16324,7 +16345,8 @@
       "mergedAt",
       "closedAt",
       "provenance",
-      "captureId"
+      "captureId",
+      "pageCount"
     ]
   },
   "MergeRequestPage": {
@@ -17100,6 +17122,73 @@
       "traffic",
       "uniqueReaders",
       "views"
+    ]
+  },
+  "ProjectBranchInfo": {
+    "type": "object",
+    "properties": {
+      "projectBranchId": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "pages": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "documentId": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "documentId",
+            "title"
+          ]
+        }
+      },
+      "updatedAt": {
+        "type": "string"
+      },
+      "updatedBy": {
+        "type": "string"
+      },
+      "openMergeRequest": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "mergeRequestId": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "isDraft": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "mergeRequestId",
+              "title",
+              "isDraft"
+            ]
+          }
+        ],
+        "nullable": true
+      }
+    },
+    "required": [
+      "projectBranchId",
+      "name",
+      "pages",
+      "updatedAt",
+      "updatedBy",
+      "openMergeRequest"
     ]
   },
   "ProjectCascadeCounts": {

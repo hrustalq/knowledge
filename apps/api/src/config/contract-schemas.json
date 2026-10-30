@@ -16451,6 +16451,24 @@
       "squash"
     ]
   },
+  "MyDraftBranchResponse": {
+    "type": "object",
+    "properties": {
+      "branch": {
+        "$ref": "#/components/schemas/BranchInfo"
+      },
+      "pages": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "branch",
+      "pages"
+    ]
+  },
   "NoteCapturePayload": {
     "type": "object",
     "properties": {

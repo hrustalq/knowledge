@@ -20,6 +20,7 @@ import type {
   CompareMode,
   CompareResponse,
   CreateBranchResponse,
+  MyDraftBranchResponse,
   CreateDocumentResponse,
   CreateDocumentThreadResponse,
   CreateUploadResponse,
@@ -427,15 +428,17 @@ export class DocumentsController {
   }
 
   @Post(':id/branches/mine')
-  @Returns('CreateBranchResponse')
+  @Returns('MyDraftBranchResponse')
   @Access('editor', 'document')
   @ApiOperation({
     summary: "The caller's private working branch for this page (#474), created on first ask",
     description:
-      'What the editor edits a published page on. Spent once a merge request from it is merged or closed: the next ' +
-      'call starts a fresh one. A branch nothing was written on follows the default head.',
+      'What the editor edits a published page on. One per person and project (#636): a page not on it yet forks onto ' +
+      "the caller's newest live draft at the default head. Spent once a merge request from it is merged or closed: the " +
+      'next call starts a fresh one. A page branch nothing was written on follows the default head. `pages` lists the ' +
+      'pages the draft has revisions on.',
   })
-  myDraftBranch(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<CreateBranchResponse> {
+  myDraftBranch(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<MyDraftBranchResponse> {
     return this.documents.myDraftBranch(id, principal.userId);
   }
 

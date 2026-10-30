@@ -87,8 +87,9 @@ export class MergeRequestsController {
     description:
       'Opens a merge request from the branch (or reuses its open one) and merges it at once. When a gate refuses — ' +
       '`protected`, `approvals`, `lint`, `breaking-api`, `draft` — the merge request stays open and `merged` is false. ' +
-      '400 when there is nothing to publish; 409 `diverged` when the default head moved past the branch and `onTopOf` ' +
-      'does not name it. The guard holds the caller to edit on the branch.',
+      '400 when there is nothing to publish; 409 `diverged` (naming the page) when a default head moved past the ' +
+      'branch and `onTopOf` does not list it. Publishes every page the branch has revisions on (#636). The guard ' +
+      'holds the caller to edit on the branch.',
   })
   publishBranch(
     @Param('id', ParseUUIDPipe) id: string,

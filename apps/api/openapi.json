@@ -7368,7 +7368,7 @@
     },
     "/v1/documents/{id}/branches/mine": {
       "post": {
-        "description": "What the editor edits a published page on. Spent once a merge request from it is merged or closed: the next call starts a fresh one. A branch nothing was written on follows the default head.",
+        "description": "What the editor edits a published page on. One per person and project (#636): a page not on it yet forks onto the caller's newest live draft at the default head. Spent once a merge request from it is merged or closed: the next call starts a fresh one. A page branch nothing was written on follows the default head. `pages` lists the pages the draft has revisions on.",
         "operationId": "DocumentsController_myDraftBranch",
         "parameters": [
           {
@@ -7399,7 +7399,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CreateBranchResponse"
+                  "$ref": "#/components/schemas/MyDraftBranchResponse"
                 }
               }
             }
@@ -9016,7 +9016,7 @@
     },
     "/v1/documents/{id}/branches/{branchId}/publish": {
       "post": {
-        "description": "Opens a merge request from the branch (or reuses its open one) and merges it at once. When a gate refuses — `protected`, `approvals`, `lint`, `breaking-api`, `draft` — the merge request stays open and `merged` is false. 400 when there is nothing to publish; 409 `diverged` when the default head moved past the branch and `onTopOf` does not name it. The guard holds the caller to edit on the branch.",
+        "description": "Opens a merge request from the branch (or reuses its open one) and merges it at once. When a gate refuses — `protected`, `approvals`, `lint`, `breaking-api`, `draft` — the merge request stays open and `merged` is false. 400 when there is nothing to publish; 409 `diverged` (naming the page) when a default head moved past the branch and `onTopOf` does not list it. Publishes every page the branch has revisions on (#636). The guard holds the caller to edit on the branch.",
         "operationId": "MergeRequestsController_publishBranch",
         "parameters": [
           {
@@ -40123,9 +40123,11 @@
             "example": "Shorten access-token TTL"
           },
           "onTopOf": {
-            "type": "string",
-            "format": "uuid",
-            "description": "The default-branch head the author reviewed after it moved past the branch: the merge lands over that head instead of refusing as `diverged`, and only over that head."
+            "description": "The default-branch heads the author reviewed after they moved past the branch, one per page (#636): each page whose head is listed lands over it instead of refusing as `diverged`, and only over that head.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -62149,6 +62151,24 @@
         "enum": [
           "merge-commit",
           "squash"
+        ]
+      },
+      "MyDraftBranchResponse": {
+        "type": "object",
+        "properties": {
+          "branch": {
+            "$ref": "#/components/schemas/BranchInfo"
+          },
+          "pages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "branch",
+          "pages"
         ]
       },
       "NoteCapturePayload": {

@@ -16,7 +16,7 @@ describe('myDraftBranch', () => {
         findMany: vi.fn().mockResolvedValue([]),
         findUnique: vi.fn().mockResolvedValue({ headRevisionId: 'r1' }),
       },
-      projectBranch: { findMany: vi.fn().mockResolvedValue([]) },
+      projectBranch: { findFirst: vi.fn().mockResolvedValue(null), findMany: vi.fn().mockResolvedValue([]) },
     };
     const stub = {} as never;
     const service = new DocumentsService(prisma as never, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub);
@@ -26,14 +26,14 @@ describe('myDraftBranch', () => {
     );
     vi.spyOn(service as never, 'toBranchInfo').mockImplementation(((b: { id: string }) => ({ branchId: b.id })) as never);
 
-    await expect(service.myDraftBranch(DOC, USER)).resolves.toEqual({ branch: { branchId: 'b1' } });
+    await expect(service.myDraftBranch(DOC, USER)).resolves.toEqual({ branch: { branchId: 'b1' }, pages: [] });
     expect(findFirst).toHaveBeenCalledTimes(2);
   });
 
   it('any other failure is still thrown', async () => {
     const prisma = {
       documentBranch: { findFirst: vi.fn().mockResolvedValue(null), findMany: vi.fn().mockResolvedValue([]) },
-      projectBranch: { findMany: vi.fn().mockResolvedValue([]) },
+      projectBranch: { findFirst: vi.fn().mockResolvedValue(null), findMany: vi.fn().mockResolvedValue([]) },
     };
     const stub = {} as never;
     const service = new DocumentsService(prisma as never, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub);
@@ -49,7 +49,10 @@ describe('myDraftBranch', () => {
         findMany: vi.fn().mockResolvedValue([{ name: `draft/${USER}-3` }]),
       },
       // Another page spent `draft/<id>` and holds `-2`: reusing either would join its branch.
-      projectBranch: { findMany: vi.fn().mockResolvedValue([{ name: `draft/${USER}` }, { name: `draft/${USER}-2` }]) },
+      projectBranch: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        findMany: vi.fn().mockResolvedValue([{ name: `draft/${USER}` }, { name: `draft/${USER}-2` }]),
+      },
     };
     const stub = {} as never;
     const service = new DocumentsService(prisma as never, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub);
@@ -58,5 +61,38 @@ describe('myDraftBranch', () => {
     await service.myDraftBranch(DOC, USER);
     expect(create).toHaveBeenCalledWith(DOC, { name: `draft/${USER}-4`, visibility: 'private' }, USER);
     expect(prisma.projectBranch.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { projectId: PROJECT, name: { startsWith: `draft/${USER}` } } }));
+  });
+
+  function folding(inReview: number) {
+    const live = { id: 'pb7', name: `draft/${USER}-2` };
+    const prisma = {
+      documentBranch: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        findMany: vi.fn().mockResolvedValue([{ documentId: 'other-page' }]),
+      },
+      projectBranch: { findFirst: vi.fn().mockResolvedValue(live), findMany: vi.fn() },
+      mergeRequest: { count: vi.fn().mockResolvedValue(inReview) },
+    };
+    const stub = {} as never;
+    const service = new DocumentsService(prisma as never, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub);
+    vi.spyOn(service as never, 'getDocumentOrThrow').mockResolvedValue({ id: DOC, projectId: PROJECT, defaultBranch: 'main' } as never);
+    const create = vi.spyOn(service, 'createBranch').mockResolvedValue({ branch: { branchId: 'b9' } } as never);
+    return { prisma, service, create };
+  }
+
+  it("a page not on the draft yet forks onto the caller's newest live one, and lists the draft's pages (#636)", async () => {
+    const { prisma, service, create } = folding(0);
+    await expect(service.myDraftBranch(DOC, USER)).resolves.toEqual({ branch: { branchId: 'b9' }, pages: ['other-page'] });
+    expect(create).toHaveBeenCalledWith(DOC, { name: `draft/${USER}-2`, visibility: 'private' }, USER);
+    expect(prisma.projectBranch.findMany).not.toHaveBeenCalled();
+    // Never someone else's branch that happens to carry the caller's name.
+    const { where } = prisma.projectBranch.findFirst.mock.calls[0][0];
+    expect(where.branches).toMatchObject({ some: { ownerId: USER }, every: { ownerId: USER } });
+  });
+
+  it('a page joining a draft already in review is readable, as the rest of it is', async () => {
+    const { service, create } = folding(1);
+    await service.myDraftBranch(DOC, USER);
+    expect(create).toHaveBeenCalledWith(DOC, { name: `draft/${USER}-2`, visibility: 'workspace' }, USER);
   });
 });

@@ -238,6 +238,7 @@ import type {
   MergeRequestApiChangesResponse,
   MergeRequestDiffResponse,
   MergeRequestThreadResponse,
+  MyDraftBranchResponse,
   NotificationPreferences,
   NotificationUnreadCountResponse,
   PageInsightsResponse,
@@ -572,6 +573,7 @@ export interface ContractResponses {
   MergeRequestApiChangesResponse: MergeRequestApiChangesResponse;
   MergeRequestDiffResponse: MergeRequestDiffResponse;
   MergeRequestThreadResponse: MergeRequestThreadResponse;
+  MyDraftBranchResponse: MyDraftBranchResponse;
   NotificationPreferences: NotificationPreferences;
   NotificationUnreadCountResponse: NotificationUnreadCountResponse;
   PageInsightsResponse: PageInsightsResponse;

@@ -37,6 +37,17 @@ in the pull request that introduces them — see
   name it `draft/<you>`, then `draft/<you>-2` and so on, counted per page. The number is now the first one free
   in the page's project, so a draft never shares a name with a draft you have on another page. Nothing else
   about drafts changes yet.
+- **Your edits in a project now share one draft, and Publish publishes them together** (#636). Editing a
+  second page while a draft is open adds that page to the same private draft instead of starting a new one,
+  and the editor's button reads **Publish N pages** when the draft carries more than one. Publishing from any
+  of those pages opens or reuses one merge request and merges every page at once, behind the same gates. If
+  another page of the draft was published since you started, the editor says so, lets you review that page's
+  changes, and publishes over each head you reviewed. Drafts you started before this release stay with their
+  page until you publish or close them. A page you join to a draft that is already in review is readable by
+  the page's readers straight away, as the rest of that merge request is.
+- API: `POST /v1/documents/:id/branches/mine` returns `pages`, the ids of the pages the draft has revisions
+  on. `POST …/branches/:branchId/publish` takes `onTopOf` as a **list** of reviewed default-branch heads, one
+  per page (it was a single id). A `diverged` refusal adds `sourceHeadRevisionId`.
 
 ### Fixed
 

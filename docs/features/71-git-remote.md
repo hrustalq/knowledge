@@ -460,6 +460,27 @@ It is too large for one reviewable PR.
     deletes the drafts it staged.
   - Threads carry `documentId`, and a thread on a page the reader cannot open
     is left out of the list, because its excerpt quotes that page.
+  **1b-2b as built** (the draft fold, [66](66-drafts-publishing.md)):
+  - `myDraftBranch` looks for this page's own live draft first, then the
+    caller's newest live `draft/<userId>[-n]` project branch, then the first
+    free name. Drafts from before the fold therefore stay per page until spent,
+    and nothing is migrated.
+  - A draft is folded into only when every page branch of it is the caller's.
+    Branch names are free text, so `draft/<someone>` could otherwise be planted
+    to ride along with their Publish.
+  - Spent is judged on the project branch: an MR merged or closed from any of
+    its page branches spends them all.
+  - A page joining a draft with an open MR is created readable (not
+    `restricted`), because the MR's diff shows it to the page's readers.
+  - `onTopOf` is a list of reviewed target heads, matched by revision id, so it
+    needs no page map. The `diverged` body gains `sourceHeadRevisionId`.
+  - Publish from a page the draft does not change opens the MR from the first
+    page it does change (edit required there), so the feed and threads land on
+    a changed page.
+  - `mine` returns `pages` (ids of the pages with revisions on the draft) for
+    the "Publish N pages" label. It does not apply the merge-base test that
+    `sourcePages` callers do, so it can count a page whose head the default
+    branch already holds.
 - **Decided for 1b** (issue comment of 2026-10-30): `draft/` folds per person
   and project, and Publish says "Publish N pages" and merges them as one merge
   request. A page first written on the draft forks at the default head at that
@@ -471,7 +492,7 @@ It is too large for one reviewable PR.
   default branch, as the issue says for `git rm`.
 - **Feature 66 under the fold** (decided above). A person's working branch
   spans every page they have edited, so Publish on one page publishes all of
-  them. Doc 66 changes with 1b-2.
+  them. Doc 66 says how (1b-2b).
 
 ### Phase 2 — 3-way merge and "update"
 

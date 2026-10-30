@@ -3819,6 +3819,7 @@
       "shareHint": "Let specific people read or co-edit this draft before it is published",
       "saved": "Draft saved — only you and the people you shared it with can read it",
       "publishing": "Publishing…",
+      "pageCount": "{n} page | {n} pages",
       "published": "Published — readers see your edit now",
       "mrTitle": "Edit {title}",
       "held": {
@@ -3831,6 +3832,7 @@
       },
       "past": {
         "title": "The page was published since your draft began",
+        "otherTitle": "Another page in your draft was published since it began",
         "body": "Publishing now replaces that version with yours. Review what changed first.",
         "review": "Review changes",
         "publishOver": "Publish over it",

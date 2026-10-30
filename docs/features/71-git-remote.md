@@ -400,17 +400,47 @@ It is too large for one reviewable PR.
   transaction opens, then takes the branch-row locks in id order and
   finalizes inside. Today's four S3 round trips per page inside the
   transaction do not scale to N.
+  **As built, split again.** 1b ships as two PRs. **1b-1** is project branches
+  with no behaviour change. **1b-2** is multi-page merge requests, the
+  atomic merge, the draft fold and the web Changes view. Where 1b-1 differs
+  from the plan above:
+  - `project_branches` holds only (workspace, project, name). `protected`,
+    `restricted` and the owner stay on each page's `document_branches` row,
+    so an empty settings table still merges as before; a gate reads "any page".
+    There is no base or head commit column. A branch's base is its first
+    commit's first parent, and its head is its latest commit, both already in
+    `project_commits`. An unwritten branch follows the default head, as doc 66
+    already says of drafts.
+  - `document_branches.project_branch_id` stays **nullable** for one release,
+    because the previous image inserts branches without it. A release after
+    1b-1 ships sets `NOT NULL`, filling any gap the way
+    `ProjectCommitsService.rehomeBranches` does.
+  - The backfill splits more than planned. It splits any group that a merge
+    request came from, not only one that would hold two open merge requests,
+    because 1b-2 derives an open merge request's pages from its source
+    branch. A legacy merge request must not gain pages it never had. The
+    earliest page branch keeps the name, the others become
+    `<name>-<page id 8 hex>`, and their 1a commits are renamed and
+    re-parented with them. A default branch is never renamed.
+  - Personal `draft/` branches are **not folded by the migration**. A new
+    draft name is the first one free in the project (`draft/<id>`,
+    `draft/<id>-2`, …), so every new draft starts its own project branch.
+    The fold happens going forward, in 1b-2.
+  - A page moved to another project, alone or by deleting its project, has
+    its branches re-pointed at the destination's branches of the same names
+    (`rehomeBranches`).
+- **Decided for 1b** (issue comment of 2026-10-30): `draft/` folds per person
+  and project, and Publish says "Publish N pages" and merges them as one merge
+  request. A page first written on the draft forks at the default head at that
+  moment, and reads as the default head before then. A spent draft keeps its
+  row, and the next one takes the next number.
 - **The default branch's tree stays `documents`' truth.** A branch carries its
   own tree in its change rows. A `git mv` or `git rm` on a branch changes
   `documents.parent_id`, `path` or `archived_at` only when it merges into the
   default branch, as the issue says for `git rm`.
-- **Open question for 1b, feature 66.** Folding `draft/` branches per person
-  means a person's working branch spans every page they have edited. Publish on
-  one page then publishes all of them, as a single merge request. The
-  recommendation is to keep the fold, since it is the git-shaped answer, and
-  have Publish say "Publish N pages" with the list. It changes doc 66, so it is
-  confirmed before 1b starts. A spent draft branch (its MR merged or closed) has
-  to free its name, by deletion or by a numbered suffix. 1b picks one.
+- **Feature 66 under the fold** (decided above). A person's working branch
+  spans every page they have edited, so Publish on one page publishes all of
+  them. Doc 66 changes with 1b-2.
 
 ### Phase 2 — 3-way merge and "update"
 
@@ -484,5 +514,4 @@ through the production ingress were not tried.
 - The JSON spec id form, the YAML form on push, and nested moves within one
   commit (the probe's tree surgery handles one move per subtree per commit;
   phase 3 re-derives an affected subtree from state instead).
-- The feature-66 Publish question and the spent-branch rule (phase 1b).
 - The author-email rule (phase 4).

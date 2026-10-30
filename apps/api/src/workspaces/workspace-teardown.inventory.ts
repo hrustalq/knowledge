@@ -85,6 +85,8 @@ export const WORKSPACE_TEARDOWN = {
   GlossaryTerm: 'workspace',
   // Cascades from its project too; deleted first so the project row is light.
   ProjectCommit: 'workspace',
+  // Page branches point at it with SET NULL, and the pages are gone by now.
+  ProjectBranch: 'workspace',
   Project: 'workspace',
   // No FK in either direction.
   ActivityLog: 'workspace',

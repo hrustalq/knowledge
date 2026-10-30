@@ -45,5 +45,5 @@ if (window.__PINIA__) {
 Promise.all([router.isReady(), messagesReady]).then(() => {
   app.mount('#app')
   // Route prefetch and the pending-navigation state (#627): after hydration.
-  installNavigation(router, pinia)
+  installNavigation(router, pinia, queryClient)
 })

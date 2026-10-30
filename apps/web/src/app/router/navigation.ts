@@ -9,7 +9,9 @@
  * - each person's most-visited route *patterns* (`/documents/:id`, never an id
  *   or a query) are kept in their own browser and fetched once the shell is
  *   idle, topped up from the rail's destinations for a new browser;
- * - hovering or focusing an in-app link starts its chunk;
+ * - hovering or focusing an in-app link starts its chunk, and resting on a
+ *   link to a page for DWELL_MS reads that page's detail and content into the
+ *   query cache (#628), so the click draws it without a skeleton;
  * - a navigation still waiting after SLOW_MS publishes `slowNavigation`, which
  *   the shell's progress bar and the rail's links draw from.
  *
@@ -19,6 +21,8 @@
 import { shallowRef } from 'vue'
 import type { RouteLocationNormalized, RouteRecordNormalized, Router } from 'vue-router'
 import type { Pinia } from 'pinia'
+import type { QueryClient } from '@tanstack/vue-query'
+import { prefetchDocument } from '@/entities/document'
 import { useAuthStore } from '@/stores/auth'
 import { useFeaturesStore } from '@/stores/features'
 import { HOME_NAV, KNOWLEDGE_NAV, PRIMARY_NAV, SETTINGS_NAV } from '@/app/shell/nav'
@@ -29,6 +33,10 @@ const SLOW_MS = 150
 /** A ring, so old habits age out. */
 const HISTORY_SIZE = 50
 const PREFETCH_COUNT = 5
+/** Long enough that a pointer sweeping down the tree reads nothing, short enough to beat the click. */
+const DWELL_MS = 100
+/** Page reads in flight at once; a link rested on past this is read on the click instead. */
+const MAX_PAGE_PREFETCH = 2
 /** Every tree row first, then the rail top to bottom (the knowledge group opens closed). */
 const SEED = [
   '/documents/:id',
@@ -44,7 +52,7 @@ export function isSlowTarget(to: string): boolean {
   return !!n && (n.path === to || n.redirectedFrom?.path === to)
 }
 
-export function installNavigation(router: Router, pinia: Pinia) {
+export function installNavigation(router: Router, pinia: Pinia, queryClient: QueryClient) {
   const auth = useAuthStore(pinia)
   const features = useFeaturesStore(pinia)
   const historyKey = () => (auth.me ? `kn_route_visits:${auth.me.userId}` : null)
@@ -74,6 +82,16 @@ export function installNavigation(router: Router, pinia: Pinia) {
     }
   }
 
+  let pageReads = 0
+  /** A page's detail and content, for `/documents/:id` only; the click joins or reuses them. */
+  function prefetchPage(path: string) {
+    if (pageReads >= MAX_PAGE_PREFETCH || !auth.authenticated || savingData()) return
+    const route = router.resolve(path)
+    if (route.matched.at(-1)?.path !== '/documents/:id' || refusal(route, auth, features)) return
+    pageReads++
+    void prefetchDocument(queryClient, route.params.id as string).finally(() => pageReads--)
+  }
+
   const leafOf = (p: string) => router.resolve(p).matched.at(-1)?.path
   const adminOnly = new Set(KNOWLEDGE_NAV.filter((l) => l.workspaceAdmin).map((l) => l.to))
 
@@ -87,9 +105,19 @@ export function installNavigation(router: Router, pinia: Pinia) {
 
   // Intent: the pointer or focus arriving on an in-app link. Delegated, so the
   // rail, the tree, breadcrumbs and links inside a page are all covered.
+  // `pointerover` fires again on every element inside the same link, so the
+  // dwell restarts only when the link under the pointer changes.
+  let dwell: ReturnType<typeof setTimeout> | undefined
+  let dwellOn: string | null = null
   const onIntent = (e: Event) => {
     const a = (e.target as Element | null)?.closest?.('a[href]') as HTMLAnchorElement | null
-    if (a && a.origin === location.origin && !a.hasAttribute('download')) prefetch(a.pathname)
+    const path = a && a.origin === location.origin && !a.hasAttribute('download') ? a.pathname : null
+    if (path === dwellOn) return
+    clearTimeout(dwell)
+    dwellOn = path
+    if (!path) return
+    prefetch(path)
+    dwell = setTimeout(() => prefetchPage(path), DWELL_MS)
   }
   document.addEventListener('pointerover', onIntent, { passive: true })
   document.addEventListener('focusin', onIntent)

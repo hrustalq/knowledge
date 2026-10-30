@@ -17,7 +17,7 @@ import { formatDate, formatDateTime } from '@/shared/utils/format'
 import { errorMessage, isRestrictedRefusal } from '@/shared/api/errors'
 import { labelFor } from '@/shared/i18n/labels'
 import { hasWorkingCopy } from '@/entities/rich-editor'
-import { readFrontmatter } from '@/entities/document'
+import { type ContentAt, documentContentQuery, documentDetailQuery, readFrontmatter } from '@/entities/document'
 import { usePageView } from '@/entities/insight'
 import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
@@ -57,6 +57,7 @@ import type {
   ResolvedAsOf,
   DocumentDetailResponse,
   ListActivityResponse,
+  ListBranchesResponse,
   ListKnowledgeIssuesResponse,
   ListConflictsResponse,
   DocumentQualityResponse,
@@ -223,8 +224,13 @@ const expanded = ref<RailWidget | null>(null)
 const expandedWidget = computed(() => RAIL_WIDGETS.find((w) => w.id === expanded.value) ?? null)
 
 const detail = ref<DocumentDetailResponse | null>(null)
-const content = ref<DocumentContentResponse | null>(null)
-const contentError = ref<string | null>(null)
+/**
+ * What the cache already holds — a hover prefetch, or the last visit (#628) —
+ * so the page draws at once while `load()` asks again. After mount only: the
+ * server drew the skeleton, and the first client render must match it.
+ */
+const cachedDetail = () =>
+  queryClient.getQueryData<DocumentDetailResponse>(documentDetailQuery(documentId.value).queryKey) ?? null
 const relations = ref<ListDocumentRelationsResponse['relations'] | null>(null)
 const error = ref<string | null>(null)
 /**
@@ -376,8 +382,6 @@ async function publishDraft() {
  * it is the ordinary read-only revision view. An explicit `?revision=` wins.
  */
 const asOfParam = computed(() => (route.query.revision ? null : ((route.query.asOf as string | undefined) ?? null)))
-const asOfRevision = ref<string | null>(null)
-const asOfResolved = ref<ResolvedAsOf | null>(null)
 
 /**
  * #474: `?branch=` reads a working branch — someone's unpublished edit, shared
@@ -387,42 +391,48 @@ const asOfResolved = ref<ResolvedAsOf | null>(null)
 const viewingBranch = computed(() =>
   route.query.revision || route.query.asOf ? null : ((route.query.branch as string | undefined) ?? null),
 )
-const branchRevision = ref<string | null>(null)
-/** Who started the branch being read, once the branch list says. */
-const branchOwner = ref<string | null>(null)
+/**
+ * Through the cache (#628), so a hover in the tree can have it ready before the
+ * click, and a revisit draws at once. The live rules invalidate it on every
+ * `revision.*` event for this page; a re-read that answers the same bytes keeps
+ * the same object, so the editor below is not rebuilt for nothing.
+ */
+const contentAt = computed<ContentAt>(() =>
+  route.query.revision
+    ? { revision: route.query.revision as string }
+    : asOfParam.value
+      ? { asOf: asOfParam.value }
+      : null,
+)
+const contentQuery = useQuery(computed(() => documentContentQuery(documentId.value, contentAt.value)))
+const content = computed(() => (contentQuery.data.value as DocumentContentResponse | undefined) ?? null)
+const contentError = computed(() => contentQuery.error.value?.message ?? null)
+const asOfRevision = computed(() => (asOfParam.value ? (content.value?.revisionId ?? null) : null))
+const asOfResolved = computed<ResolvedAsOf | null>(() => (asOfParam.value ? (content.value?.resolvedAsOf ?? null) : null))
+const branchRevision = computed(() => (viewingBranch.value ? (content.value?.revisionId ?? null) : null))
 
-async function loadContent() {
-  contentError.value = null
-  content.value = null
-  try {
-    const query = route.query.revision
-      ? { revision: route.query.revision as string }
-      : asOfParam.value
-        ? { asOf: asOfParam.value }
-        : // The content route declares no `branch` query and never read the
-          // one this used to send, so a branch view still reads the default head.
-          {}
-    // A named revision never changes; the head may have moved under a cached
-    // copy (an editor save lands here), so that read is always fresh.
-    content.value = await fetchApi(
-      queryClient,
-      '/v1/documents/{id}/content',
-      { path: { id: documentId.value }, query },
-      { fresh: !route.query.revision },
-    )
-    asOfRevision.value = asOfParam.value ? content.value.revisionId : null
-    branchRevision.value = viewingBranch.value ? content.value.revisionId : null
-    if (viewingBranch.value) {
-      const { branches } = await fetchApi(queryClient, '/v1/documents/{id}/branches', {
-        path: { id: documentId.value },
-      })
-      branchOwner.value = branches.find((b) => b.name === viewingBranch.value)?.ownerId ?? null
-    }
-    asOfResolved.value = asOfParam.value ? (content.value.resolvedAsOf ?? null) : null
-  } catch (e) {
-    contentError.value = (e as Error).message
-  }
-}
+const branchesQuery = useQuery(
+  computed(() => ({
+    ...apiQueryOptions('/v1/documents/{id}/branches', { path: { id: documentId.value } }),
+    enabled: !!viewingBranch.value,
+  })),
+)
+/** Who started the branch being read, once the branch list says. */
+const branchOwner = computed(
+  () =>
+    (branchesQuery.data.value as ListBranchesResponse | undefined)?.branches.find((b) => b.name === viewingBranch.value)
+      ?.ownerId ?? null,
+)
+
+// The bus is best-effort (docs/architecture/08): a head the two-second poll
+// sees move is re-read even if its event never arrived — an editor save in
+// this tab, then Back inside the cache's 30 s.
+watch(
+  () => detail.value?.revision.revisionId,
+  (head) => {
+    if (head && !contentAt.value && content.value && content.value.revisionId !== head) void contentQuery.refetch()
+  },
+)
 
 async function loadRelations(fresh = false) {
   try {
@@ -734,9 +744,9 @@ usePageView(
 )
 
 onMounted(() => {
+  detail.value = cachedDetail()
   void load()
   void loadRelations()
-  void loadContent()
   if (!store.treeLoaded) void store.fetchTree()
   timer = setInterval(() => void load(), 2000)
 })
@@ -744,12 +754,9 @@ onUnmounted(() => {
   if (timer) clearInterval(timer)
 })
 
-watch([() => route.query.revision, () => route.query.asOf, () => route.query.branch], () => void loadContent())
-
 // Route reuse: navigating to a different document keeps this component alive.
 watch(documentId, () => {
-  detail.value = null
-  content.value = null
+  detail.value = cachedDetail()
   relations.value = null
   error.value = null
   restrictedRefusal.value = false
@@ -759,7 +766,6 @@ watch(documentId, () => {
   timer = setInterval(() => void load(), 2000)
   void load()
   void loadRelations()
-  void loadContent()
 })
 
 // Feature 04: live refresh when this document is re-indexed elsewhere.
@@ -775,17 +781,12 @@ watch(
       return
     }
     if (!e.type.startsWith('revision.')) return
-    const before = detail.value?.revision.revisionId
     // Relations are re-extracted by any indexing pass, so they are always worth
-    // re-reading. Content is not: a revision's bytes are immutable, so the only
-    // thing that changes what this page says is a *different* head. Re-fetching
-    // it regardless tore down and rebuilt the whole editor — losing the
-    // selection, the scroll position and every comment decoration — each time a
-    // cascade touched this page.
+    // re-reading. Content is the live rules' (see contentQuery): a cascade that
+    // leaves the head where it was answers the same bytes, and the editor —
+    // its selection, scroll position and comment decorations — stays put.
     void loadRelations(true)
-    void load().then(() => {
-      if (detail.value?.revision.revisionId !== before) void loadContent()
-    })
+    void load()
   },
 )
 </script>

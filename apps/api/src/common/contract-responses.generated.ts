@@ -206,6 +206,7 @@ import type {
   ListNotificationSubscriptionsResponse,
   ListNotificationsResponse,
   ListPlatformAuditLogsResponse,
+  ListProjectBranchesResponse,
   ListProjectsResponse,
   ListReleaseTagsResponse,
   ListReleasesResponse,
@@ -543,6 +544,7 @@ export interface ContractResponses {
   ListNotificationSubscriptionsResponse: ListNotificationSubscriptionsResponse;
   ListNotificationsResponse: ListNotificationsResponse;
   ListPlatformAuditLogsResponse: ListPlatformAuditLogsResponse;
+  ListProjectBranchesResponse: ListProjectBranchesResponse;
   ListProjectsResponse: ListProjectsResponse;
   ListReleaseTagsResponse: ListReleaseTagsResponse;
   ListReleasesResponse: ListReleasesResponse;

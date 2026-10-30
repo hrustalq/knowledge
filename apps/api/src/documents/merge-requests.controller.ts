@@ -15,6 +15,7 @@ import type {
   DeleteMergeRequestCommentResponse,
   ListMergeRequestsResponse,
   ListMergeRequestThreadsResponse,
+  ListProjectBranchesResponse,
   ListSavedFiltersResponse,
   ListWorkspaceMergeRequestsResponse,
   MergeMergeRequestResponse,
@@ -33,6 +34,7 @@ import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { MergeRequestsService } from './merge-requests.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
+import { AccessService } from '../auth/access.service.js';
 import { MergeRequestThreadsService } from './merge-request-threads.service.js';
 import { SavedFiltersService } from './saved-filters.service.js';
 import {
@@ -68,6 +70,7 @@ export class MergeRequestsController {
     private readonly threads: MergeRequestThreadsService,
     private readonly savedFilters: SavedFiltersService,
     private readonly permissions: PermissionService,
+    private readonly access: AccessService,
   ) {}
 
   @Post('documents/:id/merge-requests')
@@ -106,9 +109,22 @@ export class MergeRequestsController {
   @Get('documents/:id/merge-requests')
   @Returns('ListMergeRequestsResponse')
   @Access('viewer', 'document')
-  @ApiOperation({ summary: 'List merge requests of a document (newest first)' })
-  list(@Param('id', ParseUUIDPipe) id: string): Promise<ListMergeRequestsResponse> {
-    return this.mergeRequests.list(id);
+  @ApiOperation({ summary: 'List merge requests whose branch changed a document (newest first)' })
+  async list(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<ListMergeRequestsResponse> {
+    return this.mergeRequests.list(id, await this.permissions.scopeForDocument(principal, id));
+  }
+
+  @Get('projects/:id/branches')
+  @Returns('ListProjectBranchesResponse')
+  @Access('viewer', 'project')
+  @ApiOperation({
+    summary: "List a project's branches (#636)",
+    description:
+      'Every branch but the default one, newest first, with the pages it wrote that the caller may open and its open merge request. ' +
+      'A branch with no such page is left out.',
+  })
+  async projectBranches(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<ListProjectBranchesResponse> {
+    return this.mergeRequests.projectBranches(id, await this.permissions.scopeFor(principal, await this.access.workspaceOfProject(id)));
   }
 
   @Get('merge-requests')

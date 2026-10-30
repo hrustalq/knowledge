@@ -698,6 +698,51 @@ indexing a pushed revision through to `knowledge_search` (no embeddings
 provider on the laptop; it is the ordinary finalize path), and pushes through
 the Cloudflare Worker.
 
+### Phase 5 — web, MCP, Connect AI
+
+Split in two PRs (decided 2026-10-30): 5a is the API, MCP, SKILL.md and the
+feed; 5b is the web.
+
+**As built, 5a.**
+  - **One branch list.** `MergeRequestsService.projectBranches` is the only
+    reading of a project's branches, behind `GET /v1/projects/:id/branches`
+    and `knowledge_list_branches`. Each page branch counts when it has a
+    revision of its own (`WROTE`, the rule `sourcePages` uses), its page passes
+    `visibilityWhere`, and `PermissionService.readableBranchIds` lets the
+    reader in (#474). That last is `visibleBranchIds` across pages. The default
+    branch is every page's, so it is left out. A branch with no page left in
+    view is not listed, as a ref is not advertised (phase 3).
+  - **`pageCount`** on every merge request row counts the page branches of the
+    source's project branch that hold a revision of their own, visible or not,
+    as `hiddenPages` does. It is one `groupBy` per response.
+  - **A page's merge requests** (`touchesPage`) are the ones opened from it,
+    plus the ones whose project branch wrote it. The same rule serves the
+    `documentId` filter of the workspace list. Each list still drops a merge
+    request whose anchor page the caller may not open.
+  - **MCP**: `knowledge_create_merge_request` takes `projectId` in place of
+    `documentId`. It anchors on the first page, by title, that the branch wrote
+    and the caller may open, and then runs the same `guard.doc` and
+    `guard.branches` checks as before. `knowledge_list_merge_requests` filters
+    by `projectId`, which is the anchor page's project, and therefore the
+    branch's.
+  - **SKILL.md** gets a **Git** section when `GIT_REMOTE_ENABLED` is on. The key
+    reaches git through a credential helper that reads `KNOWLEDGE_API_KEY`.
+    Before it, an empty `credential.helper=` clears git's own helpers: on a Mac,
+    osxkeychain otherwise answers first with a key it stored earlier. The e2e
+    spec found this when a helper clone came back with another person's view.
+  - **`git.pushed`**: one activity row per pushed ref, recorded after commit.
+    `subjectId` is the ref's last commit; the metadata holds `branch`,
+    `commits`, `pages`, `sha` and `subject`. `activityKindFor` counts it as a
+    write. It joins `KNOWN_EVENT_TYPES`. The revisions' own
+    `revision.finalized` rows stay, because triggers and chat notifications
+    read them.
+
+Checked by `test/git-remote.e2e-spec.ts` (12/12): the branch list as a reader
+without the restricted page, `pageCount` and the merge request on both of its
+pages, the `projectId` filter, the `git.pushed` row, and a clone through the
+credential helper. Over MCP, `knowledge_list_branches` and a merge request
+opened by project and branch name.
+
 ## Numbers
 
 Synthetic projects from `synth.mjs`, with a nested page tree, edits, two-page

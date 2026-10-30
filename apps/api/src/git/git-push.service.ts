@@ -12,6 +12,7 @@ import { PermissionService } from '../permissions/permission.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { CompareService } from '../documents/compare.service.js';
 import { MergeRequestsService } from '../documents/merge-requests.service.js';
+import { ActivityService } from '../activity/activity.service.js';
 import { t } from '../i18n/t.js';
 import type { GitCaller } from './git-access.service.js';
 import { runGit, GitRepoService, type Project } from './git-repo.service.js';
@@ -147,6 +148,7 @@ export class GitPushService {
     private readonly commits: ProjectCommitsService,
     private readonly access: AccessService,
     private readonly permissions: PermissionService,
+    private readonly activity: ActivityService,
     config: ConfigService<Env, true>,
   ) {
     this.root = config.get('GIT_CACHE_DIR', { infer: true });
@@ -558,6 +560,19 @@ export class GitPushService {
         commitIds.set(p.id, id);
       }
       const last = new Map(planned.flatMap((p) => p.changes.map((ch) => [doc(ch.documentId)!, rev(ch.revisionId)] as const)));
+      // One feed row per pushed ref, beside each revision's own `revision.finalized`
+      // (triggers and chat notifications read those). Post-commit, as every record is.
+      const tip = planned.at(-1)!;
+      this.prisma.onCommit(() =>
+        this.activity.record({
+          workspaceId,
+          projectId,
+          actor: userId,
+          action: 'git.pushed',
+          subjectId: commitIds.get(tip.id),
+          metadata: { branch, commits: planned.length, pages: last.size, sha: tip.sha, subject: tip.subject },
+        }),
+      );
       return { created, revisionFor: (documentId: string) => last.get(documentId) ?? null };
     });
   }

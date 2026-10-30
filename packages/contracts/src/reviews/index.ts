@@ -73,6 +73,12 @@ export interface MergeRequestInfo {
   provenance: MergeRequestProvenance;
   /** The `knowledge_captures` row it came from, when `provenance` is `captured` and a capture opened it. */
   captureId: string | null;
+  /**
+   * How many pages its source branch has written (#636): a branch spans its
+   * project, so one merge request can carry several. Visible or not, as the
+   * diff's `hiddenPages` counts them; never fewer than 1.
+   */
+  pageCount: number;
 }
 
 export interface CreateMergeRequestResponse {
@@ -91,6 +97,26 @@ export interface MergeRequestPage {
   title: string;
   /** merge-base comparison of this page's target head...source head. */
   compare: CompareResponse;
+}
+
+/** One branch of a project (#636), as the caller sees it: the pages it wrote that they may open. */
+export interface ProjectBranchInfo {
+  projectBranchId: string;
+  name: string;
+  /** Pages the branch has a revision of its own on, by title. A branch with none the caller may open is not listed. */
+  pages: { documentId: string; title: string }[];
+  /** Its newest revision: when, and by whom. */
+  updatedAt: string;
+  updatedBy: string;
+  /** The open merge request from it, when there is one the caller may read. */
+  openMergeRequest: { mergeRequestId: string; title: string; isDraft: boolean } | null;
+}
+
+// GET /v1/projects/:id/branches
+export interface ListProjectBranchesResponse {
+  projectId: string;
+  /** Every branch but the default one, newest first. */
+  branches: ProjectBranchInfo[];
 }
 
 // GET /v1/merge-requests/:id/diff
@@ -182,7 +208,10 @@ export interface ListWorkspaceMergeRequestsRequest {
   assigneeId?: string;
   /** Only merge requests with this user assigned as reviewer. */
   reviewerId?: string;
+  /** Merge requests whose source branch changed this page (#636), not only the ones opened from it. */
   documentId?: string;
+  /** Merge requests of this project's branches. */
+  projectId?: string;
   /** Case-insensitive substring match on the source branch name. */
   sourceBranch?: string;
   /** Case-insensitive substring match on the target branch name. */

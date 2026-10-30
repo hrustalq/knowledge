@@ -198,6 +198,7 @@ export function activityKindFor(action: string): ActivityKind {
     action.startsWith('document.') ||
     action.startsWith('revision.') ||
     action.startsWith('branch.') ||
+    action.startsWith('git.') ||
     action.startsWith('import.') ||
     action.startsWith('attachment.')
   ) {
@@ -353,6 +354,8 @@ export const KNOWN_EVENT_TYPES = [
   'project.updated',
   'project.deleted',
   'branch.created',
+  // A push to a project over git (#636): one per ref, `subjectId` its last commit.
+  'git.pushed',
   'revision.finalized',
   'revision.indexed',
   'revision.failed',

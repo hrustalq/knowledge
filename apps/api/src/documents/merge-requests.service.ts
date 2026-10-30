@@ -7,6 +7,7 @@ import type {
   ApiSpecDiff,
   CreateMergeRequestResponse,
   ListMergeRequestsResponse,
+  ListProjectBranchesResponse,
   ListWorkspaceMergeRequestsRequest,
   ListWorkspaceMergeRequestsResponse,
   MergeConflictHunk,
@@ -80,6 +81,17 @@ interface Body {
 
 /** The branch names git's conflict markers are labelled with. */
 type MergeLabels = { target: string; source: string };
+
+/** A page branch that holds a revision of its own: the branch wrote that page. */
+const WROTE = { revisions: { some: { status: { not: 'draft' } } } } as const;
+
+/**
+ * Merge requests whose branch changed the page (#636): the ones opened from it,
+ * and the ones whose project branch wrote it from another page.
+ */
+const touchesPage = (documentId: string) => ({
+  OR: [{ documentId }, { sourceBranch: { projectBranch: { branches: { some: { documentId, ...WROTE } } } } }],
+});
 
 /** The target moved past the merge base: a fast-forward no longer lands it. */
 const behind = (p: MrPage): boolean => p.target.headRevisionId !== null && p.mergeBase !== p.target.headRevisionId;
@@ -220,18 +232,23 @@ export class MergeRequestsService {
     return { mergeRequest: await this.toDetail(mr) };
   }
 
-  async list(documentId: string): Promise<ListMergeRequestsResponse> {
+  /**
+   * Every merge request whose branch changed the page (#636). One opened from a
+   * page `scope` may not open is left out, as in the workspace list: a merge
+   * request is read through the page it was opened from.
+   */
+  async list(documentId: string, scope: AccessScope): Promise<ListMergeRequestsResponse> {
     const document = await this.prisma.document.findUnique({ where: { id: documentId } });
     if (!document) throw new NotFoundException(t('error.document.notFound', { id: documentId }));
 
     const rows = await this.prisma.mergeRequest.findMany({
-      where: { documentId },
+      where: { ...touchesPage(documentId), document: { AND: [visibilityWhere(scope)] } },
       include: MR_INCLUDE,
       orderBy: { createdAt: 'desc' },
     });
     // No merge base on list rows — it costs a graph BFS per MR (contracts doc it as null).
-    const stats = await this.statsFor(rows.map((r) => r.id));
-    return { documentId, mergeRequests: rows.map((mr) => this.toInfo(mr, null, stats.get(mr.id))) };
+    const [stats, pages] = await Promise.all([this.statsFor(rows.map((r) => r.id)), this.pagesFor(rows)]);
+    return { documentId, mergeRequests: rows.map((mr) => this.toInfo(mr, null, stats.get(mr.id), pages.get(mr.id))) };
   }
 
   async listWorkspace(
@@ -249,10 +266,11 @@ export class MergeRequestsService {
     // A merge request is its page: one on a page the caller may not open is
     // not in the list, nor in the tab counts (#76).
     const baseWhere = {
-      document: { workspaceId: query.workspaceId, AND: [visibilityWhere(scope)] },
+      // A branch is one project's (#636), so the page it was opened from names it.
+      document: { workspaceId: query.workspaceId, ...(query.projectId ? { projectId: query.projectId } : {}), AND: [visibilityWhere(scope)] },
       ...(query.authorId ? { authorId: query.authorId } : {}),
       ...(query.assigneeId ? { assigneeId: query.assigneeId } : {}),
-      ...(query.documentId ? { documentId: query.documentId } : {}),
+      ...(query.documentId ? touchesPage(query.documentId) : {}),
       ...(query.reviewerId ? { reviewers: { some: { userId: query.reviewerId } } } : {}),
       ...(query.sourceBranch
         ? { sourceBranch: { name: { contains: query.sourceBranch, mode: 'insensitive' as const } } }
@@ -275,14 +293,14 @@ export class MergeRequestsService {
     ]);
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
-    const stats = await this.statsFor(page.map((r) => r.id));
+    const [stats, pages] = await Promise.all([this.statsFor(page.map((r) => r.id)), this.pagesFor(page)]);
     const counts = { open: 0, merged: 0, closed: 0 };
     for (const row of statusCounts) {
       if (row.status in counts) counts[row.status as keyof typeof counts] = row._count._all;
     }
     return {
       workspaceId: query.workspaceId,
-      mergeRequests: page.map((mr) => this.toInfo(mr, null, stats.get(mr.id))),
+      mergeRequests: page.map((mr) => this.toInfo(mr, null, stats.get(mr.id), pages.get(mr.id))),
       nextCursor: hasMore ? page[page.length - 1]!.id : null,
       counts,
     };
@@ -1392,10 +1410,87 @@ export class MergeRequestsService {
     return map;
   }
 
+  /** How many pages each merge request's source branch wrote (#636), one groupBy per response. */
+  private async pagesFor(mrs: MrWithBranches[]): Promise<Map<string, number>> {
+    const ids = [...new Set(mrs.flatMap((mr) => (mr.sourceBranch.projectBranchId ? [mr.sourceBranch.projectBranchId] : [])))];
+    const rows = ids.length
+      ? await this.prisma.documentBranch.groupBy({
+          by: ['projectBranchId'],
+          where: { projectBranchId: { in: ids }, ...WROTE },
+          _count: { _all: true },
+        })
+      : [];
+    const byBranch = new Map(rows.map((r) => [r.projectBranchId, r._count._all]));
+    return new Map(mrs.map((mr) => [mr.id, byBranch.get(mr.sourceBranch.projectBranchId) ?? 1]));
+  }
+
   /** Detail/mutation response body: info with merge base + thread stats. */
   private async toDetail(mr: MrWithBranches): Promise<MergeRequestInfo> {
-    const [mergeBase, stats] = await Promise.all([this.mergeBaseOf(mr), this.statsFor([mr.id])]);
-    return this.toInfo(mr, mergeBase, stats.get(mr.id));
+    const [mergeBase, stats, pages] = await Promise.all([this.mergeBaseOf(mr), this.statsFor([mr.id]), this.pagesFor([mr])]);
+    return this.toInfo(mr, mergeBase, stats.get(mr.id), pages.get(mr.id));
+  }
+
+  /**
+   * A project's branches as `scope` sees them (#636): each with the pages it
+   * wrote that `scope` may open, on page branches it may read (#474), newest
+   * first. The default branch is every page's, so it is left out, and so is a
+   * branch with nothing left in view.
+   */
+  async projectBranches(projectId: string, scope: AccessScope): Promise<ListProjectBranchesResponse> {
+    const rows = await this.prisma.documentBranch.findMany({
+      where: { projectBranch: { projectId }, document: { AND: [visibilityWhere(scope)] }, ...WROTE },
+      select: {
+        id: true,
+        name: true,
+        ownerId: true,
+        restricted: true,
+        documentId: true,
+        projectBranchId: true,
+        document: { select: { title: true, defaultBranch: true } },
+      },
+      orderBy: { document: { title: 'asc' } },
+    });
+    const readable = await this.permissions.readableBranchIds(
+      scope,
+      rows.filter((b) => b.name !== b.document.defaultBranch),
+    );
+    const shown = rows.filter((b) => readable.has(b.id));
+    const ids = shown.map((b) => b.id);
+    const [latest, open] = await Promise.all([
+      this.prisma.documentRevision.findMany({
+        where: { branchId: { in: ids }, status: { not: 'draft' } },
+        orderBy: { createdAt: 'desc' },
+        distinct: ['branchId'],
+        select: { branchId: true, createdAt: true, authorId: true },
+      }),
+      this.prisma.mergeRequest.findMany({
+        where: { status: 'open', sourceBranchId: { in: ids }, document: { AND: [visibilityWhere(scope)] } },
+        select: { id: true, title: true, isDraft: true, sourceBranchId: true },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+    const byBranch = new Map<string, ListProjectBranchesResponse['branches'][number]>();
+    for (const b of shown) {
+      const key = b.projectBranchId!;
+      const entry = byBranch.get(key) ?? {
+        projectBranchId: key,
+        name: b.name,
+        pages: [],
+        updatedAt: new Date(0).toISOString(),
+        updatedBy: AUTHOR_ID_STUB,
+        openMergeRequest: null,
+      };
+      entry.pages.push({ documentId: b.documentId, title: b.document.title });
+      const rev = latest.find((r) => r.branchId === b.id);
+      if (rev && rev.createdAt.toISOString() > entry.updatedAt) {
+        entry.updatedAt = rev.createdAt.toISOString();
+        entry.updatedBy = rev.authorId;
+      }
+      const mr = open.find((m) => m.sourceBranchId === b.id);
+      if (mr && !entry.openMergeRequest) entry.openMergeRequest = { mergeRequestId: mr.id, title: mr.title, isDraft: mr.isDraft };
+      byBranch.set(key, entry);
+    }
+    return { projectId, branches: [...byBranch.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)) };
   }
 
   /** 400 unless every id reads the document's workspace — a member, and not a guest (#76). */
@@ -1432,6 +1527,7 @@ export class MergeRequestsService {
     mr: MrWithBranches,
     mergeBase: string | null,
     threadStats: { total: number; unresolved: number } = { total: 0, unresolved: 0 },
+    pageCount = 1,
   ): MergeRequestInfo {
     return {
       mergeRequestId: mr.id,
@@ -1457,6 +1553,7 @@ export class MergeRequestsService {
       closedAt: mr.closedAt?.toISOString() ?? null,
       provenance: mr.provenance as MergeRequestProvenance,
       captureId: mr.captureId,
+      pageCount,
     };
   }
 

@@ -60,6 +60,19 @@ in the pull request that introduces them — see
   with 409 `conflict` and `details.conflicts`. `diverged` now means only that a target moved while the merge
   was landing, so retry. MCP: `knowledge_update_merge_request_branch`, and `includeConflicts` on
   `knowledge_get_merge_request`.
+- **Agents can find and open merge requests by project branch** (#636). The new MCP tool
+  `knowledge_list_branches` lists a project's branches. For each it shows the pages the branch changed that
+  you can open, who wrote it last and when, and its open merge request. The default branch is not listed, and
+  neither is anyone else's private draft. `knowledge_create_merge_request` accepts `projectId` and
+  `sourceBranch` in place of a page. `knowledge_list_merge_requests` filters by `projectId`. The generated
+  SKILL.md explains branches that span pages and, where the git remote is enabled, gains a **Git** section:
+  the clone URL, a credential helper that reads `KNOWLEDGE_API_KEY` so the key never sits in a URL or
+  `.git/config`, and how push options, `git mv` / `git rm` and refusals behave. A push now appears in the
+  project's activity as one `git.pushed` entry per branch pushed, beside the revisions it wrote. The web
+  label for that entry comes with the web half of this phase.
+- API: `GET /v1/projects/:id/branches` (viewer) returns the same list as `knowledge_list_branches`.
+  Merge request rows carry `pageCount`, the number of pages their branch wrote. `GET /v1/merge-requests`
+  takes `projectId`.
 
 ### Changed
 
@@ -71,6 +84,11 @@ in the pull request that introduces them — see
   same branch is refused as a duplicate, and a `diverged` refusal now names the page whose target moved
   (`details.documentId`). Changed pages you cannot open are counted on the Changes tab, never named, and
   review threads on them are hidden from you. Existing merge requests keep the single page they had.
+- **A page's merge requests include those opened from another page of the same branch** (#636). The page's
+  Changes list, `GET /v1/documents/:id/merge-requests` and the `documentId` filter of `GET /v1/merge-requests`
+  and `knowledge_list_merge_requests` now return every merge request whose branch changed the page, not only
+  the ones opened from it. A merge request opened from a page you cannot open stays out of the page's list,
+  as it already did in the workspace list.
 - **Style lint and breaking-API acknowledgements follow the pages** (#636). Each changed page of a merge
   request gets its own lint check, so a new edit re-lints only the page it touched, and lint threads are
   reconciled per page. An admin's acknowledgement of breaking API changes covers the whole branch until the

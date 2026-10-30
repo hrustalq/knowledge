@@ -3964,7 +3964,7 @@
       "method": "GET",
       "path": "/v1/documents/{id}/merge-requests",
       "tag": "merge-requests",
-      "summary": "List merge requests of a document (newest first)",
+      "summary": "List merge requests whose branch changed a document (newest first)",
       "role": "viewer",
       "source": "document",
       "public": false,
@@ -4277,6 +4277,16 @@
       "summary": "Rename a saved filter, or overwrite it with the current narrowing",
       "role": "viewer",
       "source": "saved-filter",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{id}/branches",
+      "tag": "merge-requests",
+      "summary": "List a project's branches (#636)",
+      "role": "viewer",
+      "source": "project",
       "public": false,
       "platformAdmin": false
     },
@@ -5598,11 +5608,15 @@
     },
     {
       "name": "knowledge_create_merge_request",
-      "description": "Open a GitLab-style merge request between two branches of a document. Target defaults to the default branch.",
+      "description": "Open a GitLab-style merge request from a branch. A branch is its project's, so the merge request carries every page the branch changed. Name the branch by projectId (see knowledge_list_branches) or by one documentId it changed. Target defaults to the default branch.",
       "inputs": [
         {
           "name": "documentId",
-          "optional": false
+          "optional": true
+        },
+        {
+          "name": "projectId",
+          "optional": true
         },
         {
           "name": "sourceBranch",
@@ -6367,6 +6381,16 @@
       ]
     },
     {
+      "name": "knowledge_list_branches",
+      "description": "s branches (#636): each with the pages it changed that you can open, who wrote it last and when, \" + s: the same name on any page of the project is one branch, and one merge request carries all of it.",
+      "inputs": [
+        {
+          "name": "projectId",
+          "optional": false
+        }
+      ]
+    },
+    {
       "name": "knowledge_list_conflicts",
       "description": "Contradictions the arbiter found between pages: both pages, the passage each one says, and why they disagree. Only conflicts whose pages you may open. Newest first.",
       "inputs": [
@@ -6444,6 +6468,10 @@
         },
         {
           "name": "documentId",
+          "optional": true
+        },
+        {
+          "name": "projectId",
           "optional": true
         },
         {

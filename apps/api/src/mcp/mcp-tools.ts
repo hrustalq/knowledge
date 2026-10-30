@@ -52,6 +52,8 @@ export const WRITE_TOOLS: ReadonlySet<string> = new Set([
   'knowledge_close_merge_request',
   'knowledge_comment_merge_request',
   'knowledge_merge_revision',
+  // Writes a merge revision on every page of the source branch behind its target (#636).
+  'knowledge_update_merge_request_branch',
   'knowledge_start_workflow',
   'knowledge_sync_connector',
   // Queues a run that rewrites repo wiki pages (docs/features/46).

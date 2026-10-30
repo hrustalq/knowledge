@@ -4112,6 +4112,16 @@
     },
     {
       "method": "GET",
+      "path": "/v1/merge-requests/{id}/conflicts",
+      "tag": "merge-requests",
+      "summary": "The 3-way state (#636): how many pages are behind their target, and every conflicting page the caller may open, with its hunks and the merge with git conflict markers",
+      "role": "viewer",
+      "source": "merge-request",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/merge-requests/{id}/diff",
       "tag": "merge-requests",
       "summary": "Merge-base diff of the MR, per changed page the caller may open: text + structural (+ semantic on request)",
@@ -4124,7 +4134,7 @@
       "method": "POST",
       "path": "/v1/merge-requests/{id}/merge",
       "tag": "merge-requests",
-      "summary": "Merge (merge-commit or squash); 409 with details.reason draft|approvals|diverged|breaking-api when gated, + comparison link when the target diverged",
+      "summary": "Merge (merge-commit or squash), 3-way per page where the target moved (#636); 409 with details.reason draft|approvals|lint|conflict|diverged|breaking-api when gated. `conflict` names the pages and hunks",
       "role": "editor",
       "source": "merge-request",
       "public": false,
@@ -4205,6 +4215,16 @@
       "path": "/v1/merge-requests/{id}/threads/{threadId}/comments/{commentId}",
       "tag": "merge-requests",
       "summary": "Edit a review comment (the comment's own author only)",
+      "role": "editor",
+      "source": "merge-request",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/merge-requests/{id}/update-branch",
+      "tag": "merge-requests",
+      "summary": "Update branch (#636): merge the target into the source on every page behind it — a two-parent revision on the source, never a rebase. 409 `conflict` while a conflicting page has no resolution; 409 `diverged` when a resolution names a target head that moved; 400 when the branch is up to date",
       "role": "editor",
       "source": "merge-request",
       "public": false,
@@ -6018,7 +6038,7 @@
     },
     {
       "name": "knowledge_get_merge_request",
-      "description": "Get one merge request (heads, merge base, approvals, reviewers, draft flag). Set includeDiff for the merge-base text+structural diff of every page it changes (`pages`), semantic for the graph-projection diff too.",
+      "description": "Get one merge request (heads, merge base, approvals, reviewers, draft flag). Set includeDiff for the merge-base text+structural diff of every page it changes (`pages`), semantic for the graph-projection diff too. Set includeConflicts for its 3-way state instead: how many pages are behind the target, and each conflicting page with its hunks and the merge with git conflict markers (`text`) — resolve those and pass them to knowledge_update_merge_request_branch.",
       "inputs": [
         {
           "name": "mergeRequestId",
@@ -6030,6 +6050,10 @@
         },
         {
           "name": "semantic",
+          "optional": true
+        },
+        {
+          "name": "includeConflicts",
           "optional": true
         }
       ]
@@ -6566,7 +6590,7 @@
     },
     {
       "name": "knowledge_merge_revision",
-      "description": "Merge an open merge request (\"merge-commit\" creates a two-parent DAG node, \"squash\" a single-parent one). Fails with a comparison link when the target branch diverged — rebase the source branch first. Gated: draft MRs and MRs below MR_REQUIRED_APPROVALS non-author approvals are rejected with 409 details.",
+      "description": "Merge an open merge request (\"merge-commit\" creates a two-parent DAG node, \"squash\" a single-parent one). A page whose target moved is merged 3-way; overlapping edits fail with 409 `conflict` naming the pages and hunks — resolve them with knowledge_update_merge_request_branch. Gated: draft MRs and MRs below MR_REQUIRED_APPROVALS non-author approvals are rejected with 409 details.",
       "inputs": [
         {
           "name": "mergeRequestId",
@@ -7004,6 +7028,20 @@
         },
         {
           "name": "knownAt",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_update_merge_request_branch",
+      "description": "s source branch from its target (GitLabsource on every page behind it, as two-parent revisions — never a rebase. A conflicting page needs a resolution: read it with knowledge_get_merge_request includeConflicts, replace each conflict-marker block with the resolved text, and pass the whole body with the targetHeadRevisionId it showed. 409 `conflict` while one is missing.",
+      "inputs": [
+        {
+          "name": "mergeRequestId",
+          "optional": false
+        },
+        {
+          "name": "resolutions",
           "optional": true
         }
       ]

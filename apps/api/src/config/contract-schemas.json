@@ -13769,6 +13769,21 @@
       "nameAttribute"
     ]
   },
+  "LineRange": {
+    "type": "object",
+    "properties": {
+      "start": {
+        "type": "number"
+      },
+      "count": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "start",
+      "count"
+    ]
+  },
   "LintGateState": {
     "type": "object",
     "properties": {
@@ -15853,6 +15868,25 @@
       "missing"
     ]
   },
+  "MergeConflictHunk": {
+    "type": "object",
+    "properties": {
+      "base": {
+        "$ref": "#/components/schemas/LineRange"
+      },
+      "target": {
+        "$ref": "#/components/schemas/LineRange"
+      },
+      "source": {
+        "$ref": "#/components/schemas/LineRange"
+      }
+    },
+    "required": [
+      "base",
+      "target",
+      "source"
+    ]
+  },
   "MergeMergeRequestResponse": {
     "type": "object",
     "properties": {
@@ -16074,6 +16108,66 @@
       "failed",
       "error",
       "skipped"
+    ]
+  },
+  "MergeRequestConflictPage": {
+    "type": "object",
+    "properties": {
+      "documentId": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string"
+      },
+      "targetHeadRevisionId": {
+        "type": "string"
+      },
+      "sourceHeadRevisionId": {
+        "type": "string"
+      },
+      "hunks": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/MergeConflictHunk"
+        }
+      },
+      "text": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "documentId",
+      "title",
+      "targetHeadRevisionId",
+      "sourceHeadRevisionId",
+      "hunks",
+      "text"
+    ]
+  },
+  "MergeRequestConflictsResponse": {
+    "type": "object",
+    "properties": {
+      "mergeRequestId": {
+        "type": "string"
+      },
+      "behind": {
+        "type": "number"
+      },
+      "pages": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/MergeRequestConflictPage"
+        }
+      },
+      "hiddenPages": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "mergeRequestId",
+      "behind",
+      "pages",
+      "hiddenPages"
     ]
   },
   "MergeRequestDiffResponse": {
@@ -17936,6 +18030,7 @@
         "enum": [
           "draft",
           "approvals",
+          "conflict",
           "diverged",
           "breaking-api",
           "lint",
@@ -22144,6 +22239,21 @@
     },
     "required": [
       "issue"
+    ]
+  },
+  "UpdateMergeRequestBranchResponse": {
+    "type": "object",
+    "properties": {
+      "mergeRequest": {
+        "$ref": "#/components/schemas/MergeRequestInfo"
+      },
+      "updated": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "mergeRequest",
+      "updated"
     ]
   },
   "UpdateWorkspaceResponse": {

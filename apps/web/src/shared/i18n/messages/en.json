@@ -1634,7 +1634,7 @@
     "approved": "Approved",
     "needsApprovals": "Needs {required} approval(s) — has {have} (author excluded)",
     "draftCannotMerge": "Draft merge requests cannot be merged — mark it ready first",
-    "targetDiverged": "Target branch diverged — rebase the source branch",
+    "targetDiverged": "Target branch moved while merging — try again",
     "compare": "Compare",
     "severityError": "Error",
     "severityWarning": "Warning",
@@ -1791,6 +1791,23 @@
       "adminHint": "Resolve the error threads, or ask a workspace admin to override.",
       "blockedToast": "{n} unresolved error-severity style violation holds this merge | {n} unresolved error-severity style violations hold this merge",
       "pendingToast": "This merge waits for the style check of the source revision"
+    },
+    "branch": {
+      "behind": "{target} moved ahead on {n} page — merges cleanly | {target} moved ahead on {n} pages — merges cleanly",
+      "conflicts": "Conflicts on {n} page | Conflicts on {n} pages",
+      "conflictsHint": "Merging waits until they are resolved.",
+      "hidden": "One of them is on a page you cannot open | {n} of them are on pages you cannot open",
+      "update": "Update branch",
+      "updated": "Branch updated",
+      "resolve": "Resolve conflicts",
+      "conflictToast": "The branches change the same lines",
+      "resolveTitle": "Resolve conflicts",
+      "resolveDesc": "In each block between <<<<<<< and >>>>>>>, {target} is above ======= and {source} below it. Keep what should stay and delete the markers. Updating merges {target} into {source}; nothing is rewritten.",
+      "left": "{n} conflict left | {n} conflicts left",
+      "resolved": "Resolved",
+      "hiddenBlock": "Conflicting pages you cannot open must be resolved by someone who can.",
+      "stale": "The target branch moved while you were resolving. The view has been reloaded.",
+      "pageLabel": "Resolution of {title}"
     }
   },
   "assistant": {
@@ -3831,9 +3848,9 @@
         "draft": "The merge request is marked as a draft."
       },
       "past": {
-        "title": "The page was published since your draft began",
-        "otherTitle": "Another page in your draft was published since it began",
-        "body": "Publishing now replaces that version with yours. Review what changed first.",
+        "title": "Your draft and a published change touch the same lines",
+        "otherTitle": "Another page in your draft conflicts with a published change",
+        "body": "Publishing over it replaces those lines with yours. Review what changed first.",
         "review": "Review changes",
         "publishOver": "Publish over it",
         "reviewTitle": "Published page → your draft",

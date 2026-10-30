@@ -69,7 +69,7 @@ The daily loop:
    extracted; dependents cascade one level of re-index.
 3. Find things by hybrid search, the document tree, the graph, or the glossary.
 4. Propose a change on a branch, open a merge request, annotate passages by quote,
-   resolve threads, merge fast-forward.
+   resolve threads, merge (3-way per page; overlapping edits conflict).
 5. Comment on live pages the same way — annotations outlive every revision.
 
 Infrastructure runs locally via docker compose: PostgreSQL (transactional truth),
@@ -91,7 +91,9 @@ landing on the API and has no web surface yet.
 
 **Deliberate constraints:**
 
-- Merging is fast-forward-preconditioned; three-way content merge does not exist.
+- Merging is a line-level 3-way merge per page; overlapping edits refuse with a
+  conflict a person resolves. The source branch is never rebased: history is
+  append-only.
 - The graph models semantic facts, never UI structure — there is no Project vertex.
 - Documents are never rewritten by AI. Glossary linking, comment anchoring and
   relation inference are all read-time or additive; the stored markdown is the

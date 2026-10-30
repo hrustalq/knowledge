@@ -795,6 +795,7 @@ export type I18nTranslations = {
             "notOpenForApproval": string;
             "notOpenForClose": string;
             "notOpenForMerge": string;
+            "notOpenForUpdate": string;
             "notOpenForReviewers": string;
             "notClosedForReopen": string;
             "discussionsReadOnly": string;
@@ -802,8 +803,11 @@ export type I18nTranslations = {
             "isDraft": string;
             "needsApprovals": string;
             "nothingToMerge": string;
-            "diverged": string;
+            "conflict": string;
             "divergedWhileMerging": string;
+            "resolutionStale": string;
+            "upToDate": string;
+            "markersLeft": string;
             "targetMissing": string;
             "alreadyOpen": string;
             "notMembers": string;

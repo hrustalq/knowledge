@@ -1292,7 +1292,9 @@ async function publish(onTopOf?: string[]) {
     }
   } catch (e) {
     const { documentId, currentHeadRevisionId: head, sourceHeadRevisionId: draftHead } = errorDetails(e) ?? {}
-    if (errorReason(e) === 'diverged' && typeof documentId === 'string' && typeof head === 'string' && typeof draftHead === 'string') {
+    // `conflict` (#636): a clean 3-way merge publishes over a moved head by
+    // itself, so only overlapping lines are put in front of the author.
+    if (['conflict', 'diverged'].includes(errorReason(e) ?? '') && typeof documentId === 'string' && typeof head === 'string' && typeof draftHead === 'string') {
       reviewedHeads.value = onTopOf ?? []
       publishedPast.value = { documentId, head, draftHead }
     } else onWriteError(e, sentMessage)

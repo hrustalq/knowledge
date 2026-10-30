@@ -1,8 +1,10 @@
 <script setup lang="ts">
 // GitLab-style merge widget: readiness checklist + the merge/close/reopen
-// controls in one card. 409 gate reasons (draft | approvals | diverged |
-// breaking-api, see MergeGateConflictDetails) surface as toasts — divergence
-// with a compare link. On a spec (#78) the checklist gains a breaking-change
+// controls in one card. 409 gate reasons (draft | approvals | conflict |
+// diverged | breaking-api, see MergeGateConflictDetails) surface as toasts — a
+// conflict with the way to resolve it. A branch row (#636) says whether the
+// target moved: a clean 3-way merge offers "Update branch", a conflict opens
+// the conflict view and holds the merge. On a spec (#78) the checklist gains a breaking-change
 // row: what the API tab found, what the workspace policy does about it, and an
 // admin's acknowledgement, pinned to the source head it was given for. Where
 // the page's styleguide lint is on (#74) a style row says what the check of the
@@ -12,16 +14,18 @@
 import { useI18n } from 'vue-i18n'
 import { formatDateTime } from '@/shared/utils/format'
 import { computed, ref, watch } from 'vue'
+import { useQuery } from '@tanstack/vue-query'
 import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
-import { AlertTriangle, Check, CircleDashed, FileWarning, GitMerge, MessageSquare, ThumbsUp } from 'lucide-vue-next'
+import { AlertTriangle, Check, CircleDashed, FileWarning, GitBranch, GitMerge, MessageSquare, ThumbsUp } from 'lucide-vue-next'
 import type {
   MergeGateConflictDetails,
   MergeRequestApiChangesResponse,
+  MergeRequestConflictsResponse,
   MergeRequestInfo,
   MergeStrategy,
 } from '@knowledge/contracts'
-import { useApiMutation, isApiRequestError } from '@/shared/api/queries'
+import { apiQueryOptions, useApiMutation, isApiRequestError } from '@/shared/api/queries'
 import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/shared/ui/button'
 import {
@@ -44,6 +48,7 @@ import {
 import { mrIcon } from '@/entities/merge-request'
 import { actorLabel } from '@/entities/person'
 import { lintCheckView, useLintChecks } from '../model/lint-check'
+import MergeConflictsDialog from './MergeConflictsDialog.vue'
 
 const { t } = useI18n()
 
@@ -151,9 +156,45 @@ function onRelint() {
   })
 }
 
+/** The 3-way state (#636): pages behind the target, and the conflicts among them. */
+const branchQuery = useQuery(
+  computed(() => ({
+    ...apiQueryOptions('/v1/merge-requests/{id}/conflicts', { path: { id: mr.value.mergeRequestId } }),
+    enabled: isOpen.value,
+  })),
+)
+const branchState = computed(() => (branchQuery.data.value as MergeRequestConflictsResponse | undefined) ?? null)
+const conflicted = computed(() => (branchState.value ? branchState.value.pages.length + branchState.value.hiddenPages : 0))
+const resolveOpen = ref(false)
+const updateBranch = useApiMutation('post', '/v1/merge-requests/{id}/update-branch', {
+  invalidates: () => [
+    ...invalidates(),
+    ['/v1/merge-requests/{id}/conflicts', { id: mr.value.mergeRequestId }],
+    ['/v1/merge-requests/{id}/diff'],
+    ['/v1/merge-requests/{id}/checks'],
+  ],
+})
+
+function onUpdateBranch() {
+  updateBranch.mutate(
+    { ...id.value, body: {} },
+    {
+      onSuccess: () => {
+        toast.success(t('mr.branch.updated'))
+        emit('changed')
+      },
+      onError: (e) => {
+        toast.error(e.message)
+        void branchQuery.refetch()
+      },
+    },
+  )
+}
+
 const busy = computed(
   () =>
     approve.isPending.value ||
+    updateBranch.isPending.value ||
     merge.isPending.value ||
     close.isPending.value ||
     reopen.isPending.value ||
@@ -188,6 +229,11 @@ function onMerge() {
               action: { label: t('mr.api.review'), onClick: () => emit('reviewApi') },
             })
             emit('changed')
+          } else if (details.reason === 'conflict') {
+            void branchQuery.refetch()
+            toast.error(t('mr.branch.conflictToast'), {
+              action: { label: t('mr.branch.resolve'), onClick: () => (resolveOpen.value = true) },
+            })
           } else if (details.comparisonUrl) {
             toast.error(t('mr.targetDiverged'), {
               action: { label: t('mr.compare'), onClick: () => void router.push(comparePagePath(details.comparisonUrl!)) },
@@ -361,6 +407,39 @@ function toggleDraft() {
           <span v-else-if="api.blocked" class="ml-auto text-xs text-muted-foreground">{{ t('mr.api.ackHint') }}</span>
         </template>
       </div>
+      <!-- The branch against its target (#636): hidden while up to date. A
+           clean 3-way merge needs no update; a conflict holds the merge. -->
+      <div v-if="branchState && branchState.behind > 0" class="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <template v-if="conflicted > 0">
+          <AlertTriangle class="size-4 shrink-0 text-panel-caution" />
+          <span class="font-medium">{{ t('mr.branch.conflicts', { n: conflicted }, conflicted) }}</span>
+          <Button
+            v-if="auth.canEdit && branchState.pages.length > 0"
+            variant="outline"
+            size="xs"
+            class="ml-auto"
+            :disabled="busy"
+            @click="resolveOpen = true"
+          >
+            {{ t('mr.branch.resolve') }}
+          </Button>
+          <p class="w-full pl-6 text-xs text-muted-foreground">
+            <template v-if="branchState.hiddenPages > 0">
+              {{ t('mr.branch.hidden', { n: branchState.hiddenPages }, branchState.hiddenPages) }}.
+            </template>
+            {{ t('mr.branch.conflictsHint') }}
+          </p>
+        </template>
+        <template v-else>
+          <GitBranch class="size-4 shrink-0 text-panel-tip" />
+          <span class="text-muted-foreground">
+            {{ t('mr.branch.behind', { n: branchState.behind, target: mr.targetBranch }, branchState.behind) }}
+          </span>
+          <Button v-if="auth.canEdit" variant="ghost" size="xs" class="ml-auto" :disabled="busy" @click="onUpdateBranch">
+            {{ t('mr.branch.update') }}
+          </Button>
+        </template>
+      </div>
     </div>
 
     <!-- terminal-state summary -->
@@ -393,7 +472,7 @@ function toggleDraft() {
             <SelectItem value="squash">{{ t('mr.squash') }}</SelectItem>
           </SelectContent>
         </Select>
-        <Button size="sm" :disabled="busy || mr.isDraft || !!api?.blocked || !!lintGate?.blocked" @click="onMerge">
+        <Button size="sm" :disabled="busy || mr.isDraft || !!api?.blocked || !!lintGate?.blocked || conflicted > 0" @click="onMerge">
           <GitMerge class="size-3.5" /> {{ t('mr.merge') }}
         </Button>
         <Button size="sm" variant="ghost" :disabled="busy" @click="toggleDraft">
@@ -416,6 +495,17 @@ function toggleDraft() {
         <AlertTriangle class="size-3.5" /> {{ t('mr.mergedFinal') }}
       </p>
     </div>
+
+    <MergeConflictsDialog
+      v-if="branchState && branchState.pages.length > 0"
+      v-model:open="resolveOpen"
+      :merge-request-id="mr.mergeRequestId"
+      :pages="branchState.pages"
+      :hidden-pages="branchState.hiddenPages"
+      :target-branch="mr.targetBranch"
+      :source-branch="mr.sourceBranch"
+      @updated="emit('changed')"
+    />
 
     <Dialog v-model:open="overrideOpen">
       <DialogContent class="sm:max-w-md">

@@ -41,15 +41,21 @@ Merge is refused, with a reason, when:
 | `draft` | it is marked draft — untick it |
 | `approvals` | fewer than `MR_REQUIRED_APPROVALS`; the author's own approval never counts |
 | protected branch | the target is protected and you are not a workspace admin |
-| `diverged` | the target head moved past the merge base — the 409 links straight to the comparison |
+| `conflict` | the target changed the same lines the branch did — **Resolve conflicts** |
 
-That last one is the important constraint: merging is **fast-forward-preconditioned**. The
-target head must still equal the merge base. There is no three-way content merge — when a
-branch has diverged, you rebase the work rather than let the platform guess.
+When the target moved on since the branch began, each page is merged **3-way**, the way git
+does it: changes to different lines of a page both land, and only changes to the same (or
+adjacent) lines conflict. The **Branch** row of the checklist says which. A clean branch can
+merge as it is, or take **Update branch** first. A conflicting one holds the merge until
+**Resolve conflicts** is done: the conflict view shows each page with git's markers
+(`<<<<<<<` the target, `=======`, `>>>>>>>` the branch), you keep what should stay and delete
+the markers, and **Update branch** merges the target into the branch. Nothing is rebased;
+history only grows. Pages you cannot open are counted, and someone who can open them has to
+resolve them.
 
 Merging then writes either a **merge commit** (two parents: target head, source head) or a
-**squash** (one parent), copies the source head's bytes, and runs the normal finalize →
-index pipeline.
+**squash** (one parent) carrying the merged text, and runs the normal finalize → index
+pipeline.
 
 In `AUTH_MODE=none` the approval gate is skipped, because the dev principal is also the
 stub author and self-approval exclusion would deadlock every merge.

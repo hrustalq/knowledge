@@ -121,6 +121,49 @@ export interface PublishBranchResponse extends MergeMergeRequestResponse {
   reason: MergeGateConflictDetails['reason'] | 'protected' | null;
 }
 
+/** A run of lines, 1-based; `count` 0 is an insertion point before `start`. */
+export interface LineRange {
+  start: number;
+  count: number;
+}
+
+/** One overlapping change in a 3-way merge (#636): where it sits in the base, the target head and the source head. */
+export interface MergeConflictHunk {
+  base: LineRange;
+  target: LineRange;
+  source: LineRange;
+}
+
+/** A page whose 3-way merge conflicts (#636), as the conflict view resolves it. */
+export interface MergeRequestConflictPage {
+  documentId: string;
+  title: string;
+  /** The heads it was merged at; a resolution is pinned to the target one. */
+  targetHeadRevisionId: string;
+  sourceHeadRevisionId: string;
+  hunks: MergeConflictHunk[];
+  /** The merge with git's conflict markers, labelled with the branch names. */
+  text: string;
+}
+
+// GET /v1/merge-requests/:id/conflicts (#636)
+export interface MergeRequestConflictsResponse {
+  mergeRequestId: string;
+  /** Pages whose target moved past the merge base: what "Update branch" brings in. */
+  behind: number;
+  /** Conflicting pages the caller may open. */
+  pages: MergeRequestConflictPage[];
+  /** Conflicting pages the caller may not open; they hold the merge as well. */
+  hiddenPages: number;
+}
+
+// POST /v1/merge-requests/:id/update-branch (#636)
+export interface UpdateMergeRequestBranchResponse {
+  mergeRequest: MergeRequestInfo;
+  /** Pages the update wrote a merge revision on. */
+  updated: number;
+}
+
 /** 409 error envelope for If-Match / merge conflicts (plan.md §7): details always carries a comparison link. */
 export interface RevisionConflictResponse extends ApiErrorPayload {
   code: 'CONFLICT';
@@ -214,8 +257,11 @@ export interface ListSavedFiltersResponse {
 /**
  * 409 `details` vocabulary for merge gating (see RevisionConflictResponse for
  * the diverged case): `draft` — MR is flagged draft; `approvals` — fewer
- * non-author approvals than MR_REQUIRED_APPROVALS; `diverged` — target branch
- * advanced past the merge base (fast-forward precondition); `breaking-api` —
+ * non-author approvals than MR_REQUIRED_APPROVALS; `conflict` — a page's
+ * target moved past the merge base and its 3-way merge overlaps the source's
+ * changes (#636), `conflicts` naming each page and hunk, the other keys
+ * describing the first; `diverged` — a target head moved while the merge was
+ * landing, so it was not the head the merge was computed on; `breaking-api` —
  * a spec document's source head breaks its API under a `block` policy and no
  * admin has acknowledged that head (#78); `lint` — the page's style lint is
  * `block` and the check of the source head is still to come, or found
@@ -224,7 +270,9 @@ export interface ListSavedFiltersResponse {
  * Every gate runs across all the pages a merge request changes (#636).
  */
 export interface MergeGateConflictDetails {
-  reason: 'draft' | 'approvals' | 'diverged' | 'breaking-api' | 'lint';
+  reason: 'draft' | 'approvals' | 'conflict' | 'diverged' | 'breaking-api' | 'lint';
+  /** `conflict` (#636): every conflicting page, by id, with its hunks. Line numbers only, never text. */
+  conflicts?: { documentId: string; hunks: MergeConflictHunk[] }[];
   /** The page the gate refused on, in a merge request spanning several (#636). */
   documentId?: string;
   breakingCount?: number;
@@ -234,7 +282,7 @@ export interface MergeGateConflictDetails {
   requiredApprovals?: number;
   approvals?: number;
   currentHeadRevisionId?: string | null;
-  /** `diverged` (#636): that page's source head, so a client can compare it with `currentHeadRevisionId`. */
+  /** `conflict` / `diverged` (#636): that page's source head, so a client can compare it with `currentHeadRevisionId`. */
   sourceHeadRevisionId?: string;
   comparisonUrl?: string | null;
 }

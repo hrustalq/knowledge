@@ -23,7 +23,12 @@ const branch = (documentId: string, name: string, head: string | null, extra: Re
   ...extra,
 });
 
-function fixture(over: { mergeBaseOfB?: string; denyB?: boolean } = {}) {
+// Bodies by revision id (#636, phase 2): B's target moved from `b-old` on line 2.
+const P = (two: string, five = 'five') => `one\n${two}\nthree\nfour\n${five}\n`;
+const BODIES: Record<string, string> = { 'a-src': 'a\n', 'a-main': 'a\n', 'b-old': P('two'), 'b-main': P('TWO') };
+
+function fixture(over: { mergeBaseOfB?: string; denyB?: boolean; bSource?: string } = {}) {
+  const bodies = { ...BODIES, 'b-src': over.bSource ?? P('two', 'FIVE') };
   const source = [branch(A, 'fix', 'a-src'), branch(B, 'fix', 'b-src')];
   const target = [branch(A, 'main', 'a-main'), branch(B, 'main', 'b-main')];
   const mr = {
@@ -42,6 +47,9 @@ function fixture(over: { mergeBaseOfB?: string; denyB?: boolean } = {}) {
     mergeRequest: { findUnique: vi.fn(async () => mr) },
     documentBranch: {
       findMany: vi.fn(async ({ where }: { where: { name?: string } }) => (where.name ? target : source)),
+    },
+    documentRevision: {
+      findUniqueOrThrow: vi.fn(async ({ where }: { where: { id: string } }) => ({ s3Key: where.id, contentType: 'text/markdown' })),
     },
     document: {
       findUniqueOrThrow: vi.fn(async () => ({ workspaceId: WS, projectId: PROJECT })),
@@ -63,7 +71,7 @@ function fixture(over: { mergeBaseOfB?: string; denyB?: boolean } = {}) {
   const lint = { gate: vi.fn(async () => ({ blocked: false })) };
   const service = new MergeRequestsService(
     prisma as never,
-    {} as never, // storage
+    { getObjectText: async (key: string) => bodies[key] } as never,
     {} as never, // documents
     compare as never,
     {} as never, // activity
@@ -92,11 +100,40 @@ describe('multi-page merge requests', () => {
     });
   });
 
-  it('refuses diverged on the page whose target moved, by its id', async () => {
-    const f = fixture({ mergeBaseOfB: 'b-old' });
+  it('merges a moved target 3-way when the edits do not overlap', async () => {
+    await expect(fixture({ mergeBaseOfB: 'b-old' }).service.merge(MR, 'merge-commit', USER)).rejects.toThrow('past the gates');
+  });
+
+  it('refuses conflict on the page whose edits overlap, naming its hunks', async () => {
+    const f = fixture({ mergeBaseOfB: 'b-old', bSource: P('Two') });
     const error = await f.service.merge(MR, 'merge-commit', USER).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ConflictException);
-    expect((error as ConflictException).getResponse()).toMatchObject({ reason: 'diverged', documentId: B, currentHeadRevisionId: 'b-main' });
+    expect((error as ConflictException).getResponse()).toMatchObject({
+      reason: 'conflict',
+      documentId: B,
+      currentHeadRevisionId: 'b-main',
+      sourceHeadRevisionId: 'b-src',
+      conflicts: [{ documentId: B, hunks: [{ base: { start: 2, count: 1 }, target: { start: 2, count: 1 }, source: { start: 2, count: 1 } }] }],
+    });
+  });
+
+  it('lands a conflict over a target head the author reviewed (onTopOf)', async () => {
+    const f = fixture({ mergeBaseOfB: 'b-old', bSource: P('Two') });
+    await expect(f.service.merge(MR, 'merge-commit', USER, { onTopOf: ['b-main'] })).rejects.toThrow('past the gates');
+  });
+
+  it('updates the branch only with a current, marker-free resolution of each conflict', async () => {
+    const f = fixture({ mergeBaseOfB: 'b-old', bSource: P('Two') });
+    const refusal = (resolutions?: { documentId: string; targetHeadRevisionId: string; content: string }[]) =>
+      f.service.updateBranch(MR, { resolutions }, USER).catch((e: { getResponse?: () => unknown; message: string }) => e.getResponse?.() ?? e.message);
+    expect(await refusal()).toMatchObject({ reason: 'conflict', documentId: B });
+    expect(await refusal([{ documentId: B, targetHeadRevisionId: 'b-old', content: P('Two') }])).toMatchObject({
+      reason: 'diverged',
+      currentHeadRevisionId: 'b-main',
+    });
+    expect(await refusal([{ documentId: B, targetHeadRevisionId: 'b-main', content: '<<<<<<< main\nx\n=======\ny\n>>>>>>> fix\n' }])).toMatchObject({
+      message: 'error.mergeRequest.markersLeft',
+    });
   });
 
   it('needs edit on every page, not only the one the guard checked', async () => {

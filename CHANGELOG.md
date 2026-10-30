@@ -15,6 +15,27 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Added
+
+- **Merge requests merge when the target moved, as long as the edits do not overlap** (#636). Two people
+  editing different paragraphs of one page can now both merge: each page is merged 3-way against the point
+  its branch started from, the way `git merge` does. Edits to the same or adjacent lines still refuse the
+  merge. The refusal now says `conflict` and names the pages and line ranges, where it used to say
+  `diverged` for any change on the target. The merge request's checklist gains a **Branch** row. It says
+  whether the target moved and whether the branch still merges cleanly, and it offers **Update branch**.
+  On a conflict it offers **Resolve conflicts**: a view that shows each page with git's conflict markers,
+  where you keep what should stay and delete the markers. Update branch then merges the target into the
+  branch as a new revision; nothing is rebased or rewritten.
+- **Publishing a draft no longer stops for every change made to the page since you started** (#636). A
+  published change to other lines is merged in. The editor asks you to review only when the same lines
+  changed, and **Publish over it** still lets your version win there.
+- API: `GET /v1/merge-requests/:id/conflicts` (pages behind the target, and each conflicting page with its
+  hunks and marker text) and `POST /v1/merge-requests/:id/update-branch` (`resolutions`: one resolved body per
+  conflicting page, pinned to the target head it was resolved against). Merge and publish refuse an overlap
+  with 409 `conflict` and `details.conflicts`. `diverged` now means only that a target moved while the merge
+  was landing, so retry. MCP: `knowledge_update_merge_request_branch`, and `includeConflicts` on
+  `knowledge_get_merge_request`.
+
 ### Changed
 
 - **A merge request now covers every page its branch changed** (#636). A branch name belongs to the project:

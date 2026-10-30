@@ -133,18 +133,22 @@ draft changed, whichever of them it is called from.
    - the default branch itself → 400 `branch.publishDefault`;
    - nothing to publish (no page's branch head is new to its default head) →
      400 `nothingToMerge`;
-   - a page's default head moved past the branch and `onTopOf` does not list
-     it → 409 `diverged` with that page's `documentId`,
+   - a page's default head moved past the branch, its 3-way merge with the
+     draft overlaps ([05](../architecture/05-merge-review.md), #636), and
+     `onTopOf` does not list that head → 409 `conflict` naming every such page
+     and its hunks, plus the first page's `documentId`,
      `currentHeadRevisionId`, `sourceHeadRevisionId` and a comparison link
-     (the same body `merge` sends).
+     (the same body `merge` sends). A head that moved without touching the
+     draft's lines is no refusal: the publish merges both.
 2. **The merge request.** The open one from the draft into the default branch
    is reused, whichever page opened it; otherwise one is created, from this
    page when the draft changes it and from the first page it changes when not
    (the caller needs edit there too). Creating it clears `restricted` on every
    page of the draft.
 3. **The merge**, as `merge-commit`, of every page in one project commit
-   ([71](71-git-remote.md)). `onTopOf` is a list, one reviewed head per page:
-   a page lands over the head the author reviewed, and over no other, and
+   ([71](71-git-remote.md)). A page whose default head moved lands the 3-way
+   merge. `onTopOf` is a list, one reviewed head per page: a page that
+   conflicts lands over the head the author reviewed, and over no other, and
    their content wins, as **Publish on top** does for a shared draft. A
    protected default branch on any page and a caller who is not an admin is
    answered before `merge` is called. A 409 `approvals`, `lint`,
@@ -154,12 +158,12 @@ The response is `PublishBranchResponse`: the MR, the merged revision or null,
 `merged`, and `reason` (`protected` | `approvals` | `lint` | `breaking-api` |
 `draft` | null).
 
-**Diverged, in the editor.** A notice says the page, or another page of the
-draft, was published since the draft began. **Review changes** opens the
+**Conflict, in the editor.** A notice says the page, or another page of the
+draft, has a published change to the same lines. **Review changes** opens the
 editor's review dialog on that page's
 `compare?from=<currentHeadRevisionId>&to=<sourceHeadRevisionId>&mode=direct`.
 **Publish over it** publishes again with `onTopOf` holding every head reviewed
-so far in this attempt, so a second diverged page is one more notice, not a
+so far in this attempt, so a second conflicting page is one more notice, not a
 reset.
 
 **Who hears about it.** The merge records `merge-request.created` and

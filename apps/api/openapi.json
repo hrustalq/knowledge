@@ -4527,6 +4527,70 @@
         ]
       }
     },
+    "/v1/projects/{id}/git": {
+      "get": {
+        "operationId": "ProjectsController_git",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectGitResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A project's git clone URL (#636); url is null while the git remote is off",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
     "/v1/projects/{id}/deletion-preview": {
       "get": {
         "operationId": "ProjectsController_deletionPreview",
@@ -7368,7 +7432,7 @@
     },
     "/v1/documents/{id}/branches/mine": {
       "post": {
-        "description": "What the editor edits a published page on. Spent once a merge request from it is merged or closed: the next call starts a fresh one. A branch nothing was written on follows the default head.",
+        "description": "What the editor edits a published page on. One per person and project (#636): a page not on it yet forks onto the caller's newest live draft at the default head. Spent once a merge request from it is merged or closed: the next call starts a fresh one. A page branch nothing was written on follows the default head. `pages` lists the pages the draft has revisions on.",
         "operationId": "DocumentsController_myDraftBranch",
         "parameters": [
           {
@@ -7399,7 +7463,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CreateBranchResponse"
+                  "$ref": "#/components/schemas/MyDraftBranchResponse"
                 }
               }
             }
@@ -9008,7 +9072,7 @@
             }
           }
         },
-        "summary": "List merge requests of a document (newest first)",
+        "summary": "List merge requests whose branch changed a document (newest first)",
         "tags": [
           "merge-requests"
         ]
@@ -9016,7 +9080,7 @@
     },
     "/v1/documents/{id}/branches/{branchId}/publish": {
       "post": {
-        "description": "Opens a merge request from the branch (or reuses its open one) and merges it at once. When a gate refuses — `protected`, `approvals`, `lint`, `breaking-api`, `draft` — the merge request stays open and `merged` is false. 400 when there is nothing to publish; 409 `diverged` when the default head moved past the branch and `onTopOf` does not name it. The guard holds the caller to edit on the branch.",
+        "description": "Opens a merge request from the branch (or reuses its open one) and merges it at once. When a gate refuses — `protected`, `approvals`, `lint`, `breaking-api`, `draft` — the merge request stays open and `merged` is false. 400 when there is nothing to publish; 409 `conflict` (naming the pages and hunks) when a default head moved past the branch, the 3-way merge overlaps it and `onTopOf` does not list it. Publishes every page the branch has revisions on (#636). The guard holds the caller to edit on the branch.",
         "operationId": "MergeRequestsController_publishBranch",
         "parameters": [
           {
@@ -9097,6 +9161,71 @@
         ]
       }
     },
+    "/v1/projects/{id}/branches": {
+      "get": {
+        "description": "Every branch but the default one, newest first, with the pages it wrote that the caller may open and its open merge request. A branch with no such page is left out.",
+        "operationId": "MergeRequestsController_projectBranches",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListProjectBranchesResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List a project's branches (#636)",
+        "tags": [
+          "merge-requests"
+        ]
+      }
+    },
     "/v1/merge-requests": {
       "get": {
         "operationId": "MergeRequestsController_listWorkspace",
@@ -9152,6 +9281,16 @@
             "name": "documentId",
             "required": false,
             "in": "query",
+            "description": "Merge requests whose source branch changed this page, not only the ones opened from it",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": false,
+            "in": "query",
+            "description": "Merge requests of this project's branches",
             "schema": {
               "type": "string"
             }
@@ -9930,7 +10069,7 @@
             }
           }
         },
-        "summary": "Merge-base diff of the MR: text + structural (+ semantic on request)",
+        "summary": "Merge-base diff of the MR, per changed page the caller may open: text + structural (+ semantic on request)",
         "tags": [
           "merge-requests"
         ]
@@ -10333,7 +10472,145 @@
             }
           }
         },
-        "summary": "Merge (merge-commit or squash); 409 with details.reason draft|approvals|diverged|breaking-api when gated, + comparison link when the target diverged",
+        "summary": "Merge (merge-commit or squash), 3-way per page where the target moved (#636); 409 with details.reason draft|approvals|lint|conflict|diverged|breaking-api when gated. `conflict` names the pages and hunks",
+        "tags": [
+          "merge-requests"
+        ]
+      }
+    },
+    "/v1/merge-requests/{id}/conflicts": {
+      "get": {
+        "operationId": "MergeRequestsController_mergeConflicts",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MergeRequestConflictsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The 3-way state (#636): how many pages are behind their target, and every conflicting page the caller may open, with its hunks and the merge with git conflict markers",
+        "tags": [
+          "merge-requests"
+        ]
+      }
+    },
+    "/v1/merge-requests/{id}/update-branch": {
+      "post": {
+        "operationId": "MergeRequestsController_updateBranch",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMergeRequestBranchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateMergeRequestBranchResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Update branch (#636): merge the target into the source on every page behind it — a two-parent revision on the source, never a rebase. 409 `conflict` while a conflicting page has no resolution; 409 `diverged` when a resolution names a target head that moved; 400 when the branch is up to date",
         "tags": [
           "merge-requests"
         ]
@@ -38557,7 +38834,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.38.0",
+    "version": "0.40.0",
     "contact": {}
   },
   "tags": [],
@@ -39262,7 +39539,8 @@
                 "captures",
                 "memos",
                 "conflicts",
-                "assistant"
+                "assistant",
+                "git"
               ]
             }
           }
@@ -40123,9 +40401,11 @@
             "example": "Shorten access-token TTL"
           },
           "onTopOf": {
-            "type": "string",
-            "format": "uuid",
-            "description": "The default-branch head the author reviewed after it moved past the branch: the merge lands over that head instead of refusing as `diverged`, and only over that head."
+            "description": "The default-branch heads the author reviewed after they moved past the branch, one per page (#636). A page that would conflict in the 3-way merge lands over its listed head with the branch's content instead of refusing as `conflict`, and only over that head. A page that merges cleanly ignores it.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -40275,6 +40555,40 @@
               "squash"
             ],
             "description": "Default: merge-commit."
+          }
+        }
+      },
+      "BranchResolutionDto": {
+        "type": "object",
+        "properties": {
+          "documentId": {
+            "type": "string"
+          },
+          "targetHeadRevisionId": {
+            "type": "string",
+            "description": "The target head the conflict view showed; a newer one refuses as `diverged`."
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 500000,
+            "description": "The resolved body. One still holding conflict markers is refused."
+          }
+        },
+        "required": [
+          "documentId",
+          "targetHeadRevisionId",
+          "content"
+        ]
+      },
+      "UpdateMergeRequestBranchDto": {
+        "type": "object",
+        "properties": {
+          "resolutions": {
+            "description": "One per conflicting page. A page that merges cleanly needs none, and one given for it is ignored.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BranchResolutionDto"
+            }
           }
         }
       },
@@ -59469,6 +59783,21 @@
           "nameAttribute"
         ]
       },
+      "LineRange": {
+        "type": "object",
+        "properties": {
+          "start": {
+            "type": "number"
+          },
+          "count": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "start",
+          "count"
+        ]
+      },
       "LintGateState": {
         "type": "object",
         "properties": {
@@ -60678,6 +61007,24 @@
           "nextCursor"
         ]
       },
+      "ListProjectBranchesResponse": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string"
+          },
+          "branches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProjectBranchInfo"
+            }
+          }
+        },
+        "required": [
+          "projectId",
+          "branches"
+        ]
+      },
       "ListProjectsResponse": {
         "type": "object",
         "properties": {
@@ -61553,6 +61900,25 @@
           "missing"
         ]
       },
+      "MergeConflictHunk": {
+        "type": "object",
+        "properties": {
+          "base": {
+            "$ref": "#/components/schemas/LineRange"
+          },
+          "target": {
+            "$ref": "#/components/schemas/LineRange"
+          },
+          "source": {
+            "$ref": "#/components/schemas/LineRange"
+          }
+        },
+        "required": [
+          "base",
+          "target",
+          "source"
+        ]
+      },
       "MergeMergeRequestResponse": {
         "type": "object",
         "properties": {
@@ -61776,6 +62142,66 @@
           "skipped"
         ]
       },
+      "MergeRequestConflictPage": {
+        "type": "object",
+        "properties": {
+          "documentId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "targetHeadRevisionId": {
+            "type": "string"
+          },
+          "sourceHeadRevisionId": {
+            "type": "string"
+          },
+          "hunks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MergeConflictHunk"
+            }
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "documentId",
+          "title",
+          "targetHeadRevisionId",
+          "sourceHeadRevisionId",
+          "hunks",
+          "text"
+        ]
+      },
+      "MergeRequestConflictsResponse": {
+        "type": "object",
+        "properties": {
+          "mergeRequestId": {
+            "type": "string"
+          },
+          "behind": {
+            "type": "number"
+          },
+          "pages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MergeRequestConflictPage"
+            }
+          },
+          "hiddenPages": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "mergeRequestId",
+          "behind",
+          "pages",
+          "hiddenPages"
+        ]
+      },
       "MergeRequestDiffResponse": {
         "type": "object",
         "properties": {
@@ -61784,11 +62210,22 @@
           },
           "compare": {
             "$ref": "#/components/schemas/CompareResponse"
+          },
+          "pages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MergeRequestPage"
+            }
+          },
+          "hiddenPages": {
+            "type": "number"
           }
         },
         "required": [
           "mergeRequest",
-          "compare"
+          "compare",
+          "pages",
+          "hiddenPages"
         ]
       },
       "MergeRequestInfo": {
@@ -61894,6 +62331,9 @@
           "captureId": {
             "type": "string",
             "nullable": true
+          },
+          "pageCount": {
+            "type": "number"
           }
         },
         "required": [
@@ -61919,7 +62359,27 @@
           "mergedAt",
           "closedAt",
           "provenance",
-          "captureId"
+          "captureId",
+          "pageCount"
+        ]
+      },
+      "MergeRequestPage": {
+        "type": "object",
+        "properties": {
+          "documentId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "compare": {
+            "$ref": "#/components/schemas/CompareResponse"
+          }
+        },
+        "required": [
+          "documentId",
+          "title",
+          "compare"
         ]
       },
       "MergeRequestProvenance": {
@@ -61981,6 +62441,10 @@
           "mergeRequestId": {
             "type": "string"
           },
+          "documentId": {
+            "type": "string",
+            "nullable": true
+          },
           "checkId": {
             "type": "string",
             "nullable": true
@@ -61995,6 +62459,7 @@
           "checkId",
           "comments",
           "createdAt",
+          "documentId",
           "mergeRequestId",
           "resolvable",
           "resolved",
@@ -62114,6 +62579,24 @@
         "enum": [
           "merge-commit",
           "squash"
+        ]
+      },
+      "MyDraftBranchResponse": {
+        "type": "object",
+        "properties": {
+          "branch": {
+            "$ref": "#/components/schemas/BranchInfo"
+          },
+          "pages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "branch",
+          "pages"
         ]
       },
       "NoteCapturePayload": {
@@ -62655,6 +63138,73 @@
           "views"
         ]
       },
+      "ProjectBranchInfo": {
+        "type": "object",
+        "properties": {
+          "projectBranchId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "pages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "documentId": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "documentId",
+                "title"
+              ]
+            }
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "updatedBy": {
+            "type": "string"
+          },
+          "openMergeRequest": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "mergeRequestId": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "isDraft": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "mergeRequestId",
+                  "title",
+                  "isDraft"
+                ]
+              }
+            ],
+            "nullable": true
+          }
+        },
+        "required": [
+          "projectBranchId",
+          "name",
+          "pages",
+          "updatedAt",
+          "updatedBy",
+          "openMergeRequest"
+        ]
+      },
       "ProjectCascadeCounts": {
         "type": "object",
         "properties": {
@@ -62787,6 +63337,18 @@
           "counts",
           "glossaryConflicts",
           "cascade"
+        ]
+      },
+      "ProjectGitResponse": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "url"
         ]
       },
       "ProjectOverviewResponse": {
@@ -63583,6 +64145,7 @@
             "enum": [
               "draft",
               "approvals",
+              "conflict",
               "diverged",
               "breaking-api",
               "lint",
@@ -67793,6 +68356,21 @@
           "issue"
         ]
       },
+      "UpdateMergeRequestBranchResponse": {
+        "type": "object",
+        "properties": {
+          "mergeRequest": {
+            "$ref": "#/components/schemas/MergeRequestInfo"
+          },
+          "updated": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "mergeRequest",
+          "updated"
+        ]
+      },
       "UpdateWorkspaceResponse": {
         "type": "object",
         "properties": {
@@ -69076,7 +69654,8 @@
           "captures",
           "memos",
           "conflicts",
-          "assistant"
+          "assistant",
+          "git"
         ]
       },
       "WorkspaceFeaturesResponse": {

@@ -31,7 +31,7 @@ import {
 import { vmsg } from '../../common/validation.js';
 
 /** Ceiling on an inline document body — see the note on InlineContentDto.text. */
-const MAX_INLINE_TEXT_CHARS = 500_000;
+export const MAX_INLINE_TEXT_CHARS = 500_000;
 
 export class InlineContentDto {
   @ApiProperty({ enum: ['inline'] })

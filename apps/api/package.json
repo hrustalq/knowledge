@@ -32,6 +32,7 @@
     "dev:mcp": "nest start --watch --entryFile mcp.main",
     "start:mcp": "node dist/mcp.main",
     "dev:learner": "nest start --watch --entryFile learner.main",
+    "dev:git": "nest start --watch --entryFile git.main",
     "start:learner": "node dist/learner.main"
   },
   "dependencies": {
@@ -73,6 +74,7 @@
     "mammoth": "^1.12.2",
     "marked": "^18.0.11",
     "nestjs-i18n": "^10.8.5",
+    "node-diff3": "3.2.1",
     "nodemailer": "^10.0.16",
     "openai": "^7.9.0",
     "openid-client": "6.8.8",

@@ -70,8 +70,10 @@ vectors are hashes. Point it at a real embedder and let the drift sweeper reinde
 **Keyword mode behaves like semantic.** No `FULLTEXT_PROVIDER=opensearch`, so it fell back
 by design.
 
-**A merge is refused.** Read the reason: `draft`, `approvals`, `diverged`, or a protected
-branch. A `diverged` response links to the comparison.
+**A merge is refused.** Read the reason: `draft`, `approvals`, `lint`, `conflict`,
+`breaking-api`, or a protected branch. A `conflict` names the pages and hunks; resolve it with
+**Update branch** on the merge request. A `diverged` means the target moved while the merge was
+landing: retry.
 
 **AI features are absent rather than failing.** `ASSISTANT_PROVIDER=none`. The UI reports
 disabled instead of erroring at request time.

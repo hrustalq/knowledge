@@ -144,6 +144,9 @@ importers:
       nestjs-i18n:
         specifier: ^10.8.5
         version: 10.8.5(@nestjs/common@12.0.1(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.1)(class-validator@0.14.4)(rxjs@7.8.2)
+      node-diff3:
+        specifier: 3.2.1
+        version: 3.2.1
       nodemailer:
         specifier: ^10.0.16
         version: 10.0.16
@@ -5939,6 +5942,10 @@ packages:
 
   node-abort-controller@3.1.1:
     resolution: {integrity: sha512-AGK2yQKIjRuqnc6VkX2Xj5d+QW8xZ87pa1UK6yA6ouUyuxfHuMP6umE5QK7UmTeOAymo+Zx1Fxiuw9rVx8taHQ==}
+
+  node-diff3@3.2.1:
+    resolution: {integrity: sha512-eKZcJ8RtMQ3cIaA15EgmtwG927fYnRlhtdA4Q9HAcCpAZPQhhU2XptnTH9GeAkMiX2bAXxlJSAFa9shFbztPgw==}
+    engines: {bun: '>=1.3.10'}
 
   node-emoji@2.1.3:
     resolution: {integrity: sha512-E2WEOVsgs7O16zsURJ/eH8BqhF029wGpEOnv7Urwdo2wmQanOACwJQh0devF9D9RhoZru0+9JXIS0dBXIAz+lA==}
@@ -13454,6 +13461,8 @@ snapshots:
       class-validator: 0.14.4
 
   node-abort-controller@3.1.1: {}
+
+  node-diff3@3.2.1: {}
 
   node-emoji@2.1.3:
     dependencies:

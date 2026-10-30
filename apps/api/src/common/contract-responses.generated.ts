@@ -206,6 +206,7 @@ import type {
   ListNotificationSubscriptionsResponse,
   ListNotificationsResponse,
   ListPlatformAuditLogsResponse,
+  ListProjectBranchesResponse,
   ListProjectsResponse,
   ListReleaseTagsResponse,
   ListReleasesResponse,
@@ -236,14 +237,17 @@ import type {
   MemoResponse,
   MergeMergeRequestResponse,
   MergeRequestApiChangesResponse,
+  MergeRequestConflictsResponse,
   MergeRequestDiffResponse,
   MergeRequestThreadResponse,
+  MyDraftBranchResponse,
   NotificationPreferences,
   NotificationUnreadCountResponse,
   PageInsightsResponse,
   PostAssistantMessageResponse,
   ProjectAnalyticsResponse,
   ProjectDeletionPreview,
+  ProjectGitResponse,
   ProjectOverviewResponse,
   ProjectSiteResponse,
   ProjectSummary,
@@ -311,6 +315,7 @@ import type {
   TruncateAssistantThreadResponse,
   UpdateAssistantThreadResponse,
   UpdateKnowledgeIssueResponse,
+  UpdateMergeRequestBranchResponse,
   UpdateWorkspaceResponse,
   UrlTicketResponse,
   UserGroupSummary,
@@ -540,6 +545,7 @@ export interface ContractResponses {
   ListNotificationSubscriptionsResponse: ListNotificationSubscriptionsResponse;
   ListNotificationsResponse: ListNotificationsResponse;
   ListPlatformAuditLogsResponse: ListPlatformAuditLogsResponse;
+  ListProjectBranchesResponse: ListProjectBranchesResponse;
   ListProjectsResponse: ListProjectsResponse;
   ListReleaseTagsResponse: ListReleaseTagsResponse;
   ListReleasesResponse: ListReleasesResponse;
@@ -570,14 +576,17 @@ export interface ContractResponses {
   MemoResponse: MemoResponse;
   MergeMergeRequestResponse: MergeMergeRequestResponse;
   MergeRequestApiChangesResponse: MergeRequestApiChangesResponse;
+  MergeRequestConflictsResponse: MergeRequestConflictsResponse;
   MergeRequestDiffResponse: MergeRequestDiffResponse;
   MergeRequestThreadResponse: MergeRequestThreadResponse;
+  MyDraftBranchResponse: MyDraftBranchResponse;
   NotificationPreferences: NotificationPreferences;
   NotificationUnreadCountResponse: NotificationUnreadCountResponse;
   PageInsightsResponse: PageInsightsResponse;
   PostAssistantMessageResponse: PostAssistantMessageResponse;
   ProjectAnalyticsResponse: ProjectAnalyticsResponse;
   ProjectDeletionPreview: ProjectDeletionPreview;
+  ProjectGitResponse: ProjectGitResponse;
   ProjectOverviewResponse: ProjectOverviewResponse;
   ProjectSiteResponse: ProjectSiteResponse;
   ProjectSummary: ProjectSummary;
@@ -645,6 +654,7 @@ export interface ContractResponses {
   TruncateAssistantThreadResponse: TruncateAssistantThreadResponse;
   UpdateAssistantThreadResponse: UpdateAssistantThreadResponse;
   UpdateKnowledgeIssueResponse: UpdateKnowledgeIssueResponse;
+  UpdateMergeRequestBranchResponse: UpdateMergeRequestBranchResponse;
   UpdateWorkspaceResponse: UpdateWorkspaceResponse;
   UrlTicketResponse: UrlTicketResponse;
   UserGroupSummary: UserGroupSummary;

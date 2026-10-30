@@ -15,15 +15,18 @@ import type {
   DeleteMergeRequestCommentResponse,
   ListMergeRequestsResponse,
   ListMergeRequestThreadsResponse,
+  ListProjectBranchesResponse,
   ListSavedFiltersResponse,
   ListWorkspaceMergeRequestsResponse,
   MergeMergeRequestResponse,
   MergeRequestApiChangesResponse,
   MergeRequestCheckInfo,
+  MergeRequestConflictsResponse,
   MergeRequestDiffResponse,
   MergeRequestThreadResponse,
   PublishBranchResponse,
   SavedFilter,
+  UpdateMergeRequestBranchResponse,
 } from '@knowledge/contracts';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
@@ -31,6 +34,7 @@ import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { MergeRequestsService } from './merge-requests.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
+import { AccessService } from '../auth/access.service.js';
 import { MergeRequestThreadsService } from './merge-request-threads.service.js';
 import { SavedFiltersService } from './saved-filters.service.js';
 import {
@@ -42,6 +46,7 @@ import {
   PublishBranchDto,
   ResolveThreadDto,
   SetReviewersDto,
+  UpdateMergeRequestBranchDto,
   UpdateMergeRequestDto,
 } from './dto/merge-requests.dto.js';
 import {
@@ -65,6 +70,7 @@ export class MergeRequestsController {
     private readonly threads: MergeRequestThreadsService,
     private readonly savedFilters: SavedFiltersService,
     private readonly permissions: PermissionService,
+    private readonly access: AccessService,
   ) {}
 
   @Post('documents/:id/merge-requests')
@@ -87,8 +93,9 @@ export class MergeRequestsController {
     description:
       'Opens a merge request from the branch (or reuses its open one) and merges it at once. When a gate refuses — ' +
       '`protected`, `approvals`, `lint`, `breaking-api`, `draft` — the merge request stays open and `merged` is false. ' +
-      '400 when there is nothing to publish; 409 `diverged` when the default head moved past the branch and `onTopOf` ' +
-      'does not name it. The guard holds the caller to edit on the branch.',
+      '400 when there is nothing to publish; 409 `conflict` (naming the pages and hunks) when a default head moved ' +
+      'past the branch, the 3-way merge overlaps it and `onTopOf` does not list it. Publishes every page the branch ' +
+      'has revisions on (#636). The guard holds the caller to edit on the branch.',
   })
   publishBranch(
     @Param('id', ParseUUIDPipe) id: string,
@@ -102,9 +109,22 @@ export class MergeRequestsController {
   @Get('documents/:id/merge-requests')
   @Returns('ListMergeRequestsResponse')
   @Access('viewer', 'document')
-  @ApiOperation({ summary: 'List merge requests of a document (newest first)' })
-  list(@Param('id', ParseUUIDPipe) id: string): Promise<ListMergeRequestsResponse> {
-    return this.mergeRequests.list(id);
+  @ApiOperation({ summary: 'List merge requests whose branch changed a document (newest first)' })
+  async list(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<ListMergeRequestsResponse> {
+    return this.mergeRequests.list(id, await this.permissions.scopeForDocument(principal, id));
+  }
+
+  @Get('projects/:id/branches')
+  @Returns('ListProjectBranchesResponse')
+  @Access('viewer', 'project')
+  @ApiOperation({
+    summary: "List a project's branches (#636)",
+    description:
+      'Every branch but the default one, newest first, with the pages it wrote that the caller may open and its open merge request. ' +
+      'A branch with no such page is left out.',
+  })
+  async projectBranches(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<ListProjectBranchesResponse> {
+    return this.mergeRequests.projectBranches(id, await this.permissions.scopeFor(principal, await this.access.workspaceOfProject(id)));
   }
 
   @Get('merge-requests')
@@ -221,10 +241,14 @@ export class MergeRequestsController {
   @Get('merge-requests/:id/diff')
   @Returns('MergeRequestDiffResponse')
   @Access('viewer', 'merge-request')
-  @ApiOperation({ summary: 'Merge-base diff of the MR: text + structural (+ semantic on request)' })
+  @ApiOperation({ summary: 'Merge-base diff of the MR, per changed page the caller may open: text + structural (+ semantic on request)' })
   @ApiQuery({ name: 'semantic', required: false, description: 'Include graph-projection semantic diff (default false)' })
-  diff(@Param('id', ParseUUIDPipe) id: string, @Query('semantic') semantic?: string): Promise<MergeRequestDiffResponse> {
-    return this.mergeRequests.diff(id, { semantic: semantic === 'true' });
+  async diff(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentPrincipal() principal: Principal,
+    @Query('semantic') semantic?: string,
+  ): Promise<MergeRequestDiffResponse> {
+    return this.mergeRequests.diff(id, await this.scopeForMr(id, principal), { semantic: semantic === 'true' });
   }
 
   @Get('merge-requests/:id/api-changes')
@@ -297,8 +321,8 @@ export class MergeRequestsController {
   @Access('editor', 'merge-request')
   @ApiOperation({
     summary:
-      'Merge (merge-commit or squash); 409 with details.reason draft|approvals|diverged|breaking-api when gated, ' +
-      '+ comparison link when the target diverged',
+      'Merge (merge-commit or squash), 3-way per page where the target moved (#636); 409 with details.reason ' +
+      'draft|approvals|lint|conflict|diverged|breaking-api when gated. `conflict` names the pages and hunks',
   })
   merge(
     @Param('id', ParseUUIDPipe) id: string,
@@ -306,6 +330,35 @@ export class MergeRequestsController {
     @CurrentPrincipal() principal: Principal,
   ): Promise<MergeMergeRequestResponse> {
     return this.mergeRequests.merge(id, dto.strategy ?? 'merge-commit', principal);
+  }
+
+  @Get('merge-requests/:id/conflicts')
+  @Returns('MergeRequestConflictsResponse')
+  @Access('viewer', 'merge-request')
+  @ApiOperation({
+    summary:
+      'The 3-way state (#636): how many pages are behind their target, and every conflicting page the caller may ' +
+      'open, with its hunks and the merge with git conflict markers',
+  })
+  async mergeConflicts(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<MergeRequestConflictsResponse> {
+    return this.mergeRequests.mergeConflicts(id, await this.scopeForMr(id, principal));
+  }
+
+  @Post('merge-requests/:id/update-branch')
+  @Returns('UpdateMergeRequestBranchResponse')
+  @Access('editor', 'merge-request')
+  @ApiOperation({
+    summary:
+      'Update branch (#636): merge the target into the source on every page behind it — a two-parent revision on ' +
+      'the source, never a rebase. 409 `conflict` while a conflicting page has no resolution; 409 `diverged` when ' +
+      'a resolution names a target head that moved; 400 when the branch is up to date',
+  })
+  updateBranch(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateMergeRequestBranchDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<UpdateMergeRequestBranchResponse> {
+    return this.mergeRequests.updateBranch(id, dto, principal);
   }
 
   @Post('merge-requests/:id/close')
@@ -324,8 +377,11 @@ export class MergeRequestsController {
   @Returns('ListMergeRequestThreadsResponse')
   @Access('viewer', 'merge-request')
   @ApiOperation({ summary: 'List review threads with comments (unresolved first)' })
-  listThreads(@Param('id', ParseUUIDPipe) id: string): Promise<ListMergeRequestThreadsResponse> {
-    return this.threads.list(id);
+  async listThreads(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<ListMergeRequestThreadsResponse> {
+    return this.threads.list(id, await this.scopeForMr(id, principal));
   }
 
   @Post('merge-requests/:id/threads')

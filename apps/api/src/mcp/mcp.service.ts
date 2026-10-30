@@ -35,6 +35,7 @@ import { DocumentsService } from '../documents/documents.service.js';
 import { CompareService } from '../documents/compare.service.js';
 import { MergeRequestsService } from '../documents/merge-requests.service.js';
 import { MergeRequestThreadsService } from '../documents/merge-request-threads.service.js';
+import { MAX_INLINE_TEXT_CHARS } from '../documents/dto/documents.dto.js';
 import { SearchService } from '../search/search.service.js';
 import { firstPerPage } from '../search/ranking.js';
 import { EntitiesService } from '../entities/entities.service.js';
@@ -124,7 +125,7 @@ import {
  * Bumped by hand at every release, with swagger.ts (docs/versioning.md#known-drift).
  * Named because the connection page and the skill report it too.
  */
-export const MCP_SERVER_VERSION = '0.40.0';
+export const MCP_SERVER_VERSION = '0.41.0';
 
 /**
  * MCP tools (plan.md §9). Tool names use underscores (MCP tool names must
@@ -1878,19 +1879,49 @@ export class McpService {
     );
 
     server.registerTool(
+      'knowledge_list_branches',
+      {
+        description:
+          "List a project's branches (#636): each with the pages it changed that you can open, who wrote it last and when, " +
+          'and its open merge request. The default branch is left out. A branch is the project\'s: the same name on any page ' +
+          'of the project is one branch, and one merge request carries all of it.',
+        inputSchema: { projectId: z.string().uuid() },
+      },
+      async ({ projectId }) => {
+        await guard.project(projectId, 'viewer');
+        return this.json(
+          await this.mergeRequests.projectBranches(projectId, await guard.scope(await this.access.workspaceOfProject(projectId))),
+        );
+      },
+    );
+
+    server.registerTool(
       'knowledge_create_merge_request',
       {
         description:
-          'Open a GitLab-style merge request between two branches of a document. Target defaults to the default branch.',
+          'Open a GitLab-style merge request from a branch. A branch is its project\'s, so the merge request carries every page ' +
+          'the branch changed. Name the branch by projectId (see knowledge_list_branches) or by one documentId it changed. ' +
+          'Target defaults to the default branch.',
         inputSchema: {
-          documentId: z.string().uuid(),
+          documentId: z.string().uuid().optional().describe('A page the branch changed; or pass projectId'),
+          projectId: z.string().uuid().optional().describe('The project whose branch sourceBranch is; or pass documentId'),
           sourceBranch: z.string().min(1),
           targetBranch: z.string().min(1).optional(),
           title: z.string().min(1),
           description: z.string().optional(),
         },
       },
-      async ({ documentId, sourceBranch, targetBranch, title, description }) => {
+      async ({ documentId: pageId, projectId, sourceBranch, targetBranch, title, description }) => {
+        // By project: opened from the first page, by title, the branch wrote that the caller may open.
+        const anchorOf = async (id: string) => {
+          await guard.project(id, 'editor');
+          const { branches } = await this.mergeRequests.projectBranches(id, await guard.scope(await this.access.workspaceOfProject(id)));
+          const page = branches.find((b) => b.name === sourceBranch)?.pages[0]?.documentId;
+          if (!page) throw new Error(`Branch "${sourceBranch}" has changed no page you can open in this project.`);
+          return page;
+        };
+        if (!pageId && !projectId) throw new Error('Pass documentId or projectId.');
+        const documentId = pageId ?? (await anchorOf(projectId!));
         await guard.doc(documentId, 'editor');
         await guard.branches(documentId, { branchNames: [sourceBranch, ...(targetBranch ? [targetBranch] : [])] }, 'editor');
         return this.json(await this.mergeRequests.create(documentId, { sourceBranch, targetBranch, title, description }, principal.userId));
@@ -1905,7 +1936,8 @@ export class McpService {
           'Cursor-paginated; mergeBaseRevisionId is null in list rows (fetch one MR for it).',
         inputSchema: {
           workspaceId: z.string().uuid(),
-          documentId: z.string().uuid().optional(),
+          documentId: z.string().uuid().optional().describe('Merge requests whose branch changed this page'),
+          projectId: z.string().uuid().optional(),
           status: z.enum(['open', 'merged', 'closed']).optional(),
           authorId: z.string().uuid().optional(),
           reviewerId: z.string().uuid().optional(),
@@ -1925,18 +1957,22 @@ export class McpService {
       {
         description:
           'Get one merge request (heads, merge base, approvals, reviewers, draft flag). ' +
-          'Set includeDiff for the merge-base text+structural diff, semantic for the graph-projection diff too.',
+          'Set includeDiff for the merge-base text+structural diff of every page it changes (`pages`), semantic for the graph-projection diff too. ' +
+          'Set includeConflicts for its 3-way state instead: how many pages are behind the target, and each conflicting page with its ' +
+          'hunks and the merge with git conflict markers (`text`) — resolve those and pass them to knowledge_update_merge_request_branch.',
         inputSchema: {
           mergeRequestId: z.string().uuid(),
           includeDiff: z.boolean().optional(),
           semantic: z.boolean().optional(),
+          includeConflicts: z.boolean().optional(),
         },
       },
-      async ({ mergeRequestId, includeDiff, semantic }) => {
-        await guard.mr(mergeRequestId, 'viewer');
+      async ({ mergeRequestId, includeDiff, semantic, includeConflicts }) => {
+        const workspaceId = await guard.mr(mergeRequestId, 'viewer');
+        if (includeConflicts) return this.json(await this.mergeRequests.mergeConflicts(mergeRequestId, await guard.scope(workspaceId)));
         return this.json(
             includeDiff
-              ? await this.mergeRequests.diff(mergeRequestId, { semantic })
+              ? await this.mergeRequests.diff(mergeRequestId, await guard.scope(workspaceId), { semantic })
               : await this.mergeRequests.get(mergeRequestId),
           );
       },
@@ -1995,7 +2031,8 @@ export class McpService {
       {
         description:
           'Merge an open merge request ("merge-commit" creates a two-parent DAG node, "squash" a single-parent one). ' +
-          'Fails with a comparison link when the target branch diverged — rebase the source branch first. ' +
+          'A page whose target moved is merged 3-way; overlapping edits fail with 409 `conflict` naming the pages and hunks — ' +
+          'resolve them with knowledge_update_merge_request_branch. ' +
           'Gated: draft MRs and MRs below MR_REQUIRED_APPROVALS non-author approvals are rejected with 409 details.',
         inputSchema: {
           mergeRequestId: z.string().uuid(),
@@ -2005,6 +2042,28 @@ export class McpService {
       async ({ mergeRequestId, strategy }) => {
         await guard.mr(mergeRequestId, 'editor');
         return this.json(await this.mergeRequests.merge(mergeRequestId, strategy ?? 'merge-commit', principal));
+      },
+    );
+
+    server.registerTool(
+      'knowledge_update_merge_request_branch',
+      {
+        description:
+          "Update a merge request's source branch from its target (GitLab's \"Update branch\"): merges the target into the " +
+          'source on every page behind it, as two-parent revisions — never a rebase. A conflicting page needs a resolution: ' +
+          'read it with knowledge_get_merge_request includeConflicts, replace each conflict-marker block with the resolved text, ' +
+          'and pass the whole body with the targetHeadRevisionId it showed. 409 `conflict` while one is missing.',
+        inputSchema: {
+          mergeRequestId: z.string().uuid(),
+          resolutions: z
+            .array(z.object({ documentId: z.string().uuid(), targetHeadRevisionId: z.string().uuid(), content: z.string().max(MAX_INLINE_TEXT_CHARS) }))
+            .max(1000)
+            .optional(),
+        },
+      },
+      async ({ mergeRequestId, resolutions }) => {
+        await guard.mr(mergeRequestId, 'editor');
+        return this.json(await this.mergeRequests.updateBranch(mergeRequestId, { resolutions }, principal));
       },
     );
 
@@ -2569,6 +2628,7 @@ export class McpService {
       whoami,
       tools: this.toolsFor(principal, extras),
       learnings: await this.learningsFor(whoami),
+      git: this.config.get('GIT_REMOTE_ENABLED') === true,
     });
   }
 
@@ -2719,9 +2779,11 @@ export class McpService {
         }),
       project: async (id: string, role: WorkspaceRole) =>
         this.permissions.requireResource(principal, await this.access.workspaceOfProject(id), { type: 'project', id }, role, false),
+      /** Returns the merge request's workspace, for a tool that then lists its pages. */
       mr: async (id: string, role: WorkspaceRole) => {
         const { workspaceId, documentId } = await this.access.documentOfMergeRequest(id);
         await this.permissions.requireResource(principal, workspaceId, { type: 'document', id: documentId }, role, false);
+        return workspaceId;
       },
       /** The caller's page visibility over a workspace, for tools that list pages. */
       scope: (workspaceId: string) => this.permissions.scopeFor(principal, workspaceId),

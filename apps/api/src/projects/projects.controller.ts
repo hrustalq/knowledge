@@ -15,10 +15,13 @@ import type {
   DeleteProjectResponse,
   ListProjectsResponse,
   ProjectDeletionPreview,
+  ProjectGitResponse,
   ProjectOverviewResponse,
   ProjectSummary,
 } from '@knowledge/contracts';
-import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
+import { ConfigService } from '@nestjs/config';
+import { Access, CurrentPrincipal, Feature } from '../auth/access.decorator.js';
+import type { Env } from '../config/env.js';
 import type { Principal } from '../auth/principal.js';
 import {
   CreateProjectDto,
@@ -48,6 +51,7 @@ export class ProjectsController {
     private readonly cascadeService: ProjectCascadeService,
     private readonly permissions: PermissionService,
     private readonly access: AccessService,
+    private readonly config: ConfigService<Env, true>,
   ) {}
 
   private workspaceOf(projectId: string): Promise<string> {
@@ -95,6 +99,22 @@ export class ProjectsController {
   @ApiOperation({ summary: 'Project overview: counts, contributors, recent pages' })
   async overview(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<ProjectOverviewResponse> {
     return this.overviewService.get(id, await this.permissions.scopeFor(principal, await this.workspaceOf(id)));
+  }
+
+  /**
+   * Where to clone this project from (#636): the web's Clone button. The URL is
+   * the web origin's, as SKILL.md writes it, because Caddy routes `/git/*` there.
+   * No `guests` opt-in: the git remote refuses guests in v1 (docs/features/71).
+   */
+  @Get(':id/git')
+  @Returns('ProjectGitResponse')
+  @Access('viewer', 'project')
+  @Feature('git')
+  @ApiOperation({ summary: "A project's git clone URL (#636); url is null while the git remote is off" })
+  async git(@Param('id', ParseUUIDPipe) id: string): Promise<ProjectGitResponse> {
+    if (!this.config.get('GIT_REMOTE_ENABLED', { infer: true })) return { url: null };
+    const web = this.config.get('WEB_BASE_URL', { infer: true }).replace(/\/+$/, '');
+    return { url: `${web}/git/${await this.workspaceOf(id)}/${id}.git` };
   }
 
   @Patch(':id')

@@ -86,6 +86,12 @@ model Document {
   /// an API spec, `openapi` | `asyncapi` (API_DOCUMENT_KINDS). Set at create
   /// and never changed — a revision is parsed by its document's kind.
   kind                  String    @default("page")
+  /// The page's file name in its project's git tree (#636), without the
+  /// extension: derived from the title by `slugFor`, made unique among its
+  /// siblings case-folded, and stored so the decision never flips. Rewritten
+  /// on a rename or a move, under the project's commit lock. Null only for a
+  /// row an older image wrote; the next commit derives one.
+  slug                  String?
   /// A spec's operation-key slug (`op:<slug>:…`), pinned at its first indexed
   /// revision so editing `info.title` does not fork every operation entity.
   /// Only an explicit `x-knowledge-key` on the default-branch head re-pins it.
@@ -147,26 +153,33 @@ model Document {
 }
 
 model DocumentBranch {
-  id             String   @id @default(uuid()) @db.Uuid
-  documentId     String   @map("document_id") @db.Uuid
-  name           String
-  headRevisionId String?  @map("head_revision_id") @db.Uuid
-  protected      Boolean  @default(false)
+  id              String   @id @default(uuid()) @db.Uuid
+  documentId      String   @map("document_id") @db.Uuid
+  name            String
+  headRevisionId  String?  @map("head_revision_id") @db.Uuid
+  protected       Boolean  @default(false)
   /// A private branch (#474): only its owner, the people `access_grants`
   /// (resource_type 'branch') name, and admins read it or its revisions.
   /// Opening a merge request from it clears `restricted`; `owner_id` stays as
   /// who started it. Null owner = a branch from before #474. No FK, house policy.
-  ownerId        String?  @map("owner_id") @db.Uuid
-  restricted     Boolean  @default(false)
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  ownerId         String?  @map("owner_id") @db.Uuid
+  restricted      Boolean  @default(false)
+  /// The project branch this page branch belongs to (#636 phase 1b): every
+  /// page's branch of one name in a project is one branch. Nullable for one
+  /// release only, because the previous image inserts branches without it;
+  /// `ProjectCommitsService.rehomeBranches` fills a null it meets.
+  projectBranchId String?  @map("project_branch_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  document     Document           @relation(fields: [documentId], references: [id])
-  revisions    DocumentRevision[]
-  mrAsSource   MergeRequest[]     @relation("mrSource")
-  mrAsTarget   MergeRequest[]     @relation("mrTarget")
-  collabDrafts CollabDraft[]
+  document      Document           @relation(fields: [documentId], references: [id])
+  projectBranch ProjectBranch?     @relation(fields: [projectBranchId], references: [id], onDelete: SetNull)
+  revisions     DocumentRevision[]
+  mrAsSource    MergeRequest[]     @relation("mrSource")
+  mrAsTarget    MergeRequest[]     @relation("mrTarget")
+  collabDrafts  CollabDraft[]
 
   @@unique([documentId, name])
+  @@index([projectBranchId])
   @@map("document_branches")
 }
 
@@ -205,6 +218,11 @@ model DocumentRevision {
   collabDraftId   String?   @map("collab_draft_id") @db.Uuid
   collabSnapshot  Bytes?    @map("collab_snapshot")
   coAuthorIds     Json?     @map("co_author_ids")
+  // #636 phase 4: the id line a push carried, as `{ offset, text }` (byte
+  // offset into the stored body; `text: ""` when the file had none), so the
+  // served blob is the pushed one byte for byte. Null = the canonical line a
+  // web-written revision is served with (`withIdLine`).
+  idLine          Json?     @map("id_line")
 
   document Document         @relation(fields: [documentId], references: [id])
   branch   DocumentBranch?  @relation(fields: [branchId], references: [id])
@@ -212,9 +230,9 @@ model DocumentRevision {
   children RevisionParent[] @relation("parent")
 
   @@unique([documentId, revisionNumber])
-  // Branch-scoped: a merge revision legitimately repeats the source head's
-  // content on the target branch (plan.md §8); dedupe stays per-branch.
-  @@unique([documentId, branchId, contentHash])
+  // Not unique (#636): a branch may return to content it once held — a revert.
+  // Finalize dedupes against the branch head only.
+  @@index([documentId, branchId, contentHash])
   @@index([fulltextStaleAt])
   @@map("document_revisions")
 }
@@ -295,6 +313,87 @@ model RevisionParent {
   @@map("revision_parents")
 }
 
+/// A project-level commit (#636, docs/features/71): one per state-changing
+/// write in a project — a finalize, a merge, a move, a rename, an archive or
+/// unarchive, a publish — written inside that write's own transaction under
+/// the project's commit lock (`ProjectCommitsService.lock`). The SHA is never
+/// stored: it is a function of the commits and the reader's visible set.
+model ProjectCommit {
+  id          String   @id @default(uuid()) @db.Uuid
+  /// Write order. A parent always has a lower `seq` than its children.
+  seq         BigInt   @unique @default(autoincrement())
+  workspaceId String   @map("workspace_id") @db.Uuid
+  projectId   String   @map("project_id") @db.Uuid
+  /// The branch name it was written on. Legacy per-page branches group by
+  /// (project, name) until project branches exist (phase 1b).
+  branch      String
+  /// Everything a git commit carries after its `tree` and `parent` lines —
+  /// author, committer, message, trailers — as bytes, frozen at write time.
+  header      Bytes
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  project  Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parents  ProjectCommitParent[] @relation("commitChild")
+  children ProjectCommitParent[] @relation("commitParent")
+  changes  ProjectCommitChange[]
+
+  @@index([projectId, branch, seq])
+  @@index([workspaceId])
+  @@map("project_commits")
+}
+
+/// A branch of a project (#636 phase 1b, docs/features/71): the identity that
+/// every page's branch of the same name in the project shares, and what git
+/// will serve as a ref. A page's own head stays on its `document_branches`
+/// row; `protected`, `restricted` and the owner stay there too, per page.
+model ProjectBranch {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  projectId   String   @map("project_id") @db.Uuid
+  name        String
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  project  Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  branches DocumentBranch[]
+
+  @@unique([projectId, name])
+  @@index([workspaceId])
+  @@map("project_branches")
+}
+
+/// Ordered commit parents: order 1 = first parent, as `revision_parents`.
+model ProjectCommitParent {
+  commitId       String @map("commit_id") @db.Uuid
+  parentCommitId String @map("parent_commit_id") @db.Uuid
+  parentOrder    Int    @map("parent_order") @db.SmallInt
+
+  commit ProjectCommit @relation("commitChild", fields: [commitId], references: [id], onDelete: Cascade)
+  parent ProjectCommit @relation("commitParent", fields: [parentCommitId], references: [id], onDelete: Cascade)
+
+  @@id([commitId, parentOrder])
+  @@index([parentCommitId])
+  @@map("project_commit_parents")
+}
+
+/// One page a commit touched, holding that page's full tree state after it.
+/// No FK on the page or the revision: a hard-deleted page's rows stay as
+/// tombstones nobody can see, so a commit never turns empty under its children.
+model ProjectCommitChange {
+  commitId         String  @map("commit_id") @db.Uuid
+  documentId       String  @map("document_id") @db.Uuid
+  revisionId       String  @map("revision_id") @db.Uuid
+  parentDocumentId String? @map("parent_document_id") @db.Uuid
+  slug             String
+  /// Not in the tree after this commit: archived, or moved to another project.
+  removed          Boolean @default(false)
+
+  commit ProjectCommit @relation(fields: [commitId], references: [id], onDelete: Cascade)
+
+  @@id([commitId, documentId])
+  @@index([revisionId])
+  @@map("project_commit_changes")
+}
+
 // Table created in Phase 1; compare endpoints land in Phase 2.
 model RevisionDiff {
   id             String   @id @default(uuid()) @db.Uuid
@@ -363,6 +462,9 @@ model MergeRequest {
   breakingAckBy         String?   @map("breaking_ack_by") @db.Uuid
   breakingAckAt         DateTime? @map("breaking_ack_at") @db.Timestamptz
   breakingAckRevisionId String?   @map("breaking_ack_revision_id") @db.Uuid
+  /// The source branch's head commit when acknowledged (#636): the gate passes
+  /// while it is still the head, so a write to any page of the branch reopens it.
+  breakingAckCommitId   String?   @map("breaking_ack_commit_id") @db.Uuid
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz
   mergedAt              DateTime? @map("merged_at") @db.Timestamptz
   closedAt              DateTime? @map("closed_at") @db.Timestamptz
@@ -646,6 +748,8 @@ model Project {
   connectors    Connector[]
   trackerRoute  ProjectTrackerRoute?
   site          PublishedSite?
+  commits       ProjectCommit[]
+  branches      ProjectBranch[]
 
   @@index([workspaceId, createdAt])
   @@map("projects")

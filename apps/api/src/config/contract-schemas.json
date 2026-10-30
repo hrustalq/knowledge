@@ -13769,6 +13769,21 @@
       "nameAttribute"
     ]
   },
+  "LineRange": {
+    "type": "object",
+    "properties": {
+      "start": {
+        "type": "number"
+      },
+      "count": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "start",
+      "count"
+    ]
+  },
   "LintGateState": {
     "type": "object",
     "properties": {
@@ -14978,6 +14993,24 @@
       "nextCursor"
     ]
   },
+  "ListProjectBranchesResponse": {
+    "type": "object",
+    "properties": {
+      "projectId": {
+        "type": "string"
+      },
+      "branches": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/ProjectBranchInfo"
+        }
+      }
+    },
+    "required": [
+      "projectId",
+      "branches"
+    ]
+  },
   "ListProjectsResponse": {
     "type": "object",
     "properties": {
@@ -15853,6 +15886,25 @@
       "missing"
     ]
   },
+  "MergeConflictHunk": {
+    "type": "object",
+    "properties": {
+      "base": {
+        "$ref": "#/components/schemas/LineRange"
+      },
+      "target": {
+        "$ref": "#/components/schemas/LineRange"
+      },
+      "source": {
+        "$ref": "#/components/schemas/LineRange"
+      }
+    },
+    "required": [
+      "base",
+      "target",
+      "source"
+    ]
+  },
   "MergeMergeRequestResponse": {
     "type": "object",
     "properties": {
@@ -16076,6 +16128,66 @@
       "skipped"
     ]
   },
+  "MergeRequestConflictPage": {
+    "type": "object",
+    "properties": {
+      "documentId": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string"
+      },
+      "targetHeadRevisionId": {
+        "type": "string"
+      },
+      "sourceHeadRevisionId": {
+        "type": "string"
+      },
+      "hunks": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/MergeConflictHunk"
+        }
+      },
+      "text": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "documentId",
+      "title",
+      "targetHeadRevisionId",
+      "sourceHeadRevisionId",
+      "hunks",
+      "text"
+    ]
+  },
+  "MergeRequestConflictsResponse": {
+    "type": "object",
+    "properties": {
+      "mergeRequestId": {
+        "type": "string"
+      },
+      "behind": {
+        "type": "number"
+      },
+      "pages": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/MergeRequestConflictPage"
+        }
+      },
+      "hiddenPages": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "mergeRequestId",
+      "behind",
+      "pages",
+      "hiddenPages"
+    ]
+  },
   "MergeRequestDiffResponse": {
     "type": "object",
     "properties": {
@@ -16084,11 +16196,22 @@
       },
       "compare": {
         "$ref": "#/components/schemas/CompareResponse"
+      },
+      "pages": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/MergeRequestPage"
+        }
+      },
+      "hiddenPages": {
+        "type": "number"
       }
     },
     "required": [
       "mergeRequest",
-      "compare"
+      "compare",
+      "pages",
+      "hiddenPages"
     ]
   },
   "MergeRequestInfo": {
@@ -16194,6 +16317,9 @@
       "captureId": {
         "type": "string",
         "nullable": true
+      },
+      "pageCount": {
+        "type": "number"
       }
     },
     "required": [
@@ -16219,7 +16345,27 @@
       "mergedAt",
       "closedAt",
       "provenance",
-      "captureId"
+      "captureId",
+      "pageCount"
+    ]
+  },
+  "MergeRequestPage": {
+    "type": "object",
+    "properties": {
+      "documentId": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string"
+      },
+      "compare": {
+        "$ref": "#/components/schemas/CompareResponse"
+      }
+    },
+    "required": [
+      "documentId",
+      "title",
+      "compare"
     ]
   },
   "MergeRequestProvenance": {
@@ -16281,6 +16427,10 @@
       "mergeRequestId": {
         "type": "string"
       },
+      "documentId": {
+        "type": "string",
+        "nullable": true
+      },
       "checkId": {
         "type": "string",
         "nullable": true
@@ -16295,6 +16445,7 @@
       "checkId",
       "comments",
       "createdAt",
+      "documentId",
       "mergeRequestId",
       "resolvable",
       "resolved",
@@ -16414,6 +16565,24 @@
     "enum": [
       "merge-commit",
       "squash"
+    ]
+  },
+  "MyDraftBranchResponse": {
+    "type": "object",
+    "properties": {
+      "branch": {
+        "$ref": "#/components/schemas/BranchInfo"
+      },
+      "pages": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "branch",
+      "pages"
     ]
   },
   "NoteCapturePayload": {
@@ -16955,6 +17124,73 @@
       "views"
     ]
   },
+  "ProjectBranchInfo": {
+    "type": "object",
+    "properties": {
+      "projectBranchId": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "pages": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "documentId": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "documentId",
+            "title"
+          ]
+        }
+      },
+      "updatedAt": {
+        "type": "string"
+      },
+      "updatedBy": {
+        "type": "string"
+      },
+      "openMergeRequest": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "mergeRequestId": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "isDraft": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "mergeRequestId",
+              "title",
+              "isDraft"
+            ]
+          }
+        ],
+        "nullable": true
+      }
+    },
+    "required": [
+      "projectBranchId",
+      "name",
+      "pages",
+      "updatedAt",
+      "updatedBy",
+      "openMergeRequest"
+    ]
+  },
   "ProjectCascadeCounts": {
     "type": "object",
     "properties": {
@@ -17087,6 +17323,18 @@
       "counts",
       "glossaryConflicts",
       "cascade"
+    ]
+  },
+  "ProjectGitResponse": {
+    "type": "object",
+    "properties": {
+      "url": {
+        "type": "string",
+        "nullable": true
+      }
+    },
+    "required": [
+      "url"
     ]
   },
   "ProjectOverviewResponse": {
@@ -17883,6 +18131,7 @@
         "enum": [
           "draft",
           "approvals",
+          "conflict",
           "diverged",
           "breaking-api",
           "lint",
@@ -22093,6 +22342,21 @@
       "issue"
     ]
   },
+  "UpdateMergeRequestBranchResponse": {
+    "type": "object",
+    "properties": {
+      "mergeRequest": {
+        "$ref": "#/components/schemas/MergeRequestInfo"
+      },
+      "updated": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "mergeRequest",
+      "updated"
+    ]
+  },
   "UpdateWorkspaceResponse": {
     "type": "object",
     "properties": {
@@ -23376,7 +23640,8 @@
       "captures",
       "memos",
       "conflicts",
-      "assistant"
+      "assistant",
+      "git"
     ]
   },
   "WorkspaceFeaturesResponse": {

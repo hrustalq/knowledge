@@ -1,3 +1,4 @@
+export { default as CopyBlock } from './components/CopyBlock.vue'
 export { LazyPageAccessDialog } from './components/lazy'
 export { default as PageAccessDialog } from './components/PageAccessDialog.vue'
 export { default as RequestAccessCard } from './components/RequestAccessCard.vue'

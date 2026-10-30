@@ -242,6 +242,11 @@ export class PermissionService {
       where: { documentId },
       select: { id: true, ownerId: true, restricted: true },
     });
+    return this.readableBranchIds(scope, branches);
+  }
+
+  /** The ids of `branches` `scope` may read, on pages it already may open — `visibleBranchIds` across pages (#636). */
+  async readableBranchIds(scope: AccessScope, branches: BranchAclRow[]): Promise<Set<string>> {
     const grants = await this.branchGrants(branches.filter((b) => b.restricted).map((b) => b.id));
     return new Set(branches.filter((b) => branchLevel(scope, b, grants) !== 'none').map((b) => b.id));
   }

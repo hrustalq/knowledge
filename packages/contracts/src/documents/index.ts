@@ -243,6 +243,12 @@ export interface CreateBranchResponse {
   branch: BranchInfo;
 }
 
+// POST /v1/documents/:id/branches/mine
+export interface MyDraftBranchResponse extends CreateBranchResponse {
+  /** The pages the caller's draft has revisions on (#636), by id: what one Publish carries. */
+  pages: string[];
+}
+
 // GET /v1/documents/:id/branches
 export interface ListBranchesResponse {
   branches: BranchInfo[];

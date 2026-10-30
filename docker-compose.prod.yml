@@ -222,6 +222,29 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
 
+  # The git remote (#636, docs/features/71), opt-in twice like the learner:
+  # started only when COMPOSE_PROFILES names `git`, and serving only with
+  # GIT_REMOTE_ENABLED=true; without the flag it answers 404 to every /git/*.
+  # Its own image (knowledge-api-git, the `git-runtime` stage: the api image
+  # plus the git binary) and its own process (git.main.ts), so packs never pass
+  # through the API. Caddy routes /git/* here. The volume holds one bare
+  # repository per project and visible set: losing it costs a cold rebuild from
+  # Postgres and MinIO, never data.
+  git:
+    image: knowledge-api-git:${TAG:-latest}
+    command: ["node", "dist/git.main"]
+    profiles: ["git"]
+    restart: unless-stopped
+    init: true
+    env_file: [.env]
+    volumes:
+      - gitcache:/var/cache/knowledge-git
+      - applogs:/app/logs
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio: { condition: service_healthy }
+
   # PDF export (docs/features/45), opt-in: started only when COMPOSE_PROFILES
   # names it. Production sets COMPOSE_PROFILES and GOTENBERG_URL in the GitHub
   # `production` environment, which the deploy renders into .env; a hand edit
@@ -338,3 +361,4 @@ volumes:
   caddy_data:
   caddy_config:
   applogs:
+  gitcache:

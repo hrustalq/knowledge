@@ -4,9 +4,9 @@ The rules in this document are enforced by `.dependency-cruiser.cjs` at the repo
 root and by `apps/api/.dependency-cruiser.cjs`, both of which quote it. `make deps`
 is the gate; breaking one of these is a build failure, not a review comment.
 
-## Five entrypoints, one `src` tree
+## Six entrypoints, one `src` tree
 
-**The worker is a second entrypoint of `apps/api`, not a separate app.** All five
+**The worker is a second entrypoint of `apps/api`, not a separate app.** All six
 share one dependency graph, one Prisma client and one config schema; what differs
 is which root module each composes.
 
@@ -16,10 +16,22 @@ is which root module each composes.
 | `src/worker.main.ts`                   | `WorkerModule` | BullMQ processors, no HTTP                       |
 | `src/mcp.main.ts`                      | `McpModule`    | MCP over stdio                                   |
 | `src/learner.main.ts`                  | `LearnerModule` | The learner (#305): a timer that proposes learnings, no HTTP |
+| `src/git.main.ts`                      | `GitModule`    | The git remote (#636): smart HTTP on `GIT_PORT`, its own controller only |
 | `src/scripts/generate-openapi.main.ts` | `AppModule`    | Schema emission — builds the app, never listens  |
 
 The worker uses `createApplicationContext(WorkerModule)`: no HTTP server is
-created at all; so does the learner. The schema script exists so `make api-schema` can scan route metadata
+created at all; so does the learner. The git process is HTTP, but of its own: it
+serves packs, which the API never does ("the API never streams file bodies"), so
+it is a separate process behind `/git/*` in the `Caddyfile`, built from the
+`git-runtime` stage of `Dockerfile.api` (the runtime image plus the `git`
+binary). It loads `*CoreModule`s and `AuthTokensModule` only, plus its own
+controller, and authenticates in `GitAccessService` rather than through
+`AuthModule`'s global guards; dependency-cruiser holds it to that
+(`git-loads-no-other-controller`, `git-stays-out-of-the-other-processes`). A
+push makes it a principal-bearing writer, on the API's side of "the worker
+generates, the API publishes": it writes revisions, pages and merge requests
+as the key's owner through `DocumentsCoreModule` and `MergeRequestsCoreModule`,
+the controller-free halves of `DocumentsModule` (#636 phase 4). The schema script exists so `make api-schema` can scan route metadata
 without touching infrastructure — it creates the Nest app **without `init()` or
 `listen()`**, though the env file is still required because `src/config/env.ts`
 validates with zod at import time. That is why **every new env var needs a

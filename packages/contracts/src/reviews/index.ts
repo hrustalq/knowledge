@@ -73,6 +73,12 @@ export interface MergeRequestInfo {
   provenance: MergeRequestProvenance;
   /** The `knowledge_captures` row it came from, when `provenance` is `captured` and a capture opened it. */
   captureId: string | null;
+  /**
+   * How many pages its source branch has written (#636): a branch spans its
+   * project, so one merge request can carry several. Visible or not, as the
+   * diff's `hiddenPages` counts them; never fewer than 1.
+   */
+  pageCount: number;
 }
 
 export interface CreateMergeRequestResponse {
@@ -85,11 +91,47 @@ export interface ListMergeRequestsResponse {
   mergeRequests: MergeRequestInfo[];
 }
 
+/** One page a merge request changes (#636): its source branch moved past what the target holds. */
+export interface MergeRequestPage {
+  documentId: string;
+  title: string;
+  /** merge-base comparison of this page's target head...source head. */
+  compare: CompareResponse;
+}
+
+/** One branch of a project (#636), as the caller sees it: the pages it wrote that they may open. */
+export interface ProjectBranchInfo {
+  projectBranchId: string;
+  name: string;
+  /** Pages the branch has a revision of its own on, by title. A branch with none the caller may open is not listed. */
+  pages: { documentId: string; title: string }[];
+  /** Its newest revision: when, and by whom. */
+  updatedAt: string;
+  updatedBy: string;
+  /** The open merge request from it, when there is one the caller may read. */
+  openMergeRequest: { mergeRequestId: string; title: string; isDraft: boolean } | null;
+}
+
+// GET /v1/projects/:id/branches
+export interface ListProjectBranchesResponse {
+  projectId: string;
+  /** Every branch but the default one, newest first. */
+  branches: ProjectBranchInfo[];
+}
+
 // GET /v1/merge-requests/:id/diff
 export interface MergeRequestDiffResponse {
   mergeRequest: MergeRequestInfo;
-  /** merge-base comparison targetHead...sourceHead, with structural + semantic sections. */
+  /** The page the merge request was opened from (`mergeRequest.documentId`), as before #636. */
   compare: CompareResponse;
+  /**
+   * Every page the source branch changed that the caller may open, by title
+   * (#636): a branch spans its project's pages, and the merge lands them all
+   * in one transaction.
+   */
+  pages: MergeRequestPage[];
+  /** Changed pages the caller may not open. Merging needs edit on every page, so they hold the merge for them. */
+  hiddenPages: number;
 }
 
 export interface MergeMergeRequestResponse {
@@ -103,6 +145,49 @@ export interface PublishBranchResponse extends MergeMergeRequestResponse {
   merged: boolean;
   /** The gate that refused (`protected`: the default branch is protected and the caller is no admin). */
   reason: MergeGateConflictDetails['reason'] | 'protected' | null;
+}
+
+/** A run of lines, 1-based; `count` 0 is an insertion point before `start`. */
+export interface LineRange {
+  start: number;
+  count: number;
+}
+
+/** One overlapping change in a 3-way merge (#636): where it sits in the base, the target head and the source head. */
+export interface MergeConflictHunk {
+  base: LineRange;
+  target: LineRange;
+  source: LineRange;
+}
+
+/** A page whose 3-way merge conflicts (#636), as the conflict view resolves it. */
+export interface MergeRequestConflictPage {
+  documentId: string;
+  title: string;
+  /** The heads it was merged at; a resolution is pinned to the target one. */
+  targetHeadRevisionId: string;
+  sourceHeadRevisionId: string;
+  hunks: MergeConflictHunk[];
+  /** The merge with git's conflict markers, labelled with the branch names. */
+  text: string;
+}
+
+// GET /v1/merge-requests/:id/conflicts (#636)
+export interface MergeRequestConflictsResponse {
+  mergeRequestId: string;
+  /** Pages whose target moved past the merge base: what "Update branch" brings in. */
+  behind: number;
+  /** Conflicting pages the caller may open. */
+  pages: MergeRequestConflictPage[];
+  /** Conflicting pages the caller may not open; they hold the merge as well. */
+  hiddenPages: number;
+}
+
+// POST /v1/merge-requests/:id/update-branch (#636)
+export interface UpdateMergeRequestBranchResponse {
+  mergeRequest: MergeRequestInfo;
+  /** Pages the update wrote a merge revision on. */
+  updated: number;
 }
 
 /** 409 error envelope for If-Match / merge conflicts (plan.md §7): details always carries a comparison link. */
@@ -123,7 +208,10 @@ export interface ListWorkspaceMergeRequestsRequest {
   assigneeId?: string;
   /** Only merge requests with this user assigned as reviewer. */
   reviewerId?: string;
+  /** Merge requests whose source branch changed this page (#636), not only the ones opened from it. */
   documentId?: string;
+  /** Merge requests of this project's branches. */
+  projectId?: string;
   /** Case-insensitive substring match on the source branch name. */
   sourceBranch?: string;
   /** Case-insensitive substring match on the target branch name. */
@@ -198,16 +286,24 @@ export interface ListSavedFiltersResponse {
 /**
  * 409 `details` vocabulary for merge gating (see RevisionConflictResponse for
  * the diverged case): `draft` — MR is flagged draft; `approvals` — fewer
- * non-author approvals than MR_REQUIRED_APPROVALS; `diverged` — target branch
- * advanced past the merge base (fast-forward precondition); `breaking-api` —
+ * non-author approvals than MR_REQUIRED_APPROVALS; `conflict` — a page's
+ * target moved past the merge base and its 3-way merge overlaps the source's
+ * changes (#636), `conflicts` naming each page and hunk, the other keys
+ * describing the first; `diverged` — a target head moved while the merge was
+ * landing, so it was not the head the merge was computed on; `breaking-api` —
  * a spec document's source head breaks its API under a `block` policy and no
  * admin has acknowledged that head (#78); `lint` — the page's style lint is
  * `block` and the check of the source head is still to come, or found
  * error-severity violations nobody has resolved, and no admin overrode it
  * (#74). `checkStatus` and `blockingCount` say which, `checkId` is the check.
+ * Every gate runs across all the pages a merge request changes (#636).
  */
 export interface MergeGateConflictDetails {
-  reason: 'draft' | 'approvals' | 'diverged' | 'breaking-api' | 'lint';
+  reason: 'draft' | 'approvals' | 'conflict' | 'diverged' | 'breaking-api' | 'lint';
+  /** `conflict` (#636): every conflicting page, by id, with its hunks. Line numbers only, never text. */
+  conflicts?: { documentId: string; hunks: MergeConflictHunk[] }[];
+  /** The page the gate refused on, in a merge request spanning several (#636). */
+  documentId?: string;
   breakingCount?: number;
   checkStatus?: LintGateState['checkStatus'];
   blockingCount?: number;
@@ -215,6 +311,8 @@ export interface MergeGateConflictDetails {
   requiredApprovals?: number;
   approvals?: number;
   currentHeadRevisionId?: string | null;
+  /** `conflict` / `diverged` (#636): that page's source head, so a client can compare it with `currentHeadRevisionId`. */
+  sourceHeadRevisionId?: string;
   comparisonUrl?: string | null;
 }
 
@@ -501,6 +599,11 @@ export type MergeRequestComment = ReviewComment;
 
 export interface MergeRequestThread extends ReviewThread {
   mergeRequestId: string;
+  /**
+   * The page a line or text anchor's revision belongs to (#636: a merge
+   * request spans pages); null for an unanchored, section or entity thread.
+   */
+  documentId: string | null;
   /** The lint check that opened it (#74); null on every other thread. */
   checkId: string | null;
   /** The styleguide rule a lint thread cites. */

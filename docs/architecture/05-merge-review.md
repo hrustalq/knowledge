@@ -17,19 +17,49 @@ Everything lives in `apps/api/src/documents/`: `merge-requests.service.ts`,
 `merge-requests.controller.ts`, `merge-request-threads.service.ts`,
 `saved-filters.service.ts`.
 
-## Why merging is fast-forward-preconditioned
+## Why merging is 3-way, and refuses only overlaps
 
-The target head must equal the merge base. If the target branch advanced past
-where the source forked, the merge is refused with 409 and a comparison link —
-**3-way content merge is future work**, and the way forward is to rebase the
-source branch (write a new revision on top of the target head) and try again.
+Each page is merged against its own merge base (`findMergeBase` on the revision
+DAG, never the project commit graph — doc 71's third invariant). A page whose
+target head still is the merge base lands the source head's bytes, as a
+fast-forward would. A page whose target moved lands the **line-level 3-way
+merge** of base, target and source (`three-way.ts`: `node-diff3` with
+`excludeFalseConflicts`, which agreed with `git merge-file` on 3,000 of 3,000
+fuzzed edits in the #636 spike). Two people editing different paragraphs of
+one page both merge without either redoing their work.
 
-That is a deliberate reduction rather than a missing feature: a document is one
-body of prose, so a content merge that goes wrong produces a page that reads as
-if two people wrote alternate paragraphs, and nobody can tell from the result
-which half is stale. Refusing is legible; guessing is not.
+Where the two sides change the same or adjacent lines, the merge is still
+refused, now with `reason: 'conflict'` and `conflicts` — every conflicting page
+by id with its hunks as line ranges (`MergeConflictHunk`: base, target, source).
+That keeps the old stance where it mattered: a content merge never guesses
+between two rewrites of one passage. Before #636 it refused every moved target,
+because a merge that guessed would read as two people writing alternate
+paragraphs. Only non-overlapping changes merge now, and an overlap still
+refuses. The verdict is git's, so a person resolving locally sees the same
+conflict the server reported. Spec pages (YAML or JSON) merge the same way; a
+merged spec that no longer parses is refused by `finalizeRevision`'s validator,
+and the merge rolls back.
 
-Two strategies, both carrying the source head's bytes verbatim:
+**Update branch** (`POST /v1/merge-requests/:id/update-branch`) is how a
+conflict is resolved, and why there is no rebase: history is append-only, so
+the source branch is never rewritten. It merges the target into the source on
+every page behind it, each as a revision on the source branch with parents
+**1 = source head, 2 = target head**, and one project commit for the lot (its
+second parent the target's head commit). Afterwards the merge base is the target
+head, so the merge request's own merge is a fast-forward. A conflicting page
+needs a resolution: the whole body, pinned to the target head it was resolved
+against (a newer one is 409 `diverged`), with no `<<<<<<<`/`>>>>>>>` marker line
+left (400). `GET :id/conflicts` serves the conflict view: how many pages are
+`behind`, and each conflicting page the reader may open with its hunks and the
+merge carrying git's markers labelled with the branch names. A resolution that
+keeps the source's body unchanged is still finalized (`dedupe: false`): it is
+the merge node that moves the merge base.
+
+`publishBranch`'s `onTopOf` (the default heads the author reviewed) now matters
+only on a conflict: a listed head lets that page land with the author's body.
+A clean page ignores it.
+
+Two strategies, both carrying the merged bytes:
 
 - `merge-commit` → a true merge node: `revision_parents` order **1 = target
   head, 2 = source head**, which is what makes the DAG readable afterwards.
@@ -41,7 +71,7 @@ code path as an edited one and there is no second write path to keep correct.
 
 ## Why the merge runs under a branch-row lock
 
-The fast-forward check above is an unlocked read. Under `READ COMMITTED` it sees
+The heads the merge above was computed on are an unlocked read. Under `READ COMMITTED` it sees
 the last committed head and _not_ a concurrent merge's uncommitted advance, so
 two mergers could both pass it and the second would commit over the first's
 head. The merge therefore re-takes the decision inside the transaction:
@@ -50,7 +80,8 @@ head. The merge therefore re-takes the decision inside the transaction:
 SELECT head_revision_id FROM document_branches WHERE id = $1 FOR UPDATE
 ```
 
-and 409s with `reason: 'diverged'` if the head moved since. It is the first
+and 409s with `reason: 'diverged'` if the head moved since: the 3-way result was
+computed against the old head, so it is retried rather than landed. It is the first
 branch-row lock every concurrent merger takes, so merges into one branch
 serialize rather than deadlock.
 
@@ -67,14 +98,15 @@ HEAD + GET), hence the raised `timeout: 30_000, maxWait: 10_000`.
 
 Five gates, all evaluated before any side effect, all reported as a `reason`
 the client can branch on. They run in this order: `draft`, `approvals`, `lint`,
-`diverged`, `breaking-api`.
+`conflict`, `breaking-api`. `diverged` is no gate any more: it is the race above.
 
 | `reason`       | Gate                                                                      |
 | -------------- | ------------------------------------------------------------------------- |
 | `draft`        | `merge_requests.is_draft` — PATCH-toggleable, never merges while set        |
 | `approvals`    | fewer than `MR_REQUIRED_APPROVALS` (default 1) non-author approvals         |
 | `lint`         | under the `block` lint policy, the source head's style check is still to come or has an unresolved error-severity violation, and no admin overrode it; with `checkStatus`, `blockingCount`, `checkId` ([below](#style-lint)) |
-| `diverged`     | the fast-forward precondition above, with `comparisonUrl`                   |
+| `conflict`     | the 3-way merge of a page overlaps, with `conflicts` (page ids and hunks) and the first page's `documentId`, heads and `comparisonUrl` |
+| `diverged`     | a target head moved while the merge landed (the lock above), or an Update-branch resolution names an old target head |
 | `breaking-api` | a spec merge request with breaking changes under the `block` policy and no current ack, with `breakingCount` ([below](#breaking-api-changes)) |
 
 The author's own approval is excluded from the count. That exclusion is exactly
@@ -111,7 +143,7 @@ throw and arrive under `details` — typed as `MergeGateConflictDetails` in
 `@knowledge/contracts/reviews`. **Never nest `details` manually**: a hand-built
 `details` key would be hoisted into `details.details`.
 
-The `diverged` 409 shares its shape with the `If-Match` optimistic-concurrency
+The `conflict` and `diverged` 409s share their shape with the `If-Match` optimistic-concurrency
 409 on `POST /:id/revisions` (`RevisionConflictResponse`), which is described in
 [02-persistence-revisions.md](02-persistence-revisions.md) — same envelope, same
 `comparisonUrl`, different trigger.
@@ -138,9 +170,10 @@ acknowledgement. `GET /v1/merge-requests/:id/api-changes` (its `blocked`
 field) and `merge()` both call it, so the panel cannot say "mergeable" while
 the gate says no.
 
-In `merge()`, `assertBreakingAcknowledged` runs **last**, after the diverged
-check, because it parses two specs. Past that check the target head is the
-merge base, so the gate judges the same diff the panel showed. It throws the
+In `merge()`, `assertBreakingAcknowledged` runs **last**, after the 3-way
+merge, because it parses two specs. It judges the diff from the merge base to
+the source head: the diff the panel showed, and, when the merge is clean, what
+the merge adds to the target. It throws the
 flat-extras 409 `{ reason: 'breaking-api', breakingCount }`. On a page, or
 under any policy but `block`, it returns before parsing anything.
 
@@ -210,8 +243,8 @@ rule had when the run read it). `passed`, `error` and `skipped` never hold:
 fail-open. Resolving the last such thread through the ordinary `PATCH
 …/threads/:threadId` unblocks the merge; no route was added for it.
 
-It runs after `approvals` and before `diverged`, because a rebase would only
-produce a new head to lint, and is skipped where the approval gate is
+It runs after `approvals` and before `conflict`, because updating the branch
+would only produce a new head to lint, and is skipped where the approval gate is
 (`lintGateEnforced`).
 
 **The override.** `POST /v1/merge-requests/:id/checks/:checkId/override`
@@ -397,7 +430,9 @@ a reopen still merges.
 | `PUT /v1/merge-requests/:id/reviewers`                 | editor ·merge-request| replace-set, members only                      |
 | `GET /v1/merge-requests/:id/diff?semantic=`            | viewer ·merge-request| merge-base compare, structural always          |
 | `POST /v1/merge-requests/:id/approve`                  | editor ·merge-request| records the calling principal                  |
-| `POST /v1/merge-requests/:id/merge`                    | editor ·merge-request| 409 `draft` \| `approvals` \| `lint` \| `diverged` \| `breaking-api` |
+| `POST /v1/merge-requests/:id/merge`                    | editor ·merge-request| 409 `draft` \| `approvals` \| `lint` \| `conflict` \| `diverged` \| `breaking-api` |
+| `GET /v1/merge-requests/:id/conflicts`                 | viewer ·merge-request| `behind`, conflicting pages the caller may open (hunks + marker text), `hiddenPages` |
+| `POST /v1/merge-requests/:id/update-branch`            | editor ·merge-request| merges the target into the source; `resolutions` per conflicting page |
 | `GET /v1/merge-requests/:id/api-changes`               | viewer ·merge-request| spec MRs: classified diff, linked pages per operation, policy, ack, `blocked` |
 | `POST/DELETE /v1/merge-requests/:id/breaking-ack`      | admin ·merge-request | pins / withdraws the ack at the source head    |
 | `GET /v1/merge-requests/:id/checks`                    | viewer ·merge-request| style checks per head, `gate` for the caller   |
@@ -458,12 +493,14 @@ mechanisms, because a second instance would be a second copy of the rail's state
 Events: `merge-request.created/updated/reopened/approved/merged/closed/`
 `review-requested/comment.created/comment.resolved/comment.deleted`. The
 live-cache `merge-request.*` rule invalidates detail/diff/threads keys by
-`subjectId`.
+`subjectId`, and every merge request's `conflicts` key, since any merge moves a
+target.
 
 ## Limits
 
-3-way content merge is not attempted anywhere — a diverged target is a 409 and a
-rebase. Server-side re-anchoring of outdated line anchors is future work; the
+The 3-way merge is line-level: two edits to one long line conflict, as in git.
+`GET :id/conflicts` merges every behind page on each read, with no cache.
+Server-side re-anchoring of outdated line anchors is future work; the
 client falls back to the Discussion tab. Reviewers and assignee are advisory and
 will never gate a merge. Merge base is absent from every list response by
 design. Saved views are private with no sharing mechanism, and the integer id

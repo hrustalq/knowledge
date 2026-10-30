@@ -181,6 +181,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.api
+      target: runtime
     command: ["node", "dist/learner.main"]
     init: true
     env_file: [.env]

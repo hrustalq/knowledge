@@ -1,6 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsIn,
   IsInt,
@@ -16,6 +18,7 @@ import {
 } from 'class-validator';
 import { MR_PROVENANCES, type MergeRequestProvenance } from '@knowledge/contracts';
 import { vmsg } from '../../common/validation.js';
+import { MAX_INLINE_TEXT_CHARS } from './documents.dto.js';
 
 /**
  * Permissive UUID shape (any version digit, nil allowed) — class-validator's
@@ -77,14 +80,46 @@ export class PublishBranchDto {
   title!: string;
 
   @ApiPropertyOptional({
-    format: 'uuid',
+    type: [String],
     description:
-      'The default-branch head the author reviewed after it moved past the branch: the merge lands over that head ' +
-      'instead of refusing as `diverged`, and only over that head.',
+      'The default-branch heads the author reviewed after they moved past the branch, one per page (#636). A page ' +
+      'that would conflict in the 3-way merge lands over its listed head with the branch\'s content instead of ' +
+      'refusing as `conflict`, and only over that head. A page that merges cleanly ignores it.',
   })
   @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(1000)
+  @Matches(UUID_RE, { each: true })
+  onTopOf?: string[];
+}
+
+/** A person's resolution of one conflicting page (#636): the whole body, pinned to the target head it was resolved against. */
+export class BranchResolutionDto {
+  @ApiProperty()
   @Matches(UUID_RE)
-  onTopOf?: string;
+  documentId!: string;
+
+  @ApiProperty({ description: 'The target head the conflict view showed; a newer one refuses as `diverged`.' })
+  @Matches(UUID_RE)
+  targetHeadRevisionId!: string;
+
+  @ApiProperty({ maxLength: MAX_INLINE_TEXT_CHARS, description: 'The resolved body. One still holding conflict markers is refused.' })
+  @IsString()
+  @MaxLength(MAX_INLINE_TEXT_CHARS, { message: vmsg('maxLength') })
+  content!: string;
+}
+
+export class UpdateMergeRequestBranchDto {
+  @ApiPropertyOptional({
+    type: [BranchResolutionDto],
+    description: 'One per conflicting page. A page that merges cleanly needs none, and one given for it is ignored.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(1000)
+  @ValidateNested({ each: true })
+  @Type(() => BranchResolutionDto)
+  resolutions?: BranchResolutionDto[];
 }
 
 export class UpdateMergeRequestDto {
@@ -145,10 +180,15 @@ export class ListMergeRequestsQueryDto {
   @Matches(UUID_RE)
   reviewerId?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Merge requests whose source branch changed this page, not only the ones opened from it' })
   @IsOptional()
   @Matches(UUID_RE)
   documentId?: string;
+
+  @ApiPropertyOptional({ description: "Merge requests of this project's branches" })
+  @IsOptional()
+  @Matches(UUID_RE)
+  projectId?: string;
 
   @ApiPropertyOptional({ description: 'Case-insensitive substring match on the source branch name' })
   @IsOptional()

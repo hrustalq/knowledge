@@ -116,6 +116,8 @@ export const defaultLiveCacheRules: LiveCacheRule[] = [
             ['/v1/merge-requests/{id}/threads', { id: e.subjectId }],
           ]
         : []),
+      // Any merge moves a target, and with it every open merge request's 3-way state (#636).
+      ['/v1/merge-requests/{id}/conflicts'],
       ...(e.documentId ? [['/v1/documents/{id}/merge-requests', { id: e.documentId }]] : []),
       // A capture's merged/closed state is its merge request's (captureStateFor),
       // so the inbox reads stale the moment one is merged or closed.

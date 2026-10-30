@@ -795,6 +795,7 @@ export type I18nTranslations = {
             "notOpenForApproval": string;
             "notOpenForClose": string;
             "notOpenForMerge": string;
+            "notOpenForUpdate": string;
             "notOpenForReviewers": string;
             "notClosedForReopen": string;
             "discussionsReadOnly": string;
@@ -802,8 +803,12 @@ export type I18nTranslations = {
             "isDraft": string;
             "needsApprovals": string;
             "nothingToMerge": string;
-            "diverged": string;
+            "conflict": string;
             "divergedWhileMerging": string;
+            "resolutionStale": string;
+            "upToDate": string;
+            "markersLeft": string;
+            "targetMissing": string;
             "alreadyOpen": string;
             "notMembers": string;
             "breakingApi": string;
@@ -1539,6 +1544,42 @@ export type I18nTranslations = {
         };
         "feature": {
             "disabled": string;
+        };
+        "git": {
+            "notFound": string;
+            "credentials": string;
+            "captureKey": string;
+            "guest": string;
+            "smartHttpOnly": string;
+            "push": {
+                "readOnly": string;
+                "notBranch": string;
+                "deleteRefused": string;
+                "stale": string;
+                "nonFastForward": string;
+                "nothingNew": string;
+                "unknownParent": string;
+                "mode": string;
+                "notPage": string;
+                "binary": string;
+                "idChanged": string;
+                "unknownId": string;
+                "duplicateId": string;
+                "noParentPage": string;
+                "badName": string;
+                "nameTaken": string;
+                "kindChanged": string;
+                "notSpec": string;
+                "protected": string;
+                "newOnDefault": string;
+                "cannotEdit": string;
+                "cannotRepresent": string;
+                "rejected": string;
+                "mrCreated": string;
+                "mrUpdated": string;
+                "mrMerged": string;
+            };
+            "tooLarge": string;
         };
     };
     "export": {

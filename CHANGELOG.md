@@ -13,6 +13,169 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.41.0] — 2026-10-31
+
+### Added
+
+- **A project can be cloned and fetched with git** (#636). `git clone https://<host>/git/<workspace id>/<project
+  id>.git` with any username and a `kn_` API key as the password gives the project's pages as files: a page is
+  `<slug>.md`, its children sit in `<slug>/`, and an API spec is `<slug>.yaml` or `.json`. Each file's first
+  frontmatter line is `knowledge-id: <page id>`. The history is the page history: one commit per save, merge
+  requests as merge commits, every branch, and release tags as tags. Commit authors are noreply addresses,
+  never anyone's email. A clone holds only what the key's owner may open. A restricted page, and another
+  person's private draft, are in neither their files nor their history. That means people with different
+  access get different commit SHAs for the same history, and gaining or losing access to a page rewrites your
+  history on the next fetch. Edits made in the web or over MCP arrive on the next `git fetch`. A capture key and a guest are refused.
+  It is off unless the operator enables it (see Operations), and a workspace admin can switch it off under
+  Settings → Features.
+- **Pushing to a project works like pushing to GitLab** (#636). `git push origin HEAD:fix-terms` with a write
+  key writes one revision per changed page, attributed to the key's owner; the commit keeps its SHA, so the
+  next fetch fast-forwards. `-o merge_request.create` opens a merge request across every page the branch
+  changed (`.target=`, `.title=`, `.description=` and `.draft` work as on GitLab), the remote prints its URL,
+  and a later push to the branch reports the open one as updated. A new file on a branch becomes a new page
+  behind its merge request, and a push that adds one with no merge request open opens a draft. `git mv`
+  moves or renames a page and `git rm` archives it, both when the branch merges into the default branch.
+  Merging a branch, in the web as well, now carries its moves, renames and archives. Pushing straight to the
+  default branch works where you may edit every page it touches and none of them is protected. Pushing a
+  local merge commit whose second parent is an open merge request's branch merges that merge request if every
+  gate passes, and otherwise is refused with the gate's reason. A read key, a stale or force push, a deleted
+  branch, a non-page or binary file, a changed `knowledge-id` and a directory without its page are refused
+  with a `remote:` line saying why, in English or Russian. Pushed author lines are kept as your git config
+  wrote them; the knowledge base always attributes a push to the key's owner.
+- **Merge requests merge when the target moved, as long as the edits do not overlap** (#636). Two people
+  editing different paragraphs of one page can now both merge: each page is merged 3-way against the point
+  its branch started from, the way `git merge` does. Edits to the same or adjacent lines still refuse the
+  merge. The refusal now says `conflict` and names the pages and line ranges, where it used to say
+  `diverged` for any change on the target. The merge request's checklist gains a **Branch** row. It says
+  whether the target moved and whether the branch still merges cleanly, and it offers **Update branch**.
+  On a conflict it offers **Resolve conflicts**: a view that shows each page with git's conflict markers,
+  where you keep what should stay and delete the markers. Update branch then merges the target into the
+  branch as a new revision; nothing is rebased or rewritten.
+- **Publishing a draft no longer stops for every change made to the page since you started** (#636). A
+  published change to other lines is merged in. The editor asks you to review only when the same lines
+  changed, and **Publish over it** still lets your version win there.
+- API: `GET /v1/merge-requests/:id/conflicts` (pages behind the target, and each conflicting page with its
+  hunks and marker text) and `POST /v1/merge-requests/:id/update-branch` (`resolutions`: one resolved body per
+  conflicting page, pinned to the target head it was resolved against). Merge and publish refuse an overlap
+  with 409 `conflict` and `details.conflicts`. `diverged` now means only that a target moved while the merge
+  was landing, so retry. MCP: `knowledge_update_merge_request_branch`, and `includeConflicts` on
+  `knowledge_get_merge_request`.
+- **Agents can find and open merge requests by project branch** (#636). The new MCP tool
+  `knowledge_list_branches` lists a project's branches. For each it shows the pages the branch changed that
+  you can open, who wrote it last and when, and its open merge request. The default branch is not listed, and
+  neither is anyone else's private draft. `knowledge_create_merge_request` accepts `projectId` and
+  `sourceBranch` in place of a page. `knowledge_list_merge_requests` filters by `projectId`. The generated
+  SKILL.md explains branches that span pages and, where the git remote is enabled, gains a **Git** section:
+  the clone URL, a credential helper that reads `KNOWLEDGE_API_KEY` so the key never sits in a URL or
+  `.git/config`, and how push options, `git mv` / `git rm` and refusals behave. A push now appears in the
+  project's activity as one `git.pushed` entry per branch pushed, beside the revisions it wrote. The feed
+  reads it as "pushed 3 commits to `fix-terms`".
+- API: `GET /v1/projects/:id/branches` (viewer) returns the same list as `knowledge_list_branches`.
+  Merge request rows carry `pageCount`, the number of pages their branch wrote. `GET /v1/merge-requests`
+  takes `projectId`.
+- **Clone a project from its page** (#636). Where the git remote is enabled and the workspace has git on, the
+  project page's header has a **Clone** button. Its panel holds the clone URL, makes an API key for this
+  workspace on the spot (read-only, or read and write for an editor; shown once), and gives the commands that
+  clone with it through the credential helper SKILL.md uses. A new **Branches** widget on the project page
+  lists every branch but the default one: its pages, its open merge request, and who wrote it last. Merge
+  request cards say how many pages a change spans when it is more than one.
+- API: `GET /v1/projects/:id/git` (viewer) returns the clone URL, or `url: null` while the git remote is off.
+  It answers 404 with the workspace's `git` feature off.
+
+### Changed
+
+- **A merge request now covers every page its branch changed** (#636). A branch name belongs to the project:
+  create `fix-terms` on two pages, edit both, and a merge request opened from either page lists both on its
+  Changes tab, under an index of the pages with their line counts. Merging lands every page together or none
+  of them. Each gate (draft, approvals, protected branch, style lint, breaking API changes) applies to every
+  page, and merging needs edit access to all of them. Opening a second merge request from another page of the
+  same branch is refused as a duplicate, and a `diverged` refusal now names the page whose target moved
+  (`details.documentId`). Changed pages you cannot open are counted on the Changes tab, never named, and
+  review threads on them are hidden from you. Existing merge requests keep the single page they had.
+- **A page's merge requests include those opened from another page of the same branch** (#636). The page's
+  Changes list, `GET /v1/documents/:id/merge-requests` and the `documentId` filter of `GET /v1/merge-requests`
+  and `knowledge_list_merge_requests` now return every merge request whose branch changed the page, not only
+  the ones opened from it. A merge request opened from a page you cannot open stays out of the page's list,
+  as it already did in the workspace list.
+- **Style lint and breaking-API acknowledgements follow the pages** (#636). Each changed page of a merge
+  request gets its own lint check, so a new edit re-lints only the page it touched, and lint threads are
+  reconciled per page. An admin's acknowledgement of breaking API changes covers the whole branch until the
+  next edit to any of its pages, which needs a new acknowledgement as before.
+- API: `GET /v1/merge-requests/:id/diff` adds `pages` (every changed page the caller may open, each with its
+  own comparison) and `hiddenPages`. `compare` still describes the merge request's own page. Review threads
+  carry `documentId`, the page a line or text anchor sits on. The MCP `knowledge_get_merge_request` tool returns
+  the same `pages` with `includeDiff`.
+- **A new private draft is numbered across the whole project** (#636). Starting a draft of a page used to
+  name it `draft/<you>`, then `draft/<you>-2` and so on, counted per page. The number is now the first one free
+  in the page's project, so a draft never shares a name with a draft you have on another page. Nothing else
+  about drafts changes yet.
+- **Your edits in a project now share one draft, and Publish publishes them together** (#636). Editing a
+  second page while a draft is open adds that page to the same private draft instead of starting a new one,
+  and the editor's button reads **Publish N pages** when the draft carries more than one. Publishing from any
+  of those pages opens or reuses one merge request and merges every page at once, behind the same gates. If
+  another page of the draft was published since you started, the editor says so, lets you review that page's
+  changes, and publishes over each head you reviewed. Drafts you started before this release stay with their
+  page until you publish or close them. A page you join to a draft that is already in review is readable by
+  the page's readers straight away, as the rest of that merge request is.
+- API: `POST /v1/documents/:id/branches/mine` returns `pages`, the ids of the pages the draft has revisions
+  on. `POST …/branches/:branchId/publish` takes `onTopOf` as a **list** of reviewed default-branch heads, one
+  per page (it was a single id). A `diverged` refusal adds `sourceHeadRevisionId`.
+
+### Fixed
+
+- **Reverting a page to an earlier version now saves it** (#636). Saving text a branch had held before (undoing
+  an edit, say) used to report success while leaving the page as it was, because a save that matched any
+  earlier version on the branch was treated as a duplicate. Now only a save identical to the current version
+  is skipped.
+
+### Operations
+
+- Migration `20261221100000_project_commits` adds `project_commits`, `project_commit_parents`,
+  `project_commit_changes` and a nullable `documents.slug`. It backfills one commit per finalized revision,
+  plus one per archived page, at today's page paths. It also replaces the unique index on
+  `document_revisions (document_id, branch_id, content_hash)` with a plain one. It survives a rollback: the
+  previous image never reads the new tables and never relied on the unique index. Commits for writes made
+  while it runs are missing from the history the git remote serves. On the laptop's dev copy (202 pages, 258 revisions) the backfill wrote 398 commits.
+- Migration `20261222100000_project_branches` adds `project_branches` and a nullable
+  `document_branches.project_branch_id`, and backfills one project branch per (project, branch name). Where a
+  merge request came from a branch name that several pages in one project share, those pages' branches are
+  split and every one but the earliest is renamed `<name>-<first 8 characters of the page id>`. Each keeps its
+  merge request, and a `?branch=` link to a renamed branch stops resolving. A page's default branch is never
+  renamed. The dev copy (202 pages, 214 branches) got 55 project branches and two renames. It survives a
+  rollback: the previous image never reads the new column, and branches it creates meanwhile are filled in on
+  the next cross-project move or by the release that makes the column NOT NULL. Multi-page merge requests and
+  the shared draft read them.
+- Migration `20261223100000_breaking_ack_commit` adds a nullable `merge_requests.breaking_ack_commit_id` and
+  fills it for every open merge request whose breaking-API acknowledgement is current, so none needs to be
+  given again. It survives a rollback: the previous image never reads the column, and this release keeps
+  writing `breaking_ack_revision_id` for it. An acknowledgement given while rolled back is not current after
+  upgrading again and has to be given once more.
+- Migration `20261224100000_revision_id_line` adds a nullable `document_revisions.id_line`, the id line a
+  pushed file carried, so the remote serves it back byte for byte. No backfill. It survives a rollback: the
+  previous image never reads it, and a pushed revision it serves gets the canonical id line, which changes
+  that file's SHA for anyone who fetches from the rolled-back remote.
+- With the git remote on, the `git` service now writes: revisions, pages, branches and merge requests, through
+  the same code the API uses, so it needs the same Postgres, MinIO and Redis access it already has from
+  `.env`. Pushes count against `PUBLIC_RATE_LIMIT_PER_MIN` per IP, as fetches do. A push is read into memory
+  whole and capped at 256 MB.
+- New env var `GIT_NOREPLY_DOMAIN` (default `knowledge`): commit emails are
+  `<userId>@users.noreply.<domain>`, never a person's address. Each commit keeps the domain it was written
+  with, so a change applies to new commits only. Set it before this release if the domain should differ.
+- The git remote is a sixth process of the api image and is **off by default** twice. To turn it on: add
+  `git` to `COMPOSE_PROFILES` and set `GIT_REMOTE_ENABLED=true` in the GitHub `production` environment, then
+  deploy. With the profile on, the deploy also builds `knowledge-api-git` (the `git-runtime` stage of
+  `Dockerfile.api`: the api image plus the `git` binary, about 96 MB more), and compose starts the `git`
+  service with a new `gitcache` volume. The Caddyfile now routes `/git/*` to it and answers 404 there while
+  it is not running, so leaving it off changes nothing. New env vars, with defaults: `GIT_REMOTE_ENABLED`
+  (`false`), `GIT_PORT` (`3002`), `GIT_CACHE_DIR` (the OS temp dir; `/var/cache/knowledge-git` in the image).
+  The volume is a cache: deleting it costs one rebuild per project and access set from Postgres and MinIO,
+  and nothing else. Fetches go through the Cloudflare Worker, which gives up after about 100 s, so the first
+  clone of a very large project can time out; the repository keeps building, and a retry finishes it. Rolling
+  back is safe: nothing writes to the database, and the previous image has no `git` service.
+- `Dockerfile.api` now ends with the `git-runtime` stage, so an untargeted `docker build -f Dockerfile.api`
+  builds the git image. The deploy and the dev compose file name `--target runtime` for the api image; any
+  other script that builds it must too.
+
 ## [0.40.0] — 2026-10-30
 
 ### Added
@@ -5304,7 +5467,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.40.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.41.0...HEAD
+[0.41.0]: https://github.com/hrustalq/knowledge/compare/v0.40.0...v0.41.0
 [0.40.0]: https://github.com/hrustalq/knowledge/compare/v0.39.0...v0.40.0
 [0.39.0]: https://github.com/hrustalq/knowledge/compare/v0.38.0...v0.39.0
 [0.38.0]: https://github.com/hrustalq/knowledge/compare/v0.37.0...v0.38.0

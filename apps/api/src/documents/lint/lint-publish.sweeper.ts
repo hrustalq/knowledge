@@ -107,9 +107,18 @@ export class LintPublishSweeper implements OnModuleInit, OnModuleDestroy {
       this.prisma.agentRun.findUniqueOrThrow({ where: { id: check.agentRunId! } }),
       this.prisma.mergeRequest.findUniqueOrThrow({
         where: { id: check.mergeRequestId },
-        include: { sourceBranch: { select: { headRevisionId: true } }, document: { select: { workspaceId: true } } },
+        include: { sourceBranch: { select: { name: true } }, document: { select: { workspaceId: true } } },
       }),
     ]);
+    // The check's page (#636: one check per page) and that page's source head now.
+    const { documentId } = await this.prisma.documentRevision.findUniqueOrThrow({
+      where: { id: check.headRevisionId },
+      select: { documentId: true },
+    });
+    const pageBranch = await this.prisma.documentBranch.findUnique({
+      where: { documentId_name: { documentId, name: mr.sourceBranch.name } },
+      select: { headRevisionId: true },
+    });
     const findings = (Array.isArray(run.findings) ? (run.findings as unknown as AgentFinding[]) : []).filter(
       (f) => f.kind === 'style' && f.ruleId,
     );
@@ -120,12 +129,12 @@ export class LintPublishSweeper implements OnModuleInit, OnModuleDestroy {
     // merge request, and threads about a head nobody is looking at would only
     // be resolved again by it. A merge request that closed keeps its verdict
     // and gets no threads — its discussion is read-only.
-    if (mr.sourceBranch.headRevisionId !== check.headRevisionId) {
+    if (pageBranch?.headRevisionId !== check.headRevisionId) {
       await this.finish(check.id, { status: 'skipped', reason: 'superseded', counts: { ...counts } });
       return;
     }
     if (mr.status === 'open') {
-      await withLocale(asLocale(run.locale), () => this.reconcile(check, run.createdBy, findings));
+      await withLocale(asLocale(run.locale), () => this.reconcile(check, documentId, run.createdBy, findings));
     }
     await this.finish(check.id, { status, reason: null, counts: { ...counts } });
     await this.events.publish({
@@ -136,12 +145,30 @@ export class LintPublishSweeper implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  /** Earlier lint threads of the merge request against this check's findings, in one transaction. */
-  private async reconcile(check: MergeRequestCheck, authorId: string, findings: AgentFinding[]): Promise<void> {
-    const rows = await this.prisma.mergeRequestThread.findMany({
+  /**
+   * Earlier lint threads of this page of the merge request against this
+   * check's findings, in one transaction. Another page's threads belong to its
+   * own checks (#636), so they are neither kept nor resolved here.
+   */
+  private async reconcile(check: MergeRequestCheck, documentId: string, authorId: string, findings: AgentFinding[]): Promise<void> {
+    const all = await this.prisma.mergeRequestThread.findMany({
       where: { mergeRequestId: check.mergeRequestId, checkId: { not: null }, ruleId: { not: null } },
       select: { id: true, ruleId: true, anchor: true, resolved: true },
     });
+    // A lint thread's page is its anchor's revision: `styleFindings` anchors every finding.
+    const revisionOf = (r: (typeof all)[number]) => {
+      const anchor = r.anchor as ReviewThreadAnchor | null;
+      return anchor && 'revisionId' in anchor ? anchor.revisionId : undefined;
+    };
+    const onPage = new Set(
+      (
+        await this.prisma.documentRevision.findMany({
+          where: { id: { in: all.map(revisionOf).filter((id): id is string => !!id) }, documentId },
+          select: { id: true },
+        })
+      ).map((r) => r.id),
+    );
+    const rows = all.filter((r) => onPage.has(revisionOf(r) ?? ''));
     const prior: PriorLintThread[] = rows.map((r) => {
       const anchor = r.anchor as ReviewThreadAnchor | null;
       return { threadId: r.id, ruleId: r.ruleId, quote: anchor?.type === 'text' ? anchor.quote : null, resolved: r.resolved };

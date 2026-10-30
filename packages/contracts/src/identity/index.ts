@@ -1180,6 +1180,12 @@ export interface ProjectOverviewResponse {
   recentPages: { documentId: string; title: string; updatedAt: string }[];
 }
 
+// GET /v1/projects/:id/git (#636). 404 while the workspace has git switched off.
+export interface ProjectGitResponse {
+  /** The HTTPS clone URL; null while the deployment runs no git remote (`GIT_REMOTE_ENABLED`). */
+  url: string | null;
+}
+
 // ---------------------------------------------------------------------------
 // Avatars. The same three-step upload page attachments use, for the same
 // reason: the bytes go straight to object storage on a presigned URL, so a
@@ -1537,6 +1543,7 @@ export const WORKSPACE_FEATURES = [
   'memos',
   'conflicts',
   'assistant',
+  'git',
 ] as const;
 export type WorkspaceFeature = (typeof WORKSPACE_FEATURES)[number];
 

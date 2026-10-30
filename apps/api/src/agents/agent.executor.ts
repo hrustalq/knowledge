@@ -1129,42 +1129,54 @@ export class AgentExecutor {
 
     // Asked again on execution, not only at enqueue: the page may have been
     // restricted since, and this run's findings are listed to every member.
+    // The page is the head's (#636: a merge request spans pages, one check each).
     const scope = await this.runScope(run, principal);
-    const mr = await this.prisma.mergeRequest.findFirst({
-      where: { id: lint.mergeRequestId, document: { workspaceId: run.workspaceId, AND: [visibilityWhere(scope)] } },
-      include: {
-        targetBranch: { select: { headRevisionId: true } },
-        document: { select: { title: true, projectId: true } },
-      },
-    });
-    if (!mr) throw new Error(t('agent.lint.notVisible'));
+    const head = await this.prisma.documentRevision.findUnique({ where: { id: lint.headRevisionId }, select: { documentId: true } });
+    const mr =
+      head &&
+      (await this.prisma.mergeRequest.findFirst({
+        where: { id: lint.mergeRequestId, document: { workspaceId: run.workspaceId } },
+        include: { targetBranch: { select: { name: true } } },
+      }));
+    const doc =
+      mr &&
+      (await this.prisma.document.findFirst({
+        where: { id: head.documentId, workspaceId: run.workspaceId, AND: [visibilityWhere(scope)] },
+        select: { id: true, title: true, projectId: true },
+      }));
+    if (!mr || !doc) throw new Error(t('agent.lint.notVisible'));
 
-    const styleguide = await this.skills.effectiveStyleguide(run.workspaceId, mr.document.projectId);
+    const styleguide = await this.skills.effectiveStyleguide(run.workspaceId, doc.projectId);
     if (!styleguide || enabledRules(styleguide.rules).length === 0) {
       return { summary: t('agent.lint.noStyleguide'), findings: [] };
     }
     this.trust(run, JSON.stringify(styleguide.rules));
 
     await report({ stage: 'diff' });
-    const target = mr.targetBranch.headRevisionId;
+    const target = (
+      await this.prisma.documentBranch.findUnique({
+        where: { documentId_name: { documentId: doc.id, name: mr.targetBranch.name } },
+        select: { headRevisionId: true },
+      })
+    )?.headRevisionId;
     const diff = target
-      ? await this.compare.compare(mr.documentId, target, lint.headRevisionId, 'merge-base', { structural: false })
-      : await this.compare.compareWithNothing(mr.documentId, lint.headRevisionId, { structural: false });
+      ? await this.compare.compare(doc.id, target, lint.headRevisionId, 'merge-base', { structural: false })
+      : await this.compare.compareWithNothing(doc.id, lint.headRevisionId, { structural: false });
     const text = changedText(diff.hunks).slice(0, LINT_TEXT_MAX);
     if (!text.trim()) return { summary: t('agent.lint.nothingChanged'), findings: [] };
 
     await report({ stage: 'linting' });
     const raw = await this.client.chat(
       { config: agent.config, userId: principal.userId, operation: 'lint', locale: run.locale as Locale },
-      lintMessages(agent.instructions, styleguide.rules, mr.document.title, text),
+      lintMessages(agent.instructions, styleguide.rules, doc.title, text),
       { json: true },
     );
     const max = this.config.get('LINT_MAX_FINDINGS', { infer: true });
     const { violations, dropped } = readLintViolations(safeJson(raw), styleguide.rules, text, max);
-    const page = await this.documents.getContent(mr.documentId, lint.headRevisionId);
+    const page = await this.documents.getContent(doc.id, lint.headRevisionId);
     const findings = styleFindings(violations, styleguide.rules, {
-      documentId: mr.documentId,
-      title: mr.document.title,
+      documentId: doc.id,
+      title: doc.title,
       revisionId: lint.headRevisionId,
       markdown: page.markdown,
       changed: text,

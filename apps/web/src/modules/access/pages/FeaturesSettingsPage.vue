@@ -28,6 +28,8 @@ const NAV_LABEL: Record<WorkspaceFeature, string> = {
   memos: 'nav.memos',
   conflicts: 'nav.conflicts',
   assistant: 'nav.assistant',
+  // No nav entry: the remote is reached with `git clone`, not a page.
+  git: 'features.names.git',
 }
 
 const off = ref(new Set<WorkspaceFeature>())
@@ -76,7 +78,7 @@ async function save() {
 
     <form v-else class="space-y-5" @submit.prevent="save">
       <ul class="divide-y rounded-md border">
-        <li v-for="feature in WORKSPACE_FEATURES" :key="feature" class="flex items-start gap-3 px-4 py-3">
+        <li v-for="feature in WORKSPACE_FEATURES" :key="feature" class="flex items-center gap-3 px-4 py-3">
           <Checkbox
             :id="`feature-${feature}`"
             class="mt-0.5"

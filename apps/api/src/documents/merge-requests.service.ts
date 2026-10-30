@@ -9,15 +9,18 @@ import type {
   ListMergeRequestsResponse,
   ListWorkspaceMergeRequestsRequest,
   ListWorkspaceMergeRequestsResponse,
+  MergeConflictHunk,
   MergeMergeRequestResponse,
   MergeRequestApiChangesResponse,
   MergeRequestCheckInfo,
+  MergeRequestConflictsResponse,
   MergeRequestDiffResponse,
   MergeRequestInfo,
   MergeRequestProvenance,
   MergeRequestStatus,
   MergeStrategy,
   PublishBranchResponse,
+  UpdateMergeRequestBranchResponse,
 } from '@knowledge/contracts';
 import type { DocumentBranch, MergeRequest, MergeRequestReviewer } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -30,7 +33,12 @@ import { EventsPublisher } from '../events/events.publisher.js';
 import { WORKSPACE_READER, type Principal } from '../auth/principal.js';
 import { DOCUMENT_ARCHIVED, DocumentsService } from './documents.service.js';
 import { CompareService } from './compare.service.js';
-import type { CreateMergeRequestDto, PublishBranchDto, UpdateMergeRequestDto } from './dto/merge-requests.dto.js';
+import type {
+  CreateMergeRequestDto,
+  PublishBranchDto,
+  UpdateMergeRequestBranchDto,
+  UpdateMergeRequestDto,
+} from './dto/merge-requests.dto.js';
 import { t } from '../i18n/t.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
@@ -42,6 +50,7 @@ import { LintChecksService } from './lint/lint-checks.service.js';
 import { lintGateEnforced, overridable } from './lint/lint-check.js';
 import { ProjectCommitsService } from '../git/project-commits.service.js';
 import { sourcePages } from './mr-pages.js';
+import { hasConflictMarkers, threeWay, type ThreeWayResult } from './three-way.js';
 
 /** Fallback author when no principal is supplied (AUTH_MODE=none, MCP stdio). */
 export const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
@@ -63,6 +72,18 @@ interface MrPage {
   mergeBase: string | null;
 }
 
+/** A page body and its content type. */
+interface Body {
+  text: string;
+  contentType: string;
+}
+
+/** The branch names git's conflict markers are labelled with. */
+type MergeLabels = { target: string; source: string };
+
+/** The target moved past the merge base: a fast-forward no longer lands it. */
+const behind = (p: MrPage): boolean => p.target.headRevisionId !== null && p.mergeBase !== p.target.headRevisionId;
+
 /**
  * GitLab-style merge requests over the revision DAG (plan.md §8).
  *
@@ -71,14 +92,16 @@ interface MrPage {
  * the page it was opened from. Every gate runs across the set, and the merge
  * lands every page in one transaction or none.
  *
- * Merging is fast-forward-preconditioned per page: each target head must equal
- * its merge base (i.e. must not have advanced past where we branched),
- * otherwise 409 + comparison link — 3-way content merge is future work.
- * Strategies:
+ * Merging is a 3-way merge per page (#636, `three-way.ts`): a page whose
+ * target still sits at its merge base lands the source head's body, as a
+ * fast-forward would, and one whose target moved lands the line merge of both
+ * sides. Overlapping hunks refuse with `conflict`, which "Update branch"
+ * (`updateBranch`) resolves by merging the target into the source — history is
+ * append-only, so nothing is rebased. Strategies:
  * - merge-commit → new revision with parents [targetHead, sourceHead]
  * - squash      → new revision parented only on targetHead
- * Either way the merge revision carries the source head's content and goes
- * through the normal finalize → outbox → reindex pipeline.
+ * Either way the merge revision goes through the normal finalize → outbox →
+ * reindex pipeline.
  *
  * Merge gating: draft MRs never merge; MR_REQUIRED_APPROVALS non-author
  * approvals are required (0 disables); merging into a protected branch
@@ -714,9 +737,9 @@ export class MergeRequestsService {
   /**
    * `opts.onTopOf` (#474, `publishBranch` only): the target heads the author
    * reviewed after they moved past the source, one per page (#636). A page
-   * lands over its listed head instead of refusing as diverged — the source's
-   * content wins, as it does for a shared draft's "Publish on top" — and over
-   * no other head.
+   * whose 3-way merge conflicts lands over its listed head instead of refusing
+   * — the source's content wins, as it does for a shared draft's "Publish on
+   * top" — and over no other head.
    */
   async merge(
     mergeRequestId: string,
@@ -776,8 +799,9 @@ export class MergeRequestsService {
     if (principal && [mr.targetBranch, ...pages.map((p) => p.target)].some((b) => b.protected)) {
       await this.access.requireRole(principal, workspaceId, 'admin');
     }
-    // Style lint (#74): after approvals, before divergence — a rebase would
-    // only produce a new head to lint. Not enforced where approvals are not.
+    // Style lint (#74): after approvals, before the 3-way merge — updating the
+    // branch would only produce a new head to lint. Not enforced where
+    // approvals are not.
     if (lintGateEnforced(principal)) {
       const gate = await this.lint.gate(mr.id, true);
       if (gate.blocked) {
@@ -795,18 +819,12 @@ export class MergeRequestsService {
       }
     }
 
-    for (const p of pages) {
-      const targetHeadId = p.target.headRevisionId;
-      if (targetHeadId && p.mergeBase !== targetHeadId && !opts.onTopOf?.includes(targetHeadId)) {
-        // Fast-forward precondition (plan.md §7 conflict semantics): the target
-        // advanced past the merge base. 3-way content merge is future work —
-        // rebase the source branch (new revision on top of target head) instead.
-        throw this.diverged(p.documentId, p.target, p.source, targetHeadId, p.source.headRevisionId);
-      }
-    }
+    // What every page lands with (#636), where the fast-forward precondition
+    // stood: only overlapping hunks refuse now, before anything is staged.
+    const bodies = await this.mergedBodies(pages, { target: mr.targetBranch.name, source: mr.sourceBranch.name }, opts.onTopOf);
     // Breaking API changes (#78), last because it parses two specs per spec
-    // page: each target head is its merge base here, so these are the diffs
-    // the panel showed.
+    // page. Each diff runs from the merge base to the source head: the panel's
+    // diff, and what a clean 3-way merge adds to the target.
     const breaking = (await this.breakingState(mr, pages)).blocking;
     if (breaking) {
       throw new ConflictException({
@@ -825,29 +843,18 @@ export class MergeRequestsService {
 
     // Every page's body is staged before the transaction opens (#636): a draft
     // revision on the target, parented on the head the checks above read, with
-    // the source head's bytes. The transaction then only locks, re-checks and
+    // the merged bytes. The transaction then only locks, re-checks and
     // finalizes, so its length grows with the page count by finalize's own two
     // S3 reads per page, not by the four a merge used to make inside it.
+    const drafts: string[] = [];
     const staged: { documentId: string; revisionId: string; targetBranchId: string; targetHeadId: string | null }[] = [];
     let finalized: Awaited<ReturnType<DocumentsService['finalizeRevision']>>;
     try {
       for (const p of pages) {
-        const sourceHead = await this.prisma.documentRevision.findUniqueOrThrow({ where: { id: p.source.headRevisionId } });
-        // Draft on the target branch: createRevision parents it on the target head (order 1).
-        const draft = await this.documents.createRevision(p.documentId, {
-          branch: p.target.name,
-          message,
-          contentType: sourceHead.contentType,
-        });
-        staged.push({ documentId: p.documentId, revisionId: draft.revisionId, targetBranchId: p.target.id, targetHeadId: p.target.headRevisionId });
-        if (strategy === 'merge-commit') {
-          // Second parent = source head → a true merge node in the revision DAG (plan.md §4).
-          await this.prisma.revisionParent.create({
-            data: { revisionId: draft.revisionId, parentRevisionId: sourceHead.id, parentOrder: p.target.headRevisionId ? 2 : 1 },
-          });
-        }
-        const draftRow = await this.prisma.documentRevision.findUniqueOrThrow({ where: { id: draft.revisionId } });
-        await this.storage.putObjectText(draftRow.s3Key, await this.storage.getObjectText(sourceHead.s3Key), sourceHead.contentType);
+        // Second parent = source head → a true merge node in the revision DAG (plan.md §4).
+        const second = strategy === 'merge-commit' ? { id: p.source.headRevisionId, order: p.target.headRevisionId ? 2 : 1 } : null;
+        const revisionId = await this.stage(drafts, p.documentId, p.target.name, message, bodies.get(p.documentId)!, second);
+        staged.push({ documentId: p.documentId, revisionId, targetBranchId: p.target.id, targetHeadId: p.target.headRevisionId });
       }
 
       // The merge revisions and the MR's own status commit together. They did
@@ -861,17 +868,13 @@ export class MergeRequestsService {
           // finalizeRevision takes it first too, so the order is the same for
           // every writer and a merge never deadlocks against a plain save.
           await this.commits.lock(projectId);
-          // The branch-row locks. The fast-forward precondition above is an
-          // unlocked read: under READ COMMITTED it sees the last committed head
+          // The branch-row locks. The heads the merge above was computed on are
+          // an unlocked read: under READ COMMITTED it sees the last committed head
           // and NOT a concurrent merge's uncommitted advance, so two mergers
           // could both pass it and the second would then commit over the
           // first's head. Taken in id order, so two merges sharing pages
           // serialize rather than deadlock.
-          const ids = staged.map((x) => x.targetBranchId);
-          const locked = await this.prisma.$queryRaw<{ id: string; head_revision_id: string | null }[]>`
-            SELECT id, head_revision_id FROM document_branches WHERE id = ANY(${ids}::uuid[]) ORDER BY id FOR UPDATE
-          `;
-          const headNow = new Map(locked.map((r) => [r.id, r.head_revision_id]));
+          const headNow = await this.lockHeads(staged.map((x) => x.targetBranchId));
           for (const x of staged) {
             const now = headNow.get(x.targetBranchId) ?? null;
             if (now === x.targetHeadId) continue;
@@ -921,10 +924,7 @@ export class MergeRequestsService {
         { timeout: 30_000, maxWait: 10_000 },
       );
     } catch (e) {
-      // What the transaction never finalized is a draft nobody will finish.
-      const drafts = { id: { in: staged.map((x) => x.revisionId) }, status: 'draft' };
-      await this.prisma.revisionParent.deleteMany({ where: { revision: drafts } }).catch(() => undefined);
-      await this.prisma.documentRevision.deleteMany({ where: drafts }).catch(() => undefined);
+      await this.dropDrafts(drafts);
       throw e;
     }
 
@@ -952,8 +952,8 @@ export class MergeRequestsService {
    * merge request from it — or reuse the open one — and merge it at once. When
    * a gate refuses (a protected branch for a non-admin, approvals, lint, a
    * breaking API change, a draft MR) the merge request stays open for review
-   * and `merged` is false. Nothing to publish and a default head the author has
-   * not seen are refused first, so a refused publish never opens anything.
+   * and `merged` is false. Nothing to publish and a conflict the author has not
+   * reviewed are refused first, so a refused publish never opens anything.
    */
   async publishBranch(
     documentId: string,
@@ -972,12 +972,9 @@ export class MergeRequestsService {
     const pages = await this.changedPages(source, target.name);
     if (pages.length === 0) throw new BadRequestException(t('error.mergeRequest.nothingToMerge'));
     this.assertTargetsExist(pages, target.name);
-    for (const p of pages) {
-      const targetHeadId = p.target.headRevisionId;
-      if (targetHeadId && p.mergeBase !== targetHeadId && !dto.onTopOf?.includes(targetHeadId)) {
-        throw this.diverged(p.documentId, p.target, p.source, targetHeadId, p.source.headRevisionId);
-      }
-    }
+    // A conflict refuses before an MR opens (an MR makes the branch readable);
+    // merge() merges again over the heads it locks.
+    await this.mergedBodies(pages, { target: target.name, source: source.name }, dto.onTopOf);
 
     const open = await this.openFrom(source, target);
     // Opened from a page the draft changes (#636): Publish from an untouched
@@ -1019,23 +1016,231 @@ export class MergeRequestsService {
     }
   }
 
-  /** The fast-forward refusal (plan.md §7), with the comparison a client shows before publishing on top. */
-  private diverged(
-    documentId: string,
-    target: DocumentBranch,
-    source: DocumentBranch,
-    targetHeadId: string,
-    sourceHeadId: string,
-  ): ConflictException {
+  /**
+   * The 3-way state of a merge request (#636): how many pages are behind their
+   * target, and every conflicting page `scope` may open, with git's markers for
+   * the conflict view. A closed or merged one has nothing to merge.
+   */
+  async mergeConflicts(mergeRequestId: string, scope: AccessScope): Promise<MergeRequestConflictsResponse> {
+    const mr = await this.getMrOrThrow(mergeRequestId);
+    const pages = mr.status === 'open' ? (await this.changedPages(mr.sourceBranch, mr.targetBranch.name)).filter(behind) : [];
+    const labels = { target: mr.targetBranch.name, source: mr.sourceBranch.name };
+    // ponytail: merges every behind page on each read; cache by (base, target, source) heads if an MR page gets slow.
+    const conflicted: { page: MrPage; merged: Extract<ThreeWayResult, { clean: false }> }[] = [];
+    for (const page of pages) {
+      const { merged } = await this.threeWayOf(page, labels);
+      if (merged && !merged.clean) conflicted.push({ page, merged });
+    }
+    const visible = await this.permissions.visibleDocumentIds(scope, conflicted.map((c) => c.page.documentId));
+    const shown = conflicted.filter((c) => visible.has(c.page.documentId));
+    const titles = new Map(
+      (await this.prisma.document.findMany({ where: { id: { in: shown.map((c) => c.page.documentId) } }, select: { id: true, title: true } })).map(
+        (d) => [d.id, d.title],
+      ),
+    );
+    return {
+      mergeRequestId: mr.id,
+      behind: pages.length,
+      pages: shown.map(({ page, merged }) => ({
+        documentId: page.documentId,
+        title: titles.get(page.documentId) ?? '',
+        targetHeadRevisionId: page.target.headRevisionId!,
+        sourceHeadRevisionId: page.source.headRevisionId,
+        hunks: merged.hunks,
+        text: merged.text,
+      })),
+      hiddenPages: conflicted.length - shown.length,
+    };
+  }
+
+  /**
+   * "Update branch" (#636): merge the target into the source on every page
+   * whose target moved past the merge base. Each gets a revision on the source
+   * branch parented on its head (order 1) and the target head (order 2), and
+   * the update is one project commit, so every fetcher of the branch
+   * fast-forwards — history is append-only, so this replaces a rebase. A
+   * conflicting page needs a resolution, the body a person resolved against
+   * that target head; while one is missing the update refuses with `conflict`.
+   */
+  async updateBranch(
+    mergeRequestId: string,
+    dto: UpdateMergeRequestBranchDto,
+    principal?: Principal,
+  ): Promise<UpdateMergeRequestBranchResponse> {
+    const mr = await this.getMrOrThrow(mergeRequestId);
+    if (mr.status !== 'open') {
+      throw new BadRequestException(t('error.mergeRequest.notOpenForUpdate', { id: mr.id, status: t(`status.mr.${mr.status}`) }));
+    }
+    const pages = (await this.changedPages(mr.sourceBranch, mr.targetBranch.name)).filter(behind);
+    if (pages.length === 0) throw new BadRequestException(t('error.mergeRequest.upToDate', { target: mr.targetBranch.name }));
+    const { projectId, workspaceId } = await this.prisma.document.findUniqueOrThrow({
+      where: { id: mr.documentId },
+      select: { projectId: true, workspaceId: true },
+    });
+    // It writes every page it updates, as a merge does: edit on each, and an
+    // admin for a protected source branch.
+    if (principal && principal.mode !== 'dev') {
+      const scope = await this.permissions.scopeFor(principal, workspaceId);
+      for (const p of pages) {
+        if (p.documentId !== mr.documentId) await this.permissions.requireLevel(scope, { type: 'document', id: p.documentId }, 'edit');
+      }
+    }
+    if (principal && pages.some((p) => p.source.protected)) await this.access.requireRole(principal, workspaceId, 'admin');
+
+    const labels = { target: mr.targetBranch.name, source: mr.sourceBranch.name };
+    const resolutions = new Map((dto.resolutions ?? []).map((r) => [r.documentId, r]));
+    const bodies = new Map<string, Body>();
+    const conflicts: { page: MrPage; hunks: MergeConflictHunk[] }[] = [];
+    for (const p of pages) {
+      const { source, merged } = await this.threeWayOf(p, labels);
+      if (merged!.clean) {
+        bodies.set(p.documentId, { text: merged!.text, contentType: source.contentType });
+        continue;
+      }
+      const r = resolutions.get(p.documentId);
+      if (!r) {
+        conflicts.push({ page: p, hunks: merged!.hunks });
+        continue;
+      }
+      if (r.targetHeadRevisionId !== p.target.headRevisionId) {
+        throw new ConflictException({
+          statusCode: 409,
+          message: t('error.mergeRequest.resolutionStale', { target: mr.targetBranch.name }),
+          reason: 'diverged',
+          documentId: p.documentId,
+          currentHeadRevisionId: p.target.headRevisionId,
+          sourceHeadRevisionId: p.source.headRevisionId,
+        });
+      }
+      if (hasConflictMarkers(r.content)) throw new BadRequestException(t('error.mergeRequest.markersLeft', { documentId: p.documentId }));
+      bodies.set(p.documentId, { text: r.content, contentType: source.contentType });
+    }
+    if (conflicts.length) throw this.conflict(conflicts, labels);
+
+    const message = `Merge branch '${mr.targetBranch.name}' into '${mr.sourceBranch.name}'`;
+    const drafts: string[] = [];
+    try {
+      const staged: { page: MrPage; revisionId: string }[] = [];
+      for (const p of pages) {
+        const second = { id: p.target.headRevisionId!, order: 2 };
+        staged.push({ page: p, revisionId: await this.stage(drafts, p.documentId, p.source.name, message, bodies.get(p.documentId)!, second) });
+      }
+      await this.prisma.withTransaction(
+        async () => {
+          // The same lock order as merge(): the project's commit lock, then the
+          // branch rows in id order. A write to the source since the merge was
+          // computed would be overwritten, so it refuses instead.
+          await this.commits.lock(projectId);
+          const headNow = await this.lockHeads(pages.map((p) => p.source.id));
+          if (pages.some((p) => headNow.get(p.source.id) !== p.source.headRevisionId)) {
+            throw new ConflictException(t('error.mergeRequest.concurrentChange', { id: mr.id }));
+          }
+          // `dedupe: false`: a resolution that keeps the source's body is still
+          // the merge node that moves the merge base.
+          const revisionIds: string[] = [];
+          for (const x of staged) {
+            revisionIds.push((await this.documents.finalizeRevision(x.page.documentId, x.revisionId, { commit: false, dedupe: false })).revisionId);
+          }
+          await this.commits.recordRevisions(revisionIds, { authorId: principal?.userId, mergedFrom: mr.targetBranch.name });
+        },
+        { timeout: 30_000, maxWait: 10_000 },
+      );
+    } catch (e) {
+      await this.dropDrafts(drafts);
+      throw e;
+    }
+
+    await this.recordActivity(mr.documentId, 'merge-request.updated', mr.id, principal?.userId, {
+      title: mr.title,
+      changed: ['branch'],
+      ...(pages.length > 1 ? { pageCount: pages.length } : {}),
+    });
+    return { ...(await this.get(mr.id)), updated: pages.length };
+  }
+
+  /**
+   * What each page lands with (#636). A page whose target still sits at the
+   * merge base takes the source head's body, as a fast-forward would; one
+   * whose target moved, the 3-way merge of both sides. Where its hunks
+   * overlap, the source's body wins only over a target head `onTopOf` lists
+   * (the author reviewed it); otherwise the whole merge refuses with
+   * `conflict`, before anything is staged.
+   */
+  private async mergedBodies(pages: MrPage[], labels: MergeLabels, onTopOf: readonly string[] = []): Promise<Map<string, Body>> {
+    const bodies = new Map<string, Body>();
+    const conflicts: { page: MrPage; hunks: MergeConflictHunk[] }[] = [];
+    for (const p of pages) {
+      const { source, merged } = await this.threeWayOf(p, labels);
+      if (merged && !merged.clean && !onTopOf.includes(p.target.headRevisionId!)) conflicts.push({ page: p, hunks: merged.hunks });
+      bodies.set(p.documentId, { text: merged?.clean ? merged.text : source.text, contentType: source.contentType });
+    }
+    if (conflicts.length) throw this.conflict(conflicts, labels);
+    return bodies;
+  }
+
+  /** The source head's body and, when the target moved past the merge base, the 3-way merge of both sides. */
+  private async threeWayOf(p: MrPage, labels: MergeLabels): Promise<{ source: Body; merged: ThreeWayResult | null }> {
+    const source = await this.bodyOf(p.source.headRevisionId);
+    if (!behind(p)) return { source, merged: null };
+    // No common ancestor (git's unrelated histories): each side is all additions.
+    const base = p.mergeBase ? (await this.bodyOf(p.mergeBase)).text : '';
+    return { source, merged: threeWay(base, (await this.bodyOf(p.target.headRevisionId!)).text, source.text, labels) };
+  }
+
+  private async bodyOf(revisionId: string): Promise<Body> {
+    const r = await this.prisma.documentRevision.findUniqueOrThrow({ where: { id: revisionId }, select: { s3Key: true, contentType: true } });
+    return { text: await this.storage.getObjectText(r.s3Key), contentType: r.contentType };
+  }
+
+  /** 409 `conflict` naming every conflicting page and its hunks, and the first page as `diverged` named it. Ids, never titles. */
+  private conflict(conflicts: { page: MrPage; hunks: MergeConflictHunk[] }[], labels: MergeLabels): ConflictException {
+    const [{ page }] = conflicts;
     return new ConflictException({
       statusCode: 409,
-      message: t('error.mergeRequest.diverged', { target: target.name, source: source.name }),
-      reason: 'diverged',
-      documentId,
-      currentHeadRevisionId: targetHeadId,
-      sourceHeadRevisionId: sourceHeadId,
-      comparisonUrl: `/v1/documents/${documentId}/compare?from=${targetHeadId}&to=${sourceHeadId}&mode=merge-base`,
+      message: t('error.mergeRequest.conflict', { target: labels.target, source: labels.source, count: conflicts.length }),
+      reason: 'conflict',
+      conflicts: conflicts.map((c) => ({ documentId: c.page.documentId, hunks: c.hunks })),
+      documentId: page.documentId,
+      currentHeadRevisionId: page.target.headRevisionId,
+      sourceHeadRevisionId: page.source.headRevisionId,
+      comparisonUrl: `/v1/documents/${page.documentId}/compare?from=${page.target.headRevisionId}&to=${page.source.headRevisionId}&mode=merge-base`,
     });
+  }
+
+  /**
+   * A draft revision on `branch` with `body`: createRevision parents it on the
+   * branch head (order 1), and a merge adds `second`, the head merged in. Its
+   * id goes into `drafts` first, so a failure halfway is cleaned up too.
+   */
+  private async stage(
+    drafts: string[],
+    documentId: string,
+    branch: string,
+    message: string,
+    body: Body,
+    second: { id: string; order: number } | null,
+  ): Promise<string> {
+    const { revisionId } = await this.documents.createRevision(documentId, { branch, message, contentType: body.contentType });
+    drafts.push(revisionId);
+    if (second) await this.prisma.revisionParent.create({ data: { revisionId, parentRevisionId: second.id, parentOrder: second.order } });
+    const row = await this.prisma.documentRevision.findUniqueOrThrow({ where: { id: revisionId }, select: { s3Key: true } });
+    await this.storage.putObjectText(row.s3Key, body.text, body.contentType);
+    return revisionId;
+  }
+
+  /** Locks branch rows in id order, so writers sharing pages serialize rather than deadlock, and reads their heads. */
+  private async lockHeads(branchIds: string[]): Promise<Map<string, string | null>> {
+    const locked = await this.prisma.$queryRaw<{ id: string; head_revision_id: string | null }[]>`
+      SELECT id, head_revision_id FROM document_branches WHERE id = ANY(${branchIds}::uuid[]) ORDER BY id FOR UPDATE
+    `;
+    return new Map(locked.map((r) => [r.id, r.head_revision_id]));
+  }
+
+  /** What a transaction never finalized is a draft nobody will finish. */
+  private async dropDrafts(ids: string[]): Promise<void> {
+    const drafts = { id: { in: ids }, status: 'draft' };
+    await this.prisma.revisionParent.deleteMany({ where: { revision: drafts } }).catch(() => undefined);
+    await this.prisma.documentRevision.deleteMany({ where: drafts }).catch(() => undefined);
   }
 
   /**

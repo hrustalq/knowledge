@@ -506,6 +506,31 @@ It is too large for one reviewable PR.
   source head, target head). It is clean whenever the MR's own merge would be,
   and every fetcher fast-forwards. A conflicting MR shows the conflict view and
   the `git pull` recipe.
+- **As built** (one PR). `threeWay` (`documents/three-way.ts`) takes `target`
+  as ours, so its markers read like `git merge <source>` on the target. It
+  splits lines keeping their `\n`, and closes a side that lacks one before the
+  next marker. `merge()` and `publishBranch()` compute every page's body with
+  `mergedBodies` where the fast-forward check stood. The first stage is unchanged,
+  and the only new reason is `conflict` (`conflicts`: page ids and line-range
+  hunks, never text). `diverged` remains for a head that moved while the merge
+  landed. `GET :id/conflicts` and `POST :id/update-branch` (`resolutions`:
+  whole body + the target head it was resolved against) are mirrored in MCP by
+  `knowledge_get_merge_request includeConflicts` and
+  `knowledge_update_merge_request_branch` (a `WRITE_TOOLS` entry). Where the
+  build differs from the plan above:
+  - `onTopOf` survives as the conflict override (decided 2026-10-30): a
+    conflicting page lands the author's body over a head they reviewed. A
+    clean page ignores it.
+  - Spec pages merge line-wise like markdown. A merged spec that does not
+    parse is refused by finalize's validator, and the merge rolls back. It is
+    not reported as `conflict`.
+  - `finalizeRevision` takes `dedupe: false` for Update branch, so a resolution
+    equal to the source head still writes the merge node that moves the base.
+  - No `git pull` recipe yet: there is no remote to pull from until phase 3. The
+    conflict view resolves in place on the git-marker text instead, and the
+    recipe arrives with the Clone button (phase 5).
+  - Merge revisions are still authored by the stub, as before. The merger is
+    on the project commit.
 
 ### Phase 3 — read side
 

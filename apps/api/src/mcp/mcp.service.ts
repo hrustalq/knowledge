@@ -35,6 +35,7 @@ import { DocumentsService } from '../documents/documents.service.js';
 import { CompareService } from '../documents/compare.service.js';
 import { MergeRequestsService } from '../documents/merge-requests.service.js';
 import { MergeRequestThreadsService } from '../documents/merge-request-threads.service.js';
+import { MAX_INLINE_TEXT_CHARS } from '../documents/dto/documents.dto.js';
 import { SearchService } from '../search/search.service.js';
 import { firstPerPage } from '../search/ranking.js';
 import { EntitiesService } from '../entities/entities.service.js';
@@ -1925,15 +1926,19 @@ export class McpService {
       {
         description:
           'Get one merge request (heads, merge base, approvals, reviewers, draft flag). ' +
-          'Set includeDiff for the merge-base text+structural diff of every page it changes (`pages`), semantic for the graph-projection diff too.',
+          'Set includeDiff for the merge-base text+structural diff of every page it changes (`pages`), semantic for the graph-projection diff too. ' +
+          'Set includeConflicts for its 3-way state instead: how many pages are behind the target, and each conflicting page with its ' +
+          'hunks and the merge with git conflict markers (`text`) — resolve those and pass them to knowledge_update_merge_request_branch.',
         inputSchema: {
           mergeRequestId: z.string().uuid(),
           includeDiff: z.boolean().optional(),
           semantic: z.boolean().optional(),
+          includeConflicts: z.boolean().optional(),
         },
       },
-      async ({ mergeRequestId, includeDiff, semantic }) => {
+      async ({ mergeRequestId, includeDiff, semantic, includeConflicts }) => {
         const workspaceId = await guard.mr(mergeRequestId, 'viewer');
+        if (includeConflicts) return this.json(await this.mergeRequests.mergeConflicts(mergeRequestId, await guard.scope(workspaceId)));
         return this.json(
             includeDiff
               ? await this.mergeRequests.diff(mergeRequestId, await guard.scope(workspaceId), { semantic })
@@ -1995,7 +2000,8 @@ export class McpService {
       {
         description:
           'Merge an open merge request ("merge-commit" creates a two-parent DAG node, "squash" a single-parent one). ' +
-          'Fails with a comparison link when the target branch diverged — rebase the source branch first. ' +
+          'A page whose target moved is merged 3-way; overlapping edits fail with 409 `conflict` naming the pages and hunks — ' +
+          'resolve them with knowledge_update_merge_request_branch. ' +
           'Gated: draft MRs and MRs below MR_REQUIRED_APPROVALS non-author approvals are rejected with 409 details.',
         inputSchema: {
           mergeRequestId: z.string().uuid(),
@@ -2005,6 +2011,28 @@ export class McpService {
       async ({ mergeRequestId, strategy }) => {
         await guard.mr(mergeRequestId, 'editor');
         return this.json(await this.mergeRequests.merge(mergeRequestId, strategy ?? 'merge-commit', principal));
+      },
+    );
+
+    server.registerTool(
+      'knowledge_update_merge_request_branch',
+      {
+        description:
+          "Update a merge request's source branch from its target (GitLab's \"Update branch\"): merges the target into the " +
+          'source on every page behind it, as two-parent revisions — never a rebase. A conflicting page needs a resolution: ' +
+          'read it with knowledge_get_merge_request includeConflicts, replace each conflict-marker block with the resolved text, ' +
+          'and pass the whole body with the targetHeadRevisionId it showed. 409 `conflict` while one is missing.',
+        inputSchema: {
+          mergeRequestId: z.string().uuid(),
+          resolutions: z
+            .array(z.object({ documentId: z.string().uuid(), targetHeadRevisionId: z.string().uuid(), content: z.string().max(MAX_INLINE_TEXT_CHARS) }))
+            .max(1000)
+            .optional(),
+        },
+      },
+      async ({ mergeRequestId, resolutions }) => {
+        await guard.mr(mergeRequestId, 'editor');
+        return this.json(await this.mergeRequests.updateBranch(mergeRequestId, { resolutions }, principal));
       },
     );
 

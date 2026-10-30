@@ -1619,7 +1619,7 @@ export interface paths {
         put?: never;
         /**
          * Publish a working branch onto the default branch (#474)
-         * @description Opens a merge request from the branch (or reuses its open one) and merges it at once. When a gate refuses — `protected`, `approvals`, `lint`, `breaking-api`, `draft` — the merge request stays open and `merged` is false. 400 when there is nothing to publish; 409 `diverged` (naming the page) when a default head moved past the branch and `onTopOf` does not list it. Publishes every page the branch has revisions on (#636). The guard holds the caller to edit on the branch.
+         * @description Opens a merge request from the branch (or reuses its open one) and merges it at once. When a gate refuses — `protected`, `approvals`, `lint`, `breaking-api`, `draft` — the merge request stays open and `merged` is false. 400 when there is nothing to publish; 409 `conflict` (naming the pages and hunks) when a default head moved past the branch, the 3-way merge overlaps it and `onTopOf` does not list it. Publishes every page the branch has revisions on (#636). The guard holds the caller to edit on the branch.
          */
         post: operations["MergeRequestsController_publishBranch"];
         delete?: never;
@@ -1829,8 +1829,42 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Merge (merge-commit or squash); 409 with details.reason draft|approvals|diverged|breaking-api when gated, + comparison link when the target diverged */
+        /** Merge (merge-commit or squash), 3-way per page where the target moved (#636); 409 with details.reason draft|approvals|lint|conflict|diverged|breaking-api when gated. `conflict` names the pages and hunks */
         post: operations["MergeRequestsController_merge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/merge-requests/{id}/conflicts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The 3-way state (#636): how many pages are behind their target, and every conflicting page the caller may open, with its hunks and the merge with git conflict markers */
+        get: operations["MergeRequestsController_mergeConflicts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/merge-requests/{id}/update-branch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Update branch (#636): merge the target into the source on every page behind it — a two-parent revision on the source, never a rebase. 409 `conflict` while a conflicting page has no resolution; 409 `diverged` when a resolution names a target head that moved; 400 when the branch is up to date */
+        post: operations["MergeRequestsController_updateBranch"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7799,7 +7833,7 @@ export interface components {
              * @example Shorten access-token TTL
              */
             title: string;
-            /** @description The default-branch heads the author reviewed after they moved past the branch, one per page (#636): each page whose head is listed lands over it instead of refusing as `diverged`, and only over that head. */
+            /** @description The default-branch heads the author reviewed after they moved past the branch, one per page (#636). A page that would conflict in the 3-way merge lands over its listed head with the branch's content instead of refusing as `conflict`, and only over that head. A page that merges cleanly ignores it. */
             onTopOf?: string[];
         };
         SavedFilterChipDto: {
@@ -7853,6 +7887,17 @@ export interface components {
              * @enum {string}
              */
             strategy?: "merge-commit" | "squash";
+        };
+        BranchResolutionDto: {
+            documentId: string;
+            /** @description The target head the conflict view showed; a newer one refuses as `diverged`. */
+            targetHeadRevisionId: string;
+            /** @description The resolved body. One still holding conflict markers is refused. */
+            content: string;
+        };
+        UpdateMergeRequestBranchDto: {
+            /** @description One per conflicting page. A page that merges cleanly needs none, and one given for it is ignored. */
+            resolutions?: components["schemas"]["BranchResolutionDto"][];
         };
         CreateEntityAliasDto: {
             /** Format: uuid */
@@ -13047,6 +13092,10 @@ export interface components {
             emailAttribute: string | null;
             nameAttribute: string | null;
         };
+        LineRange: {
+            start: number;
+            count: number;
+        };
         LintGateState: {
             policy: components["schemas"]["LintPolicy"];
             blocked: boolean;
@@ -13513,6 +13562,11 @@ export interface components {
             /** @enum {string|null} */
             missing: "TRANSCRIPTION_PROVIDER" | "TRANSCRIPTION_BASE_URL" | "TRANSCRIPTION_API_KEY" | null;
         };
+        MergeConflictHunk: {
+            base: components["schemas"]["LineRange"];
+            target: components["schemas"]["LineRange"];
+            source: components["schemas"]["LineRange"];
+        };
         MergeMergeRequestResponse: {
             mergeRequest: components["schemas"]["MergeRequestInfo"];
             mergedRevision: components["schemas"]["RevisionInfo"] | null;
@@ -13561,6 +13615,20 @@ export interface components {
         MergeRequestCheckReason: "superseded" | "no-styleguide" | "restricted" | "author-unavailable" | "budget" | "run-failed" | "stale";
         /** @enum {string} */
         MergeRequestCheckStatus: "pending" | "running" | "passed" | "failed" | "error" | "skipped";
+        MergeRequestConflictPage: {
+            documentId: string;
+            title: string;
+            targetHeadRevisionId: string;
+            sourceHeadRevisionId: string;
+            hunks: components["schemas"]["MergeConflictHunk"][];
+            text: string;
+        };
+        MergeRequestConflictsResponse: {
+            mergeRequestId: string;
+            behind: number;
+            pages: components["schemas"]["MergeRequestConflictPage"][];
+            hiddenPages: number;
+        };
         MergeRequestDiffResponse: {
             mergeRequest: components["schemas"]["MergeRequestInfo"];
             compare: components["schemas"]["CompareResponse"];
@@ -13987,7 +14055,7 @@ export interface components {
             mergedRevision: components["schemas"]["RevisionInfo"] | null;
             merged: boolean;
             /** @enum {string|null} */
-            reason: "draft" | "approvals" | "diverged" | "breaking-api" | "lint" | "protected" | null;
+            reason: "draft" | "approvals" | "conflict" | "diverged" | "breaking-api" | "lint" | "protected" | null;
         };
         /** @enum {string} */
         PublishedSiteStatus: "draft" | "live" | "unpublished";
@@ -14977,6 +15045,10 @@ export interface components {
         };
         UpdateKnowledgeIssueResponse: {
             issue: components["schemas"]["KnowledgeIssueInfo"];
+        };
+        UpdateMergeRequestBranchResponse: {
+            mergeRequest: components["schemas"]["MergeRequestInfo"];
+            updated: number;
         };
         UpdateWorkspaceResponse: {
             workspaceId: string;
@@ -21743,6 +21815,94 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MergeMergeRequestResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MergeRequestsController_mergeConflicts: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MergeRequestConflictsResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MergeRequestsController_updateBranch: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMergeRequestBranchDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateMergeRequestBranchResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

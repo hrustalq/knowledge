@@ -157,8 +157,8 @@ DELETE /v1/documents/:id/drafts/:branchId discard: reseed from the head
 
 ## Limits
 
-- **Three-way content merge is future work.** Merging is fast-forward-preconditioned
-  instead; see [05 — Merge & review](05-merge-review.md).
+- **Merging is a line-level 3-way merge per page** (#636), and overlapping
+  hunks still refuse; see [05 — Merge & review](05-merge-review.md).
 - The diff cache grows without bound. Nothing prunes `revision_diffs`, which is
   acceptable precisely because entries can never be wrong, but it is not free.
 - History queries read the revision-scoped fact set kept by every indexed

@@ -20,10 +20,12 @@ import type {
   MergeMergeRequestResponse,
   MergeRequestApiChangesResponse,
   MergeRequestCheckInfo,
+  MergeRequestConflictsResponse,
   MergeRequestDiffResponse,
   MergeRequestThreadResponse,
   PublishBranchResponse,
   SavedFilter,
+  UpdateMergeRequestBranchResponse,
 } from '@knowledge/contracts';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
@@ -42,6 +44,7 @@ import {
   PublishBranchDto,
   ResolveThreadDto,
   SetReviewersDto,
+  UpdateMergeRequestBranchDto,
   UpdateMergeRequestDto,
 } from './dto/merge-requests.dto.js';
 import {
@@ -87,9 +90,9 @@ export class MergeRequestsController {
     description:
       'Opens a merge request from the branch (or reuses its open one) and merges it at once. When a gate refuses — ' +
       '`protected`, `approvals`, `lint`, `breaking-api`, `draft` — the merge request stays open and `merged` is false. ' +
-      '400 when there is nothing to publish; 409 `diverged` (naming the page) when a default head moved past the ' +
-      'branch and `onTopOf` does not list it. Publishes every page the branch has revisions on (#636). The guard ' +
-      'holds the caller to edit on the branch.',
+      '400 when there is nothing to publish; 409 `conflict` (naming the pages and hunks) when a default head moved ' +
+      'past the branch, the 3-way merge overlaps it and `onTopOf` does not list it. Publishes every page the branch ' +
+      'has revisions on (#636). The guard holds the caller to edit on the branch.',
   })
   publishBranch(
     @Param('id', ParseUUIDPipe) id: string,
@@ -302,8 +305,8 @@ export class MergeRequestsController {
   @Access('editor', 'merge-request')
   @ApiOperation({
     summary:
-      'Merge (merge-commit or squash); 409 with details.reason draft|approvals|diverged|breaking-api when gated, ' +
-      '+ comparison link when the target diverged',
+      'Merge (merge-commit or squash), 3-way per page where the target moved (#636); 409 with details.reason ' +
+      'draft|approvals|lint|conflict|diverged|breaking-api when gated. `conflict` names the pages and hunks',
   })
   merge(
     @Param('id', ParseUUIDPipe) id: string,
@@ -311,6 +314,35 @@ export class MergeRequestsController {
     @CurrentPrincipal() principal: Principal,
   ): Promise<MergeMergeRequestResponse> {
     return this.mergeRequests.merge(id, dto.strategy ?? 'merge-commit', principal);
+  }
+
+  @Get('merge-requests/:id/conflicts')
+  @Returns('MergeRequestConflictsResponse')
+  @Access('viewer', 'merge-request')
+  @ApiOperation({
+    summary:
+      'The 3-way state (#636): how many pages are behind their target, and every conflicting page the caller may ' +
+      'open, with its hunks and the merge with git conflict markers',
+  })
+  async mergeConflicts(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<MergeRequestConflictsResponse> {
+    return this.mergeRequests.mergeConflicts(id, await this.scopeForMr(id, principal));
+  }
+
+  @Post('merge-requests/:id/update-branch')
+  @Returns('UpdateMergeRequestBranchResponse')
+  @Access('editor', 'merge-request')
+  @ApiOperation({
+    summary:
+      'Update branch (#636): merge the target into the source on every page behind it — a two-parent revision on ' +
+      'the source, never a rebase. 409 `conflict` while a conflicting page has no resolution; 409 `diverged` when ' +
+      'a resolution names a target head that moved; 400 when the branch is up to date',
+  })
+  updateBranch(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateMergeRequestBranchDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<UpdateMergeRequestBranchResponse> {
+    return this.mergeRequests.updateBranch(id, dto, principal);
   }
 
   @Post('merge-requests/:id/close')

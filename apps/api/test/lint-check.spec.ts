@@ -849,6 +849,8 @@ function mergeFixture(over: { gate?: Partial<ReturnType<typeof lintGate>>; check
       ),
       updateMany: vi.fn(async () => ({ count: over.claimed ?? 1 })),
     },
+    // The source body, read for the merge after the lint gate (#636).
+    documentRevision: { findUniqueOrThrow: vi.fn(async () => ({ s3Key: 'k', contentType: 'text/markdown' })) },
     document: {
       findUnique: vi.fn(async () => ({ workspaceId: WS, title: 'Saving' })),
       findUniqueOrThrow: vi.fn(async () => ({ workspaceId: WS, projectId: PROJECT })),
@@ -871,7 +873,7 @@ function mergeFixture(over: { gate?: Partial<ReturnType<typeof lintGate>>; check
     })),
     list: vi.fn(async () => ({ checks: [{ checkId: 'check-1', override: { by: AUTHOR, reason: 'hotfix' } }] })),
   };
-  // The target head is the merge base, so nothing diverged.
+  // The target head is the merge base: a fast-forward, nothing to merge 3-way.
   const compare = { findMergeBase: vi.fn(async () => OLD_HEAD) };
   const permissions = { scopeFor: vi.fn(async () => ({ workspaceId: WS })), requireLevel: vi.fn(async () => 'edit') };
   const config = { get: vi.fn(() => 0) };
@@ -879,7 +881,7 @@ function mergeFixture(over: { gate?: Partial<ReturnType<typeof lintGate>>; check
   const audit = { record: vi.fn(async () => undefined) };
   const service = new MergeRequestsService(
     prisma as never,
-    {} as never, // storage
+    { getObjectText: async () => 'body\n' } as never,
     {} as never, // documents
     compare as never,
     activity as never,

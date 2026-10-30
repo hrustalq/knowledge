@@ -504,11 +504,14 @@ export class DocumentsService {
   /**
    * `commit: false` leaves the project commit to the caller (#636): a merge
    * writes one commit for all of its pages, attributed to the person merging.
+   * `dedupe: false` keeps a body equal to the branch head: "Update branch"
+   * resolving a conflict in the branch's favour is still the merge node that
+   * moves the merge base.
    */
   async finalizeRevision(
     documentId: string,
     revisionId: string,
-    opts: { commit?: boolean } = {},
+    opts: { commit?: boolean; dedupe?: boolean } = {},
   ): Promise<FinalizeRevisionResponse> {
     const document = await this.getDocumentOrThrow(documentId);
     this.assertNotArchived(document);
@@ -545,7 +548,7 @@ export class DocumentsService {
       where: revision.branchId ? { id: revision.branchId } : { documentId, name: document.defaultBranch },
       select: { headRevisionId: true },
     });
-    const existing = branchHead?.headRevisionId
+    const existing = branchHead?.headRevisionId && opts.dedupe !== false
       ? await this.prisma.documentRevision.findFirst({ where: { id: branchHead.headRevisionId, contentHash } })
       : null;
     if (existing && existing.id !== revision.id) {

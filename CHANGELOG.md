@@ -13,6 +13,28 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Fixed
+
+- **Reverting a page to an earlier version now saves it** (#636). Saving text a branch had held before (undoing
+  an edit, say) used to report success while leaving the page as it was, because a save that matched any
+  earlier version on the branch was treated as a duplicate. Now only a save identical to the current version
+  is skipped.
+
+### Operations
+
+- Migration `20261221100000_project_commits` adds `project_commits`, `project_commit_parents`,
+  `project_commit_changes` and a nullable `documents.slug`. It backfills one commit per finalized revision,
+  plus one per archived page, at today's page paths. It also replaces the unique index on
+  `document_revisions (document_id, branch_id, content_hash)` with a plain one. It survives a rollback: the
+  previous image never reads the new tables and never relied on the unique index. Commits for writes made
+  while it runs are missing from the history the git remote (#636, later phases) will serve. Nothing reads
+  the commits yet. On the laptop's dev copy (202 pages, 258 revisions) the backfill wrote 398 commits.
+- New env var `GIT_NOREPLY_DOMAIN` (default `knowledge`): commit emails are
+  `<userId>@users.noreply.<domain>`, never a person's address. Each commit keeps the domain it was written
+  with, so a change applies to new commits only. Set it before this release if the domain should differ.
+
 ## [0.40.0] — 2026-10-30
 
 ### Added

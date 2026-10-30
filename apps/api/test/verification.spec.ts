@@ -163,13 +163,15 @@ function harness(row: Record<string, unknown>, updateCount = 1) {
       updateMany: vi.fn(async () => ({ count: updateCount })),
       findMany: vi.fn(async () => []),
     },
+    withTransaction: <T>(fn: () => Promise<T>) => fn(),
   };
+  const commits = { lock: vi.fn(async () => undefined), recordState: vi.fn(async () => undefined) };
   const activity = { record: vi.fn(async () => undefined) };
   const notifications = { notify: vi.fn(async () => []) };
   const policy = { effective: vi.fn(async () => settings) };
   const documents = { getDocument: vi.fn(async () => ({ document: { documentId: 'doc-1' } })), setOwner: vi.fn(async () => ({})), breadcrumbsFor: vi.fn(async () => new Map()) };
-  const svc = new VerificationService(prisma as never, activity as never, notifications as never, policy as never, documents as never);
-  return { svc, prisma, activity, notifications, documents };
+  const svc = new VerificationService(prisma as never, activity as never, notifications as never, policy as never, documents as never, commits as never);
+  return { svc, prisma, activity, notifications, documents, commits };
 }
 
 describe('VerificationService transitions', () => {
@@ -262,34 +264,34 @@ describe('VerificationService transitions', () => {
     expect(bare.prisma.document.updateMany).not.toHaveBeenCalled();
   });
 
-  it('archive takes the subtree in one statement scoped to the workspace, and is idempotent', async () => {
-    const { svc, prisma } = harness(doc(), 3);
+  it('archive takes the subtree scoped to the workspace, records one commit, and is idempotent', async () => {
+    const { svc, prisma, commits } = harness(doc());
+    prisma.document.findMany.mockResolvedValueOnce([{ id: 'doc-1' }, { id: 'doc-2' }, { id: 'doc-3' }] as never);
     const res = await svc.archive('doc-1', 'u-1');
     expect(res.affected).toBe(3);
-    expect(prisma.document.updateMany).toHaveBeenCalledTimes(1);
-    const where = (prisma.document.updateMany.mock.calls[0]![0] as { where: Record<string, unknown> }).where;
-    expect(where).toMatchObject({
+    const findWhere = (m: typeof prisma.document.findMany) => (m.mock.calls[0]![0] as unknown as { where: Record<string, unknown> }).where;
+    expect(findWhere(prisma.document.findMany)).toMatchObject({
       workspaceId: WS,
       archivedAt: null,
       OR: [{ id: 'doc-1' }, { path: { startsWith: '/doc-0/doc-1/' } }],
     });
+    expect(prisma.document.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { id: { in: ['doc-1', 'doc-2', 'doc-3'] } } }));
+    expect(commits.lock).toHaveBeenCalledTimes(1);
+    expect(commits.recordState).toHaveBeenCalledWith(expect.any(String), ['doc-1', 'doc-2', 'doc-3'], expect.objectContaining({ actorId: 'u-1' }));
 
     const alone = harness(doc());
     await alone.svc.archive('doc-1', 'u-1', false);
-    expect((alone.prisma.document.updateMany.mock.calls[0]![0] as { where: Record<string, unknown> }).where).toEqual({
-      workspaceId: WS,
-      id: 'doc-1',
-      archivedAt: null,
-    });
+    expect(findWhere(alone.prisma.document.findMany)).toEqual({ workspaceId: WS, id: 'doc-1', archivedAt: null });
 
     // A rollback-sentinel path cannot locate a subtree: the page alone.
     const pending = harness(doc({ path: '/pending/' }));
     await pending.svc.archive('doc-1', 'u-1');
-    expect((pending.prisma.document.updateMany.mock.calls[0]![0] as { where: Record<string, unknown> }).where).not.toHaveProperty('OR');
+    expect(findWhere(pending.prisma.document.findMany)).not.toHaveProperty('OR');
 
     const already = harness(doc({ archivedAt: new Date('2026-10-01T00:00:00Z') }));
     expect(await already.svc.archive('doc-1', 'u-1')).toMatchObject({ affected: 0, archivedAt: '2026-10-01T00:00:00.000Z' });
     expect(already.prisma.document.updateMany).not.toHaveBeenCalled();
+    expect(already.commits.recordState).not.toHaveBeenCalled();
   });
 });
 

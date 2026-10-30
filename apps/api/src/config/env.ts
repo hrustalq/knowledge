@@ -727,6 +727,13 @@ export const envSchema = z.object({
   MEMO_AUDIO_RETENTION_DAYS: z.coerce.number().int().min(0).default(30),
 
   /**
+   * Git remote (#636, docs/features/71). Commit emails are
+   * `<userId>@users.noreply.<domain>`, never a person's address. Frozen into
+   * each commit as it is written, so a change applies to new commits only.
+   */
+  GIT_NOREPLY_DOMAIN: z.string().min(1).default('knowledge'),
+
+  /**
    * Connectors (docs/features/19). Allow connector base URLs and git remotes on
    * private/loopback ranges — an on-prem Confluence or a self-hosted GitLab is a
    * legitimate target, but the default refuses them because a URL typed into a

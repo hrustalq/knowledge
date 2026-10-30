@@ -22,6 +22,7 @@ import type {
   DocumentContentResponse,
   ListMergeRequestThreadsResponse,
   MergeRequestApiChangesResponse,
+  MergeRequestPage,
   MergeRequestDiffResponse,
   MergeRequestInfo,
   MergeRequestThreadAnchor,
@@ -108,9 +109,33 @@ const diffQuery = useQuery(
     enabled: tab.value === 'changes' || tab.value === 'structure',
   })),
 )
+const diffResponse = computed(() => (diffQuery.data.value as MergeRequestDiffResponse | undefined) ?? null)
 const diff = computed(
-  () => (diffQuery.data.value as MergeRequestDiffResponse | undefined)?.compare ?? null,
+  () => diffResponse.value?.compare ?? null,
 )
+
+/**
+ * Every page the merge request changes and the caller may open (#636), the
+ * page it was opened from first. A merge request with nothing left to merge
+ * (merged, say) lists none, and then shows its own page's comparison as before.
+ */
+const diffPages = computed<MergeRequestPage[]>(() => {
+  const res = diffResponse.value
+  if (!res) return []
+  if (res.pages.length > 0) return res.pages
+  return [{ documentId: res.mergeRequest.documentId, title: '', compare: res.compare }]
+})
+const multiPage = computed(() => diffPages.value.length > 1)
+const diffTotals = computed(() =>
+  diffPages.value.reduce(
+    (sum, p) => ({ additions: sum.additions + p.compare.summary.additions, deletions: sum.deletions + p.compare.summary.deletions }),
+    { additions: 0, deletions: 0 },
+  ),
+)
+/** A line comment's page: an excerpt only re-anchors within the page it was written on. */
+function threadsOn(documentId: string) {
+  return threads.value.filter((t) => t.documentId === documentId)
+}
 
 const impactQuery = useQuery(
   computed(() => ({
@@ -155,16 +180,18 @@ const threads = computed(
 const unresolvedCount = computed(() => threads.value.filter((t) => t.resolvable && !t.resolved).length)
 
 /**
- * Which threads render inline in the diff. The timeline lists all of them
- * regardless — a comment that only exists on the Changes tab is a comment
- * nobody reading the overview knows about — but outdated anchors are still
- * only knowable once the diff has loaded.
+ * Line comments whose anchor no longer resolves, page by page. The timeline
+ * lists every thread regardless — a comment that only exists on the Changes
+ * tab is a comment nobody reading the overview knows about — but outdated
+ * anchors are only knowable once the diff has loaded.
  */
-const matched = computed(() => matchAnchoredThreads(diff.value, threads.value))
+const outdatedInDiff = computed(
+  () => new Set(diffPages.value.flatMap((p) => [...matchAnchoredThreads(p.compare, threadsOn(p.documentId)).outdatedIds])),
+)
 
 /** Both review surfaces report staleness; the timeline shows the union. */
 const allOutdatedIds = computed(
-  () => new Set([...matched.value.outdatedIds, ...reviewOutdated.value]),
+  () => new Set([...outdatedInDiff.value, ...reviewOutdated.value]),
 )
 
 const isOpen = computed(() => mr.value?.status === 'open')
@@ -182,7 +209,7 @@ const reviewOutdated = computed(() => new Set(outdatedInReview.value))
 const tabCounts = computed<Partial<Record<Tab, number>>>(() => ({
   overview: threads.value.length || undefined,
   review: threads.value.filter((t) => t.anchor?.type === 'text').length || undefined,
-  changes: diff.value?.hunks.length || undefined,
+  changes: diffPages.value.reduce((n, p) => n + p.compare.hunks.length, 0) || undefined,
   api: apiChanges.value?.diff?.changes.length || undefined,
 }))
 
@@ -482,47 +509,88 @@ function refresh() {
         <!-- changes -->
         <div v-else-if="tab === 'changes'" class="space-y-3">
           <Skeleton v-if="diffQuery.isPending.value" class="h-40 w-full" />
-          <template v-else-if="diff">
+          <template v-else-if="diffPages.length">
             <p class="text-xs text-muted-foreground">
               {{ t('mr.comparingAgainst') }} <span class="font-mono">{{ mr.sourceBranch }}</span>
-              — <span class="text-panel-tip-ink">+{{ diff.summary.additions }}</span>
-              <span class="text-panel-caution-ink">−{{ diff.summary.deletions }}</span>
+              <template v-if="multiPage"> — {{ t('mr.pagesChanged', { n: diffPages.length }, diffPages.length) }}</template>
+              — <span class="text-panel-tip-ink">+{{ diffTotals.additions }}</span>
+              <span class="ml-1 text-panel-caution-ink">−{{ diffTotals.deletions }}</span>
             </p>
-            <div v-if="pendingAnchor" class="rounded-lg border bg-card p-3">
-              <p class="mb-2 text-xs font-medium">
-                {{ t('mr.newComment') }}<template v-if="pendingAnchor.type === 'line'"> {{ t('mr.onLine', { n: pendingAnchor.line }) }}</template>
-                <button class="ml-2 text-muted-foreground hover:text-foreground" @click="pendingAnchor = null">{{ t('common.cancel') }}</button>
-              </p>
-              <CommentComposer
-                auto-expand
-                offer-thread
-                :placeholder="t('review.writeComment')"
-                :submit-label="t('review.comment')"
-                :busy="threadsBusy"
-                :resolve-document-id="resolveDocumentId"
-                @submit="(b, r) => onCreateThread(b, pendingAnchor ?? undefined, r)"
-              />
-            </div>
-            <DiffView
-              :compare="diff"
-              :threads="threads"
-              :can-comment="canComment"
-              @create-thread="(a) => (pendingAnchor = a)"
+            <p v-if="diffResponse?.hiddenPages" class="text-xs text-muted-foreground">
+              {{ t('mr.pagesHidden', { n: diffResponse.hiddenPages }, diffResponse.hiddenPages) }}
+            </p>
+            <!-- A merge request spans every page its branch changed (#636): an index, then one section each. -->
+            <nav v-if="multiPage" :aria-label="t('mr.pagesIndex')" class="rounded-lg border bg-card">
+              <ul class="divide-y text-sm">
+                <li v-for="page in diffPages" :key="page.documentId">
+                  <a
+                    :href="`#mr-page-${page.documentId}`"
+                    class="flex items-baseline gap-3 px-3 py-2 hover:bg-muted/50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+                  >
+                    <span class="min-w-0 flex-1 truncate">{{ page.title || t('mr.untitledPage') }}</span>
+                    <span class="shrink-0 font-mono text-xs tabular-nums">
+                      <span class="text-panel-tip-ink">+{{ page.compare.summary.additions }}</span>
+                      <span class="ml-1 text-panel-caution-ink">−{{ page.compare.summary.deletions }}</span>
+                    </span>
+                  </a>
+                </li>
+              </ul>
+            </nav>
+            <section
+              v-for="page in diffPages"
+              :id="`mr-page-${page.documentId}`"
+              :key="page.documentId"
+              class="scroll-mt-20 space-y-3"
+              :aria-label="multiPage ? page.title || t('mr.untitledPage') : undefined"
             >
-              <template #thread="{ thread }">
-                <ThreadCard
-                  :thread="thread"
-                  :readonly="!canComment"
+              <h3 v-if="multiPage" class="flex items-baseline gap-3 border-b pb-1.5 pt-2 text-sm font-semibold">
+                <RouterLink :to="`/documents/${page.documentId}`" class="min-w-0 flex-1 truncate hover:underline">
+                  {{ page.title || t('mr.untitledPage') }}
+                </RouterLink>
+                <span class="shrink-0 font-mono text-xs font-normal tabular-nums">
+                  <span class="text-panel-tip-ink">+{{ page.compare.summary.additions }}</span>
+                  <span class="ml-1 text-panel-caution-ink">−{{ page.compare.summary.deletions }}</span>
+                </span>
+              </h3>
+              <div
+                v-if="pendingAnchor && (!('revisionId' in pendingAnchor) || pendingAnchor.revisionId === page.compare.to.revisionId)"
+                class="rounded-lg border bg-card p-3"
+              >
+                <p class="mb-2 text-xs font-medium">
+                  {{ t('mr.newComment') }}<template v-if="pendingAnchor.type === 'line'"> {{ t('mr.onLine', { n: pendingAnchor.line }) }}</template>
+                  <button class="ml-2 text-muted-foreground hover:text-foreground" @click="pendingAnchor = null">{{ t('common.cancel') }}</button>
+                </p>
+                <CommentComposer
+                  auto-expand
+                  offer-thread
+                  :placeholder="t('review.writeComment')"
+                  :submit-label="t('review.comment')"
                   :busy="threadsBusy"
                   :resolve-document-id="resolveDocumentId"
-                  teach-kind="mr-thread"
-                  @reply="(b, p) => onReply(thread.threadId, b, p)"
-                  @resolve="(r) => onResolve(thread.threadId, r)"
-                  @edit="(c, b) => onEditComment(thread.threadId, c, b)"
-                  @delete="(c) => onDeleteComment(thread.threadId, c)"
+                  @submit="(b, r) => onCreateThread(b, pendingAnchor ?? undefined, r)"
                 />
-              </template>
-            </DiffView>
+              </div>
+              <DiffView
+                :compare="page.compare"
+                :threads="threadsOn(page.documentId)"
+                :can-comment="canComment"
+                @create-thread="(a) => (pendingAnchor = a)"
+              >
+                <template #thread="{ thread }">
+                  <ThreadCard
+                    :thread="thread"
+                    :readonly="!canComment"
+                    :busy="threadsBusy"
+                    :resolve-document-id="resolveDocumentId"
+                    teach-kind="mr-thread"
+                    @reply="(b, p) => onReply(thread.threadId, b, p)"
+                    @resolve="(r) => onResolve(thread.threadId, r)"
+                    @edit="(c, b) => onEditComment(thread.threadId, c, b)"
+                    @delete="(c) => onDeleteComment(thread.threadId, c)"
+                  />
+                </template>
+              </DiffView>
+            </section>
           </template>
         </div>
 

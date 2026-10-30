@@ -17,6 +17,22 @@ in the pull request that introduces them — see
 
 ### Changed
 
+- **A merge request now covers every page its branch changed** (#636). A branch name belongs to the project:
+  create `fix-terms` on two pages, edit both, and a merge request opened from either page lists both on its
+  Changes tab, under an index of the pages with their line counts. Merging lands every page together or none
+  of them. Each gate (draft, approvals, protected branch, style lint, breaking API changes) applies to every
+  page, and merging needs edit access to all of them. Opening a second merge request from another page of the
+  same branch is refused as a duplicate, and a `diverged` refusal now names the page whose target moved
+  (`details.documentId`). Changed pages you cannot open are counted on the Changes tab, never named, and
+  review threads on them are hidden from you. Existing merge requests keep the single page they had.
+- **Style lint and breaking-API acknowledgements follow the pages** (#636). Each changed page of a merge
+  request gets its own lint check, so a new edit re-lints only the page it touched, and lint threads are
+  reconciled per page. An admin's acknowledgement of breaking API changes covers the whole branch until the
+  next edit to any of its pages, which needs a new acknowledgement as before.
+- API: `GET /v1/merge-requests/:id/diff` adds `pages` (every changed page the caller may open, each with its
+  own comparison) and `hiddenPages`. `compare` still describes the merge request's own page. Review threads
+  carry `documentId`, the page a line or text anchor sits on. The MCP `knowledge_get_merge_request` tool returns
+  the same `pages` with `includeDiff`.
 - **A new private draft is numbered across the whole project** (#636). Starting a draft of a page used to
   name it `draft/<you>`, then `draft/<you>-2` and so on, counted per page. The number is now the first one free
   in the page's project, so a draft never shares a name with a draft you have on another page. Nothing else
@@ -47,6 +63,11 @@ in the pull request that introduces them — see
   rollback: the previous image never reads the new column, and branches it creates meanwhile are filled in on
   the next cross-project move or by the release that makes the column NOT NULL. Nothing reads project branches
   yet.
+- Migration `20261223100000_breaking_ack_commit` adds a nullable `merge_requests.breaking_ack_commit_id` and
+  fills it for every open merge request whose breaking-API acknowledgement is current, so none needs to be
+  given again. It survives a rollback: the previous image never reads the column, and this release keeps
+  writing `breaking_ack_revision_id` for it. An acknowledgement given while rolled back is not current after
+  upgrading again and has to be given once more.
 - New env var `GIT_NOREPLY_DOMAIN` (default `knowledge`): commit emails are
   `<userId>@users.noreply.<domain>`, never a person's address. Each commit keeps the domain it was written
   with, so a change applies to new commits only. Set it before this release if the domain should differ.

@@ -7,39 +7,52 @@ const DOC = '33333333-3333-4333-8333-333333333333';
 const PARENT = '44444444-4444-4444-8444-444444444444';
 const ANNA = '55555555-5555-4555-8555-555555555555';
 const BOB = '66666666-6666-4666-8666-666666666666';
+const OTHER = '77777777-7777-4777-8777-777777777777';
 
-function harness(opts: { head?: string | null; drafts?: string[]; commitOf?: Record<string, string> } = {}) {
+function revision(id: string, documentId: string, slug: string) {
+  return {
+    id,
+    authorId: ANNA,
+    message: 'Fix the intro  \n',
+    finalizedAt: new Date('2026-10-30T12:00:00.900Z'),
+    coAuthorIds: [ANNA, BOB, BOB],
+    branch: { name: 'fix' },
+    parents: [{ parentRevisionId: 'rev-1' }],
+    document: {
+      id: documentId,
+      workspaceId: WS,
+      projectId: PROJECT,
+      parentId: PARENT,
+      path: `/${PARENT}/${documentId}/`,
+      slug,
+      title: 'Архитектура',
+      defaultBranch: 'main',
+      draftOwnerId: null,
+    },
+  };
+}
+
+function harness(
+  opts: { head?: string | null; drafts?: string[]; commitOf?: Record<string, string>; revisions?: string[] } = {},
+) {
   const create = vi.fn(async () => ({}));
   const prisma = {
     $executeRaw: vi.fn(async () => 0),
     documentRevision: {
-      findUniqueOrThrow: vi.fn(async () => ({
-        id: 'rev-2',
-        authorId: ANNA,
-        message: 'Fix the intro  \n',
-        finalizedAt: new Date('2026-10-30T12:00:00.900Z'),
-        coAuthorIds: [ANNA, BOB, BOB],
-        branch: { name: 'fix' },
-        parents: [{ parentRevisionId: 'rev-1' }],
-        document: {
-          id: DOC,
-          workspaceId: WS,
-          projectId: PROJECT,
-          parentId: PARENT,
-          path: `/${PARENT}/${DOC}/`,
-          slug: 'архитектура',
-          title: 'Архитектура',
-          defaultBranch: 'main',
-          draftOwnerId: null,
-        },
-      })),
+      findMany: vi.fn(async () =>
+        (opts.revisions ?? ['rev-2']).map((id, i) =>
+          i === 0 ? revision(id, DOC, 'архитектура') : revision(id, OTHER, 'глоссарий'),
+        ),
+      ),
     },
     document: {
       findMany: vi.fn(async () => (opts.drafts ?? []).map((id) => ({ id }))),
       count: vi.fn(async () => 0),
     },
     projectCommit: {
-      findFirst: vi.fn(async () => (opts.head ? { id: opts.head } : null)),
+      findFirst: vi.fn(async ({ where }: { where: { branch: string } }) =>
+        where.branch === 'src' ? { id: 'c-src' } : opts.head ? { id: opts.head } : null,
+      ),
       create,
     },
     projectCommitChange: {
@@ -63,8 +76,8 @@ function harness(opts: { head?: string | null; drafts?: string[]; commitOf?: Rec
 
 describe('ProjectCommitsService', () => {
   it('writes a merge commit on the branch head, with frozen header bytes', async () => {
-    const h = harness({ head: 'c-head', commitOf: { 'rev-src': 'c-src' } });
-    await h.svc.recordRevision('rev-2', { mergedFrom: 'rev-src' });
+    const h = harness({ head: 'c-head' });
+    await h.svc.recordRevisions(['rev-2'], { mergedFrom: 'src' });
 
     const data = h.written();
     expect(data).toMatchObject({ workspaceId: WS, projectId: PROJECT, branch: 'fix' });
@@ -83,14 +96,24 @@ describe('ProjectCommitsService', () => {
 
   it("a branch's first commit forks from the commit that wrote its base revision", async () => {
     const h = harness({ head: null, commitOf: { 'rev-1': 'c-base' } });
-    await h.svc.recordRevision('rev-2');
+    await h.svc.recordRevisions(['rev-2']);
     expect(h.written().parents.create).toEqual([{ parentCommitId: 'c-base', parentOrder: 1 }]);
   });
 
   it('writes nothing for a page under a private draft', async () => {
     const h = harness({ head: 'c-head', drafts: [PARENT] });
-    await h.svc.recordRevision('rev-2');
+    await h.svc.recordRevisions(['rev-2']);
     expect(h.create).not.toHaveBeenCalled();
+  });
+
+  it("writes one commit for every page of a merge, the merger's", async () => {
+    const h = harness({ head: 'c-head', revisions: ['rev-2', 'rev-9'] });
+    await h.svc.recordRevisions(['rev-2', 'rev-9'], { authorId: BOB, mergedFrom: 'src' });
+    expect(h.create).toHaveBeenCalledTimes(1);
+    const data = h.written();
+    expect(data.changes.createMany.data.map((c: { documentId: string }) => c.documentId)).toEqual([DOC, OTHER]);
+    expect(Buffer.from(data.header).toString('utf8')).toMatch(/^author Bob Stone </);
+    expect(data.parents.create).toHaveLength(2);
   });
 
   it('suffixes a slug a sibling already holds, case-folded, and keeps a suffix that still fits', async () => {

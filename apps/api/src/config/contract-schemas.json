@@ -16084,11 +16084,22 @@
       },
       "compare": {
         "$ref": "#/components/schemas/CompareResponse"
+      },
+      "pages": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/MergeRequestPage"
+        }
+      },
+      "hiddenPages": {
+        "type": "number"
       }
     },
     "required": [
       "mergeRequest",
-      "compare"
+      "compare",
+      "pages",
+      "hiddenPages"
     ]
   },
   "MergeRequestInfo": {
@@ -16222,6 +16233,25 @@
       "captureId"
     ]
   },
+  "MergeRequestPage": {
+    "type": "object",
+    "properties": {
+      "documentId": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string"
+      },
+      "compare": {
+        "$ref": "#/components/schemas/CompareResponse"
+      }
+    },
+    "required": [
+      "documentId",
+      "title",
+      "compare"
+    ]
+  },
   "MergeRequestProvenance": {
     "type": "string",
     "enum": [
@@ -16281,6 +16311,10 @@
       "mergeRequestId": {
         "type": "string"
       },
+      "documentId": {
+        "type": "string",
+        "nullable": true
+      },
       "checkId": {
         "type": "string",
         "nullable": true
@@ -16295,6 +16329,7 @@
       "checkId",
       "comments",
       "createdAt",
+      "documentId",
       "mergeRequestId",
       "resolvable",
       "resolved",

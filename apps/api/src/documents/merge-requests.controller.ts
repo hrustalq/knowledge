@@ -221,10 +221,14 @@ export class MergeRequestsController {
   @Get('merge-requests/:id/diff')
   @Returns('MergeRequestDiffResponse')
   @Access('viewer', 'merge-request')
-  @ApiOperation({ summary: 'Merge-base diff of the MR: text + structural (+ semantic on request)' })
+  @ApiOperation({ summary: 'Merge-base diff of the MR, per changed page the caller may open: text + structural (+ semantic on request)' })
   @ApiQuery({ name: 'semantic', required: false, description: 'Include graph-projection semantic diff (default false)' })
-  diff(@Param('id', ParseUUIDPipe) id: string, @Query('semantic') semantic?: string): Promise<MergeRequestDiffResponse> {
-    return this.mergeRequests.diff(id, { semantic: semantic === 'true' });
+  async diff(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentPrincipal() principal: Principal,
+    @Query('semantic') semantic?: string,
+  ): Promise<MergeRequestDiffResponse> {
+    return this.mergeRequests.diff(id, await this.scopeForMr(id, principal), { semantic: semantic === 'true' });
   }
 
   @Get('merge-requests/:id/api-changes')
@@ -324,8 +328,11 @@ export class MergeRequestsController {
   @Returns('ListMergeRequestThreadsResponse')
   @Access('viewer', 'merge-request')
   @ApiOperation({ summary: 'List review threads with comments (unresolved first)' })
-  listThreads(@Param('id', ParseUUIDPipe) id: string): Promise<ListMergeRequestThreadsResponse> {
-    return this.threads.list(id);
+  async listThreads(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<ListMergeRequestThreadsResponse> {
+    return this.threads.list(id, await this.scopeForMr(id, principal));
   }
 
   @Post('merge-requests/:id/threads')

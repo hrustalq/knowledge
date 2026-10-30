@@ -1,3 +1,5 @@
+import { PermissionService } from '../permissions/permission.service.js';
+import type { AccessScope } from '../permissions/access-scope.js';
 import {
   BadRequestException,
   ForbiddenException,
@@ -47,17 +49,42 @@ export class MergeRequestThreadsService {
     // See DocumentThreadsService: NotificationsService cannot publish, so the
     // frames for directed notifications are announced from here.
     private readonly events: EventsPublisher,
+    private readonly permissions: PermissionService,
   ) {}
 
-  /** Threads are readable on merged/closed MRs too — only writes require `open`. */
-  async list(mergeRequestId: string): Promise<ListMergeRequestThreadsResponse> {
+  /**
+   * Threads are readable on merged/closed MRs too — only writes require
+   * `open`. A merge request spans pages (#636): a thread anchored on one
+   * `scope` may not open is left out, since its excerpt quotes that page.
+   */
+  async list(mergeRequestId: string, scope: AccessScope): Promise<ListMergeRequestThreadsResponse> {
     await this.getMrOrThrow(mergeRequestId);
     const rows = await this.prisma.mergeRequestThread.findMany({
       where: { mergeRequestId },
       include: { comments: { orderBy: { createdAt: 'asc' } } },
       orderBy: [{ resolved: 'asc' }, { createdAt: 'asc' }],
     });
-    return { mergeRequestId, threads: rows.map((t) => this.toThread(t)) };
+    const pages = await this.pagesOf(rows);
+    const visible = await this.permissions.visibleDocumentIds(scope, [...new Set(pages.values())]);
+    return {
+      mergeRequestId,
+      threads: rows
+        .map((t) => this.toThread(t, pages))
+        .filter((t) => t.documentId === null || visible.has(t.documentId)),
+    };
+  }
+
+  /** The page of each anchored thread's revision. */
+  private async pagesOf(rows: { anchor: unknown }[]): Promise<Map<string, string>> {
+    const ids = rows
+      .map((r) => r.anchor as MergeRequestThreadAnchor | null)
+      .flatMap((a) => (a && 'revisionId' in a ? [a.revisionId] : []));
+    if (ids.length === 0) return new Map();
+    const revisions = await this.prisma.documentRevision.findMany({
+      where: { id: { in: [...new Set(ids)] } },
+      select: { id: true, documentId: true },
+    });
+    return new Map(revisions.map((r) => [r.id, r.documentId]));
   }
 
   async createThread(
@@ -265,7 +292,8 @@ export class MergeRequestThreadsService {
     return { thread: await this.reload(thread.id) };
   }
 
-  private toThread(t: ThreadWithComments): MergeRequestThread {
+  private toThread(t: ThreadWithComments, pages: Map<string, string>): MergeRequestThread {
+    const anchor = (t.anchor as MergeRequestThreadAnchor | null) ?? null;
     return {
       threadId: t.id,
       mergeRequestId: t.mergeRequestId,
@@ -274,7 +302,8 @@ export class MergeRequestThreadsService {
       resolved: t.resolved,
       resolvedBy: t.resolvedBy,
       resolvedAt: t.resolvedAt?.toISOString() ?? null,
-      anchor: (t.anchor as MergeRequestThreadAnchor | null) ?? null,
+      anchor,
+      documentId: anchor && 'revisionId' in anchor ? (pages.get(anchor.revisionId) ?? null) : null,
       checkId: t.checkId,
       ruleId: t.ruleId,
       comments: t.comments.map(
@@ -299,7 +328,7 @@ export class MergeRequestThreadsService {
       where: { id: threadId },
       include: { comments: { orderBy: { createdAt: 'asc' } } },
     });
-    return this.toThread(row);
+    return this.toThread(row, await this.pagesOf([row]));
   }
 
   private async getMrOrThrow(mergeRequestId: string) {

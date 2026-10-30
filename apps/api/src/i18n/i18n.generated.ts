@@ -804,6 +804,7 @@ export type I18nTranslations = {
             "nothingToMerge": string;
             "diverged": string;
             "divergedWhileMerging": string;
+            "targetMissing": string;
             "alreadyOpen": string;
             "notMembers": string;
             "breakingApi": string;

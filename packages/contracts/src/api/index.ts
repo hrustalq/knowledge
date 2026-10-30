@@ -547,9 +547,12 @@ export function resolveApiBreakingChangePolicy(requested: string | null | undefi
 export interface ApiBreakingAck {
   by: string;
   at: string;
-  /** The source head acknowledged; a later push needs a new acknowledgement. */
+  /** The source head acknowledged, on the merge request's own page. */
   revisionId: string;
-  /** True while `revisionId` is still the source head. */
+  /**
+   * True while the source branch has had no commit since (#636): a write to
+   * any of its pages is a change nobody has read, and needs a new acknowledgement.
+   */
   current: boolean;
 }
 

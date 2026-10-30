@@ -501,14 +501,13 @@ export class DocumentsService {
   }
 
   /**
-   * `commit` is how a merge attributes its project commit (#636): to the person
-   * merging rather than the merge revision's author, with the source head's
-   * commit as second parent.
+   * `commit: false` leaves the project commit to the caller (#636): a merge
+   * writes one commit for all of its pages, attributed to the person merging.
    */
   async finalizeRevision(
     documentId: string,
     revisionId: string,
-    commit?: { authorId?: string; mergedFrom?: string },
+    opts: { commit?: boolean } = {},
   ): Promise<FinalizeRevisionResponse> {
     const document = await this.getDocumentOrThrow(documentId);
     this.assertNotArchived(document);
@@ -589,7 +588,7 @@ export class DocumentsService {
         select: { restricted: true },
       });
       if (revision.collabDraftId) await this.markPublished(revision.collabDraftId, revision.id, revision.collabSnapshot, true);
-      await this.commits.recordRevision(revision.id, commit);
+      if (opts.commit !== false) await this.commits.recordRevisions([revision.id]);
       // Outbox (plan.md §5): the job row commits atomically with the status change;
       // enqueue happens after commit, the sweeper covers enqueue failures.
       const job = await this.prisma.ingestionJob.create({

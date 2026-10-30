@@ -23,7 +23,7 @@ interface CommitInput {
   coAuthorIds?: string[];
   /** The first parent when the branch has no commit yet: the commit that wrote this revision. */
   forkRevisionId?: string;
-  /** A merge's source head revision: its commit becomes the second parent. */
+  /** A merge's source branch: its head commit becomes the second parent. */
   mergedFrom?: string;
   changes: CommitChange[];
 }
@@ -121,31 +121,55 @@ export class ProjectCommitsService {
         AND b.project_branch_id IS DISTINCT FROM pb.id`;
   }
 
-  /** The commit for a revision `finalizeRevision` just finalized, in its transaction. */
-  async recordRevision(revisionId: string, opts: { authorId?: string; mergedFrom?: string } = {}): Promise<void> {
-    const r = await this.prisma.documentRevision.findUniqueOrThrow({
-      where: { id: revisionId },
+  /**
+   * The commit for revisions just finalized, in their transaction: one per
+   * save, and one for every page of a merge (#636). `mergedFrom` names the
+   * merged source branch, whose head commit becomes the second parent.
+   */
+  async recordRevisions(revisionIds: string[], opts: { authorId?: string; mergedFrom?: string } = {}): Promise<void> {
+    const revisions = await this.prisma.documentRevision.findMany({
+      where: { id: { in: revisionIds } },
       include: {
         document: true,
         branch: { select: { name: true } },
         parents: { where: { parentOrder: 1 }, select: { parentRevisionId: true } },
       },
+      orderBy: { document: { path: 'asc' } },
     });
+    const drafts = await this.inDrafts(revisions.map((r) => r.document));
+    const kept = revisions.filter((r) => !drafts.has(r.document.id));
+    if (kept.length === 0) return;
+    const [r] = kept;
     const doc = r.document;
-    if ((await this.inDrafts([doc])).has(doc.id)) return;
-    const slug = doc.slug ?? slugFor(doc.title);
+    const slugOf = (d: typeof doc) => d.slug ?? slugFor(d.title);
     await this.write({
       workspaceId: doc.workspaceId,
       projectId: doc.projectId,
       branch: r.branch?.name ?? doc.defaultBranch,
       authorId: opts.authorId ?? r.authorId,
       at: r.finalizedAt ?? new Date(),
-      message: r.message?.trim() || `Update ${slug}`,
-      coAuthorIds: Array.isArray(r.coAuthorIds) ? (r.coAuthorIds as string[]) : [],
+      message: r.message?.trim() || `Update ${slugOf(doc)}`,
+      coAuthorIds: kept.flatMap((k) => (Array.isArray(k.coAuthorIds) ? (k.coAuthorIds as string[]) : [])),
       forkRevisionId: r.parents[0]?.parentRevisionId,
       mergedFrom: opts.mergedFrom,
-      changes: [{ documentId: doc.id, revisionId: r.id, parentDocumentId: doc.parentId, slug, removed: false }],
+      changes: kept.map((k) => ({
+        documentId: k.document.id,
+        revisionId: k.id,
+        parentDocumentId: k.document.parentId,
+        slug: slugOf(k.document),
+        removed: false,
+      })),
     });
+  }
+
+  /** The latest commit on a project branch, or null while nothing was written on it. */
+  async headCommit(projectId: string, branch: string): Promise<string | null> {
+    const head = await this.prisma.projectCommit.findFirst({
+      where: { projectId, branch },
+      orderBy: { seq: 'desc' },
+      select: { id: true },
+    });
+    return head?.id ?? null;
   }
 
   /**
@@ -204,13 +228,9 @@ export class ProjectCommitsService {
   }
 
   private async write(input: CommitInput): Promise<void> {
-    const head = await this.prisma.projectCommit.findFirst({
-      where: { projectId: input.projectId, branch: input.branch },
-      orderBy: { seq: 'desc' },
-      select: { id: true },
-    });
-    const first = head?.id ?? (input.forkRevisionId ? await this.commitOf(input.forkRevisionId) : null);
-    const second = input.mergedFrom ? await this.commitOf(input.mergedFrom) : null;
+    const head = await this.headCommit(input.projectId, input.branch);
+    const first = head ?? (input.forkRevisionId ? await this.commitOf(input.forkRevisionId) : null);
+    const second = input.mergedFrom ? await this.headCommit(input.projectId, input.mergedFrom) : null;
     const parents = [first, second !== first ? second : null].filter((p): p is string => p !== null);
 
     await this.prisma.projectCommit.create({

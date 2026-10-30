@@ -237,7 +237,14 @@ describe('lintThreadBody', () => {
 
 // ---------------------------------------------------------------------------
 
-const CANDIDATE: LintCandidate = { mergeRequestId: MR, authorId: AUTHOR, workspaceId: WS, projectId: PROJECT, headRevisionId: HEAD };
+const CANDIDATE: LintCandidate = {
+  mergeRequestId: MR,
+  authorId: AUTHOR,
+  workspaceId: WS,
+  projectId: PROJECT,
+  documentId: DOC,
+  headRevisionId: HEAD,
+};
 
 function trigger(over: {
   effective?: 'off' | 'warn' | 'block';
@@ -247,11 +254,16 @@ function trigger(over: {
   visible?: number;
   waiting?: number;
   inserted?: number;
-  stale?: Array<{ id: string; agentRunId: string | null }>;
+  stale?: Array<{ id: string; agentRunId: string | null; headRevisionId: string }>;
+  /** Waiting heads that are on the candidate's page. */
+  samePage?: string[];
 } = {}) {
   const prisma = {
     user: { findUnique: vi.fn(async () => ({ locale: 'ru' })) },
-    mergeRequest: { count: vi.fn(async () => over.visible ?? 1) },
+    mergeRequest: {},
+    document: { count: vi.fn(async () => over.visible ?? 1) },
+    documentRevision: { findMany: vi.fn(async () => (over.samePage ?? []).map((id) => ({ id }))) },
+    documentBranch: { findMany: vi.fn(async () => [{ id: 'sb', documentId: DOC, headRevisionId: HEAD }]) },
     mergeRequestCheck: {
       count: vi.fn(async () => over.waiting ?? 0),
       createMany: vi.fn(async () => ({ count: over.inserted ?? 1 })),
@@ -318,7 +330,14 @@ describe('LintTriggerSweeper', () => {
   });
 
   it('supersedes an older waiting check and cancels its run before it costs anything', async () => {
-    const t = trigger({ stale: [{ id: 'old-check', agentRunId: 'old-run' }] });
+    const t = trigger({
+      stale: [
+        { id: 'old-check', agentRunId: 'old-run', headRevisionId: OLD_HEAD },
+        // Another page's waiting check is that page's business (#636).
+        { id: 'other-page', agentRunId: 'other-run', headRevisionId: 'other-head' },
+      ],
+      samePage: [OLD_HEAD],
+    });
     await t.sweeper.check(CANDIDATE);
     expect(t.prisma.mergeRequestCheck.updateMany).toHaveBeenCalledWith({
       where: { id: { in: ['old-check'] }, status: 'pending' },
@@ -361,7 +380,7 @@ describe('LintTriggerSweeper', () => {
       id: MR,
       status: 'open',
       authorId: AUTHOR,
-      sourceBranch: { headRevisionId: HEAD },
+      sourceBranch: { id: 'sb', projectBranchId: null, headRevisionId: HEAD },
       document: { workspaceId: WS, projectId: PROJECT },
     }));
     prisma.mergeRequestCheck.findFirst = vi.fn(async () => null);
@@ -415,6 +434,7 @@ function publisher(over: {
       updateMany: vi.fn(async () => ({ count: over.claimed ?? 1 })),
       findUniqueOrThrow: vi.fn(async () => ({ id: 'check-1', mergeRequestId: MR, headRevisionId: HEAD, agentRunId: 'run-1' })),
       update: vi.fn(async (args: unknown) => writes.push(['check.update', args])),
+      findMany: vi.fn(async () => [{ id: 'check-0', headRevisionId: OLD_HEAD }]),
     },
     agentRun: { findUniqueOrThrow: vi.fn(async () => ({ id: 'run-1', createdBy: AUTHOR, locale: 'en', findings: over.findings ?? [] })) },
     mergeRequest: {
@@ -422,11 +442,16 @@ function publisher(over: {
         id: MR,
         documentId: DOC,
         status: over.mrStatus ?? 'open',
-        sourceBranch: { headRevisionId: over.sourceHead ?? HEAD },
+        sourceBranch: { name: 'feature' },
         document: { workspaceId: WS },
       })),
     },
-    mergeRequestThread: { findMany: vi.fn(async () => over.prior ?? []) },
+    documentRevision: {
+      findUniqueOrThrow: vi.fn(async () => ({ documentId: DOC })),
+      findMany: vi.fn(async ({ where }: { where: { id: { in: string[] } } }) => where.id.in.map((id) => ({ id }))),
+    },
+    documentBranch: { findUnique: vi.fn(async () => ({ headRevisionId: over.sourceHead ?? HEAD })) },
+    mergeRequestThread: { findMany: vi.fn(async () => (over.prior ?? []).map((t) => ({ checkId: 'check-0', ...t }))) },
   };
   const events = { publish: vi.fn(async () => undefined) };
   const sweeper = new LintPublishSweeper(prisma as never, events as never);
@@ -544,12 +569,13 @@ describe('AgentExecutor linter', () => {
       compareWithNothing: vi.fn(async () => ({ hunks: [{ oldStart: 0, oldLines: 0, newStart: 1, newLines: 1, lines: [{ kind: 'added', text: 'Now click on Save.' }] }] })),
     };
     const prisma = {
-      mergeRequest: {
-        findFirst: vi.fn(async () =>
-          over.visible === false
-            ? null
-            : { id: MR, documentId: DOC, targetBranch: { headRevisionId: 'targetHead' in over ? over.targetHead : OLD_HEAD }, document: { title: 'Saving', projectId: PROJECT } },
-        ),
+      documentRevision: { findUnique: vi.fn(async () => ({ documentId: DOC })) },
+      mergeRequest: { findFirst: vi.fn(async () => ({ id: MR, documentId: DOC, targetBranch: { name: 'main' } })) },
+      document: {
+        findFirst: vi.fn(async () => (over.visible === false ? null : { id: DOC, title: 'Saving', projectId: PROJECT })),
+      },
+      documentBranch: {
+        findUnique: vi.fn(async () => ({ headRevisionId: 'targetHead' in over ? over.targetHead : OLD_HEAD })),
       },
     };
     const exec = new AgentExecutor(
@@ -723,10 +749,11 @@ function gateFixture(over: {
     mergeRequest: {
       findUnique: vi.fn(async () => ({
         id: MR,
-        sourceBranch: { headRevisionId: state.head },
+        sourceBranch: { id: 'sb', projectBranchId: null, headRevisionId: state.head },
         document: { workspaceId: WS, projectId: PROJECT },
       })),
     },
+    documentBranch: { findMany: vi.fn(async () => [{ id: 'sb', documentId: DOC, headRevisionId: state.head }]) },
     mergeRequestCheck: { findMany: vi.fn(async () => state.checks) },
     agentRun: {
       findMany: vi.fn(async () => [{ id: 'run-1', status: 'succeeded' }]),
@@ -806,19 +833,30 @@ function mergeFixture(over: { gate?: Partial<ReturnType<typeof lintGate>>; check
     isDraft: false,
     authorId: AUTHOR,
     approvedBy: [],
-    sourceBranch: { name: 'feature', headRevisionId: HEAD },
-    targetBranch: { name: 'main', headRevisionId: OLD_HEAD, protected: false },
+    sourceBranch: { id: 'sb', documentId: DOC, projectBranchId: null, name: 'feature', headRevisionId: HEAD },
+    targetBranch: { id: 'tb', documentId: DOC, name: 'main', headRevisionId: OLD_HEAD, protected: false },
     reviewers: [],
   };
   const prisma = {
     mergeRequest: { findUnique: vi.fn(async () => mr) },
+    // sourcePages, then the target branches of those pages.
+    documentBranch: {
+      findMany: vi.fn(async ({ where }: { where: { name?: string } }) => (where.name ? [mr.targetBranch] : [mr.sourceBranch])),
+    },
     mergeRequestCheck: {
       findFirst: vi.fn(async () =>
         over.check === null ? null : { id: 'check-1', workspaceId: WS, headRevisionId: HEAD, status: 'failed', ...over.check },
       ),
       updateMany: vi.fn(async () => ({ count: over.claimed ?? 1 })),
     },
-    document: { findUnique: vi.fn(async () => ({ workspaceId: WS, title: 'Saving' })) },
+    document: {
+      findUnique: vi.fn(async () => ({ workspaceId: WS, title: 'Saving' })),
+      findUniqueOrThrow: vi.fn(async () => ({ workspaceId: WS, projectId: PROJECT })),
+      // The breaking-API gate is the first read past the lint gate.
+      findMany: vi.fn(async () => {
+        throw new Error('past the gates');
+      }),
+    },
     onCommit: vi.fn((fn: () => Promise<unknown>) => void fn()),
   };
   const lint = {
@@ -833,24 +871,25 @@ function mergeFixture(over: { gate?: Partial<ReturnType<typeof lintGate>>; check
     })),
     list: vi.fn(async () => ({ checks: [{ checkId: 'check-1', override: { by: AUTHOR, reason: 'hotfix' } }] })),
   };
-  // Past the gates: stop at the merge base, so a test sees which gate spoke.
-  const compare = { findMergeBase: vi.fn(async () => { throw new Error('past the gates'); }) };
+  // The target head is the merge base, so nothing diverged.
+  const compare = { findMergeBase: vi.fn(async () => OLD_HEAD) };
+  const permissions = { scopeFor: vi.fn(async () => ({ workspaceId: WS })), requireLevel: vi.fn(async () => 'edit') };
   const config = { get: vi.fn(() => 0) };
   const activity = { record: vi.fn(async () => undefined) };
   const audit = { record: vi.fn(async () => undefined) };
   const service = new MergeRequestsService(
     prisma as never,
-    {} as never,
-    {} as never,
+    {} as never, // storage
+    {} as never, // documents
     compare as never,
     activity as never,
-    {} as never,
+    {} as never, // access
     config as never,
-    {} as never,
-    {} as never,
-    {} as never,
-    {} as never,
-    {} as never,
+    {} as never, // notifications
+    {} as never, // events
+    permissions as never,
+    {} as never, // apiDiffs
+    {} as never, // entities
     lint as never,
     audit as never,
   );
@@ -870,7 +909,7 @@ describe('MergeRequestsService lint gate', () => {
       blockingCount: 2,
       checkId: 'check-1',
     });
-    expect(f.compare.findMergeBase).not.toHaveBeenCalled();
+    expect(f.prisma.document.findMany).not.toHaveBeenCalled();
   });
 
   it('lets an unheld merge through to the next gate', async () => {

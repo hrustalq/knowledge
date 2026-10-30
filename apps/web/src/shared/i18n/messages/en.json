@@ -1534,6 +1534,9 @@
         "archived": "archived a template",
         "unarchived": "restored a template",
         "reset": "reset a template to its default"
+      },
+      "git": {
+        "pushed": "pushed {n} commit to | pushed {n} commits to"
       }
     },
     "loading": "Loading activity…",
@@ -2075,7 +2078,8 @@
     "workflows": "no workflows | {n} workflow | {n} workflows",
     "tools": "no tools | {n} tool | {n} tools",
     "openIssues": "{n} open report | {n} open reports",
-    "usages": "{n} usage site | {n} usage sites"
+    "usages": "{n} usage site | {n} usage sites",
+    "branches": "No branches | {n} branch | {n} branches"
   },
   "chat": {
     "needsAgentMode": "This needs Agent mode",
@@ -3141,7 +3145,9 @@
     "noPages": "No pages in this project yet.",
     "noContributors": "Nobody has written anything here yet.",
     "contributorsHint": "Derived from who has revised a page here — not an access list.",
-    "railElsewhere": "Managed in settings."
+    "railElsewhere": "Managed in settings.",
+    "branchNoMr": "No merge request",
+    "branchMorePages": "and {n} more"
   },
   "rail": {
     "overview": "Overview",
@@ -3161,7 +3167,8 @@
     "usedBy": "Used by",
     "quality": "Quality",
     "conflicts": "Contradictions",
-    "insights": "Insights"
+    "insights": "Insights",
+    "branches": "Branches"
   },
   "knowledgeIssue": {
     "report": "Report a problem",
@@ -7302,6 +7309,23 @@
     },
     "names": {
       "git": "Git remote"
+    }
+  },
+  "git": {
+    "clone": {
+      "title": "Clone with git",
+      "button": "Clone",
+      "intro": "This project is a git repository holding the pages you may open, one markdown file each. A pushed branch becomes a merge request.",
+      "url": "Clone URL",
+      "copyUrl": "Copy the clone URL",
+      "keyTitle": "API key",
+      "keyIntro": "Git signs in with an API key read from {env}. Make one for this workspace here, or reuse one from {connect}.",
+      "connectLink": "Connect AI",
+      "readKey": "Read-only key",
+      "writeKey": "Read and write key",
+      "shownOnce": "The new key is in the commands below. Copy them now: it is shown only this once. Keep {env} set in the shell you run git from.",
+      "terminal": "Terminal",
+      "pushHint": "To propose a change, push a branch: {command}"
     }
   }
 }

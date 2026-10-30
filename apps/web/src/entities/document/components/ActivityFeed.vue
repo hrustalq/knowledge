@@ -93,7 +93,9 @@ const newest = computed<ActivityEntry | null>(() => entries.value[0] ?? null)
 
 function label(e: ActivityEntry): string {
   const key = `activity.action.${e.action}`
-  const text = t(key)
+  // `git.pushed` (#636) counts its commits; a label with no plural ignores the number.
+  const n = Number(e.metadata.commits ?? 1)
+  const text = t(key, { n }, n)
   return text === key ? e.action : text
 }
 
@@ -122,7 +124,7 @@ function isPerson(e: ActivityEntry): boolean {
 }
 
 function title(e: ActivityEntry): string {
-  return e.documentTitle ?? (e.metadata.title as string) ?? e.documentId?.slice(0, 8) ?? ''
+  return e.documentTitle ?? (e.metadata.title as string) ?? (e.metadata.branch as string) ?? e.documentId?.slice(0, 8) ?? ''
 }
 
 /** The folded line: the same sentence a row makes, without the link. */
@@ -279,6 +281,11 @@ watch(() => events.revision, () => void refreshHead())
               >
                 {{ title(e) }}
               </RouterLink>
+              <!-- A push (#636) names a branch, not a page. -->
+              <span
+                v-else-if="e.metadata.branch"
+                class="order-last basis-full truncate font-mono text-xs sm:order-none sm:basis-auto"
+              >{{ e.metadata.branch }}</span>
               <span class="ml-auto shrink-0 text-xs text-muted-foreground">{{ relativeTime(e.createdAt) }}</span>
             </div>
           </div>

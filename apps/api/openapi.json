@@ -4527,6 +4527,70 @@
         ]
       }
     },
+    "/v1/projects/{id}/git": {
+      "get": {
+        "operationId": "ProjectsController_git",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectGitResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A project's git clone URL (#636); url is null while the git remote is off",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
     "/v1/projects/{id}/deletion-preview": {
       "get": {
         "operationId": "ProjectsController_deletionPreview",
@@ -63273,6 +63337,18 @@
           "counts",
           "glossaryConflicts",
           "cascade"
+        ]
+      },
+      "ProjectGitResponse": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "url"
         ]
       },
       "ProjectOverviewResponse": {

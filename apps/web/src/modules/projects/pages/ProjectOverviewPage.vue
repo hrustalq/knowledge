@@ -23,6 +23,7 @@ import {
   Download,
   FileText,
   Gauge,
+  GitBranch,
   GitMerge,
   Globe,
   Info,
@@ -30,7 +31,7 @@ import {
   Users,
   Workflow as WorkflowIcon,
 } from 'lucide-vue-next'
-import type { ListActivityResponse, ProjectOverviewResponse, ProjectSiteResponse, QualitySummaryResponse } from '@knowledge/contracts'
+import type { ListActivityResponse, ListProjectBranchesResponse, ProjectOverviewResponse, ProjectSiteResponse, QualitySummaryResponse } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { getWorkspaceId, relativeTime } from '@/shared/api/api'
 import { Badge } from '@/shared/ui/badge'
@@ -41,6 +42,7 @@ import { ActivityFeed } from '@/entities/document'
 import { MarkdownView } from '@/entities/document'
 import { UserChip } from '@/entities/person'
 import ProjectAvatar from '@/modules/projects/components/ProjectAvatar.vue'
+import CloneButton from '@/modules/projects/components/CloneButton.vue'
 import { ExportDialog } from '@/entities/document'
 import { QualityDistribution } from '@/entities/insight'
 import { ProjectAnalyticsSection } from '@/entities/insight'
@@ -65,6 +67,8 @@ const RAIL_WIDGETS = [
   { id: 'quality', label: t('rail.quality'), icon: Gauge, expandable: false },
   { id: 'activity', label: t('rail.activity'), icon: ActivityIcon, expandable: true },
   { id: 'merge-requests', label: t('rail.changes'), icon: GitMerge, expandable: false },
+  // Every branch but the default one (#636): drafts, merge request sources, pushes.
+  { id: 'branches', label: t('rail.branches'), icon: GitBranch, expandable: false },
   { id: 'glossary', label: t('rail.glossary'), icon: BookMarked, expandable: false },
   { id: 'connectors', label: t('rail.connectors'), icon: Plug, expandable: false },
   { id: 'workflows', label: t('rail.workflows'), icon: WorkflowIcon, expandable: false },
@@ -107,6 +111,13 @@ const siteQuery = useQuery(
 )
 const site = computed(() => (siteQuery.data.value as ProjectSiteResponse | undefined)?.site ?? null)
 
+const branchesQuery = useQuery(
+  computed(() => apiQueryOptions('/v1/projects/{id}/branches', { path: { id: projectId.value } })),
+)
+const branches = computed(() => (branchesQuery.data.value as ListProjectBranchesResponse | undefined)?.branches ?? [])
+/** Pages a branch row links before folding the rest into "+N more". */
+const BRANCH_PAGES_SHOWN = 3
+
 /**
  * `?tab=` opens a widget rather than selecting one: several can be open at
  * once, so there is no single value for the URL to hold. Same contract as the
@@ -138,6 +149,7 @@ const visibleWidgets = computed(() => {
     if (w.id === 'connectors') return c.connectors > 0 || auth.canAdminWorkspace
     if (w.id === 'workflows') return c.workflows > 0
     if (w.id === 'merge-requests') return c.openMergeRequests > 0
+    if (w.id === 'branches') return branches.value.length > 0
     // A site is worth a row once it exists, or for someone who could set one up.
     if (w.id === 'site') return site.value !== null || auth.canAdminWorkspace
     return true
@@ -156,6 +168,7 @@ const previewFor = computed<Record<RailWidget, string | null>>(() => {
     'merge-requests': c?.openMergeRequests
       ? t('count.open', { n: c.openMergeRequests }, c.openMergeRequests)
       : null,
+    branches: branches.value.length ? t('count.branches', { n: branches.value.length }, branches.value.length) : null,
     glossary: c?.glossaryTerms ? t('count.terms', { n: c.glossaryTerms }, c.glossaryTerms) : null,
     connectors: c?.connectors ? t('count.connected', { n: c.connectors }, c.connectors) : null,
     workflows: c?.workflows ? t('count.workflows', { n: c.workflows }, c.workflows) : null,
@@ -193,10 +206,11 @@ const isActive = computed(() => projectId.value === projects.activeId)
           {{ t('project.createdAt', { when: relativeTime(project.createdAt) }) }}
         </p>
       </div>
-      <div class="flex shrink-0 gap-2">
+      <div class="flex flex-wrap gap-2">
         <Button v-if="!isActive" variant="outline" size="sm" @click="projects.switchProject(project.projectId)">
           {{ t('project.setAsActive') }}
         </Button>
+        <CloneButton :project-id="project.projectId" :project-name="project.name" />
         <Button variant="outline" size="sm" @click="exportOpen = true">
           <Download class="size-3.5" /> {{ t('export.actionProject') }}
         </Button>
@@ -352,6 +366,35 @@ const isActive = computed(() => projectId.value === projects.activeId)
             :can-manage="auth.canAdminWorkspace"
             :project-id="projectId"
           />
+
+          <ul v-else-if="w.id === 'branches'" class="space-y-3 text-sm">
+            <li v-for="b in branches" :key="b.projectBranchId" class="min-w-0 space-y-1">
+              <div class="flex items-baseline gap-2">
+                <span class="min-w-0 flex-1 truncate font-mono text-xs font-medium" :title="b.name">{{ b.name }}</span>
+                <span class="shrink-0 text-xs text-muted-foreground">{{ relativeTime(b.updatedAt) }}</span>
+              </div>
+              <p class="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                <GitMerge class="size-3 shrink-0" aria-hidden="true" />
+                <template v-if="b.openMergeRequest">
+                  <RouterLink :to="`/merge-requests/${b.openMergeRequest.mergeRequestId}`" class="min-w-0 truncate text-foreground hover:underline">
+                    {{ b.openMergeRequest.title }}
+                  </RouterLink>
+                  <Badge v-if="b.openMergeRequest.isDraft" variant="outline" class="shrink-0 text-micro">{{ t('mr.draft') }}</Badge>
+                </template>
+                <span v-else>{{ t('project.branchNoMr') }}</span>
+              </p>
+              <p class="min-w-0 truncate text-xs text-muted-foreground">
+                <template v-for="(page, i) in b.pages.slice(0, BRANCH_PAGES_SHOWN)" :key="page.documentId">
+                  <template v-if="i > 0">, </template>
+                  <RouterLink :to="`/documents/${page.documentId}`" class="hover:text-foreground hover:underline">{{ page.title }}</RouterLink>
+                </template>
+                <template v-if="b.pages.length > BRANCH_PAGES_SHOWN">
+                  {{ t('project.branchMorePages', { n: b.pages.length - BRANCH_PAGES_SHOWN }) }}
+                </template>
+              </p>
+              <UserChip :user-id="b.updatedBy" size="sm" class="max-w-full text-xs" />
+            </li>
+          </ul>
 
           <div v-else-if="w.id === 'site'" class="space-y-2 text-sm">
             <a

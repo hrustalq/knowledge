@@ -60,7 +60,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/shared/ui/alert-dialog'
-import CopyBlock from '@/modules/access/components/CopyBlock.vue'
+import { CopyBlock } from '@/entities/access'
 
 const { t } = useI18n()
 const route = useRoute()

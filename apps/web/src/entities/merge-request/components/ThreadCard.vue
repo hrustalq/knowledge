@@ -52,7 +52,7 @@ import {
 import { MarkdownView } from '@/entities/document'
 import { excerpt } from '@/core/markdown/plain'
 import CommentComposer from './CommentComposer.vue'
-import { UserChip } from '@/entities/person'
+import { UserAvatar, UserChip } from '@/entities/person'
 import { useMembers } from '@/entities/person'
 import { useAgentNames } from '@/entities/person'
 import { fullTime, timelineTime } from '../model/mr-ui'

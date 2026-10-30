@@ -1338,7 +1338,7 @@ export interface paths {
         put?: never;
         /**
          * The caller's private working branch for this page (#474), created on first ask
-         * @description What the editor edits a published page on. Spent once a merge request from it is merged or closed: the next call starts a fresh one. A branch nothing was written on follows the default head.
+         * @description What the editor edits a published page on. One per person and project (#636): a page not on it yet forks onto the caller's newest live draft at the default head. Spent once a merge request from it is merged or closed: the next call starts a fresh one. A page branch nothing was written on follows the default head. `pages` lists the pages the draft has revisions on.
          */
         post: operations["DocumentsController_myDraftBranch"];
         delete?: never;
@@ -1619,7 +1619,7 @@ export interface paths {
         put?: never;
         /**
          * Publish a working branch onto the default branch (#474)
-         * @description Opens a merge request from the branch (or reuses its open one) and merges it at once. When a gate refuses — `protected`, `approvals`, `lint`, `breaking-api`, `draft` — the merge request stays open and `merged` is false. 400 when there is nothing to publish; 409 `diverged` when the default head moved past the branch and `onTopOf` does not name it. The guard holds the caller to edit on the branch.
+         * @description Opens a merge request from the branch (or reuses its open one) and merges it at once. When a gate refuses — `protected`, `approvals`, `lint`, `breaking-api`, `draft` — the merge request stays open and `merged` is false. 400 when there is nothing to publish; 409 `diverged` (naming the page) when a default head moved past the branch and `onTopOf` does not list it. Publishes every page the branch has revisions on (#636). The guard holds the caller to edit on the branch.
          */
         post: operations["MergeRequestsController_publishBranch"];
         delete?: never;
@@ -7799,11 +7799,8 @@ export interface components {
              * @example Shorten access-token TTL
              */
             title: string;
-            /**
-             * Format: uuid
-             * @description The default-branch head the author reviewed after it moved past the branch: the merge lands over that head instead of refusing as `diverged`, and only over that head.
-             */
-            onTopOf?: string;
+            /** @description The default-branch heads the author reviewed after they moved past the branch, one per page (#636): each page whose head is listed lands over it instead of refusing as `diverged`, and only over that head. */
+            onTopOf?: string[];
         };
         SavedFilterChipDto: {
             /** @example reviewer */
@@ -13649,6 +13646,10 @@ export interface components {
         };
         /** @enum {string} */
         MergeStrategy: "merge-commit" | "squash";
+        MyDraftBranchResponse: {
+            branch: components["schemas"]["BranchInfo"];
+            pages: string[];
+        };
         NoteCapturePayload: {
             body: string;
             appliesTo?: string[];
@@ -19993,7 +19994,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CreateBranchResponse"];
+                    "application/json": components["schemas"]["MyDraftBranchResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

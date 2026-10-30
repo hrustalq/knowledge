@@ -6,6 +6,7 @@ import type {
   BranchInfo,
   FactExtractor,
   CreateBranchResponse,
+  MyDraftBranchResponse,
   CreateDocumentResponse,
   CreateUploadResponse,
   DocumentCategory,
@@ -952,36 +953,65 @@ export class DocumentsService {
 
   /**
    * The caller's working branch for this page (#474), private and created on
-   * first ask. A branch an MR was merged or closed from is spent — the MR made
-   * it readable — so the next edit starts a fresh `draft/<userId>-<n>`. One
-   * nothing was ever written on follows the default head, so the editor never
-   * opens a page as it read the day the branch was cut.
+   * first ask. It is one branch per person and project (#636): a page not yet
+   * on it forks onto the caller's newest live `draft/<userId>[-n]` at the
+   * default head, so one Publish carries every page they edited. A draft an MR
+   * was merged or closed from is spent, on every page — the MR made it
+   * readable — so the next edit starts the next `-<n>`. A page branch nothing
+   * was written on follows the default head, so the editor never opens a page
+   * as it read the day the branch was cut. `pages` lists the pages the draft
+   * has revisions on, for "Publish N pages".
    */
-  async myDraftBranch(documentId: string, userId: string): Promise<CreateBranchResponse> {
+  async myDraftBranch(documentId: string, userId: string): Promise<MyDraftBranchResponse> {
     const document = await this.getDocumentOrThrow(documentId);
     const prefix = `${DRAFT_BRANCH_PREFIX}${userId}`;
+    const spentMr = { status: { in: ['merged', 'closed'] } };
+    const spent = { mrAsSource: { some: spentMr } };
+    // This page's own live draft first, so work saved before the fold stays
+    // where it is even when a newer draft exists.
     const mine = await this.prisma.documentBranch.findFirst({
       where: {
         documentId,
         ownerId: userId,
         name: { startsWith: prefix },
-        mrAsSource: { none: { status: { in: ['merged', 'closed'] } } },
+        mrAsSource: { none: spentMr },
+        OR: [{ projectBranchId: null }, { projectBranch: { branches: { none: spent } } }],
       },
       orderBy: { createdAt: 'desc' },
     });
     if (!mine) {
-      // The first name free in the whole project (#636): a branch name is the
-      // project's, so reusing one another page spent or holds would join its branch.
-      const held = await this.prisma.projectBranch.findMany({
-        where: { projectId: document.projectId, name: { startsWith: prefix } },
-        select: { name: true },
+      // Only a draft every page branch of which is the caller's: anyone may
+      // name a branch `draft/<someone>`, and folding into theirs would publish
+      // their pages under this person's Publish.
+      const live = await this.prisma.projectBranch.findFirst({
+        where: {
+          projectId: document.projectId,
+          name: { startsWith: prefix },
+          branches: { some: { ownerId: userId }, every: { ownerId: userId }, none: spent },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, name: true },
       });
-      const own = await this.prisma.documentBranch.findMany({ where: { documentId, name: { startsWith: prefix } }, select: { name: true } });
-      const taken = new Set([...held, ...own].map((b) => b.name));
-      let name = prefix;
-      for (let n = 2; taken.has(name); n++) name = `${prefix}-${n}`;
+      let name = live?.name;
+      if (!name) {
+        // The first name free in the whole project (#636): a branch name is the
+        // project's, so reusing one another page spent or holds would join its branch.
+        const held = await this.prisma.projectBranch.findMany({
+          where: { projectId: document.projectId, name: { startsWith: prefix } },
+          select: { name: true },
+        });
+        const own = await this.prisma.documentBranch.findMany({ where: { documentId, name: { startsWith: prefix } }, select: { name: true } });
+        const taken = new Set([...held, ...own].map((b) => b.name));
+        name = prefix;
+        for (let n = 2; taken.has(name); n++) name = `${prefix}-${n}`;
+      }
+      // A draft already in review is readable to the page's readers on every
+      // page it spans, so a page joining it is too.
+      const inReview =
+        !!live && (await this.prisma.mergeRequest.count({ where: { status: 'open', sourceBranch: { projectBranchId: live.id } } })) > 0;
       try {
-        return await this.createBranch(documentId, { name, visibility: 'private' }, userId);
+        const created = await this.createBranch(documentId, { name, visibility: inReview ? 'workspace' : 'private' }, userId);
+        return { ...created, pages: live ? await this.draftPages({ id: created.branch.branchId, projectBranchId: live.id }) : [] };
       } catch (e) {
         // Two of the caller's tabs asked in the same instant: the unique
         // (document, name) let one insert win, and that one is the answer.
@@ -1005,10 +1035,23 @@ export class DocumentsService {
       ]);
       if (own === 0 && drafts === 0) {
         const moved = await this.prisma.documentBranch.update({ where: { id: mine.id }, data: { headRevisionId: def.headRevisionId } });
-        return { branch: this.toBranchInfo(moved) };
+        return { branch: this.toBranchInfo(moved), pages: await this.draftPages(mine) };
       }
     }
-    return { branch: this.toBranchInfo(mine) };
+    return { branch: this.toBranchInfo(mine), pages: await this.draftPages(mine) };
+  }
+
+  /** The pages a working branch has revisions on (#636), by id: what its Publish would carry. */
+  private async draftPages(branch: Pick<DocumentBranch, 'id' | 'projectBranchId'>): Promise<string[]> {
+    const rows = await this.prisma.documentBranch.findMany({
+      where: {
+        ...(branch.projectBranchId ? { projectBranchId: branch.projectBranchId } : { id: branch.id }),
+        revisions: { some: { status: { not: 'draft' } } },
+      },
+      select: { documentId: true },
+      orderBy: { documentId: 'asc' },
+    });
+    return rows.map((r) => r.documentId);
   }
 
   /** The page's branches `scope` may read: a private one only for its owner, its grantees and admins (#474). */

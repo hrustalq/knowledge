@@ -924,10 +924,10 @@ async function loadPage() {
     if (requestedBranch && !byName(requestedBranch)) toast.error(t('editor.branchNotFound', { name: requestedBranch }))
     // A published page is edited on the caller's own working branch (#474),
     // unless a link named another. A private draft page is private already.
-    const mine =
-      !requestedBranch && !detail.document.draftOwnerId
-        ? (await api.post('/v1/documents/{id}/branches/mine', { path })).branch
-        : null
+    const working =
+      !requestedBranch && !detail.document.draftOwnerId ? await api.post('/v1/documents/{id}/branches/mine', { path }) : null
+    const mine = working?.branch ?? null
+    draftPages.value = working?.pages ?? []
     branch.value = mine ?? byName(requestedBranch) ?? byName(detail.document.defaultBranch) ?? null
     // One working branch at a time per page and person, so it keeps the
     // page's own slot: edits stored before #474 are offered back, and the
@@ -1205,6 +1205,7 @@ async function save(onTop = false) {
     const fin = await writeRevision(markdown, sentMessage, onTop, !onWorkingBranch.value)
     if (onWorkingBranch.value) {
       await followSavedRevision(fin.revisionId)
+      if (!draftPages.value.includes(editId.value as string)) draftPages.value = [...draftPages.value, editId.value as string]
       message.value = ''
       toast.success(fin.deduplicated ? t('editor.noContentChanges') : t('editor.draftBranch.saved'))
       return
@@ -1222,21 +1223,30 @@ async function save(onTop = false) {
 /* ------------------------------------------------ publishing a branch */
 
 /**
- * The default head a Publish was refused over (#474): the page was published
- * since this branch began, and publishing now would replace that with this
- * version. Set from the 409; the author reviews, then publishes over it.
+ * The default head a Publish was refused over (#474): a page of the draft —
+ * this one or another it spans (#636) — was published since the draft began,
+ * and publishing now would replace that with this version. Set from the 409;
+ * the author reviews, then publishes over it.
  */
-const publishedPast = ref<string | null>(null)
+const publishedPast = ref<{ documentId: string; head: string; draftHead: string } | null>(null)
+/** The heads already published over in this attempt: a second page can refuse after the first is cleared. */
+const reviewedHeads = ref<string[]>([])
 /** The comparison the review dialog shows while `publishedPast` is being looked at. */
 const pastCompare = ref<CompareResponse | null>(null)
 const publishing = ref(false)
+/** The pages the caller's draft has revisions on (#636): one Publish carries them all. */
+const draftPages = ref<string[]>([])
+const publishCount = computed(
+  () => new Set([...draftPages.value, ...(unstaged.value && editId.value ? [editId.value as string] : [])]).size,
+)
 
 async function reviewPast() {
-  if (!publishedPast.value || !headRevisionId.value) return
+  const past = publishedPast.value
+  if (!past) return
   try {
     pastCompare.value = await fetchApi(queryClient, '/v1/documents/{id}/compare', {
-      path: { id: editId.value as string },
-      query: { from: publishedPast.value, to: headRevisionId.value, mode: 'direct' },
+      path: { id: past.documentId },
+      query: { from: past.head, to: past.draftHead, mode: 'direct' },
     })
     reviewOpen.value = true
   } catch (e) {
@@ -1250,7 +1260,7 @@ async function reviewPast() {
  * fields go with it, merged or held — they are not versioned, so they cannot
  * wait in review.
  */
-async function publish(onTopOf?: string) {
+async function publish(onTopOf?: string[]) {
   if (loadError.value || !editId.value || !branch.value) return
   const markdown = readyToWrite()
   if (markdown === null) return
@@ -1265,12 +1275,13 @@ async function publish(onTopOf?: string) {
       path: { id, branchId },
       body: {
         title: sentMessage.trim() || t('editor.draftBranch.mrTitle', { title: title.value }),
-        ...(onTopOf ? { onTopOf } : {}),
+        ...(onTopOf?.length ? { onTopOf } : {}),
       },
       config: { timeout: 0 },
     })
     await patchPageFields()
     publishedPast.value = null
+    reviewedHeads.value = []
     workingCopy.settle()
     if (res.merged) {
       toast.success(t('editor.draftBranch.published'))
@@ -1280,13 +1291,20 @@ async function publish(onTopOf?: string) {
       await router.push(`/merge-requests/${res.mergeRequest.mergeRequestId}`)
     }
   } catch (e) {
-    const head = errorDetails(e)?.currentHeadRevisionId
-    if (errorReason(e) === 'diverged' && typeof head === 'string') publishedPast.value = head
-    else onWriteError(e, sentMessage)
+    const { documentId, currentHeadRevisionId: head, sourceHeadRevisionId: draftHead } = errorDetails(e) ?? {}
+    if (errorReason(e) === 'diverged' && typeof documentId === 'string' && typeof head === 'string' && typeof draftHead === 'string') {
+      reviewedHeads.value = onTopOf ?? []
+      publishedPast.value = { documentId, head, draftHead }
+    } else onWriteError(e, sentMessage)
   } finally {
     busy.value = false
     publishing.value = false
   }
+}
+
+/** Publish again over every head reviewed so far, the one just refused on included. */
+function publishOverPast() {
+  if (publishedPast.value) void publish([...reviewedHeads.value, publishedPast.value.head])
 }
 
 /* ------------------------------------------------- leaving the editor */
@@ -1532,7 +1550,10 @@ onBeforeUnmount(() => {
             :disabled="busy || loading || loadError !== null || (collab !== null && !collab.status.writable)"
             @click="onWorkingBranch ? publish() : save()"
           >
-            {{
+            <span v-if="onWorkingBranch && !publishing && publishCount > 1">
+              {{ t('editor.publish') }}<span class="kn-bar-count">&nbsp;{{ t('editor.draftBranch.pageCount', publishCount) }}</span>
+            </span>
+            <template v-else>{{
               onWorkingBranch
                 ? publishing
                   ? t('editor.draftBranch.publishing')
@@ -1542,7 +1563,7 @@ onBeforeUnmount(() => {
                   : isDraft
                     ? t('editor.saveDraft')
                     : t('editor.publish')
-            }}
+            }}</template>
           </Button>
         </div>
       </Teleport>
@@ -1628,11 +1649,13 @@ onBeforeUnmount(() => {
             <div v-if="publishedPast" class="kn-stale-copy" role="status">
               <GitCompareArrows class="size-4 shrink-0" aria-hidden="true" />
               <div class="min-w-0 flex-1">
-                <p class="font-medium">{{ t('editor.draftBranch.past.title') }}</p>
+                <p class="font-medium">
+                  {{ t(publishedPast.documentId === editId ? 'editor.draftBranch.past.title' : 'editor.draftBranch.past.otherTitle') }}
+                </p>
                 <p class="text-muted-foreground">{{ t('editor.draftBranch.past.body') }}</p>
               </div>
               <Button size="sm" variant="ghost" @click="reviewPast">{{ t('editor.draftBranch.past.review') }}</Button>
-              <Button size="sm" variant="outline" :disabled="busy" @click="publish(publishedPast ?? undefined)">
+              <Button size="sm" variant="outline" :disabled="busy" @click="publishOverPast">
                 {{ t('editor.draftBranch.past.publishOver') }}
               </Button>
             </div>
@@ -1783,7 +1806,7 @@ onBeforeUnmount(() => {
             v-if="pastCompare"
             variant="outline"
             :disabled="busy || !publishedPast"
-            @click="(reviewOpen = false, publish(publishedPast ?? undefined))"
+            @click="(reviewOpen = false, publishOverPast())"
           >
             {{ t('editor.draftBranch.past.publishOver') }}
           </Button>

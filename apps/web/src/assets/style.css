@@ -383,6 +383,18 @@
     white-space: nowrap;
   }
 }
+/* "Publish 2 pages" (#636): the count folds on a phone-width bar and stays in
+   the button's accessible name. */
+@container kn-bar (max-width: 30rem) {
+  .kn-bar-count {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
 .kn-bar-start {
   display: flex;
   min-width: 0;

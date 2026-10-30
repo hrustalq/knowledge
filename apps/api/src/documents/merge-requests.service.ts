@@ -712,16 +712,17 @@ export class MergeRequestsService {
   }
 
   /**
-   * `opts.onTopOf` (#474, `publishBranch` only): the target head the author
-   * reviewed after it moved past the source. The merge lands over that head
-   * instead of refusing as diverged — the source's content wins, as it does
-   * for a shared draft's "Publish on top" — and over no other head.
+   * `opts.onTopOf` (#474, `publishBranch` only): the target heads the author
+   * reviewed after they moved past the source, one per page (#636). A page
+   * lands over its listed head instead of refusing as diverged — the source's
+   * content wins, as it does for a shared draft's "Publish on top" — and over
+   * no other head.
    */
   async merge(
     mergeRequestId: string,
     strategy: MergeStrategy = 'merge-commit',
     principal?: Principal,
-    opts: { onTopOf?: string } = {},
+    opts: { onTopOf?: readonly string[] } = {},
   ): Promise<MergeMergeRequestResponse> {
     const mr = await this.getMrOrThrow(mergeRequestId);
     if (mr.status !== 'open') {
@@ -796,7 +797,7 @@ export class MergeRequestsService {
 
     for (const p of pages) {
       const targetHeadId = p.target.headRevisionId;
-      if (targetHeadId && p.mergeBase !== targetHeadId && opts.onTopOf !== targetHeadId) {
+      if (targetHeadId && p.mergeBase !== targetHeadId && !opts.onTopOf?.includes(targetHeadId)) {
         // Fast-forward precondition (plan.md §7 conflict semantics): the target
         // advanced past the merge base. 3-way content merge is future work —
         // rebase the source branch (new revision on top of target head) instead.
@@ -874,13 +875,15 @@ export class MergeRequestsService {
           for (const x of staged) {
             const now = headNow.get(x.targetBranchId) ?? null;
             if (now === x.targetHeadId) continue;
+            const sourceHeadId = pages.find((p) => p.documentId === x.documentId)!.source.headRevisionId;
             throw new ConflictException({
               statusCode: 409,
               message: t('error.mergeRequest.divergedWhileMerging', { target: mr.targetBranch.name }),
               reason: 'diverged',
               documentId: x.documentId,
               currentHeadRevisionId: now,
-              comparisonUrl: `/v1/documents/${x.documentId}/compare?from=${now}&to=${pages.find((p) => p.documentId === x.documentId)!.source.headRevisionId}&mode=merge-base`,
+              sourceHeadRevisionId: sourceHeadId,
+              comparisonUrl: `/v1/documents/${x.documentId}/compare?from=${now}&to=${sourceHeadId}&mode=merge-base`,
             });
           }
 
@@ -971,14 +974,23 @@ export class MergeRequestsService {
     this.assertTargetsExist(pages, target.name);
     for (const p of pages) {
       const targetHeadId = p.target.headRevisionId;
-      if (targetHeadId && p.mergeBase !== targetHeadId && dto.onTopOf !== targetHeadId) {
+      if (targetHeadId && p.mergeBase !== targetHeadId && !dto.onTopOf?.includes(targetHeadId)) {
         throw this.diverged(p.documentId, p.target, p.source, targetHeadId, p.source.headRevisionId);
       }
     }
 
     const open = await this.openFrom(source, target);
+    // Opened from a page the draft changes (#636): Publish from an untouched
+    // page of the draft would otherwise file the MR, its feed rows and its
+    // threads under a page it leaves alone. The guard checked only this page.
+    const anchor = pages.some((p) => p.documentId === documentId) ? documentId : pages[0].documentId;
+    if (!open && anchor !== documentId && principal && principal.mode !== 'dev') {
+      const scope = await this.permissions.scopeFor(principal, document.workspaceId);
+      await this.permissions.requireLevel(scope, { type: 'document', id: anchor }, 'edit');
+    }
     const mrId =
-      open?.id ?? (await this.create(documentId, { sourceBranch: source.name, title: dto.title }, principal?.userId)).mergeRequest.mergeRequestId;
+      open?.id ??
+      (await this.create(anchor, { sourceBranch: source.name, title: dto.title }, principal?.userId)).mergeRequest.mergeRequestId;
     const held = async (reason: PublishBranchResponse['reason']): Promise<PublishBranchResponse> => ({
       ...(await this.get(mrId)),
       mergedRevision: null,
@@ -1021,6 +1033,7 @@ export class MergeRequestsService {
       reason: 'diverged',
       documentId,
       currentHeadRevisionId: targetHeadId,
+      sourceHeadRevisionId: sourceHeadId,
       comparisonUrl: `/v1/documents/${documentId}/compare?from=${targetHeadId}&to=${sourceHeadId}&mode=merge-base`,
     });
   }

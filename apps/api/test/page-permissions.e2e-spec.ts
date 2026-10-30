@@ -856,7 +856,7 @@ describe('page permissions (e2e, #76)', () => {
       expect(refused.body.details).toMatchObject({ reason: 'diverged', currentHeadRevisionId: theirs });
       // Refused before an MR could make the branch readable.
       expect(await prisma.mergeRequest.count({ where: { documentId: page } })).toBe(mrsBefore);
-      await publishThrough(branchId, { onTopOf: theirs });
+      await publishThrough(branchId, { onTopOf: [theirs] });
       expect(await published()).toContain('mine again');
     });
   });

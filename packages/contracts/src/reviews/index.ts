@@ -234,6 +234,8 @@ export interface MergeGateConflictDetails {
   requiredApprovals?: number;
   approvals?: number;
   currentHeadRevisionId?: string | null;
+  /** `diverged` (#636): that page's source head, so a client can compare it with `currentHeadRevisionId`. */
+  sourceHeadRevisionId?: string;
   comparisonUrl?: string | null;
 }
 

@@ -1,6 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsIn,
   IsInt,
@@ -77,14 +79,16 @@ export class PublishBranchDto {
   title!: string;
 
   @ApiPropertyOptional({
-    format: 'uuid',
+    type: [String],
     description:
-      'The default-branch head the author reviewed after it moved past the branch: the merge lands over that head ' +
-      'instead of refusing as `diverged`, and only over that head.',
+      'The default-branch heads the author reviewed after they moved past the branch, one per page (#636): each page ' +
+      'whose head is listed lands over it instead of refusing as `diverged`, and only over that head.',
   })
   @IsOptional()
-  @Matches(UUID_RE)
-  onTopOf?: string;
+  @IsArray()
+  @ArrayMaxSize(1000)
+  @Matches(UUID_RE, { each: true })
+  onTopOf?: string[];
 }
 
 export class UpdateMergeRequestDto {

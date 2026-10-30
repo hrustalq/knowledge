@@ -48,7 +48,7 @@ import { AuditService } from '../auth/audit.service.js';
 import { ConflictsService } from '../conflicts/conflicts.service.js';
 import { LintChecksService } from './lint/lint-checks.service.js';
 import { lintGateEnforced, overridable } from './lint/lint-check.js';
-import { ProjectCommitsService } from '../git/project-commits.service.js';
+import { ProjectCommitsService, type PagePlace } from '../git/project-commits.service.js';
 import { sourcePages } from './mr-pages.js';
 import { hasConflictMarkers, threeWay, type ThreeWayResult } from './three-way.js';
 
@@ -748,93 +748,12 @@ export class MergeRequestsService {
     opts: { onTopOf?: readonly string[] } = {},
   ): Promise<MergeMergeRequestResponse> {
     const mr = await this.getMrOrThrow(mergeRequestId);
-    if (mr.status !== 'open') {
-      throw new BadRequestException(t('error.mergeRequest.notOpenForMerge', { id: mr.id, status: t(`status.mr.${mr.status}`) }));
-    }
-
-    // --- Merge gates (all before any side effect). The extra keys on these
-    // ConflictException bodies are hoisted into the ApiErrorPayload `details`
-    // by ApiExceptionFilter — see MergeGateConflictDetails in contracts.
-    if (mr.isDraft) {
-      throw new ConflictException({
-        statusCode: 409,
-        message: t('error.mergeRequest.isDraft', { id: mr.id }),
-        reason: 'draft',
-      });
-    }
-    // Approval gate — enforced only for real identities: in AUTH_MODE=none the
-    // dev principal IS the zeros author stub (self-approval could never pass),
-    // and MCP stdio has no principal. Same trust semantics as requireRole.
-    const requiredApprovals =
-      principal && principal.mode !== 'dev' ? (this.config.get<number>('MR_REQUIRED_APPROVALS') ?? 1) : 0;
-    const approvals = this.approvers(mr).filter((id) => id !== mr.authorId).length;
-    if (approvals < requiredApprovals) {
-      throw new ConflictException({
-        statusCode: 409,
-        message: t('error.mergeRequest.needsApprovals', { id: mr.id, approvals, required: requiredApprovals }),
-        reason: 'approvals',
-        requiredApprovals,
-        approvals,
-      });
-    }
-    const pages = await this.changedPages(mr.sourceBranch, mr.targetBranch.name);
-    if (pages.length === 0) throw new BadRequestException(t('error.mergeRequest.nothingToMerge'));
-    this.assertTargetsExist(pages, mr.targetBranch.name);
-    const { projectId, workspaceId } = await this.prisma.document.findUniqueOrThrow({
-      where: { id: mr.documentId },
-      select: { projectId: true, workspaceId: true },
-    });
-    // The guard held the caller to edit on the page the merge request was
-    // opened from; a merge writes every page it spans (#636), so each must
-    // allow it too. The guard's refusal, never a title.
-    if (principal && principal.mode !== 'dev') {
-      const scope = await this.permissions.scopeFor(principal, workspaceId);
-      for (const p of pages) {
-        if (p.documentId !== mr.documentId) await this.permissions.requireLevel(scope, { type: 'document', id: p.documentId }, 'edit');
-      }
-    }
-    // A protected target branch on any page requires workspace admin. Skipped
-    // when there is no principal (MCP stdio) and short-circuited in
-    // AUTH_MODE=none — the same trust semantics as every other ACL in the codebase.
-    if (principal && [mr.targetBranch, ...pages.map((p) => p.target)].some((b) => b.protected)) {
-      await this.access.requireRole(principal, workspaceId, 'admin');
-    }
-    // Style lint (#74): after approvals, before the 3-way merge — updating the
-    // branch would only produce a new head to lint. Not enforced where
-    // approvals are not.
-    if (lintGateEnforced(principal)) {
-      const gate = await this.lint.gate(mr.id, true);
-      if (gate.blocked) {
-        throw new ConflictException({
-          statusCode: 409,
-          message:
-            gate.blockingCount > 0
-              ? t('error.mergeRequest.lintBlocking', { id: mr.id, count: gate.blockingCount })
-              : t('error.mergeRequest.lintPending', { id: mr.id }),
-          reason: 'lint',
-          checkStatus: gate.checkStatus,
-          blockingCount: gate.blockingCount,
-          checkId: gate.checkId,
-        });
-      }
-    }
+    const { pages, places, projectId } = await this.gates(mr, principal);
 
     // What every page lands with (#636), where the fast-forward precondition
     // stood: only overlapping hunks refuse now, before anything is staged.
     const bodies = await this.mergedBodies(pages, { target: mr.targetBranch.name, source: mr.sourceBranch.name }, opts.onTopOf);
-    // Breaking API changes (#78), last because it parses two specs per spec
-    // page. Each diff runs from the merge base to the source head: the panel's
-    // diff, and what a clean 3-way merge adds to the target.
-    const breaking = (await this.breakingState(mr, pages)).blocking;
-    if (breaking) {
-      throw new ConflictException({
-        statusCode: 409,
-        message: t('error.mergeRequest.breakingApi', { id: mr.id, count: breaking.breaking }),
-        reason: 'breaking-api',
-        breakingCount: breaking.breaking,
-        documentId: breaking.documentId,
-      });
-    }
+    await this.breakingGate(mr, pages);
 
     const message =
       strategy === 'squash'
@@ -848,7 +767,7 @@ export class MergeRequestsService {
     // S3 reads per page, not by the four a merge used to make inside it.
     const drafts: string[] = [];
     const staged: { documentId: string; revisionId: string; targetBranchId: string; targetHeadId: string | null }[] = [];
-    let finalized: Awaited<ReturnType<DocumentsService['finalizeRevision']>>;
+    let finalized: Awaited<ReturnType<DocumentsService['finalizeRevision']>> | null;
     try {
       for (const p of pages) {
         // Second parent = source head → a true merge node in the revision DAG (plan.md §4).
@@ -898,27 +817,14 @@ export class MergeRequestsService {
           for (const x of staged) {
             results.push({ documentId: x.documentId, ...(await this.documents.finalizeRevision(x.documentId, x.revisionId, { commit: false })) });
           }
-          await this.commits.recordRevisions(
-            results.filter((r) => !r.deduplicated).map((r) => r.revisionId),
-            { authorId: principal?.userId, mergedFrom: strategy === 'merge-commit' ? mr.sourceBranch.name : undefined },
-          );
-          const result = results.find((r) => r.documentId === mr.documentId) ?? results[0];
-
-          // Guarded status flip: a concurrent merge/close of THIS MR loses the race and 409s.
-          // Now a rollback too, so the merge revisions it would have orphaned go with it.
-          const flipped = await this.prisma.mergeRequest.updateMany({
-            where: { id: mr.id, status: 'open' },
-            data: { status: 'merged', strategy, mergedRevisionId: result.revisionId, mergedAt: new Date() },
-          });
-          if (flipped.count === 0) {
-            throw new ConflictException(t('error.mergeRequest.concurrentChange', { id: mr.id }));
-          }
-          // A page that existed only as this merge request is a page now (#73):
-          // it joins the tree, the lists and search with the merge.
-          await this.prisma.document.updateMany({
-            where: { id: { in: pages.map((p) => p.documentId) }, pendingMergeRequestId: mr.id },
-            data: { pendingMergeRequestId: null },
-          });
+          // The branch's moves, renames and archives land with its content (#636 phase 4).
+          const placed = await this.documents.applyPlaces(projectId, places, principal?.userId ?? AUTHOR_ID_STUB);
+          const mergedFrom = strategy === 'merge-commit' ? mr.sourceBranch.name : undefined;
+          const revisionIds = results.filter((r) => !r.deduplicated).map((r) => r.revisionId);
+          if (revisionIds.length) await this.commits.recordRevisions(revisionIds, { authorId: principal?.userId, mergedFrom, placed });
+          else await this.commits.recordState(projectId, placed, { actorId: principal?.userId, message, mergedFrom });
+          const result = results.find((r) => r.documentId === mr.documentId) ?? results[0] ?? null;
+          await this.flipMerged(mr, strategy, result?.revisionId ?? null, [...pages.map((p) => p.documentId), ...places.map((p) => p.documentId)]);
           return result;
         },
         { timeout: 30_000, maxWait: 10_000 },
@@ -927,14 +833,62 @@ export class MergeRequestsService {
       await this.dropDrafts(drafts);
       throw e;
     }
+    return this.afterMerge(mr, strategy, finalized?.revisionId ?? null, principal, pages.length);
+  }
 
+  /**
+   * Merge by pushing a local merge commit (#636 phase 4): every gate a web
+   * merge passes, then `land` writes the pushed commit — its revisions on the
+   * target and its tree — inside the transaction that flips the merge request.
+   * `land` returns the merged revision on the merge request's own page, if
+   * the push changed it.
+   */
+  async mergeByPush(mergeRequestId: string, principal: Principal, land: () => Promise<string | null>): Promise<MergeRequestInfo> {
+    const mr = await this.getMrOrThrow(mergeRequestId);
+    const { pages, places, projectId } = await this.gates(mr, principal);
+    await this.breakingGate(mr, pages);
+    const revisionId = await this.prisma.withTransaction(
+      async () => {
+        await this.commits.lock(projectId);
+        const landed = await land();
+        await this.flipMerged(mr, 'merge-commit', landed, [...pages.map((p) => p.documentId), ...places.map((p) => p.documentId)]);
+        return landed;
+      },
+      { timeout: 30_000, maxWait: 10_000 },
+    );
+    return (await this.afterMerge(mr, 'merge-commit', revisionId, principal, pages.length)).mergeRequest;
+  }
+
+  /** Guarded status flip, and the pages that existed only as this merge request join the tree (#73). */
+  private async flipMerged(mr: MrWithBranches, strategy: MergeStrategy, mergedRevisionId: string | null, documentIds: string[]): Promise<void> {
+    // A concurrent merge/close of THIS MR loses the race and 409s, rolling its revisions back.
+    const flipped = await this.prisma.mergeRequest.updateMany({
+      where: { id: mr.id, status: 'open' },
+      data: { status: 'merged', strategy, mergedRevisionId, mergedAt: new Date() },
+    });
+    if (flipped.count === 0) {
+      throw new ConflictException(t('error.mergeRequest.concurrentChange', { id: mr.id }));
+    }
+    await this.prisma.document.updateMany({
+      where: { id: { in: documentIds }, pendingMergeRequestId: mr.id },
+      data: { pendingMergeRequestId: null },
+    });
+  }
+
+  private async afterMerge(
+    mr: MrWithBranches,
+    strategy: MergeStrategy,
+    mergedRevisionId: string | null,
+    principal: Principal | undefined,
+    pageCount: number,
+  ): Promise<MergeMergeRequestResponse> {
     const updated = await this.prisma.mergeRequest.findUniqueOrThrow({ where: { id: mr.id }, include: MR_INCLUDE });
-    const mergedRevision = await this.prisma.documentRevision.findUnique({ where: { id: finalized.revisionId } });
+    const mergedRevision = mergedRevisionId ? await this.prisma.documentRevision.findUnique({ where: { id: mergedRevisionId } }) : null;
     await this.recordActivity(mr.documentId, 'merge-request.merged', mr.id, principal?.userId, {
       title: mr.title,
       strategy,
-      mergedRevisionId: finalized.revisionId,
-      ...(pages.length > 1 ? { pageCount: pages.length } : {}),
+      mergedRevisionId,
+      ...(pageCount > 1 ? { pageCount } : {}),
     });
     // #81: the conflicts this merge request was proposed to fix are resolved.
     // Post-commit and non-fatal: the merge stands either way.
@@ -945,6 +899,144 @@ export class MergeRequestsService {
       mergeRequest: await this.toDetail(updated),
       mergedRevision: mergedRevision ? toRevisionInfo(mergedRevision) : null,
     };
+  }
+
+  /**
+   * Every merge gate but breaking API changes, all before any side effect,
+   * and the pages and tree changes the merge lands. Shared by the web merge
+   * and a merge by push, so the two cannot disagree.
+   */
+  private async gates(
+    mr: MrWithBranches,
+    principal?: Principal,
+  ): Promise<{ pages: MrPage[]; places: PagePlace[]; projectId: string; workspaceId: string }> {
+    if (mr.status !== 'open') {
+      throw new BadRequestException(t('error.mergeRequest.notOpenForMerge', { id: mr.id, status: t(`status.mr.${mr.status}`) }));
+    }
+
+    // --- Merge gates (all before any side effect). The extra keys on these
+    // ConflictException bodies are hoisted into the ApiErrorPayload `details`
+    // by ApiExceptionFilter — see MergeGateConflictDetails in contracts.
+    if (mr.isDraft) {
+      throw new ConflictException({
+        statusCode: 409,
+        message: t('error.mergeRequest.isDraft', { id: mr.id }),
+        reason: 'draft',
+      });
+    }
+    // Approval gate — enforced only for real identities: in AUTH_MODE=none the
+    // dev principal IS the zeros author stub (self-approval could never pass),
+    // and MCP stdio has no principal. Same trust semantics as requireRole.
+    const requiredApprovals =
+      principal && principal.mode !== 'dev' ? (this.config.get<number>('MR_REQUIRED_APPROVALS') ?? 1) : 0;
+    const approvals = this.approvers(mr).filter((id) => id !== mr.authorId).length;
+    if (approvals < requiredApprovals) {
+      throw new ConflictException({
+        statusCode: 409,
+        message: t('error.mergeRequest.needsApprovals', { id: mr.id, approvals, required: requiredApprovals }),
+        reason: 'approvals',
+        requiredApprovals,
+        approvals,
+      });
+    }
+    const pages = await this.changedPages(mr.sourceBranch, mr.targetBranch.name);
+    const { projectId, workspaceId, defaultBranch } = await this.prisma.document.findUniqueOrThrow({
+      where: { id: mr.documentId },
+      select: { projectId: true, workspaceId: true, defaultBranch: true },
+    });
+    // ponytail: a branch's tree lands only on the default branch; a merge into another branch carries content alone.
+    const places = mr.targetBranch.name === defaultBranch ? await this.treePlaces(projectId, mr.sourceBranch.name, defaultBranch) : [];
+    if (pages.length === 0 && places.length === 0) throw new BadRequestException(t('error.mergeRequest.nothingToMerge'));
+    this.assertTargetsExist(pages, mr.targetBranch.name);
+    // The guard held the caller to edit on the page the merge request was
+    // opened from; a merge writes every page it spans (#636), and every page
+    // its tree moves, so each must allow it too. The guard's refusal, never a title.
+    if (principal && principal.mode !== 'dev') {
+      const scope = await this.permissions.scopeFor(principal, workspaceId);
+      for (const id of new Set([...pages.map((p) => p.documentId), ...places.map((p) => p.documentId)])) {
+        if (id !== mr.documentId) await this.permissions.requireLevel(scope, { type: 'document', id }, 'edit');
+      }
+    }
+    // A protected target branch on any page requires workspace admin. Skipped
+    // when there is no principal (MCP stdio) and short-circuited in
+    // AUTH_MODE=none — the same trust semantics as every other ACL in the codebase.
+    if (principal && [mr.targetBranch, ...pages.map((p) => p.target)].some((b) => b.protected)) {
+      await this.access.requireRole(principal, workspaceId, 'admin');
+    }
+    // Style lint (#74): after approvals, before the 3-way merge — updating the
+    // branch would only produce a new head to lint. Not enforced where
+    // approvals are not.
+    if (lintGateEnforced(principal)) {
+      const gate = await this.lint.gate(mr.id, true);
+      if (gate.blocked) {
+        throw new ConflictException({
+          statusCode: 409,
+          message:
+            gate.blockingCount > 0
+              ? t('error.mergeRequest.lintBlocking', { id: mr.id, count: gate.blockingCount })
+              : t('error.mergeRequest.lintPending', { id: mr.id }),
+          reason: 'lint',
+          checkStatus: gate.checkStatus,
+          blockingCount: gate.blockingCount,
+          checkId: gate.checkId,
+        });
+      }
+    }
+
+    return { pages, places, projectId, workspaceId };
+  }
+
+  /** Breaking API changes (#78), last because it parses two specs per spec page. */
+  private async breakingGate(mr: MrWithBranches, pages: MrPage[]): Promise<void> {
+    // Each diff runs from the merge base to the source head: the panel's
+    // diff, and what a clean 3-way merge adds to the target.
+    const breaking = (await this.breakingState(mr, pages)).blocking;
+    if (breaking) {
+      throw new ConflictException({
+        statusCode: 409,
+        message: t('error.mergeRequest.breakingApi', { id: mr.id, count: breaking.breaking }),
+        reason: 'breaking-api',
+        breakingCount: breaking.breaking,
+        documentId: breaking.documentId,
+      });
+    }
+  }
+
+  /**
+   * The moves, renames and archives a source branch makes that the default
+   * branch has not (#636 phase 4): each page's latest place on the branch,
+   * where it differs both from where the default branch put the page when
+   * the branch forked and from where it is now. A move made on the default
+   * branch since the fork therefore stands unless the branch moved the page
+   * too, in which case the branch's place wins.
+   */
+  async treePlaces(projectId: string, source: string, target: string): Promise<PagePlace[]> {
+    const rows = await this.prisma.$queryRaw<{ document_id: string; parent_document_id: string | null; slug: string; removed: boolean; seq: bigint }[]>`
+      SELECT DISTINCT ON (c.document_id) c.document_id, c.parent_document_id, c.slug, c.removed, pc.seq
+      FROM project_commit_changes c JOIN project_commits pc ON pc.id = c.commit_id
+      WHERE pc.project_id = ${projectId}::uuid AND pc.branch = ${source}
+      ORDER BY c.document_id, pc.seq DESC`;
+    if (rows.length === 0) return [];
+    const fork = await this.prisma.projectCommit.findFirst({ where: { projectId, branch: source }, orderBy: { seq: 'asc' }, select: { seq: true } });
+    const ids = rows.map((r) => r.document_id);
+    const [base, docs] = await Promise.all([
+      this.prisma.$queryRaw<{ document_id: string; parent_document_id: string | null; slug: string; removed: boolean }[]>`
+        SELECT DISTINCT ON (c.document_id) c.document_id, c.parent_document_id, c.slug, c.removed
+        FROM project_commit_changes c JOIN project_commits pc ON pc.id = c.commit_id
+        WHERE pc.project_id = ${projectId}::uuid AND pc.branch = ${target} AND pc.seq < ${fork!.seq} AND c.document_id = ANY(${ids}::uuid[])
+        ORDER BY c.document_id, pc.seq DESC`,
+      this.prisma.document.findMany({ where: { id: { in: ids } }, select: { id: true, parentId: true, slug: true, archivedAt: true } }),
+    ]);
+    const at = new Map(base.map((b) => [b.document_id, b]));
+    const now = new Map(docs.map((d) => [d.id, d]));
+    const same = (a: { parent_document_id: string | null; slug: string; removed: boolean } | undefined, r: (typeof rows)[number]) =>
+      !!a && a.parent_document_id === r.parent_document_id && a.slug === r.slug && a.removed === r.removed;
+    return rows.flatMap((r) => {
+      const d = now.get(r.document_id);
+      if (!d || same(at.get(r.document_id), r)) return [];
+      if (same({ parent_document_id: d.parentId, slug: d.slug ?? '', removed: d.archivedAt !== null }, r)) return [];
+      return [{ documentId: r.document_id, parentDocumentId: r.parent_document_id, slug: r.slug, removed: r.removed }];
+    });
   }
 
   /**

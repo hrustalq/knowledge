@@ -1,8 +1,8 @@
 # 71 — A project is a git remote (decision record, draft)
 
 Issue [#636](https://github.com/hrustalq/knowledge/issues/636). **Status: phase 0
-(spike) done, verdict GO; phases 1–3 built, so a project clones and fetches
-read-only. Push is phase 4.** This document records what the spike measured, the
+(spike) done, verdict GO; phases 1–4 built, so a project clones, fetches and
+takes pushes. The web's Clone button and the MCP side are phase 5.** This document records what the spike measured, the
 model it settled on, and which parts of the plan in #636 it changes. Phase 6
 rewrites it into the usual feature document once the feature ships.
 
@@ -278,13 +278,16 @@ re-exported from `DocumentsModule` so no call site changes. This is the
 A pushed commit's header is kept verbatim, so `git log` shows the name and email
 in the pusher's git config: a real address, or someone else's name. Attribution
 in PostgreSQL (`author_id`, the activity feed, MR authorship) is always the
-authenticated principal. That never changes. **Recommended for phase 4:** refuse
-a push whose author or committer email is not the pusher's noreply address. The
-`remote:` message gives the exact `git config user.email …` line, and the Clone
-dialog (phase 5) shows it up front. This keeps the issue's "never a person's real
-address" true for pushed history too, and stops one person writing commits under
-another's name. It costs every new user one config line, so it is flagged for a
-decision at phase 4.
+authenticated principal. That never changes.
+
+**Decided 2026-10-30: no rule.** As on GitHub and GitLab, a push authenticated
+by a valid key with push rights is accepted whatever its author and committer
+lines say. The spike recommended refusing any email but the pusher's noreply
+address; that would have cost every new user a config line and made
+reproduce-or-refuse depend on local git config. So for pushed history, "never a
+person's real address" holds only as far as the pusher's git config keeps it:
+`git log` names show what that config wrote. Server-written commits still
+carry noreply addresses.
 
 ## The protocol
 
@@ -607,6 +610,94 @@ first `# ` heading, else its filename. Verifying the pushed commit renders back
 uses the cached parent tree, not the probe's full scratch render. Deleting a
 branch over git is refused in v1.
 
+**As built** (one PR, decided 2026-10-30). `GitPushService`
+(`apps/api/src/git/git-push.service.ts`) is receive-pack:
+`info/refs?service=git-receive-pack` advertises the caller's refs, and `POST
+…/git-receive-pack` parses the commands, push options and pack, indexes the
+pack into a quarantine directory with the caller's cache as its alternate, and
+handles each ref in turn under the project's lock. A ref is checked (write key
+and editor role, a branch name, no delete, `old` = the ref the caller was
+shown, fast-forward), its commits are mapped onto pages in the caller's view,
+the result is trial-rendered in that view (`GitView.trial`) and refused unless
+every commit comes back with its pushed SHA, and only then written, in one
+transaction that first re-checks the branch's head commit under the commit
+lock. The write goes through `createDocument`, `createBranch`,
+`createRevision` + `finalizeRevision` (`commit: false, dedupe: false`, so a
+pushed revision is indexed like any edit), `applyPlaces` and
+`ProjectCommitsService.recordPushed`, which stores the pushed parents and
+header bytes. Where the build differs from the plan above:
+
+- **Each ref is its own transaction**, and `atomic` is not advertised, so a
+  push of two branches can land one. Later refs see the earlier ones' commits.
+- **The id line is stored per revision** (`document_revisions.id_line`,
+  `{ offset, text }` in bytes; null = the canonical line, `text: ""` = none).
+  `stripIdLine` looks only where `withIdLine` puts it (the leading
+  frontmatter of a markdown file, a top-level line of YAML, the first member of
+  JSON) and is its exact inverse. A blob carrying the canonical line stores
+  null. A new page's file has no id line, and is served without one until the
+  web writes it.
+- **A branch carries its own tree.** A move, rename or `git rm` pushed to a
+  branch is only a change row there; `recordRevisions` keeps a page where its
+  branch put it when the web edits it on that branch. A merge into the default
+  branch, from the web or by push, applies the branch's tree with
+  `applyPlaces` (`MergeRequestsService.treePlaces`): each page's latest place on
+  the branch, where it differs from both the place at the fork and the place
+  now. A move made on the default branch since the fork stands unless the
+  branch moved the same page, and then the branch wins. A merge into any other
+  branch carries content only. Pages only moved count for the gates (edit on
+  each) and for "nothing to merge".
+- **Renaming a file renames the slug, not the title.** A new page's title is
+  its frontmatter `title:`, else its first `# ` heading, else its file name. A
+  new `.yaml` / `.json` file is OpenAPI or AsyncAPI by its top-level key, and
+  anything else there is refused.
+- **A new file on a branch with no open merge request opens a draft one** into
+  the default branch (decided 2026-10-30), as if `-o merge_request.create -o
+  merge_request.draft` had been passed, so every head-less page has its merge
+  request. A new file pushed to the default branch is refused (finding 3).
+- **A merge commit records the other side** on every page it brings in. A page
+  the merge changed gets the other side's revision as its second parent. A page
+  whose body this side kept gets a merge node with that body, unless the other
+  side's revision is already behind it. This is what makes `git pull`, resolve,
+  push leave a merge request mergeable. In a merge, an added file without an id
+  is the other side's page at that path.
+- **Merge by push**: the last pushed commit's second parent is an open merge
+  request's source head commit, and its target is the pushed branch.
+  `MergeRequestsService.mergeByPush` runs the gates the web merge runs (shared
+  as `gates` + `breakingGate`), lands the push inside the transaction that
+  flips the merge request, and prints `Merged merge request`.
+- **A direct push to the default branch** needs edit on every page it changes
+  and is refused when any of them has a protected default branch, even for an
+  admin. Only a merge by push reaches a protected branch, behind the same admin
+  gate as a web merge.
+- **Refused in v1**: deleting a branch, a branch that has no commit of its own
+  yet, a file that is not `.md` / `.yaml` / `.json` or not regular and
+  non-executable, a binary file, a changed or duplicated id, an id the caller
+  cannot see, a directory without its page, a forbidden or case-colliding name,
+  and a page changing its file type. Each refusal is a `remote:` line in the
+  caller's locale (finding 4).
+- The merge request URL is `${WEB_BASE_URL}/merge-requests/<id>`; merge
+  requests have no short number.
+- A push is read whole into memory (256 MB cap), and page bodies go to MinIO
+  inside the transaction (`ponytail:` markers on both).
+- Every push request counts against `PUBLIC_RATE_LIMIT_PER_MIN` per IP, as
+  fetches do.
+- There is no `git.pushed` activity row yet: a pushed revision is a
+  `revision.finalized` row attributed to the pusher. A row of its own needs a
+  label in the web feed, which is phase 5.
+- `MergeRequestsCoreModule` (finding 6) and an `EntitiesCoreModule` are
+  extracted; `GitModule` loads both with `DocumentsCoreModule`.
+
+Checked by `test/git-remote.e2e-spec.ts` (11/11, real `git`): a two-page push
+with `-o merge_request.create` lists both pages and fast-forwards after a web
+merge with its SHA kept; a direct push; a read key, a stale push, a force push
+and a protected branch refused in en and ru; non-page files, a changed id and an
+orphan directory refused; an overlapping edit resolved by `git pull` and push
+then merged; a merge by push refused for `approvals`, then accepted; `git mv`,
+a new file (draft merge request) and `git rm` applied on merge. Not tried:
+indexing a pushed revision through to `knowledge_search` (no embeddings
+provider on the laptop; it is the ordinary finalize path), and pushes through
+the Cloudflare Worker.
+
 ## Numbers
 
 Synthetic projects from `synth.mjs`, with a nested page tree, edits, two-page
@@ -640,4 +731,3 @@ through the production ingress were not tried.
 - The JSON spec id form, the YAML form on push, and nested moves within one
   commit (the probe's tree surgery handles one move per subtree per commit;
   phase 3 re-derives an affected subtree from state instead).
-- The author-email rule (phase 4).

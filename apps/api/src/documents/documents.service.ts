@@ -1627,6 +1627,72 @@ export class DocumentsService {
   }
 
   /**
+   * Put pages where a branch's tree puts them (#636 phase 4): a push to the
+   * default branch, or a merge into it, moves, renames, archives and
+   * unarchives them with the rules `moveDocument` applies — the parent in the
+   * same project, the path cycle check, the subtree's paths and restrictions —
+   * and writes no commit: the caller's commit records the result.
+   *
+   * Pages are placed shallowest first by where they end up, so a page moving
+   * under one that moves too is placed after it, and a swap never passes
+   * through a cycle. Run inside the caller's transaction, under its commit lock.
+   */
+  async applyPlaces(
+    projectId: string,
+    places: { documentId: string; parentDocumentId: string | null; slug: string; removed: boolean }[],
+    actorId: string,
+  ): Promise<string[]> {
+    if (places.length === 0) return [];
+    const docs = new Map((await this.prisma.document.findMany({ where: { id: { in: places.map((p) => p.documentId) } } })).map((d) => [d.id, d]));
+    const wanted = new Map(places.map((p) => [p.documentId, p]));
+    const parentOf = async (id: string): Promise<string | null> =>
+      wanted.get(id)?.parentDocumentId ??
+      (wanted.has(id) ? null : ((await this.prisma.document.findUnique({ where: { id }, select: { parentId: true } }))?.parentId ?? null));
+    const depthOf = async (id: string): Promise<number> => {
+      let depth = 0;
+      for (let p = await parentOf(id); p && depth < 64; p = await parentOf(p)) depth++;
+      return depth;
+    };
+    const order = await Promise.all(places.map(async (p) => ({ p, depth: await depthOf(p.documentId) })));
+    order.sort((a, b) => a.depth - b.depth);
+
+    const changed: string[] = [];
+    for (const { p } of order) {
+      const document = docs.get(p.documentId);
+      if (!document || document.projectId !== projectId) continue;
+      const row = await this.prisma.document.findUniqueOrThrow({ where: { id: p.documentId } });
+      const data: Prisma.DocumentUncheckedUpdateInput = {};
+      if (p.parentDocumentId !== row.parentId) {
+        if (p.parentDocumentId === row.id) throw new BadRequestException(t('error.document.selfParent'));
+        const parent = p.parentDocumentId ? await this.assertValidParent(row.id, p.parentDocumentId, projectId) : null;
+        const newPath = `${parent?.path ?? '/'}${row.id}/`;
+        const depthDelta = (parent?.depth ?? -1) + 1 - row.depth;
+        const position = await this.prisma.document.count({ where: { projectId, parentId: p.parentDocumentId, id: { not: row.id } } });
+        await this.prisma.document.update({
+          where: { id: row.id },
+          data: { parentId: p.parentDocumentId, path: newPath, depth: row.depth + depthDelta, position },
+        });
+        await this.repathSubtree(row.workspaceId, row.id, row.path, newPath, depthDelta);
+        await this.permissions.recomputeRestrictedBy({ documentId: row.id });
+      }
+      if (p.slug !== row.slug) data.slug = p.slug;
+      if (p.removed !== (row.archivedAt !== null)) {
+        data.archivedAt = p.removed ? new Date() : null;
+        data.archivedBy = p.removed ? actorId : null;
+      }
+      if (Object.keys(data).length) await this.prisma.document.update({ where: { id: row.id }, data });
+      if (p.parentDocumentId !== row.parentId || Object.keys(data).length) changed.push(row.id);
+      if (p.removed !== (row.archivedAt !== null)) {
+        const action = p.removed ? 'document.archived' : 'document.unarchived';
+        this.prisma.onCommit(() =>
+          this.activity.record({ workspaceId: row.workspaceId, actor: actorId, action, documentId: row.id, projectId, metadata: { title: row.title, affected: 1, includeDescendants: false } }),
+        );
+      }
+    }
+    return changed;
+  }
+
+  /**
    * Feature 08 (docs/features/08): the document tree. Scoped to one project
    * when `projectId` is given; without it the tree spans the whole workspace,
    * which is what the web falls back to before its projects store resolves.

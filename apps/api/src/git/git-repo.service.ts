@@ -12,12 +12,12 @@ import { StorageService } from '../storage/storage.service.js';
 import { visibilitySql, type AccessScope } from '../permissions/access-scope.js';
 import { branchLevel } from '../permissions/branch-access.js';
 import { hashObject, isValidRefName, writePack, type GitObject } from './git-objects.js';
-import { GitView, ProjectModel, withIdLine, type ModelChange, type PageExt, type Visibility } from './git-view.js';
+import { GitView, ProjectModel, withIdLine, type IdLine, type ModelChange, type PageExt, type Visibility } from './git-view.js';
 
 /** Run `git` with `input` on stdin; resolves stdout, rejects with stderr. */
-function runGit(args: string[], input?: Buffer | string): Promise<Buffer> {
+export function runGit(args: string[], input?: Buffer | string, env?: Record<string, string>): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const child = spawn('git', args, { stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn('git', args, { stdio: ['pipe', 'pipe', 'pipe'], ...(env ? { env: { ...process.env, ...env } } : {}) });
     const out: Buffer[] = [];
     const err: Buffer[] = [];
     child.stdout.on('data', (c: Buffer) => out.push(c));
@@ -32,13 +32,13 @@ function runGit(args: string[], input?: Buffer | string): Promise<Buffer> {
   });
 }
 
-interface Project {
+export interface Project {
   id: string;
   model: ProjectModel;
   lastSeq: bigint;
   defaultBranch: string;
-  /** Revision -> its object key, for a blob not yet hashed or not in a cache. */
-  sources: Map<string, string>;
+  /** Revision -> its object key and pushed id line, for a blob not yet hashed or not in a cache. */
+  sources: Map<string, { s3Key: string; idLine: IdLine | null }>;
   /** Revision -> blob SHA, persisted in `blobs-v1.tsv` so a restart reads no page body twice. */
   blobs: Map<string, string>;
 }
@@ -80,6 +80,21 @@ export class GitRepoService {
    * is append-only, so what was advertised is still in it.
    */
   async repoFor(workspaceId: string, projectId: string, scope: AccessScope, sync: boolean): Promise<string> {
+    return this.withRepo(workspaceId, projectId, scope, sync, ({ dir }) => Promise.resolve(dir));
+  }
+
+  /**
+   * `fn` over `scope`'s repository brought up to date, its view and the
+   * project's model, under the project's lock: a push reads its parent trees
+   * and writes its commits with no sync of this project in between.
+   */
+  async withRepo<T>(
+    workspaceId: string,
+    projectId: string,
+    scope: AccessScope,
+    sync: boolean,
+    fn: (repo: { dir: string; view: GitView; project: Project }) => Promise<T>,
+  ): Promise<T> {
     // ponytail: one lock per project serializes its syncs; per (project, view) if fetches queue.
     return this.serialized(projectId, async () => {
       const project = await this.load(projectId);
@@ -87,16 +102,17 @@ export class GitRepoService {
       // ponytail: a visible set's repository is never deleted once its set changes; sweep
       // directories by mtime if the cache volume grows (one per project and access set).
       const dir = join(this.root, projectId, `${visibility.key}.git`);
-      if (!sync && existsSync(join(dir, 'HEAD'))) return dir;
-      try {
-        await this.syncRepo(workspaceId, project, visibility, dir);
-      } catch (err) {
-        // The view has drained objects that never reached the repository: start
-        // it over, and the next sync writes whatever `cat-file` finds missing.
-        this.views.delete(dir);
-        throw err;
+      if (sync || !existsSync(join(dir, 'HEAD'))) {
+        try {
+          await this.syncRepo(workspaceId, project, visibility, dir);
+        } catch (err) {
+          // The view has drained objects that never reached the repository: start
+          // it over, and the next sync writes whatever `cat-file` finds missing.
+          this.views.delete(dir);
+          throw err;
+        }
       }
-      return dir;
+      return fn({ dir, view: this.views.get(dir) ?? new GitView(project.model, visibility, (ch) => project.blobs.get(ch.revisionId)!), project });
     });
   }
 
@@ -143,13 +159,13 @@ export class GitRepoService {
     const [revisions, documents] = await Promise.all([
       this.prisma.documentRevision.findMany({
         where: { id: { in: revisionIds } },
-        select: { id: true, branchId: true, contentType: true, s3Key: true },
+        select: { id: true, branchId: true, contentType: true, s3Key: true, idLine: true },
       }),
       this.prisma.document.findMany({ where: { id: { in: documentIds } }, select: { id: true, kind: true } }),
     ]);
     const revision = new Map(revisions.map((r) => [r.id, r]));
     const kind = new Map(documents.map((d) => [d.id, d.kind]));
-    for (const r of revisions) project.sources.set(r.id, r.s3Key);
+    for (const r of revisions) project.sources.set(r.id, { s3Key: r.s3Key, idLine: r.idLine as IdLine | null });
 
     for (const c of commits) {
       project.model.add({
@@ -258,8 +274,8 @@ export class GitRepoService {
 
   /** A revision's bytes as served: its stored body with the page's id line. */
   private async bodyOf(project: Project, ch: ModelChange): Promise<Buffer> {
-    const key = project.sources.get(ch.revisionId)!;
-    return withIdLine(ch.documentId, Buffer.from(await this.storage.getObjectBytes(key)), ch.ext);
+    const { s3Key, idLine } = project.sources.get(ch.revisionId)!;
+    return withIdLine(ch.documentId, Buffer.from(await this.storage.getObjectBytes(s3Key)), ch.ext, idLine);
   }
 
   /** The SHAs among `shas` this repository lacks. */

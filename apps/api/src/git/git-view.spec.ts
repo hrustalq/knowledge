@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { hashObject, isValidRefName, writePack, type GitObject } from './git-objects.js';
-import { GitView, ProjectModel, withIdLine, type ModelChange, type Visibility } from './git-view.js';
+import { GitView, ProjectModel, stripIdLine, withIdLine, type ModelChange, type Visibility } from './git-view.js';
 
 const git = (dir: string, ...args: string[]) => execFileSync('git', ['--git-dir', dir, ...args], { encoding: 'utf8' }).trim();
 
@@ -89,6 +89,32 @@ describe('GitView', () => {
     execFileSync('git', ['clone', '-q', `file://${dir}`, join(work, 'c')]);
     expect(execFileSync('git', ['-C', join(work, 'c'), 'ls-files'], { encoding: 'utf8' }).trim()).toBe('b2.md\nh.md');
   });
+
+  it('trial-renders a push as advance would, then takes it back', () => {
+    const model = project();
+    const view = new GitView(model, everyone, blobOf).advance();
+    const c9 = { id: 'c9', branch: 'main', parents: ['c8'], header: header('c9', 1_900_000_000), at: new Date(), changes: [{ documentId: 'N', revisionId: 'n1', branchId: null, parentDocumentId: 'B', slug: 'n', removed: false, ext: 'md' as const }] };
+    const [sha] = view.trial([c9], new Map(), ['N']);
+    expect(view.shaOf('c9')).toBeNull();
+    expect(model.commits).toHaveLength(8);
+    expect(model.heads.get('main')).toBe('c8');
+    expect(everyone.documents.has('N')).toBe(false);
+    model.add(c9);
+    const later = new GitView(model, { documents: new Set(['A', 'B', 'H', 'N']), hiddenBranches: new Set() }, blobOf).advance();
+    expect(later.shaOf('c9')).toBe(sha);
+    expect(later.index('c9').get('b2/n.md')?.documentId).toBe('N');
+  });
+
+  it('re-derives the tree of a commit that moves a page and one under it', () => {
+    const m = new ProjectModel();
+    const ch = (doc: string, o: Partial<ModelChange> = {}): ModelChange => ({
+      documentId: doc, revisionId: `${doc}1`, branchId: null, parentDocumentId: null, slug: doc.toLowerCase(), removed: false, ext: 'md', ...o,
+    });
+    m.add({ id: 'k1', branch: 'main', parents: [], header: header('k1', 1), at: new Date(), changes: [ch('P'), ch('Q', { parentDocumentId: 'P' }), ch('R', { parentDocumentId: 'Q' })] });
+    m.add({ id: 'k2', branch: 'main', parents: ['k1'], header: header('k2', 2), at: new Date(), changes: [ch('P', { slug: 'x' }), ch('Q', { parentDocumentId: 'P', slug: 'y' })] });
+    const view = new GitView(m, { documents: new Set(['P', 'Q', 'R']), hiddenBranches: new Set() }, blobOf).advance();
+    expect([...view.index('k2').keys()].sort()).toEqual(['x.md', 'x/y.md', 'x/y/r.md']);
+  });
 });
 
 describe('withIdLine', () => {
@@ -101,6 +127,40 @@ describe('withIdLine', () => {
     ['json', '{}', '{\n  "x-knowledge-id": "X"\n}'],
   ] as const)('%s %j', (ext, body, served) => {
     expect(withIdLine('X', Buffer.from(body), ext).toString()).toBe(served);
+  });
+});
+
+describe('stripIdLine', () => {
+  const id = '8c1e0a4e-1f2b-4c3d-9e8f-0a1b2c3d4e5f';
+  it.each([
+    ['md', '# T\n'],
+    ['md', '---\ntitle: T\n---\nx'],
+    ['md', '---\r\ntitle: T\r\n---\r\n'],
+    ['yaml', 'openapi: 3.1.0\n'],
+    ['json', '{"openapi":"3.1.0"}'],
+    ['json', '{}'],
+  ] as const)('takes the canonical line back out of %s %j', (ext, body) => {
+    const s = stripIdLine(withIdLine(id, Buffer.from(body), ext), ext);
+    expect(s.id).toBe(id);
+    expect(s.body.toString()).toBe(body);
+  });
+
+  it.each([
+    ['md', `---\ntitle: T\nknowledge-id:   ${id.toUpperCase()}  \n---\n# T\n`, '---\ntitle: T\n---\n# T\n'],
+    ['md', `---\nknowledge-id: ${id}\n---\n\n# T\n`, '\n# T\n'],
+    ['yaml', `openapi: 3.1.0\nx-knowledge-id: ${id}\ninfo: {}\n`, 'openapi: 3.1.0\ninfo: {}\n'],
+    ['json', `{ "x-knowledge-id" : "${id}" , "openapi": "3.1.0" }`, '{ "openapi": "3.1.0" }'],
+  ] as const)('gives a pushed %s blob back byte for byte: %j', (ext, blob, body) => {
+    const s = stripIdLine(Buffer.from(blob), ext);
+    expect([s.id, s.body.toString()]).toEqual([id, body]);
+    expect(withIdLine(id, s.body, ext, s.idLine).toString()).toBe(blob);
+  });
+
+  it('leaves an id outside the frontmatter as content, and serves a file without one as it was', () => {
+    const blob = Buffer.from(`# T\n\nknowledge-id: ${id}\n`);
+    const s = stripIdLine(blob, 'md');
+    expect(s).toMatchObject({ id: null, idLine: { offset: 0, text: '' } });
+    expect(withIdLine(id, s.body, 'md', s.idLine).equals(blob)).toBe(true);
   });
 });
 

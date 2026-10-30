@@ -2,7 +2,7 @@ import type { INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { execFile } from 'node:child_process';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -11,7 +11,7 @@ import request from 'supertest';
 import type { PrismaService } from '../src/prisma/prisma.service.js';
 
 /**
- * #636 phase 3 acceptance: a project is a read-only git remote. Real `git`
+ * #636 phases 3 and 4 acceptance: a project is a git remote. Real `git`
  * against the git process (in this process, on a random port), with real
  * people and keys in `AUTH_MODE=api-key`, because the dev principal sees
  * everything:
@@ -23,7 +23,7 @@ import type { PrismaService } from '../src/prisma/prisma.service.js';
  *
  * Needs `make infra-up` (Postgres, Redis, MinIO, ArcadeDB). No indexing is
  * awaited: a commit is written at finalize. Each run makes a fresh project and
- * destroys the earlier runs' projects.
+ * destroys the earlier runs' projects. The tests run in order and share state.
  */
 
 const WORKSPACE = '63600000-0000-4636-8636-000000000636';
@@ -31,7 +31,7 @@ const run = promisify(execFile);
 
 type Person = { id: string; key: string; read: string; capture: string };
 
-describe('git remote, read side (e2e, #636)', () => {
+describe('git remote (e2e, #636)', () => {
   let app: INestApplication;
   let gitApp: NestExpressApplication;
   let prisma: PrismaService;
@@ -50,8 +50,32 @@ describe('git remote, read side (e2e, #636)', () => {
   };
   const as = (key: string) => ({ Authorization: `Bearer ${key}` });
   const repo = (key: string, workspace = WORKSPACE) => `http://x:${key}@127.0.0.1:${port}/git/${workspace}/${projectId}.git`;
-  const git = async (args: string[], cwd = work) =>
-    (await run('git', args, { cwd, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', LANG: 'C' } })).stdout.trim();
+  const env = (extra: Record<string, string> = {}) => ({
+    ...process.env,
+    GIT_TERMINAL_PROMPT: '0',
+    LANG: 'C',
+    GIT_AUTHOR_NAME: 'Alice Laptop',
+    GIT_AUTHOR_EMAIL: 'alice@laptop.test',
+    GIT_COMMITTER_NAME: 'Alice Laptop',
+    GIT_COMMITTER_EMAIL: 'alice@laptop.test',
+    ...extra,
+  });
+  const git = async (args: string[], cwd = work) => (await run('git', args, { cwd, env: env() })).stdout.trim();
+  /** stdout and stderr, where git prints `remote:` lines. */
+  const gitAll = async (args: string[], cwd = work, extra: Record<string, string> = {}) => {
+    const r = await run('git', args, { cwd, env: env(extra) });
+    return `${r.stdout}\n${r.stderr}`;
+  };
+  /** A failing git's whole output. */
+  const gitFails = (args: string[], cwd = work, extra: Record<string, string> = {}) =>
+    run('git', args, { cwd, env: env(extra) }).then(
+      (r) => {
+        throw new Error(`git ${args.join(' ')} succeeded: ${r.stderr}`);
+      },
+      (e: { stdout?: string; stderr?: string; message: string }) => `${e.message}\n${e.stdout ?? ''}\n${e.stderr ?? ''}`,
+    );
+  const mrIdIn = (out: string) => /merge-requests\/([0-9a-f-]{36})/.exec(out)?.[1];
+  const edit = (dir: string, file: string, fn: (text: string) => string) => writeFileSync(join(dir, file), fn(readFileSync(join(dir, file), 'utf8')));
   const clone = async (key: string, name: string) => {
     await git(['clone', '-q', repo(key), name]);
     return join(work, name);
@@ -98,6 +122,8 @@ describe('git remote, read side (e2e, #636)', () => {
     process.env.AUTH_MODE = 'api-key';
     process.env.GIT_REMOTE_ENABLED = 'true';
     process.env.GIT_CACHE_DIR = cache;
+    // Every credentialed git request counts against the per-IP limit, and this spec makes a few hundred.
+    process.env.PUBLIC_RATE_LIMIT_PER_MIN = '100000';
     const [{ createE2eApp }, { NestFactory }, { GitModule }, { PrismaService }] = await Promise.all([
       import('./e2e-app.js'),
       import('@nestjs/core'),
@@ -189,7 +215,177 @@ describe('git remote, read side (e2e, #636)', () => {
     expect((await refs(people.bob.read, `11111111-1111-4111-8111-111111111111/${projectId}.git`)).status).toBe(404);
     expect(await refs(people.bob.read, undefined, { 'Accept-Language': 'ru' })).toMatchObject({ status: 200 });
     expect(await refs(people.gus.read, undefined, { 'Accept-Language': 'ru' })).toMatchObject({ status: 403, text: expect.stringMatching(/Гостям/) });
-    await expect(git(['push', repo(people.bob.key), 'HEAD:refs/heads/x'], join(work, 'bob'))).rejects.toThrow(/read-only/);
+    await expect(git(['push', repo(people.bob.read), 'HEAD:refs/heads/x'], join(work, 'bob'))).rejects.toThrow(/read-only/);
+  });
+
+  // --- Write side (phase 4) -------------------------------------------------
+
+  /** A page admin creates on main; its file name. */
+  async function page(title: string, text: string, parentId?: string): Promise<{ id: string; slug: string }> {
+    const res = await http()
+      .post('/v1/documents')
+      .set(as(people.admin.key))
+      .send({ workspaceId: WORKSPACE, projectId, title, parentId, visibility: 'workspace', content: { mode: 'inline', format: 'markdown', text } })
+      .expect(ok(201));
+    const row = await prisma.document.findUniqueOrThrow({ where: { id: res.body.documentId }, select: { slug: true } });
+    return { id: res.body.documentId, slug: row.slug! };
+  }
+  const approveAndMerge = async (mrId: string) => {
+    await http().post(`/v1/merge-requests/${mrId}/approve`).set(as(people.admin.key)).expect(ok(201));
+    return http().post(`/v1/merge-requests/${mrId}/merge`).set(as(people.admin.key)).send({});
+  };
+  let guide: { id: string; slug: string };
+
+  it('pushes a branch with -o merge_request.create; the MR spans both pages, a web merge lands both, and git pull fast-forwards', async () => {
+    guide = await page(`Style guide ${nonce}`, `# Style guide ${nonce}\n\nOne.\n\nTwo.\n\nThree.\n`);
+    const dir = await clone(people.alice.key, 'alice-w');
+    edit(dir, `${slugs.open}.md`, (x) => `${x}\nA pushed line.\n`);
+    edit(dir, `${guide.slug}.md`, (x) => x.replace('One.', 'One, pushed.'));
+    await git(['commit', '-qam', 'Fix terms'], dir);
+    const pushed = await git(['rev-parse', 'HEAD'], dir);
+    const out = await gitAll(['push', '-o', 'merge_request.create', '-o', 'merge_request.title=Fix terms', 'origin', 'HEAD:fix-terms'], dir);
+    const mrId = mrIdIn(out);
+    expect(mrId).toBeTruthy();
+    // Reproduce or refuse: the remote holds the commit with the SHA that was pushed.
+    expect((await git(['ls-remote', repo(people.alice.read), 'refs/heads/fix-terms'])).split('\t')[0]).toBe(pushed);
+    const diff = await http().get(`/v1/merge-requests/${mrId}/diff`).set(as(people.admin.key)).expect(ok(200));
+    expect(diff.body.pages.map((p: { documentId: string }) => p.documentId).sort()).toEqual([ids.open, guide.id].sort());
+    // Pushed revisions are attributed to the key's owner, whatever the commit's author line says.
+    const rev = await prisma.documentRevision.findFirstOrThrow({ where: { documentId: guide.id, branch: { name: 'fix-terms' }, status: { not: 'draft' } } });
+    expect(rev.authorId).toBe(people.alice.id);
+
+    expect((await approveAndMerge(mrId!)).status).toBe(201);
+    await git(['pull', '-q', '--ff-only', 'origin', 'main'], dir);
+    expect((await git(['log', '-1', '--format=%P'], dir)).split(' ')).toHaveLength(2);
+    expect(readFileSync(join(dir, `${guide.slug}.md`), 'utf8')).toContain('One, pushed.');
+    expect(await git(['log', '-1', '--format=%s'], dir)).toBe("Merge branch 'fix-terms' into 'main'");
+    await git(['fsck', '--strict'], dir);
+  });
+
+  it('pushes straight to an unprotected default branch, and refuses a read key, a stale push, a force push and a protected branch, in en and ru', async () => {
+    const a = join(work, 'alice-w');
+    const b = await clone(people.alice.key, 'alice-w2');
+    edit(a, `${guide.slug}.md`, (x) => x.replace('Three.', 'Three, direct.'));
+    await git(['commit', '-qam', 'Direct edit'], a);
+    await git(['push', '-q', 'origin', 'HEAD:main'], a);
+    expect(await git(['ls-remote', repo(people.alice.read), 'refs/heads/main'])).toContain(await git(['rev-parse', 'HEAD'], a));
+    expect(await prisma.documentRevision.count({ where: { documentId: guide.id, message: 'Direct edit', status: { not: 'draft' } } })).toBe(1);
+
+    edit(b, `${guide.slug}.md`, (x) => x.replace(`# Style guide ${nonce}`, `# Style guide ${nonce}, second clone`));
+    await git(['commit', '-qam', 'Stale edit'], b);
+    expect(await gitFails(['push', repo(people.alice.read), 'HEAD:read-attempt'], b)).toMatch(/read-only/);
+    expect(await gitFails(['push', 'origin', 'HEAD:main'], b)).toMatch(/fetch first/);
+    expect(await gitFails(['push', '-f', 'origin', 'HEAD:main'], b)).toMatch(/non-fast-forward[\s\S]*immutable/);
+
+    await git(['pull', '-q', '--no-rebase', '--no-edit', 'origin', 'main'], b);
+    await prisma.documentBranch.updateMany({ where: { documentId: guide.id, name: 'main' }, data: { protected: true } });
+    try {
+      expect(await gitFails(['push', 'origin', 'HEAD:main'], b)).toMatch(/'main' is protected[\s\S]*merge_request\.create/);
+      expect(await gitFails(['push', 'origin', 'HEAD:main'], b, { LANGUAGE: 'ru' })).toMatch(/защищена/);
+    } finally {
+      await prisma.documentBranch.updateMany({ where: { documentId: guide.id, name: 'main' }, data: { protected: false } });
+    }
+    await git(['push', '-q', 'origin', 'HEAD:main'], b);
+  });
+
+  it('refuses what does not map onto pages', async () => {
+    const dir = join(work, 'alice-w2');
+    await git(['checkout', '-q', '-b', 'bad'], dir);
+    writeFileSync(join(dir, 'notes.txt'), 'not a page\n');
+    await git(['add', '.'], dir);
+    await git(['commit', '-qm', 'A text file'], dir);
+    expect(await gitFails(['push', 'origin', 'HEAD:bad'], dir)).toMatch(/notes\.txt: pages are \.md/);
+    await git(['reset', '-q', '--hard', 'HEAD~1'], dir);
+    edit(dir, `${guide.slug}.md`, (x) => x.replace(`knowledge-id: ${guide.id}`, `knowledge-id: ${ids.open}`));
+    await git(['commit', '-qam', 'Wrong id'], dir);
+    expect(await gitFails(['push', 'origin', 'HEAD:bad'], dir)).toMatch(/knowledge-id must stay/);
+    await git(['reset', '-q', '--hard', 'HEAD~1'], dir);
+    // A page's file moved without its directory's page cannot come back as pushed.
+    mkdirSync(join(dir, 'deep'));
+    writeFileSync(join(dir, 'deep', 'orphan.md'), '# Orphan\n');
+    await git(['add', '.'], dir);
+    await git(['commit', '-qm', 'Orphan'], dir);
+    expect(await gitFails(['push', 'origin', 'HEAD:bad'], dir)).toMatch(/deep\/' needs a page 'deep\.md'/);
+    await git(['checkout', '-q', 'main'], dir);
+  });
+
+  it('resolves an overlapping edit with git pull, and the merge request merges', async () => {
+    const dir = join(work, 'alice-w');
+    await git(['pull', '-q', '--ff-only', 'origin', 'main'], dir);
+    await git(['checkout', '-q', '-b', 'conflict-a'], dir);
+    edit(dir, `${guide.slug}.md`, (x) => x.replace('Two.', 'Two, from the branch.'));
+    await git(['commit', '-qam', 'Branch side'], dir);
+    const mrId = mrIdIn(await gitAll(['push', '-o', 'merge_request.create', 'origin', 'HEAD:conflict-a'], dir))!;
+    const head = await prisma.documentBranch.findUniqueOrThrow({ where: { documentId_name: { documentId: guide.id, name: 'main' } } });
+    const text = (await http().get(`/v1/documents/${guide.id}/content`).set(as(people.admin.key)).expect(ok(200))).body.markdown as string;
+    await write(people.admin, guide.id, 'main', text.replace('Two.', 'Two, from the web.'));
+    expect(head.headRevisionId).not.toBeNull();
+    await http().post(`/v1/merge-requests/${mrId}/approve`).set(as(people.admin.key)).expect(ok(201));
+    const refused = await http().post(`/v1/merge-requests/${mrId}/merge`).set(as(people.admin.key)).send({});
+    expect(refused.status).toBe(409);
+    expect(refused.body.details.reason).toBe('conflict');
+
+    expect(await gitFails(['pull', '--no-rebase', '--no-edit', 'origin', 'main'], dir)).toMatch(/CONFLICT/);
+    edit(dir, `${guide.slug}.md`, (x) => x.replace(/<<<<<<< HEAD\n[\s\S]*?>>>>>>> [0-9a-f]+\n/, 'Two, from both.\n'));
+    await git(['commit', '-qam', 'Resolve'], dir);
+    await gitAll(['push', 'origin', 'HEAD:conflict-a'], dir);
+    const merged = await http().post(`/v1/merge-requests/${mrId}/merge`).set(as(people.admin.key)).send({});
+    expect(merged.status).toBe(201);
+    await git(['checkout', '-q', 'main'], dir);
+    await git(['pull', '-q', '--ff-only', 'origin', 'main'], dir);
+    expect(readFileSync(join(dir, `${guide.slug}.md`), 'utf8')).toContain('Two, from both.');
+  });
+
+  it('merges by pushing a local merge commit once the gates pass', async () => {
+    const dir = join(work, 'alice-w');
+    await git(['checkout', '-q', '-b', 'by-push'], dir);
+    edit(dir, `${slugs.open}.md`, (x) => `${x}\nMerged by push.\n`);
+    await git(['commit', '-qam', 'By push'], dir);
+    const mrId = mrIdIn(await gitAll(['push', '-o', 'merge_request.create', 'origin', 'HEAD:by-push'], dir))!;
+    await git(['checkout', '-q', 'main'], dir);
+    await git(['merge', '-q', '--no-ff', '--no-edit', 'by-push'], dir);
+    expect(await gitFails(['push', 'origin', 'HEAD:main'], dir)).toMatch(/approval/);
+    await http().post(`/v1/merge-requests/${mrId}/approve`).set(as(people.admin.key)).expect(ok(201));
+    const local = await git(['rev-parse', 'HEAD'], dir);
+    expect(await gitAll(['push', 'origin', 'HEAD:main'], dir)).toMatch(/Merged merge request/);
+    expect((await git(['ls-remote', repo(people.admin.read), 'refs/heads/main'])).split('\t')[0]).toBe(local);
+    const mr = await http().get(`/v1/merge-requests/${mrId}`).set(as(people.admin.key)).expect(ok(200));
+    expect(mr.body.mergeRequest.status).toBe('merged');
+  });
+
+  it('git mv reparents, a new file opens a draft merge request, and git rm archives on merge', async () => {
+    const stale = await page(`Stale notes ${nonce}`, `# Stale notes ${nonce}\n`);
+    const dir = join(work, 'alice-w');
+    await git(['pull', '-q', '--ff-only', 'origin', 'main'], dir);
+    await git(['checkout', '-q', '-b', 'tree'], dir);
+    mkdirSync(join(dir, slugs.open), { recursive: true });
+    await git(['mv', `${guide.slug}.md`, `${slugs.open}/${guide.slug}.md`], dir);
+    writeFileSync(join(dir, slugs.open, 'fresh-page.md'), '# Fresh page\n\nWritten in git.\n');
+    await git(['rm', '-q', `${stale.slug}.md`], dir);
+    await git(['add', '.'], dir);
+    await git(['commit', '-qm', 'Reorganize'], dir);
+    const out = await gitAll(['push', 'origin', 'HEAD:tree'], dir);
+    const mrId = mrIdIn(out)!;
+    expect(mrId).toBeTruthy();
+    const fresh = await prisma.document.findFirstOrThrow({ where: { projectId, title: 'Fresh page' } });
+    expect(fresh).toMatchObject({ pendingMergeRequestId: mrId, parentId: ids.open, slug: 'fresh-page' });
+    expect((await prisma.mergeRequest.findUniqueOrThrow({ where: { id: mrId } })).isDraft).toBe(true);
+    // Nothing reaches the default branch before the merge.
+    expect((await prisma.document.findUniqueOrThrow({ where: { id: guide.id } })).parentId).toBeNull();
+
+    await http().patch(`/v1/merge-requests/${mrId}`).set(as(people.alice.key)).send({ isDraft: false }).expect(ok(200));
+    const merged = await approveAndMerge(mrId);
+    expect(merged.status).toBe(201);
+    expect(await prisma.document.findUniqueOrThrow({ where: { id: guide.id } })).toMatchObject({ parentId: ids.open });
+    expect((await prisma.document.findUniqueOrThrow({ where: { id: stale.id } })).archivedAt).not.toBeNull();
+    expect((await prisma.document.findUniqueOrThrow({ where: { id: fresh.id } })).pendingMergeRequestId).toBeNull();
+
+    await git(['checkout', '-q', 'main'], dir);
+    await git(['pull', '-q', '--ff-only', 'origin', 'main'], dir);
+    expect(existsSync(join(dir, slugs.open, `${guide.slug}.md`))).toBe(true);
+    expect(existsSync(join(dir, slugs.open, 'fresh-page.md'))).toBe(true);
+    expect(existsSync(join(dir, `${stale.slug}.md`))).toBe(false);
+    await git(['fsck', '--strict'], dir);
   });
 
   it('404s with the workspace toggle off', async () => {

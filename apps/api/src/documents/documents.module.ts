@@ -11,7 +11,7 @@ import { GlossaryCoreModule } from '../glossary/glossary-core.module.js';
 import { DocumentsController } from './documents.controller.js';
 import { DocumentRelationsService } from './document-relations.service.js';
 import { MergeRequestsController } from './merge-requests.controller.js';
-import { MergeRequestsService } from './merge-requests.service.js';
+import { MergeRequestsCoreModule } from './merge-requests-core.module.js';
 import { MergeRequestThreadsService } from './merge-request-threads.service.js';
 import { SavedFiltersService } from './saved-filters.service.js';
 import { DocumentThreadsService } from './document-threads.service.js';
@@ -88,13 +88,14 @@ import { AnalyticsCoreModule } from '../analytics/analytics-core.module.js';
     // The style lint merge gate (#74): the policy and the check reads. A leaf
     // over Prisma and the agent registry, so there is no cycle.
     LintCoreModule,
+    // Opening, updating and merging merge requests (#636): core, so the git process loads it too.
+    MergeRequestsCoreModule,
   ],
   controllers: [DocumentsController, MergeRequestsController],
   providers: [
     // Frontmatter relation edits (docs/features/28). API-only by construction:
     // it opens merge requests, so it needs MergeRequestsService.
     DocumentRelationsService,
-    MergeRequestsService,
     MergeRequestThreadsService,
     SavedFiltersService,
     DocumentThreadsService,
@@ -105,7 +106,7 @@ import { AnalyticsCoreModule } from '../analytics/analytics-core.module.js';
   exports: [
     DocumentsCoreModule,
     DocumentRelationsService,
-    MergeRequestsService,
+    MergeRequestsCoreModule,
     MergeRequestThreadsService,
     DocumentThreadsService,
     HistoryService,

@@ -1,15 +1,21 @@
 import { spawn } from 'node:child_process';
 import { createGunzip } from 'node:zlib';
-import { Controller, ForbiddenException, Get, HttpException, Logger, Param, Post, Query, Req, Res } from '@nestjs/common';
+import { Controller, Get, HttpException, Logger, Param, PayloadTooLargeException, Post, Query, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { t, withLocale } from '../i18n/t.js';
 import { GitAccessService, type GitCaller } from './git-access.service.js';
 import { GitRepoService } from './git-repo.service.js';
+import { GitPushService } from './git-push.service.js';
+
+/** The largest push read into memory. */
+// ponytail: a push is buffered whole; stream it into index-pack if pushes this large become routine.
+const MAX_PUSH_BYTES = 256 * 1024 * 1024;
 
 /**
- * Smart HTTP for `git clone` / `git fetch` (#636 phase 3): protocol v2 and v0,
- * served by the real `git upload-pack --stateless-rpc` over the caller's
- * repository. Push (receive-pack) is refused at its advertisement until phase 4.
+ * Smart HTTP for a project as a git remote (#636): `git clone` / `git fetch`
+ * over protocol v2 and v0, served by the real `git upload-pack --stateless-rpc`
+ * over the caller's repository (phase 3), and `git push` through our own
+ * receive-pack (`GitPushService`, phase 4).
  *
  * Errors are `text/plain`: git prints such a body as `remote:` lines, which
  * is how a refused key or a switched-off toggle reaches the person.
@@ -21,6 +27,7 @@ export class GitController {
   constructor(
     private readonly access: GitAccessService,
     private readonly repos: GitRepoService,
+    private readonly push: GitPushService,
   ) {}
 
   /** Liveness for the container healthcheck. */
@@ -38,8 +45,12 @@ export class GitController {
     @Res() res: Response,
   ): Promise<void> {
     await this.serve(req, res, workspaceId, repo, async (caller, projectId) => {
-      // Push arrives in phase 4. Git asks for this advertisement before any pack, so refusing it here is enough.
-      if (service === 'git-receive-pack') throw new ForbiddenException(t('error.git.pushUnavailable'));
+      if (service === 'git-receive-pack') {
+        res.setHeader('Content-Type', 'application/x-git-receive-pack-advertisement');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.end(await this.push.advertise(workspaceId, projectId, caller));
+        return;
+      }
       if (service !== 'git-upload-pack') {
         // Dumb HTTP is not served: every git since 1.6.6 asks for a service.
         res.status(403).type('text/plain').send(`${t('error.git.smartHttpOnly')}\n`);
@@ -67,6 +78,39 @@ export class GitController {
       res.setHeader('Content-Type', 'application/x-git-upload-pack-result');
       res.setHeader('Cache-Control', 'no-cache');
       await this.uploadPack(req, res, dir, /version=2/.test(String(req.headers['git-protocol'] ?? '')), false);
+    });
+  }
+
+  @Post('git/:workspaceId/:repo/git-receive-pack')
+  async receive(
+    @Param('workspaceId') workspaceId: string,
+    @Param('repo') repo: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    await this.serve(req, res, workspaceId, repo, async (caller, projectId) => {
+      const result = await this.push.receive(workspaceId, projectId, caller, await this.body(req));
+      res.setHeader('Content-Type', 'application/x-git-receive-pack-result');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.end(result);
+    });
+  }
+
+  /** The request body, gunzipped when git compressed it. */
+  private body(req: Request): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      let size = 0;
+      const stream = req.headers['content-encoding'] === 'gzip' ? req.pipe(createGunzip()) : req;
+      stream.on('data', (c: Buffer) => {
+        size += c.length;
+        if (size > MAX_PUSH_BYTES) {
+          stream.destroy();
+          reject(new PayloadTooLargeException(t('error.git.tooLarge')));
+        } else chunks.push(c);
+      });
+      stream.on('end', () => resolve(Buffer.concat(chunks)));
+      stream.on('error', reject);
     });
   }
 

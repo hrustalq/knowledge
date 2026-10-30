@@ -57,6 +57,13 @@ class State {
   get(doc: string): ModelChange | undefined {
     return this.delta.get(doc) ?? this.parent?.get(doc);
   }
+
+  /** Every page this state holds an entry for. */
+  documents(): Set<string> {
+    const out = this.parent?.documents() ?? new Set<string>();
+    for (const k of this.delta.keys()) out.add(k);
+    return out;
+  }
 }
 
 const EMPTY_STATE = new State(null, new Map());
@@ -85,6 +92,17 @@ export class ProjectModel {
     const state = new State(this.stateOf(commit.parents[0] ?? null), new Map(commit.changes.map((ch) => [ch.documentId, ch])));
     this.states.set(id, state);
     return state;
+  }
+
+  /** Take back the last `ids.length` commits `add` appended (a trial render). */
+  drop(ids: string[], heads: Map<string, string>): void {
+    this.commits.length -= ids.length;
+    for (const id of ids) {
+      this.byId.delete(id);
+      this.states.delete(id);
+    }
+    this.heads.clear();
+    for (const [k, v] of heads) this.heads.set(k, v);
   }
 }
 
@@ -147,7 +165,7 @@ export class GitView {
     private readonly model: ProjectModel,
     private readonly visibility: Visibility,
     /** The blob SHA of a change's page body, id line included. Known for every visible change before `advance`. */
-    private readonly blobOf: (change: ModelChange) => string,
+    private blobOf: (change: ModelChange) => string,
   ) {}
 
   sees(change: ModelChange): boolean {
@@ -192,6 +210,61 @@ export class GitView {
     return m == null ? null : (this.sha.get(m) ?? null);
   }
 
+  /** The kept commit a SHA of this view names, if any: what a push's parent line means. */
+  idOf(sha: string): string | null {
+    for (const [id, s] of this.sha) if (s === sha) return id;
+    return null;
+  }
+
+  /** The tree of kept commit `id` as `path -> page state`: what a push's diff against it touches. */
+  index(id: string | null): Map<string, ModelChange> {
+    const out = new Map<string, ModelChange>();
+    if (id == null) return out;
+    const state = this.model.stateOf(id);
+    for (const doc of state.documents()) {
+      const e = state.get(doc)!;
+      if (e.removed || !this.visibility.documents.has(doc) || !this.sees(e)) continue;
+      out.set(`${this.dirOf(state, doc)}.${e.ext}`, e);
+    }
+    return out;
+  }
+
+  /**
+   * The SHAs `commits` would render to here, appended after everything
+   * rendered so far, and then taken back: reproduce-or-refuse for a push
+   * (docs/features/71 invariant 1), on top of the cached parent trees.
+   * `blobs` names the blob of each change these commits add.
+   */
+  trial(commits: ModelCommit[], blobs: Map<string, string>, newDocuments: string[] = []): (string | null)[] {
+    this.advance();
+    // Pages the push creates are the pusher's to see.
+    const documents = this.visibility.documents as Set<string>;
+    const added = newDocuments.filter((d) => !documents.has(d));
+    for (const d of added) documents.add(d);
+    const heads = new Map(this.model.heads);
+    const saved = { next: this.next, keptBranches: new Set(this.keptBranches), fresh: this.fresh, freshBlobs: this.freshBlobs, blobOf: this.blobOf };
+    const blobOf = saved.blobOf;
+    this.fresh = new Map();
+    this.freshBlobs = new Set();
+    this.blobOf = (ch) => blobs.get(ch.revisionId) ?? blobOf(ch);
+    try {
+      for (const c of commits) this.model.add(c);
+      this.advance();
+      return commits.map((c) => this.shaOf(c.id));
+    } finally {
+      const ids = commits.map((c) => c.id);
+      for (const id of ids) {
+        this.mapped.delete(id);
+        this.kept.delete(id);
+        this.sha.delete(id);
+        this.trees.delete(id);
+      }
+      this.model.drop(ids, heads);
+      Object.assign(this, saved);
+      for (const d of added) documents.delete(d);
+    }
+  }
+
   private put(type: 'tree' | 'commit', body: Buffer): string {
     const sha = hashObject(type, body);
     this.fresh.set(sha, { type, body });
@@ -214,6 +287,30 @@ export class GitView {
     const parent = e.parentDocumentId;
     const up = parent && this.visibility.documents.has(parent) && state.get(parent) ? this.dirOf(state, parent) : '';
     return up ? `${up}/${e.slug}` : e.slug;
+  }
+
+  /** Whether two visible pages moved in one commit, one inside the other's directory before or after. */
+  private nestedMoves(visible: ModelChange[], before: State, after: State): boolean {
+    const moves = visible.flatMap((ch) => {
+      if (!before.get(ch.documentId)) return [];
+      const from = this.dirOf(before, ch.documentId);
+      const to = this.dirOf(after, ch.documentId);
+      return from === to ? [] : [{ from, to }];
+    });
+    return moves.some((m) => moves.some((o) => o !== m && (m.from.startsWith(`${o.from}/`) || m.to.startsWith(`${o.to}/`))));
+  }
+
+  /** The whole tree a state places in view. */
+  private fromState(state: State): Dir {
+    let tree = EMPTY_DIR;
+    for (const doc of state.documents()) {
+      const e = state.get(doc)!;
+      if (e.removed || !this.visibility.documents.has(doc) || !this.sees(e)) continue;
+      const blob = this.blobOf(e);
+      this.freshBlobs.add(blob);
+      tree = setAt(tree, `${this.dirOf(state, doc)}.${e.ext}`.split('/'), blob);
+    }
+    return tree;
   }
 
   private isAncestor(a: string, b: string): boolean {
@@ -255,18 +352,27 @@ export class GitView {
     const before = this.model.stateOf(c.parents[0] ?? null);
     const after = this.model.stateOf(c.id);
     let tree = ps[0] ? this.trees.get(ps[0])! : EMPTY_DIR;
-    for (const ch of visible) {
-      const old = before.get(ch.documentId);
-      const from = old ? this.dirOf(before, ch.documentId) : null;
-      const to = this.dirOf(after, ch.documentId);
-      if (old && !old.removed) tree = removeAt(tree, `${from}.${old.ext}`.split('/'));
-      if (from && from !== to) {
-        // ponytail: one move per subtree per commit, which is all a server write makes;
-        // re-derive the subtree from state when phase 4's pushes nest moves.
+    // A pushed commit can move a page and something under it at once, which
+    // the per-change surgery below cannot express: such a commit's tree is
+    // re-derived from state. No server write nests moves, so no stored
+    // commit's SHA depends on which of the two ran.
+    if (this.nestedMoves(visible, before, after)) tree = this.fromState(after);
+    else {
+      // Every old file goes first, then directories move, then files land: a
+      // push can archive `a.md` and move `b.md` onto its path in one commit,
+      // and change rows come back from the database in no particular order.
+      const placed = visible.map((ch) => {
+        const old = before.get(ch.documentId);
+        return { ch, old, from: old ? this.dirOf(before, ch.documentId) : null, to: this.dirOf(after, ch.documentId) };
+      });
+      for (const { old, from } of placed) if (old && !old.removed) tree = removeAt(tree, `${from}.${old.ext}`.split('/'));
+      for (const { from, to } of placed) {
+        if (!from || from === to) continue;
         const sub = getAt(tree, from.split('/'));
         if (sub && typeof sub === 'object') tree = setAt(removeAt(tree, from.split('/')), to.split('/'), sub);
       }
-      if (!ch.removed) {
+      for (const { ch, to } of placed) {
+        if (ch.removed) continue;
         const blob = this.blobOf(ch);
         this.freshBlobs.add(blob);
         tree = setAt(tree, `${to}.${ch.ext}`.split('/'), blob);
@@ -279,16 +385,25 @@ export class GitView {
 }
 
 const ID_KEY = 'knowledge-id';
+const UUID = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
+
+/** Bytes a push's id line occupied: inserted at `offset` of the stored body, it gives the pushed blob back. */
+export interface IdLine {
+  offset: number;
+  text: string;
+}
 
 /**
  * A page body as served: the id line put in as a web-written revision gets it
  * (docs/features/71 "The tree mapping"). The first frontmatter key of a
  * markdown page, the first line of a YAML spec, the first member of a JSON one.
- * Bytes in, bytes out: nothing but the inserted line changes.
+ * Bytes in, bytes out: nothing but the inserted line changes. A pushed
+ * revision's own `idLine` replaces the canonical one, `text: ""` included.
  */
-export function withIdLine(documentId: string, body: Buffer, ext: PageExt): Buffer {
+export function withIdLine(documentId: string, body: Buffer, ext: PageExt, idLine?: IdLine | null): Buffer {
   const insert = (offset: number, text: string) =>
     Buffer.concat([body.subarray(0, offset), Buffer.from(text), body.subarray(offset)]);
+  if (idLine) return insert(idLine.offset, idLine.text);
   if (ext === 'yaml') return insert(0, `x-${ID_KEY}: ${documentId}\n`);
   if (ext === 'json') {
     const open = body.indexOf('{');
@@ -299,4 +414,43 @@ export function withIdLine(documentId: string, body: Buffer, ext: PageExt): Buff
   const fence = /^---(\r?\n)/.exec(body.subarray(0, 5).toString('latin1'));
   if (fence) return insert(fence[0].length, `${ID_KEY}: ${documentId}${fence[1]}`);
   return insert(0, `---\n${ID_KEY}: ${documentId}\n---\n`);
+}
+
+/**
+ * The inverse, for a pushed blob: find its id line, take it out, and record
+ * exactly what was taken and where, so `withIdLine(id, body, ext, idLine)`
+ * gives the blob back byte for byte however the person laid it out. Looked
+ * for where `withIdLine` puts it: a line of a markdown file's leading
+ * frontmatter (a block holding nothing else goes with it), a top-level line
+ * of a YAML spec, the first member of a JSON one. Elsewhere it is content.
+ */
+export function stripIdLine(blob: Buffer, ext: PageExt): { body: Buffer; idLine: IdLine; id: string | null } {
+  const text = blob.toString('latin1');
+  let m: { start: number; end: number; id: string } | null = null;
+  if (ext === 'json') {
+    const hit = new RegExp(`^(\\s*\\{)(\\s*"x-${ID_KEY}"\\s*:\\s*"(${UUID})"\\s*,?)`).exec(text);
+    if (hit) m = { start: hit[1].length, end: hit[0].length, id: hit[3] };
+  } else if (ext === 'yaml') {
+    const hit = new RegExp(`^x-${ID_KEY}:[ \\t]*(${UUID})[ \\t]*\\r?\\n`, 'm').exec(text);
+    if (hit) m = { start: hit.index, end: hit.index + hit[0].length, id: hit[1] };
+  } else {
+    const open = /^---\r?\n/.exec(text);
+    const close = open && /^---[ \t]*(\r?\n|$)/m.exec(text.slice(open[0].length));
+    if (open && close) {
+      const fm = text.slice(open[0].length, open[0].length + close.index);
+      const hit = new RegExp(`^${ID_KEY}:[ \\t]*(${UUID})[ \\t]*\\r?\\n`, 'm').exec(fm);
+      if (hit) {
+        const start = open[0].length + hit.index;
+        m = { start, end: start + hit[0].length, id: hit[1] };
+        // The block held the id alone: it goes too, as `withIdLine` adds it to a page with none.
+        if (hit[0].length === fm.length) m = { start: 0, end: open[0].length + close.index + close[0].length, id: hit[1] };
+      }
+    }
+  }
+  if (!m) return { body: blob, idLine: { offset: 0, text: '' }, id: null };
+  return {
+    body: Buffer.concat([blob.subarray(0, m.start), blob.subarray(m.end)]),
+    idLine: { offset: m.start, text: blob.subarray(m.start, m.end).toString('utf8') },
+    id: m.id.toLowerCase(),
+  };
 }

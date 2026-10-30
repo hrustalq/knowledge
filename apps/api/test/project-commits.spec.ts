@@ -38,6 +38,7 @@ function harness(
   const create = vi.fn(async () => ({}));
   const prisma = {
     $executeRaw: vi.fn(async () => 0),
+    $queryRaw: vi.fn(async () => []),
     documentRevision: {
       findMany: vi.fn(async () =>
         (opts.revisions ?? ['rev-2']).map((id, i) =>

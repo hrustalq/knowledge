@@ -13,7 +13,7 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
-## [0.41.0] — 2026-10-30
+## [0.41.0] — 2026-10-31
 
 ### Added
 

@@ -17,6 +17,7 @@ import { AgentRegistryService } from '../../agents/agent-registry.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { t } from '../../i18n/t.js';
 import { LINT_AGENT_KEY, errorRuleIds, lintGate, resolveLintPolicy } from './lint-check.js';
+import { sourcePages } from '../mr-pages.js';
 
 /**
  * The read side of merge request checks (#74) and the lint policy every part
@@ -78,24 +79,25 @@ export class LintChecksService {
 
   /**
    * Every check of a merge request, newest first, with the policy of its page
-   * and what the gate says about its current head. `enforced` is whether the
-   * gate applies to the caller (see `lintGate`).
+   * and what the gate says about its current heads: one check per page it
+   * changes (#636), and the gate holds while any page's would. `enforced` is
+   * whether the gate applies to the caller (see `lintGate`).
    */
   async list(mergeRequestId: string, enforced: boolean): Promise<ListMergeRequestChecksResponse> {
     const mr = await this.prisma.mergeRequest.findUnique({
       where: { id: mergeRequestId },
-      include: { sourceBranch: { select: { headRevisionId: true } }, document: { select: { workspaceId: true, projectId: true } } },
+      include: { sourceBranch: true, document: { select: { workspaceId: true, projectId: true } } },
     });
     if (!mr) throw new NotFoundException(t('error.mergeRequest.notFound', { id: mergeRequestId }));
 
-    const rows = await this.prisma.mergeRequestCheck.findMany({
-      where: { mergeRequestId },
-      orderBy: { createdAt: 'desc' },
-    });
-    const head = mr.sourceBranch.headRevisionId;
-    const currentRow = rows.find((r) => r.kind === 'lint' && r.headRevisionId === head) ?? null;
+    const [rows, pages] = await Promise.all([
+      this.prisma.mergeRequestCheck.findMany({ where: { mergeRequestId }, orderBy: { createdAt: 'desc' } }),
+      sourcePages(this.prisma, mr.sourceBranch),
+    ]);
+    const heads = pages.map((b) => b.headRevisionId).filter((id): id is string => !!id);
+    const currentRows = heads.map((head) => rows.find((r) => r.kind === 'lint' && r.headRevisionId === head) ?? null);
     const runIds = rows.map((r) => r.agentRunId).filter((id): id is string => !!id);
-    const [runs, open, policy, blockingCount] = await Promise.all([
+    const [runs, open, policy, blockingCounts] = await Promise.all([
       runIds.length
         ? this.prisma.agentRun.findMany({ where: { id: { in: runIds } }, select: { id: true, status: true } })
         : Promise.resolve([]),
@@ -105,7 +107,9 @@ export class LintChecksService {
         _count: { _all: true },
       }),
       this.policyFor(mr.document.workspaceId, mr.document.projectId),
-      currentRow?.status === 'failed' ? this.blockingCount(currentRow.id, currentRow.agentRunId) : Promise.resolve(0),
+      Promise.all(
+        currentRows.map((row) => (row?.status === 'failed' ? this.blockingCount(row.id, row.agentRunId) : Promise.resolve(0))),
+      ),
     ]);
     const runStatus = new Map(runs.map((r) => [r.id, r.status]));
     const unresolved = new Map(open.map((g) => [g.checkId!, g._count._all]));
@@ -116,7 +120,7 @@ export class LintChecksService {
         mergeRequestId: row.mergeRequestId,
         kind: row.kind as MergeRequestCheckKind,
         headRevisionId: row.headRevisionId,
-        current: row.headRevisionId === head,
+        current: heads.includes(row.headRevisionId),
         // `running` is the run's state, not the check's: derived, never stored.
         status:
           row.status === 'pending' && row.agentRunId && runStatus.get(row.agentRunId) === 'running'
@@ -135,13 +139,17 @@ export class LintChecksService {
         publishedAt: row.publishedAt?.toISOString() ?? null,
       }),
     );
-    const current = currentRow ? checks.find((c) => c.checkId === currentRow.id)! : null;
-    const gate = lintGate({
-      policy: policy.effective,
-      enforced,
-      check: current ? { id: current.checkId, status: current.status, overridden: !!current.override } : null,
-      blockingCount,
+    const gates = currentRows.map((row, i) => {
+      const current = row ? checks.find((c) => c.checkId === row.id)! : null;
+      return lintGate({
+        policy: policy.effective,
+        enforced,
+        check: current ? { id: current.checkId, status: current.status, overridden: !!current.override } : null,
+        blockingCount: blockingCounts[i],
+      });
     });
+    // The page that holds the merge, else the page it was opened from.
+    const gate = gates.find((g) => g.blocked) ?? gates[0] ?? lintGate({ policy: policy.effective, enforced, check: null, blockingCount: 0 });
     return { mergeRequestId, policy, gate, checks };
   }
 

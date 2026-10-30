@@ -4114,7 +4114,7 @@
       "method": "GET",
       "path": "/v1/merge-requests/{id}/diff",
       "tag": "merge-requests",
-      "summary": "Merge-base diff of the MR: text + structural (+ semantic on request)",
+      "summary": "Merge-base diff of the MR, per changed page the caller may open: text + structural (+ semantic on request)",
       "role": "viewer",
       "source": "merge-request",
       "public": false,
@@ -5520,7 +5520,7 @@
     },
     {
       "name": "knowledge_create_document",
-      "description": "Create a new page from markdown in a project, optionally nested under another page. It is indexed in the background (poll knowledge_get_document for status \"indexed\"). To change an existing page, branch and open a merge request instead. To start from a template (an ADR, RFC, runbook…), pass templateRef and the placeholder values knowledge_get_template lists — with no content the server fills the template in; with content, yours wins and the template is recorded as where the page came from. kind test-fixture creates a QA test fixture: content is its YAML or JSON body (fixture: 1, steps with call / manual, optional inputs and teardown; credentials only as {{secret.x}}), validated against the specs you can open; openapi / asyncapi create a spec. None of these take a template.",
+      "description": "Create a new page from markdown in a project, optionally nested under another page. It is indexed in the background (poll knowledge_get_document for status \"indexed\"). To change an existing page, branch and open a merge request instead. To start from a template (an ADR, RFC, runbook…), pass templateRef and the placeholder values knowledge_get_template lists — with no content the server fills the template in; with content, yours wins and the template is recorded as where the page came from. kind test-fixture creates a QA test fixture: content is its YAML or JSON body (fixture: 1, steps with call / manual, optional inputs and teardown; credentials only as {{secret.x}}), validated against the specs you can open; openapi / asyncapi create a spec. None of these take a template. To create the page from a local file instead of pasting it, pass upload: true and no content: the reply carries an upload URL, then call knowledge_finalize_upload.",
       "inputs": [
         {
           "name": "workspaceId",
@@ -5536,6 +5536,10 @@
         },
         {
           "name": "content",
+          "optional": true
+        },
+        {
+          "name": "upload",
           "optional": true
         },
         {
@@ -5775,6 +5779,20 @@
       ]
     },
     {
+      "name": "knowledge_finalize_upload",
+      "description": "Finish a knowledge_start_upload (or knowledge_create_document upload: true) once the file is uploaded: the revision becomes the branch head and is indexed. An API spec or test fixture that does not validate is refused with the validator's messages; upload a corrected file to the same URL and call this again.",
+      "inputs": [
+        {
+          "name": "documentId",
+          "optional": false
+        },
+        {
+          "name": "revisionId",
+          "optional": false
+        }
+      ]
+    },
+    {
       "name": "knowledge_find_embeds",
       "description": "Pages whose current version embeds a Figma file or frame, with the captions of each matching group. Pass a Figma URL (a frame link narrows to that frame) or a fileKey. Only pages you may open are returned.",
       "inputs": [
@@ -6000,7 +6018,7 @@
     },
     {
       "name": "knowledge_get_merge_request",
-      "description": "Get one merge request (heads, merge base, approvals, reviewers, draft flag). Set includeDiff for the merge-base text+structural diff, semantic for the graph-projection diff too.",
+      "description": "Get one merge request (heads, merge base, approvals, reviewers, draft flag). Set includeDiff for the merge-base text+structural diff of every page it changes (`pages`), semantic for the graph-projection diff too.",
       "inputs": [
         {
           "name": "mergeRequestId",
@@ -6561,6 +6579,32 @@
       ]
     },
     {
+      "name": "knowledge_patch_document",
+      "description": "Change some lines of a page instead of rewriting it: a new revision on a branch, like knowledge_create_revision. Line numbers are 1-based and count the `markdown` that knowledge_get_document_content returned for baseRevisionId (the body without its frontmatter, which is kept; a spec or fixture is numbered whole). Each edit replaces startLine..endLine (inclusive) with content; endLine = startLine - 1 inserts before startLine, startLine = line count + 1 appends, empty content deletes. Number every edit off that one read, not off each other; edits may not overlap. Refused when the branch head has moved past baseRevisionId: read again and renumber.",
+      "inputs": [
+        {
+          "name": "documentId",
+          "optional": false
+        },
+        {
+          "name": "baseRevisionId",
+          "optional": false
+        },
+        {
+          "name": "branch",
+          "optional": true
+        },
+        {
+          "name": "edits",
+          "optional": false
+        },
+        {
+          "name": "message",
+          "optional": true
+        }
+      ]
+    },
+    {
       "name": "knowledge_propose_agent_learning",
       "description": "Propose a learning: a correction for one agent (or every agent), in plain words. It is stored as proposed and reaches no prompt until a workspace admin approves it in the app.",
       "inputs": [
@@ -6850,6 +6894,32 @@
         },
         {
           "name": "password",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_start_upload",
+      "description": "Write a new revision of a page from a local file instead of pasting it: returns a presigned PUT URL (valid 15 minutes) and a curl command. Upload the file with it, then call knowledge_finalize_upload with the revisionId. The file is the whole page, as with knowledge_create_revision: a markdown file without a frontmatter block keeps the current tags and relations. Pass baseRevisionId to be refused when the branch head has moved. For a new page, use knowledge_create_document with upload: true.",
+      "inputs": [
+        {
+          "name": "documentId",
+          "optional": false
+        },
+        {
+          "name": "branch",
+          "optional": true
+        },
+        {
+          "name": "baseRevisionId",
+          "optional": true
+        },
+        {
+          "name": "message",
+          "optional": true
+        },
+        {
+          "name": "syntax",
           "optional": true
         }
       ]

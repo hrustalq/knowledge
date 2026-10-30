@@ -429,6 +429,37 @@ It is too large for one reviewable PR.
   - A page moved to another project, alone or by deleting its project, has
     its branches re-pointed at the destination's branches of the same names
     (`rehomeBranches`).
+  **1b-2 is split again** (decided 2026-10-30): **1b-2a** is multi-page merge
+  requests end to end (API, MCP, the web Changes view); **1b-2b** is the draft
+  fold, "Publish N pages" and doc 66. Where 1b-2a differs from the plan above:
+  - `merge_requests.document_id` stays `NOT NULL`. It is the page the merge
+    request was opened from, so the `merge-request` ACL source, the activity
+    feed, notifications and threads still resolve through it. The page set is
+    derived beside it by `sourcePages` (`documents/mr-pages.ts`): every page
+    branch of the source project branch with a finalized revision of its own,
+    plus the opening page. A page whose source head the target already holds is
+    left out. A merged merge request lists nothing left to merge, and its
+    Changes tab shows its own page as before.
+  - Merging needs edit on every page, checked in `merge` after the guard's
+    check of the opening page. A page with no branch of the target's name is
+    refused (`targetMissing`, page ids only).
+  - **Lint is one check per page head, not one per head commit.**
+    `merge_request_checks.head_revision_id` already names a page, so no column
+    was needed. A write re-lints only the page it touched. The gate holds while
+    any page's would, and superseding and thread reconciling run per page. A
+    lint thread's page is its anchor's revision.
+  - The breaking-API acknowledgement pins the source branch's head commit
+    (`breaking_ack_commit_id`). `breaking_ack_revision_id` is still written for
+    the previous image. The API changes panel describes the first changed spec
+    page the reader may open, and `blocked` answers for every spec page.
+  - The atomic merge stages each page's draft and bytes before the transaction.
+    Inside, it locks the branch rows in id order, re-checks every head and
+    finalizes with `commit: false`. `recordRevisions` then writes one commit for
+    all pages, whose second parent is the source branch's head commit. Two S3
+    reads per page (finalize's HEAD and GET) still run inside. A failed merge
+    deletes the drafts it staged.
+  - Threads carry `documentId`, and a thread on a page the reader cannot open
+    is left out of the list, because its excerpt quotes that page.
 - **Decided for 1b** (issue comment of 2026-10-30): `draft/` folds per person
   and project, and Publish says "Publish N pages" and merges them as one merge
   request. A page first written on the draft forks at the default head at that

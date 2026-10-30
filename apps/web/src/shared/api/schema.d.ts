@@ -1741,7 +1741,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Merge-base diff of the MR: text + structural (+ semantic on request) */
+        /** Merge-base diff of the MR, per changed page the caller may open: text + structural (+ semantic on request) */
         get: operations["MergeRequestsController_diff"];
         put?: never;
         post?: never;
@@ -13567,6 +13567,8 @@ export interface components {
         MergeRequestDiffResponse: {
             mergeRequest: components["schemas"]["MergeRequestInfo"];
             compare: components["schemas"]["CompareResponse"];
+            pages: components["schemas"]["MergeRequestPage"][];
+            hiddenPages: number;
         };
         MergeRequestInfo: {
             mergeRequestId: string;
@@ -13596,6 +13598,11 @@ export interface components {
             provenance: components["schemas"]["MergeRequestProvenance"];
             captureId: string | null;
         };
+        MergeRequestPage: {
+            documentId: string;
+            title: string;
+            compare: components["schemas"]["CompareResponse"];
+        };
         /** @enum {string} */
         MergeRequestProvenance: "manual" | "agent" | "captured";
         /** @enum {string} */
@@ -13611,6 +13618,7 @@ export interface components {
             comments: components["schemas"]["ReviewComment"][];
             createdAt: string;
             mergeRequestId: string;
+            documentId: string | null;
             checkId: string | null;
             ruleId: string | null;
         };

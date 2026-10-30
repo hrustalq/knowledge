@@ -9930,7 +9930,7 @@
             }
           }
         },
-        "summary": "Merge-base diff of the MR: text + structural (+ semantic on request)",
+        "summary": "Merge-base diff of the MR, per changed page the caller may open: text + structural (+ semantic on request)",
         "tags": [
           "merge-requests"
         ]
@@ -38557,7 +38557,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.38.0",
+    "version": "0.40.0",
     "contact": {}
   },
   "tags": [],
@@ -61784,11 +61784,22 @@
           },
           "compare": {
             "$ref": "#/components/schemas/CompareResponse"
+          },
+          "pages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MergeRequestPage"
+            }
+          },
+          "hiddenPages": {
+            "type": "number"
           }
         },
         "required": [
           "mergeRequest",
-          "compare"
+          "compare",
+          "pages",
+          "hiddenPages"
         ]
       },
       "MergeRequestInfo": {
@@ -61922,6 +61933,25 @@
           "captureId"
         ]
       },
+      "MergeRequestPage": {
+        "type": "object",
+        "properties": {
+          "documentId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "compare": {
+            "$ref": "#/components/schemas/CompareResponse"
+          }
+        },
+        "required": [
+          "documentId",
+          "title",
+          "compare"
+        ]
+      },
       "MergeRequestProvenance": {
         "type": "string",
         "enum": [
@@ -61981,6 +62011,10 @@
           "mergeRequestId": {
             "type": "string"
           },
+          "documentId": {
+            "type": "string",
+            "nullable": true
+          },
           "checkId": {
             "type": "string",
             "nullable": true
@@ -61995,6 +62029,7 @@
           "checkId",
           "comments",
           "createdAt",
+          "documentId",
           "mergeRequestId",
           "resolvable",
           "resolved",

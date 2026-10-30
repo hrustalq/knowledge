@@ -1925,7 +1925,7 @@ export class McpService {
       {
         description:
           'Get one merge request (heads, merge base, approvals, reviewers, draft flag). ' +
-          'Set includeDiff for the merge-base text+structural diff, semantic for the graph-projection diff too.',
+          'Set includeDiff for the merge-base text+structural diff of every page it changes (`pages`), semantic for the graph-projection diff too.',
         inputSchema: {
           mergeRequestId: z.string().uuid(),
           includeDiff: z.boolean().optional(),
@@ -1933,10 +1933,10 @@ export class McpService {
         },
       },
       async ({ mergeRequestId, includeDiff, semantic }) => {
-        await guard.mr(mergeRequestId, 'viewer');
+        const workspaceId = await guard.mr(mergeRequestId, 'viewer');
         return this.json(
             includeDiff
-              ? await this.mergeRequests.diff(mergeRequestId, { semantic })
+              ? await this.mergeRequests.diff(mergeRequestId, await guard.scope(workspaceId), { semantic })
               : await this.mergeRequests.get(mergeRequestId),
           );
       },
@@ -2719,9 +2719,11 @@ export class McpService {
         }),
       project: async (id: string, role: WorkspaceRole) =>
         this.permissions.requireResource(principal, await this.access.workspaceOfProject(id), { type: 'project', id }, role, false),
+      /** Returns the merge request's workspace, for a tool that then lists its pages. */
       mr: async (id: string, role: WorkspaceRole) => {
         const { workspaceId, documentId } = await this.access.documentOfMergeRequest(id);
         await this.permissions.requireResource(principal, workspaceId, { type: 'document', id: documentId }, role, false);
+        return workspaceId;
       },
       /** The caller's page visibility over a workspace, for tools that list pages. */
       scope: (workspaceId: string) => this.permissions.scopeFor(principal, workspaceId),

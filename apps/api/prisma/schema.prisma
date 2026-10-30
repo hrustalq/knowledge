@@ -457,6 +457,9 @@ model MergeRequest {
   breakingAckBy         String?   @map("breaking_ack_by") @db.Uuid
   breakingAckAt         DateTime? @map("breaking_ack_at") @db.Timestamptz
   breakingAckRevisionId String?   @map("breaking_ack_revision_id") @db.Uuid
+  /// The source branch's head commit when acknowledged (#636): the gate passes
+  /// while it is still the head, so a write to any page of the branch reopens it.
+  breakingAckCommitId   String?   @map("breaking_ack_commit_id") @db.Uuid
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz
   mergedAt              DateTime? @map("merged_at") @db.Timestamptz
   closedAt              DateTime? @map("closed_at") @db.Timestamptz

@@ -16,17 +16,19 @@ import { visibilityWhere, WORKSPACE_AUDIENCE } from '../../permissions/access-sc
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { LintChecksService } from './lint-checks.service.js';
 import { LINT_AGENT_KEY } from './lint-check.js';
+import { sourcePages } from '../mr-pages.js';
 
 const SWEEP_INTERVAL_MS = 30_000;
 /** Heads looked at per tick. */
 const BATCH = 20;
 
-/** An open merge request whose source head has no lint check yet. */
+/** A page of an open merge request whose source head has no lint check yet (#636: one check per page). */
 export interface LintCandidate {
   mergeRequestId: string;
   authorId: string;
   workspaceId: string;
   projectId: string;
+  documentId: string;
   headRevisionId: string;
 }
 
@@ -98,7 +100,7 @@ export class LintTriggerSweeper implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Open, ready merge requests whose head has no check, on a live page, where
+   * Pages of open, ready merge requests whose head has no check, live, where
    * the policy could be on: a scope that says `off` and a disabled linter are
    * filtered here, so they cannot fill the batch tick after tick. The policy
    * is resolved properly in `check`; this is only the prefilter.
@@ -106,10 +108,14 @@ export class LintTriggerSweeper implements OnModuleInit, OnModuleDestroy {
   private candidates(): Promise<LintCandidate[]> {
     return this.prisma.$queryRaw<LintCandidate[]>`
       SELECT mr.id AS "mergeRequestId", mr.author_id AS "authorId", d.workspace_id AS "workspaceId",
-             d.project_id AS "projectId", sb.head_revision_id AS "headRevisionId"
+             d.project_id AS "projectId", d.id AS "documentId", sb.head_revision_id AS "headRevisionId"
         FROM merge_requests mr
-        JOIN document_branches sb ON sb.id = mr.source_branch_id
-        JOIN documents d ON d.id = mr.document_id
+        JOIN document_branches s0 ON s0.id = mr.source_branch_id
+        -- Every page the merge request carries, as sourcePages derives them (#636).
+        JOIN document_branches sb ON sb.id = s0.id OR (
+               sb.project_branch_id = s0.project_branch_id
+               AND EXISTS (SELECT 1 FROM document_revisions r WHERE r.branch_id = sb.id AND r.status <> 'draft'))
+        JOIN documents d ON d.id = sb.document_id
         LEFT JOIN workspace_settings ws ON ws.workspace_id = d.workspace_id
         LEFT JOIN projects p ON p.id = d.project_id
        WHERE mr.status = 'open'
@@ -159,8 +165,8 @@ export class LintTriggerSweeper implements OnModuleInit, OnModuleDestroy {
     // page must be one every member may read (#76) — the audience clamp every
     // background agent reads under. The executor asks again before it reads.
     const audience = await this.permissions.audienceScope(await this.permissions.scopeFor(principal, c.workspaceId), WORKSPACE_AUDIENCE);
-    const open = await this.prisma.mergeRequest.count({
-      where: { id: c.mergeRequestId, document: { AND: [visibilityWhere(audience)] } },
+    const open = await this.prisma.document.count({
+      where: { id: c.documentId, AND: [visibilityWhere(audience)] },
     });
     if (open === 0) return this.record(c, { status: 'skipped', reason: 'restricted', styleguideId });
     try {
@@ -227,12 +233,22 @@ export class LintTriggerSweeper implements OnModuleInit, OnModuleDestroy {
     return inserted.count === 1 ? id : null;
   }
 
-  /** Older heads still waiting: skipped, and their runs cancelled before they cost anything. */
+  /** Older heads of the same page still waiting: skipped, and their runs cancelled before they cost anything. */
   private async supersede(c: LintCandidate, keepId: string): Promise<void> {
-    const stale = await this.prisma.mergeRequestCheck.findMany({
+    const waiting = await this.prisma.mergeRequestCheck.findMany({
       where: { mergeRequestId: c.mergeRequestId, kind: 'lint', status: 'pending', id: { not: keepId } },
-      select: { id: true, agentRunId: true },
+      select: { id: true, agentRunId: true, headRevisionId: true },
     });
+    if (waiting.length === 0) return;
+    const samePage = new Set(
+      (
+        await this.prisma.documentRevision.findMany({
+          where: { id: { in: waiting.map((w) => w.headRevisionId) }, documentId: c.documentId },
+          select: { id: true },
+        })
+      ).map((r) => r.id),
+    );
+    const stale = waiting.filter((w) => samePage.has(w.headRevisionId));
     if (stale.length === 0) return;
     await this.prisma.mergeRequestCheck.updateMany({
       where: { id: { in: stale.map((s) => s.id) }, status: 'pending' },
@@ -248,41 +264,52 @@ export class LintTriggerSweeper implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Lint the current head again (POST …/checks/lint): its finished check is
-   * dropped so the head can be claimed afresh. A check still waiting or
-   * running is left alone (409), and so is a merge request lint is off for.
+   * Lint the current heads again (POST …/checks/lint): each page's finished
+   * check is dropped so its head can be claimed afresh, and the first new
+   * check is returned. A page whose check is still waiting or running is left
+   * alone (409 when that is every page), and so is a merge request lint is off for.
    */
   async relint(mergeRequestId: string): Promise<string> {
     const mr = await this.prisma.mergeRequest.findUnique({
       where: { id: mergeRequestId },
-      include: { sourceBranch: { select: { headRevisionId: true } }, document: { select: { workspaceId: true, projectId: true } } },
+      include: { sourceBranch: true, document: { select: { workspaceId: true, projectId: true } } },
     });
     if (!mr) throw new NotFoundException(t('error.mergeRequest.notFound', { id: mergeRequestId }));
-    const head = mr.sourceBranch.headRevisionId;
-    if (mr.status !== 'open' || !head) throw new BadRequestException(t('error.lint.notOpen'));
+    const pages = (await sourcePages(this.prisma, mr.sourceBranch)).filter((b) => b.headRevisionId);
+    if (mr.status !== 'open' || pages.length === 0) throw new BadRequestException(t('error.lint.notOpen'));
 
     const policy = await this.checks.policyFor(mr.document.workspaceId, mr.document.projectId);
     if (policy.effective === 'off') throw new BadRequestException(t('error.lint.off'));
 
-    const waiting = await this.prisma.mergeRequestCheck.findFirst({
-      where: { mergeRequestId, kind: 'lint', headRevisionId: head, status: 'pending' },
-      select: { id: true },
-    });
-    if (waiting) {
-      throw new ConflictException({ statusCode: 409, message: t('error.lint.running'), reason: 'lint.running', checkId: waiting.id });
+    let first: string | null = null;
+    let waitingId: string | null = null;
+    for (const page of pages) {
+      const head = page.headRevisionId!;
+      const waiting = await this.prisma.mergeRequestCheck.findFirst({
+        where: { mergeRequestId, kind: 'lint', headRevisionId: head, status: 'pending' },
+        select: { id: true },
+      });
+      if (waiting) {
+        waitingId ??= waiting.id;
+        continue;
+      }
+      await this.prisma.mergeRequestCheck.deleteMany({
+        where: { mergeRequestId, kind: 'lint', headRevisionId: head, status: { not: 'pending' } },
+      });
+      const checkId = await this.check({
+        mergeRequestId,
+        authorId: mr.authorId,
+        workspaceId: mr.document.workspaceId,
+        projectId: mr.document.projectId,
+        documentId: page.documentId,
+        headRevisionId: head,
+      });
+      first ??= checkId;
     }
-
-    await this.prisma.mergeRequestCheck.deleteMany({
-      where: { mergeRequestId, kind: 'lint', headRevisionId: head, status: { not: 'pending' } },
-    });
-    const checkId = await this.check({
-      mergeRequestId,
-      authorId: mr.authorId,
-      workspaceId: mr.document.workspaceId,
-      projectId: mr.document.projectId,
-      headRevisionId: head,
-    });
-    if (!checkId) throw new ConflictException({ statusCode: 409, message: t('error.lint.busy'), reason: 'lint.busy' });
-    return checkId;
+    if (first) return first;
+    if (waitingId) {
+      throw new ConflictException({ statusCode: 409, message: t('error.lint.running'), reason: 'lint.running', checkId: waitingId });
+    }
+    throw new ConflictException({ statusCode: 409, message: t('error.lint.busy'), reason: 'lint.busy' });
   }
 }

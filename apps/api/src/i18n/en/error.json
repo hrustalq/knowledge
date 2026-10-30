@@ -134,6 +134,7 @@
     "nothingToMerge": "Nothing to merge — the source head is already an ancestor of the target head",
     "diverged": "Target branch {target} has advanced past the merge base — rebase {source} onto it and retry",
     "divergedWhileMerging": "Target branch {target} advanced while merging — retry",
+    "targetMissing": "These changed pages have no branch {branch} to merge into: {pages}",
     "alreadyOpen": "Open merge request {id} already exists for {source} → {target}",
     "notMembers": "Not members of this workspace: {users}",
     "breakingApi": "Merge request {id} makes {count} breaking API change(s), and this workspace blocks those until an admin acknowledges them",

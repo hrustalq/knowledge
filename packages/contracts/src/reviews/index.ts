@@ -85,11 +85,27 @@ export interface ListMergeRequestsResponse {
   mergeRequests: MergeRequestInfo[];
 }
 
+/** One page a merge request changes (#636): its source branch moved past what the target holds. */
+export interface MergeRequestPage {
+  documentId: string;
+  title: string;
+  /** merge-base comparison of this page's target head...source head. */
+  compare: CompareResponse;
+}
+
 // GET /v1/merge-requests/:id/diff
 export interface MergeRequestDiffResponse {
   mergeRequest: MergeRequestInfo;
-  /** merge-base comparison targetHead...sourceHead, with structural + semantic sections. */
+  /** The page the merge request was opened from (`mergeRequest.documentId`), as before #636. */
   compare: CompareResponse;
+  /**
+   * Every page the source branch changed that the caller may open, by title
+   * (#636): a branch spans its project's pages, and the merge lands them all
+   * in one transaction.
+   */
+  pages: MergeRequestPage[];
+  /** Changed pages the caller may not open. Merging needs edit on every page, so they hold the merge for them. */
+  hiddenPages: number;
 }
 
 export interface MergeMergeRequestResponse {
@@ -205,9 +221,12 @@ export interface ListSavedFiltersResponse {
  * `block` and the check of the source head is still to come, or found
  * error-severity violations nobody has resolved, and no admin overrode it
  * (#74). `checkStatus` and `blockingCount` say which, `checkId` is the check.
+ * Every gate runs across all the pages a merge request changes (#636).
  */
 export interface MergeGateConflictDetails {
   reason: 'draft' | 'approvals' | 'diverged' | 'breaking-api' | 'lint';
+  /** The page the gate refused on, in a merge request spanning several (#636). */
+  documentId?: string;
   breakingCount?: number;
   checkStatus?: LintGateState['checkStatus'];
   blockingCount?: number;
@@ -501,6 +520,11 @@ export type MergeRequestComment = ReviewComment;
 
 export interface MergeRequestThread extends ReviewThread {
   mergeRequestId: string;
+  /**
+   * The page a line or text anchor's revision belongs to (#636: a merge
+   * request spans pages); null for an unanchored, section or entity thread.
+   */
+  documentId: string | null;
   /** The lint check that opened it (#74); null on every other thread. */
   checkId: string | null;
   /** The styleguide rule a lint thread cites. */

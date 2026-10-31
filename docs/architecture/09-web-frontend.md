@@ -281,6 +281,34 @@ or a page loaded the tree later) the rail keeps the skeleton until mount, as
 above. A failed prefetch never fails the render. The store stays unloaded and
 the client fetches as before.
 
+`prefetchShell` also loads the workspace roster and the unread count, so the
+switcher and the bell's badge are in the HTML and the rail does not move when
+they arrive (#643). Because the roster is now always loaded, a workspace
+fallback is recorded explicitly in `workspaces.fallbackId`, which is what
+`entry-client.ts` adopts. On `/documents/:id` it also reads the page's detail
+and content (`prefetchForRender`, the same keys the page's `useQuery`s use).
+They are serialized like a store's reads, so the title, the meta line and the
+body render on the server and the client hydrates from the same answers
+without asking again. The page reads the detail from the cache in setup, and
+skips its first re-read and the two-second poll when that copy is fresh and
+its revision settled.
+
+The read view's body is a tiptap editor, built in `onMounted`. Until it
+exists, a read-only `RichEditor` draws the body as static HTML: the markdown
+parsed and serialized through the editor's own schema (`staticBodyHtml`),
+inside an inert document (jsdom on the server, which `entry-server.ts` loads
+for page routes only). Only nodes, marks and attributes the schema knows
+survive, so it is as safe as the editor itself. The client draws the same once
+more in the hydrating render (`hydration.active`, set by `entry-client.ts`
+around `app.mount`), and skips it on a client navigation, where the editor
+exists in the same tick.
+
+The rail's preview queries and the page's comment threads are off on the server
+and in the hydrating render, and start once the browser is idle after first
+paint (`whenIdle`). They cannot land mid-render (#278), and they no longer leave
+as one burst with the page's reads. Page insights are read once, after the open
+beacon, so the count includes this visit.
+
 Rows drawn on the server bring two more rules. Anything they start must not run
 during setup. `SidebarTreeNode` fetches an open row's children from a
 `watchPostEffect`, which never runs on the server and runs after the row has

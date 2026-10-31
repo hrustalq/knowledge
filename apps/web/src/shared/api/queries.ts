@@ -160,10 +160,7 @@ export async function bindStoreQuery<T>(
   apply: (data: T) => void,
   { fresh = false }: { fresh?: boolean } = {},
 ): Promise<void> {
-  const query = queryClient.getQueryCache().build(queryClient, options as never)
-  let hashes = storeHashes.get(queryClient)
-  if (!hashes) storeHashes.set(queryClient, (hashes = new Set()))
-  hashes.add(query.queryHash)
+  rememberForHydration(queryClient, options)
 
   if (!import.meta.env.SSR) {
     const raw = toRaw(store)
@@ -194,7 +191,29 @@ export function unbindStoreQuery(store: object, slot: string): void {
   slots?.delete(slot)
 }
 
-/** Whether entry-server should serialize this query: a store read it before or during the render. */
+/**
+ * A read entry-server makes before the render, for a component's `useQuery`
+ * (#643). Finished before anything draws, so the server renders with it; and
+ * serialized like a store's read, so the client's first render finds the same
+ * answer and hydrates without asking. A failure is left for the component to
+ * ask again, as it always did.
+ */
+export async function prefetchForRender(
+  queryClient: QueryClient,
+  options: { queryKey: ReadonlyArray<unknown>; queryFn: (ctx: { signal: AbortSignal }) => Promise<unknown>; staleTime?: number },
+): Promise<void> {
+  rememberForHydration(queryClient, options)
+  await queryClient.fetchQuery({ ...options, retry: false } as never).catch(() => undefined)
+}
+
+function rememberForHydration(queryClient: QueryClient, options: { queryKey: ReadonlyArray<unknown> }) {
+  const query = queryClient.getQueryCache().build(queryClient, options as never)
+  let hashes = storeHashes.get(queryClient)
+  if (!hashes) storeHashes.set(queryClient, (hashes = new Set()))
+  hashes.add(query.queryHash)
+}
+
+/** Whether entry-server should serialize this query: a store read it, or entry-server did before the render. */
 export function isStoreQuery(queryClient: QueryClient, queryHash: string): boolean {
   return storeHashes.get(queryClient)?.has(queryHash) ?? false
 }

@@ -121,8 +121,9 @@ function onKey(e: KeyboardEvent) {
     </div>
 
     <!-- Density: how much changed per stretch of the window. Decorative to a
-         screen reader — the same counts are not information it can act on. -->
-    <svg v-if="bars.length" class="h-3.5 w-full text-muted-foreground" :viewBox="`0 0 ${BARS} 10`" preserveAspectRatio="none" aria-hidden="true">
+         screen reader — the same counts are not information it can act on.
+         Drawn empty until the timeline arrives, so the strip keeps its height. -->
+    <svg class="h-3.5 w-full text-muted-foreground" :viewBox="`0 0 ${BARS} 10`" preserveAspectRatio="none" aria-hidden="true">
       <rect
         v-for="(b, i) in bars"
         :key="i"

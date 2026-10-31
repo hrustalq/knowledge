@@ -12,6 +12,12 @@ export const useWorkspacesStore = defineStore('workspaces', {
   state: () => ({
     items: [] as WorkspaceSummary[],
     loaded: false,
+    /**
+     * The workspace the server rendered with, when it had to pick another than
+     * the cookie's (#479). entry-client adopts it. Its own field: the roster is
+     * loaded on every render now (#643), so `loaded` no longer says it.
+     */
+    fallbackId: null as string | null,
   }),
   actions: {
     fetchList(opts: { fresh?: boolean } = {}): Promise<void> {

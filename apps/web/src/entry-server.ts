@@ -152,7 +152,7 @@ export async function render(url: string, ctx: Partial<SsrRequestContext> = {}) 
     await messagesReady
     await prefetchShell(router, pinia, queryClient, request)
 
-    const ssrContext: { teleports?: Record<string, string> } = {}
+    const ssrContext: { teleports?: Record<string, string>; title?: () => string } = {}
     let html = await renderToString(app, ssrContext)
     // The page action bar (#441) is a teleport into the shell's own markup, so
     // its buffer goes back into that element here; the client hydrates it there.
@@ -173,6 +173,9 @@ export async function render(url: string, ctx: Partial<SsrRequestContext> = {}) 
     ).replace(/</g, '\\u003c')
     const head = `<script>window.__PINIA__ = ${state};window.__QUERIES__ = ${queries}</script>`
 
-    return { html, head }
+    // Set by the shell (#644); escaped here, since server.js splices it in raw.
+    const title = ssrContext.title?.().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+    return { html, head, title }
   })
 }

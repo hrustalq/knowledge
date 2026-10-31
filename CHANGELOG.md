@@ -13,6 +13,16 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Fixed
+
+- **Every browser tab was titled "Knowledge"** (#644). The member app now names the route in the tab, in
+  history and to a screen reader, from the same trail as the breadcrumb: `‹page› · ‹project› · Knowledge`,
+  `Merge requests · Knowledge`, `AI · Settings · Knowledge`, in the UI's language, both in the server render
+  and after each navigation. A page the reader may not open is never named. A page from another project now
+  also gets its own breadcrumb, under its own project, instead of only "Pages".
+
 ## [0.42.0] — 2026-10-31
 
 ### Breaking

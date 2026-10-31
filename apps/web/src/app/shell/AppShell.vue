@@ -12,7 +12,7 @@
  * simply wrong on any route without a trail. `--kn-chrome-h` is published from
  * the chrome actually rendered, and the sub-rails read it.
  */
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, useSSRContext, watch, watchEffect } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { FocusScope } from 'reka-ui'
@@ -28,6 +28,7 @@ import VerifyEmailBanner from './VerifyEmailBanner.vue'
 import AppTopbar from './AppTopbar.vue'
 import AppBreadcrumbs from './AppBreadcrumbs.vue'
 import { useCrumbs } from './breadcrumbs'
+import { APP_NAME, titleFor } from './document-title'
 import { slowNavigation } from '@/app/router/navigation'
 
 const route = useRoute()
@@ -73,6 +74,20 @@ const crumbs = useCrumbs()
  * below can follow.
  */
 const showCrumbs = computed(() => !route.meta.bare && crumbs.value.length > 0)
+
+/**
+ * The tab title names the route (#644). The server reads it after the render,
+ * once the prefetches have filled what the trail names; signed out, the tab
+ * goes back to the app's name.
+ */
+const documentTitle = computed(() => titleFor(crumbs.value))
+if (import.meta.env.SSR) {
+  const ssr = useSSRContext<{ title?: () => string }>()
+  if (ssr) ssr.title = () => documentTitle.value
+} else {
+  watchEffect(() => (document.title = documentTitle.value))
+  onBeforeUnmount(() => (document.title = APP_NAME))
+}
 
 /** An unconfirmed address (docs/features/41), until dismissed for this load. */
 const auth = useAuthStore()

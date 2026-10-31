@@ -30,6 +30,13 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- **The editor no longer shows a page's title twice** (#646). A page whose text opens with its own title
+  as `# Title` (most imported, captured and agent-written pages do) showed it in the title field and again as
+  a heading at the top of the body, though readers saw it once. The editor now shows it only in the title
+  field, and saving keeps the heading in the stored text exactly as it was. Renaming the page renames that
+  heading too. A first heading that differs from the title stays in the body, as before. Shared drafts
+  (`COLLAB_ENABLED`) created from now on leave it out the same way; a draft that already holds the heading
+  keeps it and is not given a second one.
 - **A failure part-way through an action no longer leaves it half done** (#658). Seventeen flows wrote one
   change as separate commits, so an error or crash in between left state nothing repaired. They now commit
   whole or not at all. Before this fix:

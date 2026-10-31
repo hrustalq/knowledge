@@ -441,3 +441,32 @@ export const SANITIZE_CONFIG: { ADD_TAGS: string[]; ADD_ATTR: string[] } = {
 export function slugifyHeading(text: string): string {
   return slugifyPath(text);
 }
+
+/**
+ * A body's leading `# Title`, split off when it matches the page title (#646).
+ *
+ * `documents.title` is the canonical title and the header (or the editor's
+ * title field) shows it, but almost every page also opens with `# Same Title`
+ * — imports, captures and agents all write it — so the page met it twice. A
+ * first heading that says something else is a real section and stays.
+ * `heading + body` is always the input, byte for byte: nothing is rewritten.
+ */
+export function splitTitleHeading(markdown: string, title: string): { heading: string; body: string } {
+  const want = title.trim().toLowerCase();
+  const match = want ? /^\s*#\s+(.+?)\s*(?:\n|$)/.exec(markdown) : null;
+  if (!match || match[1].trim().toLowerCase() !== want) return { heading: '', body: markdown };
+  return { heading: match[0], body: markdown.slice(match[0].length) };
+}
+
+/**
+ * `body` with a held title heading back in front: the inverse of
+ * `splitTitleHeading` for an editor that kept the heading out (#646). Renaming
+ * the page renames the heading, so reader and title stay in step; a body that
+ * already leads with the heading (a draft seeded before #646) gets no second one.
+ */
+export function joinTitleHeading(body: string, held: { heading: string; title: string } | null, title: string): string {
+  if (!held) return body;
+  if (splitTitleHeading(body, held.title).heading || splitTitleHeading(body, title).heading) return body;
+  const renamed = title.trim() && title.trim() !== held.title.trim();
+  return (renamed ? `# ${title.trim()}\n\n` : held.heading) + body;
+}

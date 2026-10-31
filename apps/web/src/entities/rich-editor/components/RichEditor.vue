@@ -158,6 +158,13 @@ const props = withDefaults(
     resolveDocumentId?: () => Promise<string | null>
     placeholder?: string
     /**
+     * The body's accessible name (WCAG 4.1.2). A contenteditable has no label of
+     * its own, so a screen reader lands in it announcing nothing; the page title
+     * beside it is a named field, and this is the field the title is for.
+     * Defaults to "Page body"; a comment or a definition passes its own.
+     */
+    label?: string
+    /**
      * Comment-box mode: same editor, page furniture removed. No toolbar, no
      * drag gutter, no table controls, and the slash menu is trimmed to the
      * blocks that make sense in a review comment — a column layout or a
@@ -763,7 +770,17 @@ onMounted(() => {
       AiSuggestions.configure({ t, shared: props.collab?.suggestions ?? null }),
     ],
     editorProps: {
-      attributes: { class: 'kn-prose', spellcheck: 'true' },
+      // An object, never a function: Tiptap spreads it into its own
+      // `{ role: 'textbox', … }`, and a spread function is nothing at all.
+      // The role is ours too, because `setEditable` hands this object to
+      // ProseMirror as-is and Tiptap's default goes with it.
+      attributes: {
+        role: 'textbox',
+        class: 'kn-prose',
+        spellcheck: 'true',
+        'aria-multiline': 'true',
+        'aria-label': props.label || t('editor.bodyLabel'),
+      },
       handlePaste: (_view, event) => {
         const files = [...(event.clipboardData?.files ?? [])]
         if (files.length === 0) return false

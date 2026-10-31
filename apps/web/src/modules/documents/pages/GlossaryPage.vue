@@ -524,6 +524,7 @@ watch(highlighted, (id) => {
                 v-model="form.definition"
                 compact
                 :placeholder="t('glossary.definitionPlaceholder')"
+                :label="t('glossary.definition')"
               />
             </div>
           </div>

@@ -82,6 +82,9 @@ export class ConnectorsService {
   private readonly logger = new Logger(ConnectorsService.name);
   private readonly key: Buffer | null;
   private readonly allowPrivateUrls: boolean;
+  /** `web` sources (#674): their own ceiling and their own private-address switch. */
+  readonly webSourcesEnabled: boolean;
+  private readonly webAllowPrivate: boolean;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -93,6 +96,8 @@ export class ConnectorsService {
   ) {
     this.key = parseKey(this.config.get('SETTINGS_ENCRYPTION_KEY', { infer: true }));
     this.allowPrivateUrls = this.config.get('CONNECTOR_ALLOW_PRIVATE_URLS', { infer: true });
+    this.webSourcesEnabled = this.config.get('WEB_SOURCES_ENABLED', { infer: true });
+    this.webAllowPrivate = this.config.get('WEB_SOURCE_ALLOW_PRIVATE', { infer: true });
     if (!this.key) {
       this.logger.warn('SETTINGS_ENCRYPTION_KEY is not set — connector credentials cannot be saved from the UI');
     }
@@ -107,7 +112,8 @@ export class ConnectorsService {
   /** The workspace's connectors in projects `scope` can open (#555), as `RepoSnapshotService.listRepos` reads them. */
   async list(scope: AccessScope): Promise<ConnectorSummary[]> {
     const rows = await this.prisma.connector.findMany({
-      where: { workspaceId: scope.workspaceId },
+      // A page's own source (#674) is managed from that page, not listed here.
+      where: { workspaceId: scope.workspaceId, ownerDocumentId: null },
       include: { project: { select: { id: true, restricted: true } } },
       orderBy: { createdAt: 'asc' },
     });
@@ -169,6 +175,7 @@ export class ConnectorsService {
   async create(input: CreateConnectorInput, userId?: string): Promise<ConnectorSummary> {
     const info = connectorKindInfo(input.kind);
     if (!info) throw new BadRequestException(t('error.connector.unknownKind', { kind: input.kind }));
+    this.assertKindEnabled(info.kind);
 
     await this.projects.requireProjectInWorkspace(input.projectId, input.workspaceId);
 
@@ -387,7 +394,7 @@ export class ConnectorsService {
       // Read once per context for the same reason `debug` is, and handed to
       // `connectorFetch` so the SSRF guard runs at the dial rather than only
       // when an admin saved the base URL.
-      allowPrivate: this.allowPrivateUrls,
+      allowPrivate: this.allowPrivateFor(row.kind),
       // Who to bill and which language to answer in (docs/features/27). Both
       // come off the row rather than a request, because the path that needs
       // them most is the worker's, where there is no request at all.
@@ -406,6 +413,7 @@ export class ConnectorsService {
     options: { externalIds?: string[]; actorId?: string; mode?: ConnectorSyncMode } = {},
   ): Promise<ConnectorRun> {
     if (!row.enabled) throw new BadRequestException(t('error.connector.disabled'));
+    this.assertKindEnabled(row.kind);
 
     const adapter = this.adapterFor(row);
     if (direction === 'pull' && !adapter.capabilities.pull) {
@@ -461,7 +469,7 @@ export class ConnectorsService {
    * that is already queued.
    */
   async queueWebhookRefs(row: Connector, externalIds: string[]): Promise<ConnectorRun | null> {
-    if (!row.enabled) return null;
+    if (!row.enabled || (row.kind === 'web' && !this.webSourcesEnabled)) return null;
 
     const queued = await this.prisma.connectorRun.findFirst({
       where: { connectorId: row.id, status: 'queued', direction: 'pull' },
@@ -650,7 +658,7 @@ export class ConnectorsService {
         throw new BadRequestException(t('error.connector.missingField', { kind: info.label, field: field.label }));
       }
       if (present && /url$/i.test(field.key)) {
-        await assertSafeExternalUrl(String(value), this.allowPrivateUrls, {
+        await assertSafeExternalUrl(String(value), this.allowPrivateFor(kind), {
           invalid: 'error.connector.urlInvalid',
           notHttps: 'error.connector.urlNotHttps',
           unresolved: 'error.connector.hostUnresolved',
@@ -658,6 +666,15 @@ export class ConnectorsService {
         });
       }
     }
+  }
+
+  /** WEB_SOURCES_ENABLED off: a `web` connector cannot be made or run (#674). */
+  assertKindEnabled(kind: string): void {
+    if (kind === 'web' && !this.webSourcesEnabled) throw new NotFoundException(t('error.source.disabled'));
+  }
+
+  allowPrivateFor(kind: string): boolean {
+    return kind === 'web' ? this.webAllowPrivate : this.allowPrivateUrls;
   }
 
   private checkDirection(kind: ConnectorKind, direction: ConnectorDirection): ConnectorDirection {

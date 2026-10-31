@@ -24,6 +24,8 @@ export const CONNECTOR_KINDS = [
   'zendesk',
   'intercom',
   'figma',
+  // A source-backed page's source (#674): one URL, fetched and replaced whole.
+  'web',
 ] as const;
 export type ConnectorKind = (typeof CONNECTOR_KINDS)[number];
 
@@ -617,6 +619,24 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
       },
     ],
   },
+  {
+    // Source-backed pages (#674): a markdown or HTML URL whose page here is
+    // read-only and replaced by each new version. No push, no tree yet.
+    kind: 'web',
+    label: 'Web page',
+    capabilities: { pull: true, push: false, webhook: true, tree: false },
+    credentialLabel: 'Token, or Header-Name: value',
+    fields: [
+      {
+        key: 'url',
+        label: 'URL',
+        kind: 'text',
+        required: true,
+        placeholder: 'https://example.com/docs/guide.md',
+        help: 'A markdown file or an HTML page. The page it becomes is read-only and follows the source.',
+      },
+    ],
+  },
 ];
 
 export function connectorKindInfo(kind: string): ConnectorKindInfo | null {
@@ -645,6 +665,8 @@ export const CONNECTION_PROVIDERS = [
   'zendesk',
   'intercom',
   'figma',
+  // Any host a `web` source reads (#674), one connection per origin.
+  'web',
 ] as const;
 export type ConnectionProvider = (typeof CONNECTION_PROVIDERS)[number];
 
@@ -702,6 +724,8 @@ export function connectionProviderFor(kind: ConnectorKind, config: Record<string
     case 'linear':
     case 'figma':
       return { provider: kind, site: null };
+    case 'web':
+      return { provider: 'web', site: originOf(config.url) };
   }
 }
 
@@ -756,6 +780,7 @@ export const CONNECTOR_RESOURCE_KEYS: Record<ConnectorKind, readonly string[]> =
   zendesk: ['baseUrl', 'harvestLabel'],
   intercom: ['region', 'harvestLabel'],
   figma: [FIGMA_ALLOWLIST_CONFIG_KEY],
+  web: ['url'],
 };
 
 /** The duplicate-link key: the resource keys, trimmed, case-folded, without a trailing `/` or `.git`. */
@@ -2203,4 +2228,83 @@ export interface DraftComponentResponse {
   /** The page's title, and the merge request's. */
   title: string;
   paths: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Source-backed pages (#674): a read-only page whose body belongs to a `web`
+// source and is replaced by each new version of it.
+// ---------------------------------------------------------------------------
+
+/** The check intervals the page source panel offers, in minutes. */
+export const SOURCE_INTERVALS_MIN = [15, 60, 360, 1440] as const;
+export const SOURCE_DEFAULT_INTERVAL_MIN = 60;
+/** Consecutive failed syncs before an alert, and consecutive 404/410s before the page is archived. */
+export const SOURCE_FAILURE_LIMIT = 3;
+/** Minutes before each retry of a transient failure (timeout, 5xx, 429, DNS); `Retry-After` can only lengthen one. */
+export const SOURCE_RETRY_DELAYS_MIN = [1, 5, 25] as const;
+
+/**
+ * Why a source alerts its connector's owner (an in-app row plus email, reason
+ * `alert`). Later phases add `held` (recipe review) and `breaking` (OpenAPI).
+ */
+export const SOURCE_ALERT_KINDS = ['paused', 'gone', 'failing'] as const;
+export type SourceAlertKind = (typeof SOURCE_ALERT_KINDS)[number];
+
+// GET /v1/documents/:id/source
+export interface DocumentSourceInfo {
+  documentId: string;
+  connectorId: string;
+  url: string;
+  host: string;
+  intervalMinutes: number | null;
+  /** Set while the source writes nothing (paused by hand or by a restore). */
+  pausedAt: string | null;
+  /** New versions the source has published since the page was paused. */
+  aheadCount: number;
+  /** The last successful check, changed or not. */
+  lastCheckedAt: string | null;
+  /** The revision the source last wrote, and the page's head now (they differ after a restore). */
+  syncedRevisionId: string | null;
+  headRevisionId: string | null;
+  /** Consecutive failed syncs. */
+  failures: number;
+  /** When the next retry of a transient failure runs, if one is pending. */
+  retryAt: string | null;
+  webhookConfigured: boolean;
+}
+
+// POST /v1/sources
+export interface CreateSourcePageRequest {
+  workspaceId: string;
+  projectId: string;
+  parentId?: string | null;
+  url: string;
+  title?: string;
+  intervalMinutes?: number | null;
+  /** For a host that needs one: a token (sent as Bearer) or `Header-Name: value`. Saved as a connection for the host. */
+  credential?: string;
+}
+
+export interface CreateSourcePageResponse {
+  documentId: string;
+  connectorId: string;
+}
+
+// PATCH /v1/documents/:id/source
+export interface UpdateDocumentSourceRequest {
+  intervalMinutes: number | null;
+}
+
+// POST /v1/documents/:id/source/restore
+export interface RestoreDocumentSourceRequest {
+  /** An earlier revision of this page; restoring it pauses the source. */
+  revisionId: string;
+}
+
+// POST /v1/documents/:id/source/webhook — shown once.
+export interface DocumentSourceWebhookResponse {
+  url: string;
+  secret: string;
+  /** The header the sender signs the raw body with: `sha256=<hex HMAC-SHA256>`. */
+  header: string;
 }

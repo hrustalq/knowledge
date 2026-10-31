@@ -1,4 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { Env } from '../config/env.js';
 import { isWorkspaceFeature, type WorkspaceFeature } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { t } from '../i18n/t.js';
@@ -15,7 +17,19 @@ const FEATURES_TTL_MS = 30_000;
 export class FeaturesService {
   private readonly cache = new Map<string, { at: number; value: WorkspaceFeature[] }>();
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService<Env, true>,
+  ) {}
+
+  /**
+   * Sections this server does not run, whatever a workspace chose: an env
+   * ceiling over the toggle (#674). Reported beside the stored choice, never
+   * written into it, so turning the env on brings back what the admin chose.
+   */
+  unavailable(): WorkspaceFeature[] {
+    return this.config.get('WEB_SOURCES_ENABLED', { infer: true }) ? [] : ['sources'];
+  }
 
   async disabled(workspaceId: string): Promise<WorkspaceFeature[]> {
     const hit = this.cache.get(workspaceId);
@@ -29,7 +43,7 @@ export class FeaturesService {
 
   /** 404, as if the route or tool did not exist: a switched-off section is absent, not forbidden. */
   async require(workspaceId: string, feature: WorkspaceFeature): Promise<void> {
-    if ((await this.disabled(workspaceId)).includes(feature)) {
+    if (this.unavailable().includes(feature) || (await this.disabled(workspaceId)).includes(feature)) {
       throw new NotFoundException({ statusCode: 404, message: t('error.feature.disabled', { feature }), feature });
     }
   }

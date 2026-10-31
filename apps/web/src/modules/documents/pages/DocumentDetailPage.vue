@@ -32,6 +32,7 @@ import {
   Flag,
   Gauge,
   GitMerge,
+  Globe,
   History,
   LayoutTemplate,
   Lock,
@@ -119,6 +120,7 @@ import { WorkflowRail } from '@/entities/workflow'
 import { ConnectorRail } from '@/entities/connector'
 import ConflictsRail from '@/modules/documents/components/ConflictsRail.vue'
 import BacklinksRail from '@/modules/documents/components/BacklinksRail.vue'
+import SourceRail from '@/modules/documents/components/SourceRail.vue'
 import KnowledgeIssuesRail from '@/modules/documents/components/KnowledgeIssuesRail.vue'
 import { QualityRail } from '@/entities/insight'
 import { PageInsightsRail } from '@/entities/insight'
@@ -155,6 +157,8 @@ const RAIL_WIDGETS = [
   // about the page, so it heads the rail, and a widget like the rest so it
   // folds away and is remembered the same way.
   { id: 'verification', label: t('verification.title'), icon: BadgeCheck, expandable: false },
+  // Where a source-backed page reads from, and pause / resume / sync (#674): only on one.
+  { id: 'source', label: t('rail.source'), icon: Globe, expandable: false },
   { id: 'overview', label: t('rail.overview'), icon: Info, expandable: false },
   // Comments with no place on the text (#439): on the page as a whole, or on a
   // passage edited away. Only while there are any.
@@ -212,7 +216,7 @@ onMounted(() => {
  */
 // A section the workspace switched off (#604) takes its rail row with it.
 const features = useFeaturesStore()
-const WIDGET_FEATURE: Partial<Record<RailWidget, WorkspaceFeature>> = { conflicts: 'conflicts', insights: 'analytics', workflows: 'workflows' }
+const WIDGET_FEATURE: Partial<Record<RailWidget, WorkspaceFeature>> = { conflicts: 'conflicts', insights: 'analytics', workflows: 'workflows', source: 'sources' }
 
 const visibleWidgets = computed(() =>
   RAIL_WIDGETS.filter(
@@ -220,6 +224,9 @@ const visibleWidgets = computed(() =>
       (!WIDGET_FEATURE[w.id] || features.isOn(WIDGET_FEATURE[w.id]!)) &&
       (w.id !== 'frontmatter' || !!content.value?.frontmatter) &&
       (w.id !== 'used-by' || !!declaration.value) &&
+      (w.id !== 'source' || sourceBacked.value) &&
+      // The source's own connector is the Source widget, not a second row.
+      (w.id !== 'connectors' || !sourceBacked.value) &&
       (w.id !== 'quality' || !!quality.value?.score) &&
       (w.id !== 'conflicts' || openConflicts.value > 0) &&
       (w.id !== 'backlinks' || backlinkCount.value > 0) &&
@@ -333,6 +340,8 @@ onMounted(() => whenIdle(() => (railReady.value = true), 1000))
 // hands it the detail and takes the detail back. Archived pages are
 // read-only: the Edit action goes, and the editor route sends you back here.
 const archived = computed(() => !!detail.value?.document.archivedAt)
+/** Its body belongs to an external source (#674): only that source writes it, so nothing here offers to. */
+const sourceBacked = computed(() => !!detail.value?.document.sourceBacked)
 
 /* ------------------------------------------------------------ page data */
 
@@ -732,6 +741,11 @@ const previewFor = computed<Record<RailWidget, string | null>>(() => {
     connectors: connectorLinks?.length
       ? (connectorLinks[0].connectorName ?? null)
       : null,
+    // Where it reads from; the widget says whether it is following (#674).
+    source: (() => {
+      const url = connectorLinks?.find((l) => l.kind === 'web')?.link.externalUrl
+      return url ? new URL(url).host : null
+    })(),
     frontmatter: frontmatterKeys ? t('count.fields', { n: frontmatterKeys }, frontmatterKeys) : null,
     revisions: revisions ? t('count.revisions', { n: revisions.length }, revisions.length) : null,
     'merge-requests': mrs
@@ -913,7 +927,16 @@ watch(
         <Send class="size-3.5" aria-hidden="true" />
         <span class="kn-bar-label">{{ t('access.draft.publish') }}</span>
       </Button>
-      <Button v-if="auth.canEdit && !archived" variant="outline" size="sm" as-child>
+      <!-- A source-backed page (#674) has no Edit: the rail's Source widget is where it is acted on. -->
+      <span
+        v-if="sourceBacked"
+        class="inline-flex h-8 items-center gap-1.5 px-2 text-xs text-muted-foreground"
+        :title="t('sources.followsHint')"
+      >
+        <Globe class="size-3.5" aria-hidden="true" />
+        <span class="kn-bar-label">{{ t('sources.follows') }}</span>
+      </span>
+      <Button v-else-if="auth.canEdit && !archived" variant="outline" size="sm" as-child>
         <RouterLink
           :to="`/documents/${detail.document.documentId}/${isSpec ? 'spec' : isFixture ? 'fixture' : 'edit'}`"
           :title="hasUnstaged ? t('editor.unstaged.label') : t('common.edit')"
@@ -1062,7 +1085,7 @@ watch(
         <PageRail
           :widgets="visibleWidgets"
           surface="document"
-          :default-open="['operations', 'verification', 'overview', 'comments']"
+          :default-open="['operations', 'verification', 'source', 'overview', 'comments']"
           :previews="previewFor"
           @expand="expanded = $event"
         >
@@ -1082,6 +1105,10 @@ watch(
               @reload="load()"
             />
             <p v-else class="text-xs text-muted-foreground">{{ t('verification.headOnly') }}</p>
+          </template>
+
+          <template #widget-source>
+            <SourceRail :document-id="documentId" :can-edit="auth.canEdit && !archived" @synced="load()" />
           </template>
 
           <!-- What this page *is*: the facts a reader checks before trusting it. -->
@@ -1159,7 +1186,7 @@ watch(
             <pre class="overflow-x-auto rounded bg-muted/40 p-2 text-xs">{{ JSON.stringify(content?.frontmatter, null, 2) }}</pre>
           </template>
 
-          <template #widget-revisions><RevisionsView :document-id="documentId" /></template>
+          <template #widget-revisions><RevisionsView :document-id="documentId" :source-backed="sourceBacked && auth.canEdit && !archived" @restored="load()" /></template>
           <template #widget-merge-requests><MergeRequestList :document-id="documentId" /></template>
           <template #widget-conflicts>
             <ConflictsRail :document-id="documentId" />
@@ -1245,7 +1272,7 @@ watch(
             }}
           </span>
           <RouterLink
-            v-if="auth.canEdit && !archived"
+            v-if="auth.canEdit && !archived && !sourceBacked"
             :to="branchOwner === auth.me?.userId ? `/documents/${documentId}/edit` : `/documents/${documentId}/edit?branch=${encodeURIComponent(viewingBranch)}`"
             class="underline"
           >
@@ -1298,7 +1325,7 @@ watch(
           <DialogTitle>{{ expandedWidget?.label }} — {{ detail.document.title }}</DialogTitle>
         </DialogHeader>
         <div class="max-h-[70vh] overflow-auto pr-1">
-          <RevisionsView v-if="expanded === 'revisions'" :document-id="documentId" />
+          <RevisionsView v-if="expanded === 'revisions'" :document-id="documentId" :source-backed="sourceBacked && auth.canEdit && !archived" @restored="load()" />
           <MergeRequestList v-else-if="expanded === 'merge-requests'" :document-id="documentId" />
           <!-- Sized under the dialog's own 70vh so the feed keeps the scroll,
                for the same reason it does in the rail. -->

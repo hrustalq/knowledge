@@ -11,6 +11,7 @@ import { IntercomAdapter } from './intercom.adapter.js';
 import { FigmaAdapter } from './figma.adapter.js';
 import { MarkdownGitAdapter } from './markdown-git.adapter.js';
 import { NotionAdapter } from './notion.adapter.js';
+import { WebAdapter } from './web.adapter.js';
 import type { ConnectorAdapter } from './connector.types.js';
 
 /**
@@ -34,6 +35,7 @@ export class ConnectorRegistry {
     zendesk: ZendeskAdapter,
     intercom: IntercomAdapter,
     figma: FigmaAdapter,
+    web: WebAdapter,
   ) {
     this.byKind = {
       confluence,
@@ -47,6 +49,7 @@ export class ConnectorRegistry {
       zendesk,
       intercom,
       figma,
+      web,
     };
   }
 

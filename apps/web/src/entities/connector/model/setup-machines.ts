@@ -254,6 +254,8 @@ export const KIND_STEPS: Record<ConnectorKind, KindStep[]> = {
       meta: { labelKey: 'connectors.step.figmaAccess', fields: [FIGMA_ALLOWLIST_CONFIG_KEY, FIGMA_TOKEN_EXPIRES_CONFIG_KEY], credential: true },
     },
   ],
+  // A web source (#674): the URL and, for a host that needs one, its token.
+  web: [{ name: 'source', meta: { labelKey: 'connectors.step.source', fields: ['url'], credential: true } }],
 }
 
 export const confluenceSetup = kindMachine('confluenceSetup', KIND_STEPS.confluence)
@@ -267,6 +269,7 @@ export const linearSetup = kindMachine('linearSetup', KIND_STEPS.linear)
 export const zendeskSetup = kindMachine('zendeskSetup', KIND_STEPS.zendesk)
 export const intercomSetup = kindMachine('intercomSetup', KIND_STEPS.intercom)
 export const figmaSetup = kindMachine('figmaSetup', KIND_STEPS.figma)
+export const webSetup = kindMachine('webSetup', KIND_STEPS.web)
 
 export const SETUP_MACHINES: Record<ConnectorKind, KindMachine> = {
   confluence: confluenceSetup,
@@ -280,6 +283,7 @@ export const SETUP_MACHINES: Record<ConnectorKind, KindMachine> = {
   zendesk: zendeskSetup,
   intercom: intercomSetup,
   figma: figmaSetup,
+  web: webSetup,
 }
 
 /** The per-kind steps, for the stepper — read without running the machine. */

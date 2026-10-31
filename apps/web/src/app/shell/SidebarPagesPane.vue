@@ -16,7 +16,7 @@
 import { useI18n } from 'vue-i18n'
 import { computed, onMounted, provide, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { Braces, ChevronDown, ChevronLeft, FilePlus2, FileUp, FlaskConical, LayoutTemplate, Plus } from 'lucide-vue-next'
+import { Braces, ChevronDown, ChevronLeft, FilePlus2, FileUp, FlaskConical, Globe, LayoutTemplate, Plus } from 'lucide-vue-next'
 import type { DocumentTreeNode } from '@knowledge/contracts'
 import { useAuthStore } from '@/stores/auth'
 import { useDocumentsStore } from '@/stores/documents'
@@ -205,6 +205,13 @@ const shift = computed(() => treeShift(focusDepth.value, sidebar.treeDepthBudget
                 <RouterLink to="/create/fixture">
                   <FlaskConical class="size-3.5" />
                   {{ t('nav.newTestFixture') }}
+                </RouterLink>
+              </DropdownMenuItem>
+              <!-- A page that follows a URL (#674); hidden while sources are off. -->
+              <DropdownMenuItem v-feature="'sources'" as-child>
+                <RouterLink to="/create/source">
+                  <Globe class="size-3.5" />
+                  {{ t('nav.linkSource') }}
                 </RouterLink>
               </DropdownMenuItem>
             </DropdownMenuContent>

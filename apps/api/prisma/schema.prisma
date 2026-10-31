@@ -2213,6 +2213,12 @@ model Connector {
   /// the previous image still syncs against a migrated database.
   connectionId String? @map("connection_id") @db.Uuid
 
+  /// The page a `web` connector belongs to (#674): "Add page → Link a source"
+  /// makes one connector per page, hidden from the Connectors list and
+  /// managed from that page. Null for every connector a person set up. No FK,
+  /// like documents.parent_id: the page's teardown deletes the connector.
+  ownerDocumentId String? @map("owner_document_id") @db.Uuid
+
   createdBy String?  @map("created_by") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
@@ -2232,6 +2238,7 @@ model Connector {
 
   @@unique([workspaceId, name])
   @@index([workspaceId, kind])
+  @@index([ownerDocumentId])
   @@map("connectors")
 }
 
@@ -2311,6 +2318,20 @@ model ConnectorLink {
   lastPulledAt DateTime? @map("last_pulled_at") @db.Timestamptz
   lastPushedAt DateTime? @map("last_pushed_at") @db.Timestamptz
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  /// Source-backed pages (#674), `web` links only. Paused: the source writes
+  /// nothing, and counts in ahead_count the new versions it would have
+  /// written (ahead_hash = the last one counted).
+  pausedAt     DateTime? @map("paused_at") @db.Timestamptz
+  aheadCount   Int       @default(0) @map("ahead_count")
+  aheadHash    String?   @map("ahead_hash")
+  /// Consecutive failed syncs (retries exhausted, or unparseable), and
+  /// consecutive 404/410s; SOURCE_FAILURE_LIMIT of the second archives the page.
+  failures     Int       @default(0)
+  goneCount    Int       @default(0) @map("gone_count")
+  /// A transient failure's next retry (SOURCE_RETRY_DELAYS_MIN[retry_attempt - 1]).
+  retryAttempt Int       @default(0) @map("retry_attempt")
+  retryAt      DateTime? @map("retry_at") @db.Timestamptz
 
   connector Connector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
 

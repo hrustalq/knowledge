@@ -1569,6 +1569,8 @@ export const WORKSPACE_FEATURES = [
   'conflicts',
   'assistant',
   'git',
+  // Source-backed pages (#674); also under the WEB_SOURCES_ENABLED ceiling.
+  'sources',
 ] as const;
 export type WorkspaceFeature = (typeof WORKSPACE_FEATURES)[number];
 
@@ -1581,4 +1583,6 @@ export interface WorkspaceFeaturesResponse {
   workspaceId: string;
   /** Switched off in this workspace; every other feature is on. */
   disabled: WorkspaceFeature[];
+  /** Off on this server whatever the workspace chose (an env ceiling, e.g. `sources` under WEB_SOURCES_ENABLED). */
+  unavailable: WorkspaceFeature[];
 }

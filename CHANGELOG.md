@@ -17,6 +17,25 @@ in the pull request that introduces them — see
 
 ### Added
 
+- **Pages that follow an external source** (#674, phase 1). "Add page → **Link a source**" takes a markdown file
+  or an HTML page by URL and makes a page whose body belongs to that source: it reads the source at once (an
+  unreadable URL is refused there, with the HTTP status), then again on its check interval (15 min to daily, or
+  only when asked), on **Sync now**, or on a signed webhook (`X-Hub-Signature-256`, secret shown once). A fetch
+  is conditional on the last ETag / Last-Modified, so an unchanged source writes nothing. A new version lands
+  directly as a revision, never as a merge request, and the person who linked it is told. The page is
+  read-only: the editor, REST revisions and uploads, MCP `knowledge_create_revision`, git push, merges and
+  co-editing publishes are all refused with 409 `source-backed`, and the page shows "Follows its source"
+  instead of Edit. A **Source** widget in the rail says where it reads from, when it last checked, and
+  whether it is following, paused (with how many versions the source is ahead) or failing; it pauses,
+  resumes and syncs. **Restore** on an earlier History row writes that revision back and pauses the source.
+  A host that refuses without credentials asks for a token or a `Header-Name: value` header once and saves
+  it as a connection for that host. Timeouts, 5xx and 429 retry at 1, 5 and 25 minutes (`Retry-After` can
+  only lengthen one). After three failed syncs in a row, three 404/410s in a row (the page is then archived
+  and the pages linking to it are marked outdated, "source removed"), or a restore, the owner gets an
+  **alert**: a new `Sources` inbox category, and email like a mention. A `web` connector kind exists for
+  the same sources set up from Settings → Connectors. Off unless `WEB_SOURCES_ENABLED` is on, and a
+  workspace admin can switch it off as the `sources` feature; either way the routes 404 and the entry
+  points are hidden.
 - **A page knows which pages link to it** (#673). Every internal link on a page's published version is now
   recorded with the heading it points at: the `/documents/<id>#heading` form the editor writes, and the same
   address pasted in full from this deployment's own web address (`WEB_BASE_URL`); links to anywhere else are
@@ -45,6 +64,12 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- **Source-backed pages are off until `WEB_SOURCES_ENABLED=true`** (#674, default `false`).
+  `WEB_SOURCE_ALLOW_PRIVATE` (default `false`) lets a source fetch private or loopback addresses; it is
+  separate from `CONNECTOR_ALLOW_PRIVATE_URLS` because any editor can link a source. Email alerts need
+  `MAIL_NOTIFICATIONS_ENABLED` like every other notification mail. The migration only adds nullable or
+  defaulted columns to `connectors` and `connector_links`, which the previous release never reads, so a
+  rollback by retag needs nothing.
 - **Run `make page-links-backfill` once after deploying #673** (in production, `node
   dist/scripts/page-links-backfill.main.js` in the API container). Pages indexed earlier have no recorded
   links until their next edit; the script reads each page's indexed published version and records them.

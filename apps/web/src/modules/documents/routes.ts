@@ -6,6 +6,8 @@ export const routes: RouteRecordRaw[] = [
   // definite height to resolve; the tree and list views scroll inside it.
   { path: '/documents', component: () => import('./pages/DocumentsListPage.vue'), meta: { fill: true } },
   { path: '/documents/:id', component: () => import('./pages/DocumentDetailPage.vue') },
+  // A source-backed page (#674): linked to a URL, not written here.
+  { path: '/create/source', component: () => import('./pages/LinkSourcePage.vue'), meta: { feature: 'sources' } },
   { path: '/search', component: () => import('./pages/SearchPage.vue') },
   // Contradictions between pages (#81).
   { path: '/conflicts', component: () => import('./pages/ConflictsPage.vue'), meta: { feature: 'conflicts' } },

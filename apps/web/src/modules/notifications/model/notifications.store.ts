@@ -154,5 +154,5 @@ export const useNotificationsStore = defineStore('notifications', {
 })
 
 function emptyCounts(): Record<NotificationCategory, number> {
-  return { mention: 0, review: 0, comment: 0, document: 0, verification: 0, access: 0, job: 0 }
+  return { mention: 0, review: 0, comment: 0, document: 0, verification: 0, access: 0, job: 0, source: 0 }
 }

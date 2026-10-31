@@ -39,6 +39,12 @@ export interface ExternalRef {
    * lazily discovered tree must never do.
    */
   hasChildren?: boolean;
+  /**
+   * The version the link last agreed on, for a conditional fetch (#674): the
+   * `web` adapter sends it as If-None-Match / If-Modified-Since. Set by
+   * staging, never by an adapter's own listing.
+   */
+  knownVersion?: string;
 }
 
 export interface ExternalAttachment {
@@ -63,6 +69,8 @@ export interface ExternalDocument {
   attachments?: ExternalAttachment[];
   /** What the conversion could not carry. Surfaced verbatim on the run. */
   warnings: string[];
+  /** The source answered 304 to `ref.knownVersion` (#674): nothing to read, nothing to write. */
+  notModified?: boolean;
 }
 
 /**

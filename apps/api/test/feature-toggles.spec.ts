@@ -20,7 +20,7 @@ function run(principal: Partial<Principal>, opts: { disabled: string[]; member?:
     }),
   };
   const prisma = { workspaceSettings: { findUnique: vi.fn(async () => ({ disabledFeatures: opts.disabled })) } };
-  const guard = new AclGuard(reflector as never, access as never, {} as never, new FeaturesService(prisma as never));
+  const guard = new AclGuard(reflector as never, access as never, {} as never, new FeaturesService(prisma as never, { get: () => true } as never));
   const request = { principal, method: 'GET', params: {}, query: {}, body: { workspaceId: WS } };
   return guard.canActivate({
     getHandler: () => undefined,

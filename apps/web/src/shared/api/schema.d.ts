@@ -4085,6 +4085,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a source-backed page from a URL (markdown or HTML). The first version is read now; the page is read-only and follows the source on its interval, webhook or Sync now */
+        post: operations["WebSourcesController_link"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{id}/source": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The page's source: where it reads from, when it last checked, paused, failing or behind */
+        get: operations["WebSourcesController_info"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** How often the source is checked */
+        patch: operations["WebSourcesController_update"];
+        trace?: never;
+    };
+    "/v1/documents/{id}/source/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stop writing new versions; they are counted until the source is resumed */
+        post: operations["WebSourcesController_pause"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{id}/source/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Follow the source again: a sync is queued and writes whatever it says now */
+        post: operations["WebSourcesController_resume"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{id}/source/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore an earlier revision of the page. Pauses the source and alerts its owner */
+        post: operations["WebSourcesController_restore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{id}/source/webhook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A new webhook signing secret for the page's source, shown once; the old one stops working */
+        post: operations["WebSourcesController_webhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/connectors/github/installations": {
         parameters: {
             query?: never;
@@ -7593,7 +7696,7 @@ export interface components {
         };
         UpdateWorkspaceFeaturesDto: {
             /** @description The sections to switch off; every one not listed is on. An empty list turns everything back on. */
-            disabled: ("workflows" | "knowledge-health" | "qa" | "analytics" | "captures" | "memos" | "conflicts" | "assistant" | "git")[];
+            disabled: ("workflows" | "knowledge-health" | "qa" | "analytics" | "captures" | "memos" | "conflicts" | "assistant" | "git" | "sources")[];
         };
         UpdateWorkspaceDto: {
             /** @example Platform Team */
@@ -8160,7 +8263,7 @@ export interface components {
         UpdateNotificationPreferencesDto: {
             workspaceId: string;
             /** @description Categories to switch off; omit to leave unchanged. An empty array clears every mute. */
-            mutedCategories?: ("mention" | "review" | "comment" | "document" | "verification" | "access" | "job")[];
+            mutedCategories?: ("mention" | "review" | "comment" | "document" | "verification" | "access" | "job" | "source")[];
             /** @description Commenting on something starts watching it. Defaults to true; omit to leave unchanged. */
             autoWatchOnComment?: boolean;
             /** @description Email mentions, review requests and assignments (docs/features/41). Defaults to true; omit to leave unchanged. */
@@ -8176,7 +8279,7 @@ export interface components {
              * @description Narrows `all` to one category, so clearing comments leaves reviews unread.
              * @enum {string}
              */
-            category?: "mention" | "review" | "comment" | "document" | "verification" | "access" | "job";
+            category?: "mention" | "review" | "comment" | "document" | "verification" | "access" | "job" | "source";
         };
         AssistantReviewDto: {
             /** Format: uuid */
@@ -8776,7 +8879,7 @@ export interface components {
             /** Format: uuid */
             workspaceId: string;
             /** @enum {string} */
-            kind: "confluence" | "confluence-server" | "jira" | "notion" | "markdown-git" | "codebase" | "google-drive" | "linear" | "zendesk" | "intercom" | "figma";
+            kind: "confluence" | "confluence-server" | "jira" | "notion" | "markdown-git" | "codebase" | "google-drive" | "linear" | "zendesk" | "intercom" | "figma" | "web";
             /** @example Product wiki */
             name: string;
             /**
@@ -8951,6 +9054,39 @@ export interface components {
                 [key: string]: string;
             };
         };
+        CreateSourcePageDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /** Format: uuid */
+            projectId: string;
+            /** Format: uuid */
+            parentId?: string | null;
+            /** @description A markdown file or an HTML page, https */
+            url: string;
+            /** @description The page title. Empty: the source's own title */
+            title?: string;
+            /**
+             * @description Minutes between checks; null = only on demand. Omitted reads as 60
+             * @enum {number|null}
+             */
+            intervalMinutes?: 15 | 60 | 360 | 1440 | null;
+            /** @description For a host that needs one: a token (sent as Bearer) or `Header-Name: value`. Saved as a connection for the host */
+            credential?: string;
+        };
+        UpdateDocumentSourceDto: {
+            /**
+             * @description Minutes between checks; null = only on demand
+             * @enum {number|null}
+             */
+            intervalMinutes: 15 | 60 | 360 | 1440 | null;
+        };
+        RestoreDocumentSourceDto: {
+            /**
+             * Format: uuid
+             * @description An earlier revision of this page
+             */
+            revisionId: string;
+        };
         PutWorkItemRulesDto: {
             workspaceId: string;
             /**
@@ -8994,7 +9130,7 @@ export interface components {
             /** Format: uuid */
             workspaceId: string;
             /** @enum {string} */
-            provider: "github" | "gitlab" | "git" | "atlassian" | "confluence-server" | "notion" | "google" | "linear" | "zendesk" | "intercom" | "figma";
+            provider: "github" | "gitlab" | "git" | "atlassian" | "confluence-server" | "notion" | "google" | "linear" | "zendesk" | "intercom" | "figma" | "web";
             /** @description The site for providers that are not one fixed host: an Atlassian site, a GitLab instance (gitlab.com when empty) */
             site?: string | null;
             /** @description Write-only. Encrypted at rest; never returned. */
@@ -9006,7 +9142,7 @@ export interface components {
         };
         ConnectionLinkDto: {
             /** @enum {string} */
-            kind: "confluence" | "confluence-server" | "jira" | "notion" | "markdown-git" | "codebase" | "google-drive" | "linear" | "zendesk" | "intercom" | "figma";
+            kind: "confluence" | "confluence-server" | "jira" | "notion" | "markdown-git" | "codebase" | "google-drive" | "linear" | "zendesk" | "intercom" | "figma" | "web";
             /** Format: uuid */
             projectId: string;
             /** @description The resource label, for the connector name */
@@ -11798,7 +11934,7 @@ export interface components {
         /** @enum {string} */
         ConnectionMethod: "token" | "app" | "oauth";
         /** @enum {string} */
-        ConnectionProvider: "github" | "gitlab" | "git" | "atlassian" | "confluence-server" | "notion" | "google" | "linear" | "zendesk" | "intercom" | "figma";
+        ConnectionProvider: "github" | "gitlab" | "git" | "atlassian" | "confluence-server" | "notion" | "google" | "linear" | "zendesk" | "intercom" | "figma" | "web";
         ConnectionResource: {
             id: string;
             label: string;
@@ -11906,7 +12042,7 @@ export interface components {
             run: components["schemas"]["ConnectorRunInfo"];
         };
         /** @enum {string} */
-        ConnectorKind: "confluence" | "confluence-server" | "jira" | "notion" | "markdown-git" | "codebase" | "google-drive" | "linear" | "zendesk" | "intercom" | "figma";
+        ConnectorKind: "confluence" | "confluence-server" | "jira" | "notion" | "markdown-git" | "codebase" | "google-drive" | "linear" | "zendesk" | "intercom" | "figma" | "web";
         ConnectorLinkSummary: {
             id: string;
             connectorId: string;
@@ -12161,6 +12297,10 @@ export interface components {
             url: string;
             requestedExpiresAt: string | null;
         };
+        CreateSourcePageResponse: {
+            documentId: string;
+            connectorId: string;
+        };
         CreateUploadResponse: {
             documentId: string;
             revisionId: string;
@@ -12327,6 +12467,26 @@ export interface components {
             history: components["schemas"]["QualityHistoryPoint"][];
             lowThreshold: number;
         };
+        DocumentSourceInfo: {
+            documentId: string;
+            connectorId: string;
+            url: string;
+            host: string;
+            intervalMinutes: number | null;
+            pausedAt: string | null;
+            aheadCount: number;
+            lastCheckedAt: string | null;
+            syncedRevisionId: string | null;
+            headRevisionId: string | null;
+            failures: number;
+            retryAt: string | null;
+            webhookConfigured: boolean;
+        };
+        DocumentSourceWebhookResponse: {
+            url: string;
+            secret: string;
+            header: string;
+        };
         DocumentSummary: {
             documentId: string;
             workspaceId: string;
@@ -12339,6 +12499,7 @@ export interface components {
             headRevisionStatus: components["schemas"]["RevisionStatus"] | null;
             createdAt: string;
             kind?: components["schemas"]["ApiDocumentKind"];
+            sourceBacked?: boolean;
             verifiedAt?: string | null;
             verifiedBy?: string | null;
             verifiedRevisionId?: string | null;
@@ -12386,6 +12547,7 @@ export interface components {
             headRevisionStatus: components["schemas"]["RevisionStatus"] | null;
             createdAt: string;
             kind?: components["schemas"]["ApiDocumentKind"];
+            sourceBacked?: boolean;
             verifiedAt?: string | null;
             verifiedBy?: string | null;
             verifiedRevisionId?: string | null;
@@ -13438,6 +13600,7 @@ export interface components {
                 verification: number;
                 access: number;
                 job: number;
+                source: number;
             };
         };
         ListPlatformAuditLogsResponse: {
@@ -13809,7 +13972,7 @@ export interface components {
             appliesTo?: string[];
         };
         /** @enum {string} */
-        NotificationCategory: "mention" | "review" | "comment" | "document" | "verification" | "access" | "job";
+        NotificationCategory: "mention" | "review" | "comment" | "document" | "verification" | "access" | "job" | "source";
         NotificationEntry: {
             id: string;
             workspaceId: string;
@@ -13834,7 +13997,7 @@ export interface components {
             emailDirected: boolean;
         };
         /** @enum {string} */
-        NotificationReason: "watching" | "manager" | "participant" | "author" | "owner" | "assigned" | "review-requested" | "mention";
+        NotificationReason: "watching" | "manager" | "participant" | "author" | "owner" | "assigned" | "review-requested" | "alert" | "mention";
         /** @enum {string} */
         NotificationSubjectType: "document" | "merge-request" | "project";
         NotificationSubscriptionEntry: {
@@ -13858,6 +14021,7 @@ export interface components {
                 verification: number;
                 access: number;
                 job: number;
+                source: number;
             };
         };
         OidcProviderConfig: {
@@ -15228,7 +15392,7 @@ export interface components {
             at: string;
         };
         /** @enum {string} */
-        VerificationSourceKind: "person" | "drift" | "curator" | "mcp";
+        VerificationSourceKind: "person" | "drift" | "curator" | "mcp" | "source";
         VerifyEmailResponse: {
             ok: boolean;
         };
@@ -15462,10 +15626,11 @@ export interface components {
             counts: components["schemas"]["WorkspaceDeletionCounts"];
         };
         /** @enum {string} */
-        WorkspaceFeature: "workflows" | "knowledge-health" | "qa" | "analytics" | "captures" | "memos" | "conflicts" | "assistant" | "git";
+        WorkspaceFeature: "workflows" | "knowledge-health" | "qa" | "analytics" | "captures" | "memos" | "conflicts" | "assistant" | "git" | "sources";
         WorkspaceFeaturesResponse: {
             workspaceId: string;
             disabled: components["schemas"]["WorkspaceFeature"][];
+            unavailable: components["schemas"]["WorkspaceFeature"][];
         };
         WorkspaceGraphNode: {
             id: string;
@@ -24327,7 +24492,7 @@ export interface operations {
                 workspaceId: string;
                 /** @description Only unread rows. Defaults to false. */
                 unread?: boolean;
-                category?: "mention" | "review" | "comment" | "document" | "verification" | "access" | "job";
+                category?: "mention" | "review" | "comment" | "document" | "verification" | "access" | "job" | "source";
                 /** @description Page size, 1-100. Defaults to 30. */
                 limit?: number;
                 cursor?: string;
@@ -29197,6 +29362,317 @@ export interface operations {
             };
         };
     };
+    WebSourcesController_link: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSourcePageDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateSourcePageResponse"];
+                };
+            };
+            /** @description The URL could not be read; `details.needsCredential` when the host refused without one */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WebSourcesController_info: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSourceInfo"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WebSourcesController_update: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDocumentSourceDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSourceInfo"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WebSourcesController_pause: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSourceInfo"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WebSourcesController_resume: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSourceInfo"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WebSourcesController_restore: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RestoreDocumentSourceDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSourceInfo"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WebSourcesController_webhook: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSourceWebhookResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     GithubController_installations: {
         parameters: {
             query: {
@@ -29888,7 +30364,7 @@ export interface operations {
     ConnectionsController_resources: {
         parameters: {
             query: {
-                kind: "confluence" | "confluence-server" | "jira" | "notion" | "markdown-git" | "codebase" | "google-drive" | "linear" | "zendesk" | "intercom" | "figma";
+                kind: "confluence" | "confluence-server" | "jira" | "notion" | "markdown-git" | "codebase" | "google-drive" | "linear" | "zendesk" | "intercom" | "figma" | "web";
                 q?: unknown;
             };
             header?: {

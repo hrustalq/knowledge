@@ -41,7 +41,14 @@
       "body": "{actor} assigned “{title}” to you."
     },
     "action": "Open",
-    "footer": "You are receiving this because you were named directly. Change what reaches your email at {url}"
+    "footer": "You are receiving this because you were named directly. Change what reaches your email at {url}",
+    "alert": {
+      "subject": "Source needs attention: {title}",
+      "body": "The source of “{title}” needs your attention.",
+      "paused": "“{title}” was restored to an earlier revision, so its source is paused. New versions are counted, not written, until someone resumes it.",
+      "gone": "The source of “{title}” has answered “not found” three times in a row. The page was archived and the pages that link to it were marked outdated.",
+      "failing": "The last three syncs of “{title}” failed. The page still shows the last version it read."
+    }
   },
   "someone": "Someone",
   "untitled": "an untitled page"

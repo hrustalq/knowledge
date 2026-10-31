@@ -181,7 +181,8 @@
     "skipToContent": "Skip to content",
     "navigation": "Navigation",
     "features": "Features",
-    "pageActions": "Page actions"
+    "pageActions": "Page actions",
+    "linkSource": "Link a source"
   },
   "role": {
     "guest": "Guest",
@@ -463,7 +464,8 @@
       "folder": "Folder",
       "harvest": "Workspace and label",
       "figmaAccess": "Access",
-      "harvestTag": "Tag"
+      "harvestTag": "Tag",
+      "source": "Source"
     },
     "testing": "Checking the connection",
     "testingHint": "Making one request to prove the credential reaches the right place.",
@@ -3176,7 +3178,8 @@
     "conflicts": "Contradictions",
     "insights": "Insights",
     "branches": "Branches",
-    "linkedFrom": "Linked from"
+    "linkedFrom": "Linked from",
+    "source": "Source"
   },
   "knowledgeIssue": {
     "report": "Report a problem",
@@ -4453,7 +4456,8 @@
       "document": "Page changes",
       "verification": "Verification",
       "job": "Runs",
-      "access": "Access"
+      "access": "Access",
+      "source": "Sources"
     },
     "categoryHint": {
       "mention": "Somebody named you in a comment.",
@@ -4462,10 +4466,12 @@
       "document": "A page you follow was edited, renamed or moved.",
       "verification": "A page you own needs a check, was marked outdated, is about to expire, or was handed to you.",
       "job": "A workflow, agent, import or sync you started finished.",
-      "access": "Requests to open a page you manage, and answers to your own."
+      "access": "Requests to open a page you manage, and answers to your own.",
+      "source": "A page you linked to a source took a new version, or its source needs you."
     },
     "reason": {
-      "assigned": "Assigned to you"
+      "assigned": "Assigned to you",
+      "alert": "Needs attention"
     },
     "subject": {
       "document": "Page",
@@ -4523,7 +4529,14 @@
       "work-item.closed": "closed the tracker ticket for this",
       "connector.harvest.proposed": "a resolved item you closed was harvested into captures for review",
       "memo.done": "your memo was read and its proposals opened for review",
-      "memo.failed": "your memo could not be analysed"
+      "memo.failed": "your memo could not be analysed",
+      "source.updated": "took a new version from its source",
+      "source.alert": "needs attention: its source"
+    },
+    "alert": {
+      "paused": "was restored, so its source is paused",
+      "gone": "lost its source and was archived",
+      "failing": "failed to sync three times in a row"
     }
   },
   "connect": {
@@ -4741,7 +4754,8 @@
       "sentinel": "the sentinel",
       "curator": "the curator",
       "mcp": "an agent over MCP",
-      "someone": "somebody"
+      "someone": "somebody",
+      "source": "its source"
     },
     "sourceLink": "Open the pull request",
     "owner": "Owner",
@@ -7315,11 +7329,14 @@
       "memos": "Uploading meeting recordings and the merge requests proposed from them.",
       "conflicts": "The list of contradictions between pages and resolving them.",
       "assistant": "The Assistant page, its saved conversations and the chat panel beside the editor. Review, lint and suggestion helpers stay.",
-      "git": "Cloning and fetching this workspace's projects with git, over HTTPS with an API key."
+      "git": "Cloning and fetching this workspace's projects with git, over HTTPS with an API key.",
+      "sources": "Pages that follow a web page or markdown file: \"Link a source\" in the new-page menu and the Source panel on such a page."
     },
     "names": {
-      "git": "Git remote"
-    }
+      "git": "Git remote",
+      "sources": "Source-backed pages"
+    },
+    "serverOff": "Off on this server (WEB_SOURCES_ENABLED), whatever is chosen here."
   },
   "git": {
     "clone": {
@@ -7336,6 +7353,67 @@
       "shownOnce": "The new key is in the commands below. Copy them now: it is shown only this once. Keep {env} set in the shell you run git from.",
       "terminal": "Terminal",
       "pushHint": "To propose a change, push a branch: {command}"
+    }
+  },
+  "sources": {
+    "link": {
+      "heading": "Link a source",
+      "lede": "A page that follows a markdown file or a web page. It reads the source now and again on every check, and nobody edits it here.",
+      "url": "Source URL",
+      "urlPlaceholder": "https://example.com/docs/guide.md",
+      "urlHint": "A markdown file or an HTML page, over https.",
+      "credential": "Token or header",
+      "credentialPlaceholder": "token, or X-Api-Key: value",
+      "credentialHint": "Sent as a Bearer token, or as the header you name. Saved for this host, so the next source on it will not ask.",
+      "title": "Title",
+      "titlePlaceholder": "The source's own title",
+      "readOnly": "The page is read-only. To keep a version the source has since changed, pause the source and restore that revision.",
+      "reading": "Reading the source…",
+      "submit": "Link source"
+    },
+    "interval": {
+      "label": "Check",
+      "m15": "Every 15 minutes",
+      "m60": "Hourly",
+      "m360": "Every 6 hours",
+      "m1440": "Daily",
+      "manual": "Only when asked"
+    },
+    "syncedFrom": "Synced from {host}",
+    "state": {
+      "following": "Following the source",
+      "paused": "Paused",
+      "ahead": "{n} new version since | {n} new versions since",
+      "failing": "Last sync failed | Last {n} syncs failed",
+      "retryAt": "retrying {at}",
+      "retrying": "Unreachable, retrying {at}"
+    },
+    "lastChecked": "Checked {when}",
+    "neverChecked": "Not checked yet",
+    "syncNow": "Sync now",
+    "pause": "Pause",
+    "resume": "Resume",
+    "paused": "Source paused",
+    "resumed": "Following the source again",
+    "syncStarted": "Checking the source",
+    "webhook": {
+      "create": "Webhook…",
+      "rotate": "New webhook secret",
+      "once": "Shown once. POST to this URL, signing the raw body as {header}: sha256=<hex HMAC>.",
+      "copy": {
+        "url": "Copy webhook URL",
+        "secret": "Copy signing secret"
+      },
+      "copyFailed": "Could not copy"
+    },
+    "follows": "Follows its source",
+    "followsHint": "Only its source writes this page. Use the Source panel to pause it or restore a revision.",
+    "restore": {
+      "row": "Restore",
+      "title": "Restore revision {n}?",
+      "body": "It becomes the page again, and the source is paused so the next check does not replace it. Resume the source to follow it again.",
+      "action": "Restore and pause",
+      "done": "Revision {n} restored; the source is paused"
     }
   }
 }

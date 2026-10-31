@@ -613,6 +613,7 @@ export type I18nTranslations = {
                 "imagesDropped": string;
                 "firstSheetOnly": string;
             };
+            "sourceNoArticle": string;
         };
         "pushVersionMessage": string;
         "syncRevisionMessage": string;
@@ -667,6 +668,8 @@ export type I18nTranslations = {
             "deleted": string;
             "closedVia": string;
         };
+        "sourceRemovedNote": string;
+        "sourceRestoredMessage": string;
     };
     "error": {
         "embed": {
@@ -757,6 +760,7 @@ export type I18nTranslations = {
             "archived": string;
             "ownerNotMember": string;
             "foreignIds": string;
+            "sourceBacked": string;
         };
         "branch": {
             "notFound": string;
@@ -1584,6 +1588,16 @@ export type I18nTranslations = {
             };
             "tooLarge": string;
         };
+        "source": {
+            "disabled": string;
+            "tooLarge": string;
+            "unsupportedType": string;
+            "needsCredential": string;
+            "unreadable": string;
+            "notFound": string;
+            "revisionNotOfPage": string;
+            "interval": string;
+        };
     };
     "export": {
         "docx": {
@@ -1745,6 +1759,13 @@ export type I18nTranslations = {
             };
             "action": string;
             "footer": string;
+            "alert": {
+                "subject": string;
+                "body": string;
+                "paused": string;
+                "gone": string;
+                "failing": string;
+            };
         };
         "someone": string;
         "untitled": string;

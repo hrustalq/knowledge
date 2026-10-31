@@ -18,6 +18,10 @@ import { GithubCoreModule } from './github/github-core.module.js';
 import { RepoWikiService } from './repo-wiki.service.js';
 import { FigmaFilesService } from '../embeds/figma-files.service.js';
 import { FigmaOauthService } from '../embeds/figma-oauth.service.js';
+import { NotificationsCoreModule } from '../notifications/notifications-core.module.js';
+import { VerificationCoreModule } from '../verification/verification-core.module.js';
+import { ConnectorQueueModule } from './connector-queue.module.js';
+import { WebSourcesService } from './web-sources.service.js';
 
 /**
  * Connector configuration, credentials, links and the sync engine, with no
@@ -43,6 +47,11 @@ import { FigmaOauthService } from '../embeds/figma-oauth.service.js';
     // Component declarations re-resolve and their code edges rebuild after
     // each codebase pull (#236).
     ComponentsCoreModule,
+    // Source-backed pages (#674): archive a gone source, flag its dependents,
+    // alert the owner, and queue retries and resumes.
+    VerificationCoreModule,
+    NotificationsCoreModule,
+    ConnectorQueueModule,
   ],
   providers: [
     ConnectorsService,
@@ -57,6 +66,7 @@ import { FigmaOauthService } from '../embeds/figma-oauth.service.js';
     FigmaFilesService,
     // Its OAuth grants (#557): every Figma call resolves its token here, in both processes.
     FigmaOauthService,
+    WebSourcesService,
   ],
   exports: [
     ConnectorsService,
@@ -73,6 +83,7 @@ import { FigmaOauthService } from '../embeds/figma-oauth.service.js';
     CodeImportsService,
     FigmaFilesService,
     FigmaOauthService,
+    WebSourcesService,
   ],
 })
 export class ConnectorsCoreModule {}

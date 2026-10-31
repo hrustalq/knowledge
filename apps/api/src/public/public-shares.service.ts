@@ -19,6 +19,7 @@ import { verifyPassword } from '../auth/password.js';
 import type { Env } from '../config/env.js';
 import { DocumentsService, hasRealPath } from '../documents/documents.service.js';
 import { ExportService } from '../export/export.service.js';
+import { LISTED_PAGE } from '../common/listed-page.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PublishingSettingsService } from '../publishing/publishing-settings.service.js';
@@ -278,6 +279,8 @@ export class PublicSharesService {
         // A restricted page leaves the shared tree, and everything under it
         // with it: its descendants inherit the restriction (#76).
         restrictedBy: { isEmpty: true },
+        // Nor does a capture still behind its merge request (#642).
+        ...LISTED_PAGE,
         id: { not: live.root.id },
       },
       select: { id: true, parentId: true, title: true, position: true },

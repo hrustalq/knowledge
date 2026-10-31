@@ -10,6 +10,7 @@ import type {
 } from '@knowledge/contracts';
 import type { Prisma, Project } from '@prisma/client';
 import { visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
+import { LISTED_PAGE } from '../common/listed-page.js';
 import { ActivityService } from '../activity/activity.service.js';
 import { ProjectCommitsService } from '../git/project-commits.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
@@ -98,7 +99,7 @@ export class ProjectsService {
           : {}),
       },
       orderBy: { createdAt: 'asc' },
-      include: { _count: { select: { documents: { where: visibilityWhere(scope) } } } },
+      include: { _count: { select: { documents: { where: { ...LISTED_PAGE, AND: [visibilityWhere(scope)] } } } } },
       ...(query.limit ? { take: query.limit + 1 } : {}),
       ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
     });
@@ -114,7 +115,7 @@ export class ProjectsService {
   async get(projectId: string, scope: AccessScope): Promise<ProjectSummary> {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
-      include: { _count: { select: { documents: { where: visibilityWhere(scope) } } } },
+      include: { _count: { select: { documents: { where: { ...LISTED_PAGE, AND: [visibilityWhere(scope)] } } } } },
     });
     if (!project) throw new NotFoundException(t('error.project.notFound', { id: projectId }));
     return toSummary(project, project._count.documents);
@@ -169,7 +170,7 @@ export class ProjectsService {
     const updated = await this.prisma.project.update({
       where: { id: projectId },
       data,
-      include: { _count: { select: { documents: true } } },
+      include: { _count: { select: { documents: { where: LISTED_PAGE } } } },
     });
     await this.activity.record({
       workspaceId: project.workspaceId,

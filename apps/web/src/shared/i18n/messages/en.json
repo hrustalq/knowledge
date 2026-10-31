@@ -1551,10 +1551,10 @@
   },
   "mr": {
     "state": {
-      "merged": "merged",
-      "closed": "closed",
-      "draft": "draft",
-      "open": "open"
+      "merged": "Merged",
+      "closed": "Closed",
+      "draft": "Draft",
+      "open": "Open"
     },
     "aiReviewHeading": "**AI review** — {findings} on `{branch}`",
     "aiNotConfigured": "AI review is not configured on this server ({setting}).",

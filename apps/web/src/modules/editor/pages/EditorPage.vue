@@ -71,6 +71,7 @@ import {
   type RenderTemplateResponse,
 } from '@knowledge/contracts'
 import { SCHEMA_VERSION, editorSchema, parseMarkdown } from '@knowledge/editor-schema'
+import { joinTitleHeading, splitTitleHeading } from '@knowledge/editor-schema/markdown'
 import { getWorkspaceId } from '@/shared/api/api'
 import { api, fetchApi, isApiRequestError } from '@/shared/api/queries'
 import { errorDetails, errorMessage, errorReason } from '@/shared/api/errors'
@@ -186,6 +187,23 @@ const template = ref<TemplateProvenance | null>(null)
  * Held here on load and re-emitted verbatim instead.
  */
 const otherFrontmatter = ref<Record<string, unknown>>({})
+/**
+ * The stored body's own `# Title` (#646), held out of the editor so the title
+ * shows once — in the title field — and put back in front of the body on every
+ * write, so a page saved untouched keeps it byte for byte. `title` is the page
+ * title it matched; renaming the page renames the heading with it.
+ */
+const titleHeading = ref<{ heading: string; title: string } | null>(null)
+
+/** Hold `markdown`'s title heading, if it has one, and return the rest for the editor. */
+function holdTitleHeading(markdown: string, pageTitle: string): string {
+  const { heading, body } = splitTitleHeading(markdown, pageTitle)
+  titleHeading.value = heading ? { heading, title: pageTitle } : null
+  return body
+}
+
+/** `markdown` with the held title heading back in front. */
+const withTitleHeading = (markdown: string, pageTitle = title.value) => joinTitleHeading(markdown, titleHeading.value, pageTitle)
 const headRevisionId = ref<string | null>(null)
 /**
  * `?branch=<name>` (#80): edit that branch rather than the default one — a
@@ -437,7 +455,7 @@ function publishedFields(page: DocumentDetailResponse['document'], content: Docu
   const fm = readFrontmatter(content.frontmatter)
   return {
     title: page.title,
-    body: docToMarkdown(parseMarkdown(content.markdown, document), editorSchema),
+    body: docToMarkdown(parseMarkdown(splitTitleHeading(content.markdown, page.title).body, document), editorSchema),
     category: page.category,
     parentId: page.parentId ?? '',
     projectId: page.projectId,
@@ -526,6 +544,8 @@ async function followHead() {
   })
   baseFields.value = publishedFields(detail.document, content)
   otherFrontmatter.value = readFrontmatter(content.frontmatter).other
+  // Publishing writes over this head now, so its heading is the one put back.
+  holdTitleHeading(content.markdown, detail.document.title)
   headRevisionId.value = head
   headMoved.value = draft.baseRevisionId === head ? null : head
 }
@@ -870,8 +890,9 @@ const reviewCompare = computed<CompareResponse | null>(() => {
   const base = baseFields.value
   if (!reviewOpen.value || !base) return null
   if (pastCompare.value) return pastCompare.value
-  const before = buildSource(base, otherFrontmatter.value)
-  const after = buildSource(currentFields(), otherFrontmatter.value)
+  const now = currentFields()
+  const before = buildSource({ ...base, body: withTitleHeading(base.body, base.title) }, otherFrontmatter.value)
+  const after = buildSource({ ...now, body: withTitleHeading(now.body) }, otherFrontmatter.value)
   const { hunks, additions, deletions } = lineDiff(before, after)
   const side = (revisionId: string) => ({ revisionId, revisionNumber: 0, branch: null, contentHash: null })
   return {
@@ -947,7 +968,7 @@ async function loadPage() {
     parentId.value = detail.document.parentId ?? ''
     projectId.value = detail.document.projectId
     headRevisionId.value = head
-    body.value = content.markdown
+    body.value = holdTitleHeading(content.markdown, detail.document.title)
     const fm = readFrontmatter(content.frontmatter)
     otherFrontmatter.value = fm.other
     relationRows.value = fm.relations
@@ -974,7 +995,7 @@ function templateProvenance() {
 
 /** The source file for the page as it stands — see `buildSource`. */
 function pageSource(markdown: string): string {
-  return buildSource({ body: markdown, relations: relationRows.value, tags: tags.value }, otherFrontmatter.value)
+  return buildSource({ body: withTitleHeading(markdown), relations: relationRows.value, tags: tags.value }, otherFrontmatter.value)
 }
 
 /**
@@ -1066,7 +1087,8 @@ function readyToWrite(): string | null {
     return null
   }
   const markdown = editorRef.value?.flush() ?? body.value
-  if (!title.value.trim() || !markdown.trim()) {
+  // The held title heading counts: a page that is only its heading saves as it always did.
+  if (!title.value.trim() || !withTitleHeading(markdown).trim()) {
     toast.error(t('editor.titleAndContentRequired'))
     return null
   }

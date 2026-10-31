@@ -13,7 +13,7 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
-## [Unreleased]
+## [0.42.0] — 2026-10-31
 
 ### Breaking
 
@@ -144,6 +144,20 @@ in the pull request that introduces them — see
   Production already sets it to the public https origin; no new variable. A rollback to an earlier image signs
   every browser out once (the earlier web looked for the token in browser storage, which this release
   empties); people sign in again, and no data is lost.
+
+## [0.41.1] — 2026-10-31
+
+### Fixed
+
+- **The v0.41.0 deploy failed with the git remote on** (#662). The deploy's check for the `git` compose profile
+  could not read the quoted values the deploy writes to `.env`, so it never built the git remote's image, and
+  starting the stack failed on pulling it. Production stayed on v0.40.0 with the #636 migrations applied.
+
+### Operations
+
+- No new migrations. This release carries v0.41.0's migrations and its git remote; their Operations notes
+  apply. Pages written while production ran v0.40.0 on the new schema have no commit in the history the
+  git remote serves.
 
 ## [0.41.0] — 2026-10-31
 
@@ -5599,7 +5613,9 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.41.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.42.0...HEAD
+[0.42.0]: https://github.com/hrustalq/knowledge/compare/v0.41.1...v0.42.0
+[0.41.1]: https://github.com/hrustalq/knowledge/compare/v0.41.0...v0.41.1
 [0.41.0]: https://github.com/hrustalq/knowledge/compare/v0.40.0...v0.41.0
 [0.40.0]: https://github.com/hrustalq/knowledge/compare/v0.39.0...v0.40.0
 [0.39.0]: https://github.com/hrustalq/knowledge/compare/v0.38.0...v0.39.0

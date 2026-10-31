@@ -167,9 +167,11 @@ jobs:
       # The git remote's image (#636): the api image plus the git binary, from
       # the same cache, so only the apt layer is new. Built only when the
       # `git` compose profile is on, since each version's copy keeps ~96 MB.
+      # The rendered .env single-quotes every value, and compose strips the
+      # quotes, so the test must allow them (#662).
       - name: Build git image
         run: |
-          if grep -Eq '^COMPOSE_PROFILES=(.*,)?git(,|$)' "$DEPLOY_DIR/.env"; then
+          if grep -Eq "^COMPOSE_PROFILES='?([^']*,)?git(,|'?\$)" "$DEPLOY_DIR/.env"; then
             docker build -f Dockerfile.api --target git-runtime \
               -t "knowledge-api-git:$VERSION" -t "knowledge-api-git:$SHA" -t knowledge-api-git:latest .
           else

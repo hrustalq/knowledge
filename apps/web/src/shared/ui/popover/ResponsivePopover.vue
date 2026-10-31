@@ -65,7 +65,9 @@ function close() {
 function onPopoverOpen(event: Event) {
   if (!props.focusPanel) return
   event.preventDefault()
-  ;(event.target as HTMLElement | null)?.focus()
+  // reka fires this on Floating UI's wrapper; the focusable box (reka's
+  // tabindex=-1) is the one inside it.
+  ;(event.target as HTMLElement | null)?.querySelector<HTMLElement>('[data-slot=popover-content]')?.focus()
 }
 
 function onSheetOpen(event: Event) {

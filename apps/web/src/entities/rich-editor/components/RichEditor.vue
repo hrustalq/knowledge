@@ -772,7 +772,10 @@ onMounted(() => {
     editorProps: {
       // An object, never a function: Tiptap spreads it into its own
       // `{ role: 'textbox', … }`, and a spread function is nothing at all.
+      // The role is ours too, because `setEditable` hands this object to
+      // ProseMirror as-is and Tiptap's default goes with it.
       attributes: {
+        role: 'textbox',
         class: 'kn-prose',
         spellcheck: 'true',
         'aria-multiline': 'true',

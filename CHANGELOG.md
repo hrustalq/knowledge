@@ -66,6 +66,12 @@ in the pull request that introduces them — see
 - **In Russian at phone width the top bar pushed the account menu off-screen** (#647). The search trigger kept
   the full width of its longer placeholder, so at 390 px the bar was 421 px wide and Log out sat under a 7 px
   sliver. The trigger now gives way and truncates; the bar fits from 360 px up in both languages.
+- **On a phone you could not publish an edit** (#681). The editor's action bar was wider than the screen in both
+  languages (about 500 px of controls on a 360 px phone in Russian), so Save draft and Publish sat off the
+  right edge, and the bar does not scroll. On a narrow bar, Assistant, Settings, Share and Cancel now move
+  into the ⋯ menu, under the same names, and Save draft folds to an icon like its neighbours. Publish keeps
+  its word. The bar fits from 360 px up in both languages. Wide screens are unchanged, except that Save draft
+  now has an icon beside its label.
 - **Three keyboard and screen-reader gaps** (#649). The page body in the editor is now announced as a labelled
   multi-line text field ("Page body"; a comment, a glossary definition and a template body each carry their
   own name) instead of an unnamed editable region. A closed side rail, such as the Filters rail on Merge

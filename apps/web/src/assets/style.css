@@ -597,8 +597,13 @@
   }
 }
 /* "Publish 2 pages" (#636): the count folds on a phone-width bar and stays in
-   the button's accessible name. */
+   the button's accessible name. Even as icons the editor's end group is wider
+   than a phone (#681), so its secondary buttons leave for the More menu, which
+   lists them while they are hidden here. */
 @container kn-bar (max-width: 30rem) {
+  .kn-bar-fold {
+    display: none;
+  }
   .kn-bar-count {
     position: absolute;
     width: 1px;

@@ -123,6 +123,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
@@ -277,6 +278,17 @@ const loading = ref(isEdit.value)
 const loadError = ref<unknown>(null)
 const settingsOpen = ref(false)
 const editorRef = ref<InstanceType<typeof RichEditor> | null>(null)
+/**
+ * On a phone-width bar (#681) the `kn-bar` 30rem container query hides the
+ * secondary buttons; More then lists them. The menu is portalled out of the
+ * container, so it asks the bar, on open, whether Cancel is still drawn —
+ * one breakpoint decides both.
+ */
+const cancelButton = ref<{ $el: HTMLElement } | null>(null)
+const barFolded = ref(false)
+function onMoreOpen(open: boolean) {
+  if (open) barFolded.value = cancelButton.value?.$el.offsetParent === null
+}
 
 /* ------------------------------------------------------- assistant */
 
@@ -1486,7 +1498,7 @@ onBeforeUnmount(() => {
             variant="ghost"
             size="sm"
             v-feature="'assistant'"
-            class="kn-ai-toggle"
+            class="kn-ai-toggle kn-bar-fold"
             :aria-pressed="aiOpen"
             :title="`${t('editorAi.toggle')} (${modKey}J)`"
             @click="setAiOpen(!aiOpen)"
@@ -1494,20 +1506,33 @@ onBeforeUnmount(() => {
             <Sparkles class="size-4" /> <span class="kn-bar-label">{{ t('editorAi.button') }}</span>
           </Button>
           <!-- Labels while the bar has room, icons when it does not; Publish
-               keeps its word at every width — it is the one irreversible act here. -->
-          <Button variant="ghost" size="sm" :title="t('editor.settings')" @click="settingsOpen = true">
+               keeps its word at every width — it is the one irreversible act here.
+               On a phone-width bar the `kn-bar-fold` buttons move into More (#681). -->
+          <Button variant="ghost" size="sm" class="kn-bar-fold" :title="t('editor.settings')" @click="settingsOpen = true">
             <Settings2 class="size-4" /> <span class="kn-bar-label">{{ t('editor.settings') }}</span>
           </Button>
-          <Button variant="ghost" size="sm" :title="t('common.cancel')" @click="cancel">
+          <Button ref="cancelButton" variant="ghost" size="sm" class="kn-bar-fold" :title="t('common.cancel')" @click="cancel">
             <X class="size-4" /> <span class="kn-bar-label">{{ t('common.cancel') }}</span>
           </Button>
-          <DropdownMenu>
+          <DropdownMenu @update:open="onMoreOpen">
             <DropdownMenuTrigger as-child>
               <Button variant="ghost" size="icon-sm" :aria-label="t('editor.moreActions')">
                 <MoreHorizontal class="size-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" class="w-52">
+              <template v-if="barFolded">
+                <DropdownMenuItem v-if="aiAvailable" @select="setAiOpen(!aiOpen)">
+                  <Sparkles class="size-4" /> {{ t('editorAi.button') }}
+                </DropdownMenuItem>
+                <DropdownMenuItem @select="settingsOpen = true">
+                  <Settings2 class="size-4" /> {{ t('editor.settings') }}
+                </DropdownMenuItem>
+                <DropdownMenuItem v-if="canShareBranch" @select="shareOpen = true">
+                  <UserPlus class="size-4" /> {{ t('editor.draftBranch.share') }}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </template>
               <!-- What this edit holds that the page does not, and the two
                    things to do about it — the same review the chip opens. -->
               <DropdownMenuSub v-if="unstaged">
@@ -1547,6 +1572,12 @@ onBeforeUnmount(() => {
                   </DropdownMenuItem>
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
+              <template v-if="barFolded">
+                <DropdownMenuSeparator />
+                <DropdownMenuItem @select="cancel">
+                  <X class="size-4" /> {{ t('common.cancel') }}
+                </DropdownMenuItem>
+              </template>
             </DropdownMenuContent>
           </DropdownMenu>
           <!-- A working branch (#474): saving keeps it private, publishing is
@@ -1555,6 +1586,7 @@ onBeforeUnmount(() => {
             v-if="canShareBranch"
             variant="ghost"
             size="sm"
+            class="kn-bar-fold"
             :title="t('editor.draftBranch.shareHint')"
             @click="shareOpen = true"
           >
@@ -1565,9 +1597,11 @@ onBeforeUnmount(() => {
             size="sm"
             variant="outline"
             :disabled="busy || loading || loadError !== null || (collab !== null && !collab.status.writable)"
+            :title="t('editor.saveDraft')"
             @click="save()"
           >
-            {{ busy && !publishing ? t('common.saving') : t('editor.saveDraft') }}
+            <Save class="size-4" />
+            <span class="kn-bar-label">{{ busy && !publishing ? t('common.saving') : t('editor.saveDraft') }}</span>
           </Button>
           <Button
             size="sm"

@@ -271,8 +271,24 @@
   background: var(--background);
   container: kn-trail / inline-size;
 }
-.kn-trail:has(> nav, > .kn-page-actions > *) {
+.kn-trail:has(> nav, .kn-page-actions > *) {
   display: flex;
+}
+/* The phone aside's parts (below): outside it the toggle and scrim are not
+   drawn and the panel adds no box, so the actions sit in the row as before. */
+.kn-actions-toggle,
+.kn-actions-scrim {
+  display: none;
+}
+.kn-actions-panel {
+  display: contents;
+}
+.kn-actions-head {
+  display: none;
+}
+/* ⋯'s items spelled out for the aside; drawn only there. */
+.kn-aside-only {
+  display: none;
 }
 .kn-shell:has(.kn-trail > nav, .kn-page-actions > *) {
   --kn-trail-h: 2.25rem;
@@ -333,25 +349,201 @@
     padding-inline: 0;
   }
 }
-/* Below `sm` a page's six actions left the trail a few letters (#645), so a
-   row holding both splits in two: the trail on its own full-width line, the
-   actions on the line under it. Still never a wrap of the actions themselves,
-   and the chrome height says two rows, so nothing moves under them. */
+/* Below `sm` a page's six actions left the trail a few letters (#645). The
+   row keeps the trail and one toggle, and the actions open as an aside from
+   the end: the same element, drawn as a panel over a scrim (the mobile
+   drawer's shape, mirrored), its controls one per line with their names.
+   Hidden while closed rather than unmounted — the page teleports into it and
+   the server splices into it — so `visibility` waits out the slide. */
 @media (width < 40rem) {
-  .kn-trail:has(> nav):has(> .kn-page-actions > *) {
-    flex-wrap: wrap;
-    height: 4.5rem;
-    row-gap: 0;
+  /* A size container is a containing block for `position: fixed`, which would
+     pin the aside inside this 36px row; its one query (folded labels) has
+     nothing to fold here, where the labels are back. */
+  .kn-trail {
+    container-type: normal;
   }
-  .kn-trail:has(> .kn-page-actions > *) > nav {
-    flex-basis: 100%;
-    height: 2.25rem;
+  .kn-trail:has(.kn-page-actions > *) > .kn-actions-toggle {
+    display: inline-flex;
+    margin-inline-start: auto;
   }
-  .kn-trail:has(> nav) > .kn-page-actions {
-    height: 2.25rem;
+  .kn-actions-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgb(0 0 0 / 0.4);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--rail-duration) var(--pane-ease);
   }
-  .kn-shell:has(.kn-trail > nav):has(.kn-page-actions > *) {
-    --kn-trail-h: 4.5rem;
+  .kn-actions-panel {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    inset-block: 0;
+    inset-inline-end: 0;
+    z-index: 40;
+    width: min(18rem, 85vw);
+    overflow-y: auto;
+    padding: 0.5rem 0.5rem 1rem;
+    border-inline-start: 1px solid var(--border);
+    background: var(--background);
+    box-shadow: 0 16px 48px -12px rgb(0 0 0 / 0.45);
+    transform: translateX(100%);
+    visibility: hidden;
+    transition:
+      transform var(--rail-duration) var(--pane-ease),
+      visibility 0s linear var(--rail-duration);
+  }
+  .kn-trail[data-actions-open] > .kn-actions-scrim {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .kn-trail[data-actions-open] > .kn-actions-panel {
+    transform: none;
+    visibility: visible;
+    transition: transform var(--rail-duration) var(--pane-ease);
+  }
+
+  /* The panel's own header: what it is, and a way out a thumb can reach. */
+  .kn-actions-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 2.75rem;
+    padding-inline: 0.75rem 0.25rem;
+    margin-bottom: 0.25rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .kn-actions-title {
+    font-size: var(--kn-text-sm);
+    font-weight: 600;
+  }
+
+  /* One list, one row. Every control — ghost, outline, a split button, a
+     link — draws the same way here: no frame, a 16px icon in its own column,
+     the name beside it in the control size, the ghost hover. The row is what
+     says "action"; a border on two of them only said which component they
+     happen to be. A filled primary (Publish) keeps its fill: it is the one
+     thing on a draft that should stand out. */
+  .kn-actions-panel .kn-page-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    margin: 0;
+  }
+  .kn-actions-panel .kn-page-actions > [role="group"],
+  .kn-actions-panel .kn-page-actions > a {
+    margin-inline-start: 0;
+  }
+  .kn-actions-panel .kn-page-actions :is(button, a) {
+    width: 100%;
+    height: 2.5rem;
+    justify-content: flex-start;
+    gap: 0.75rem;
+    padding-inline: 0.75rem;
+    border-radius: var(--radius-md, 0.375rem);
+    font-size: var(--kn-text-sm);
+    font-weight: 400;
+    /* Not the button's `transition-all`: that also eases the `visibility` it
+       inherits from the panel, so a row stays hidden — and refuses focus —
+       for its first frames after the panel opens. */
+    transition-property: color, background-color, border-color, box-shadow;
+  }
+  .kn-actions-panel .kn-page-actions :is(button, a):not(.bg-primary) {
+    border-color: transparent;
+    background: transparent;
+    color: var(--foreground);
+  }
+  /* The outline variant's seat shadow goes; the focus ring (also a shadow) stays. */
+  .kn-actions-panel .kn-page-actions :is(button, a):not(.bg-primary):not(:focus-visible) {
+    box-shadow: none;
+  }
+  .kn-actions-panel .kn-page-actions :is(button, a):not(.bg-primary):hover {
+    background: var(--accent);
+  }
+  .kn-actions-panel .kn-page-actions :is(button, a) svg {
+    width: 1rem;
+    height: 1rem;
+    color: var(--muted-foreground);
+  }
+  .kn-actions-panel .kn-page-actions :is(button, a).bg-primary svg {
+    color: inherit;
+  }
+  /* A restricted page still reads as one: the lock keeps the accent. */
+  .kn-actions-panel .kn-page-actions [data-restricted] svg {
+    color: var(--primary);
+  }
+  /* Names in full: the row's folded labels come back, and an icon-only
+     control shows its accessible name (it stays the name, so nothing is read
+     twice) — on `::before`, ordered after the icon, because `::after` is
+     `.kn-hit`'s touch target. */
+  .kn-actions-panel .kn-page-actions .kn-bar-label {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+    font-size: inherit;
+  }
+  .kn-actions-panel .kn-page-actions :is(button, a)[aria-label]:not(:has(.kn-bar-label))::before {
+    content: attr(aria-label);
+    order: 1;
+  }
+  /* The split button (a group of two) is one row whose caret sits at its end,
+     square, as a second target. */
+  .kn-actions-panel .kn-page-actions [role="group"]:not(.kn-aside-only) {
+    display: flex;
+  }
+  .kn-actions-panel .kn-page-actions [role="group"]:not(.kn-aside-only) > :first-child {
+    flex: 1;
+    min-width: 0;
+  }
+  .kn-actions-panel .kn-page-actions [role="group"]:not(.kn-aside-only) > button:last-child {
+    flex: none;
+    width: 2.5rem;
+    justify-content: center;
+    padding-inline: 0;
+  }
+  .kn-actions-panel .kn-page-actions [role="group"]:not(.kn-aside-only) > button:last-child::before {
+    content: none;
+  }
+  /* Everything at once: ⋯ goes, its items come in as rows of the same list. */
+  .kn-actions-panel .kn-row-only {
+    display: none;
+  }
+  .kn-actions-panel .kn-aside-only {
+    display: flex;
+  }
+  .kn-actions-panel div.kn-aside-only {
+    flex-direction: column;
+  }
+  .kn-actions-panel .kn-page-actions .kn-aside-chevron {
+    margin-inline-start: auto;
+  }
+  .kn-actions-panel .kn-aside-caption {
+    padding: 0.5rem 0.75rem 0.25rem;
+    font-size: var(--kn-text-caption);
+    font-weight: 500;
+    color: var(--muted-foreground);
+  }
+  /* Groups part on a hairline, inset to the rows' text. */
+  .kn-actions-panel .kn-bar-rule {
+    width: auto;
+    height: 1px;
+    margin: 0.375rem 0.75rem;
+  }
+}
+@media (width < 40rem) and (prefers-reduced-motion: reduce) {
+  .kn-actions-panel,
+  .kn-trail[data-actions-open] > .kn-actions-panel {
+    transform: none;
+    transition: opacity 120ms linear, visibility 0s linear 120ms;
+    opacity: 0;
+  }
+  .kn-trail[data-actions-open] > .kn-actions-panel {
+    opacity: 1;
+    transition: opacity 120ms linear;
   }
 }
 

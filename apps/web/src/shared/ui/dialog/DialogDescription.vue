@@ -14,7 +14,7 @@ const forwarded = useForwardProps(reactiveOmit(props, "class"))
   <DialogDescription
     data-slot="dialog-description"
     v-bind="forwarded"
-    :class="cn('text-muted-foreground text-sm text-balance', props.class)"
+    :class="cn('text-muted-foreground text-sm text-balance wrap-anywhere', props.class)"
   >
     <slot />
   </DialogDescription>

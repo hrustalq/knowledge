@@ -180,7 +180,8 @@
     "loadingPage": "Загрузка страницы",
     "skipToContent": "Перейти к содержимому",
     "navigation": "Навигация",
-    "features": "Разделы"
+    "features": "Разделы",
+    "pageActions": "Действия со страницей"
   },
   "role": {
     "guest": "Гость",
@@ -5593,7 +5594,8 @@
       "colCreated": "Запрошен",
       "summary": "Страниц: {pages} · {size}",
       "expires": "удалится {when}"
-    }
+    },
+    "heading": "Экспорт"
   },
   "chatBots": {
     "title": "Чат-боты",

@@ -26,6 +26,12 @@ in the pull request that introduces them — see
   open is left out entirely, never counted, and pages still awaiting a merge request or archived are not
   listed. A link removed from a page drops off once its new version is indexed, and a deleted page takes
   its links with it. A draft branch links nothing until it is merged.
+- **On a phone, a page's actions open as a side panel** (#685). Below 640 px the breadcrumb row used to split in two,
+  the trail on one line and six small icons on the next. The row is one line again: the breadcrumbs, then a
+  single button that slides the actions in from the right, each with its name (Watch, Share, Access, Copy page,
+  Edit, Export, Save as template and the view options), so nothing hides behind ⋯ any more and Export keeps its
+  formats in one menu. The panel holds focus while open, closes on ×, the backdrop or Escape, and hands focus
+  back to the button. Wider screens are unchanged.
 
 ### Operations
 
@@ -38,6 +44,10 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- **A long word could push a dialog's title out of the window** on a small screen (#685). An unbroken name, address
+  or id in a confirmation (or any dialog) widened the box past the screen edge, taking the buttons with it,
+  and a dialog title that wrapped drew its lines on top of each other. Titles and descriptions now break long
+  words onto the next line and the dialog stays inside the screen.
 - **Every browser tab was titled "Knowledge"** (#644). The member app now names the route in the tab, in
   history and to a screen reader, from the same trail as the breadcrumb: `‹page› · ‹project› · Knowledge`,
   `Merge requests · Knowledge`, `AI · Settings · Knowledge`, in the UI's language, both in the server render

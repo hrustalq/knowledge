@@ -14,7 +14,7 @@ const forwarded = useForwardProps(reactiveOmit(props, "class"))
   <DialogTitle
     data-slot="dialog-title"
     v-bind="forwarded"
-    :class="cn('font-display text-base leading-none font-semibold tracking-tight', props.class)"
+    :class="cn('font-display text-base leading-snug font-semibold tracking-tight wrap-anywhere', props.class)"
   >
     <slot />
   </DialogTitle>

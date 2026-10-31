@@ -26,6 +26,8 @@ import {
   Activity as ActivityIcon,
   BadgeCheck,
   Braces,
+  Check,
+  ChevronDown,
   Download,
   Flag,
   Gauge,
@@ -924,7 +926,13 @@ watch(
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger as-child>
-          <Button variant="ghost" size="icon-sm" :aria-label="t('documents.moreActions')" :title="t('documents.moreActions')">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            class="kn-row-only"
+            :aria-label="t('documents.moreActions')"
+            :title="t('documents.moreActions')"
+          >
             <MoreHorizontal class="size-4" />
           </Button>
         </DropdownMenuTrigger>
@@ -966,6 +974,49 @@ watch(
           </DropdownMenuSub>
         </DropdownMenuContent>
       </DropdownMenu>
+      <!-- ⋯ spelled out for the phone's aside (assets/style.css), which has
+           the room to show every action at once: the same items, as rows. -->
+      <span class="kn-bar-rule kn-aside-only" aria-hidden="true" />
+      <!-- Export stays one row with its formats behind it, as in ⋯. -->
+      <DropdownMenu>
+        <DropdownMenuTrigger as-child>
+          <Button variant="ghost" size="sm" class="kn-aside-only">
+            <Download class="size-4" aria-hidden="true" />
+            <span class="kn-bar-label">{{ t('export.heading') }}</span>
+            <ChevronDown class="kn-aside-chevron size-4" aria-hidden="true" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" class="w-56">
+          <DropdownMenuItem v-for="f in EXPORT_FORMATS" :key="f" @select="openExport(f)">
+            {{ t(`export.format.${f}`) }}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <template v-if="auth.canEdit && saveAsPage">
+        <span class="kn-bar-rule kn-aside-only" aria-hidden="true" />
+        <Button variant="ghost" size="sm" class="kn-aside-only" @click="saveAsOpen = true">
+          <LayoutTemplate class="size-4" aria-hidden="true" />
+          <span class="kn-bar-label">{{ t('templates.saveAs.action') }}</span>
+        </Button>
+      </template>
+      <span class="kn-bar-rule kn-aside-only" aria-hidden="true" />
+      <div class="kn-aside-only" role="group" :aria-label="t('documents.menu.view')">
+        <p class="kn-aside-caption" aria-hidden="true">{{ t('documents.menu.view') }}</p>
+        <Button variant="ghost" size="sm" :aria-pressed="layout.fullWidth" @click="layout.setFullWidth(!layout.fullWidth)">
+          <Check class="size-4" :class="layout.fullWidth ? '' : 'invisible'" aria-hidden="true" />
+          <span class="kn-bar-label">{{ t('documents.fullWidth') }}</span>
+        </Button>
+        <Button
+          v-if="canvasEl?.hasGlossary"
+          variant="ghost"
+          size="sm"
+          :aria-pressed="!!canvasEl?.glossaryOn"
+          @click="canvasEl?.toggleGlossaryLinks()"
+        >
+          <Check class="size-4" :class="canvasEl?.glossaryOn ? '' : 'invisible'" aria-hidden="true" />
+          <span class="kn-bar-label">{{ t('glossary.toggleLinks') }}</span>
+        </Button>
+      </div>
     </template>
   </Teleport>
 

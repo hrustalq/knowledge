@@ -180,7 +180,8 @@
     "loadingPage": "Loading page",
     "skipToContent": "Skip to content",
     "navigation": "Navigation",
-    "features": "Features"
+    "features": "Features",
+    "pageActions": "Page actions"
   },
   "role": {
     "guest": "Guest",
@@ -5593,7 +5594,8 @@
       "colCreated": "Asked",
       "summary": "{pages} pages · {size}",
       "expires": "deleted {when}"
-    }
+    },
+    "heading": "Export"
   },
   "chatBots": {
     "title": "Chat bots",

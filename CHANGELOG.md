@@ -56,6 +56,16 @@ in the pull request that introduces them — see
   had already fixed its list of items. It now gets a run of its own.
 - **Deleting a workflow while a run of it is starting is refused with the usual "runs in flight" error** (#658).
   It used to delete that run's history and keep the workflow.
+- **Agent runs, connector syncs, imports and memos no longer get stuck when their job is lost** (#657). Each
+  one is saved first and handed to the worker second, and if Redis was down or the process restarted in
+  between, it waited forever: a scheduled agent never fired again, a connector refused every new sync until
+  someone cancelled the stuck one, an import stayed "Queued" even after pressing Start again, and a memo sat
+  "Uploaded". The worker now hands such a row over again after 10–15 minutes, and Start on a queued import
+  hands it over at once.
+- **An agent run whose worker died mid-run is retried on a default install** (#657). The recovery used to run
+  only with `AGENT_SCHEDULE_ENABLED=true`, so with schedules off (the default) a crashed manual, trigger, lint,
+  drift or memo run stayed "Running" forever. It now runs whatever that flag says, and so does the connector
+  recovery whatever `CONNECTOR_SCHEDULE_ENABLED` says; the flags still decide whether scheduled runs start.
 
 ## [0.41.0] — 2026-10-31
 

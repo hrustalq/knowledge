@@ -130,7 +130,13 @@ export class ImportService {
    */
   async start(importId: string): Promise<ImportJobInfo> {
     const row = await this.require(importId);
-    if (row.status === 'running' || row.status === 'queued') return toInfo(row);
+    if (row.status === 'running') return toInfo(row);
+    // Enqueued again rather than returned (#657): the row may have committed
+    // while its job did not, and the same jobId makes a live job absorb it.
+    if (row.status === 'queued') {
+      await this.producer.enqueue(row.id);
+      return toInfo(row);
+    }
     if (row.status === 'submitted') {
       throw new ConflictException(t('error.import.alreadySubmitted'));
     }

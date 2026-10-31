@@ -3,6 +3,7 @@ import { StorageModule } from '../storage/storage.module.js';
 import { EventsModule } from '../events/events.module.js';
 import { ImportQueueModule } from './import-queue.module.js';
 import { ImportProcessor } from './import.processor.js';
+import { ImportRelaySweeper } from './import-relay.sweeper.js';
 import { ParsersModule } from './parsers/parsers.module.js';
 
 /**
@@ -12,6 +13,6 @@ import { ParsersModule } from './parsers/parsers.module.js';
  */
 @Module({
   imports: [ImportQueueModule, StorageModule, EventsModule, ParsersModule],
-  providers: [ImportProcessor],
+  providers: [ImportProcessor, ImportRelaySweeper],
 })
 export class ImportWorkerModule {}

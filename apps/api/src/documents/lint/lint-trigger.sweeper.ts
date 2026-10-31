@@ -192,19 +192,23 @@ export class LintTriggerSweeper implements OnModuleInit, OnModuleDestroy {
     const input: AgentRunInput = {
       lint: { mergeRequestId: c.mergeRequestId, headRevisionId: c.headRevisionId, checkId },
     };
-    const run = await this.prisma.agentRun.create({
-      data: {
-        workspaceId: c.workspaceId,
-        agentKey: LINT_AGENT_KEY,
-        agentId: override?.id ?? null,
-        trigger: 'merge-request',
-        createdBy: c.authorId,
-        locale,
-        input: input as Prisma.InputJsonValue,
-      },
+    // The run and the check's link to it commit together (#657); the job
+    // follows the commit, and `AgentScheduleSweeper` relays a lost one.
+    await this.prisma.withTransaction(async () => {
+      const run = await this.prisma.agentRun.create({
+        data: {
+          workspaceId: c.workspaceId,
+          agentKey: LINT_AGENT_KEY,
+          agentId: override?.id ?? null,
+          trigger: 'merge-request',
+          createdBy: c.authorId,
+          locale,
+          input: input as Prisma.InputJsonValue,
+        },
+      });
+      await this.prisma.mergeRequestCheck.update({ where: { id: checkId }, data: { agentRunId: run.id } });
+      this.prisma.onCommit(() => this.producer.enqueue(run.id));
     });
-    await this.prisma.mergeRequestCheck.update({ where: { id: checkId }, data: { agentRunId: run.id } });
-    await this.producer.enqueue(run.id);
     return checkId;
   }
 

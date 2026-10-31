@@ -132,23 +132,28 @@ export class MemosProcessor extends WorkerHost {
       select: { id: true },
     });
     const input: AgentRunInput = { memo: { memoId: row.id } };
-    const run = await this.prisma.agentRun.create({
-      data: {
-        workspaceId: row.workspaceId,
-        agentKey: 'secretary',
-        agentId: override?.id ?? null,
-        trigger: 'manual',
-        subjectKey: `memo:${row.id}`,
-        createdBy: row.createdBy,
-        locale: row.locale,
-        input: input as unknown as Prisma.InputJsonValue,
-      },
+    // The run and the memo's link to it commit together (#657): a crash between
+    // them left a `transcribed` memo that a relay would read twice. The job
+    // follows the commit; `AgentScheduleSweeper` relays a lost one.
+    await this.prisma.withTransaction(async () => {
+      const run = await this.prisma.agentRun.create({
+        data: {
+          workspaceId: row.workspaceId,
+          agentKey: 'secretary',
+          agentId: override?.id ?? null,
+          trigger: 'manual',
+          subjectKey: `memo:${row.id}`,
+          createdBy: row.createdBy,
+          locale: row.locale,
+          input: input as unknown as Prisma.InputJsonValue,
+        },
+      });
+      await this.prisma.memo.update({
+        where: { id: row.id },
+        data: { status: 'analysing', stage: null, error: null, agentRunId: run.id, publishedAt: null },
+      });
+      this.prisma.onCommit(() => this.agents.enqueue(run.id));
     });
-    await this.prisma.memo.update({
-      where: { id: row.id },
-      data: { status: 'analysing', stage: null, error: null, agentRunId: run.id, publishedAt: null },
-    });
-    await this.agents.enqueue(run.id);
   }
 
   private async fail(memoId: string, stage: 'transcribing' | 'analysing', message: string): Promise<void> {

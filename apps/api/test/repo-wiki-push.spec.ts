@@ -80,8 +80,10 @@ describe('ConnectorsService.queueRepoPush', () => {
         runs.push(run);
         return run;
       }),
-      update: vi.fn(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
-        Object.assign(runs.find((r) => r.id === where.id)!, data);
+      updateMany: vi.fn(async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+        const run = runs.find((r) => Object.entries(where).every(([k, v]) => r[k] === v));
+        if (run) Object.assign(run, data);
+        return { count: run ? 1 : 0 };
       }),
     },
   };
@@ -135,6 +137,13 @@ describe('ConnectorsService.queueRepoPush', () => {
     expect(await service.queueRepoPush(connector({ ...WIKI_ON, branch: 'main' }), { branch: 'main' })).toBeNull();
     expect(runs[0].scope).not.toEqual(['module:a']);
   });
+
+  it('gives a push its own run when the worker claimed the waiting one in between (#658)', async () => {
+    runs.push({ id: 'claimed', status: 'running', startedAt: new Date(), scope: null });
+    prisma.connectorRun.findFirst.mockResolvedValueOnce({ id: 'claimed', status: 'queued', startedAt: null, scope: null });
+    expect(await service.queueRepoPush(connector({ ...WIKI_ON, branch: 'main' }), { branch: 'main' })).not.toBeNull();
+    expect(runs).toHaveLength(2);
+  });
 });
 
 describe('ConnectorStagingService.apply, delivered by merge request', () => {
@@ -148,6 +157,8 @@ describe('ConnectorStagingService.apply, delivered by merge request', () => {
     ]);
     const conflicts: Array<Record<string, unknown>> = [];
     const prisma = {
+      withTransaction: async (fn: () => Promise<unknown>) => fn(),
+      onCommit: (fn: () => Promise<unknown>) => void fn(),
       connectorLink: {
         findUnique: vi.fn(async () => ({ id: 'l1', documentId: 'd1', contentHash: sha256(OLD), externalUrl: null })),
         update: vi.fn(async () => undefined),
@@ -241,6 +252,8 @@ describe('ConnectorConflictSweeper, regenerated pages', () => {
     const owner = '22222222-2222-4222-8222-222222222222';
     const conn = { id: 'c1', name: 'demo', locale: 'en', createdBy: owner };
     const prisma = {
+      withTransaction: async (fn: () => Promise<unknown>) => fn(),
+      onCommit: (fn: () => Promise<unknown>) => void fn(),
       connectorConflict: {
         findMany: vi.fn(async (args: { where: { status: string } }) =>
           args.where.status === 'pending'

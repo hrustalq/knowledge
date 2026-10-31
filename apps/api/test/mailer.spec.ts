@@ -120,6 +120,8 @@ describe('MailProcessor — one email per inbox row', () => {
       u2: { displayName: 'Grace' },
     };
     const prisma = {
+      withTransaction: async (fn: () => Promise<unknown>) => fn(),
+      onCommit: (fn: () => Promise<unknown>) => void fn(),
       notification: {
         findUnique: vi.fn(async () => ({ ...row, emailedAt })),
         updateMany: vi.fn(async ({ where }: { where: { emailedAt: null } }) => {
@@ -213,6 +215,8 @@ describe('AuthFlowService — verification', () => {
     const created: Record<string, unknown>[] = [];
     const userUpdates: unknown[] = [];
     const prisma = {
+      withTransaction: async (fn: () => Promise<unknown>) => fn(),
+      onCommit: (fn: () => Promise<unknown>) => void fn(),
       user: {
         findUnique: vi.fn(async () => user),
         updateMany: vi.fn(async (args: unknown) => {
@@ -301,6 +305,8 @@ describe('AuthFlowService — forgot-password queues the link', () => {
     const created: unknown[] = [];
     const mail = { enqueue: vi.fn(async () => undefined) };
     const prisma = {
+      withTransaction: async (fn: () => Promise<unknown>) => fn(),
+      onCommit: (fn: () => Promise<unknown>) => void fn(),
       user: {
         findUnique: vi.fn(async ({ where }: { where: { email: string } }) =>
           where.email === 'ada@example.com' ? { id: 'u1', disabledAt: null } : null,

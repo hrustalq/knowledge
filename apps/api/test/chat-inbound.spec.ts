@@ -114,6 +114,8 @@ function harness(opts: {
   const claims: Array<Record<string, unknown>> = [];
   const settled: Array<Record<string, unknown>> = [];
   const prisma = {
+    withTransaction: async (fn: () => Promise<unknown>) => fn(),
+    onCommit: (fn: () => Promise<unknown>) => void fn(),
     workspace: { findUnique: vi.fn(async () => ({ name: 'Acme' })) },
     user: { findUnique: vi.fn(async () => ({ locale: 'ru' })) },
     chatAnswer: {

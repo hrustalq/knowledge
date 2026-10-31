@@ -45,6 +45,8 @@ function world(values: Record<string, unknown>) {
   const db = { users: [] as Row[], members: [] as Row[], sessions: [] as Row[], resets: [] as Row[], keys: [] as Row[] };
   const byWhere = (rows: Row[], where: Row) => rows.find((r) => Object.entries(where).every(([k, v]) => r[k] === v)) ?? null;
   const prisma = {
+    withTransaction: async (fn: () => Promise<unknown>) => fn(),
+    onCommit: (fn: () => Promise<unknown>) => void fn(),
     user: {
       findUnique: vi.fn(async ({ where }: Row) => byWhere(db.users, where)),
       create: vi.fn(async ({ data }: Row) => {
@@ -201,6 +203,8 @@ describe('rows from before the #75 migration', () => {
     const member: Row = { workspaceId: WS, userId: 'u1', role: 'editor', trustedOperator: false, createdAt: new Date() };
     const user = { id: 'u1', email: EMAIL, displayName: 'Ada', disabledAt: null, avatarKey: null, avatarUpdatedAt: null };
     const prisma = {
+      withTransaction: async (fn: () => Promise<unknown>) => fn(),
+      onCommit: (fn: () => Promise<unknown>) => void fn(),
       workspaceMember: {
         findUnique: vi.fn(async () => member),
         findMany: vi.fn(async () => [{ ...member, user }]),

@@ -124,8 +124,10 @@ export class AttachmentsService {
     const head = await this.storage.headObject(row.s3Key);
     if (!head) throw new BadRequestException(t('error.attachment.uploadMissing'));
     if (head.contentLength > this.maxBytes) {
-      await this.storage.deleteObject(row.s3Key);
+      // Row first (#658): a leftover object is harmless, a `pending` row
+      // pointing at nothing is not.
       await this.prisma.attachment.delete({ where: { id: row.id } });
+      await this.storage.deleteObject(row.s3Key);
       throw new PayloadTooLargeException(t('error.attachment.tooLarge', { limit: this.maxBytes }));
     }
     const updated = await this.prisma.attachment.update({

@@ -426,6 +426,8 @@ describe('ConnectorConflictSweeper, spec changes', () => {
   function harness(rows: Array<Record<string, unknown>>) {
     const conn = { id: 'c1', name: 'billing', locale: 'en', createdBy: null };
     const prisma = {
+      withTransaction: async (fn: () => Promise<unknown>) => fn(),
+      onCommit: (fn: () => Promise<unknown>) => void fn(),
       connectorConflict: {
         findMany: vi.fn(async (args: { where: { status: string } }) =>
           args.where.status === 'pending'

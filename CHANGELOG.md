@@ -13,6 +13,30 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Fixed
+
+- **A failure part-way through an action no longer leaves it half done** (#658). Seventeen flows wrote one
+  change as separate commits, so an error or crash in between left state nothing repaired. They now commit
+  whole or not at all. Before this fix:
+  - A merge request could open over a branch its readers still could not see.
+  - A cancelled workflow run kept nodes that could still be approved.
+  - An approved workflow step could open no next steps.
+  - A synced or reverted connector page could raise a false conflict on the next pull.
+  - A connector conflict could lose the upstream change silently, or be marked failed while its merge request
+    was open.
+  - A chat link code could be spent with no account linked.
+  - A verification link could be spent with the address left unverified.
+  - A signup could leave an account with no workspace, which the retry then refused as taken.
+- **Changing a page's owner together with its parent or project now applies both** (#658). The owner change
+  used to commit first and end the request, so the move was silently dropped. A PATCH that is refused for
+  any reason now changes nothing, owner included.
+- **A webhook or push that arrives as a sync run starts is no longer lost** (#658). It used to join a run that
+  had already fixed its list of items. It now gets a run of its own.
+- **Deleting a workflow while a run of it is starting is refused with the usual "runs in flight" error** (#658).
+  It used to delete that run's history and keep the workflow.
+
 ## [0.41.0] — 2026-10-31
 
 ### Added

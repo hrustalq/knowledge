@@ -770,18 +770,14 @@ onMounted(() => {
       AiSuggestions.configure({ t, shared: props.collab?.suggestions ?? null }),
     ],
     editorProps: {
-      // A function, so ProseMirror re-reads it on every update: `setEditable`
-      // flips it, and a read-only body is a document, not a textbox to type in.
-      attributes: (): Record<string, string> =>
-        props.editable
-          ? {
-              class: 'kn-prose',
-              spellcheck: 'true',
-              role: 'textbox',
-              'aria-multiline': 'true',
-              'aria-label': props.label || t('editor.bodyLabel'),
-            }
-          : { class: 'kn-prose', spellcheck: 'true' },
+      // An object, never a function: Tiptap spreads it into its own
+      // `{ role: 'textbox', … }`, and a spread function is nothing at all.
+      attributes: {
+        class: 'kn-prose',
+        spellcheck: 'true',
+        'aria-multiline': 'true',
+        'aria-label': props.label || t('editor.bodyLabel'),
+      },
       handlePaste: (_view, event) => {
         const files = [...(event.clipboardData?.files ?? [])]
         if (files.length === 0) return false

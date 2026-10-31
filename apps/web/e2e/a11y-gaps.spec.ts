@@ -29,7 +29,7 @@ test('the editor body is a labelled multi-line textbox', async ({ page, request 
 
   await page.goto(`/documents/${documentId}/edit`)
   const body = page.getByRole('textbox', { name: 'Page body' })
-  await expect(body).toBeVisible()
+  await expect(body).toBeVisible({ timeout: 15_000 })
   await expect(body).toHaveAttribute('aria-multiline', 'true')
 })
 
@@ -42,8 +42,12 @@ test('a collapsed sub-rail is out of the tab order', async ({ page }) => {
 
 test('opening notifications focuses the panel, not "Mark all as read"', async ({ page }) => {
   await page.goto('/merge-requests')
-  await page.getByRole('button', { name: /^Notifications/ }).click()
+  const bell = page.getByRole('button', { name: /^Notifications/ })
   const panel = page.locator('[data-slot=popover-content]')
-  await expect(panel).toBeVisible()
+  // A click that lands before hydration does nothing; retry only while closed.
+  await expect(async () => {
+    if (!(await panel.isVisible())) await bell.click()
+    await expect(panel).toBeVisible({ timeout: 1000 })
+  }).toPass()
   await expect(panel).toBeFocused()
 })

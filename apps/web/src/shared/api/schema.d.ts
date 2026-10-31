@@ -10581,6 +10581,7 @@ export interface components {
             error: string | null;
             threadId: string | null;
             toolCallCount: number;
+            audioSeconds: number | null;
             createdAt: string;
         };
         /** @enum {string} */

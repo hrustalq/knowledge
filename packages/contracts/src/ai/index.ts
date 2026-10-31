@@ -1281,6 +1281,8 @@ export interface AiUsageLogEntry {
   error: string | null;
   threadId: string | null;
   toolCallCount: number;
+  /** A `transcription` row's recording length (#551); null for every token-billed call. */
+  audioSeconds: number | null;
   createdAt: string;
 }
 // GET /v1/ai/usage/logs?workspaceId=&cursor=&userId=&operation=&ok=

@@ -150,13 +150,14 @@ neither platform says what the message was.
 
 | placeholder | matches |
 | --- | --- |
-| `[SECRET_n]` | the credential shapes `findSecret` knows (`SECRET_PATTERNS`), first, since a token can contain a card or phone shape |
-| `[EMAIL_n]` | email addresses, case-folded for numbering |
+| `[SECRET_n]` / `[PHONE_n]` | the value after a trigger word (#551): `пароль`, `ключ`, `токен`, `секрет`, `пин-код`, `password`, `token`, `secret`, `api key`/`access key`/`private key` → `SECRET`; `телефон`, `phone` → `PHONE`. Within six words to the sentence's end, it masks from the first to the last word that looks like a value: a digit or a Latin letter after a Russian trigger, a digit or symbol after an English one, at least seven digits after a phone one. A window with none is prose and stays (`пароль надо сменить`). This runs first, before any shape below can take part of the value |
+| `[SECRET_n]` | the credential shapes `findSecret` knows (`SECRET_PATTERNS`), since a token can contain a card or phone shape |
+| `[EMAIL_n]` | email addresses, case-folded for numbering; then an address read aloud — `… собака … точка ру`, or what speech-to-text makes of it (`sobakexample.com`), ending in a known top-level domain so a dog in a sentence is never one |
 | `[PASSPORT_n]` | a RU passport, series and number (4 + 6 digits): after `паспорт`, `серия` or `passport` (within 20 characters, no digit between) in any common spacing — `4509 123456`, `45 09 № 123456`, `4509 номер 123456`, `4509123456`; with no such word, only the printed `45 09 123456` form |
 | `[SNILS_n]` | `112-233-445 95`, `112 233 445 95` or eleven bare digits that pass the SNILS checksum |
 | `[INN_n]` | ten or twelve bare digits that pass the INN check digits (organisation or person) |
 | `[CARD_n]` | 13–19 digits, spaces or dashes allowed, that pass Luhn |
-| `[PHONE_n]` | three-three-two-two shapes with an optional `+code` or `8`, so a date or time never fits |
+| `[PHONE_n]` | three-three-two-two shapes with an optional `+code` or `8`, so a date or time never fits; then `+` and seven or more digits in any grouping, what is left of a spoken number |
 
 The table is the order the masker runs in. RU identity numbers come before
 cards and phones because bare ten or eleven digits are also a phone shape,
@@ -177,7 +178,9 @@ everywhere it is used:
 The masker keeps no value past the call. Authors become `Person 1`,
 `Person 2` in order of first appearance: the model needs to tell speakers
 apart, never who they are. There is no named-entity detection, and
-`findSecret` stays the backstop on every capture.
+`findSecret` stays the backstop on every capture. A trigger word over-masks on
+purpose: `token limit 4000` becomes `token limit [SECRET_n]`, and that is
+the price of catching `пароль Twortistage 2026`, which no shape can.
 
 ### The harvester
 

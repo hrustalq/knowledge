@@ -78,6 +78,7 @@ in the codebase, so they are worth keeping stable:
 | 2     | Parse with gray-matter (`matter(raw)`); non-markdown/non-`text/*` is rejected. A spec document parses by its kind instead (below) | —       |
 | 3     | Normalize via `splitMarkdown`, persist `normalized.json` beside the source | `normalize` |
 | 3b    | Embed groups — record `revision_embeds`, queue snapshot renders (#470)   | `embeds`     |
+| 3c    | Page links — replace `page_links` for a default-branch head (#673)       | `links`      |
 | 4     | Chunk — `chunkSections(sections)`, then one chunk per embedded frame     | `chunk`      |
 | 5     | Embed — title + heading breadcrumb + body, in slices of 32               | `embed`      |
 | 6     | Index into the graph store — `graph.upsertRevisionChunks`                | `graph`      |
@@ -128,6 +129,24 @@ deletes the revision's `Chunk` rows and its `DocumentRevision` vertex before
 recreating them, so running it twice converges rather than duplicating. Chunks
 carry no system time, so recreating them loses nothing. Relation edges are
 different; see the next paragraphs.
+
+**Links between pages** (#673). Step 3c runs only when the revision is the
+default-branch head (`live`). `pageLinkTargets` (`ingestion/page-links.ts`)
+reads the body's link tokens through `markdownLinks` — the editor's own marked
+instance, so code spans, fences and images are never links — and keeps those
+that resolve to `/documents/<uuid>` on `WEB_BASE_URL`'s origin, with the decoded
+`#fragment` as the anchor, one row per (target, anchor), self-links dropped.
+`replacePageLinks` swaps the page's rows inside a transaction that first
+share-locks the default branch row and re-checks that the revision is still its
+head: a finalize moving the head waits on the lock, so an older revision's job
+that finishes late writes nothing instead of restoring stale links. The table
+holds only current links; there is no per-revision history, and a branch
+revision links nothing until it merges. Reads are `GET /v1/documents/:id/backlinks`
+and MCP `knowledge_get_document`'s `backlinks`, both through
+`DocumentsService.getBacklinks`, which filters sources by `visibilityWhere`,
+`LISTED_PAGE` and `archivedAt: null`. Pages indexed before the table existed are
+filled once by `make page-links-backfill`. Nothing reaches the graph: links are
+not edges, and nothing re-embeds.
 
 **Embedded designs** (#470, [feature 64](../features/64-embeds.md)). Step 3b
 reads the page's embed groups with `embedGroupsOf` (no DOM) and rewrites the
@@ -449,6 +468,7 @@ revision. A memo's transcript is never chunked, embedded or searched. The full r
 | `code_imports`, `code_files` | A codebase connector's head: importer → imported file with the names taken, and every file. Replaced whole per pull, in one transaction (feature 51).        |
 | `component_declarations` | One row per page with a `component:` block: resolved connector, paths, symbols, warning, `missing_paths`. Written by ingestion, re-resolved per pull.       |
 | `documents.kind`, `documents.spec_slug` | `page` \| `openapi` \| `asyncapi`, default `page`. The slug is pinned at a spec's first indexed revision (feature 52). |
+| `page_links` | One row per (target page, anchor) on each page's default-branch head (#673). Replaced whenever a head indexes; no FK on either page, the source's rows deleted by the project cascade. |
 | `revision_embeds` | One row per embed item per revision (#470): group, position, URL, file/node/version, caption, `warning`. Rewritten per revision; no FK, deleted by the project cascade. |
 | `embed_nodes`, `embed_files`, `embed_node_heads` | The snapshot cache (immutable per pinned version), the allowlist's files as last listed, and each pinned node's current hash from the change check (feature 64). |
 | `api_operations` | One row per operation or channel per revision: protocol, method, path, `entity_key`, summary, tags, `pointer`. A projection, replaced per revision; unique on `(revision_id, entity_key, method)`, because an AsyncAPI channel carries both a send and a receive. |

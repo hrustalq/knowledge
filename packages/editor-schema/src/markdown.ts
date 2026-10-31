@@ -230,6 +230,15 @@ export function markdownTokens(md: string): TokensList {
   return marked.lexer(md ?? '');
 }
 
+/** Every link token in a body, nested ones included (lists, tables, panels), as this parser reads them. */
+export function markdownLinks(md: string): Tokens.Link[] {
+  const links: Tokens.Link[] = [];
+  marked.walkTokens(markdownTokens(md), (token) => {
+    if (token.type === 'link') links.push(token as Tokens.Link);
+  });
+  return links;
+}
+
 /* ------------------------------------------------------------------ embeds */
 
 export interface EmbedGroup {

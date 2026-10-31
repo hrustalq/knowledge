@@ -38,6 +38,7 @@ import {
   NotepadTextDashed,
   Plug,
   Info,
+  Link2,
   Network,
   Pencil,
   Scale,
@@ -51,6 +52,7 @@ import {
 import { toast } from 'vue-sonner'
 import type {
   CodeUsagesResponse,
+  DocumentBacklinksResponse,
   ComponentDeclarationView,
   DocumentConnectorResponse,
   DocumentContentResponse,
@@ -114,6 +116,7 @@ import { LazyGraphView as GraphView } from '@/entities/graph'
 import { WorkflowRail } from '@/entities/workflow'
 import { ConnectorRail } from '@/entities/connector'
 import ConflictsRail from '@/modules/documents/components/ConflictsRail.vue'
+import BacklinksRail from '@/modules/documents/components/BacklinksRail.vue'
 import KnowledgeIssuesRail from '@/modules/documents/components/KnowledgeIssuesRail.vue'
 import { QualityRail } from '@/entities/insight'
 import { PageInsightsRail } from '@/entities/insight'
@@ -165,6 +168,8 @@ const RAIL_WIDGETS = [
   // Passages another page contradicts (#81): only while one is open.
   { id: 'conflicts', label: t('rail.conflicts'), icon: Scale, expandable: false },
   { id: 'graph', label: t('rail.graph'), icon: Share2, expandable: true },
+  // Pages whose text links here (#673): only while there are any.
+  { id: 'backlinks', label: t('rail.linkedFrom'), icon: Link2, expandable: false },
   // How often the page is read and by whom — people, the assistant, agents (#79).
   { id: 'insights', label: t('rail.insights'), icon: Eye, expandable: false },
   // Where the code a component page declares is used (#236): only on a page
@@ -215,6 +220,7 @@ const visibleWidgets = computed(() =>
       (w.id !== 'used-by' || !!declaration.value) &&
       (w.id !== 'quality' || !!quality.value?.score) &&
       (w.id !== 'conflicts' || openConflicts.value > 0) &&
+      (w.id !== 'backlinks' || backlinkCount.value > 0) &&
       (w.id !== 'comments' || unplacedThreads.value.length > 0) &&
       (w.id !== 'operations' || isSpec.value),
   ),
@@ -685,6 +691,13 @@ const usagesPreview = useQuery(
   })),
 )
 
+const backlinksPreview = useQuery(
+  computed(() => ({ ...apiQueryOptions('/v1/documents/{id}/backlinks', { path: { id: documentId.value } }), enabled: railReady.value })),
+)
+const backlinkCount = computed(
+  () => (backlinksPreview.data.value as DocumentBacklinksResponse | undefined)?.backlinks.length ?? 0,
+)
+
 const previewFor = computed<Record<RailWidget, string | null>>(() => {
   const revisions = (revisionsPreview.data.value as ListRevisionsResponse | undefined)?.revisions
   const mrs = (mergeRequestsPreview.data.value as ListMergeRequestsResponse | undefined)?.mergeRequests
@@ -727,6 +740,7 @@ const previewFor = computed<Record<RailWidget, string | null>>(() => {
           : 'none'
       : null,
     conflicts: openConflicts.value ? String(openConflicts.value) : null,
+    backlinks: backlinkCount.value ? t('count.backlinks', { n: backlinkCount.value }, backlinkCount.value) : null,
     comments: unplacedOpen.value
       ? t('count.openComments', { n: unplacedOpen.value }, unplacedOpen.value)
       : t('count.threads', { n: unplacedThreads.value.length }, unplacedThreads.value.length),
@@ -1110,6 +1124,7 @@ watch(
             <QualityRail v-if="quality?.score" :quality="quality" />
           </template>
           <template #widget-graph><GraphView :document-id="documentId" /></template>
+          <template #widget-backlinks><BacklinksRail :document-id="documentId" /></template>
           <template #widget-insights>
             <PageInsightsRail v-if="insights" :insights="insights" />
           </template>

@@ -539,6 +539,25 @@ export interface DocumentAncestorsResponse {
   ancestors: DocumentSummary[];
 }
 
+// GET /v1/documents/:id/backlinks?anchor= (#673)
+/** A page whose default-branch head links to the asked-for page. */
+export interface DocumentBacklink {
+  documentId: string;
+  title: string;
+  projectId: string | null;
+  /** The headings of the target it links to; empty when it links only to the page as a whole. */
+  anchors: string[];
+}
+
+/**
+ * Pages linking to a document, by title. Only pages the caller may open and a
+ * list would show; one the caller cannot see is left out, not counted.
+ */
+export interface DocumentBacklinksResponse {
+  documentId: string;
+  backlinks: DocumentBacklink[];
+}
+
 // GET /v1/documents/:id/graph?depth= (feature 06)
 export interface DocumentGraphNode {
   /** documentId for documents, entity key for entities. */

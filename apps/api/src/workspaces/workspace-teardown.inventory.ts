@@ -27,6 +27,7 @@ export const WORKSPACE_TEARDOWN = {
   ShareLink: 'workspace',
   GlossaryExclusion: 'workspace',
   RevisionEmbed: 'workspace',
+  PageLink: 'workspace',
   ConnectorLink: 'workspace',
   ConnectorConflict: 'workspace',
   Notification: 'workspace',

@@ -19,6 +19,7 @@ import type {
   DocumentTreeNode,
   DocumentTreeResponse,
   DocumentAncestorsResponse,
+  DocumentBacklinksResponse,
   FinalizeRevisionResponse,
   ListBranchesResponse,
   ListDocumentRelationsResponse,
@@ -1930,6 +1931,47 @@ export class DocumentsService {
     }
 
     return { documentId, ancestors: chain.reverse() };
+  }
+
+  /**
+   * Pages whose default-branch head links to `documentId` (#673), optionally
+   * only those linking to one `anchor`. Sources are read under the caller's
+   * scope and the list predicate, in the target's workspace only: a page the
+   * caller cannot open is absent, never counted.
+   */
+  async getBacklinks(documentId: string, scope: AccessScope, anchor?: string): Promise<DocumentBacklinksResponse> {
+    const links = await this.prisma.pageLink.findMany({
+      where: { workspaceId: scope.workspaceId, targetDocumentId: documentId, ...(anchor ? { targetAnchor: anchor } : {}) },
+      select: { sourceDocumentId: true, targetAnchor: true },
+    });
+    const anchors = new Map<string, Set<string>>();
+    for (const l of links) {
+      const set = anchors.get(l.sourceDocumentId) ?? new Set<string>();
+      if (l.targetAnchor) set.add(l.targetAnchor);
+      anchors.set(l.sourceDocumentId, set);
+    }
+    if (anchors.size === 0) return { documentId, backlinks: [] };
+    const sources = await this.prisma.document.findMany({
+      where: {
+        id: { in: [...anchors.keys()] },
+        workspaceId: scope.workspaceId,
+        archivedAt: null,
+        ...LISTED_PAGE,
+        AND: [visibilityWhere(scope)],
+      },
+      select: { id: true, title: true, projectId: true },
+      orderBy: { title: 'asc' },
+      // ponytail: unpaged, add a cursor when one page collects thousands of backlinks
+    });
+    return {
+      documentId,
+      backlinks: sources.map((d) => ({
+        documentId: d.id,
+        title: d.title,
+        projectId: d.projectId,
+        anchors: [...(anchors.get(d.id) ?? [])].sort(),
+      })),
+    };
   }
 
   /**

@@ -26,6 +26,7 @@ import type {
   CreateUploadResponse,
   DeleteDocumentCommentResponse,
   DocumentAncestorsResponse,
+  DocumentBacklinksResponse,
   DocumentConnectorResponse,
   DocumentDetailResponse,
   DocumentGraphResponse,
@@ -382,6 +383,19 @@ export class DocumentsController {
   @ApiOperation({ summary: 'Ancestor chain (root first) — for breadcrumbs and lazy tree expansion' })
   async ancestors(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<DocumentAncestorsResponse> {
     return this.documents.getAncestors(id, await this.permissions.scopeForDocument(principal, id));
+  }
+
+  @Get(':id/backlinks')
+  @Returns('DocumentBacklinksResponse')
+  @Access('viewer', 'document')
+  @ApiOperation({ summary: 'Pages linking to this one (#673), only those the caller may open; anchor = one heading' })
+  @ApiQuery({ name: 'anchor', required: false })
+  async backlinks(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentPrincipal() principal: Principal,
+    @Query('anchor') anchor?: string,
+  ): Promise<DocumentBacklinksResponse> {
+    return this.documents.getBacklinks(id, await this.permissions.scopeForDocument(principal, id), anchor || undefined);
   }
 
   @Get(':id/graph')

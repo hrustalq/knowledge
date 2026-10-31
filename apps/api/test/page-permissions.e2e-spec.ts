@@ -110,7 +110,7 @@ describe('page permissions (e2e, #76)', () => {
     return { id: user.id, email, key, keyId: row.id };
   }
 
-  async function createPage(key: keyof typeof titles, parentId?: string): Promise<string> {
+  async function createPage(key: keyof typeof titles, parentId?: string, extra = ''): Promise<string> {
     const res = await http()
       .post('/v1/documents')
       .set(as(people.admin))
@@ -125,7 +125,7 @@ describe('page permissions (e2e, #76)', () => {
           mode: 'inline',
           format: 'markdown',
           // The title in the body too: BM25 reads chunk text only, never the heading (#526).
-          text: `# ${titles[key]}\n\nThe ${word} procedure for ${titles[key]}: who signs it, where the record lives, and when it is reviewed.\n`,
+          text: `# ${titles[key]}\n\nThe ${word} procedure for ${titles[key]}: who signs it, where the record lives, and when it is reviewed.\n${extra}`,
         },
       })
       .expect(ok(201));
@@ -232,7 +232,9 @@ describe('page permissions (e2e, #76)', () => {
     groupId = group.body.groupId;
     await http().put(`/v1/groups/${groupId}/members`).set(as(people.admin)).send({ add: [people.alice.id] }).expect(ok(200));
 
-    const revisions = [await createPage('O'), await createPage('P'), await createPage('M')];
+    // P links to O, so O's backlinks name a page bob may not open (#673).
+    const revisions = [await createPage('O')];
+    revisions.push(await createPage('P', undefined, `\nSee [the handbook](/documents/${ids.O}#sign-off).\n`), await createPage('M'));
     revisions.push(await createPage('S', ids.O), await createPage('C', ids.P));
     await Promise.all(revisions.map(waitIndexed));
 
@@ -378,6 +380,28 @@ describe('page permissions (e2e, #76)', () => {
       const read = await mcp(people.bob, 'knowledge_get_document', { documentId: ids.P });
       expect(read.isError).toBe(true);
       expect(JSON.stringify(read)).not.toContain(word);
+    });
+  });
+
+  describe('backlinks (#673)', () => {
+    const backlinks = async (p: Person) =>
+      (await http().get(`/v1/documents/${ids.O}/backlinks`).set(as(p)).expect(ok(200))).body as {
+        backlinks: Array<{ documentId: string; anchors: string[] }>;
+      };
+
+    it('names a restricted linking page only to someone who may open it', async () => {
+      expect((await backlinks(people.alice)).backlinks).toEqual([expect.objectContaining({ documentId: ids.P, anchors: ['sign-off'] })]);
+      const bob = await backlinks(people.bob);
+      expect(bob.backlinks).toEqual([]);
+      expect(JSON.stringify(bob)).not.toContain(word);
+    });
+
+    it('applies the same scope to knowledge_get_document over MCP', async () => {
+      const read = async (p: Person) =>
+        (JSON.parse((await mcp(p, 'knowledge_get_document', { documentId: ids.O })).content[0].text) as { backlinks: Array<{ documentId: string }> })
+          .backlinks.map((b) => b.documentId);
+      expect(await read(people.alice)).toEqual([ids.P]);
+      expect(await read(people.bob)).toEqual([]);
     });
   });
 

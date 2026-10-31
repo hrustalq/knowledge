@@ -2892,6 +2892,16 @@
     },
     {
       "method": "GET",
+      "path": "/v1/documents/{id}/backlinks",
+      "tag": "documents",
+      "summary": "Pages linking to this one (#673), only those the caller may open; anchor = one heading",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/documents/{id}/branches",
       "tag": "documents",
       "summary": "List branches with head revisions",
@@ -5972,7 +5982,7 @@
     },
     {
       "name": "knowledge_get_document",
-      "description": "Get a document, its head (or a given) revision and indexed chunk summaries.",
+      "description": "Get a document, its head (or a given) revision and indexed chunk summaries, plus `backlinks`: the pages you can open whose current text links to it, with the headings they link to.",
       "inputs": [
         {
           "name": "documentId",

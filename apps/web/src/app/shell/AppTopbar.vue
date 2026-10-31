@@ -33,11 +33,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
     </Button>
 
     <!-- A trigger, not a field: the sheet owns the only live query input, so
-         focus can't be tugged between two of them by the dialog focus trap. -->
+         focus can't be tugged between two of them by the dialog focus trap.
+         `min-w-0` lets it give way to the controls beside it (#647): a flex
+         item is otherwise as wide as its placeholder, and the Russian one
+         pushed the account menu off a phone screen. -->
     <button
       id="global-search-trigger"
       type="button"
-      class="relative h-8 w-full max-w-sm rounded-md border bg-muted/40 pl-8 pr-10 text-left text-sm text-muted-foreground outline-none transition-colors max-sm:pr-3 hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring"
+      class="relative h-8 w-full min-w-0 max-w-sm rounded-md border bg-muted/40 pl-8 pr-10 text-left text-sm text-muted-foreground outline-none transition-colors max-sm:pr-3 hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring"
       aria-haspopup="dialog"
       :aria-label="t('nav.searchPages')"
       @click="searchUi.openSearch()"

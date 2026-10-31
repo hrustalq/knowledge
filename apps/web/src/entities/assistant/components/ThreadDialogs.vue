@@ -32,7 +32,7 @@ function rename(thread: AssistantThreadSummary) {
   renaming.value = thread
   // Seeded with what the row currently reads, so renaming an auto-named chat
   // starts from that name instead of an empty field.
-  renameDraft.value = thread.title ?? threadLabel(thread)
+  renameDraft.value = thread.title ?? threadLabel(thread, '')
 }
 
 function remove(thread: AssistantThreadSummary) {
@@ -93,7 +93,7 @@ defineExpose({ rename, remove })
       <DialogHeader>
         <DialogTitle>{{ t('chat.deleteChat') }}</DialogTitle>
         <DialogDescription>
-          {{ t('chat.deleteChatBody', { name: deleting ? threadLabel(deleting) : '' }) }}
+          {{ t('chat.deleteChatBody', { name: deleting ? threadLabel(deleting, t('chat.untitled')) : '' }) }}
         </DialogDescription>
       </DialogHeader>
       <DialogFooter>

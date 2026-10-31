@@ -5,7 +5,7 @@
 // apart. Store-free: each surface passes the filters it offers in the
 // `filters` slot, drawn twice — the desktop rail and the mobile disclosure.
 import { useI18n } from 'vue-i18n'
-import { ref } from 'vue'
+import { computed, nextTick, ref, useId, watch } from 'vue'
 import { Search, SlidersHorizontal } from 'lucide-vue-next'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
@@ -36,6 +36,38 @@ const setQueryEl = (c: unknown) => {
 const filtersOpen = ref(false)
 
 defineExpose({ focusQuery: () => queryEl.value?.focus() })
+
+/**
+ * The query field drives the results as a listbox (#651), the command-palette
+ * way: focus stays in the field so typing goes on working, ↑/↓ move a row
+ * marked by `aria-activedescendant`, and Enter opens it by clicking the row's
+ * own link — the router link in the app, a plain link in a site's reader.
+ */
+const listId = useId()
+const active = ref(-1)
+const results = computed(() => props.search.response.value?.results ?? [])
+watch(results, () => (active.value = -1))
+watch(active, async (i) => {
+  if (i < 0) return
+  await nextTick()
+  document.getElementById(`${listId}-${i}`)?.scrollIntoView({ block: 'nearest' })
+})
+
+function onQueryKey(e: KeyboardEvent) {
+  const n = results.value.length
+  if (!n || e.isComposing) return
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    active.value = Math.min(n - 1, active.value + 1)
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    active.value = Math.max(-1, active.value - 1)
+  } else if (e.key === 'Enter' && active.value >= 0) {
+    // Opening a row, not running the search again.
+    e.preventDefault()
+    document.getElementById(`${listId}-${active.value}`)?.click()
+  }
+}
 
 function clearLabel() {
   const n = props.search.activeFilterCount.value
@@ -84,7 +116,13 @@ function clearLabel() {
               v-model="search.query.value"
               :placeholder="placeholder || t('search.searchEveryPagePlaceholder')"
               :aria-label="t('search.query')"
+              role="combobox"
+              aria-autocomplete="list"
+              :aria-expanded="results.length > 0"
+              :aria-controls="listId"
+              :aria-activedescendant="active >= 0 ? `${listId}-${active}` : undefined"
               class="pl-8"
+              @keydown="onQueryKey"
             />
           </div>
           <Button type="submit" :disabled="search.busy.value || !search.query.value.trim()">
@@ -134,6 +172,8 @@ function clearLabel() {
           :error="search.error.value"
           :active-filter-count="search.activeFilterCount.value"
           :copy="copy"
+          :list-id="listId"
+          :active-index="active"
           @navigate="emit('navigate')"
           @clear-filters="search.clearFilters()"
         />

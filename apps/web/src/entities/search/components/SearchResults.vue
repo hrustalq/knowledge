@@ -22,7 +22,16 @@ const props = defineProps<{
   activeFilterCount: number
   /** What the idle and no-match states say; page search's wording when omitted. */
   copy?: SearchCopy
+  /**
+   * The listbox the query field drives (#651): its id, and the row the arrow
+   * keys are on. Without an id the list is a plain list of links.
+   */
+  listId?: string
+  activeIndex?: number
 }>()
+
+/** A row's element id, which the query field's `aria-activedescendant` names. */
+const optionId = (i: number) => (props.listId ? `${props.listId}-${i}` : undefined)
 
 const say = (k: keyof SearchCopy, fallback: string) => props.copy?.[k] ?? t(fallback)
 
@@ -82,16 +91,24 @@ const emit = defineEmits<{ navigate: []; 'clear-filters': [] }>()
     </div>
 
     <div v-else :class="busy ? 'opacity-60 transition-opacity' : ''">
-      <ul class="divide-y">
-        <li v-for="r in response.results" :key="r.key">
+      <ul
+        class="divide-y"
+        :id="listId"
+        :role="listId ? 'listbox' : undefined"
+        :aria-label="listId ? t('search.resultsLabel') : undefined"
+      >
+        <li v-for="(r, i) in response.results" :key="r.key" :role="listId ? 'none' : undefined">
           <component
             :is="linkIs(r)"
+            :id="optionId(i)"
             :to="r.to"
             :href="r.to ? undefined : r.href"
             :target="r.external ? '_blank' : undefined"
             :rel="r.external ? 'noopener noreferrer' : undefined"
+            :role="listId ? 'option' : undefined"
+            :aria-selected="listId ? i === activeIndex : undefined"
             class="block rounded-md px-2 py-3 transition-colors"
-            :class="r.to || r.href ? 'hover:bg-muted/60' : ''"
+            :class="[r.to || r.href ? 'hover:bg-muted/60' : '', listId && i === activeIndex ? 'bg-muted/60' : '']"
             @click="emit('navigate')"
           >
             <div class="flex items-baseline justify-between gap-3">
@@ -117,14 +134,8 @@ const emit = defineEmits<{ navigate: []; 'clear-filters': [] }>()
                   {{ t('search.asOf.superseded', { date: formatDate(r.supersededAt) }) }}
                 </Badge>
               </span>
-              <!-- Scores round to 0 under the stub embedding provider; a column
-                   of zeroes reads as broken, so show one only when it says something. -->
-              <span
-                v-if="r.score && r.score > 0"
-                class="shrink-0 font-mono text-xs tabular-nums text-muted-foreground"
-              >
-                {{ r.score }}
-              </span>
+              <!-- No score (#651): under hybrid fusion it is a rank-fusion value,
+                   not a percentage, and 0.03 read as a near-miss. -->
             </div>
             <p v-if="r.snippet.length" class="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
               <template v-for="(part, j) in r.snippet" :key="j">

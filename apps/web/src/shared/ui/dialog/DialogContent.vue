@@ -32,7 +32,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
     <DialogContent
       data-slot="dialog-content"
       :class="cn(
-        'bg-card fixed top-1/2 left-1/2 z-50 grid w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2',
+        'bg-card fixed top-1/2 left-1/2 z-50 grid grid-cols-[minmax(0,1fr)] w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2',
         'gap-5 rounded-xl border p-6 shadow-[0_16px_48px_-12px] shadow-foreground/20 dark:shadow-black/60',
         'duration-200 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
         'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95',

@@ -106,6 +106,7 @@ export class SsoFlowService {
       orderBy: [{ name: 'asc' }, { id: 'asc' }],
     });
     return {
+      enabled: true,
       providers: rows.map(toLoginProvider),
       passwordLogin: this.config.get('AUTH_PASSWORD_LOGIN_ENABLED', { infer: true }),
     };

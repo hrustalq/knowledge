@@ -321,8 +321,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Login buttons: enabled providers of the workspace plus every platform-wide one. 404 when SSO is off */
-        get: operations["SsoController_providers"];
+        /** Login buttons: enabled providers of the workspace plus every platform-wide one. `enabled: false` when SSO is off */
+        get: operations["SsoProvidersController_providers"];
         put?: never;
         post?: never;
         delete?: never;
@@ -14813,6 +14813,7 @@ export interface components {
             preset: components["schemas"]["IdpPreset"];
         };
         SsoProvidersResponse: {
+            enabled: boolean;
             providers: components["schemas"]["SsoLoginProvider"][];
             passwordLogin: boolean;
         };
@@ -16323,7 +16324,7 @@ export interface operations {
             };
         };
     };
-    SsoController_providers: {
+    SsoProvidersController_providers: {
         parameters: {
             query?: {
                 /** @description The workspace whose buttons to show (the kn_ws cookie's) */

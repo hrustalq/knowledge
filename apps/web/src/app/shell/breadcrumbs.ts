@@ -75,8 +75,9 @@ export function useCrumbs(): ComputedRef<Crumb[]> {
   /** Pages live inside a project, so page trails lead with the active project. */
   function pageRoot(): Crumb[] {
     const name = projects.activeName
-    return name
-      ? [{ label: name, to: '/settings/projects' }, { label: t('nav.pages'), to: '/documents' }]
+    // The project's own page (feature 24), not the settings roster (#645).
+    return name && projects.activeId
+      ? [{ label: name, to: `/projects/${projects.activeId}` }, { label: t('nav.pages'), to: '/documents' }]
       : [{ label: t('nav.pages'), to: '/documents' }]
   }
 

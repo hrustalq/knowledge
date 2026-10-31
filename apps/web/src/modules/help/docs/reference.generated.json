@@ -1564,7 +1564,7 @@
       "method": "GET",
       "path": "/v1/auth/sso/providers",
       "tag": "auth",
-      "summary": "Login buttons: enabled providers of the workspace plus every platform-wide one. 404 when SSO is off",
+      "summary": "Login buttons: enabled providers of the workspace plus every platform-wide one. `enabled: false` when SSO is off",
       "role": null,
       "source": null,
       "public": true,

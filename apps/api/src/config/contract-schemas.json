@@ -21083,6 +21083,9 @@
   "SsoProvidersResponse": {
     "type": "object",
     "properties": {
+      "enabled": {
+        "type": "boolean"
+      },
       "providers": {
         "type": "array",
         "items": {
@@ -21094,6 +21097,7 @@
       }
     },
     "required": [
+      "enabled",
       "providers",
       "passwordLogin"
     ]

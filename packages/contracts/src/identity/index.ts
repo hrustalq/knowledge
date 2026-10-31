@@ -456,6 +456,12 @@ export interface SsoLoginProvider {
 
 // GET /v1/auth/sso/providers?workspaceId=
 export interface SsoProvidersResponse {
+  /**
+   * SSO is on for this instance (#645). False answers 200 with no providers
+   * rather than the other SSO routes' 404, so the login page's one probe does
+   * not log an error on every visit; it then shows the plain password form.
+   */
+  enabled: boolean;
   providers: SsoLoginProvider[];
   /** AUTH_PASSWORD_LOGIN_ENABLED: the password form is offered at all. */
   passwordLogin: boolean;

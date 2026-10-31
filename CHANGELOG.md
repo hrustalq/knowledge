@@ -71,6 +71,19 @@ in the pull request that introduces them — see
   `finalized`), in English even in the Russian interface. They now read "Open" / «Открыт» and "Indexed" /
   «Проиндексирована», the same words the lists use, and a status the interface does not know yet still shows
   as itself.
+- **The sign-in page no longer logs an error on every visit** (#645). With single sign-on off, its check for
+  SSO buttons got a 404, which the browser printed in the console. `GET /v1/auth/sso/providers` now answers
+  200 with `enabled: false` and no providers; every other SSO route still answers 404 while SSO is off.
+- **The project crumb above a page opens the project** (#645), not the project list in settings.
+- **On a phone the breadcrumb trail is readable again** (#645). A page's actions shared the trail's row and
+  squeezed it to a few letters. Below 640 px the trail now has a row of its own with the actions under it, a
+  short crumb such as "Pages" is never cut, and every crumb is a 24 px tap target.
+- **The graph's time slider announces "Now" or a date to screen readers** (#645), not the drag hint.
+- **Search results show plain text** (#645). An excerpt could show markdown as typed, such as backticks around
+  `webhook-dispatcher` or `**` around bold text. Code inside a fenced block still shows, and names with
+  underscores (`snake_case`) keep them.
+- **The web server no longer sends `X-Powered-By: Express`** (#645), and app pages now state
+  `Referrer-Policy: strict-origin-when-cross-origin` (the browsers' default) beside the other security headers.
 
 ## [0.41.0] — 2026-10-31
 

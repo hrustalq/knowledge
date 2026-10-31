@@ -52,6 +52,13 @@ const readout = computed(() => {
   return selectedTag.value ? t('graph.time.asOfTag', { tag: selectedTag.value, date }) : t('graph.time.asOf', { date })
 })
 
+/**
+ * What a screen reader announces for the thumb (#645): the value, never the
+ * epoch `aria-valuenow` has to carry, and never the drag hint the visible
+ * readout shows at "now" — a hint is not a position.
+ */
+const valueText = computed(() => (at.value === null ? t('graph.time.now') : readout.value))
+
 function pointAt(clientX: number): number | null {
   const el = track.value
   if (!el || !span.value) return null
@@ -145,7 +152,7 @@ function onKey(e: KeyboardEvent) {
       :aria-valuemin="span?.from"
       :aria-valuemax="span?.to"
       :aria-valuenow="at ?? span?.to"
-      :aria-valuetext="readout"
+      :aria-valuetext="valueText"
       @pointerdown="onPointerDown"
       @pointermove="onPointerMove"
       @pointerup="onPointerUp"

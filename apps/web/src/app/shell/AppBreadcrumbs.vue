@@ -60,13 +60,16 @@ watch(
   >
     <!-- The trail scrolls inside the bar, not the bar itself: its fade masks
          what it covers, and on the bar that would be the solid ground the page
-         scrolls under. -->
+         scrolls under. `leading-6` makes every crumb a 24px target (#645,
+         WCAG 2.5.8) inside the 36px row. Ancestors keep their capped width and
+         the current page — the heading right below — gives way first, so a
+         short label like "Pages" never loses letters. -->
     <div class="kn-scroll-strip flex h-full min-w-0 flex-1 items-center gap-1 overflow-x-auto">
       <template v-for="(c, i) in crumbs" :key="i">
         <ChevronRight v-if="i > 0" class="size-3 shrink-0" aria-hidden="true" />
         <span
           v-if="c.restricted"
-          class="flex max-w-56 shrink-0 items-center gap-1 italic"
+          class="flex max-w-56 shrink-0 items-center gap-1 leading-6 italic"
           :title="t('access.lockedLabel')"
         >
           <Lock class="size-3 shrink-0" aria-hidden="true" />
@@ -75,11 +78,11 @@ watch(
         <RouterLink
           v-else-if="c.to && i < crumbs.length - 1"
           :to="c.to"
-          class="max-w-56 truncate transition-colors hover:text-foreground"
+          class="max-w-32 shrink-0 truncate leading-6 transition-colors hover:text-foreground sm:max-w-56"
         >
           {{ c.label }}
         </RouterLink>
-        <span v-else class="max-w-56 truncate font-medium text-foreground" aria-current="page">{{ c.label }}</span>
+        <span v-else class="max-w-56 truncate leading-6 font-medium text-foreground" aria-current="page">{{ c.label }}</span>
       </template>
     </div>
   </nav>

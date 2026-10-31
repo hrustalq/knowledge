@@ -94,12 +94,13 @@ export const useAuthStore = defineStore('auth', {
     },
     /**
      * The login page's SSO buttons (#75), or null when SSO is off on this
-     * instance — the routes answer 404 then, and the page is the plain
-     * password form it always was.
+     * instance — the page is then the plain password form it always was. The
+     * route says so with `enabled: false` (#645); a 404 is an older API.
      */
     async ssoProviders(workspaceId: string): Promise<SsoProvidersResponse | null> {
       try {
-        return await api.get('/v1/auth/sso/providers', { query: { workspaceId } })
+        const res = await api.get('/v1/auth/sso/providers', { query: { workspaceId } })
+        return res.enabled === false ? null : res
       } catch (e) {
         if (isApiRequestError(e) && e.status === 404) return null
         throw e

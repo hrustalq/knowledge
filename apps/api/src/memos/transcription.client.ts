@@ -47,11 +47,11 @@ export class TranscriptionClient {
     if (this.provider === 'gen-api') {
       form.append('audio_url', audio, basename(path));
       form.append('is_sync', 'true');
-      const body = (await this.post(GEN_STT_URL, form)) as { response?: unknown };
+      const body = (await this.post(GEN_STT_URL, form)) as { response?: unknown; cost?: unknown };
       if (!Array.isArray(body.response)) throw new Error(t('error.memo.speechServerRefused', { status: 200 }));
       const text = body.response.filter((s): s is string => typeof s === 'string').join(' ');
       // No segments: `stitchTranscript` makes the whole chunk one, which is why gen-api chunks are short.
-      return { offset, duration, language: null, text, segments: [] };
+      return { offset, duration, language: null, text, segments: [], ...(typeof body.cost === 'number' ? { cost: body.cost } : {}) };
     }
     form.append('file', audio, basename(path));
     form.append('model', this.model);

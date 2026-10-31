@@ -74,6 +74,8 @@ export class MemosProcessor extends WorkerHost {
     const dir = await mkdtemp(join(tmpdir(), 'memo-'));
     const started = Date.now();
     let seconds = 0;
+    // A sum only while every chunk reported one: a partial sum would read as the whole bill.
+    let cost: number | null = 0;
     let failure: string | undefined;
     try {
       const source = join(dir, 'source');
@@ -86,7 +88,9 @@ export class MemosProcessor extends WorkerHost {
       const cuts = this.stt.provider === 'gen-api' ? pauseCuts(await detectPauses(source), seconds) : fixedCuts(seconds);
       const chunks: ChunkTranscript[] = [];
       for (const chunk of await splitAudio(source, dir, cuts, seconds)) {
-        chunks.push(await this.stt.transcribe(chunk.path, chunk.offset, chunk.duration));
+        const part = await this.stt.transcribe(chunk.path, chunk.offset, chunk.duration);
+        cost = cost === null || part.cost === undefined ? null : cost + part.cost;
+        chunks.push(part);
       }
       const { segments, language } = stitchTranscript(chunks);
       await this.prisma.memo.update({
@@ -108,7 +112,9 @@ export class MemosProcessor extends WorkerHost {
         void this.usage.recordTranscription({
           workspaceId,
           userId,
+          provider: this.stt.provider,
           model: this.stt.model,
+          costUsdMicros: cost === null ? null : Math.round(cost * 1_000_000),
           audioSeconds: Math.round(seconds),
           durationMs: Date.now() - started,
           ok: !failure,

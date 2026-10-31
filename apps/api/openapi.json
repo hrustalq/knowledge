@@ -48641,6 +48641,10 @@
           "toolCallCount": {
             "type": "number"
           },
+          "audioSeconds": {
+            "type": "number",
+            "nullable": true
+          },
           "createdAt": {
             "type": "string"
           }
@@ -48664,6 +48668,7 @@
           "error",
           "threadId",
           "toolCallCount",
+          "audioSeconds",
           "createdAt"
         ]
       },

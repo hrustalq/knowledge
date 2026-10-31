@@ -40,6 +40,11 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- **A memo's update merge request says "update", not "gap"** (#551). The description now names what the
+  meeting decided to do to the page.
+- **Transcription rows in AI usage name the real speech provider and carry its cost** (#551). They used to
+  say `openai-compatible` even on gen-api, and counted as unpriced. With gen-api the cost gen-stt reports is
+  recorded; the usage log also shows each row's recording length (`audioSeconds`).
 - **A captured page waiting for review no longer shows up as a page before its merge request merges** (#642).
   The knowledge-base graph drew it as a node, and clicking it opened a page that said "indexed" but could
   not load. A page's own graph could also reach it as a neighbour. The project page counts in the rail, on the
@@ -117,6 +122,14 @@ in the pull request that introduces them — see
   goes back to it.
 
 ### Security
+
+- **Passwords, keys, emails and phone numbers said aloud in a memo are masked** (#551). Speech-to-text never
+  writes them in a form the masker recognised, so a password read out in a meeting (`пароль от стейджа …`)
+  reached the stored transcript and the model. The masker now masks the value after a word like `пароль`,
+  `ключ`, `токен`, `password`, `api key` or `телефон`, an address read aloud (`… собака … точка ру`) and a bare
+  `+` number. Chat harvest and chat search use the same masker, so a typed `пароль: hunter2` is masked there
+  too. Short numbers after `token` or `ключ` may now be masked as well (`token limit [SECRET_1]`). Transcripts
+  already stored are unchanged; delete a memo to remove one.
 
 - **Scripts on the page can no longer read your session** (#650). The session used to sit in browser storage
   and in a cookie that scripts could read, so a script slipped into rendered content could copy a 30-day

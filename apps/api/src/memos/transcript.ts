@@ -11,6 +11,8 @@ export interface ChunkTranscript {
   segments: Array<{ start: number; end: number; text: string }>;
   /** The whole chunk's text — the fallback when `segments` is empty. */
   text: string;
+  /** What the server billed for this chunk, when it says (gen-api does). */
+  cost?: number;
 }
 
 /**

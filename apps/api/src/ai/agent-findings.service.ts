@@ -209,7 +209,8 @@ export class AgentFindingsService {
         // The evidence travels with the proposal: a reviewer deciding whether
         // a page drifted wants the pull request that moved it.
         description:
-          `Proposed from a ${run.agentKey} run.\n\n**${finding.kind}** — ${finding.detail}` +
+          // A memo's proposal is a decision the meeting took, not a gap a scan found (#551).
+          `Proposed from a ${run.agentKey} run.\n\n**${finding.memo?.action ?? finding.kind}** — ${finding.detail}` +
           (finding.sources?.length
             ? `\n\n${finding.sources.map((src) => `- [${src.title}](${src.url})`).join('\n')}`
             : ''),

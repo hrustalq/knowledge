@@ -34,6 +34,7 @@ import { decorateCitations } from '@/entities/assistant/model/citations'
 import { answerTurns, flowSteps } from '@/entities/assistant/model/flow-steps'
 import AssistantPrompt from './AssistantPrompt.vue'
 import ThinkingTrail from './ThinkingTrail.vue'
+import { useDocumentsStore } from '@/stores/documents'
 
 const { t } = useI18n()
 
@@ -51,7 +52,37 @@ const emit = defineEmits<{
   switchMode: [string]
   reset: [AssistantMessageInfo]
   edit: [{ message: AssistantMessageInfo; content: string }]
+  /** An example prompt was picked: the host puts it in the composer. */
+  prompt: [string]
 }>()
+
+/**
+ * Example prompts from this project's own pages (#651), so each one finds
+ * something here. Read after mount, so the server's render matches the
+ * client's first one (the generic prompt); the top level of the tree is asked
+ * for if nothing has loaded it yet, a request the store shares with the rail.
+ */
+const documents = useDocumentsStore()
+const hydrated = ref(false)
+onMounted(() => {
+  hydrated.value = true
+  watch(
+    () => rows.value.length === 0,
+    (empty) => {
+      if (empty && !documents.treeLoaded) void documents.fetchTree()
+    },
+    { immediate: true },
+  )
+})
+const examples = computed(() => {
+  const titles = hydrated.value
+    ? documents.tree.filter((n) => !n.hidden && n.title.trim()).map((n) => n.title.trim())
+    : []
+  const fromPages = titles.length
+    ? [t('chat.exampleSummarize', { title: titles[0] }), t('chat.exampleDepends', { title: titles[1] ?? titles[0] })]
+    : [t('chat.exampleOverview')]
+  return [...fromPages, t('chat.example3')]
+})
 
 const scrollEl = ref<HTMLElement | null>(null)
 /** Everything inside the scrollport. Its height is what actually moves the tail. */
@@ -346,10 +377,20 @@ defineExpose({ scrollToEnd })
             <strong class="font-medium text-foreground">{{ t('chat.modeAgent') }}</strong>
             {{ t('chat.emptyBodyAfter') }}
           </p>
-          <ul class="mt-5 space-y-1.5 text-sm text-muted-foreground">
-            <li>{{ t('chat.example1') }}</li>
-            <li>{{ t('chat.example2') }}</li>
-            <li>{{ t('chat.example3') }}</li>
+          <!-- Buttons, not quotes (#651): a prompt that looks pickable is. -->
+          <p class="mt-5 text-caption font-medium text-muted-foreground">{{ t('chat.tryAsking') }}</p>
+          <!-- -ml-3: the text lines up with the copy above; the hover ground hangs into the gutter. -->
+          <ul class="mt-1.5 -ml-3 flex flex-col items-start gap-1">
+            <li v-for="example in examples" :key="example" class="max-w-full">
+              <Button
+                variant="ghost"
+                size="sm"
+                class="h-auto max-w-full justify-start py-1.5 text-left font-normal whitespace-normal text-muted-foreground hover:text-foreground"
+                @click="emit('prompt', example)"
+              >
+                {{ example }}
+              </Button>
+            </li>
           </ul>
         </div>
 

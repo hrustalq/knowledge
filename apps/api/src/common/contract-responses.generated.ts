@@ -288,6 +288,7 @@ import type {
   ScimTokenCreated,
   SearchApiOperationsResponse,
   SearchResponse,
+  SessionCookieResponse,
   SetAnswerFeedbackResponse,
   ShareLinkListResponse,
   ShareLinkSummary,
@@ -627,6 +628,7 @@ export interface ContractResponses {
   ScimTokenCreated: ScimTokenCreated;
   SearchApiOperationsResponse: SearchApiOperationsResponse;
   SearchResponse: SearchResponse;
+  SessionCookieResponse: SessionCookieResponse;
   SetAnswerFeedbackResponse: SetAnswerFeedbackResponse;
   ShareLinkListResponse: ShareLinkListResponse;
   ShareLinkSummary: ShareLinkSummary;

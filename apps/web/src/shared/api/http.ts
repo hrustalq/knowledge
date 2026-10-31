@@ -4,6 +4,7 @@
 // malformed bodies, network failures, timeouts and aborts all included.
 import axios, { AxiosError, type AxiosInstance } from 'axios'
 import {
+  CSRF_HEADER,
   errorCodeForStatus,
   isApiErrorPayload,
   type ApiErrorCode,
@@ -91,10 +92,14 @@ const base = import.meta.env.SSR
 export const http: AxiosInstance = axios.create({ baseURL: base, timeout: 30_000 })
 
 http.interceptors.request.use((config) => {
+  // In the browser the HttpOnly session cookie authenticates the call (#650)
+  // and getToken() is null; the SSR render forwards the request's cookie as a
+  // bearer. A call may ask as another credential (Connect AI checks a key it
+  // just minted): its own header wins over the session's.
   const token = getToken()
-  // A call may ask as another credential (Connect AI checks a key it just
-  // minted): its own header wins over the session's.
   if (token && !config.headers.has('Authorization')) config.headers.set('Authorization', `Bearer ${token}`)
+  // What lets the API accept a cookie-authenticated write: a cross-site form cannot send it.
+  for (const [name, value] of Object.entries(CSRF_HEADER)) config.headers.set(name, value)
   // Second HTTP stack, same contract: the API replies in the UI's language.
   config.headers.set('Accept-Language', getLocale())
   // Correlates this call to the API's logs — and, under SSR, to the page render

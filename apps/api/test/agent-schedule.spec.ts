@@ -238,6 +238,8 @@ describe('AgentScheduleSweeper.startDue', async () => {
         }),
       },
       user: { findUnique: vi.fn(async () => ({ locale: 'ru' })) },
+      withTransaction: vi.fn(async (fn: () => Promise<unknown>) => fn()),
+      onCommit: vi.fn((fn: () => Promise<unknown>) => void fn()),
     };
     const producer = { enqueue: vi.fn(async () => undefined) };
     const sweeper = new AgentScheduleSweeper(prisma as never, producer as never, { get: () => true } as never);
@@ -279,6 +281,65 @@ describe('AgentScheduleSweeper.startDue', async () => {
     ]);
     await startDue();
     expect(created.map((run) => run.agentKey)).toEqual(['reviewer']);
+  });
+});
+
+describe('AgentScheduleSweeper — run recovery (#657)', async () => {
+  const { AgentScheduleSweeper } = await import('../src/agents/agent-schedule.sweeper.js');
+  const { vi } = await import('vitest');
+
+  function sweeperWith(rows: { stuck?: object[]; pending?: object[] }, schedulesEnabled = false) {
+    const findMany = vi.fn(async ({ where }: { where: { status: string } }) =>
+      where.status === 'running' ? (rows.stuck ?? []) : (rows.pending ?? []),
+    );
+    const prisma = {
+      agentRun: { findMany, update: vi.fn(async () => ({})) },
+      aiAgent: { findMany: vi.fn(async () => []) },
+    };
+    const producer = { enqueue: vi.fn(async () => undefined), enqueueRetry: vi.fn(async () => undefined) };
+    const sweeper = new AgentScheduleSweeper(prisma as never, producer as never, { get: () => schedulesEnabled } as never);
+    sweeper.onModuleInit();
+    sweeper.onModuleDestroy();
+    return { sweeper, prisma, producer, findMany };
+  }
+
+  it('re-enqueues a stale pending run under the jobId of its last enqueue, with schedules off', async () => {
+    const { sweeper, producer, prisma, findMany } = sweeperWith({
+      pending: [
+        { id: 'fresh-run', attempt: 0 },
+        { id: 'retried-run', attempt: 2 },
+      ],
+    });
+    await sweeper.sweep();
+    expect(producer.enqueue).toHaveBeenCalledExactlyOnceWith('fresh-run');
+    expect(producer.enqueueRetry).toHaveBeenCalledExactlyOnceWith('retried-run', 2);
+    const pending = findMany.mock.calls.find(([q]) => q.where.status === 'pending')![0] as {
+      where: { updatedAt: { lt: Date } };
+    };
+    expect(pending.where.updatedAt.lt.getTime()).toBeLessThan(Date.now() - 9 * 60_000);
+    // Schedules stay off: no candidate query.
+    expect(prisma.aiAgent.findMany).not.toHaveBeenCalled();
+  });
+
+  it('recovers a stuck running run with schedules off, and enqueues nothing when no row is stale', async () => {
+    const stuck = sweeperWith({ stuck: [{ id: 'dead-run', attempt: 0 }] });
+    await stuck.sweeper.sweep();
+    expect(stuck.prisma.agentRun.update).toHaveBeenCalledWith({
+      where: { id: 'dead-run' },
+      data: { status: 'pending', attempt: { increment: 1 } },
+    });
+    expect(stuck.producer.enqueueRetry).toHaveBeenCalledExactlyOnceWith('dead-run', 1);
+
+    const quiet = sweeperWith({});
+    await quiet.sweeper.sweep();
+    expect(quiet.producer.enqueue).not.toHaveBeenCalled();
+    expect(quiet.producer.enqueueRetry).not.toHaveBeenCalled();
+  });
+
+  it('starts due schedules only when they are enabled', async () => {
+    const { sweeper, prisma } = sweeperWith({}, true);
+    await sweeper.sweep();
+    expect(prisma.aiAgent.findMany).toHaveBeenCalledOnce();
   });
 });
 

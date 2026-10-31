@@ -23,6 +23,7 @@ import type { RouteLocationNormalized, RouteRecordNormalized, Router } from 'vue
 import type { Pinia } from 'pinia'
 import type { QueryClient } from '@tanstack/vue-query'
 import { prefetchDocument } from '@/entities/document'
+import { whenIdle } from '@/shared/utils/hydration'
 import { useAuthStore } from '@/stores/auth'
 import { useFeaturesStore } from '@/stores/features'
 import { HOME_NAV, KNOWLEDGE_NAV, PRIMARY_NAV, SETTINGS_NAV } from '@/app/shell/nav'
@@ -184,10 +185,6 @@ function savingData(): boolean {
   return !!c && (!!c.saveData || /2g/.test(c.effectiveType ?? ''))
 }
 
-function whenIdle(fn: () => void) {
-  if ('requestIdleCallback' in window) window.requestIdleCallback(fn, { timeout: 5000 })
-  else setTimeout(fn, 2000)
-}
 
 // Chrome, Firefox, Safari, and Vite's preload helper, in that order.
 const CHUNK_ERROR =

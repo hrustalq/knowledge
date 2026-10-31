@@ -55,6 +55,7 @@ import { api, fetchApi } from '@/shared/api/queries'
 import { GLOSSARY_AT_ATTR, GLOSSARY_ATTR } from '@/entities/document'
 import { GlossaryCard } from '@/entities/document'
 import { useMediaQuery } from '@vueuse/core'
+import { splitTitleHeading } from '@knowledge/editor-schema/markdown'
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
@@ -103,15 +104,6 @@ interface Floater {
 }
 
 /**
- * The page body, with its own title removed.
- *
- * `documents.title` is the canonical title and the page header renders it, but
- * almost every page also opens with `# Same Title` because that is what writing
- * markdown looks like — so the reader met the title twice. The heading is
- * dropped only when it actually matches; a first heading that says something
- * else is a real section and stays.
- */
-/**
  * The roster behind `[text](Exact Page Title)` references (lib/page-refs).
  * Fetched only when this page actually contains a candidate, so an ordinary
  * page costs nothing; RichEditor re-parses when it lands.
@@ -148,14 +140,8 @@ watch(
   { immediate: true },
 )
 
-const body = computed(() => {
-  const raw = props.markdown ?? ''
-  const title = props.title?.trim().toLowerCase()
-  if (!title) return raw
-  return raw.replace(/^\s*#\s+(.+?)\s*(\n|$)/, (match, heading: string) =>
-    heading.trim().toLowerCase() === title ? '' : match,
-  )
-})
+/** The page body without its own `# Title` — the editor holds it out by the same rule. */
+const body = computed(() => splitTitleHeading(props.markdown ?? '', props.title ?? '').body)
 
 const canvas = ref<HTMLElement | null>(null)
 const page = ref<HTMLElement | null>(null)

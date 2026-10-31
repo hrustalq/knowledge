@@ -52,7 +52,6 @@ export function searchViewOf(res: SearchResponse): SearchView {
       to: linkOf(r.documentId, i + 1),
       // Chunk snippets are cut mid-sentence.
       snippet: r.snippetParts ?? [{ text: `${r.snippet}…`, hit: false }],
-      score: r.score,
       trust: r.trust?.status,
       badges: (r.entities ?? []).map((e) => ({ key: e.key, label: e.name })),
       ...(r.validTo ? { supersededAt: r.validTo } : {}),

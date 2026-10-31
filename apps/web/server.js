@@ -98,6 +98,8 @@ const renderCache = createRenderCache({
 
 // Create http server
 const app = express()
+// No `X-Powered-By: Express` on any response, the app's or a site's (#645).
+app.disable('x-powered-by')
 
 // Registered first, so Vite's middlewares and the SSR handler both run inside
 // the scope and every response carries x-request-id — static asset 404s included.

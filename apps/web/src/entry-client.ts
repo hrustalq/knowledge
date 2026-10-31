@@ -3,6 +3,7 @@ import { hydrate, type DehydratedState } from '@tanstack/vue-query'
 import { createApp } from './main'
 import { installNavigation } from './app/router/navigation'
 import { ensureLocaleMessages } from './shared/i18n'
+import { hydration } from './shared/utils/hydration'
 import { getLocale, getProjectId, getWorkspaceId, setActiveProject, setActiveWorkspace } from './shared/api/api'
 import { useProjectsStore } from './stores/projects'
 import { useWorkspacesStore } from './stores/workspaces'
@@ -25,10 +26,7 @@ if (window.__PINIA__) {
   // (deleted, #479) with the first one listed. First, because adopting a
   // workspace clears the remembered project the next lines then adopt.
   const workspaces = useWorkspacesStore(pinia)
-  const fallback = workspaces.items[0]?.workspaceId
-  if (workspaces.loaded && fallback && !workspaces.items.some((w) => w.workspaceId === getWorkspaceId())) {
-    setActiveWorkspace(fallback)
-  }
+  if (workspaces.fallbackId && workspaces.fallbackId !== getWorkspaceId()) setActiveWorkspace(workspaces.fallbackId)
   // The server may have resolved the active project against the roster (a
   // remembered one that is gone, or none yet). Adopt what it rendered with,
   // or every API call this page makes would ask for another scope (#279).
@@ -43,7 +41,10 @@ if (window.__PINIA__) {
 }
 
 Promise.all([router.isReady(), messagesReady]).then(() => {
+  // Hydration is synchronous: the flag covers exactly the render that adopts the server's DOM.
+  hydration.active = !!window.__PINIA__
   app.mount('#app')
+  hydration.active = false
   // Route prefetch and the pending-navigation state (#627): after hydration.
   installNavigation(router, pinia, queryClient)
 })

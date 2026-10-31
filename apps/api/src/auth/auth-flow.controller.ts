@@ -1,5 +1,6 @@
-import { Body, Controller, HttpCode, Post, Req, UseGuards } from '@nestjs/common';
-import type { Request } from 'express';
+import { Body, Controller, HttpCode, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { Request, Response } from 'express';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type {
   AuthSessionResponse,
@@ -7,6 +8,7 @@ import type {
   LogoutResponse,
   ResendVerificationResponse,
   ResetPasswordResponse,
+  SessionCookieResponse,
   UrlTicketResponse,
   VerifyEmailResponse,
 } from '@knowledge/contracts';
@@ -22,6 +24,9 @@ import {
 } from './auth-flow.dto.js';
 import type { Principal } from './principal.js';
 import { UrlTicketsService } from './url-tickets.service.js';
+import { SessionsService } from './sessions.service.js';
+import { clearSessionCookie, setSessionCookie } from './session-cookie.js';
+import type { Env } from '../config/env.js';
 import { requestMeta } from '../common/client-ip.js';
 import { AuthRateLimit, AuthRateLimitGuard } from './auth-rate-limit.guard.js';
 import { Returns } from '../common/returns.decorator.js';
@@ -40,14 +45,25 @@ export class AuthFlowController {
   constructor(
     private readonly flow: AuthFlowService,
     private readonly tickets: UrlTicketsService,
+    private readonly sessions: SessionsService,
+    private readonly config: ConfigService<Env, true>,
   ) {}
+
+  private webBaseUrl(): string {
+    return this.config.get('WEB_BASE_URL', { infer: true });
+  }
 
   @Public()
   @Post('signup')
   @Returns('AuthSessionResponse')
-  @ApiOperation({ summary: 'Create an account with email + password; returns a ks_ session token' })
-  signup(@Body() dto: SignupDto, @Req() req: Request): Promise<AuthSessionResponse> {
-    return this.flow.signup(dto.email, dto.displayName, dto.password, requestMeta(req));
+  @ApiOperation({ summary: 'Create an account with email + password; sets the HttpOnly kn_token session cookie' })
+  async signup(
+    @Body() dto: SignupDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<AuthSessionResponse> {
+    const issued = await this.flow.signup(dto.email, dto.displayName, dto.password, requestMeta(req));
+    return setSessionCookie(res, issued, this.webBaseUrl());
   }
 
   @Public()
@@ -56,18 +72,53 @@ export class AuthFlowController {
   @Returns('AuthSessionResponse')
   @UseGuards(AuthRateLimitGuard)
   @AuthRateLimit('login')
-  @ApiOperation({ summary: 'Email + password login; returns a ks_ session token. 429 past 30/min per IP or 10/min per address' })
-  login(@Body() dto: LoginDto, @Req() req: Request): Promise<AuthSessionResponse> {
-    return this.flow.login(dto.email, dto.password, requestMeta(req));
+  @ApiOperation({
+    summary: 'Email + password login; sets the HttpOnly kn_token session cookie. 429 past 30/min per IP or 10/min per address',
+  })
+  async login(
+    @Body() dto: LoginDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<AuthSessionResponse> {
+    const issued = await this.flow.login(dto.email, dto.password, requestMeta(req));
+    return setSessionCookie(res, issued, this.webBaseUrl());
   }
 
   @HttpCode(200)
   @Post('logout')
   @Returns('LogoutResponse')
   @UnverifiedOk()
-  @ApiOperation({ summary: 'Revoke the current session token (no-op for API keys / dev mode)' })
-  async logout(@CurrentPrincipal() principal: Principal, @Req() req: Request): Promise<LogoutResponse> {
+  @ApiOperation({ summary: 'Revoke the current session and clear its cookie (no-op for API keys / dev mode)' })
+  async logout(
+    @CurrentPrincipal() principal: Principal,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<LogoutResponse> {
     await this.flow.logout(principal, requestMeta(req));
+    clearSessionCookie(res, this.webBaseUrl());
+    return { ok: true };
+  }
+
+  /**
+   * #650 migration. A browser signed in before the session moved into an
+   * HttpOnly cookie still holds its `ks_` token in localStorage: it sends it
+   * here once as a bearer header, gets the cookie, and forgets its copy, so
+   * nobody is signed out by the deploy. Only a live `ks_` session presented
+   * as a header qualifies, never an API key: an API key in a cookie would
+   * authenticate every cross-site navigation as that key.
+   */
+  // ponytail: one-release bridge; delete with the web's adoptLegacySession once a session TTL (30 days) has passed after the release that ships it
+  @HttpCode(200)
+  @Post('session-cookie')
+  @Returns('SessionCookieResponse')
+  @UnverifiedOk()
+  @ApiOperation({ summary: 'Move a pre-#650 bearer ks_ session into the HttpOnly kn_token cookie (one-release migration)' })
+  async sessionCookie(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<SessionCookieResponse> {
+    const header = req.headers.authorization;
+    const token = header?.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : '';
+    const session = token.startsWith('ks_') ? await this.sessions.resolve(token) : null;
+    if (!session) return { ok: false };
+    setSessionCookie(res, { token, expiresAt: session.expiresAt.toISOString() }, this.webBaseUrl());
     return { ok: true };
   }
 
@@ -110,14 +161,15 @@ export class AuthFlowController {
   }
 
   /**
-   * #102: swap the caller's header credential for a single-use, ~60 s `kt_`
-   * ticket to put in `?token=` on a `@QueryTokenOk` route (the SSE stream), or
-   * in a `/v1/collab` provider's token (#80), so the long-lived session token
-   * or API key never appears in a URL or crosses that socket. The ticket
+   * #102: swap the caller's credential (a header, or the browser's session
+   * cookie, #650) for a single-use, ~60 s `kt_` ticket to put in `?token=` on
+   * a `@QueryTokenOk` route (the SSE stream), on the `/v1/events/ws` upgrade,
+   * or in a `/v1/collab` provider's token (#80), so the long-lived session
+   * token or API key never appears in a URL or crosses that socket. The ticket
    * carries the principal as resolved now, API-key narrowing included, so it
    * can never reach more than the credential that minted it.
    *
-   * Only a header mints one: this route is not `@QueryTokenOk`, so a ticket
+   * A ticket cannot mint one: this route is not `@QueryTokenOk`, so a ticket
    * cannot be traded for a fresh ticket. `@ReadKeyOk` because POST here is
    * transport — a read-only key needs the stream as much as a write key does.
    */

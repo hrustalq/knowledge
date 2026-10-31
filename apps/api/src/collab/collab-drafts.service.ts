@@ -5,6 +5,7 @@ import * as Y from 'yjs';
 import { prosemirrorToYDoc } from '@tiptap/y-tiptap';
 import type { CollabDraftInfo } from '@knowledge/contracts';
 import { BODY_FIELD, SCHEMA_VERSION, parseMarkdown } from '@knowledge/editor-schema';
+import { splitTitleHeading } from '@knowledge/editor-schema/markdown';
 import { pageMetaOf, seedPageMeta, type PageMeta } from '@knowledge/editor-schema/page-fields';
 import type { Env } from '../config/env.js';
 import { DocumentsService } from '../documents/documents.service.js';
@@ -283,7 +284,10 @@ export class CollabDraftsService {
     const head = branch.headRevisionId;
     const content = head ? await this.documents.getContent(documentId, head) : null;
     const meta = pageMetaOf(branch.document, content?.frontmatter);
-    return { head, ...seedState(content?.markdown ?? '', meta) };
+    // The body's own `# Title` stays out of the draft, as the editor holds it
+    // out (#646); publishing puts it back in front of the draft's body.
+    const { body } = splitTitleHeading(content?.markdown ?? '', branch.document.title);
+    return { head, ...seedState(body, meta) };
   }
 }
 

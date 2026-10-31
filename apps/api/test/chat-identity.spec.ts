@@ -41,6 +41,8 @@ function harness(code: Partial<{ usedAt: Date | null; expiresAt: Date }> = {}, m
     ...code,
   };
   const prisma = {
+    withTransaction: async (fn: () => Promise<unknown>) => fn(),
+    onCommit: (fn: () => Promise<unknown>) => void fn(),
     $transaction: vi.fn(async (ops: unknown[]) => Promise.all(ops)),
     chatLinkCode: {
       deleteMany: vi.fn(async () => ({ count: 0 })),

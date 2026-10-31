@@ -44,6 +44,24 @@ seconds (`setInterval(…, 30_000).unref()`, re-entrancy-guarded by a `running`
 flag) it re-enqueues up to 20 rows still `queued` and older than 60 seconds,
 oldest first. The delay is what keeps it from racing the normal path.
 
+The other queues that commit a row before enqueueing its job have the same
+relay (#657), each in a worker-side sweeper beside its processor and each
+re-enqueueing under the jobId of the row's last enqueue, so a job that is merely
+waiting absorbs it:
+
+| Row                         | Stale after                           | Relayed by                                         |
+| --------------------------- | ------------------------------------- | -------------------------------------------------- |
+| `agent_runs` `pending`      | 10 min since `updatedAt`              | `AgentScheduleSweeper.relayPending` (`id`, or `id:attempt`) |
+| `agent_runs` `running`      | 30 min since the last heartbeat       | `AgentScheduleSweeper.requeueStuck` (retry)        |
+| `connector_runs` `queued`   | 15 min since `startedAt` / `createdAt` | `ConnectorScheduleSweeper.relayQueued` (`id`, or `id#relay` for a continuation) |
+| `import_jobs` `queued`      | 10 min since `createdAt`              | `ImportRelaySweeper`                               |
+| `memos` `uploaded` / `transcribed` | 10 min since `updatedAt`       | `MemoRetentionSweeper`                             |
+
+The relay halves run whatever `AGENT_SCHEDULE_ENABLED` and
+`CONNECTOR_SCHEDULE_ENABLED` say; those flags gate only the starting of
+scheduled runs. A duplicate that slips through still loses its processor's
+guarded claim.
+
 ## The worker pipeline
 
 `IngestionProcessor` (`apps/api/src/ingestion/ingestion.processor.ts`,

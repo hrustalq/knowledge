@@ -471,14 +471,16 @@ export class ConnectorsService {
     if (queued) {
       // A queued run with no scope is a full sync and already covers everything.
       const scope = Array.isArray(queued.scope) ? (queued.scope as unknown as string[]) : null;
-      if (scope) {
-        const merged = [...new Set([...scope, ...externalIds])];
-        await this.prisma.connectorRun.update({
-          where: { id: queued.id },
-          data: { scope: merged as Prisma.InputJsonValue },
-        });
-      }
-      return null;
+      if (!scope) return null;
+      // Guarded (#658): a worker that claimed the run since the read has frozen
+      // its scope, and a concurrent merge has changed it. Either way these ids
+      // get a run of their own below instead of being dropped.
+      const merged = [...new Set([...scope, ...externalIds])];
+      const { count } = await this.prisma.connectorRun.updateMany({
+        where: { id: queued.id, status: 'queued', scope: { equals: queued.scope as Prisma.InputJsonValue } },
+        data: { scope: merged as Prisma.InputJsonValue },
+      });
+      if (count === 1) return null;
     }
 
     return this.prisma.connectorRun.create({
@@ -536,11 +538,14 @@ export class ConnectorsService {
     });
     if (queued) {
       // A scoped run would read only its scope; this push needs the whole
-      // repository hashed, so the waiting run is widened to unscoped.
-      if (queued.scope !== null) {
-        await this.prisma.connectorRun.update({ where: { id: queued.id }, data: { scope: Prisma.DbNull } });
-      }
-      return null;
+      // repository hashed, so the waiting run is widened to unscoped. Guarded
+      // (#658): one the worker claimed since the read no longer folds, and the
+      // push gets a run of its own below.
+      const { count } = await this.prisma.connectorRun.updateMany({
+        where: { id: queued.id, status: 'queued', startedAt: null },
+        data: { scope: Prisma.DbNull },
+      });
+      if (count === 1) return null;
     }
 
     return this.prisma.connectorRun.create({

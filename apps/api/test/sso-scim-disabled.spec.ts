@@ -99,7 +99,9 @@ function routesOf(nest: INestApplication): Route[] {
 const send = (nest: INestApplication, { method, path }: Route) =>
   (request(nest.getHttpServer()) as unknown as Record<string, (p: string) => request.Test>)[method](path);
 
-const isAuthPolicy = (r: Route) => r.path === `/v1/workspaces/${WS}/auth-policy`;
+/** Routes that answer with SSO off: the policy route, and the login page's probe (#645). */
+const isAuthPolicy = (r: Route) =>
+  r.path === `/v1/workspaces/${WS}/auth-policy` || r.path === '/v1/auth/sso/providers';
 
 const OFF: [string, Record<string, unknown>][] = [
   ['AUTH_MODE=none, flags at their defaults', env()],
@@ -143,13 +145,21 @@ describe('SSO and SCIM routes while disabled', () => {
         expect(res.body.message).toMatch(/error\.(sso|scim)\.disabled/);
       }
     }
-  });
+    // A Nest boot plus one request per route: past 5 s under a loaded full run.
+  }, 20_000);
 
   it.each(OFF)('%s: the auth-policy route still answers', async (_label, values) => {
     const nest = await boot(values);
     const res = await request(nest.getHttpServer()).get(`/v1/workspaces/${WS}/auth-policy`);
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ ceilings: { ssoEnabled: false } });
+  });
+
+  it.each(OFF)('%s: the login probe answers 200 with SSO off and no providers', async (_label, values) => {
+    const nest = await boot(values);
+    const res = await request(nest.getHttpServer()).get('/v1/auth/sso/providers');
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ enabled: false, providers: [] });
   });
 
   it('control: switched on under api-key, the same routes are there', async () => {

@@ -1,3 +1,5 @@
+import { plainText } from '@knowledge/contracts/content';
+
 /** A run of snippet text; `hit` runs are a query term as it appears in the chunk. */
 export interface SnippetPart {
   text: string;
@@ -28,8 +30,11 @@ export function queryStems(query: string): string[] {
  * A window of `text` around the first word a query stem starts, every such
  * word in it a `hit` run. No match — a hit the vector leg found on meaning
  * alone — is the chunk's opening, with no marks: a highlight is never invented.
+ * The chunk is markdown, so it is read as plain text first (#645): a snippet
+ * is not rendered, and a literal backtick or `**` there is noise.
  */
-export function snippetPartsOf(text: string, query: string): SnippetPart[] {
+export function snippetPartsOf(markdown: string, query: string): SnippetPart[] {
+  const text = plainText(markdown);
   const stems = queryStems(query);
   const matches = [...text.matchAll(WORD)]
     .filter((m) => stems.some((s) => fold(m[0]).startsWith(s)))

@@ -53,6 +53,13 @@ const store = useDocumentsStore()
 // move made here and one made in the rail cannot mean different things.
 provideTreeDnd((message: string) => toast.error(message))
 const projects = useProjectsStore()
+/**
+ * Whose graph to read is known (#651): the active project, or a roster that
+ * loaded with none. On the first visit after sign-in there is no `kn_proj`
+ * yet, and reading before the roster picks one read the whole workspace's
+ * graph, tags and timeline, then the project's.
+ */
+const scopeReady = computed(() => projects.activeId !== null || projects.loaded)
 const router = useRouter()
 const route = useRoute()
 const queryClient = useQueryClient()
@@ -117,7 +124,7 @@ onMounted(() => {
   }
   // An `?asOf=` link is about the graph, so it opens there (#81).
   if (graphTime.param.value) view.value = 'graph'
-  if (view.value === 'graph') void graphTime.loadTimeline()
+  if (view.value === 'graph' && scopeReady.value) void graphTime.loadTimeline()
   if (!store.treeLoaded) void store.fetchTree()
   if (!store.loaded) void store.fetchList({ reset: true })
   if (!projects.loaded) void projects.fetchList().catch(() => undefined)
@@ -132,10 +139,12 @@ function setView(next: View) {
 // of the three payloads, and a reader who lives in the tree should never pay
 // for it.
 watch(
-  [view, () => projects.activeId],
+  [view, () => projects.activeId, () => scopeReady.value],
   // Not during SSR: the render does not wait for it (the canvas is client-only),
   // so the answer would only race the serialized state.
-  () => { if (!import.meta.env.SSR && view.value === 'graph' && !store.graphLoaded) void store.fetchGraph() },
+  () => {
+    if (!import.meta.env.SSR && view.value === 'graph' && scopeReady.value && !store.graphLoaded) void store.fetchGraph()
+  },
   { immediate: true },
 )
 
@@ -159,9 +168,9 @@ const graphTime = useGraphTime({
   initial: typeof route.query.asOf === 'string' ? route.query.asOf : null,
 })
 watch(
-  [view, () => projects.activeId],
+  [view, () => projects.activeId, () => scopeReady.value],
   ([v], [, prevProject]) => {
-    if (v !== 'graph') return
+    if (v !== 'graph' || !scopeReady.value) return
     void graphTime.loadTimeline()
     if (prevProject !== undefined && prevProject !== projects.activeId) graphTime.refresh()
   },
@@ -309,18 +318,15 @@ watch(virtualRows, (rows) => {
         <!-- Graph ---------------------------------------------------------->
         <template v-else-if="view === 'graph'">
           <GraphCanvas
-            v-if="store.graphLoaded && store.graph"
+            :loading="!(store.graphLoaded && store.graph)"
             :nodes="graphNodes"
             :edges="graphEdges"
-            :truncated="store.graph.truncated"
+            :truncated="store.graph?.truncated ?? false"
             :show-entity-controls="hasEntities"
             :time="graphTime"
             storage-key="kn_graph_opts_workspace"
             @open="(id) => router.push(`/documents/${id}`)"
           />
-          <div v-else class="grid size-full place-items-center">
-            <Skeleton class="size-full" />
-          </div>
         </template>
 
         <!-- Tree ----------------------------------------------------------->

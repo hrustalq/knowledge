@@ -682,6 +682,7 @@ export type I18nTranslations = {
             "accountDisabled": string;
             "unknownApiKey": string;
             "invalidUrlTicket": string;
+            "csrf": string;
             "credentialInUrl": string;
             "invalidCredentials": string;
             "invalidResetToken": string;
@@ -1006,6 +1007,8 @@ export type I18nTranslations = {
             "runsInFlight": {
                 "one": string;
                 "other": string;
+                "few": string;
+                "many": string;
             };
             "disabled": string;
             "differentProject": string;

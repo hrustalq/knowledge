@@ -401,7 +401,7 @@
             }
           }
         },
-        "summary": "Create an account with email + password; returns a ks_ session token",
+        "summary": "Create an account with email + password; sets the HttpOnly kn_token session cookie",
         "tags": [
           "auth"
         ]
@@ -467,7 +467,7 @@
             }
           }
         },
-        "summary": "Email + password login; returns a ks_ session token. 429 past 30/min per IP or 10/min per address",
+        "summary": "Email + password login; sets the HttpOnly kn_token session cookie. 429 past 30/min per IP or 10/min per address",
         "tags": [
           "auth"
         ]
@@ -523,7 +523,63 @@
             }
           }
         },
-        "summary": "Revoke the current session token (no-op for API keys / dev mode)",
+        "summary": "Revoke the current session and clear its cookie (no-op for API keys / dev mode)",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/session-cookie": {
+      "post": {
+        "operationId": "AuthFlowController_sessionCookie",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionCookieResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Move a pre-#650 bearer ks_ session into the HttpOnly kn_token cookie (one-release migration)",
         "tags": [
           "auth"
         ]
@@ -1254,7 +1310,7 @@
     },
     "/v1/auth/sso/providers": {
       "get": {
-        "operationId": "SsoController_providers",
+        "operationId": "SsoProvidersController_providers",
         "parameters": [
           {
             "name": "workspaceId",
@@ -1311,7 +1367,7 @@
             }
           }
         },
-        "summary": "Login buttons: enabled providers of the workspace plus every platform-wide one. 404 when SSO is off",
+        "summary": "Login buttons: enabled providers of the workspace plus every platform-wide one. `enabled: false` when SSO is off",
         "tags": [
           "auth"
         ]
@@ -1443,7 +1499,7 @@
             }
           }
         },
-        "summary": "Trade the single-use code from /auth/sso/complete for a ks_ session token",
+        "summary": "Trade the single-use code from /auth/sso/complete for the HttpOnly kn_token session cookie",
         "tags": [
           "auth"
         ]
@@ -38834,7 +38890,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.40.0",
+    "version": "0.41.0",
     "contact": {}
   },
   "tags": [],
@@ -48585,6 +48641,10 @@
           "toolCallCount": {
             "type": "number"
           },
+          "audioSeconds": {
+            "type": "number",
+            "nullable": true
+          },
           "createdAt": {
             "type": "string"
           }
@@ -48608,6 +48668,7 @@
           "error",
           "threadId",
           "toolCallCount",
+          "audioSeconds",
           "createdAt"
         ]
       },
@@ -51991,9 +52052,6 @@
       "AuthSessionResponse": {
         "type": "object",
         "properties": {
-          "token": {
-            "type": "string"
-          },
           "expiresAt": {
             "type": "string"
           },
@@ -52002,7 +52060,6 @@
           }
         },
         "required": [
-          "token",
           "expiresAt",
           "me"
         ]
@@ -66376,6 +66433,17 @@
           "confidence"
         ]
       },
+      "SessionCookieResponse": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ]
+      },
       "SessionView": {
         "type": "object",
         "properties": {
@@ -67051,9 +67119,6 @@
       "SsoExchangeResponse": {
         "type": "object",
         "properties": {
-          "token": {
-            "type": "string"
-          },
           "expiresAt": {
             "type": "string"
           },
@@ -67067,8 +67132,7 @@
         "required": [
           "expiresAt",
           "me",
-          "returnTo",
-          "token"
+          "returnTo"
         ]
       },
       "SsoLoginProvider": {
@@ -67097,6 +67161,9 @@
       "SsoProvidersResponse": {
         "type": "object",
         "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
           "providers": {
             "type": "array",
             "items": {
@@ -67108,6 +67175,7 @@
           }
         },
         "required": [
+          "enabled",
           "providers",
           "passwordLogin"
         ]

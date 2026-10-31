@@ -50,8 +50,8 @@ export class TokenAuthService {
   }
 
   /**
-   * The web's `kn_token` cookie on a `@CookieTokenOk` asset redirect (#102
-   * phase 2b). The web only ever stores a `ks_` session there; anything else
+   * The browser's HttpOnly `kn_token` cookie (#650), read on any route that
+   * got no header. The API only ever sets a `ks_` session there; anything else
    * is refused rather than resolved as an API key.
    */
   async resolveSessionCookie(token: string): Promise<Principal> {

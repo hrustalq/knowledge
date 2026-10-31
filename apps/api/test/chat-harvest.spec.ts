@@ -50,6 +50,40 @@ describe('the masker', () => {
     expect(createMasker()('8 (999) 123 45 67 or (555) 123-4567')).toBe('[PHONE_1] or [PHONE_2]');
   });
 
+  describe('credentials said aloud (#551)', () => {
+    // What gen-stt made of a synthetic meeting's spoken credentials on prod (2026-10-30).
+    it('masks the value after a trigger word, keeping the words around it', () => {
+      const mask = createMasker();
+      expect(mask('Пароль от стейджа Twortistage 2026, запишите.')).toBe('Пароль от стейджа [SECRET_1], запишите.');
+      expect(mask('API ключ СКИС проджект ABCD 1234567890XQW. Дальше ретро.')).toBe(
+        'API ключ СКИС проджект [SECRET_2]. Дальше ретро.',
+      );
+      expect(mask('Телефон дежурного +791651234.')).toBe('Телефон дежурного [PHONE_1].');
+      expect(mask('password: hunter2, then lunch')).toBe('password: [SECRET_3], then lunch');
+      expect(mask('the api key is 7f3a9c21')).toBe('the api key is [SECRET_4]');
+    });
+
+    it('gives a value said twice one placeholder', () => {
+      const mask = createMasker();
+      expect(mask('пароль Twortistage 2026')).toBe('пароль [SECRET_1]');
+      expect(mask('ещё раз: пароль Twortistage  2026')).toBe('ещё раз: пароль [SECRET_1]');
+    });
+
+    it('masks an address read aloud and a bare +number that lost the 3-3-2-2 shape', () => {
+      const mask = createMasker();
+      expect(mask('Почта Дмитрий.rlov sobakexple.com, пишите.')).toBe('Почта [EMAIL_1], пишите.');
+      expect(mask('dmitry собака example точка ру')).toBe('[EMAIL_2]');
+      expect(mask('звоните +7 916 512 34')).toBe('звоните [PHONE_1]');
+    });
+
+    it('leaves a trigger word followed by prose alone', () => {
+      const text =
+        'Пароль надо сменить до пятницы. Ключевой момент — ретро. Моя собака заболела. ' +
+        'Phone call at 3pm. The password reset flow needs review. Ключ к успеху — сроки.';
+      expect(createMasker()(text)).toBe(text);
+    });
+  });
+
   describe('RU identity numbers (#342)', () => {
     // Real-shaped values that pass their checksums.
     const INN10 = '7707083893';

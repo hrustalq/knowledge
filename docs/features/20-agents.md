@@ -268,6 +268,12 @@ Schedules are off by default and need an owner and an interval before they can
 be enabled, because the failure mode of unattended AI is an avalanche, not a
 slow queue.
 
+The same sweeper is the recovery for every run, scheduled or not (#657), and
+that half runs even with `AGENT_SCHEDULE_ENABLED=false`: a `running` row with no
+heartbeat for 30 minutes is retried, and a `pending` row untouched for 10
+minutes — its enqueue lost after the commit — is enqueued again under its last
+jobId.
+
 A schedule can also run at a time of day (#70): `daily` at `HH:MM`, or
 `weekly` on a set of weekdays, in an IANA timezone (null means UTC; the
 editor fills in the browser's zone). The tick does not change. A slot is due

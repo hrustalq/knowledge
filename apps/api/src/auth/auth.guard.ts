@@ -1,9 +1,11 @@
 import { ForbiddenException, HttpStatus, Injectable, type CanActivate, type ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { COOKIE_TOKEN_OK_META, PUBLIC_META, QUERY_TOKEN_OK_META, UNVERIFIED_OK_META } from './access.decorator.js';
+import { SESSION_COOKIE } from '@knowledge/contracts';
+import { PUBLIC_META, QUERY_TOKEN_OK_META, UNVERIFIED_OK_META } from './access.decorator.js';
 import { readCookie } from '../common/cookies.js';
 import { t } from '../i18n/t.js';
 import { TokenAuthService } from './token-auth.service.js';
+import { cookieCsrfOk } from './session-cookie.js';
 import { bindTrace } from '@knowledge/observability';
 
 /**
@@ -16,9 +18,6 @@ import { bindTrace } from '@knowledge/observability';
  * failures are AclGuard's job → 403. Resolution itself lives in
  * TokenAuthService (shared with the live WebSocket gateway).
  */
-/** The cookie the web mirrors its session token into (apps/web/src/shared/api/api.ts). */
-const SESSION_COOKIE = 'kn_token';
-
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(
@@ -34,20 +33,21 @@ export class AuthGuard implements CanActivate {
 
     const header: string | undefined = req.headers['authorization'];
     const bearer = header?.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : undefined;
-    // EventSource and <img> cannot set headers, so the routes they call opt in
-    // to a URL ticket (@QueryTokenOk) or the web's session cookie
-    // (@CookieTokenOk) (#102). Anywhere else both are ignored as if absent:
-    // the request is unauthenticated, not quietly let in.
-    const opted = (meta: string) =>
-      this.reflector.getAllAndOverride<boolean>(meta, [ctx.getHandler(), ctx.getClass()]) === true;
+    // EventSource cannot set headers, so the routes it calls opt in to a URL
+    // ticket (@QueryTokenOk) (#102); anywhere else a query token is ignored as
+    // if absent. The browser's HttpOnly session cookie (#650) is read on every
+    // route, last: a header always wins, then a ticket.
     const queryToken =
-      opted(QUERY_TOKEN_OK_META) && typeof req.query?.token === 'string' && req.query.token
+      this.reflector.getAllAndOverride<boolean>(QUERY_TOKEN_OK_META, [ctx.getHandler(), ctx.getClass()]) === true &&
+      typeof req.query?.token === 'string' &&
+      req.query.token
         ? req.query.token
         : undefined;
-    const cookieToken = opted(COOKIE_TOKEN_OK_META) ? readCookie(req.headers.cookie, SESSION_COOKIE) : null;
+    const cookieToken = bearer || queryToken ? null : readCookie(req.headers.cookie, SESSION_COOKIE);
+    if (cookieToken && !cookieCsrfOk(req)) {
+      throw new ForbiddenException({ statusCode: HttpStatus.FORBIDDEN, message: t('error.auth.csrf'), reason: 'csrf' });
+    }
 
-    // A header always wins; the others go through their narrower rules
-    // (a query token is a single-use kt_ ticket, a cookie a ks_ session).
     req.principal = bearer
       ? await this.tokenAuth.resolve(bearer)
       : queryToken

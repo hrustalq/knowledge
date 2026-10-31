@@ -101,21 +101,25 @@ export class ChatIdentityService {
   async confirm(code: string, principal: Principal): Promise<ChatIdentityEntry> {
     const { row, integration } = await this.redeemable(code);
     await this.assertMember(principal, integration.workspaceId);
-    const spent = await this.prisma.chatLinkCode.updateMany({
-      where: { id: row.id, usedAt: null },
-      data: { usedAt: new Date() },
-    });
-    if (spent.count === 0) throw this.codeError('linkCodeUsed');
-    const identity = await this.prisma.chatIdentity.upsert({
-      where: { integrationId_externalUserId: { integrationId: integration.id, externalUserId: row.externalUserId } },
-      create: {
-        integrationId: integration.id,
-        workspaceId: integration.workspaceId,
-        externalUserId: row.externalUserId,
-        externalUserName: row.externalUserName,
-        userId: principal.userId,
-      },
-      update: { userId: principal.userId, externalUserName: row.externalUserName, linkedAt: new Date() },
+    // The spent code and the identity commit together (#658), or a failed
+    // upsert burns the code with nothing linked.
+    const identity = await this.prisma.withTransaction(async () => {
+      const spent = await this.prisma.chatLinkCode.updateMany({
+        where: { id: row.id, usedAt: null },
+        data: { usedAt: new Date() },
+      });
+      if (spent.count === 0) throw this.codeError('linkCodeUsed');
+      return this.prisma.chatIdentity.upsert({
+        where: { integrationId_externalUserId: { integrationId: integration.id, externalUserId: row.externalUserId } },
+        create: {
+          integrationId: integration.id,
+          workspaceId: integration.workspaceId,
+          externalUserId: row.externalUserId,
+          externalUserName: row.externalUserName,
+          userId: principal.userId,
+        },
+        update: { userId: principal.userId, externalUserName: row.externalUserName, linkedAt: new Date() },
+      });
     });
     void this.announceLinked(integration, row.externalChatId, principal);
     return this.toEntry(identity, integration, principal.displayName);

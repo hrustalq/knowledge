@@ -54,6 +54,8 @@ import {
   LayoutTemplate,
 } from 'lucide-vue-next'
 import { markdownToHtml } from '@/core/markdown/render'
+import { hydration, inertDocument } from '@/shared/utils/hydration'
+import { staticBodyHtml } from '../model/static-body'
 import { api } from '@/shared/api/client'
 import { getWorkspaceId } from '@/shared/api/api'
 import type { EmbedAttributes } from './extensions/media'
@@ -703,6 +705,17 @@ function toHtml(markdown: string): string {
   return markdownToHtml(markdown, { resolvePage: props.resolvePage })
 }
 
+/**
+ * The read view's body before the editor exists (#643): drawn on the server,
+ * and once more by the hydrating render so the two agree. A client
+ * navigation builds the editor in the same tick, so it skips this.
+ */
+const staticHtml = (() => {
+  if (props.editable || props.collab || !(import.meta.env.SSR || hydration.active)) return ''
+  const doc = inertDocument()
+  return doc ? staticBodyHtml(toHtml(props.modelValue), doc) : ''
+})()
+
 onMounted(() => document.addEventListener('pointerdown', onPointerDownOutside))
 onBeforeUnmount(() => document.removeEventListener('pointerdown', onPointerDownOutside))
 
@@ -1042,6 +1055,8 @@ defineExpose({
              the same measure so the two read as one column. -->
         <div v-if="$slots.lede" class="kn-lede"><slot name="lede" /></div>
         <EditorContent v-if="editor" :editor="editor" />
+        <!-- The shape EditorContent draws, so the swap does not move the text. -->
+        <div v-else-if="staticHtml"><div class="tiptap ProseMirror kn-prose" v-html="staticHtml" /></div>
       </div>
 
       <EditorBubble v-if="editor && editable" :editor="editor" @link="openLinkDialog" />

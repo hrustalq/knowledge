@@ -785,28 +785,33 @@ export class DocumentsService {
     if (ownerId !== null) await this.assertMember(document.workspaceId, ownerId);
     if (ownerId === document.ownerId) return this.toSummary(document);
     const updated = await this.prisma.document.update({ where: { id: documentId }, data: { ownerId } });
-    void this.activity.record({
-      workspaceId: document.workspaceId,
-      actor: actorId,
-      action: 'document.owner-changed',
-      documentId,
-      projectId: document.projectId,
-      metadata: { title: document.title, from: document.ownerId, to: ownerId },
-      patch: { ownerId },
-    });
-    if (ownerId && ownerId !== actorId) {
-      void this.notifications.notify({
+    // Post-commit: `updateDocument` calls this inside its boundary (#658).
+    this.prisma.onCommit(() =>
+      this.activity.record({
         workspaceId: document.workspaceId,
-        userIds: [ownerId],
-        type: 'document.owner-changed',
-        reason: 'owner',
-        actor: actorId ?? null,
+        actor: actorId,
+        action: 'document.owner-changed',
         documentId,
-        subjectType: 'document',
-        subjectId: documentId,
-        title: document.title,
-        subscribe: true,
-      });
+        projectId: document.projectId,
+        metadata: { title: document.title, from: document.ownerId, to: ownerId },
+        patch: { ownerId },
+      }),
+    );
+    if (ownerId && ownerId !== actorId) {
+      this.prisma.onCommit(() =>
+        this.notifications.notify({
+          workspaceId: document.workspaceId,
+          userIds: [ownerId],
+          type: 'document.owner-changed',
+          reason: 'owner',
+          actor: actorId ?? null,
+          documentId,
+          subjectType: 'document',
+          subjectId: documentId,
+          title: document.title,
+          subscribe: true,
+        }),
+      );
     }
     return this.toSummary(updated);
   }
@@ -1327,12 +1332,9 @@ export class DocumentsService {
     this.assertNotArchived(document);
 
     // Ownership is its own act with its own event and notification
-    // (docs/features/39); the rest of the patch follows. A call that only
-    // changes the owner ends here.
-    if (dto.ownerId !== undefined && dto.ownerId !== document.ownerId) {
-      await this.setOwner(documentId, dto.ownerId, actorId);
-      document.ownerId = dto.ownerId;
-    }
+    // (docs/features/39). It commits with the rest of the patch, inside the
+    // boundary below, so a rejected PATCH leaves the owner alone too (#658).
+    const newOwner = dto.ownerId !== undefined && dto.ownerId !== document.ownerId ? dto.ownerId : undefined;
 
     const data: {
       title?: string;
@@ -1353,7 +1355,6 @@ export class DocumentsService {
         data.verificationExpiresAt = expiryFor(document.verifiedAt, dto.reviewIntervalDays, settings.reviewIntervalDays);
       }
     }
-    if (Object.keys(data).length === 0 && dto.ownerId !== undefined) return this.toSummary(await this.getDocumentOrThrow(documentId));
 
     // Project move (Workspace > Project > Document). Cross-workspace moves are
     // out of scope: the S3 key layout, graph vertices and the fulltext index
@@ -1377,7 +1378,12 @@ export class DocumentsService {
       }
       data.parentId = dto.parentId;
     }
-    if (Object.keys(data).length === 0) throw new BadRequestException(t('error.document.nothingToUpdate'));
+    // A call that only changes the owner ends here, once every other field has
+    // been read: an early return dropped a move sent with an owner (#658).
+    if (Object.keys(data).length === 0) {
+      if (dto.ownerId === undefined) throw new BadRequestException(t('error.document.nothingToUpdate'));
+      return newOwner !== undefined ? this.setOwner(documentId, newOwner, actorId) : this.toSummary(document);
+    }
 
     // A project move with no explicit parent re-roots the page (above), which
     // is a path change too.
@@ -1393,6 +1399,7 @@ export class DocumentsService {
     const renamed = data.title !== undefined && data.title !== document.title;
     const placed = reparented || data.projectId !== undefined;
     const updated = await this.prisma.withTransaction(async () => {
+      if (newOwner !== undefined) await this.setOwner(documentId, newOwner, actorId);
       // A rename or a move renames or moves the page's file (#636): a fresh
       // slug under its new parent, and one commit, under the commit lock.
       let slug: string | undefined;
@@ -1447,18 +1454,20 @@ export class DocumentsService {
         const message = reparented ? `Move ${slug}` : `Rename ${document.slug ?? document.title} to ${slug}`;
         await this.commits.recordState(document.projectId, [documentId], { actorId, message });
       }
-      return row;
-    });
-    if (data.title && data.title !== document.title) {
-      // Keep the graph vertex label in sync (PG stays authoritative).
-      await this.graph.upsertDocumentVertex(document.workspaceId, documentId, data.title).catch(() => {
-        /* vertex may not exist yet — created on first index */
-      });
       // The BM25 rows carry the title (#528): the stale sweeper re-mirrors
       // them from the graph's chunks, with nothing re-embedded.
-      await this.prisma.documentRevision.updateMany({
-        where: { documentId, status: 'indexed' },
-        data: { fulltextStaleAt: new Date() },
+      if (renamed) {
+        await this.prisma.documentRevision.updateMany({
+          where: { documentId, status: 'indexed' },
+          data: { fulltextStaleAt: new Date() },
+        });
+      }
+      return row;
+    });
+    if (renamed) {
+      // Keep the graph vertex label in sync (PG stays authoritative).
+      await this.graph.upsertDocumentVertex(document.workspaceId, documentId, updated.title).catch(() => {
+        /* vertex may not exist yet — created on first index */
       });
     }
     await this.activity.record({
@@ -1938,9 +1947,10 @@ export class DocumentsService {
   async getWorkspaceGraph(scope: AccessScope, projectId?: string, at?: TemporalPoint): Promise<WorkspaceGraphResponse> {
     const { workspaceId } = scope;
     // Pages the caller may not open are not nodes, so their edges go (below,
-    // `inScope`) and with them every entity only they mention (#76).
+    // `inScope`) and with them every entity only they mention (#76). A capture
+    // still behind its merge request is not a node until it merges (#642).
     const docs = await this.prisma.document.findMany({
-      where: { workspaceId, ...(projectId ? { projectId } : {}), AND: [visibilityWhere(scope)] },
+      where: { workspaceId, ...(projectId ? { projectId } : {}), ...LISTED_PAGE, AND: [visibilityWhere(scope)] },
       include: { branches: true },
       orderBy: { title: 'asc' },
     });
@@ -2017,7 +2027,17 @@ export class DocumentsService {
     // would otherwise both reveal the page and carry the walk on through it
     // to entities only it mentions. GraphService drops both (#76).
     const g = await this.graph.getWorkspaceRelationGraph(document.workspaceId, await this.permissions.documentFilterFor(scope), at);
-    const adj = buildAdjacency(g.edges);
+    // A neighbour still behind its merge request is not a page yet (#642); the
+    // page itself stays, so its reviewer can open its graph.
+    const unlisted = new Set(
+      (
+        await this.prisma.document.findMany({
+          where: { workspaceId: document.workspaceId, pendingMergeRequestId: { not: null }, id: { not: documentId } },
+          select: { id: true },
+        })
+      ).map((d) => d.id),
+    );
+    const adj = buildAdjacency(g.edges.filter((e) => !unlisted.has(e.documentId)));
     const hits = bfs(adj, docNode(documentId), d * 2);
 
     const docIds = new Set<string>([documentId]);

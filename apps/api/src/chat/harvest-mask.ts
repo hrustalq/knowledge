@@ -34,6 +34,41 @@ const CARD_RE = /(?<![\d-])\d(?:[ -]?\d){12,18}(?![\d-])/g;
  * Three-three-two-two, so a date or a time (`2026-10-19 14:30`) never fits.
  */
 const PHONE_RE = /(?<![\w+])(?:(?:\+\d{1,3}|8)[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{2}[\s.-]?\d{2}(?!\w)/g;
+/**
+ * `+` and seven or more digits in any grouping: what speech-to-text leaves of a
+ * spoken number once it has dropped a digit or two out of the 3-3-2-2 shape.
+ */
+const PLUS_PHONE_RE = /(?<![\w+])\+\d(?:[\s-]?\d){6,14}(?![\w-])/g;
+/**
+ * An address read aloud (#551): `… собака … точка ком`, or what speech-to-text
+ * makes of it (`Дмитрий.rlov sobakexple.com`). It must end in a known top-level
+ * domain, so a dog in a sentence ("моя собака заболела") is never an address.
+ */
+const SPOKEN_EMAIL_RE =
+  /[\p{L}\d._-]+\s+(?:собака|sobaka?)\s*[\p{L}\d-]+(?:(?:\.|\s+(?:точка|dot)\s+)[\p{L}\d-]+)*?(?:\.|\s+(?:точка|dot)\s+)(?:com|ru|org|net|io|dev|ai|рф|ком|ру)(?![\p{L}\d])/giu;
+
+/**
+ * A credential named before it is said (#551). Speech-to-text never yields a
+ * token's written shape, so the word in front of the value is the only signal:
+ * `пароль`, `ключ`, `токен`, `password`, `api key`, `телефон` and their forms,
+ * then the rest of the sentence. A sentence ends at `.!?;` followed by a space
+ * or the end, so the dot in `example.com` does not end it.
+ */
+const TRIGGER_RE =
+  /(?<![\p{L}\d])(пароль|пароля|паролем|паролю|ключ|ключа|ключом|токен|токена|токеном|секрет|секрета|пин-?код|пин-?кода|телефон|телефона|телефону|password|passcode|passwd|pwd|token|secret|(?:api|access|secret|private)[ -]?key|phone)(?![\p{L}\d])((?:[^.!?;\n]|[.!?;](?=\S))*)/giu;
+/**
+ * How many words after the trigger may hold the value. A spoken key splits into
+ * several words; past six it is the next thought, not the credential.
+ */
+const TRIGGER_WINDOW_WORDS = 6;
+/**
+ * Which words in that window are the value. After a Russian trigger the value
+ * is whatever is Latin or has a digit (`Twortistage 2026`), so `пароль надо
+ * сменить` stays readable. After an English trigger every word is Latin, so
+ * only a digit or a symbol counts. A phone is digits either way.
+ */
+const VALUE_AFTER_RU = /[\dA-Za-z_@#$%^&*]/;
+const VALUE_AFTER_EN = /[\d_@#$%^&*]/;
 
 const digitsOf = (m: string) => m.replace(/\D/g, '');
 
@@ -41,6 +76,7 @@ const PATTERNS: ReadonlyArray<readonly [Kind, RegExp, ((match: string) => boolea
   // Secrets first: a token can contain what looks like a card or a phone.
   ...SECRET_PATTERNS.map(([, re]) => ['SECRET', new RegExp(re.source, 'g')] as const),
   ['EMAIL', EMAIL_RE],
+  ['EMAIL', SPOKEN_EMAIL_RE],
   // Identity numbers before phones: bare ten or eleven digits are also a phone
   // shape, and a checksum (or a passport's context) is the stronger claim.
   ['PASSPORT', PASSPORT_RE],
@@ -48,6 +84,7 @@ const PATTERNS: ReadonlyArray<readonly [Kind, RegExp, ((match: string) => boolea
   ['INN', INN_RE, inn],
   ['CARD', CARD_RE, (m) => luhn(digitsOf(m))],
   ['PHONE', PHONE_RE],
+  ['PHONE', PLUS_PHONE_RE],
 ];
 
 export function luhn(digits: string): boolean {
@@ -86,19 +123,44 @@ function keyOf(kind: Kind, match: string): string {
   return match.replace(/[\s().-]/g, '');
 }
 
+/**
+ * Masks the value after each trigger word: from the first word in the window
+ * that looks like a value to the last, so `пароль от стейджа Twortistage 2026,
+ * запишите` keeps `от стейджа` and `, запишите`. A window with no such word is
+ * prose and stays. Runs before the shape patterns, which would otherwise
+ * replace part of the value and leave its placeholder looking like one.
+ */
+function maskAfterTriggers(text: string, place: (kind: Kind, value: string) => string): string {
+  return text.replace(TRIGGER_RE, (whole, trigger: string, rest: string) => {
+    const phone = /^(?:телефон|phone)/i.test(trigger);
+    const looksLikeValue = phone ? /\d/ : /[а-яё]/i.test(trigger) ? VALUE_AFTER_RU : VALUE_AFTER_EN;
+    const hits = [...rest.matchAll(/\S+/g)].slice(0, TRIGGER_WINDOW_WORDS).filter((w) => looksLikeValue.test(w[0]));
+    const first = hits[0];
+    const last = hits.at(-1);
+    if (!first || !last) return whole;
+    const from = first.index;
+    let to = last.index + last[0].length;
+    while (to > from && /[,:)"»']/.test(rest[to - 1]!)) to--; // punctuation after the value is prose
+    const value = rest.slice(from, to);
+    // A number short of seven digits after `phone` is a time or a count ("phone call at 3pm").
+    if (phone && digitsOf(value).length < 7) return whole;
+    return trigger + rest.slice(0, from) + place(phone ? 'PHONE' : 'SECRET', value) + rest.slice(to);
+  });
+}
+
 export function createMasker(): (text: string) => string {
   const seen = new Map<string, string>();
   const counts: Record<Kind, number> = { SECRET: 0, EMAIL: 0, PASSPORT: 0, SNILS: 0, INN: 0, CARD: 0, PHONE: 0 };
+  const place = (kind: Kind, match: string) => {
+    const key = `${kind}\0${keyOf(kind, match)}`;
+    let placeholder = seen.get(key);
+    if (!placeholder) seen.set(key, (placeholder = `[${kind}_${++counts[kind]}]`));
+    return placeholder;
+  };
   return (text) => {
-    let out = text;
+    let out = maskAfterTriggers(text, place);
     for (const [kind, re, accept] of PATTERNS) {
-      out = out.replace(re, (match) => {
-        if (accept && !accept(match)) return match;
-        const key = `${kind}\0${keyOf(kind, match)}`;
-        let placeholder = seen.get(key);
-        if (!placeholder) seen.set(key, (placeholder = `[${kind}_${++counts[kind]}]`));
-        return placeholder;
-      });
+      out = out.replace(re, (match) => (accept && !accept(match) ? match : place(kind, match)));
     }
     return out;
   };

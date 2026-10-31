@@ -13,6 +13,138 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.42.0] — 2026-10-31
+
+### Breaking
+
+- **Sign-in responses no longer carry the session token** (#650). `POST /v1/auth/login`, `/signup`,
+  `/sso/exchange` and `/ldap/{providerId}/login` set it as an HttpOnly `kn_token` cookie instead, and their
+  bodies hold only `expiresAt` and `me`. A write authenticated by that cookie must also send an
+  `X-Requested-With` header, or it is refused with 403. `HTTP`
+  **Migration:** a script or integration should use an API key (`Authorization: Bearer kn_…`), which is
+  unchanged. A script that must sign in with a password reads the `ks_` token from the `Set-Cookie` header and
+  sends it as `Authorization: Bearer`.
+
+### Changed
+
+- **A page opened directly (a reload, a shared link, a new tab) shows its text at once** (#643). The server
+  used to send skeletons, and the title and body arrived only after the scripts loaded and made about twenty
+  requests. The title, the revision line and the body are now in the first response, and the browser no
+  longer asks again for the page or its content.
+- **The rail no longer jumps when a page loads** (#643). The workspace switcher and the unread-notification
+  badge now arrive with the page, instead of appearing afterwards and pushing the navigation down.
+- **The rest of a page's rail loads after the page has drawn** (#643). History, changes, reports and the other
+  previews used to be requested in one burst with the page's own data. Page views are now read once per visit.
+- **The knowledge-base graph shows its time strip while the graph loads** (#643), instead of a grey box until
+  the graph arrives.
+
+### Fixed
+
+- **A memo's update merge request says "update", not "gap"** (#551). The description now names what the
+  meeting decided to do to the page.
+- **Transcription rows in AI usage name the real speech provider and carry its cost** (#551). They used to
+  say `openai-compatible` even on gen-api, and counted as unpriced. With gen-api the cost gen-stt reports is
+  recorded; the usage log also shows each row's recording length (`audioSeconds`).
+- **A captured page waiting for review no longer shows up as a page before its merge request merges** (#642).
+  The knowledge-base graph drew it as a node, and clicking it opened a page that said "indexed" but could
+  not load. A page's own graph could also reach it as a neighbour. The project page counts in the rail, on the
+  projects list and on the project page counted it too, so they disagreed with the page list. A publicly shared
+  subtree listed its title. All of these now leave it out until the merge request merges. Its reviewer still
+  opens it from the merge request.
+- **The editor no longer shows a page's title twice** (#646). A page whose text opens with its own title
+  as `# Title` (most imported, captured and agent-written pages do) showed it in the title field and again as
+  a heading at the top of the body, though readers saw it once. The editor now shows it only in the title
+  field, and saving keeps the heading in the stored text exactly as it was. Renaming the page renames that
+  heading too. A first heading that differs from the title stays in the body, as before. Shared drafts
+  (`COLLAB_ENABLED`) created from now on leave it out the same way; a draft that already holds the heading
+  keeps it and is not given a second one.
+- **A failure part-way through an action no longer leaves it half done** (#658). Seventeen flows wrote one
+  change as separate commits, so an error or crash in between left state nothing repaired. They now commit
+  whole or not at all. Before this fix:
+  - A merge request could open over a branch its readers still could not see.
+  - A cancelled workflow run kept nodes that could still be approved.
+  - An approved workflow step could open no next steps.
+  - A synced or reverted connector page could raise a false conflict on the next pull.
+  - A connector conflict could lose the upstream change silently, or be marked failed while its merge request
+    was open.
+  - A chat link code could be spent with no account linked.
+  - A verification link could be spent with the address left unverified.
+  - A signup could leave an account with no workspace, which the retry then refused as taken.
+- **Changing a page's owner together with its parent or project now applies both** (#658). The owner change
+  used to commit first and end the request, so the move was silently dropped. A PATCH that is refused for
+  any reason now changes nothing, owner included.
+- **A webhook or push that arrives as a sync run starts is no longer lost** (#658). It used to join a run that
+  had already fixed its list of items. It now gets a run of its own.
+- **Deleting a workflow while a run of it is starting is refused with the usual "runs in flight" error** (#658).
+  It used to delete that run's history and keep the workflow.
+- **Agent runs, connector syncs, imports and memos no longer get stuck when their job is lost** (#657). Each
+  one is saved first and handed to the worker second, and if Redis was down or the process restarted in
+  between, it waited forever: a scheduled agent never fired again, a connector refused every new sync until
+  someone cancelled the stuck one, an import stayed "Queued" even after pressing Start again, and a memo sat
+  "Uploaded". The worker now hands such a row over again after 10–15 minutes, and Start on a queued import
+  hands it over at once.
+- **An agent run whose worker died mid-run is retried on a default install** (#657). The recovery used to run
+  only with `AGENT_SCHEDULE_ENABLED=true`, so with schedules off (the default) a crashed manual, trigger, lint,
+  drift or memo run stayed "Running" forever. It now runs whatever that flag says, and so does the connector
+  recovery whatever `CONNECTOR_SCHEDULE_ENABLED` says; the flags still decide whether scheduled runs start.
+- **Merge-request and revision status badges are translated** (#648). The merge request header, the page
+  header, the page's Overview rail and the History table printed the raw value (`open`, `indexed`,
+  `finalized`), in English even in the Russian interface. They now read "Open" / «Открыт» and "Indexed" /
+  «Проиндексирована», the same words the lists use, and a status the interface does not know yet still shows
+  as itself.
+- **The sign-in page no longer logs an error on every visit** (#645). With single sign-on off, its check for
+  SSO buttons got a 404, which the browser printed in the console. `GET /v1/auth/sso/providers` now answers
+  200 with `enabled: false` and no providers; every other SSO route still answers 404 while SSO is off.
+- **The project crumb above a page opens the project** (#645), not the project list in settings.
+- **On a phone the breadcrumb trail is readable again** (#645). A page's actions shared the trail's row and
+  squeezed it to a few letters. Below 640 px the trail now has a row of its own with the actions under it, a
+  short crumb such as "Pages" is never cut, and every crumb is a 24 px tap target.
+- **The graph's time slider announces "Now" or a date to screen readers** (#645), not the drag hint.
+- **Search results show plain text** (#645). An excerpt could show markdown as typed, such as backticks around
+  `webhook-dispatcher` or `**` around bold text. Code inside a fenced block still shows, and names with
+  underscores (`snake_case`) keep them.
+- **The web server no longer sends `X-Powered-By: Express`** (#645), and app pages now state
+  `Referrer-Policy: strict-origin-when-cross-origin` (the browsers' default) beside the other security headers.
+- **Search results can be reached from the keyboard** (#651). In the search sheet and on `/search`, ↓ and ↑ now
+  move through the results while you stay in the query field, Enter opens the marked one, and screen readers
+  hear which result is marked. The bare relevance number beside each result (such as `0.0325`) is gone. It
+  was a rank-fusion value, not a percentage, and read as a weak match.
+- **A merge request's breadcrumb shows its title** (#651), not the first eight characters of its id.
+- **The assistant's example prompts can be clicked, and come from your own pages** (#651). Clicking one puts it
+  in the message box, ready to send or reword. The examples name the project's pages instead of topics that
+  may not exist in your workspace. A chat with no title or messages yet is called "Untitled chat" (translated),
+  not "New chat", so it no longer reads as a second New chat button.
+- **The first visit to the knowledge-base graph reads it once** (#651). Right after signing in, the page read
+  the whole workspace's graph, release tags and timeline, then read them again for the project. It now waits
+  for the project and reads each once.
+- **A wrong password is reported on the form** (#651), not only in a passing notification. The message appears
+  under the fields and is read out by screen readers, the password field is marked invalid, and the cursor
+  goes back to it.
+
+### Security
+
+- **Passwords, keys, emails and phone numbers said aloud in a memo are masked** (#551). Speech-to-text never
+  writes them in a form the masker recognised, so a password read out in a meeting (`пароль от стейджа …`)
+  reached the stored transcript and the model. The masker now masks the value after a word like `пароль`,
+  `ключ`, `токен`, `password`, `api key` or `телефон`, an address read aloud (`… собака … точка ру`) and a bare
+  `+` number. Chat harvest and chat search use the same masker, so a typed `пароль: hunter2` is masked there
+  too. Short numbers after `token` or `ключ` may now be masked as well (`token limit [SECRET_1]`). Transcripts
+  already stored are unchanged; delete a memo to remove one.
+
+- **Scripts on the page can no longer read your session** (#650). The session used to sit in browser storage
+  and in a cookie that scripts could read, so a script slipped into rendered content could copy a 30-day
+  session and use it from anywhere. It is now a cookie only the server sees (HttpOnly, and Secure over HTTPS).
+  Writes made with it must come from the app itself. Live updates, co-editing, images and signed-in pages work
+  as before, and API keys and MCP clients are unaffected. Sessions that were open before the update move to
+  the new cookie on their next page load, so nobody is signed out.
+
+### Operations
+
+- **The session cookie's `Secure` flag follows `WEB_BASE_URL`** (#650): set when it starts with `https:`.
+  Production already sets it to the public https origin; no new variable. A rollback to an earlier image signs
+  every browser out once (the earlier web looked for the token in browser storage, which this release
+  empties); people sign in again, and no data is lost.
+
 ## [0.41.1] — 2026-10-31
 
 ### Fixed
@@ -5481,7 +5613,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.41.1...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.42.0...HEAD
+[0.42.0]: https://github.com/hrustalq/knowledge/compare/v0.41.1...v0.42.0
 [0.41.1]: https://github.com/hrustalq/knowledge/compare/v0.41.0...v0.41.1
 [0.41.0]: https://github.com/hrustalq/knowledge/compare/v0.40.0...v0.41.0
 [0.40.0]: https://github.com/hrustalq/knowledge/compare/v0.39.0...v0.40.0

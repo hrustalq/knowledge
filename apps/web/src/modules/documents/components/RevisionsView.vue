@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Feature 05 (docs/features/05): revision DAG + inline compare.
 import { useI18n } from 'vue-i18n'
+import { labelFor } from '@/shared/i18n/labels'
 import { formatDateTime } from '@/shared/utils/format'
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
@@ -145,7 +146,7 @@ watch(branchFilter, () => void load())
             <td class="px-3 py-2">{{ r.revisionNumber }}</td>
             <td class="px-3 py-2 font-mono text-xs">{{ r.revisionId.slice(0, 8) }}</td>
             <td class="px-3 py-2">{{ r.branch ?? '—' }}</td>
-            <td class="px-3 py-2"><Badge :variant="statusVariant(r.status)">{{ r.status }}</Badge></td>
+            <td class="px-3 py-2"><Badge :variant="statusVariant(r.status)">{{ labelFor(t, 'revisionStatus', r.status) }}</Badge></td>
             <td class="max-w-48 px-3 py-2 text-muted-foreground">
               <span class="block truncate">{{ r.message ?? '—' }}</span>
               <!-- Published from a shared draft (#80): who wrote in it since the publish before. -->

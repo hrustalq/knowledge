@@ -15,7 +15,7 @@ import type {
   CreateAvatarUploadResponse,
 } from '@knowledge/contracts';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
-import { Access, CookieTokenOk, CurrentPrincipal } from '../auth/access.decorator.js';
+import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { AvatarsService } from './avatars.service.js';
 import { CompleteAvatarUploadDto, CreateAvatarUploadDto } from './avatars.dto.js';
@@ -79,7 +79,6 @@ export class AvatarsController {
    * shares *any* of them. The service answers that in one indexed query.
    */
   @Get('users/:userId/avatar')
-  @CookieTokenOk() // <img> cannot set headers
   @Redirect(undefined, 302)
   @ApiOperation({ summary: 'Redirect to a short-lived signed URL for a user’s avatar' })
   async userAvatar(
@@ -126,7 +125,6 @@ export class AvatarsController {
 
   @Get('projects/:id/avatar')
   @Access('viewer', 'project')
-  @CookieTokenOk() // <img> cannot set headers
   @Redirect(undefined, 302)
   @ApiOperation({ summary: 'Redirect to a short-lived signed URL for a project’s avatar' })
   async projectAvatar(@Param('id', ParseUUIDPipe) id: string): Promise<{ url: string }> {

@@ -10,8 +10,6 @@ import request from 'supertest';
 import { redactUrl } from '@knowledge/observability';
 import { AuthGuard } from '../src/auth/auth.guard.js';
 import {
-  COOKIE_TOKEN_OK_META,
-  CookieTokenOk,
   CurrentPrincipal,
   QUERY_TOKEN_OK_META,
   QueryTokenOk,
@@ -27,17 +25,19 @@ import { LiveGateway } from '../src/events/live.gateway.js';
  *   valid key in the URL of a read or write route is a 401;
  * - the opted-in routes still authenticate from ?token=, and a header still
  *   wins everywhere;
- * - the <img> redirects (@CookieTokenOk) authenticate from the kn_token
- *   session cookie instead, which every other route ignores (#102 phase 2b);
- * - both allowlists: the SSE stream for ?token=, the <img> redirects for the cookie;
- * - the live WebSocket keeps its own ?token= path (not behind AuthGuard);
+ * - the HttpOnly kn_token session cookie authenticates any route with no
+ *   header or ticket (#650), and an unsafe method on it needs the
+ *   X-Requested-With header a cross-site form cannot send;
+ * - the allowlist: the SSE stream for ?token=;
+ * - the live WebSocket keeps its own ?token= path (not behind AuthGuard), and
+ *   takes a kt_ ticket there;
  * - token values are masked in logged URLs.
  */
 
 const GOOD = 'kn_good_key';
 /** What a query token may be (#102 phase 2): a kt_ ticket. */
 const GOOD_QUERY = 'kt_good_ticket';
-/** What the kn_token cookie may be (#102 phase 2b): a ks_ session. */
+/** What the kn_token cookie may be (#650): a ks_ session. */
 const GOOD_COOKIE = 'ks_good_session';
 const principal: Principal = { ...DEV_PRINCIPAL, mode: 'api-key', isAdmin: false, userId: 'u1' };
 
@@ -61,7 +61,7 @@ const tokenAuth = {
 };
 
 // Stand-ins shaped like the real routes: markdown / llms-full reads, a write,
-// and one opted-in redirect-style read.
+// and the opted-in stream.
 @Controller('v1')
 class ProbeController {
   @Get('documents/:id/markdown')
@@ -83,12 +83,6 @@ class ProbeController {
   @Get('stream')
   @QueryTokenOk()
   stream(@CurrentPrincipal() p: Principal) {
-    return { userId: p.userId };
-  }
-
-  @Get('asset')
-  @CookieTokenOk()
-  asset(@CurrentPrincipal() p: Principal) {
     return { userId: p.userId };
   }
 }
@@ -123,11 +117,36 @@ describe('AuthGuard ?token= scope', () => {
     ['get', '/v1/documents/d1/markdown'],
     ['get', '/v1/workspaces/w1/llms-full.txt'],
     ['post', '/v1/documents'],
-  ] as const)('%s %s with a valid credential in ?token= or the cookie and no header → 401', async (method, path) => {
+  ] as const)('%s %s with a valid credential in ?token= and no header → 401', async (method, path) => {
     const http = await boot();
     expect((await http[method](`${path}?token=${GOOD}`)).status).toBe(401);
     expect((await http[method](`${path}?token=${GOOD_QUERY}`)).status).toBe(401);
-    expect((await http[method](path).set('Cookie', `kn_token=${GOOD_COOKIE}`)).status).toBe(401);
+  });
+
+  it('the session cookie authenticates any route (#650)', async () => {
+    const http = await boot();
+    const res = await http.get('/v1/documents/d1/markdown').set('Cookie', `kn_lang=ru; kn_token=${GOOD_COOKIE}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ userId: 'u1' });
+    expect((await http.get('/v1/stream').set('Cookie', `kn_token=${GOOD_COOKIE}`)).status).toBe(200);
+    expect((await http.get('/v1/documents/d1/markdown').set('Cookie', 'kn_token=ks_bad')).status).toBe(401);
+  });
+
+  it('a cookie write without X-Requested-With is refused as CSRF; with it, it passes', async () => {
+    const http = await boot();
+    const forged = await http.post('/v1/documents').set('Cookie', `kn_token=${GOOD_COOKIE}`);
+    expect(forged.status).toBe(403);
+    expect(forged.body.reason).toBe('csrf');
+    const app_ = await http.post('/v1/documents').set('Cookie', `kn_token=${GOOD_COOKIE}`).set('X-Requested-With', 'knowledge');
+    expect(app_.status).toBe(201);
+  });
+
+  it('a bearer write needs no CSRF header, even with a cookie beside it', async () => {
+    const http = await boot();
+    expect((await http.post('/v1/documents').set('Authorization', `Bearer ${GOOD}`)).status).toBe(201);
+    expect(
+      (await http.post('/v1/documents').set('Cookie', 'kn_token=ks_other').set('Authorization', `Bearer ${GOOD}`)).status,
+    ).toBe(201);
   });
 
   it('the same routes still accept the key as a Bearer header', async () => {
@@ -152,7 +171,9 @@ describe('AuthGuard ?token= scope', () => {
   it('a Bearer header wins over ?token= and the cookie on an opted-in route', async () => {
     const http = await boot();
     expect((await http.get('/v1/stream?token=kt_other').set('Authorization', `Bearer ${GOOD}`)).status).toBe(200);
-    expect((await http.get('/v1/asset').set('Cookie', 'kn_token=ks_other').set('Authorization', `Bearer ${GOOD}`)).status).toBe(200);
+    expect(
+      (await http.get('/v1/documents/d1/markdown').set('Cookie', 'kn_token=ks_other').set('Authorization', `Bearer ${GOOD}`)).status,
+    ).toBe(200);
   });
 
   it('an opted-in route with a bad query token is still a 401', async () => {
@@ -160,18 +181,9 @@ describe('AuthGuard ?token= scope', () => {
     expect((await http.get('/v1/stream?token=kt_bad')).status).toBe(401);
   });
 
-  it('a @CookieTokenOk route authenticates from the kn_token cookie, not from ?token=', async () => {
+  it('a ticket wins over the cookie on an opted-in route', async () => {
     const http = await boot();
-    const res = await http.get('/v1/asset').set('Cookie', `kn_lang=ru; kn_token=${GOOD_COOKIE}`);
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ userId: 'u1' });
-    expect((await http.get(`/v1/asset?token=${GOOD_QUERY}`)).status).toBe(401);
-    expect((await http.get('/v1/asset').set('Cookie', 'kn_token=ks_bad')).status).toBe(401);
-  });
-
-  it('a @QueryTokenOk route ignores the cookie', async () => {
-    const http = await boot();
-    expect((await http.get('/v1/stream').set('Cookie', `kn_token=${GOOD_COOKIE}`)).status).toBe(401);
+    expect((await http.get('/v1/stream?token=kt_bad').set('Cookie', `kn_token=${GOOD_COOKIE}`)).status).toBe(401);
   });
 });
 
@@ -208,16 +220,6 @@ describe('opt-in allowlists', () => {
     expect(await routesWith(QUERY_TOKEN_OK_META)).toEqual(['EventsController.events']);
   }, 30_000);
 
-  it('@CookieTokenOk is exactly the <img> / <object> / <audio> redirects', async () => {
-    expect(await routesWith(COOKIE_TOKEN_OK_META)).toEqual([
-      'AttachmentsController.content',
-      'AvatarsController.projectAvatar',
-      'AvatarsController.userAvatar',
-      'EmbedsController.snapshot',
-      'ImportController.image',
-      'MemosController.audio',
-    ]);
-  }, 30_000);
 });
 
 describe('live WebSocket keeps its own ?token= path', () => {
@@ -234,6 +236,21 @@ describe('live WebSocket keeps its own ?token= path', () => {
       headers: {},
     } as never);
     expect(resolve).toHaveBeenCalledWith(GOOD);
+    expect(socket.close).not.toHaveBeenCalled();
+  });
+
+  it('takes a kt_ ticket through the ticket rules, the way the web connects (#650)', async () => {
+    const resolve = vi.fn(async () => principal);
+    const resolveTicket = vi.fn(async () => principal);
+    const config = {
+      get: (k: string) =>
+        ({ LIVE_WS_ENABLED: true, LIVE_TRACKED_EVENTS: '', LIVE_WS_MAX_SUBSCRIPTIONS: 10 })[k],
+    };
+    const gw = new LiveGateway(config as never, { resolve, resolveTicket, blocksUnverified: () => false } as never, {} as never, {} as never);
+    const socket = { on: vi.fn(), close: vi.fn(), send: vi.fn() };
+    await gw.handleConnection(socket as never, { url: `/v1/events/ws?token=${GOOD_QUERY}`, headers: {} } as never);
+    expect(resolveTicket).toHaveBeenCalledWith(GOOD_QUERY);
+    expect(resolve).not.toHaveBeenCalled();
     expect(socket.close).not.toHaveBeenCalled();
   });
 });

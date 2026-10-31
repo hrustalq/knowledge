@@ -439,17 +439,21 @@ export class ChatAnswersService {
     if (found) {
       return this.prisma.chatConversation.update({ where: { id: found.id }, data: { lastActivityAt: new Date() } });
     }
-    const { thread } = await this.threads.createThread(integration.workspaceId, userId, {
-      title: question.slice(0, 80),
-    });
-    return this.prisma.chatConversation.create({
-      data: {
-        integrationId: integration.id,
-        workspaceId: integration.workspaceId,
-        externalChatId: inbound.chatId,
-        userId,
-        assistantThreadId: thread.id,
-      },
+    // One commit (#658): a thread without its conversation is an empty orphan
+    // in the asker's assistant rail.
+    return this.prisma.withTransaction(async () => {
+      const { thread } = await this.threads.createThread(integration.workspaceId, userId, {
+        title: question.slice(0, 80),
+      });
+      return this.prisma.chatConversation.create({
+        data: {
+          integrationId: integration.id,
+          workspaceId: integration.workspaceId,
+          externalChatId: inbound.chatId,
+          userId,
+          assistantThreadId: thread.id,
+        },
+      });
     });
   }
 

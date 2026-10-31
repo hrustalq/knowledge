@@ -71,6 +71,7 @@ import type {
   WorkspaceFeature,
 } from '@knowledge/contracts'
 import { getWorkspaceId, relativeTime, statusVariant } from '@/shared/api/api'
+import { whenIdle } from '@/shared/utils/hydration'
 import { EXPORT_FORMATS, isOpenIssueStatus, type ExportFormat } from '@knowledge/contracts'
 import { api, apiQueryOptions, fetchApi, useApiMutation } from '@/shared/api/queries'
 import { CollabDraftBadge } from '@/entities/rich-editor'
@@ -223,14 +224,15 @@ const visibleWidgets = computed(() =>
 const expanded = ref<RailWidget | null>(null)
 const expandedWidget = computed(() => RAIL_WIDGETS.find((w) => w.id === expanded.value) ?? null)
 
-const detail = ref<DocumentDetailResponse | null>(null)
 /**
- * What the cache already holds — a hover prefetch, or the last visit (#628) —
- * so the page draws at once while `load()` asks again. After mount only: the
- * server drew the skeleton, and the first client render must match it.
+ * What the cache already holds — what entry-server read before the render
+ * (#643), a hover prefetch, or the last visit (#628) — so the page draws at
+ * once. Read during setup: the server rendered with the same answer it hands
+ * the client, so the hydrating render agrees with it.
  */
 const cachedDetail = () =>
   queryClient.getQueryData<DocumentDetailResponse>(documentDetailQuery(documentId.value).queryKey) ?? null
+const detail = ref<DocumentDetailResponse | null>(cachedDetail())
 const relations = ref<ListDocumentRelationsResponse['relations'] | null>(null)
 const error = ref<string | null>(null)
 /**
@@ -307,6 +309,15 @@ const visibleRelations = computed(() =>
 )
 let timer: ReturnType<typeof setInterval> | undefined
 
+/**
+ * The rail's previews, and the comments the canvas decorates, start once the
+ * page has painted (#643): on the server and in the hydrating render they are
+ * off, so they cannot land mid-render (#278), and on the client they no longer
+ * leave as one burst with the page's own reads.
+ */
+const railReady = ref(false)
+onMounted(() => whenIdle(() => (railReady.value = true), 1000))
+
 /* ---------------------------------------------------------- verification */
 
 // The status bar (components/verification/VerificationBar, docs/features/39)
@@ -316,6 +327,24 @@ let timer: ReturnType<typeof setInterval> | undefined
 const archived = computed(() => !!detail.value?.document.archivedAt)
 
 /* ------------------------------------------------------------ page data */
+
+const SETTLED = new Set(['indexed', 'failed', 'draft'])
+
+/**
+ * Re-read the detail, and every two seconds while a revision is in flight.
+ * Not when the cached copy is fresh and settled — the server rendered with it
+ * (#643), or a hover just read it: the live rules re-read it on any event for
+ * this page, which is what the poll stands in for.
+ */
+function follow() {
+  if (timer) clearInterval(timer)
+  timer = undefined
+  const cached = queryClient.getQueryCache().find({ queryKey: documentDetailQuery(documentId.value).queryKey, exact: true })
+  const status = detail.value?.revision.status
+  if (status && SETTLED.has(status) && cached && !cached.isStaleByTime(documentDetailQuery(documentId.value).staleTime)) return
+  timer = setInterval(() => void load(), 2000)
+  void load()
+}
 
 async function load() {
   try {
@@ -335,8 +364,7 @@ async function load() {
      * cheaper than the render it avoids.
      */
     if (JSON.stringify(detail.value) !== JSON.stringify(next)) detail.value = next
-    const status = next.revision.status
-    if (status === 'indexed' || status === 'failed' || status === 'draft') {
+    if (SETTLED.has(next.revision.status)) {
       if (timer) clearInterval(timer)
       timer = undefined
     }
@@ -451,7 +479,7 @@ async function loadRelations(fresh = false) {
 /* -------------------------------------------------------------- comments */
 
 const threadsQuery = useQuery(
-  computed(() => apiQueryOptions('/v1/documents/{id}/threads', { path: { id: documentId.value } })),
+  computed(() => ({ ...apiQueryOptions('/v1/documents/{id}/threads', { path: { id: documentId.value } }), enabled: railReady.value })),
 )
 const threads = computed(
   () => (threadsQuery.data.value as ListDocumentThreadsResponse | undefined)?.threads ?? [],
@@ -572,35 +600,37 @@ const resolveDocumentId = async () => documentId.value
  */
 
 const revisionsPreview = useQuery(
-  computed(() => apiQueryOptions('/v1/documents/{id}/revisions', { path: { id: documentId.value } })),
+  computed(() => ({ ...apiQueryOptions('/v1/documents/{id}/revisions', { path: { id: documentId.value } }), enabled: railReady.value })),
 )
 const mergeRequestsPreview = useQuery(
-  computed(() =>
-    apiQueryOptions('/v1/documents/{id}/merge-requests', { path: { id: documentId.value } }),
-  ),
+  computed(() => ({
+    ...apiQueryOptions('/v1/documents/{id}/merge-requests', { path: { id: documentId.value } }),
+    enabled: railReady.value,
+  })),
 )
 const workflowsPreview = useQuery(
   computed(() => ({
     ...apiQueryOptions('/v1/documents/{id}/workflow-runs', { path: { id: documentId.value } }),
-    enabled: features.isOn('workflows'),
+    enabled: railReady.value && features.isOn('workflows'),
   })),
 )
 const activityPreview = useQuery(
-  computed(() =>
-    apiQueryOptions('/v1/activity', {
+  computed(() => ({
+    ...apiQueryOptions('/v1/activity', {
       query: { workspaceId: getWorkspaceId(), documentId: documentId.value, limit: '1' },
     }),
-  ),
+    enabled: railReady.value,
+  })),
 )
 
 const connectorsPreview = useQuery(
-  computed(() => apiQueryOptions('/v1/documents/{id}/connectors', { path: { id: documentId.value } })),
+  computed(() => ({ ...apiQueryOptions('/v1/documents/{id}/connectors', { path: { id: documentId.value } }), enabled: railReady.value })),
 )
 // #81: the rail row's count, and the same cache entry ConflictsRail reads.
 const conflictsPreview = useQuery(
   computed(() => ({
     ...apiQueryOptions('/v1/conflicts', { query: { workspaceId: getWorkspaceId(), documentId: documentId.value } }),
-    enabled: features.isOn('conflicts'),
+    enabled: railReady.value && features.isOn('conflicts'),
   })),
 )
 const openConflicts = computed(
@@ -608,26 +638,36 @@ const openConflicts = computed(
 )
 
 const issuesPreview = useQuery(
-  computed(() =>
-    apiQueryOptions('/v1/knowledge-issues', {
+  computed(() => ({
+    ...apiQueryOptions('/v1/knowledge-issues', {
       query: { workspaceId: getWorkspaceId(), documentId: documentId.value },
     }),
-  ),
+    enabled: railReady.value,
+  })),
 )
 
 // The widget is drawn only once a score exists, so the preview query is also
 // the widget's data — one request whether the row is open or not.
 const qualityQuery = useQuery(
-  computed(() => apiQueryOptions('/v1/documents/{id}/quality', { path: { id: documentId.value } })),
+  computed(() => ({ ...apiQueryOptions('/v1/documents/{id}/quality', { path: { id: documentId.value } }), enabled: railReady.value })),
 )
 const quality = computed(() => qualityQuery.data.value as DocumentQualityResponse | undefined)
 
 // Usage analytics (#79): the collapsed row previews the view count, so the
-// page owns the query and the widget only draws.
+// page owns the query and the widget only draws. Read once per visit (#643):
+// after the open beacon, so the count includes this view (#336) — or, with
+// no beacon (Do Not Track, a failed send), after a few seconds.
+const insightsArmed = ref(false)
+let insightsFallback: ReturnType<typeof setTimeout> | undefined
+function armInsightsLater() {
+  insightsArmed.value = false
+  clearTimeout(insightsFallback)
+  insightsFallback = setTimeout(() => (insightsArmed.value = true), 3000)
+}
 const insightsQuery = useQuery(
   computed(() => ({
     ...apiQueryOptions('/v1/documents/{id}/insights', { path: { id: documentId.value } }),
-    enabled: features.isOn('analytics'),
+    enabled: insightsArmed.value && features.isOn('analytics'),
   })),
 )
 const insights = computed(() => insightsQuery.data.value as PageInsightsResponse | undefined)
@@ -635,7 +675,7 @@ const insights = computed(() => insightsQuery.data.value as PageInsightsResponse
 // The same query the declaration notice runs, which vue-query dedupes; the
 // usages are read only once a declaration resolved to a connector.
 const declarationPreview = useQuery(
-  computed(() => apiQueryOptions('/v1/documents/{id}/component', { path: { id: documentId.value } })),
+  computed(() => ({ ...apiQueryOptions('/v1/documents/{id}/component', { path: { id: documentId.value } }), enabled: railReady.value })),
 )
 const declaration = computed(() => declarationPreview.data.value as ComponentDeclarationView | null | undefined)
 const usagesPreview = useQuery(
@@ -733,25 +773,28 @@ const isFixture = computed(() => detail.value?.document.kind === 'test-fixture')
 const apiRef = useApiReference(documentId, viewingRevision, isSpec)
 const canComment = computed(() => auth.canComment && !viewingRevision.value)
 // Usage analytics (#79): opening this page is one view, once it is known to be
-// readable — a refused or missing page records nothing. The insights query
-// started before the beacon, so it is read again once this visit is a row (#336).
+// readable — a refused or missing page records nothing. The insights read
+// waits for it; if the fallback already read, it is read again (#336).
 usePageView(
   () =>
     detail.value ? { documentId: documentId.value, revisionId: viewingRevision.value ?? detail.value.revision.revisionId } : null,
   (id) => {
-    if (id === documentId.value && features.isOn('analytics')) void insightsQuery.refetch()
+    if (id !== documentId.value) return
+    clearTimeout(insightsFallback)
+    if (!insightsArmed.value) insightsArmed.value = true
+    else if (features.isOn('analytics')) void insightsQuery.refetch()
   },
 )
 
 onMounted(() => {
-  detail.value = cachedDetail()
-  void load()
+  follow()
+  armInsightsLater()
   void loadRelations()
   if (!store.treeLoaded) void store.fetchTree()
-  timer = setInterval(() => void load(), 2000)
 })
 onUnmounted(() => {
   if (timer) clearInterval(timer)
+  clearTimeout(insightsFallback)
 })
 
 // Route reuse: navigating to a different document keeps this component alive.
@@ -762,9 +805,8 @@ watch(documentId, () => {
   restrictedRefusal.value = false
   headings.value = []
   outdatedThreads.value = []
-  if (timer) clearInterval(timer)
-  timer = setInterval(() => void load(), 2000)
-  void load()
+  follow()
+  armInsightsLater()
   void loadRelations()
 })
 
@@ -931,7 +973,7 @@ watch(
     <PageLayout variant="detail" :title="detail.document.title">
       <template #status>
         <Badge variant="outline">{{ labelFor(t, 'category', detail.document.category) }}</Badge>
-        <Badge :variant="statusVariant(detail.revision.status)">{{ detail.revision.status }}</Badge>
+        <Badge :variant="statusVariant(detail.revision.status)">{{ labelFor(t, 'revisionStatus', detail.revision.status) }}</Badge>
         <Badge v-if="templateChip" variant="outline" class="text-muted-foreground gap-1 font-normal">
           <LayoutTemplate class="size-3" aria-hidden="true" />
           {{ templateChip }}
@@ -987,7 +1029,7 @@ watch(
               </dd>
               <dt class="text-muted-foreground">{{ t('documents.status') }}</dt>
               <dd class="text-right">
-                <Badge :variant="statusVariant(detail.revision.status)">{{ detail.revision.status }}</Badge>
+                <Badge :variant="statusVariant(detail.revision.status)">{{ labelFor(t, 'revisionStatus', detail.revision.status) }}</Badge>
               </dd>
               <dt class="text-muted-foreground">{{ t('documents.category') }}</dt>
               <dd class="truncate text-right">{{ labelFor(t, 'category', detail.document.category) }}</dd>

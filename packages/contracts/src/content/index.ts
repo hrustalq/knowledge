@@ -490,3 +490,36 @@ function withoutFences(markdown: string): string {
   }
   return out.join('\n');
 }
+
+// ---------------------------------------------------------------------------
+
+/**
+ * Markdown → plain text, for the places that can only show plain text: a
+ * `title` attribute, a one-line preview of a collapsed thread, the excerpt of
+ * the comment a reply answers, and a search snippet (#645), which the API
+ * windows and marks after stripping so no backtick or `**` reaches a reader.
+ *
+ * This is deliberately a stripper, not a parser. Rendering the markdown and
+ * reading `textContent` would be more correct and needs a DOM, which two of
+ * the three callers do not have (SSR, and a `title=` built before mount) — and
+ * for a single line of preview text, dropping the markers is indistinguishable
+ * from the real thing.
+ */
+export function plainText(markdown: string): string {
+  return (markdown ?? '')
+    // A fence goes, its code stays: a search hit can be inside it.
+    .replace(/```[^\n]*\n?([\s\S]*?)```/g, ' $1 ')
+    .replace(/`{1,3}([^`]*)`{1,3}/g, '$1')
+    .replace(/<[^>]+>/g, '')
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/^\s{0,3}>\s?/gm, '')
+    .replace(/^\s*[-*+]\s+/gm, '')
+    .replace(/^\s*\d+\.\s+/gm, '')
+    .replace(/(\*\*|\*|~~)/g, '')
+    // Underscore emphasis only at a word's edge: `snake_case` and
+    // `AGENT_SCHEDULE_ENABLED` keep theirs.
+    .replace(/(?<![\p{L}\p{N}])__?|__?(?![\p{L}\p{N}])/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}

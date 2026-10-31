@@ -15,6 +15,8 @@ const SWEEP_INTERVAL_MS = AGENT_SCHEDULE_TICK_MINUTES * 60_000;
 const BATCH = 10;
 /** A run still 'running' after this is presumed dead and re-queued. */
 const STALE_RUN_MS = 30 * 60_000;
+/** A run still 'pending' after this has probably lost its job (#657) and is enqueued again. */
+const STALE_PENDING_MS = 10 * 60_000;
 
 /**
  * Starts scheduled agent runs, and recovers ones that died mid-flight
@@ -29,12 +31,18 @@ const STALE_RUN_MS = 30 * 60_000;
  * Its back-pressure rule carries over too: a run is refused while one is
  * already in flight for that agent, so an agent slower than its interval falls
  * behind rather than piling up.
+ *
+ * The recovery half runs whether or not schedules are on (#657): every run —
+ * manual, trigger, lint, drift, memo — is a row committed before its job, and
+ * this is the one relay that re-enqueues a row whose job was lost or whose
+ * worker died. Only `startDue` is behind `AGENT_SCHEDULE_ENABLED`.
  */
 @Injectable()
 export class AgentScheduleSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(AgentScheduleSweeper.name);
   private timer?: NodeJS.Timeout;
   private running = false;
+  private schedulesEnabled = false;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -43,10 +51,8 @@ export class AgentScheduleSweeper implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit(): void {
-    if (!this.config.get('AGENT_SCHEDULE_ENABLED', { infer: true })) {
-      this.logger.log('Agent schedules disabled (AGENT_SCHEDULE_ENABLED=false)');
-      return;
-    }
+    this.schedulesEnabled = this.config.get('AGENT_SCHEDULE_ENABLED', { infer: true });
+    if (!this.schedulesEnabled) this.logger.log('Agent schedules disabled (AGENT_SCHEDULE_ENABLED=false); run recovery stays on');
     this.timer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS);
     this.timer.unref();
   }
@@ -55,12 +61,13 @@ export class AgentScheduleSweeper implements OnModuleInit, OnModuleDestroy {
     if (this.timer) clearInterval(this.timer);
   }
 
-  private async sweep(): Promise<void> {
+  async sweep(): Promise<void> {
     if (this.running) return;
     this.running = true;
     try {
       await this.requeueStuck();
-      await this.startDue();
+      await this.relayPending();
+      if (this.schedulesEnabled) await this.startDue();
     } catch (error) {
       this.logger.warn(`Agent schedule sweep failed: ${String(error)}`);
     } finally {
@@ -83,6 +90,27 @@ export class AgentScheduleSweeper implements OnModuleInit, OnModuleDestroy {
       });
       // A retry needs a fresh jobId: the kept failed job blocks reuse.
       await this.producer.enqueueRetry(run.id, run.attempt + 1);
+    }
+  }
+
+  /**
+   * The outbox relay (#657), `OutboxSweeper`'s shape: a `pending` row whose
+   * enqueue was lost after its commit is enqueued again under the jobId of its
+   * last enqueue, so a row whose job is merely waiting collapses into it. A
+   * duplicate that slips through still loses the processor's guarded claim.
+   */
+  private async relayPending(): Promise<void> {
+    const stale = await this.prisma.agentRun.findMany({
+      where: { status: 'pending', updatedAt: { lt: new Date(Date.now() - STALE_PENDING_MS) } },
+      select: { id: true, attempt: true },
+      orderBy: { updatedAt: 'asc' },
+      take: BATCH * 2,
+    });
+    for (const run of stale) {
+      this.logger.log(`Re-enqueueing stale pending agent run ${run.id}`);
+      // `attempt` is 0 until `requeueStuck` hands the row to a retry.
+      if (run.attempt === 0) await this.producer.enqueue(run.id);
+      else await this.producer.enqueueRetry(run.id, run.attempt);
     }
   }
 
@@ -132,19 +160,23 @@ export class AgentScheduleSweeper implements OnModuleInit, OnModuleDestroy {
           where: { id: agent.scheduleOwner! },
           select: { locale: true },
         });
-        const run = await this.prisma.agentRun.create({
-          data: {
-            workspaceId: agent.workspaceId,
-            agentKey: agent.key,
-            agentId: agent.id,
-            trigger: 'schedule',
-            createdBy: agent.scheduleOwner!,
-            locale: asLocale(owner?.locale),
-            input: agent.scheduleNote ? { note: agent.scheduleNote } : undefined,
-          },
+        // The run and the stamp that says it started commit together (#657);
+        // the job follows the commit, and `relayPending` covers a lost one.
+        await this.prisma.withTransaction(async () => {
+          const run = await this.prisma.agentRun.create({
+            data: {
+              workspaceId: agent.workspaceId,
+              agentKey: agent.key,
+              agentId: agent.id,
+              trigger: 'schedule',
+              createdBy: agent.scheduleOwner!,
+              locale: asLocale(owner?.locale),
+              input: agent.scheduleNote ? { note: agent.scheduleNote } : undefined,
+            },
+          });
+          await this.prisma.aiAgent.update({ where: { id: agent.id }, data: { lastRunAt: new Date() } });
+          this.prisma.onCommit(() => this.producer.enqueue(run.id));
         });
-        await this.prisma.aiAgent.update({ where: { id: agent.id }, data: { lastRunAt: new Date() } });
-        await this.producer.enqueue(run.id);
         started++;
       } catch (error) {
         // One bad schedule must not stop the sweep for every other workspace.

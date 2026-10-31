@@ -113,14 +113,18 @@ export class AiUsageService {
   }
 
   /**
-   * A memo's transcription (#551): env-configured, so there is no resolved
-   * config to read a provider from, and billed by audio length, not tokens.
-   * Fire-and-forget like `record`.
+   * A memo's transcription (#551): env-configured, so the provider comes from
+   * env rather than a resolved config, and it is billed by audio length, not
+   * tokens. The cost is what the speech server reported (gen-api's `cost`, in
+   * the same units the decision client records), else null. Fire-and-forget
+   * like `record`.
    */
   async recordTranscription(input: {
     workspaceId: string;
     userId: string;
+    provider: string;
     model: string;
+    costUsdMicros: number | null;
     audioSeconds: number;
     durationMs: number;
     ok: boolean;
@@ -132,8 +136,9 @@ export class AiUsageService {
           workspaceId: input.workspaceId,
           userId: input.userId,
           operation: 'transcription',
-          provider: 'openai-compatible',
+          provider: input.provider,
           model: input.model,
+          costUsdMicros: input.costUsdMicros,
           audioSeconds: input.audioSeconds,
           durationMs: input.durationMs,
           ok: input.ok,
@@ -435,6 +440,7 @@ export class AiUsageService {
       error: r.error,
       threadId: r.threadId,
       toolCallCount: r.toolCallCount,
+      audioSeconds: r.audioSeconds,
       createdAt: r.createdAt.toISOString(),
     }));
     return { entries, nextCursor: rows.length > limit ? page[page.length - 1].id : null };

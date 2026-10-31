@@ -16,7 +16,7 @@ import type {
   ImportJobResponse,
   SubmitImportResponse,
 } from '@knowledge/contracts';
-import { Access, CookieTokenOk, CurrentPrincipal } from '../auth/access.decorator.js';
+import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { CreateImportDto, SubmitImportDto } from './dto/imports.dto.js';
 import { ImportService } from './import.service.js';
@@ -78,7 +78,6 @@ export class ImportController {
    */
   @Get(':id/images/:index')
   @Access('viewer', 'import')
-  @CookieTokenOk() // <img> cannot set headers
   @Redirect(undefined, 302)
   @ApiExcludeEndpoint() // binary redirect; not useful in the generated client
   async image(

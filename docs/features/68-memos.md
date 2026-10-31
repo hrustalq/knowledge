@@ -100,6 +100,12 @@ keeps one placeholder. The unmasked text lives only in the job's memory. Every m
 output wrap the transcript with `wrapUntrusted(…, 'memo')`. `harvest-mask` reads its credential patterns
 from `common/secret-scan.ts`, lifted out of `captures/` because the worker may not reach that folder.
 
+Speech-to-text never writes a credential in its written shape: on prod a spoken password came back as
+`Twortistage 2026` and an address as `Дмитрий.rlov sobakexple.com`. So the masker also reads the word in
+front of a value — `пароль`, `ключ`, `токен`, `password`, `api key`, `телефон` — and masks spoken addresses
+and bare `+` numbers (doc 59, *Masking*). A credential said with no such word, and with no digit or Latin
+letter in it, still reaches the transcript.
+
 ### A memo is a row, private to its uploader
 
 `memos`: workspace, project, `created_by`, title, filename, content type, size, `audio_key`,
@@ -167,9 +173,11 @@ back-pressure; `ScribePublishSweeper`'s shape) finds memos in `analysing` whose 
 ### Spend
 
 `transcription` gives one `ai_usage` row per attempt that reached ffprobe, billed to the uploader, with
-the length in the new nullable `ai_usage.audio_seconds` (tokens zero). It is written by
-`AiUsageService.recordTranscription`, because env-configured speech has no resolved config. `memo` covers
-the secretary's model calls. Reserve calls `assertWithinBudget` before handing out a URL.
+the length in the new nullable `ai_usage.audio_seconds` (tokens zero, and `audioSeconds` on the usage log
+entries). It is written by `AiUsageService.recordTranscription`, because env-configured speech has no
+resolved config: the row's provider is `TRANSCRIPTION_PROVIDER`, and its cost is the sum of the `cost`
+gen-stt reports per chunk (null when any chunk reports none, which an OpenAI-compatible server never
+does). `memo` covers the secretary's model calls. Reserve calls `assertWithinBudget` before handing out a URL.
 
 ### Lifecycle
 
@@ -191,7 +199,7 @@ REST, each route `@Access` + `@Returns`:
 | `POST /v1/memos`                      | editor | reserve: row + presigned PUT; 503 `transcription-disabled` when off       |
 | `POST /v1/memos/:id/finalize`         | editor | size re-read from the bucket, transcription queued                       |
 | `GET /v1/memos/:id`                   | viewer | memo, transcript, summary, proposals with merge requests, dropped        |
-| `GET /v1/memos/:id/audio`             | viewer | 302 to a presigned GET (`@CookieTokenOk`, `<audio>` sends no header)      |
+| `GET /v1/memos/:id/audio`             | viewer | 302 to a presigned GET (session cookie, `<audio>` sends no header)        |
 | `POST /v1/memos/:id/retry`            | editor | resume a failed memo                                                     |
 | `DELETE /v1/memos/:id`                | editor | purge audio + row                                                        |
 
@@ -227,8 +235,8 @@ Web (`/memos` after Captures in the sidebar; design brief on #551):
 - Speaker diarization: segments carry time, not speakers.
 - Searchable or citable transcripts; shared or project-visible memos.
 - Video files; captures other than pages (glossary terms, relations).
-- A per-workspace transcription route, and a per-minute cost column (`audio_seconds` is recorded, not
-  priced).
+- A per-workspace transcription route, and a configured per-minute price (only a cost the speech server
+  reports is recorded).
 - One prompt window per memo: past ~150k characters of transcript (beyond the 120-minute default) the tail
   is not shown to the secretary (`// ponytail:` in `agents/memo.ts`).
 

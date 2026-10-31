@@ -81,7 +81,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create an account with email + password; returns a ks_ session token */
+        /** Create an account with email + password; sets the HttpOnly kn_token session cookie */
         post: operations["AuthFlowController_signup"];
         delete?: never;
         options?: never;
@@ -98,7 +98,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Email + password login; returns a ks_ session token. 429 past 30/min per IP or 10/min per address */
+        /** Email + password login; sets the HttpOnly kn_token session cookie. 429 past 30/min per IP or 10/min per address */
         post: operations["AuthFlowController_login"];
         delete?: never;
         options?: never;
@@ -115,8 +115,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Revoke the current session token (no-op for API keys / dev mode) */
+        /** Revoke the current session and clear its cookie (no-op for API keys / dev mode) */
         post: operations["AuthFlowController_logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/session-cookie": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Move a pre-#650 bearer ks_ session into the HttpOnly kn_token cookie (one-release migration) */
+        post: operations["AuthFlowController_sessionCookie"];
         delete?: never;
         options?: never;
         head?: never;
@@ -321,8 +338,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Login buttons: enabled providers of the workspace plus every platform-wide one. 404 when SSO is off */
-        get: operations["SsoController_providers"];
+        /** Login buttons: enabled providers of the workspace plus every platform-wide one. `enabled: false` when SSO is off */
+        get: operations["SsoProvidersController_providers"];
         put?: never;
         post?: never;
         delete?: never;
@@ -357,7 +374,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Trade the single-use code from /auth/sso/complete for a ks_ session token */
+        /** Trade the single-use code from /auth/sso/complete for the HttpOnly kn_token session cookie */
         post: operations["SsoController_exchange"];
         delete?: never;
         options?: never;
@@ -10564,6 +10581,7 @@ export interface components {
             error: string | null;
             threadId: string | null;
             toolCallCount: number;
+            audioSeconds: number | null;
             createdAt: string;
         };
         /** @enum {string} */
@@ -11344,7 +11362,6 @@ export interface components {
         /** @enum {string} */
         AuthMethod: "password" | "oidc" | "saml" | "ldap";
         AuthSessionResponse: {
-            token: string;
             expiresAt: string;
             me: components["schemas"]["MeResponse"];
         };
@@ -14641,6 +14658,9 @@ export interface components {
             extractor: string;
             confidence: number;
         };
+        SessionCookieResponse: {
+            ok: boolean;
+        };
         SessionView: {
             id: string;
             authMethod: components["schemas"]["AuthMethod"];
@@ -14801,7 +14821,6 @@ export interface components {
             recheckUntil: string | null;
         };
         SsoExchangeResponse: {
-            token: string;
             expiresAt: string;
             me: components["schemas"]["MeResponse"];
             returnTo: string;
@@ -14813,6 +14832,7 @@ export interface components {
             preset: components["schemas"]["IdpPreset"];
         };
         SsoProvidersResponse: {
+            enabled: boolean;
             providers: components["schemas"]["SsoLoginProvider"][];
             passwordLogin: boolean;
         };
@@ -15823,6 +15843,46 @@ export interface operations {
             };
         };
     };
+    AuthFlowController_sessionCookie: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionCookieResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     AuthFlowController_forgotPassword: {
         parameters: {
             query?: never;
@@ -16323,7 +16383,7 @@ export interface operations {
             };
         };
     };
-    SsoController_providers: {
+    SsoProvidersController_providers: {
         parameters: {
             query?: {
                 /** @description The workspace whose buttons to show (the kn_ws cookie's) */

@@ -12,6 +12,7 @@
     "accountDisabled": "Учётная запись отключена",
     "unknownApiKey": "Неизвестный API-ключ",
     "invalidUrlTicket": "Билет доступа в ссылке недействителен, истёк или уже использован",
+    "csrf": "Запись по cookie сессии должна идти из приложения: нет заголовка X-Requested-With. Скриптам нужен API-ключ в заголовке Authorization: Bearer",
     "credentialInUrl": "В URL принимается только одноразовый билет. Передайте API-ключ или сессию в заголовке Authorization: Bearer или обменяйте их на билет через POST /v1/auth/url-ticket",
     "invalidCredentials": "Неверный адрес электронной почты или пароль",
     "invalidResetToken": "Ссылка для сброса пароля недействительна или истекла",

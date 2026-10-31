@@ -74,6 +74,8 @@ export class MemosProcessor extends WorkerHost {
     const dir = await mkdtemp(join(tmpdir(), 'memo-'));
     const started = Date.now();
     let seconds = 0;
+    // A sum only while every chunk reported one: a partial sum would read as the whole bill.
+    let cost: number | null = 0;
     let failure: string | undefined;
     try {
       const source = join(dir, 'source');
@@ -86,7 +88,9 @@ export class MemosProcessor extends WorkerHost {
       const cuts = this.stt.provider === 'gen-api' ? pauseCuts(await detectPauses(source), seconds) : fixedCuts(seconds);
       const chunks: ChunkTranscript[] = [];
       for (const chunk of await splitAudio(source, dir, cuts, seconds)) {
-        chunks.push(await this.stt.transcribe(chunk.path, chunk.offset, chunk.duration));
+        const part = await this.stt.transcribe(chunk.path, chunk.offset, chunk.duration);
+        cost = cost === null || part.cost === undefined ? null : cost + part.cost;
+        chunks.push(part);
       }
       const { segments, language } = stitchTranscript(chunks);
       await this.prisma.memo.update({
@@ -108,7 +112,9 @@ export class MemosProcessor extends WorkerHost {
         void this.usage.recordTranscription({
           workspaceId,
           userId,
+          provider: this.stt.provider,
           model: this.stt.model,
+          costUsdMicros: cost === null ? null : Math.round(cost * 1_000_000),
           audioSeconds: Math.round(seconds),
           durationMs: Date.now() - started,
           ok: !failure,
@@ -132,23 +138,28 @@ export class MemosProcessor extends WorkerHost {
       select: { id: true },
     });
     const input: AgentRunInput = { memo: { memoId: row.id } };
-    const run = await this.prisma.agentRun.create({
-      data: {
-        workspaceId: row.workspaceId,
-        agentKey: 'secretary',
-        agentId: override?.id ?? null,
-        trigger: 'manual',
-        subjectKey: `memo:${row.id}`,
-        createdBy: row.createdBy,
-        locale: row.locale,
-        input: input as unknown as Prisma.InputJsonValue,
-      },
+    // The run and the memo's link to it commit together (#657): a crash between
+    // them left a `transcribed` memo that a relay would read twice. The job
+    // follows the commit; `AgentScheduleSweeper` relays a lost one.
+    await this.prisma.withTransaction(async () => {
+      const run = await this.prisma.agentRun.create({
+        data: {
+          workspaceId: row.workspaceId,
+          agentKey: 'secretary',
+          agentId: override?.id ?? null,
+          trigger: 'manual',
+          subjectKey: `memo:${row.id}`,
+          createdBy: row.createdBy,
+          locale: row.locale,
+          input: input as unknown as Prisma.InputJsonValue,
+        },
+      });
+      await this.prisma.memo.update({
+        where: { id: row.id },
+        data: { status: 'analysing', stage: null, error: null, agentRunId: run.id, publishedAt: null },
+      });
+      this.prisma.onCommit(() => this.agents.enqueue(run.id));
     });
-    await this.prisma.memo.update({
-      where: { id: row.id },
-      data: { status: 'analysing', stage: null, error: null, agentRunId: run.id, publishedAt: null },
-    });
-    await this.agents.enqueue(run.id);
   }
 
   private async fail(memoId: string, stage: 'transcribing' | 'analysing', message: string): Promise<void> {

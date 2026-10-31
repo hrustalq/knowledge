@@ -29,7 +29,6 @@ import {
 } from '@knowledge/contracts'
 import { BODY_FIELD } from '@knowledge/editor-schema'
 import { META_FIELD, seedPageMeta } from '@knowledge/editor-schema/page-fields'
-import { getToken } from '@/shared/api/api'
 import { api } from '@/shared/api/queries'
 import { avatarColor, avatarColorDeep } from '@/core/avatar'
 import { wsBase } from '@/shared/api/live'
@@ -115,8 +114,8 @@ export function outcomeOf(reason: string): { rejoin: true } | { rejoin: false; r
 
 /** A single-use `kt_` ticket per (re)join; nothing longer-lived goes over the socket. */
 async function ticket(): Promise<string> {
-  // AUTH_MODE=none: the server admits anyone, and minting would be a wasted request.
-  if (!getToken()) return ''
+  // The session is an HttpOnly cookie (#650): this tab cannot tell AUTH_MODE=none
+  // from a signed-in session, so it always mints (the cookie authenticates it).
   return (await api.post('/v1/auth/url-ticket')).ticket
 }
 

@@ -24,6 +24,21 @@ describe('snippetPartsOf', () => {
     expect(snippetPartsOf(text, 'meaning only')).toEqual([{ text: `${'a'.repeat(300)}…`, hit: false }]);
   });
 
+  it('reads the chunk as plain text, so no markdown marker reaches the reader (#645)', () => {
+    const text = '## Retries\n\nDelivered by the `webhook-dispatcher` service, **at least once**; see [the runbook](https://x/y) and `WEBHOOK_MAX_ATTEMPTS`.';
+    const parts = snippetPartsOf(text, 'webhook');
+    expect(parts.map((p) => p.text).join('')).toBe(
+      'Retries Delivered by the webhook-dispatcher service, at least once; see the runbook and WEBHOOK_MAX_ATTEMPTS.',
+    );
+    expect(hits(parts)).toEqual(['webhook', 'WEBHOOK']);
+  });
+
+  it('keeps the code of a fenced block, only the fence goes', () => {
+    const parts = snippetPartsOf('Run:\n\n```bash\nmake deploy-check\n```', 'deploy');
+    expect(parts.map((p) => p.text).join('')).toBe('Run: make deploy-check');
+    expect(hits(parts)).toEqual(['deploy']);
+  });
+
   it('drops words too short to mark', () => {
     expect(queryStems('и a to сервиса Users')).toEqual(['серви', 'user']);
   });

@@ -276,30 +276,39 @@ export class ConnectorStagingService {
     }
 
     const previousRevisionId = await this.headRevisionId(link.documentId);
-    const revisionId = await this.writeRevision(link.documentId, markdown);
-
-    await this.prisma.connectorLink.update({
-      where: { id: link.id },
-      data: {
-        contentHash: hash,
-        revisionId,
-        externalVersion: item.externalVersion,
-        externalTitle: item.title,
-        externalUrl: item.externalUrl ?? link.externalUrl,
-        lastPulledAt: new Date(),
+    // The revision, the link's `contentHash` and the item commit together
+    // (#658): a revision without the hash reads as a local edit on the next
+    // pull and raises a false conflict. The revision is inside rather than
+    // written first because that gap is the bug; the MinIO PUT then holds the
+    // connection, hence `createPage`'s raised timeout.
+    await this.prisma.withTransaction(
+      async () => {
+        const revisionId = await this.writeRevision(link.documentId, markdown);
+        await this.prisma.connectorLink.update({
+          where: { id: link.id },
+          data: {
+            contentHash: hash,
+            revisionId,
+            externalVersion: item.externalVersion,
+            externalTitle: item.title,
+            externalUrl: item.externalUrl ?? link.externalUrl,
+            lastPulledAt: new Date(),
+          },
+        });
+        await this.prisma.connectorRunItem.update({
+          where: { id: item.id },
+          data: {
+            status: 'applied',
+            documentId: link.documentId,
+            revisionId,
+            previousRevisionId,
+            createdDocument: false,
+            error: null,
+          },
+        });
       },
-    });
-    await this.prisma.connectorRunItem.update({
-      where: { id: item.id },
-      data: {
-        status: 'applied',
-        documentId: link.documentId,
-        revisionId,
-        previousRevisionId,
-        createdDocument: false,
-        error: null,
-      },
-    });
+      { timeout: 30_000, maxWait: 10_000 },
+    );
     await this.acl.applyToPage(row, link, storedAcl(item));
   }
 
@@ -497,37 +506,46 @@ export class ConnectorStagingService {
         : reason === 'spec-changed'
           ? `spec/${run.id.slice(0, 8)}-${Date.now().toString(36)}`
           : `connector/${row.kind}-${Date.now().toString(36)}`;
-    await this.documents.createBranch(link.documentId, { name: branch });
-    const revisionId = await this.writeRevision(link.documentId, markdown, branch, specOf(item));
+    // The branch, its revision, the link's `externalVersion`, the conflict row
+    // and the item are one change (#658). The version bumped without the
+    // conflict row makes the next pull skip the item, silently losing the
+    // upstream change. Same raised timeout as `createPage`: the PUT is inside.
+    await this.prisma.withTransaction(
+      async () => {
+        await this.documents.createBranch(link.documentId, { name: branch });
+        const revisionId = await this.writeRevision(link.documentId, markdown, branch, specOf(item));
 
-    await this.prisma.connectorLink.update({
-      where: { id: link.id },
-      data: {
-        // The external version is recorded so the same conflict is not raised on
-        // every run, but `contentHash` deliberately is not: the two sides have
-        // not agreed on anything.
-        externalVersion: item.externalVersion,
-        externalTitle: item.title,
-        lastPulledAt: new Date(),
+        await this.prisma.connectorLink.update({
+          where: { id: link.id },
+          data: {
+            // The external version is recorded so the same conflict is not raised on
+            // every run, but `contentHash` deliberately is not: the two sides have
+            // not agreed on anything.
+            externalVersion: item.externalVersion,
+            externalTitle: item.title,
+            lastPulledAt: new Date(),
+          },
+        });
+        await this.prisma.connectorConflict.create({
+          data: {
+            connectorId: row.id,
+            workspaceId: row.workspaceId,
+            documentId: link.documentId,
+            linkId: link.id,
+            branch,
+            revisionId,
+            externalUrl: item.externalUrl,
+            title: item.title,
+            reason,
+          },
+        });
+        await this.prisma.connectorRunItem.update({
+          where: { id: item.id },
+          data: { status: 'applied', documentId: link.documentId, revisionId, createdDocument: false },
+        });
       },
-    });
-    await this.prisma.connectorConflict.create({
-      data: {
-        connectorId: row.id,
-        workspaceId: row.workspaceId,
-        documentId: link.documentId,
-        linkId: link.id,
-        branch,
-        revisionId,
-        externalUrl: item.externalUrl,
-        title: item.title,
-        reason,
-      },
-    });
-    await this.prisma.connectorRunItem.update({
-      where: { id: item.id },
-      data: { status: 'applied', documentId: link.documentId, revisionId, createdDocument: false },
-    });
+      { timeout: 30_000, maxWait: 10_000 },
+    );
   }
 
   /**

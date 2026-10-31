@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   BadRequestException,
   ConflictException,
@@ -84,8 +85,13 @@ export class ImportService {
     await this.projects.requireProjectInWorkspace(dto.projectId, dto.workspaceId);
     if (dto.parentId) await this.requireParent(dto.parentId, dto.projectId);
 
+    // The id is minted here so the key is known before the insert: one
+    // statement, never a row with an empty key (#658).
+    const id = randomUUID();
+    const s3Key = this.storage.importObjectKey(dto.workspaceId, id, dto.filename);
     const row = await this.prisma.importJob.create({
       data: {
+        id,
         workspaceId: dto.workspaceId,
         projectId: dto.projectId,
         parentId: dto.parentId ?? null,
@@ -93,8 +99,7 @@ export class ImportService {
         sourceFilename: dto.filename,
         contentType: dto.contentType,
         sizeBytes: dto.sizeBytes,
-        // Placeholder: the key needs the row id, which the insert just minted.
-        s3Key: '',
+        s3Key,
         createdBy: userId ?? AUTHOR_ID_STUB,
         // Frozen here: the parse runs in a worker minutes later, with no
         // request left to read a language from (docs/features/18).
@@ -102,12 +107,10 @@ export class ImportService {
       },
     });
 
-    const s3Key = this.storage.importObjectKey(row.workspaceId, row.id, dto.filename);
-    const updated = await this.prisma.importJob.update({ where: { id: row.id }, data: { s3Key } });
     const url = await this.storage.presignPut(s3Key, dto.contentType);
 
     return {
-      import: toInfo(updated),
+      import: toInfo(row),
       upload: {
         url,
         method: 'PUT',
@@ -127,7 +130,13 @@ export class ImportService {
    */
   async start(importId: string): Promise<ImportJobInfo> {
     const row = await this.require(importId);
-    if (row.status === 'running' || row.status === 'queued') return toInfo(row);
+    if (row.status === 'running') return toInfo(row);
+    // Enqueued again rather than returned (#657): the row may have committed
+    // while its job did not, and the same jobId makes a live job absorb it.
+    if (row.status === 'queued') {
+      await this.producer.enqueue(row.id);
+      return toInfo(row);
+    }
     if (row.status === 'submitted') {
       throw new ConflictException(t('error.import.alreadySubmitted'));
     }

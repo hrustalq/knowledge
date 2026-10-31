@@ -1,6 +1,8 @@
 // Live tracked-entity updates: WebSocket client for /v1/events/ws.
 // Speaks the strict @knowledge/contracts protocol (LiveClientMessage /
-// LiveServerMessage), authenticates with ?token= (same as SSE), reconnects
+// LiveServerMessage), authenticates with a single-use `kt_` ticket in ?token=
+// (same as SSE, minted per connect: the session is an HttpOnly cookie, #650,
+// and no long-lived credential goes in a URL, #102), reconnects
 // with backoff and re-subscribes automatically. Access control lives
 // server-side (viewer role per subscribed workspace); tracking configuration
 // is per-subscription (events / documents filters).
@@ -11,7 +13,8 @@ import type {
   LiveServerMessage,
   LiveTrackingConfig,
 } from '@knowledge/contracts'
-import { getToken } from '@/shared/api/api'
+import { api } from './client'
+import { isApiRequestError } from './http'
 
 export type LiveEventListener = (event: KnowledgeEvent) => void
 export type LiveErrorListener = (error: ApiErrorPayload) => void
@@ -34,6 +37,8 @@ export class LiveClient {
   private reconnectDelay = RECONNECT_MIN_MS
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private closed = false
+  /** A ticket is being minted: the socket does not exist yet, but a second connect must not start. */
+  private connecting = false
   /** Desired subscriptions — replayed on every (re)connect. */
   private readonly subscriptions = new Map<string, LiveTrackingConfig | undefined>()
   private readonly eventListeners = new Set<LiveEventListener>()
@@ -44,10 +49,24 @@ export class LiveClient {
   }
 
   connect(): void {
-    if (import.meta.env.SSR || this.socket || this.closed) return
-    const token = getToken()
-    const url = `${wsBase()}/v1/events/ws${token ? `?token=${encodeURIComponent(token)}` : ''}`
-    const socket = new WebSocket(url)
+    if (import.meta.env.SSR || this.socket || this.connecting || this.closed) return
+    this.connecting = true
+    api.post('/v1/auth/url-ticket').then(
+      ({ ticket }) => {
+        this.connecting = false
+        if (!this.closed) this.open(ticket)
+      },
+      (e: unknown) => {
+        this.connecting = false
+        // Signed out or gated: as pointless to retry as a 4401 / 4403.
+        if (isApiRequestError(e) && (e.status === 401 || e.status === 403)) return
+        this.reconnect()
+      },
+    )
+  }
+
+  private open(ticket: string): void {
+    const socket = new WebSocket(`${wsBase()}/v1/events/ws?token=${encodeURIComponent(ticket)}`)
     this.socket = socket
 
     socket.onopen = () => {
@@ -72,10 +91,9 @@ export class LiveClient {
     socket.onclose = (ev) => {
       this.socket = null
       // 4401 = auth refused, 4403 = address unverified under
-      // AUTH_REQUIRE_VERIFIED_EMAIL — reconnecting with the same token is pointless.
-      if (this.closed || ev.code === 4401 || ev.code === 4403) return
-      this.reconnectTimer = setTimeout(() => this.connect(), this.reconnectDelay)
-      this.reconnectDelay = Math.min(this.reconnectDelay * 2, RECONNECT_MAX_MS)
+      // AUTH_REQUIRE_VERIFIED_EMAIL — reconnecting with the same session is pointless.
+      if (ev.code === 4401 || ev.code === 4403) return
+      this.reconnect()
     }
     socket.onerror = () => {
       /* onclose fires next and owns reconnection */
@@ -108,6 +126,12 @@ export class LiveClient {
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer)
     this.socket?.close()
     this.socket = null
+  }
+
+  private reconnect(): void {
+    if (this.closed) return
+    this.reconnectTimer = setTimeout(() => this.connect(), this.reconnectDelay)
+    this.reconnectDelay = Math.min(this.reconnectDelay * 2, RECONNECT_MAX_MS)
   }
 
   private send(message: LiveClientMessage): void {

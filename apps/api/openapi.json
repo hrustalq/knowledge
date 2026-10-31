@@ -14243,7 +14243,8 @@
                 "document",
                 "verification",
                 "access",
-                "job"
+                "job",
+                "source"
               ]
             }
           },
@@ -22012,6 +22013,477 @@
         ]
       }
     },
+    "/v1/sources": {
+      "post": {
+        "operationId": "WebSourcesController_link",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSourcePageDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateSourcePageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The URL could not be read; `details.needsCredential` when the host refused without one"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create a source-backed page from a URL (markdown or HTML). The first version is read now; the page is read-only and follows the source on its interval, webhook or Sync now",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
+    "/v1/documents/{id}/source": {
+      "get": {
+        "operationId": "WebSourcesController_info",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentSourceInfo"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The page's source: where it reads from, when it last checked, paused, failing or behind",
+        "tags": [
+          "sources"
+        ]
+      },
+      "patch": {
+        "operationId": "WebSourcesController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDocumentSourceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentSourceInfo"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "How often the source is checked",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
+    "/v1/documents/{id}/source/pause": {
+      "post": {
+        "operationId": "WebSourcesController_pause",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentSourceInfo"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Stop writing new versions; they are counted until the source is resumed",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
+    "/v1/documents/{id}/source/resume": {
+      "post": {
+        "operationId": "WebSourcesController_resume",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentSourceInfo"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Follow the source again: a sync is queued and writes whatever it says now",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
+    "/v1/documents/{id}/source/restore": {
+      "post": {
+        "operationId": "WebSourcesController_restore",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreDocumentSourceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentSourceInfo"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Restore an earlier revision of the page. Pauses the source and alerts its owner",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
+    "/v1/documents/{id}/source/webhook": {
+      "post": {
+        "operationId": "WebSourcesController_webhook",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentSourceWebhookResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A new webhook signing secret for the page's source, shown once; the old one stops working",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
     "/v1/connectors/github/installations": {
       "get": {
         "operationId": "GithubController_installations",
@@ -23128,7 +23600,8 @@
                 "linear",
                 "zendesk",
                 "intercom",
-                "figma"
+                "figma",
+                "web"
               ],
               "type": "string"
             }
@@ -39668,7 +40141,8 @@
                 "memos",
                 "conflicts",
                 "assistant",
-                "git"
+                "git",
+                "sources"
               ]
             }
           }
@@ -41372,7 +41846,8 @@
                 "document",
                 "verification",
                 "access",
-                "job"
+                "job",
+                "source"
               ]
             }
           },
@@ -41415,7 +41890,8 @@
               "document",
               "verification",
               "access",
-              "job"
+              "job",
+              "source"
             ],
             "description": "Narrows `all` to one category, so clearing comments leaves reviews unread."
           }
@@ -42965,7 +43441,8 @@
               "linear",
               "zendesk",
               "intercom",
-              "figma"
+              "figma",
+              "web"
             ]
           },
           "name": {
@@ -43400,6 +43877,87 @@
           }
         }
       },
+      "CreateSourcePageDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "parentId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "url": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "A markdown file or an HTML page, https"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "The page title. Empty: the source's own title"
+          },
+          "intervalMinutes": {
+            "type": "number",
+            "nullable": true,
+            "enum": [
+              15,
+              60,
+              360,
+              1440
+            ],
+            "description": "Minutes between checks; null = only on demand. Omitted reads as 60"
+          },
+          "credential": {
+            "type": "string",
+            "maxLength": 4000,
+            "description": "For a host that needs one: a token (sent as Bearer) or `Header-Name: value`. Saved as a connection for the host"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "projectId",
+          "url"
+        ]
+      },
+      "UpdateDocumentSourceDto": {
+        "type": "object",
+        "properties": {
+          "intervalMinutes": {
+            "type": "number",
+            "nullable": true,
+            "enum": [
+              15,
+              60,
+              360,
+              1440
+            ],
+            "description": "Minutes between checks; null = only on demand"
+          }
+        },
+        "required": [
+          "intervalMinutes"
+        ]
+      },
+      "RestoreDocumentSourceDto": {
+        "type": "object",
+        "properties": {
+          "revisionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "An earlier revision of this page"
+          }
+        },
+        "required": [
+          "revisionId"
+        ]
+      },
       "PutWorkItemRulesDto": {
         "type": "object",
         "properties": {
@@ -43522,7 +44080,8 @@
               "linear",
               "zendesk",
               "intercom",
-              "figma"
+              "figma",
+              "web"
             ]
           },
           "site": {
@@ -43569,7 +44128,8 @@
               "linear",
               "zendesk",
               "intercom",
-              "figma"
+              "figma",
+              "web"
             ]
           },
           "projectId": {
@@ -54000,7 +54560,8 @@
           "linear",
           "zendesk",
           "intercom",
-          "figma"
+          "figma",
+          "web"
         ]
       },
       "ConnectionResource": {
@@ -54469,7 +55030,8 @@
           "linear",
           "zendesk",
           "intercom",
-          "figma"
+          "figma",
+          "web"
         ]
       },
       "ConnectorLinkSummary": {
@@ -55541,6 +56103,21 @@
           "requestedExpiresAt"
         ]
       },
+      "CreateSourcePageResponse": {
+        "type": "object",
+        "properties": {
+          "documentId": {
+            "type": "string"
+          },
+          "connectorId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "documentId",
+          "connectorId"
+        ]
+      },
       "CreateUploadResponse": {
         "type": "object",
         "properties": {
@@ -56253,6 +56830,90 @@
           "lowThreshold"
         ]
       },
+      "DocumentSourceInfo": {
+        "type": "object",
+        "properties": {
+          "documentId": {
+            "type": "string"
+          },
+          "connectorId": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "intervalMinutes": {
+            "type": "number",
+            "nullable": true
+          },
+          "pausedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "aheadCount": {
+            "type": "number"
+          },
+          "lastCheckedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "syncedRevisionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "headRevisionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "failures": {
+            "type": "number"
+          },
+          "retryAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "webhookConfigured": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "documentId",
+          "connectorId",
+          "url",
+          "host",
+          "intervalMinutes",
+          "pausedAt",
+          "aheadCount",
+          "lastCheckedAt",
+          "syncedRevisionId",
+          "headRevisionId",
+          "failures",
+          "retryAt",
+          "webhookConfigured"
+        ]
+      },
+      "DocumentSourceWebhookResponse": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "secret": {
+            "type": "string"
+          },
+          "header": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "secret",
+          "header"
+        ]
+      },
       "DocumentSummary": {
         "type": "object",
         "properties": {
@@ -56295,6 +56956,9 @@
           },
           "kind": {
             "$ref": "#/components/schemas/ApiDocumentKind"
+          },
+          "sourceBacked": {
+            "type": "boolean"
           },
           "verifiedAt": {
             "type": "string",
@@ -56499,6 +57163,9 @@
           },
           "kind": {
             "$ref": "#/components/schemas/ApiDocumentKind"
+          },
+          "sourceBacked": {
+            "type": "boolean"
           },
           "verifiedAt": {
             "type": "string",
@@ -61141,6 +61808,9 @@
               },
               "job": {
                 "type": "number"
+              },
+              "source": {
+                "type": "number"
               }
             },
             "required": [
@@ -61150,7 +61820,8 @@
               "document",
               "verification",
               "access",
-              "job"
+              "job",
+              "source"
             ]
           }
         },
@@ -62799,7 +63470,8 @@
           "document",
           "verification",
           "access",
-          "job"
+          "job",
+          "source"
         ]
       },
       "NotificationEntry": {
@@ -62920,6 +63592,7 @@
           "owner",
           "assigned",
           "review-requested",
+          "alert",
           "mention"
         ]
       },
@@ -63003,6 +63676,9 @@
               },
               "job": {
                 "type": "number"
+              },
+              "source": {
+                "type": "number"
               }
             },
             "required": [
@@ -63012,7 +63688,8 @@
               "document",
               "verification",
               "access",
-              "job"
+              "job",
+              "source"
             ]
           }
         },
@@ -68846,7 +69523,8 @@
           "person",
           "drift",
           "curator",
-          "mcp"
+          "mcp",
+          "source"
         ]
       },
       "VerifyEmailResponse": {
@@ -69840,7 +70518,8 @@
           "memos",
           "conflicts",
           "assistant",
-          "git"
+          "git",
+          "sources"
         ]
       },
       "WorkspaceFeaturesResponse": {
@@ -69854,11 +70533,18 @@
             "items": {
               "$ref": "#/components/schemas/WorkspaceFeature"
             }
+          },
+          "unavailable": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceFeature"
+            }
           }
         },
         "required": [
           "workspaceId",
-          "disabled"
+          "disabled",
+          "unavailable"
         ]
       },
       "WorkspaceGraphNode": {

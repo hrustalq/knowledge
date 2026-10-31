@@ -88,6 +88,12 @@ export interface DocumentSummary {
    */
   kind?: ApiDocumentKind;
   /**
+   * The body belongs to an external source (#674) and only that source writes
+   * it: the editor, REST, MCP and git refuse a revision. Filled in by the
+   * detail route; absent elsewhere, where it reads as false.
+   */
+  sourceBacked?: boolean;
+  /**
    * The manual verification stamp (docs/features/38): who last said "this page
    * is right" and at which revision. Optional because only the detail route
    * fills it in — a tree node or a list row never needs it. `verification` is
@@ -427,6 +433,10 @@ export const KNOWN_EVENT_TYPES = [
   // the uploader alone; `title` is their own memo's, metadata carries counts.
   'memo.done',
   'memo.failed',
+  // A source-backed page took a new version from its source (#674), told to
+  // the connector's owner; an alert is directed at them (reason `alert`).
+  'source.updated',
+  'source.alert',
   'connector.created',
   'connector.updated',
   'connector.deleted',
@@ -637,7 +647,8 @@ export const VERIFICATION_FLAGS = ['requested', 'outdated'] as const;
 export type VerificationFlag = (typeof VERIFICATION_FLAGS)[number];
 
 /** Who set the flag. `drift` and `curator` are the agents of docs/features/35 and 20. */
-export const VERIFICATION_SOURCE_KINDS = ['person', 'drift', 'curator', 'mcp'] as const;
+// `source`: a source-backed page this one depends on went away (#674).
+export const VERIFICATION_SOURCE_KINDS = ['person', 'drift', 'curator', 'mcp', 'source'] as const;
 export type VerificationSourceKind = (typeof VERIFICATION_SOURCE_KINDS)[number];
 
 export interface VerificationSource {

@@ -5,7 +5,8 @@ import type { NotificationReason } from '@knowledge/contracts';
  * notifications that reach email (docs/features/41). A watch is a subscription
  * to news, and news belongs in the inbox; being named is the interruption.
  */
-export const MAILED_REASONS: readonly NotificationReason[] = ['mention', 'review-requested', 'assigned'];
+// `alert` (#674): a source-backed page's source needs its owner — paused, gone, failing.
+export const MAILED_REASONS: readonly NotificationReason[] = ['mention', 'review-requested', 'assigned', 'alert'];
 
 /** Takes a string: the stored `notifications.reason` column is free TEXT. */
 export const isMailedReason = (reason: string): boolean => (MAILED_REASONS as readonly string[]).includes(reason);

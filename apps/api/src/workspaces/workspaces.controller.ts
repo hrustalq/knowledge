@@ -78,7 +78,7 @@ export class WorkspacesController {
   @Access('viewer', 'workspace', { guests: true })
   @ApiOperation({ summary: 'The sections switched off in this workspace' })
   async getFeatures(@Param('id', ParseUUIDPipe) id: string): Promise<WorkspaceFeaturesResponse> {
-    return { workspaceId: id, disabled: await this.features.disabled(id) };
+    return { workspaceId: id, disabled: await this.features.disabled(id), unavailable: this.features.unavailable() };
   }
 
   @Put(':id/features')
@@ -90,7 +90,7 @@ export class WorkspacesController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateWorkspaceFeaturesDto,
   ): Promise<WorkspaceFeaturesResponse> {
-    return { workspaceId: id, disabled: await this.features.set(id, dto.disabled, principal.userId) };
+    return { workspaceId: id, disabled: await this.features.set(id, dto.disabled, principal.userId), unavailable: this.features.unavailable() };
   }
 
   @Patch(':id')

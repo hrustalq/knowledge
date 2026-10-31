@@ -754,6 +754,18 @@ export const envSchema = z.object({
    * settings form is also the classic SSRF shape. Mirrors AI_PLUGINS_ALLOW_PRIVATE_URLS.
    */
   CONNECTOR_ALLOW_PRIVATE_URLS: boolish(false),
+  /**
+   * Source-backed pages (#674): the `web` connector kind, "Link a source" and
+   * the page source panel. A ceiling over the workspace `sources` toggle: off,
+   * the routes 404, web sources never sync and the UI hides them.
+   */
+  WEB_SOURCES_ENABLED: boolish(false),
+  /**
+   * Let a `web` source fetch a private or loopback address. Separate from
+   * CONNECTOR_ALLOW_PRIVATE_URLS because any editor can link a source, where
+   * only an admin sets up a connector.
+   */
+  WEB_SOURCE_ALLOW_PRIVATE: boolish(false),
   /** Items one sync run will touch, so a 50k-page space cannot pin a worker forever. */
   CONNECTOR_SYNC_MAX_ITEMS: z.coerce.number().int().positive().default(1_000),
   /** Wall-clock ceiling for one sync run. */

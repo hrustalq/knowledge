@@ -84,7 +84,12 @@ export class ConnectorScheduleSweeper implements OnModuleInit, OnModuleDestroy {
       await this.relayQueued();
       if (!this.schedulesEnabled) return;
       const due = await this.prisma.connector.findMany({
-        where: { enabled: true, OR: [{ syncIntervalMinutes: { not: null } }, { aclMode: { not: 'off' } }] },
+        where: {
+          enabled: true,
+          OR: [{ syncIntervalMinutes: { not: null } }, { aclMode: { not: 'off' } }],
+          // Web sources off (#674): their schedules wait rather than failing every tick.
+          ...(this.connectors.webSourcesEnabled ? {} : { kind: { not: 'web' } }),
+        },
       });
       const now = Date.now();
       const aclDefault = this.config.get('CONNECTOR_ACL_SYNC_DEFAULT_MIN', { infer: true });

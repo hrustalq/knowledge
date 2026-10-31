@@ -4962,6 +4962,76 @@
     },
     {
       "method": "GET",
+      "path": "/v1/documents/{id}/source",
+      "tag": "sources",
+      "summary": "The page's source: where it reads from, when it last checked, paused, failing or behind",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/documents/{id}/source",
+      "tag": "sources",
+      "summary": "How often the source is checked",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/source/pause",
+      "tag": "sources",
+      "summary": "Stop writing new versions; they are counted until the source is resumed",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/source/restore",
+      "tag": "sources",
+      "summary": "Restore an earlier revision of the page. Pauses the source and alerts its owner",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/source/resume",
+      "tag": "sources",
+      "summary": "Follow the source again: a sync is queued and writes whatever it says now",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/source/webhook",
+      "tag": "sources",
+      "summary": "A new webhook signing secret for the page's source, shown once; the old one stops working",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sources",
+      "tag": "sources",
+      "summary": "Create a source-backed page from a URL (markdown or HTML). The first version is read now; the page is read-only and follows the source on its interval, webhook or Sync now",
+      "role": "editor",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/templates",
       "tag": "templates",
       "summary": "The template gallery: built-ins (in the caller’s language) merged with the workspace’s own",

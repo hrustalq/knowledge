@@ -30,6 +30,8 @@ const NAV_LABEL: Record<WorkspaceFeature, string> = {
   assistant: 'nav.assistant',
   // No nav entry: the remote is reached with `git clone`, not a page.
   git: 'features.names.git',
+  // Reached from "Add page", not the nav.
+  sources: 'features.names.sources',
 }
 
 const off = ref(new Set<WorkspaceFeature>())
@@ -90,6 +92,8 @@ async function save() {
             <label :for="`feature-${feature}`" class="text-sm font-medium">{{ t(NAV_LABEL[feature]) }}</label>
             <p :id="`feature-${feature}-hint`" class="kn-measure text-xs text-muted-foreground">
               {{ t(`features.items.${feature}`) }}
+              <!-- An env ceiling: what is asked for and what applies, both shown. -->
+              <span v-if="features.unavailable.includes(feature)" class="text-foreground">{{ t('features.serverOff') }}</span>
             </p>
           </div>
         </li>

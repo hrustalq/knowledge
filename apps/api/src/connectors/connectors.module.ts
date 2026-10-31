@@ -25,6 +25,7 @@ import { WorkItemsController } from './handoff/work-items.controller.js';
 import { WorkItemSyncSweeper } from './handoff/work-item-sync.sweeper.js';
 import { TrackerRoutesController } from './handoff/tracker-routes.controller.js';
 import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
+import { WebSourcesController } from './web-sources.controller.js';
 import { ConnectorsCoreModule } from './connectors-core.module.js';
 import { ConnectorsController } from './connectors.controller.js';
 import { GithubBrowseService } from './github/github-browse.service.js';
@@ -82,6 +83,7 @@ import { RepoGuidanceService } from './guidance/repo-guidance.service.js';
   controllers: [
     GithubWebhookController,
     ConnectorsController,
+    WebSourcesController,
     ConnectorWebhookController,
     GithubController,
     WorkItemsController,

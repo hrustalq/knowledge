@@ -7858,7 +7858,8 @@
       "linear",
       "zendesk",
       "intercom",
-      "figma"
+      "figma",
+      "web"
     ]
   },
   "ConnectionResource": {
@@ -8327,7 +8328,8 @@
       "linear",
       "zendesk",
       "intercom",
-      "figma"
+      "figma",
+      "web"
     ]
   },
   "ConnectorLinkSummary": {
@@ -9399,6 +9401,21 @@
       "requestedExpiresAt"
     ]
   },
+  "CreateSourcePageResponse": {
+    "type": "object",
+    "properties": {
+      "documentId": {
+        "type": "string"
+      },
+      "connectorId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "documentId",
+      "connectorId"
+    ]
+  },
   "CreateUploadResponse": {
     "type": "object",
     "properties": {
@@ -10111,6 +10128,90 @@
       "lowThreshold"
     ]
   },
+  "DocumentSourceInfo": {
+    "type": "object",
+    "properties": {
+      "documentId": {
+        "type": "string"
+      },
+      "connectorId": {
+        "type": "string"
+      },
+      "url": {
+        "type": "string"
+      },
+      "host": {
+        "type": "string"
+      },
+      "intervalMinutes": {
+        "type": "number",
+        "nullable": true
+      },
+      "pausedAt": {
+        "type": "string",
+        "nullable": true
+      },
+      "aheadCount": {
+        "type": "number"
+      },
+      "lastCheckedAt": {
+        "type": "string",
+        "nullable": true
+      },
+      "syncedRevisionId": {
+        "type": "string",
+        "nullable": true
+      },
+      "headRevisionId": {
+        "type": "string",
+        "nullable": true
+      },
+      "failures": {
+        "type": "number"
+      },
+      "retryAt": {
+        "type": "string",
+        "nullable": true
+      },
+      "webhookConfigured": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "documentId",
+      "connectorId",
+      "url",
+      "host",
+      "intervalMinutes",
+      "pausedAt",
+      "aheadCount",
+      "lastCheckedAt",
+      "syncedRevisionId",
+      "headRevisionId",
+      "failures",
+      "retryAt",
+      "webhookConfigured"
+    ]
+  },
+  "DocumentSourceWebhookResponse": {
+    "type": "object",
+    "properties": {
+      "url": {
+        "type": "string"
+      },
+      "secret": {
+        "type": "string"
+      },
+      "header": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "url",
+      "secret",
+      "header"
+    ]
+  },
   "DocumentSummary": {
     "type": "object",
     "properties": {
@@ -10153,6 +10254,9 @@
       },
       "kind": {
         "$ref": "#/components/schemas/ApiDocumentKind"
+      },
+      "sourceBacked": {
+        "type": "boolean"
       },
       "verifiedAt": {
         "type": "string",
@@ -10357,6 +10461,9 @@
       },
       "kind": {
         "$ref": "#/components/schemas/ApiDocumentKind"
+      },
+      "sourceBacked": {
+        "type": "boolean"
       },
       "verifiedAt": {
         "type": "string",
@@ -14999,6 +15106,9 @@
           },
           "job": {
             "type": "number"
+          },
+          "source": {
+            "type": "number"
           }
         },
         "required": [
@@ -15008,7 +15118,8 @@
           "document",
           "verification",
           "access",
-          "job"
+          "job",
+          "source"
         ]
       }
     },
@@ -16657,7 +16768,8 @@
       "document",
       "verification",
       "access",
-      "job"
+      "job",
+      "source"
     ]
   },
   "NotificationEntry": {
@@ -16778,6 +16890,7 @@
       "owner",
       "assigned",
       "review-requested",
+      "alert",
       "mention"
     ]
   },
@@ -16861,6 +16974,9 @@
           },
           "job": {
             "type": "number"
+          },
+          "source": {
+            "type": "number"
           }
         },
         "required": [
@@ -16870,7 +16986,8 @@
           "document",
           "verification",
           "access",
-          "job"
+          "job",
+          "source"
         ]
       }
     },
@@ -22704,7 +22821,8 @@
       "person",
       "drift",
       "curator",
-      "mcp"
+      "mcp",
+      "source"
     ]
   },
   "VerifyEmailResponse": {
@@ -23698,7 +23816,8 @@
       "memos",
       "conflicts",
       "assistant",
-      "git"
+      "git",
+      "sources"
     ]
   },
   "WorkspaceFeaturesResponse": {
@@ -23712,11 +23831,18 @@
         "items": {
           "$ref": "#/components/schemas/WorkspaceFeature"
         }
+      },
+      "unavailable": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/WorkspaceFeature"
+        }
       }
     },
     "required": [
       "workspaceId",
-      "disabled"
+      "disabled",
+      "unavailable"
     ]
   },
   "WorkspaceGraphNode": {

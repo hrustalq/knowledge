@@ -13,6 +13,7 @@ import { ConnectorDiscoveryService } from './connector-discovery.service.js';
 import { sha256 } from './connector-markdown.js';
 import { ComponentsService } from '../components/components.service.js';
 import { ConnectorStagingService } from './connector-staging.service.js';
+import { WebSourcesService } from './web-sources.service.js';
 import type { ConnectorTask } from './connector.producer.js';
 import type { ConnectorAdapter, ConnectorContext } from './adapters/connector.types.js';
 
@@ -72,6 +73,7 @@ export class ConnectorSyncService {
     private readonly events: EventsPublisher,
     private readonly codeImports: CodeImportsService,
     private readonly components: ComponentsService,
+    private readonly webSources: WebSourcesService,
   ) {
     this.maxItems = this.config.get('CONNECTOR_SYNC_MAX_ITEMS', { infer: true });
     this.batchSize = this.config.get('CONNECTOR_SYNC_BATCH', { infer: true });
@@ -556,7 +558,8 @@ export class ConnectorSyncService {
       type: totals.failed > 0 ? 'connector.run.failed' : 'connector.run.succeeded',
       subjectId: row.id,
       title: row.name,
-    });
+    });    // A web source's transient failures are retried by a later run (#674).
+    if (row.kind === 'web') await this.webSources.afterRun(row);
   }
 
   private async push(

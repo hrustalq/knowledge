@@ -119,6 +119,8 @@ export async function identify(provider: ConnectionProvider, site: string | null
       return { id: me.id, label: me.handle ?? me.email ?? me.id, avatarUrl: me.img_url ?? null };
     }
     case 'git':
+    // A web host's token (#674) has no account to ask about.
+    case 'web':
       return null;
   }
 }

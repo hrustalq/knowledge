@@ -124,6 +124,7 @@ export class MailProcessor extends WorkerHost implements OnModuleInit, OnModuleD
           title: row.title ?? t('mail.untitled', undefined, to.locale),
           url: this.link(notificationPath(row)),
           settingsUrl: this.link('/settings/notifications'),
+          alert: typeof (row.metadata as Record<string, unknown> | null)?.alert === 'string' ? String((row.metadata as Record<string, unknown>).alert) : undefined,
         }),
       );
     } catch (e) {

@@ -18,6 +18,7 @@ import { StorageService } from '../storage/storage.service.js';
 import type { ConnectorAdapter, ConnectorContext, ExternalDocument, ExternalRef } from './adapters/connector.types.js';
 import { composeMarkdown, sha256, stagedObject } from './connector-markdown.js';
 import { ConnectorAclService } from './connector-acl.service.js';
+import { WebSourcesService } from './web-sources.service.js';
 import type { StoredAcl } from './connector-acl.js';
 
 /** The item's own metadata blob. Small on purpose — the markdown is in the bucket. */
@@ -57,6 +58,7 @@ export class ConnectorStagingService {
     private readonly storage: StorageService,
     private readonly acl: ConnectorAclService,
     private readonly figma: FigmaFilesService,
+    private readonly webSources: WebSourcesService,
   ) {}
 
   // --- stage ---
@@ -82,7 +84,14 @@ export class ConnectorStagingService {
       title: item.title,
       ...(item.externalUrl ? { url: item.externalUrl } : {}),
       ...(item.externalVersion ? { version: item.externalVersion } : {}),
+      // A `web` fetch is conditional on what the link last agreed on (#674).
+      ...(row.kind === 'web' && link?.externalVersion ? { knownVersion: link.externalVersion } : {}),
     };
+    const web = row.kind === 'web' ? link : null;
+    // A source-backed page that was deleted or archived is not re-created or written (#674).
+    if (web && !(await this.prisma.document.findFirst({ where: { id: web.documentId, archivedAt: null }, select: { id: true } }))) {
+      return this.markUnchanged(item, web);
+    }
     // Read before either skip (#76): who may open a page can change upstream
     // while its content does not, and an unchanged page still mirrors that now.
     const acl = await this.acl.capture(row, adapter, ctx, ref);
@@ -98,11 +107,29 @@ export class ConnectorStagingService {
       return { action: 'unchanged', unchanged: true };
     }
 
-    const doc = await adapter.fetch(ctx, ref);
+    let doc: ExternalDocument;
+    try {
+      doc = await adapter.fetch(ctx, ref);
+    } catch (err) {
+      if (web && (await this.webSources.fetchFailed(row, web, err))) return this.markUnchanged(item, web);
+      throw err;
+    }
+    if (web) await this.webSources.checked(web);
+    if (doc.notModified && link) {
+      ctx.debug('item: unchanged (304)', { id: item.externalId });
+      await this.prisma.connectorLink.update({ where: { id: link.id }, data: { lastPulledAt: new Date() } });
+      return this.markUnchanged(item, link);
+    }
     // A Figma frame the source embeds is pinned to its file's current version on pull (#470).
     doc.markdown = await this.figma.pinMarkdown(row.workspaceId, doc.markdown);
     const markdown = composeMarkdown(doc);
     const hash = sha256(markdown);
+
+    // Paused (#674): nothing is written, and a new version is counted.
+    if (web?.pausedAt) {
+      await this.webSources.countAhead(web, hash);
+      return this.markUnchanged(item, web);
+    }
 
     // The far side changed but produced identical content — a Confluence version
     // bump from a label edit, say. Record the version and move on.
@@ -175,8 +202,19 @@ export class ConnectorStagingService {
    * What applying would do. `conflict` means both sides moved since they last
    * agreed — the only case where writing would destroy something.
    */
+  /** The item as seen and skipped: the two sides already agree, or there is nothing to write. */
+  private async markUnchanged(item: ConnectorRunItem, link: ConnectorLink): Promise<StageOutcome> {
+    await this.prisma.connectorRunItem.update({
+      where: { id: item.id },
+      data: { status: 'unchanged', action: 'unchanged', linkId: link.id, documentId: link.documentId },
+    });
+    return { action: 'unchanged', unchanged: true };
+  }
+
   private async decideAction(row: Connector, link: ConnectorLink | null): Promise<ConnectorItemAction> {
     if (!link) return 'create';
+    // A source-backed page (#674) has no local edits to lose: only its source writes it.
+    if (row.kind === 'web') return 'update';
 
     const document = await this.prisma.document.findUnique({ where: { id: link.documentId } });
     // The page was deleted here; the link is stale, so this is a fresh create.
@@ -283,7 +321,7 @@ export class ConnectorStagingService {
     // connection, hence `createPage`'s raised timeout.
     await this.prisma.withTransaction(
       async () => {
-        const revisionId = await this.writeRevision(link.documentId, markdown);
+        const revisionId = await this.writeRevision(writerOf(row), link.documentId, markdown);
         await this.prisma.connectorLink.update({
           where: { id: link.id },
           data: {
@@ -310,6 +348,7 @@ export class ConnectorStagingService {
       { timeout: 30_000, maxWait: 10_000 },
     );
     await this.acl.applyToPage(row, link, storedAcl(item));
+    if (row.kind === 'web') await this.webSources.updated(row, link.documentId);
   }
 
   private async createPage(
@@ -468,17 +507,18 @@ export class ConnectorStagingService {
 
   /** A new revision on the document's default branch, through the normal pipeline. */
   private async writeRevision(
+    writer: { connectorId: string } | undefined,
     documentId: string,
     markdown: string,
     branch?: string,
     spec?: ItemDraft['spec'],
   ): Promise<string> {
     const contentType = spec ? apiSpecContentType(spec.kind, spec.syntax) : 'text/markdown';
-    const revision = await this.documents.createRevision(documentId, {
-      branch,
-      message: t('connector.syncRevisionMessage'),
-      contentType,
-    });
+    const dto = { branch, message: t('connector.syncRevisionMessage'), contentType };
+    // A `web` connector names itself as the writer: its source-backed page refuses every other (#674).
+    const revision = writer
+      ? await this.documents.createRevision(documentId, dto, undefined, undefined, writer)
+      : await this.documents.createRevision(documentId, dto);
     const row = await this.prisma.documentRevision.findUnique({ where: { id: revision.revisionId } });
     if (!row) throw new Error('revision vanished between create and write');
     await this.storage.putObjectText(row.s3Key, markdown, row.contentType);
@@ -513,7 +553,7 @@ export class ConnectorStagingService {
     await this.prisma.withTransaction(
       async () => {
         await this.documents.createBranch(link.documentId, { name: branch });
-        const revisionId = await this.writeRevision(link.documentId, markdown, branch, specOf(item));
+        const revisionId = await this.writeRevision(writerOf(row), link.documentId, markdown, branch, specOf(item));
 
         await this.prisma.connectorLink.update({
           where: { id: link.id },
@@ -619,6 +659,11 @@ function deliversByMergeRequest(row: Connector, externalId: string): boolean {
     isWikiUnitKey(externalId) ||
     externalId === 'changelog:unreleased'
   );
+}
+
+/** The writer a source-backed page accepts (#674): only a `web` connector has one. */
+function writerOf(row: Connector): { connectorId: string } | undefined {
+  return row.kind === 'web' ? { connectorId: row.id } : undefined;
 }
 
 /** The spec this item stages (#78), or undefined for a page. */

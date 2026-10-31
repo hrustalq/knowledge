@@ -32,6 +32,7 @@ import type {
 } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { toRevisionInfo } from './revision-info.js';
+import { sourceConnectorOf } from './source-backed.js';
 import { normalizeRelationTarget, tagFilterKey } from '../common/relations.js';
 import { StorageService } from '../storage/storage.service.js';
 import { GraphService } from '../graph/graph.service.js';
@@ -419,6 +420,8 @@ export class DocumentsService {
     dto: CreateRevisionDto,
     expectedHeadRevisionId?: string,
     authorId: string = AUTHOR_ID_STUB,
+    /** The `web` connector writing its own source-backed page (#674); never from a request. */
+    writer?: { connectorId: string },
   ): Promise<RevisionInfo> {
     const document = await this.getDocumentOrThrow(documentId);
     this.assertNotArchived(document);
@@ -452,6 +455,7 @@ export class DocumentsService {
       contentType: dto.contentType,
       authorId,
       collab: dto.collabDraftId ? await this.draftOf(documentId, dto.branch ?? document.defaultBranch, dto) : undefined,
+      connectorId: writer?.connectorId,
     });
     return toRevisionInfo(revision);
   }
@@ -887,6 +891,7 @@ export class DocumentsService {
         headRevisionStatus: (revision.status as RevisionStatus) ?? null,
         createdAt: document.createdAt.toISOString(),
         kind: document.kind as ApiDocumentKind,
+        sourceBacked: (await sourceConnectorOf(this.prisma, document.id)) !== null,
         // The stamp, the flag and their reading against the head and the
         // clock (docs/features/38 + 39). Writes live in VerificationService.
         ...this.trustFields(document, headId, issues.get(documentId) ?? 0, settings.inactiveAfterDays),
@@ -2299,9 +2304,22 @@ export class DocumentsService {
       contentType?: string;
       authorId?: string;
       collab?: { draftId: string; snapshot: Uint8Array<ArrayBuffer> };
+      connectorId?: string;
     },
   ): Promise<DocumentRevision> {
     const document = await this.getDocumentOrThrow(documentId);
+    // A source-backed page (#674) takes revisions from its own connector and
+    // from nobody else: every writer — editor, upload, MCP, git push, a merge,
+    // a co-editing publish — creates its revision here, so this is the one
+    // place the rule lives. A branch is refused too, or a merge would land it.
+    const source = await sourceConnectorOf(this.prisma, documentId);
+    if (source && source !== opts.connectorId) {
+      throw new ConflictException({
+        statusCode: 409,
+        message: t('error.document.sourceBacked', { title: document.title }),
+        reason: 'source-backed',
+      });
+    }
     const branchName = opts.branch ?? document.defaultBranch;
     const branch = await this.prisma.documentBranch.findUnique({
       where: { documentId_name: { documentId, name: branchName } },

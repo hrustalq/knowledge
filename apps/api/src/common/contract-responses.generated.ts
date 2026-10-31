@@ -96,6 +96,7 @@ import type {
   CreatePageFromFindingResponse,
   CreateProjectResponse,
   CreateShareLinkResponse,
+  CreateSourcePageResponse,
   CreateUploadResponse,
   CreateWorkspaceResponse,
   DeleteAnswerFeedbackResponse,
@@ -113,6 +114,8 @@ import type {
   DocumentEmbedsResponse,
   DocumentGraphResponse,
   DocumentQualityResponse,
+  DocumentSourceInfo,
+  DocumentSourceWebhookResponse,
   DocumentSummary,
   DocumentThreadResponse,
   DocumentTreeResponse,
@@ -437,6 +440,7 @@ export interface ContractResponses {
   CreatePageFromFindingResponse: CreatePageFromFindingResponse;
   CreateProjectResponse: CreateProjectResponse;
   CreateShareLinkResponse: CreateShareLinkResponse;
+  CreateSourcePageResponse: CreateSourcePageResponse;
   CreateUploadResponse: CreateUploadResponse;
   CreateWorkspaceResponse: CreateWorkspaceResponse;
   DeleteAnswerFeedbackResponse: DeleteAnswerFeedbackResponse;
@@ -454,6 +458,8 @@ export interface ContractResponses {
   DocumentEmbedsResponse: DocumentEmbedsResponse;
   DocumentGraphResponse: DocumentGraphResponse;
   DocumentQualityResponse: DocumentQualityResponse;
+  DocumentSourceInfo: DocumentSourceInfo;
+  DocumentSourceWebhookResponse: DocumentSourceWebhookResponse;
   DocumentSummary: DocumentSummary;
   DocumentThreadResponse: DocumentThreadResponse;
   DocumentTreeResponse: DocumentTreeResponse;

@@ -2,15 +2,17 @@ import type { Component } from 'vue'
 import {
   AtSign,
   FileText,
+  Globe,
   KeyRound,
   GitPullRequestArrow,
   MessageSquare,
   Play,
   ShieldCheck,
+  TriangleAlert,
   UserPlus,
 } from 'lucide-vue-next'
 import type { NotificationCategory, NotificationEntry } from '@knowledge/contracts'
-import { NOTIFICATION_CATEGORIES } from '@knowledge/contracts'
+import { NOTIFICATION_CATEGORIES, SOURCE_ALERT_KINDS } from '@knowledge/contracts'
 
 /**
  * How an inbox row presents itself (docs/features/22).
@@ -34,11 +36,13 @@ const LOOKS: Record<NotificationCategory, NotificationLook> = {
   verification: { icon: ShieldCheck, class: 'text-teal-500', label: 'notifications.category.verification' },
   access: { icon: KeyRound, class: 'text-orange-500', label: 'notifications.category.access' },
   job: { icon: Play, class: 'text-muted-foreground', label: 'notifications.category.job' },
+  source: { icon: Globe, class: 'text-emerald-600', label: 'notifications.category.source' },
 }
 
 /** Reasons worth an icon of their own, because they are addressed at a person. */
 const REASON_LOOKS: Record<string, NotificationLook> = {
   assigned: { icon: UserPlus, class: 'text-panel-tip', label: 'notifications.reason.assigned' },
+  alert: { icon: TriangleAlert, class: 'text-destructive', label: 'notifications.reason.alert' },
 }
 
 /** The look of a category itself, for a legend or a settings list. */
@@ -118,5 +122,10 @@ export function notificationMessageKey(entry: NotificationEntry): string {
   if (entry.reason === 'mention') return 'notifications.event.mention'
   if (entry.reason === 'assigned') return 'notifications.event.assigned'
   if (entry.reason === 'review-requested') return 'notifications.event.reviewRequested'
+  // A source alert (#674) says which one; an unknown kind reads as the generic line.
+  const alert = entry.metadata?.alert
+  if (entry.reason === 'alert' && typeof alert === 'string' && (SOURCE_ALERT_KINDS as readonly string[]).includes(alert)) {
+    return `notifications.alert.${alert}`
+  }
   return `notifications.event['${entry.type}']`
 }

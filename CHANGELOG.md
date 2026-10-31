@@ -25,6 +25,12 @@ in the pull request that introduces them — see
 - **In Russian at phone width the top bar pushed the account menu off-screen** (#647). The search trigger kept
   the full width of its longer placeholder, so at 390 px the bar was 421 px wide and Log out sat under a 7 px
   sliver. The trigger now gives way and truncates; the bar fits from 360 px up in both languages.
+- **Three keyboard and screen-reader gaps** (#649). The page body in the editor is now announced as a labelled
+  multi-line text field ("Page body"; a comment, a glossary definition and a template body each carry their
+  own name) instead of an unnamed editable region. A closed side rail, such as the Filters rail on Merge
+  requests, no longer leaves its invisible buttons in the tab order. Opening the notifications bell puts focus
+  on the panel rather than on "Mark all as read", so the Enter that opened it can no longer clear every
+  unread notification.
 
 ## [0.42.0] — 2026-10-31
 

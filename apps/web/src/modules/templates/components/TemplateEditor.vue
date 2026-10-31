@@ -347,7 +347,7 @@ async function save() {
       <Label>{{ t('templates.fields.body') }}</Label>
       <p class="text-muted-foreground text-xs">{{ hints.body }}</p>
       <div class="kn-tpl-body rounded-md border px-4 py-3">
-        <RichEditor ref="editorRef" v-model="body" @ready="onEditorReady" />
+        <RichEditor ref="editorRef" v-model="body" :label="t('templates.fields.body')" @ready="onEditorReady" />
       </div>
     </section>
 

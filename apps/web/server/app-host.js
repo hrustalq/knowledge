@@ -13,6 +13,8 @@ export const APP_SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
   'Cross-Origin-Opener-Policy': 'same-origin',
+  // The browsers' default, stated like the rest (#645).
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
 }
 
 // The member app is behind a sign-in and is no crawler's business. Sites in

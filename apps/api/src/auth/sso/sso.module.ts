@@ -5,7 +5,7 @@ import { IdentityProvidersService } from './identity-providers.service.js';
 import { OidcService } from './oidc.service.js';
 import { SamlService } from './saml.service.js';
 import { LdapService } from './ldap.service.js';
-import { SsoController } from './sso.controller.js';
+import { SsoController, SsoProvidersController } from './sso.controller.js';
 import { SsoEnabledGuard, SsoOrScimEnabledGuard } from './sso-enabled.guard.js';
 import { SsoFlowService } from './sso-flow.service.js';
 import { SsoLoginService } from './sso-login.service.js';
@@ -27,7 +27,7 @@ import { SsoMaintenanceSweeper } from './sso-maintenance.sweeper.js';
  */
 @Module({
   imports: [PrismaModule],
-  controllers: [SsoController, IdentityProvidersController, GroupMappingsController, AuthPolicyController, SsoDomainsController],
+  controllers: [SsoProvidersController, SsoController, IdentityProvidersController, GroupMappingsController, AuthPolicyController, SsoDomainsController],
   providers: [
     OidcService,
     SamlService,

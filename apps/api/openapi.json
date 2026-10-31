@@ -1254,7 +1254,7 @@
     },
     "/v1/auth/sso/providers": {
       "get": {
-        "operationId": "SsoController_providers",
+        "operationId": "SsoProvidersController_providers",
         "parameters": [
           {
             "name": "workspaceId",
@@ -1311,7 +1311,7 @@
             }
           }
         },
-        "summary": "Login buttons: enabled providers of the workspace plus every platform-wide one. 404 when SSO is off",
+        "summary": "Login buttons: enabled providers of the workspace plus every platform-wide one. `enabled: false` when SSO is off",
         "tags": [
           "auth"
         ]
@@ -38834,7 +38834,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.40.0",
+    "version": "0.41.0",
     "contact": {}
   },
   "tags": [],
@@ -67097,6 +67097,9 @@
       "SsoProvidersResponse": {
         "type": "object",
         "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
           "providers": {
             "type": "array",
             "items": {
@@ -67108,6 +67111,7 @@
           }
         },
         "required": [
+          "enabled",
           "providers",
           "passwordLogin"
         ]

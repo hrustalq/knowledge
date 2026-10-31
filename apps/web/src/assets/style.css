@@ -333,6 +333,27 @@
     padding-inline: 0;
   }
 }
+/* Below `sm` a page's six actions left the trail a few letters (#645), so a
+   row holding both splits in two: the trail on its own full-width line, the
+   actions on the line under it. Still never a wrap of the actions themselves,
+   and the chrome height says two rows, so nothing moves under them. */
+@media (width < 40rem) {
+  .kn-trail:has(> nav):has(> .kn-page-actions > *) {
+    flex-wrap: wrap;
+    height: 4.5rem;
+    row-gap: 0;
+  }
+  .kn-trail:has(> .kn-page-actions > *) > nav {
+    flex-basis: 100%;
+    height: 2.25rem;
+  }
+  .kn-trail:has(> nav) > .kn-page-actions {
+    height: 2.25rem;
+  }
+  .kn-shell:has(.kn-trail > nav):has(.kn-page-actions > *) {
+    --kn-trail-h: 4.5rem;
+  }
+}
 
 /*
  * The editor's bar (#441): the strip under the trail that the editor teleports

@@ -121,7 +121,7 @@ export class RoleSyncService {
       else if (!groupsKnown && workspaceId === provider.workspaceId) {
         // Nothing changed, but an admin should see why an authoritative
         // provider took nothing away.
-        void this.record(ctx, userId, workspaceId, current, current, target, { groupsUnknown: true });
+        this.record(ctx, userId, workspaceId, current, current, target, { groupsUnknown: true });
       }
     }
     return changes;
@@ -195,14 +195,14 @@ export class RoleSyncService {
         skipDuplicates: true,
       });
       if (!count) return null;
-      void this.record(ctx, userId, workspaceId, null, target, target);
+      this.record(ctx, userId, workspaceId, null, target, target);
       return { workspaceId, kind: 'added' };
     }
 
     if (!target) {
       if (!ctx.authoritative) return null;
       if (await removeMemberGuarded(this.prisma, workspaceId, userId, { sources: ctx.owned })) {
-        void this.record(ctx, userId, workspaceId, current, null, null);
+        this.record(ctx, userId, workspaceId, current, null, null);
         return { workspaceId, kind: 'removed' };
       }
       return this.blocked(ctx, userId, workspaceId, current, null);
@@ -225,7 +225,7 @@ export class RoleSyncService {
       data: { trustedOperator, source },
     });
     const after = { role, trustedOperator, source };
-    void this.record(ctx, userId, workspaceId, current, after, target);
+    this.record(ctx, userId, workspaceId, current, after, target);
     return { workspaceId, kind: 'updated' };
   }
 
@@ -236,15 +236,17 @@ export class RoleSyncService {
     current: WorkspaceMember,
     wanted: { role: string; trustedOperator: boolean } | null,
   ): RoleSyncChange {
-    void this.audit.record({
-      workspaceId,
-      actor: 'role-sync',
-      action: 'role_sync.blocked_last_admin',
-      params: { ...ctx.params, before: snapshot(current), wanted },
-      ok: false,
-      error: 'last-admin',
-      target: userId,
-    });
+    this.prisma.onCommit(() =>
+      this.audit.record({
+        workspaceId,
+        actor: 'role-sync',
+        action: 'role_sync.blocked_last_admin',
+        params: { ...ctx.params, before: snapshot(current), wanted },
+        ok: false,
+        error: 'last-admin',
+        target: userId,
+      }),
+    );
     return { workspaceId, kind: 'blocked' };
   }
 
@@ -256,20 +258,24 @@ export class RoleSyncService {
     after: Snapshot,
     target: Target | null,
     extra: Record<string, unknown> = {},
-  ): Promise<void> {
-    return this.audit.record({
-      workspaceId,
-      actor: 'role-sync',
-      action: 'role_sync.applied',
-      params: {
-        ...ctx.params,
-        before: snapshot(before),
-        after: snapshot(after),
-        matchedGroups: target?.matched ?? [],
-        ...extra,
-      },
-      ok: true,
-      target: userId,
-    });
+  ): void {
+    // After commit: SCIM runs this inside its boundary (#656), where an inline write races the commit
+    // and would outlive a rollback in no sensible way. Outside one it runs at once, as before.
+    this.prisma.onCommit(() =>
+      this.audit.record({
+        workspaceId,
+        actor: 'role-sync',
+        action: 'role_sync.applied',
+        params: {
+          ...ctx.params,
+          before: snapshot(before),
+          after: snapshot(after),
+          matchedGroups: target?.matched ?? [],
+          ...extra,
+        },
+        ok: true,
+        target: userId,
+      }),
+    );
   }
 }

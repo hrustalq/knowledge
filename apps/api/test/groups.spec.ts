@@ -138,6 +138,8 @@ function fakePrisma(opts: { source?: string; roster?: string[] } = {}) {
     },
     accessGrant: { deleteMany: vi.fn(async () => ({ count: 0 })) },
     $transaction: vi.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
+    withTransaction: async (fn: () => Promise<unknown>) => fn(),
+    onCommit: (fn: () => Promise<unknown>) => void fn(),
   };
   return prisma;
 }
@@ -228,6 +230,8 @@ describe('removing a workspace member', () => {
       },
       $executeRaw: vi.fn(async () => 1),
       $transaction: vi.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
+      withTransaction: async (fn: () => Promise<unknown>) => fn(),
+      onCommit: (fn: () => Promise<unknown>) => void fn(),
       userGroupMember: { deleteMany },
       accessGrant: { deleteMany: grantsDeleteMany },
     };

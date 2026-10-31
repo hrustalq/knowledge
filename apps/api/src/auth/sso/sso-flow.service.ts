@@ -390,49 +390,55 @@ export class SsoFlowService {
     } catch (e) {
       return refuse((e as Error).message);
     }
-    if (claims.jti) {
-      try {
-        await this.prisma.ssoAuthRequest.create({
-          data: {
-            providerId: provider.id,
-            stateHash: sha256(`logout-jti:${provider.id}:${claims.jti}`),
-            returnTo: DEFAULT_RETURN,
-            consumedAt: new Date(),
-            // Past this the token is refused for its age anyway, then the sweeper purges the marker.
-            expiresAt: new Date(Date.now() + (LOGOUT_TOKEN_MAX_AGE_SEC + 120) * 1000),
-          },
-        });
-      } catch (e) {
-        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') return refuse('logout token replayed');
-        throw e;
-      }
-    }
-
-    const identity = claims.sub
-      ? await this.prisma.userIdentity.findUnique({ where: { providerId_subject: { providerId: provider.id, subject: claims.sub } } })
-      : null;
-    // Never an unnarrowed revoke: a `sub` we have not linked, with no `sid`, ends nothing.
-    const { count } =
-      claims.sid || identity
-        ? await this.prisma.session.updateMany({
-            where: {
+    // The jti marker and the revoke commit together (#656): a marker that outlived a failed revoke
+    // would refuse the IdP's retry as a replay, and the sessions would never end.
+    try {
+      await this.prisma.withTransaction(async () => {
+        if (claims.jti) {
+          await this.prisma.ssoAuthRequest.create({
+            data: {
               providerId: provider.id,
-              revokedAt: null,
-              ...(claims.sid ? { idpSessionId: claims.sid } : {}),
-              ...(identity ? { userId: identity.userId } : {}),
+              stateHash: sha256(`logout-jti:${provider.id}:${claims.jti}`),
+              returnTo: DEFAULT_RETURN,
+              consumedAt: new Date(),
+              // Past this the token is refused for its age anyway, then the sweeper purges the marker.
+              expiresAt: new Date(Date.now() + (LOGOUT_TOKEN_MAX_AGE_SEC + 120) * 1000),
             },
-            data: { revokedAt: new Date() },
-          })
-        : { count: 0 };
-    void this.audit.record({
-      workspaceId: provider.workspaceId,
-      actor: 'idp',
-      action: 'auth.session_revoked',
-      params: { via: 'backchannel', providerId: provider.id, by: claims.sid ? 'sid' : 'sub', sessionsRevoked: count },
-      ok: true,
-      ip: meta.ip,
-      target: identity?.userId ?? null,
-    });
+          });
+        }
+        const identity = claims.sub
+          ? await this.prisma.userIdentity.findUnique({ where: { providerId_subject: { providerId: provider.id, subject: claims.sub } } })
+          : null;
+        // Never an unnarrowed revoke: a `sub` we have not linked, with no `sid`, ends nothing.
+        const { count } =
+          claims.sid || identity
+            ? await this.prisma.session.updateMany({
+                where: {
+                  providerId: provider.id,
+                  revokedAt: null,
+                  ...(claims.sid ? { idpSessionId: claims.sid } : {}),
+                  ...(identity ? { userId: identity.userId } : {}),
+                },
+                data: { revokedAt: new Date() },
+              })
+            : { count: 0 };
+        this.prisma.onCommit(() =>
+          this.audit.record({
+            workspaceId: provider.workspaceId,
+            actor: 'idp',
+            action: 'auth.session_revoked',
+            params: { via: 'backchannel', providerId: provider.id, by: claims.sid ? 'sid' : 'sub', sessionsRevoked: count },
+            ok: true,
+            ip: meta.ip,
+            target: identity?.userId ?? null,
+          }),
+        );
+      });
+    } catch (e) {
+      // Caught outside the boundary: a P2002 aborts the transaction, so nothing inside it may carry on.
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') return refuse('logout token replayed');
+      throw e;
+    }
     return true;
   }
 

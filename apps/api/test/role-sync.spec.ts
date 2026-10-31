@@ -79,6 +79,8 @@ function fakeDb(members: Row[], mappings: Row[] = []) {
       throw new Error(`unexpected SQL: ${sql}`);
     }),
     $transaction: vi.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
+    withTransaction: async (fn: () => Promise<unknown>) => fn(),
+    onCommit: (fn: () => Promise<unknown>) => void fn(),
     userGroupMember: { deleteMany: vi.fn(async () => ({ count: 0 })) },
     accessGrant: { deleteMany: vi.fn(async () => ({ count: 0 })) },
   };

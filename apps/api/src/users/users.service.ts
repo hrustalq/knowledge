@@ -95,16 +95,18 @@ export class UsersService {
     if (dto.disabled !== undefined) data.disabledAt = dto.disabled ? (user.disabledAt ?? new Date()) : null;
     if (dto.password !== undefined) data.passwordHash = await hashPassword(dto.password);
 
-    const updated = await this.prisma.user.update({
-      where: { id: userId },
-      data,
-      include: { memberships: true, apiKeys: ACTIVE_KEY },
+    // Disabling or overriding the password invalidates existing logins, in the same commit (#656).
+    const updated = await this.prisma.withTransaction(async () => {
+      if (dto.disabled === true || dto.password !== undefined) {
+        await this.sessions.revokeAllForUser(userId);
+      }
+      if (dto.password !== undefined) this.prisma.onCommit(() => this.mail.enqueue({ template: 'password-changed', userId }));
+      return this.prisma.user.update({
+        where: { id: userId },
+        data,
+        include: { memberships: true, apiKeys: ACTIVE_KEY },
+      });
     });
-    // Disabling or overriding the password invalidates existing logins.
-    if (dto.disabled === true || dto.password !== undefined) {
-      await this.sessions.revokeAllForUser(userId);
-    }
-    if (dto.password !== undefined) await this.mail.enqueue({ template: 'password-changed', userId });
     return this.toSummary(updated);
   }
 

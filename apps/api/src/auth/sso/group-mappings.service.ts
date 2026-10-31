@@ -12,7 +12,7 @@ import {
 import type { Env } from '../../config/env.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { t } from '../../i18n/t.js';
-import { scimEnabled } from '../../scim/scim-enabled.js';
+import { SCIM_TX, scimEnabled } from '../../scim/scim-enabled.js';
 import { AuditService } from '../audit.service.js';
 import type { Principal } from '../principal.js';
 import type { UpsertGroupMappingDto } from './identity-providers.dto.js';
@@ -136,16 +136,24 @@ export class GroupMappingsService {
   async remove(workspaceId: string, mappingId: string, principal: Principal): Promise<void> {
     const row = await this.prisma.idpGroupMapping.findFirst({ where: { id: mappingId, workspaceId } });
     if (!row) throw new NotFoundException(t('error.sso.groupMappingNotFound'));
-    await this.prisma.idpGroupMapping.delete({ where: { id: row.id } });
-    void this.audit.record({
-      workspaceId,
-      actor: principal.userId,
-      action: 'sso.group_mapping_deleted',
-      params: { providerId: row.providerId, externalGroup: row.externalGroup, role: row.role, trustedOperator: row.trustedOperator },
-      ok: true,
-      target: row.id,
-    });
-    if (!row.providerId && this.scim) await this.resyncScimGroup(workspaceId, row.externalGroup);
+    // One commit (#656): the retry 404s, so a deleted mapping whose re-sync failed would leave its role in place.
+    await this.prisma.withTransaction(
+      async () => {
+        await this.prisma.idpGroupMapping.delete({ where: { id: row.id } });
+        this.prisma.onCommit(() =>
+          this.audit.record({
+            workspaceId,
+            actor: principal.userId,
+            action: 'sso.group_mapping_deleted',
+            params: { providerId: row.providerId, externalGroup: row.externalGroup, role: row.role, trustedOperator: row.trustedOperator },
+            ok: true,
+            target: row.id,
+          }),
+        );
+        if (!row.providerId && this.scim) await this.resyncScimGroup(workspaceId, row.externalGroup);
+      },
+      SCIM_TX,
+    );
   }
 
   private async resyncScimGroup(workspaceId: string, groupId: string): Promise<void> {

@@ -32,6 +32,18 @@ in the pull request that introduces them — see
   on the panel rather than on "Mark all as read", so the Enter that opened it can no longer clear every
   unread notification.
 
+### Security
+
+- **A failure partway through a security change could leave sessions signed in for good** (#656). Deleting an
+  identity provider, a back-channel logout, a password reset or change, an admin disabling an account or
+  overriding its password, and every SCIM change that removes access (deactivating, deleting or creating an
+  inactive user, removing someone from a group, deleting a group, deleting a SCIM group mapping) used to commit
+  the change first and end the sessions or access second. A crash or dropped connection between the two kept the
+  change but not the revoke, and the retry was refused (the token spent, the provider gone, the IdP's logout
+  token "replayed"), so nothing ever repaired it. Each now commits as one unit: both happen or neither does, and
+  the retry works. A replayed logout token is still refused. The audit row and the "password changed" mail now
+  go out only once the change has committed.
+
 ## [0.42.0] — 2026-10-31
 
 ### Breaking

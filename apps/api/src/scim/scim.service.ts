@@ -9,6 +9,7 @@ import { SessionsService } from '../auth/sessions.service.js';
 import { normalizeDomain } from '../auth/sso/identity-providers.service.js';
 import { RoleSyncService } from '../auth/sso/role-sync.service.js';
 import { ScimError } from './scim-errors.js';
+import { SCIM_TX } from './scim-enabled.js';
 import { parseGroupFilter, parseUserFilter } from './scim-filter.js';
 import { applyGroupPatch, applyUserPatch, readPatch, type GroupState } from './scim-patch.js';
 import {
@@ -110,58 +111,64 @@ export class ScimService {
   async createUser(caller: ScimCaller, body: unknown): Promise<Doc> {
     const f = readUserDoc(body);
     const ws = caller.workspaceId;
-    const clash = await this.prisma.scimUser.findFirst({
-      where: { workspaceId: ws, OR: [{ userName: f.userName }, ...(f.externalId ? [{ externalId: f.externalId }] : [])] },
-    });
-    if (clash) throw conflict(t('error.scim.userExists', { userName: f.userName }));
+    // One commit (#656): the retry 409s userExists, so a row whose offboard failed would never be offboarded.
+    const userId = await this.prisma.withTransaction(async () => {
+      const clash = await this.prisma.scimUser.findFirst({
+        where: { workspaceId: ws, OR: [{ userName: f.userName }, ...(f.externalId ? [{ externalId: f.externalId }] : [])] },
+      });
+      if (clash) throw conflict(t('error.scim.userExists', { userName: f.userName }));
 
-    const authority = await this.domainAuthority(ws, f.email);
-    let user = await this.prisma.user.findUnique({ where: { email: f.email } });
-    const linked = !!user;
-    if (user) {
-      if (await this.prisma.scimUser.findUnique({ where: { workspaceId_userId: { workspaceId: ws, userId: user.id } } })) {
-        throw conflict(t('error.scim.emailProvisioned', { email: f.email }));
+      const authority = await this.domainAuthority(ws, f.email);
+      let user = await this.prisma.user.findUnique({ where: { email: f.email } });
+      const linked = !!user;
+      if (user) {
+        if (await this.prisma.scimUser.findUnique({ where: { workspaceId_userId: { workspaceId: ws, userId: user.id } } })) {
+          throw conflict(t('error.scim.emailProvisioned', { email: f.email }));
+        }
+        if (authority && user.displayName !== f.displayName) {
+          user = await this.prisma.user.update({ where: { id: user.id }, data: { displayName: f.displayName } });
+        }
+      } else {
+        try {
+          user = await this.prisma.user.create({
+            data: {
+              email: f.email,
+              displayName: f.displayName,
+              // SSO-only until the person sets one; SCIM never carries passwords here.
+              passwordHash: null,
+              // A verified domain is the workspace's word that the address is real.
+              emailVerifiedAt: authority ? new Date() : null,
+            },
+          });
+        } catch (e) {
+          if (isUnique(e)) throw conflict(t('error.scim.emailProvisioned', { email: f.email }));
+          throw e;
+        }
       }
-      if (authority && user.displayName !== f.displayName) {
-        user = await this.prisma.user.update({ where: { id: user.id }, data: { displayName: f.displayName } });
-      }
-    } else {
+
       try {
-        user = await this.prisma.user.create({
-          data: {
-            email: f.email,
-            displayName: f.displayName,
-            // SSO-only until the person sets one; SCIM never carries passwords here.
-            passwordHash: null,
-            // A verified domain is the workspace's word that the address is real.
-            emailVerifiedAt: authority ? new Date() : null,
-          },
+        await this.prisma.scimUser.create({
+          data: { workspaceId: ws, userId: user.id, userName: f.userName, externalId: f.externalId, active: f.active, raw: f.raw as Prisma.InputJsonValue },
         });
       } catch (e) {
-        if (isUnique(e)) throw conflict(t('error.scim.emailProvisioned', { email: f.email }));
+        if (isUnique(e)) throw conflict(t('error.scim.userExists', { userName: f.userName }));
         throw e;
       }
-    }
-
-    try {
-      await this.prisma.scimUser.create({
-        data: { workspaceId: ws, userId: user.id, userName: f.userName, externalId: f.externalId, active: f.active, raw: f.raw as Prisma.InputJsonValue },
-      });
-    } catch (e) {
-      if (isUnique(e)) throw conflict(t('error.scim.userExists', { userName: f.userName }));
-      throw e;
-    }
-    void this.audit.record({
-      workspaceId: ws,
-      actor: 'scim',
-      action: 'scim.user_created',
-      params: { tokenId: caller.tokenId, userName: f.userName, email: f.email, linked, active: f.active },
-      ok: true,
-      target: user.id,
-    });
-    if (!f.active) await this.offboard(user.id, authority);
-    await this.roleSync.applyScim(ws, [user.id]);
-    return this.render(ws, await this.loadUser(ws, user.id));
+      this.prisma.onCommit(() =>
+        this.audit.record({
+          workspaceId: ws,
+          actor: 'scim',
+          action: 'scim.user_created',
+          params: { tokenId: caller.tokenId, userName: f.userName, email: f.email, linked, active: f.active },
+          ok: true,
+          target: user.id,
+        }),
+      );
+      if (!f.active) await this.offboard(user.id, authority);
+      await this.roleSync.applyScim(ws, [user.id]);
+      return user.id;
+    }, SCIM_TX);
+    return this.render(ws, await this.loadUser(ws, userId));
   }
 
   async replaceUser(caller: ScimCaller, id: string, body: unknown): Promise<Doc> {
@@ -180,18 +187,23 @@ export class ScimService {
     const ws = caller.workspaceId;
     const rec = await this.loadUser(ws, id);
     const authority = await this.domainAuthority(ws, rec.user.email);
-    await this.prisma.scimGroupMember.deleteMany({ where: { userId: rec.userId, group: { workspaceId: ws } } });
-    await this.prisma.scimUser.deleteMany({ where: { workspaceId: ws, userId: rec.userId } });
-    await this.roleSync.applyScim(ws, [rec.userId]);
-    const disabled = await this.offboard(rec.userId, authority);
-    void this.audit.record({
-      workspaceId: ws,
-      actor: 'scim',
-      action: 'scim.user_deleted',
-      params: { tokenId: caller.tokenId, userName: rec.userName, accountDisabled: disabled },
-      ok: true,
-      target: rec.userId,
-    });
+    // One commit (#656): the IdP's retry 404s in loadUser, so a deleted row whose offboard failed stays signed in.
+    await this.prisma.withTransaction(async () => {
+      await this.prisma.scimGroupMember.deleteMany({ where: { userId: rec.userId, group: { workspaceId: ws } } });
+      await this.prisma.scimUser.deleteMany({ where: { workspaceId: ws, userId: rec.userId } });
+      await this.roleSync.applyScim(ws, [rec.userId]);
+      const disabled = await this.offboard(rec.userId, authority);
+      this.prisma.onCommit(() =>
+        this.audit.record({
+          workspaceId: ws,
+          actor: 'scim',
+          action: 'scim.user_deleted',
+          params: { tokenId: caller.tokenId, userName: rec.userName, accountDisabled: disabled },
+          ok: true,
+          target: rec.userId,
+        }),
+      );
+    }, SCIM_TX);
   }
 
   private async update(caller: ScimCaller, rec: ScimUserRecord, f: ScimUserFields): Promise<Doc> {
@@ -204,58 +216,65 @@ export class ScimService {
       throw conflict(t('error.scim.externalIdExists', { externalId: f.externalId }));
     }
 
-    // The global account moves only under a domain this workspace has proven.
-    const authority = await this.domainAuthority(ws, rec.user.email);
-    const account: Prisma.UserUpdateInput = {};
-    if (authority && f.email !== rec.user.email) account.email = f.email;
-    if (authority && f.displayName !== rec.user.displayName) account.displayName = f.displayName;
-    if (Object.keys(account).length) {
+    // One commit (#656): a retry sees active=false already stored, so a deactivation whose offboard failed is never retried.
+    await this.prisma.withTransaction(async () => {
+      // The global account moves only under a domain this workspace has proven.
+      const authority = await this.domainAuthority(ws, rec.user.email);
+      const account: Prisma.UserUpdateInput = {};
+      if (authority && f.email !== rec.user.email) account.email = f.email;
+      if (authority && f.displayName !== rec.user.displayName) account.displayName = f.displayName;
+      if (Object.keys(account).length) {
+        try {
+          await this.prisma.user.update({ where: { id: rec.userId }, data: account });
+        } catch (e) {
+          if (isUnique(e)) throw conflict(t('error.scim.emailProvisioned', { email: f.email }));
+          throw e;
+        }
+      }
+
       try {
-        await this.prisma.user.update({ where: { id: rec.userId }, data: account });
+        await this.prisma.scimUser.update({
+          where: { workspaceId_userId: { workspaceId: ws, userId: rec.userId } },
+          data: { userName: f.userName, externalId: f.externalId, active: f.active, raw: f.raw as Prisma.InputJsonValue },
+        });
       } catch (e) {
-        if (isUnique(e)) throw conflict(t('error.scim.emailProvisioned', { email: f.email }));
+        if (isUnique(e)) throw conflict(t('error.scim.userExists', { userName: f.userName }));
         throw e;
       }
-    }
 
-    try {
-      await this.prisma.scimUser.update({
-        where: { workspaceId_userId: { workspaceId: ws, userId: rec.userId } },
-        data: { userName: f.userName, externalId: f.externalId, active: f.active, raw: f.raw as Prisma.InputJsonValue },
-      });
-    } catch (e) {
-      if (isUnique(e)) throw conflict(t('error.scim.userExists', { userName: f.userName }));
-      throw e;
-    }
-
-    const changed = [
-      ...(f.userName !== rec.userName ? ['userName'] : []),
-      ...(f.externalId !== rec.externalId ? ['externalId'] : []),
-      ...(f.active !== rec.active ? ['active'] : []),
-      ...Object.keys(account),
-    ];
-    if (f.active !== rec.active) await this.roleSync.applyScim(ws, [rec.userId]);
-    if (!f.active && rec.active) {
-      const disabled = await this.offboard(rec.userId, authority);
-      void this.audit.record({
-        workspaceId: ws,
-        actor: 'scim',
-        action: 'scim.user_deactivated',
-        params: { tokenId: caller.tokenId, userName: f.userName, changed, accountDisabled: disabled },
-        ok: true,
-        target: rec.userId,
-      });
-    } else if (changed.length) {
-      if (f.active && !rec.active) await this.reinstate(rec.userId, authority);
-      void this.audit.record({
-        workspaceId: ws,
-        actor: 'scim',
-        action: 'scim.user_updated',
-        params: { tokenId: caller.tokenId, userName: f.userName, changed },
-        ok: true,
-        target: rec.userId,
-      });
-    }
+      const changed = [
+        ...(f.userName !== rec.userName ? ['userName'] : []),
+        ...(f.externalId !== rec.externalId ? ['externalId'] : []),
+        ...(f.active !== rec.active ? ['active'] : []),
+        ...Object.keys(account),
+      ];
+      if (f.active !== rec.active) await this.roleSync.applyScim(ws, [rec.userId]);
+      if (!f.active && rec.active) {
+        const disabled = await this.offboard(rec.userId, authority);
+        this.prisma.onCommit(() =>
+          this.audit.record({
+            workspaceId: ws,
+            actor: 'scim',
+            action: 'scim.user_deactivated',
+            params: { tokenId: caller.tokenId, userName: f.userName, changed, accountDisabled: disabled },
+            ok: true,
+            target: rec.userId,
+          }),
+        );
+      } else if (changed.length) {
+        if (f.active && !rec.active) await this.reinstate(rec.userId, authority);
+        this.prisma.onCommit(() =>
+          this.audit.record({
+            workspaceId: ws,
+            actor: 'scim',
+            action: 'scim.user_updated',
+            params: { tokenId: caller.tokenId, userName: f.userName, changed },
+            ok: true,
+            target: rec.userId,
+          }),
+        );
+      }
+    }, SCIM_TX);
     return this.render(ws, await this.loadUser(ws, rec.userId));
   }
 
@@ -337,24 +356,30 @@ export class ScimService {
     const ws = caller.workspaceId;
     const next = applyGroupPatch({ displayName: '', externalId: null, members: new Set() }, [{ op: 'replace', value: groupBody(body) }]);
     if (!next.displayName) throw new ScimError(HttpStatus.BAD_REQUEST, t('error.scim.displayNameRequired'), 'invalidValue');
-    let group: ScimGroup;
-    try {
-      group = await this.prisma.scimGroup.create({ data: { workspaceId: ws, displayName: next.displayName, externalId: next.externalId } });
-    } catch (e) {
-      if (isUnique(e)) throw conflict(t('error.scim.groupExists', { displayName: next.displayName }));
-      throw e;
-    }
-    const { added, skipped } = await this.writeMembers(ws, group.id, new Set(), next.members);
-    void this.audit.record({
-      workspaceId: ws,
-      actor: 'scim',
-      action: 'scim.group_created',
-      params: { tokenId: caller.tokenId, displayName: next.displayName, members: added.length, skipped },
-      ok: true,
-      target: group.id,
-    });
-    await this.roleSync.applyScim(ws, added);
-    return renderGroup(this.base, await this.loadGroup(ws, group.id));
+    // One commit (#656): a retry finds the members already written (added = []), so it would never grant them.
+    const groupId = await this.prisma.withTransaction(async () => {
+      let group: ScimGroup;
+      try {
+        group = await this.prisma.scimGroup.create({ data: { workspaceId: ws, displayName: next.displayName, externalId: next.externalId } });
+      } catch (e) {
+        if (isUnique(e)) throw conflict(t('error.scim.groupExists', { displayName: next.displayName }));
+        throw e;
+      }
+      const { added, skipped } = await this.writeMembers(ws, group.id, new Set(), next.members);
+      this.prisma.onCommit(() =>
+        this.audit.record({
+          workspaceId: ws,
+          actor: 'scim',
+          action: 'scim.group_created',
+          params: { tokenId: caller.tokenId, displayName: next.displayName, members: added.length, skipped },
+          ok: true,
+          target: group.id,
+        }),
+      );
+      await this.roleSync.applyScim(ws, added);
+      return group.id;
+    }, SCIM_TX);
+    return renderGroup(this.base, await this.loadGroup(ws, groupId));
   }
 
   async replaceGroup(caller: ScimCaller, id: string, body: unknown): Promise<Doc> {
@@ -374,47 +399,57 @@ export class ScimService {
   async deleteGroup(caller: ScimCaller, id: string): Promise<void> {
     const ws = caller.workspaceId;
     const group = await this.loadGroup(ws, id);
-    await this.prisma.scimGroup.delete({ where: { id: group.id } });
-    // A SCIM mapping names the group by id; without the group it can never match again.
-    await this.prisma.idpGroupMapping.deleteMany({ where: { workspaceId: ws, providerId: null, externalGroup: group.id } });
-    void this.audit.record({
-      workspaceId: ws,
-      actor: 'scim',
-      action: 'scim.group_deleted',
-      params: { tokenId: caller.tokenId, displayName: group.displayName, members: group.members.length },
-      ok: true,
-      target: group.id,
-    });
-    await this.roleSync.applyScim(ws, group.members.map((m) => m.userId));
+    // One commit (#656): the retry 404s, so members whose access came from this group would keep it.
+    await this.prisma.withTransaction(async () => {
+      await this.prisma.scimGroup.delete({ where: { id: group.id } });
+      // A SCIM mapping names the group by id; without the group it can never match again.
+      await this.prisma.idpGroupMapping.deleteMany({ where: { workspaceId: ws, providerId: null, externalGroup: group.id } });
+      this.prisma.onCommit(() =>
+        this.audit.record({
+          workspaceId: ws,
+          actor: 'scim',
+          action: 'scim.group_deleted',
+          params: { tokenId: caller.tokenId, displayName: group.displayName, members: group.members.length },
+          ok: true,
+          target: group.id,
+        }),
+      );
+      await this.roleSync.applyScim(ws, group.members.map((m) => m.userId));
+    }, SCIM_TX);
   }
 
   private async writeGroup(caller: ScimCaller, group: Awaited<ReturnType<ScimService['loadGroup']>>, next: GroupState): Promise<Doc> {
     const ws = caller.workspaceId;
-    if (next.displayName !== group.displayName || next.externalId !== group.externalId) {
-      try {
-        await this.prisma.scimGroup.update({ where: { id: group.id }, data: { displayName: next.displayName, externalId: next.externalId } });
-      } catch (e) {
-        if (isUnique(e)) throw conflict(t('error.scim.groupExists', { displayName: next.displayName }));
-        throw e;
+    // One commit (#656): a retry computes removed = [], so a removed member whose re-sync failed keeps the access.
+    await this.prisma.withTransaction(async () => {
+      if (next.displayName !== group.displayName || next.externalId !== group.externalId) {
+        try {
+          await this.prisma.scimGroup.update({ where: { id: group.id }, data: { displayName: next.displayName, externalId: next.externalId } });
+        } catch (e) {
+          if (isUnique(e)) throw conflict(t('error.scim.groupExists', { displayName: next.displayName }));
+          throw e;
+        }
       }
-    }
-    const { added, removed, skipped } = await this.writeMembers(ws, group.id, new Set(group.members.map((m) => m.userId)), next.members);
-    void this.audit.record({
-      workspaceId: ws,
-      actor: 'scim',
-      action: 'scim.group_updated',
-      params: {
-        tokenId: caller.tokenId,
-        displayName: next.displayName,
-        ...(next.displayName !== group.displayName ? { renamedFrom: group.displayName } : {}),
-        added: added.length,
-        removed: removed.length,
-        skipped,
-      },
-      ok: true,
-      target: group.id,
-    });
-    await this.roleSync.applyScim(ws, [...added, ...removed]);
+      const { added, removed, skipped } = await this.writeMembers(ws, group.id, new Set(group.members.map((m) => m.userId)), next.members);
+      this.prisma.onCommit(() =>
+        this.audit.record({
+          workspaceId: ws,
+          actor: 'scim',
+          action: 'scim.group_updated',
+          params: {
+            tokenId: caller.tokenId,
+            displayName: next.displayName,
+            ...(next.displayName !== group.displayName ? { renamedFrom: group.displayName } : {}),
+            added: added.length,
+            removed: removed.length,
+            skipped,
+          },
+          ok: true,
+          target: group.id,
+        }),
+      );
+      await this.roleSync.applyScim(ws, [...added, ...removed]);
+    }, SCIM_TX);
     return renderGroup(this.base, await this.loadGroup(ws, group.id));
   }
 

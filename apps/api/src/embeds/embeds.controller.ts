@@ -1,7 +1,7 @@
 import { Controller, Get, Param, ParseUUIDPipe, Redirect } from '@nestjs/common';
 import { ApiExcludeEndpoint, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { DocumentEmbedsResponse } from '@knowledge/contracts';
-import { Access, CookieTokenOk } from '../auth/access.decorator.js';
+import { Access } from '../auth/access.decorator.js';
 import { DocumentEmbedsResponseDto } from './embeds.dto.js';
 import { EmbedsService } from './embeds.service.js';
 import { Returns } from '../common/returns.decorator.js';
@@ -29,7 +29,6 @@ export class EmbedsController {
   /** `_` stands for a whole-file item. A redirect, as for attachments: `<img>` cannot send a header. */
   @Get(':fileKey/:nodeId/:version')
   @Access('viewer', 'document')
-  @CookieTokenOk()
   @Redirect(undefined, 302)
   @ApiExcludeEndpoint()
   async snapshot(

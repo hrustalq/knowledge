@@ -30,28 +30,68 @@ permanently empty).
 is execution order**: `AuthGuard` → `AclGuard`.
 
 1. **`AuthGuard`** resolves the principal, or 401. `@Public()` opts a route out
-   (signup, login, forgot/reset password). Two callers cannot set headers, and
-   each gets one narrow opt-in (#102):
+   (signup, login, forgot/reset password). It reads, in order: an
+   `Authorization: Bearer` header, a `?token=` ticket on an opted-in route, and
+   the browser's session cookie:
 
    - **`@QueryTokenOk()`**: the SSE stream (`EventSource`) reads `?token=`, and
      it must be a single-use `kt_` URL ticket (`TokenAuthService.resolveTicket`).
      A `kn_` API key or a `ks_` session in a URL is a 401 even here, because
      either outlives the request in access logs, history and `Referer`. A caller
-     mints the ticket first with `POST /v1/auth/url-ticket` (header credential
-     only; `@ReadKeyOk`).
-   - **`@CookieTokenOk()`**: the attachment, import-image and avatar redirects
-     (`<img>` / `<object>`) read the web's `kn_token` cookie, a `ks_` session
-     only (`resolveSessionCookie`). The web calls the API same-origin under
-     `/api`, so the browser sends the cookie and the asset URL carries no
-     credential at all; `SameSite=Lax` keeps a cross-site `<img>` from sending
-     it, and the routes are GET redirects that change nothing.
+     mints the ticket first with `POST /v1/auth/url-ticket` (`@ReadKeyOk`). Off
+     the opted-in routes a query token is ignored as if absent, so the request
+     is a 401. `test/query-token.spec.ts` pins the route list, so a new route
+     cannot opt in without a reviewed spec change.
+   - **The `kn_token` session cookie** (#650), on every route that got neither:
+     a `ks_` session only (`resolveSessionCookie`).
 
-   A header always wins. Anywhere else both the query token and the cookie are
-   ignored as if absent, so the request is a 401. `test/query-token.spec.ts`
-   pins both route lists, so a new route cannot opt in without a reviewed spec
-   change, and `test/url-tickets.spec.ts` pins what each may carry. Query
-   values named `token` are masked in the API's request and error logs
+   Query values named `token` are masked in the API's request and error logs
    (`redactUrl`) and in the bundled Caddy access log.
+
+### The browser session is an HttpOnly cookie (#650)
+
+The browser never holds its session token where a script can read it. Login,
+signup, the SSO exchange and LDAP sign-in answer with `Set-Cookie:
+kn_token=ks_…; HttpOnly; SameSite=Lax; Path=/`, expiring with the session, plus
+`Secure` whenever `WEB_BASE_URL` is `https:` (the request reaches the API over
+plain HTTP behind the proxies, so the configured origin decides, not the
+request). Their JSON bodies carry `expiresAt` and `me`, never the token. Logout
+revokes the session and clears the cookie. `session-cookie.ts` holds both.
+
+Before this, the token sat in `localStorage` and in a cookie JS wrote itself, so
+any XSS in the untrusted text the app renders (page markdown, imported HTML,
+connector content, agent output) could send a 30-day bearer token anywhere.
+Now an XSS can act as the reader while the tab is open, but cannot carry the
+session off.
+
+- **CSRF.** A cookie rides along on every request the browser makes, so an
+  unsafe method authenticated by it must also carry `X-Requested-With`
+  (`cookieCsrfOk`), else 403 `reason: 'csrf'`. A cross-site form cannot set a
+  header, and a cross-site script cannot add one without a CORS preflight,
+  which the API never answers: it enables no CORS. The web sends
+  `CSRF_HEADER` (`@knowledge/contracts`) on every call. A bearer header or a
+  ticket is not ambient and needs no such proof. `SameSite=Lax` also keeps the
+  cookie off cross-site subresource requests.
+- **SSR.** `server.js` reads the cookie from the page request and the render's
+  API calls send it as a bearer, so signed-in pages still arrive rendered.
+- **Sockets and streams.** The live WebSocket, the SSE stream and collab each
+  get a `kt_` ticket minted over the cookie, per (re)connect. The WebSocket
+  gateway never reads the cookie, so a cross-site page cannot open a socket as
+  the reader.
+- **API keys and MCP** are unchanged: `Authorization: Bearer kn_…`.
+- **Migration.** A tab signed in before the change still has the token in
+  `localStorage`; on its next load it posts it once as a bearer to
+  `POST /v1/auth/session-cookie`, gets the cookie, and deletes its copy. The
+  route accepts a live `ks_` session only, never an API key. It is a
+  one-release bridge, marked `ponytail:` on both ends.
+- **What it does not stop.** An XSS in an open tab can still call the API as
+  the reader, including minting an API key. HttpOnly limits the damage to the
+  life of the tab, it does not remove it.
+
+`test/session-cookie.spec.ts` pins the cookie attributes, the token-free body,
+logout and the migration; `test/query-token.spec.ts` pins the cookie on every
+route and the CSRF rule; `test/url-tickets.spec.ts` pins what a ticket may
+carry.
 
 2. **`AclGuard`** reads `@Access(role, source)` metadata, resolves the target
    **workspace in PostgreSQL**, and 403s on failure.

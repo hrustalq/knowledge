@@ -6,7 +6,6 @@ export const PUBLIC_META = 'knowledge:public';
 export const PLATFORM_ADMIN_META = 'knowledge:platform-admin';
 export const READ_KEY_OK_META = 'knowledge:read-key-ok';
 export const QUERY_TOKEN_OK_META = 'knowledge:query-token-ok';
-export const COOKIE_TOKEN_OK_META = 'knowledge:cookie-token-ok';
 export const UNVERIFIED_OK_META = 'knowledge:unverified-ok';
 export const FEATURE_META = 'knowledge:feature';
 
@@ -124,17 +123,6 @@ export const ReadKeyOk = () => SetMetadata(READ_KEY_OK_META, true);
  * reviewed decision.
  */
 export const QueryTokenOk = () => SetMetadata(QUERY_TOKEN_OK_META, true);
-
-/**
- * A GET redirect that `<img>` / `<object>` load (attachment, import-image and
- * avatar reads, #102 phase 2b): with no `Authorization` header it may
- * authenticate from the web's `kn_token` cookie, a `ks_` session only. The web
- * calls the API same-origin under `/api`, so the browser sends the cookie and
- * no credential has to ride in the URL; `SameSite=Lax` keeps a cross-site
- * `<img>` from carrying it. Pinned beside `@QueryTokenOk` in
- * test/query-token.spec.ts.
- */
-export const CookieTokenOk = () => SetMetadata(COOKIE_TOKEN_OK_META, true);
 
 /**
  * A route a session with an unproven address may still call while

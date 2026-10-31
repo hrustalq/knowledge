@@ -242,7 +242,7 @@ refused.
     with its name, size and `changed`, and queues a render for what is missing.
     The node view reads it once per page and polls while something renders.
   - `GET /v1/documents/:id/embeds/:fileKey/:nodeId/:version` (`viewer`,
-    `document`, `@CookieTokenOk`, mirroring `attachments.controller.ts`)
+    `document`, the session cookie, mirroring `attachments.controller.ts`)
     answers with a 302 to a presigned URL, but only when a revision of **that
     document** references the item, the item passes the allowlist read check,
     and the cache has the bytes. Otherwise 404. A file-level item uses `_` as

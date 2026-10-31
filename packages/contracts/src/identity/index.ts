@@ -710,15 +710,34 @@ export interface ReindexResponse {
 
 
 
-/** Returned by signup and login: a `ks_` session token (send as Bearer). */
+/**
+ * The browser's `ks_` session cookie (#650). The API sets it HttpOnly on every
+ * sign-in and clears it on logout; no script reads or writes it.
+ */
+export const SESSION_COOKIE = 'kn_token';
+
+/**
+ * The header that proves a cookie-authenticated write came from the app
+ * (#650): a cross-site form cannot set it. The web sends it on every call.
+ */
+export const CSRF_HEADER = { 'X-Requested-With': 'knowledge' } as const;
+
+/**
+ * Returned by signup and login. The session itself is the HttpOnly
+ * `kn_token` cookie set on the same response (#650); the body never carries it.
+ */
 export interface AuthSessionResponse {
-  token: string;
   expiresAt: string;
   me: MeResponse;
 }
 
 // POST /v1/auth/logout
 export interface LogoutResponse {
+  ok: boolean;
+}
+
+// POST /v1/auth/session-cookie (#650 migration): `ok` false when the bearer was not a live session.
+export interface SessionCookieResponse {
   ok: boolean;
 }
 

@@ -8,7 +8,6 @@ const base = import.meta.env.SSR
   ? (process.env.API_URL_INTERNAL ?? 'http://localhost:3000')
   : (import.meta.env.VITE_API_URL ?? '/api')
 
-const TOKEN_KEY = 'kn_token'
 const WS_KEY = 'kn_ws'
 const PROJECT_KEY = 'kn_proj'
 const PANE_KEY = 'kn_pane'
@@ -35,10 +34,11 @@ const LANG_KEY = 'kn_lang'
 /** Which level of the sidebar's navigation stack is showing (see stores/sidebar-nav). */
 export type SidebarPane = 'projects' | 'pages'
 
-// Client-side auth state lives in localStorage (+ mirrored into cookies so SSR
-// can render authenticated pages). On the server the per-request values come
-// from the AsyncLocalStorage context installed by entry-server — module state
-// is never shared across concurrent SSR requests.
+// Client-side preferences live in localStorage (+ mirrored into cookies so SSR
+// renders the same frame). The session is not among them: it is an HttpOnly
+// cookie the API sets and no script here can read (#650). On the server the
+// per-request values come from the AsyncLocalStorage context installed by
+// entry-server — module state is never shared across concurrent SSR requests.
 interface SsrRequestContext {
   token: string | null
   workspaceId: string | null
@@ -82,7 +82,6 @@ export function requestTraceId(): string {
   }
 }
 
-let clientToken: string | null = null
 let clientWorkspaceId: string | null = null
 let clientProjectId: string | null = null
 let clientPane: string | null = null
@@ -101,11 +100,6 @@ if (!import.meta.env.SSR) {
     // on the page (#278). Storage alone misses the Accept-Language fallback.
     const rendered = document.documentElement.lang
     if (isLocale(rendered)) clientLocale = rendered
-    clientToken = localStorage.getItem(TOKEN_KEY)
-    // Renew the cookie mirror (setToken writes it with a 30-day max-age): the
-    // <img> asset routes authenticate from it (#102), so it must not lapse
-    // while localStorage still holds a live session.
-    if (clientToken) setToken(clientToken)
     clientWorkspaceId = localStorage.getItem(WS_KEY)
     clientProjectId = localStorage.getItem(PROJECT_KEY)
     clientPane = localStorage.getItem(PANE_KEY)
@@ -119,7 +113,7 @@ if (!import.meta.env.SSR) {
     const storedLocale = localStorage.getItem(LANG_KEY)
     if (isLocale(storedLocale)) {
       clientLocale ??= storedLocale
-      // Renew the mirror like the token's, so the server keeps rendering the
+      // Renew the mirror, so the server keeps rendering the
       // stored choice instead of falling back to Accept-Language.
       document.cookie = `${LANG_KEY}=${storedLocale}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`
     }
@@ -128,27 +122,14 @@ if (!import.meta.env.SSR) {
   }
 }
 
+/**
+ * The session token, during SSR only: server.js reads it from the request's
+ * HttpOnly `kn_token` cookie and the render's API calls send it as a bearer.
+ * In the browser it is null by design (#650): the cookie authenticates every
+ * same-origin call, and no script can read it.
+ */
 export function getToken(): string | null {
-  return import.meta.env.SSR ? (ssrContext()?.token ?? null) : clientToken
-}
-
-export function setToken(token: string | null): void {
-  if (import.meta.env.SSR) return
-  clientToken = token
-  try {
-    if (token) {
-      localStorage.setItem(TOKEN_KEY, token)
-      // Mirror into a cookie so the SSR pass renders as the logged-in user.
-      // Set by JS on purpose (no httpOnly): the token is readable client-side
-      // anyway via localStorage; SameSite=Lax limits cross-site sends.
-      document.cookie = `${TOKEN_KEY}=${token}; path=/; max-age=${60 * 60 * 24 * 30}; samesite=lax`
-    } else {
-      localStorage.removeItem(TOKEN_KEY)
-      document.cookie = `${TOKEN_KEY}=; path=/; max-age=0`
-    }
-  } catch {
-    /* ignore */
-  }
+  return import.meta.env.SSR ? (ssrContext()?.token ?? null) : null
 }
 
 /** Active workspace for all API calls; falls back to the demo workspace. */
@@ -423,10 +404,10 @@ export function saveFile(blob: Blob, filename: string): void {
  * environment prefix and the credential are added here, at render time.
  *
  * `<img>` and `<object>` cannot send an Authorization header, and no credential
- * goes in the URL (#102): the asset routes marked `@CookieTokenOk()` in the API
- * read the `kn_token` session cookie instead. The browser sends it because the
- * API is same-origin under `/api` (the Vite proxy, Caddy in production); a
- * cross-origin `VITE_API_URL` would leave every attachment and avatar a 401.
+ * goes in the URL (#102): the API reads the HttpOnly `kn_token` session cookie
+ * instead (#650). The browser sends it because the API is same-origin under
+ * `/api` (the Vite proxy, Caddy in production); a cross-origin `VITE_API_URL`
+ * would leave every call, attachment and avatar a 401.
  */
 /**
  * The absolute URL of an API route, for a full-page navigation rather than a

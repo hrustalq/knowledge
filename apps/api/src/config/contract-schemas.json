@@ -5977,9 +5977,6 @@
   "AuthSessionResponse": {
     "type": "object",
     "properties": {
-      "token": {
-        "type": "string"
-      },
       "expiresAt": {
         "type": "string"
       },
@@ -5988,7 +5985,6 @@
       }
     },
     "required": [
-      "token",
       "expiresAt",
       "me"
     ]
@@ -20362,6 +20358,17 @@
       "confidence"
     ]
   },
+  "SessionCookieResponse": {
+    "type": "object",
+    "properties": {
+      "ok": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "ok"
+    ]
+  },
   "SessionView": {
     "type": "object",
     "properties": {
@@ -21037,9 +21044,6 @@
   "SsoExchangeResponse": {
     "type": "object",
     "properties": {
-      "token": {
-        "type": "string"
-      },
       "expiresAt": {
         "type": "string"
       },
@@ -21053,8 +21057,7 @@
     "required": [
       "expiresAt",
       "me",
-      "returnTo",
-      "token"
+      "returnTo"
     ]
   },
   "SsoLoginProvider": {

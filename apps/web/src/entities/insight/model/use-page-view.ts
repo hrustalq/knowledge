@@ -1,6 +1,7 @@
 import { onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { apiUrl, getLocale, getToken } from '@/shared/api/api'
+import { CSRF_HEADER } from '@knowledge/contracts'
+import { apiUrl, getLocale } from '@/shared/api/api'
 import { createPageViewTracker, searchClickOf, TICK_MS, type PageViewTarget } from '@/entities/insight/model/page-view'
 
 const INPUTS = ['scroll', 'wheel', 'keydown', 'pointerdown', 'pointermove'] as const
@@ -26,16 +27,16 @@ export function usePageView(
     const tracker = createPageViewTracker({
       // Raw fetch, on purpose: the last beat is sent as the tab closes, and only
       // a `keepalive` fetch outlives the page — the generated client's XHR dies
-      // with it, and sendBeacon cannot carry the Authorization header.
+      // with it, and sendBeacon cannot carry the CSRF header the HttpOnly
+      // session cookie needs on a write (#650).
       send: (path, body) => {
-        const token = getToken()
         return fetch(apiUrl(path), {
           method: 'POST',
           keepalive: true,
           headers: {
             'Content-Type': 'application/json',
             'Accept-Language': getLocale(),
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...CSRF_HEADER,
           },
           body: JSON.stringify(body),
         })

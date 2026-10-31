@@ -7,6 +7,8 @@ import request from 'supertest';
 import { AuthGuard } from '../src/auth/auth.guard.js';
 import { AuthFlowController } from '../src/auth/auth-flow.controller.js';
 import { AuthFlowService } from '../src/auth/auth-flow.service.js';
+import { SessionsService } from '../src/auth/sessions.service.js';
+import { ConfigService } from '@nestjs/config';
 import { PublicRateLimiter } from '../src/public/public-rate-limit.js';
 import { EventsController } from '../src/events/events.controller.js';
 import { EventsSubscriber } from '../src/events/events.subscriber.js';
@@ -152,6 +154,9 @@ describe('url tickets over HTTP (real AuthGuard, real controllers)', () => {
         { provide: TokenAuthService, useValue: auth },
         { provide: UrlTicketsService, useValue: tickets },
         { provide: AuthFlowService, useValue: {} },
+        // The sign-in routes' cookie needs (#650); unused by these routes.
+        { provide: SessionsService, useValue: {} },
+        { provide: ConfigService, useValue: { get: () => 'http://localhost:5173' } },
         // The login route's budget guard (#75) is on the controller; unused by these routes.
         { provide: PublicRateLimiter, useValue: { hit: async () => true } },
         { provide: EventsSubscriber, useValue: { stream } },

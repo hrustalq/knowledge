@@ -19,6 +19,7 @@ import {
 } from '@knowledge/contracts';
 import { AccessService } from '../auth/access.service.js';
 import { TokenAuthService } from '../auth/token-auth.service.js';
+import { UrlTicketsService } from '../auth/url-tickets.service.js';
 import type { Principal } from '../auth/principal.js';
 import type { Env } from '../config/env.js';
 import { EventsSubscriber } from './events.subscriber.js';
@@ -47,9 +48,12 @@ function matchesType(pattern: string, type: string): boolean {
  * subscription exists — same deny-by-default stance as GraphService — and,
  * per frame, page restrictions through `LiveVisibility`, #76) and
  * tracking configuration (server-side LIVE_TRACKED_EVENTS allowlist ∩ the
- * client's per-subscription events/documents filters). Auth mirrors SSE:
- * ?token=<kn_|ks_> on the upgrade URL, resolved by TokenAuthService because
- * APP_GUARDs never run on WS upgrades. All errors are strict ApiErrorPayload
+ * client's per-subscription events/documents filters). Auth: a bearer header,
+ * or ?token= on the upgrade URL, resolved by TokenAuthService because
+ * APP_GUARDs never run on WS upgrades. The web sends a single-use `kt_`
+ * ticket (#650: its session is an HttpOnly cookie it cannot read); `kn_`/`ks_`
+ * stay accepted for other clients. The cookie itself is never read here, so a
+ * cross-site page cannot open a socket as the reader. All errors are strict ApiErrorPayload
  * envelopes inside {type:'error'} frames; auth failures also close the socket
  * (4401). Lives in EventsApiModule — worker/MCP never load it.
  */
@@ -152,7 +156,9 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     try {
       // withLocale so exceptions thrown deep inside tokenAuth come back
       // translated — their ambient t() has no request context out here.
-      const principal = await withLocale(locale, () => this.tokenAuth.resolve(token));
+      const principal = await withLocale(locale, () =>
+        token && UrlTicketsService.isTicket(token) ? this.tokenAuth.resolveTicket(token) : this.tokenAuth.resolve(token),
+      );
       if (this.tokenAuth.blocksUnverified(principal)) {
         authenticated(false);
         socket.close(4403, 'email unverified');

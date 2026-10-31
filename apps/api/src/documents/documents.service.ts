@@ -1947,9 +1947,10 @@ export class DocumentsService {
   async getWorkspaceGraph(scope: AccessScope, projectId?: string, at?: TemporalPoint): Promise<WorkspaceGraphResponse> {
     const { workspaceId } = scope;
     // Pages the caller may not open are not nodes, so their edges go (below,
-    // `inScope`) and with them every entity only they mention (#76).
+    // `inScope`) and with them every entity only they mention (#76). A capture
+    // still behind its merge request is not a node until it merges (#642).
     const docs = await this.prisma.document.findMany({
-      where: { workspaceId, ...(projectId ? { projectId } : {}), AND: [visibilityWhere(scope)] },
+      where: { workspaceId, ...(projectId ? { projectId } : {}), ...LISTED_PAGE, AND: [visibilityWhere(scope)] },
       include: { branches: true },
       orderBy: { title: 'asc' },
     });
@@ -2026,7 +2027,17 @@ export class DocumentsService {
     // would otherwise both reveal the page and carry the walk on through it
     // to entities only it mentions. GraphService drops both (#76).
     const g = await this.graph.getWorkspaceRelationGraph(document.workspaceId, await this.permissions.documentFilterFor(scope), at);
-    const adj = buildAdjacency(g.edges);
+    // A neighbour still behind its merge request is not a page yet (#642); the
+    // page itself stays, so its reviewer can open its graph.
+    const unlisted = new Set(
+      (
+        await this.prisma.document.findMany({
+          where: { workspaceId: document.workspaceId, pendingMergeRequestId: { not: null }, id: { not: documentId } },
+          select: { id: true },
+        })
+      ).map((d) => d.id),
+    );
+    const adj = buildAdjacency(g.edges.filter((e) => !unlisted.has(e.documentId)));
     const hits = bfs(adj, docNode(documentId), d * 2);
 
     const docIds = new Set<string>([documentId]);

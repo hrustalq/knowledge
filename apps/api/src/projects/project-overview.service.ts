@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { ProjectsService } from './projects.service.js';
 import type { Prisma } from '@prisma/client';
 import { visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
+import { LISTED_PAGE } from '../common/listed-page.js';
 
 /** Enough people to be a roster, not a directory. The rail links out for the rest. */
 const CONTRIBUTOR_LIMIT = 12;
@@ -45,10 +46,13 @@ export class ProjectOverviewService {
   async get(projectId: string, scope: AccessScope): Promise<ProjectOverviewResponse> {
     const project = await this.projects.get(projectId, scope);
     const visible = visibilityWhere(scope);
+    // A capture still behind its merge request is not a page here yet (#642);
+    // the open-MR count keeps it, since that merge request is what it is.
+    const listed: Prisma.DocumentWhereInput = { ...LISTED_PAGE, AND: [visible] };
     const [contributors, counts, recentPages] = await Promise.all([
-      this.contributorsFor(projectId, visible),
+      this.contributorsFor(projectId, listed),
       this.countsFor(project, visible),
-      this.recentPagesFor(projectId, visible),
+      this.recentPagesFor(projectId, listed),
     ]);
     return { project, contributors, counts, recentPages };
   }

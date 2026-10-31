@@ -30,6 +30,12 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- **A captured page waiting for review no longer shows up as a page before its merge request merges** (#642).
+  The knowledge-base graph drew it as a node, and clicking it opened a page that said "indexed" but could
+  not load. A page's own graph could also reach it as a neighbour. The project page counts in the rail, on the
+  projects list and on the project page counted it too, so they disagreed with the page list. A publicly shared
+  subtree listed its title. All of these now leave it out until the merge request merges. Its reviewer still
+  opens it from the merge request.
 - **The editor no longer shows a page's title twice** (#646). A page whose text opens with its own title
   as `# Title` (most imported, captured and agent-written pages do) showed it in the title field and again as
   a heading at the top of the body, though readers saw it once. The editor now shows it only in the title

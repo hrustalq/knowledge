@@ -59,9 +59,11 @@ export const useNotificationsStore = defineStore('notifications', {
      * Separate from `ensureLoaded` because it is what a live event triggers, and
      * refetching the whole panel on every notification would throw away the
      * reader's scroll position in a list they may be part-way through.
+     *
+     * entry-server reads it before the render, so the badge is in the HTML
+     * (#643); the bell's mount then binds to that answer with `fresh: false`.
      */
-    async refreshCount() {
-      if (import.meta.env.SSR) return
+    async refreshCount({ fresh = true }: { fresh?: boolean } = {}) {
       try {
         // Bound, so the `notification.created` live rule re-reads it too.
         await bindStoreQuery<NotificationUnreadCountResponse>(
@@ -73,7 +75,7 @@ export const useNotificationsStore = defineStore('notifications', {
             this.unreadCount = res.count
             this.counts = { ...emptyCounts(), ...res.counts }
           },
-          { fresh: true },
+          { fresh },
         )
       } catch {
         // A badge that fails to load is not worth telling anybody about.

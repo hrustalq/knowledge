@@ -33,7 +33,7 @@ const shown = computed(() => store.entries.slice(0, PANEL_ROWS))
 const badge = computed(() => (store.unreadCount > 99 ? '99+' : String(store.unreadCount)))
 
 onMounted(() => {
-  if (auth.authenticated) void store.refreshCount()
+  if (auth.authenticated) void store.refreshCount({ fresh: false })
 })
 
 // Opening is the moment to fetch rows — the badge alone needs no list, so the

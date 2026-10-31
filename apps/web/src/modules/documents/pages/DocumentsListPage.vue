@@ -309,18 +309,15 @@ watch(virtualRows, (rows) => {
         <!-- Graph ---------------------------------------------------------->
         <template v-else-if="view === 'graph'">
           <GraphCanvas
-            v-if="store.graphLoaded && store.graph"
+            :loading="!(store.graphLoaded && store.graph)"
             :nodes="graphNodes"
             :edges="graphEdges"
-            :truncated="store.graph.truncated"
+            :truncated="store.graph?.truncated ?? false"
             :show-entity-controls="hasEntities"
             :time="graphTime"
             storage-key="kn_graph_opts_workspace"
             @open="(id) => router.push(`/documents/${id}`)"
           />
-          <div v-else class="grid size-full place-items-center">
-            <Skeleton class="size-full" />
-          </div>
         </template>
 
         <!-- Tree ----------------------------------------------------------->

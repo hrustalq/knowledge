@@ -15,6 +15,19 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Changed
+
+- **A page opened directly (a reload, a shared link, a new tab) shows its text at once** (#643). The server
+  used to send skeletons, and the title and body arrived only after the scripts loaded and made about twenty
+  requests. The title, the revision line and the body are now in the first response, and the browser no
+  longer asks again for the page or its content.
+- **The rail no longer jumps when a page loads** (#643). The workspace switcher and the unread-notification
+  badge now arrive with the page, instead of appearing afterwards and pushing the navigation down.
+- **The rest of a page's rail loads after the page has drawn** (#643). History, changes, reports and the other
+  previews used to be requested in one burst with the page's own data. Page views are now read once per visit.
+- **The knowledge-base graph shows its time strip while the graph loads** (#643), instead of a grey box until
+  the graph arrives.
+
 ### Fixed
 
 - **A failure part-way through an action no longer leaves it half done** (#658). Seventeen flows wrote one

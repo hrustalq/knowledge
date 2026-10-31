@@ -5,7 +5,10 @@ import type { Router } from 'vue-router'
 import { DEFAULT_LOCALE, type Locale } from '@knowledge/contracts'
 import { dehydrate } from '@tanstack/vue-query'
 import { createApp } from './main'
-import { isStoreQuery } from './shared/api/queries'
+import type { QueryClient } from '@tanstack/vue-query'
+import { isStoreQuery, prefetchForRender } from './shared/api/queries'
+import { documentContentQuery, documentDetailQuery, type ContentAt } from './entities/document'
+import { useNotificationsStore } from './modules/notifications'
 import { ensureLocaleMessages } from './shared/i18n'
 import { useAuthStore } from './stores/auth'
 import { useDocumentsStore } from './stores/documents'
@@ -46,29 +49,35 @@ const ssrCtx = new AsyncLocalStorage<SsrRequestContext>()
  * A failure leaves the store unloaded and the client fetches as it always did;
  * it never fails the render.
  */
-async function prefetchShell(router: Router, pinia: Pinia, request: SsrRequestContext) {
+async function prefetchShell(router: Router, pinia: Pinia, queryClient: QueryClient, request: SsrRequestContext) {
   const auth = useAuthStore(pinia)
   // The same test app/App.vue makes between the signed-out card and the shell.
   if (router.currentRoute.value.meta.public || !auth.authenticated || auth.verificationPending) return
 
   const projects = useProjectsStore(pinia)
   const documents = useDocumentsStore(pinia)
+  const workspaces = useWorkspacesStore(pinia)
   const scoped = request.projectId
   // The remembered project almost always still exists, so its tree is asked
-  // for alongside the roster rather than after it.
-  const early = scoped ? documents.fetchTree().catch(() => undefined) : null
+  // for alongside the roster rather than after it. The workspace switcher and
+  // the unread badge sit above the tree in the rail: drawn after hydration,
+  // they pushed the whole nav down (#643).
+  const early = Promise.all([
+    scoped ? documents.fetchTree().catch(() => undefined) : null,
+    workspaces.fetchList().catch(() => undefined),
+    useNotificationsStore(pinia).refreshCount(),
+    prefetchPage(router, queryClient),
+  ])
   await projects.fetchList().catch(() => undefined)
   await early
   if (!projects.loaded || projects.items.length === 0) {
     // The cookie's workspace may be gone — deleted (#479), or never ours (a 404,
     // or under AUTH_MODE=none an empty roster). Render the first one the caller
     // can see instead; entry-client adopts it the same way.
-    const workspaces = useWorkspacesStore(pinia)
-    await workspaces.fetchList().catch(() => undefined)
     const fallback = workspaces.items[0]?.workspaceId
     if (fallback && !workspaces.items.some((w) => w.workspaceId === request.workspaceId)) {
       // The project check below then drops the old workspace's tree.
-      request.workspaceId = fallback
+      request.workspaceId = workspaces.fallbackId = fallback
       await projects.fetchList().catch(() => undefined)
     }
   }
@@ -82,6 +91,39 @@ async function prefetchShell(router: Router, pinia: Pinia, request: SsrRequestCo
   }
   if (!documents.treeLoaded) await documents.fetchTree().catch(() => undefined)
   documents.treePrefetched = documents.treeLoaded
+}
+
+/**
+ * A page view's detail and content (#643): the page draws its title, meta line
+ * and body from these two on the server instead of skeletons, and the client
+ * hydrates from the same answers without asking again. Workspace-independent
+ * keys, so the fallback above cannot strand them.
+ */
+async function prefetchPage(router: Router, queryClient: QueryClient) {
+  const route = router.currentRoute.value
+  if (route.matched.at(-1)?.path !== '/documents/:id') return
+  const id = route.params.id as string
+  // The page's own `contentAt`: an explicit revision wins over `?asOf=`.
+  const q = route.query
+  const at: ContentAt =
+    typeof q.revision === 'string' ? { revision: q.revision } : typeof q.asOf === 'string' ? { asOf: q.asOf } : null
+  await Promise.all([
+    prefetchForRender(queryClient, documentDetailQuery(id)),
+    prefetchForRender(queryClient, documentContentQuery(id, at)),
+    installSsrDocument(),
+  ])
+}
+
+/**
+ * The inert document the read view parses its static body in (shared/utils/
+ * hydration). One per process, loaded on the first page render: nothing is
+ * ever attached to it, and jsdom runs no scripts and loads no resources.
+ */
+let ssrDocument: Promise<void> | null = null
+function installSsrDocument() {
+  return (ssrDocument ??= import('jsdom').then(({ JSDOM }) => {
+    ;(globalThis as Record<string, unknown>).__KN_SSR_DOCUMENT__ = new JSDOM('').window.document
+  }).catch(() => undefined)) // no document: the read view stays client-drawn, as before
 }
 
 export async function render(url: string, ctx: Partial<SsrRequestContext> = {}) {
@@ -108,7 +150,7 @@ export async function render(url: string, ctx: Partial<SsrRequestContext> = {}) 
     await router.push(url)
     await router.isReady()
     await messagesReady
-    await prefetchShell(router, pinia, request)
+    await prefetchShell(router, pinia, queryClient, request)
 
     const ssrContext: { teleports?: Record<string, string> } = {}
     let html = await renderToString(app, ssrContext)

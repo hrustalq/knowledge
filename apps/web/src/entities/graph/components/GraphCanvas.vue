@@ -7,12 +7,14 @@
  * are the same surface at two sizes — anything that behaved differently in the
  * lightbox would be a second thing to keep correct.
  */
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { Minus, Plus, Scan } from 'lucide-vue-next'
 import { api } from '@/shared/api/queries'
+import { hydration } from '@/shared/utils/hydration'
+import { Skeleton } from '@/shared/ui/skeleton'
 import { getWorkspaceId } from '@/shared/api/api'
 import { operationHref } from '@/entities/api-operation'
 import KnowledgeGraph from './KnowledgeGraph.vue'
@@ -33,8 +35,14 @@ const props = withDefaults(
     storageKey?: string
     /** #81: when given, the canvas carries the time strip and the panel's Time section. */
     time?: GraphTime | null
+    /**
+     * The graph is still being read (#643): the panel and the time strip are
+     * drawn — on the server too — and only the canvas waits, so the first
+     * paint is the instrument, not a grey box.
+     */
+    loading?: boolean
   }>(),
-  { rootId: null, truncated: false, showEntityControls: true, storageKey: '', time: null },
+  { rootId: null, truncated: false, showEntityControls: true, storageKey: '', time: null, loading: false },
 )
 
 const emit = defineEmits<{ open: [id: string] }>()
@@ -69,7 +77,12 @@ function restore(): GraphOptions {
   }
 }
 
-const options = ref<GraphOptions>(restore())
+// Storage is the browser's: the server and the hydrating render use the defaults, and the stored set lands on mount.
+const deferRestore = import.meta.env.SSR || hydration.active
+const options = ref<GraphOptions>(deferRestore ? { ...DEFAULT_OPTIONS } : restore())
+onMounted(() => {
+  if (deferRestore) options.value = restore()
+})
 const query = ref('')
 const stats = ref({ nodes: 0, edges: 0, orphans: 0, counts: {} as Record<string, number> })
 const graph = ref<InstanceType<typeof KnowledgeGraph> | null>(null)
@@ -95,7 +108,9 @@ const summary = computed(() =>
 
 <template>
   <div class="relative size-full overflow-hidden bg-background">
+    <Skeleton v-if="loading" class="absolute inset-0 rounded-none" />
     <KnowledgeGraph
+      v-else
       ref="graph"
       :nodes="nodes"
       :edges="edges"
@@ -112,7 +127,9 @@ const summary = computed(() =>
          in the gap beside the panel and pan from anywhere that looks empty. -->
     <div class="pointer-events-none absolute inset-0 p-3">
       <div class="flex h-full items-start justify-between gap-3">
+        <!-- Arrives with the graph: its sections depend on what the graph holds. -->
         <GraphControls
+          v-if="!loading"
           v-model:options="options"
           v-model:query="query"
           :counts="stats.counts"
@@ -122,11 +139,11 @@ const summary = computed(() =>
           :has-communities="hasCommunities"
           class="max-h-full overflow-y-auto"
         />
-        <div class="pointer-events-auto"><slot name="actions" /></div>
+        <div class="pointer-events-auto ml-auto"><slot name="actions" /></div>
       </div>
 
       <div class="pointer-events-none absolute inset-x-3 bottom-3 flex flex-col gap-1.5">
-        <p class="self-start rounded-md bg-background/70 px-1.5 py-0.5 text-xs text-muted-foreground backdrop-blur-sm">
+        <p :class="{ invisible: loading }" class="self-start rounded-md bg-background/70 px-1.5 py-0.5 text-xs text-muted-foreground backdrop-blur-sm">
           {{ summary }}
           <span v-if="truncated" class="text-panel-warning-ink"> · {{ t('graph.truncated') }}</span>
         </p>

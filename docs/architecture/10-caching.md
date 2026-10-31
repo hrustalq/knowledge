@@ -67,7 +67,9 @@ fetch, and the key is remembered: `entry-server.ts` dehydrates exactly those
 store-bound queries into `window.__QUERIES__` (`isStoreQuery`), and
 `entry-client.ts` hydrates them before the stores rebind. A component's own
 `useQuery` data is not transferred and is fetched again after hydration
-([09](09-web-frontend.md#limits)).
+([09](09-web-frontend.md#limits)), unless `entry-server.ts` read it before the
+render with `prefetchForRender`, which registers the key the same way. The
+page view's detail and content are read this way (#643).
 
 Two traps the move to the cache uncovered:
 

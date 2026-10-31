@@ -8,7 +8,7 @@ import { toast } from 'vue-sonner'
 import type { ComposerTranslation } from 'vue-i18n'
 import type { KnowledgeEvent } from '@knowledge/contracts'
 import { api, isApiRequestError } from '@/shared/api/queries'
-import { getToken, getWorkspaceId } from '@/shared/api/api'
+import { getWorkspaceId } from '@/shared/api/api'
 import { useDocumentsStore } from '@/stores/documents'
 
 /** Reconnect backoff after the stream drops: 1 s, doubling, capped at 30 s. */
@@ -16,16 +16,14 @@ const RETRY_MIN_MS = 1_000
 const RETRY_MAX_MS = 30_000
 
 /**
- * The stream URL. EventSource cannot set headers, so in AUTH_MODE=api-key the
- * credential rides in ?token= — as a single-use, ~60 s `kt_` ticket minted with
- * the header credential, never the session token itself (#102). Without a
- * token (AUTH_MODE=none) the URL carries none.
+ * The stream URL, with a single-use, ~60 s `kt_` ticket in ?token= (#102).
+ * The cookie alone would authenticate this same-origin GET (#650), but minting
+ * first is what tells a dead session (401: stop) from a dropped stream (retry):
+ * EventSource never shows its status. In AUTH_MODE=none the ticket is ignored.
  */
 export async function eventsStreamUrl(workspaceId: string): Promise<string> {
-  const url = `/api/v1/events?workspaceId=${encodeURIComponent(workspaceId)}`
-  if (!getToken()) return url
   const { ticket } = await api.post('/v1/auth/url-ticket')
-  return `${url}&token=${encodeURIComponent(ticket)}`
+  return `/api/v1/events?workspaceId=${encodeURIComponent(workspaceId)}&token=${encodeURIComponent(ticket)}`
 }
 
 /**

@@ -12,6 +12,7 @@ import type { Env } from '../../config/env.js';
 import { SsoEnabledGuard, ssoEnabled } from './sso-enabled.guard.js';
 import { SsoFlowService } from './sso-flow.service.js';
 import { Returns } from '../../common/returns.decorator.js';
+import { setSessionCookie } from '../session-cookie.js';
 import { CachePolicy } from '../../common/http-cache.js';
 
 /**
@@ -55,7 +56,10 @@ export class SsoProvidersController {
 @Controller('v1/auth')
 @UseGuards(SsoEnabledGuard)
 export class SsoController {
-  constructor(private readonly sso: SsoFlowService) {}
+  constructor(
+    private readonly sso: SsoFlowService,
+    private readonly config: ConfigService<Env, true>,
+  ) {}
 
   @Public()
   @HttpCode(200)
@@ -74,9 +78,14 @@ export class SsoController {
   @Returns('SsoExchangeResponse')
   @UseGuards(AuthRateLimitGuard)
   @AuthRateLimit('exchange')
-  @ApiOperation({ summary: 'Trade the single-use code from /auth/sso/complete for a ks_ session token' })
-  exchange(@Body() dto: SsoExchangeDto, @Req() req: Request): Promise<SsoExchangeResponse> {
-    return this.sso.exchange(dto.code, requestMeta(req));
+  @ApiOperation({ summary: 'Trade the single-use code from /auth/sso/complete for the HttpOnly kn_token session cookie' })
+  async exchange(
+    @Body() dto: SsoExchangeDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<SsoExchangeResponse> {
+    const issued = await this.sso.exchange(dto.code, requestMeta(req));
+    return setSessionCookie(res, issued, this.config.get('WEB_BASE_URL', { infer: true }));
   }
 
   @Public()
@@ -152,8 +161,14 @@ export class SsoController {
   @ApiOperation({
     summary: 'Sign in with a directory username and password (AUTH_LDAP_ENABLED). Wrong username and wrong password answer the same 401',
   })
-  ldapLogin(@Param('providerId') providerId: string, @Body() dto: LdapLoginDto, @Req() req: Request): Promise<AuthSessionResponse> {
-    return this.sso.ldapLogin(providerId, dto.username, dto.password, requestMeta(req));
+  async ldapLogin(
+    @Param('providerId') providerId: string,
+    @Body() dto: LdapLoginDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<AuthSessionResponse> {
+    const issued = await this.sso.ldapLogin(providerId, dto.username, dto.password, requestMeta(req));
+    return setSessionCookie(res, issued, this.config.get('WEB_BASE_URL', { infer: true }));
   }
 
   /** Our SP metadata, which is also our entity ID: public by nature, it holds only our certificate. */

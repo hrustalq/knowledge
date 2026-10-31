@@ -15,6 +15,16 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Breaking
+
+- **Sign-in responses no longer carry the session token** (#650). `POST /v1/auth/login`, `/signup`,
+  `/sso/exchange` and `/ldap/{providerId}/login` set it as an HttpOnly `kn_token` cookie instead, and their
+  bodies hold only `expiresAt` and `me`. A write authenticated by that cookie must also send an
+  `X-Requested-With` header, or it is refused with 403. `HTTP`
+  **Migration:** a script or integration should use an API key (`Authorization: Bearer kn_…`), which is
+  unchanged. A script that must sign in with a password reads the `ks_` token from the `Set-Cookie` header and
+  sends it as `Authorization: Bearer`.
+
 ### Changed
 
 - **A page opened directly (a reload, a shared link, a new tab) shows its text at once** (#643). The server
@@ -105,6 +115,22 @@ in the pull request that introduces them — see
 - **A wrong password is reported on the form** (#651), not only in a passing notification. The message appears
   under the fields and is read out by screen readers, the password field is marked invalid, and the cursor
   goes back to it.
+
+### Security
+
+- **Scripts on the page can no longer read your session** (#650). The session used to sit in browser storage
+  and in a cookie that scripts could read, so a script slipped into rendered content could copy a 30-day
+  session and use it from anywhere. It is now a cookie only the server sees (HttpOnly, and Secure over HTTPS).
+  Writes made with it must come from the app itself. Live updates, co-editing, images and signed-in pages work
+  as before, and API keys and MCP clients are unaffected. Sessions that were open before the update move to
+  the new cookie on their next page load, so nobody is signed out.
+
+### Operations
+
+- **The session cookie's `Secure` flag follows `WEB_BASE_URL`** (#650): set when it starts with `https:`.
+  Production already sets it to the public https origin; no new variable. A rollback to an earlier image signs
+  every browser out once (the earlier web looked for the token in browser storage, which this release
+  empties); people sign in again, and no data is lost.
 
 ## [0.41.0] — 2026-10-31
 

@@ -27,7 +27,7 @@ actually arrived rather than what the caller claimed. The old object is deleted
 reader mid-request is entitled to it.
 
 Reads are a redirect because `<img>` cannot send an `Authorization` header. The
-API authorizes (the route is `@CookieTokenOk()`: the web's session cookie, no
+API authorizes (from the web's HttpOnly session cookie, #650, no
 credential in the URL, #102) and hands
 the browser a URL it can fetch directly. Disposition and content type are decided
 server-side, so an upload can never talk the browser into treating it as

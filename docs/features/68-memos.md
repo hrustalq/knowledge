@@ -191,7 +191,7 @@ REST, each route `@Access` + `@Returns`:
 | `POST /v1/memos`                      | editor | reserve: row + presigned PUT; 503 `transcription-disabled` when off       |
 | `POST /v1/memos/:id/finalize`         | editor | size re-read from the bucket, transcription queued                       |
 | `GET /v1/memos/:id`                   | viewer | memo, transcript, summary, proposals with merge requests, dropped        |
-| `GET /v1/memos/:id/audio`             | viewer | 302 to a presigned GET (`@CookieTokenOk`, `<audio>` sends no header)      |
+| `GET /v1/memos/:id/audio`             | viewer | 302 to a presigned GET (session cookie, `<audio>` sends no header)        |
 | `POST /v1/memos/:id/retry`            | editor | resume a failed memo                                                     |
 | `DELETE /v1/memos/:id`                | editor | purge audio + row                                                        |
 

@@ -9,8 +9,7 @@
  * Authorization header applies and no credential ever reaches a query string.
  */
 import type { ApiErrorPayload, AssistantStreamFrame, PostAssistantMessageRequest } from '@knowledge/contracts'
-import { errorCodeForStatus, isApiErrorPayload } from '@knowledge/contracts'
-import { getToken } from '@/shared/api/api'
+import { CSRF_HEADER, errorCodeForStatus, isApiErrorPayload } from '@knowledge/contracts'
 
 const base = import.meta.env.VITE_API_URL ?? '/api'
 
@@ -46,7 +45,6 @@ function payload(statusCode: number, message: string, path: string): ApiErrorPay
  */
 export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<void> {
   const path = `/v1/assistant/threads/${opts.threadId}/messages/stream`
-  const token = getToken()
   let response: Response
   try {
     response = await fetch(`${base}${path}`, {
@@ -54,7 +52,8 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<void
       headers: {
         'Content-Type': 'application/json',
         Accept: 'text/event-stream',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        // The HttpOnly session cookie authenticates it; this header is what lets a cookie write through (#650).
+        ...CSRF_HEADER,
       },
       body: JSON.stringify(opts.body),
       signal: opts.signal,

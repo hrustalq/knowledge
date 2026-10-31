@@ -22,6 +22,7 @@ import { MailProducer } from '../mail/mail.producer.js';
 import { hashPassword, verifyPassword } from './password.js';
 import type { Principal } from './principal.js';
 import { SessionsService, type SessionMeta } from './sessions.service.js';
+import type { Issued } from './session-cookie.js';
 import { passwordAllowedFor } from './password-policy.js';
 import { AuthPolicyService, type EnforcedDomain } from './auth-policy.service.js';
 import { AuditService } from './audit.service.js';
@@ -67,7 +68,7 @@ export class AuthFlowService {
     return this.config.get<string>('NODE_ENV') !== 'production';
   }
 
-  async signup(email: string, displayName: string, password: string, meta?: RequestMeta): Promise<AuthSessionResponse> {
+  async signup(email: string, displayName: string, password: string, meta?: RequestMeta): Promise<Issued<AuthSessionResponse>> {
     if (!this.config.get<boolean>('AUTH_SIGNUP_ENABLED')) {
       throw new ForbiddenException(t('error.auth.signupDisabled'));
     }
@@ -114,7 +115,7 @@ export class AuthFlowService {
     return this.issueSession(user, meta, { authMethod: 'password', workspaceId: null, via: 'signup' });
   }
 
-  async login(email: string, password: string, meta?: RequestMeta): Promise<AuthSessionResponse> {
+  async login(email: string, password: string, meta?: RequestMeta): Promise<Issued<AuthSessionResponse>> {
     const normalized = email.trim().toLowerCase();
     // The ceiling is instance-wide, so saying so reveals nothing about the account.
     if (!passwordAllowedFor(normalized, this.config)) {
@@ -334,7 +335,7 @@ export class AuthFlowService {
    * (#75). A signup is its first sign-in, and audited as one. An SSO sign-in
    * is audited under its provider's workspace, so that workspace's admins see it.
    */
-  async issueSession(user: User, meta: RequestMeta | undefined, opts: IssueSessionOptions): Promise<AuthSessionResponse> {
+  async issueSession(user: User, meta: RequestMeta | undefined, opts: IssueSessionOptions): Promise<Issued<AuthSessionResponse>> {
     const { token, session } = await this.sessions.create(user.id, {
       authMethod: opts.authMethod,
       ...(opts.providerId ? { providerId: opts.providerId } : {}),

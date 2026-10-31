@@ -30,6 +30,7 @@ import type { Env } from '../../config/env.js';
 import { t } from '../../i18n/t.js';
 import { AuditService } from '../audit.service.js';
 import { AuthFlowService } from '../auth-flow.service.js';
+import type { Issued } from '../session-cookie.js';
 import { passwordAllowedFor } from '../password-policy.js';
 import { AuthPolicyService } from '../auth-policy.service.js';
 import { OIDC_PRESETS, presetOf } from './oidc-presets.js';
@@ -320,7 +321,7 @@ export class SsoFlowService {
    * so is a disabled account, as for a password login. Only an unreachable
    * directory and a sign-in the account may not make say more.
    */
-  async ldapLogin(providerId: string, username: string, password: string, meta: RequestMeta): Promise<AuthSessionResponse> {
+  async ldapLogin(providerId: string, username: string, password: string, meta: RequestMeta): Promise<Issued<AuthSessionResponse>> {
     const provider = liveIdpKinds(this.config).includes('ldap') ? await this.liveProvider(providerId, 'ldap') : null;
     if (!provider) throw new NotFoundException(t('error.sso.providerNotFound'));
     const who = username.trim().slice(0, 100);
@@ -494,7 +495,7 @@ export class SsoFlowService {
    * category for the page to show. A spent code's hash is gone, so its row is
    * not found and the audit row names no provider.
    */
-  async exchange(code: string, meta: RequestMeta): Promise<SsoExchangeResponse> {
+  async exchange(code: string, meta: RequestMeta): Promise<Issued<SsoExchangeResponse>> {
     const hash = sha256(code);
     const row = await this.prisma.ssoAuthRequest.findUnique({ where: { exchangeCodeHash: hash }, include: { provider: true } });
     if (!row || !row.userId) throw this.exchangeRefused(row?.provider ?? null, 'exchange code unknown or already spent', meta);

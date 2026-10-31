@@ -12,6 +12,7 @@
     "accountDisabled": "Account is disabled",
     "unknownApiKey": "Unknown API key",
     "invalidUrlTicket": "This link's access ticket is invalid, expired or already used",
+    "csrf": "A write signed in with the session cookie must come from the app: the X-Requested-With header is missing. Scripts should send an API key as an Authorization: Bearer header",
     "credentialInUrl": "Only a single-use ticket is accepted in a URL. Send the API key or session as an Authorization: Bearer header, or exchange it for a ticket at POST /v1/auth/url-ticket",
     "invalidCredentials": "Invalid email or password",
     "invalidResetToken": "Invalid or expired reset token",

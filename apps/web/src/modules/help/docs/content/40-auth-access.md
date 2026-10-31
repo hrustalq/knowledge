@@ -91,7 +91,9 @@ workspace usable immediately.
 
 ## In the browser
 
-The token lives in `localStorage` plus `kn_token` / `kn_ws` cookies. The cookies exist so
-the **server-rendered pass** is authenticated — read per request through async-local
-storage, so concurrent renders can never see each other's tokens. That is why an
+The session lives in the `kn_token` cookie, which the API sets **HttpOnly** at sign-in
+and clears at logout: no script on the page can read it, so a script injected through
+page content cannot carry it off. The cookie is also what authenticates the
+**server-rendered pass** — read per request through async-local storage, so concurrent
+renders can never see each other's sessions. That is why an
 authenticated page arrives rendered rather than as a spinner.

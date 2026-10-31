@@ -159,7 +159,8 @@ user's documents to the next.
 
 `shared/api/api.ts` is imported by everything and has to answer "what is the current
 token / workspace / locale" in both environments. In the browser those live in
-module variables hydrated from `localStorage`. On the server they come from an
+module variables hydrated from `localStorage`, except the token, which the
+browser never sees (an HttpOnly cookie, #650: `getToken()` is null there). On the server they come from an
 `AsyncLocalStorage` scope installed by `entry-server.ts`:
 
 ```ts
@@ -178,15 +179,15 @@ The context carries `token`, `workspaceId`, `projectId`, `pane`, `rail`,
 
 ## The cookie set
 
-localStorage is the durable client copy; a **cookie mirror exists for exactly
-one reason** — it is the only source readable before any JavaScript runs, so it
+localStorage is the durable client copy of a preference; a **cookie mirror
+exists for exactly one reason** — it is the only source readable before any JavaScript runs, so it
 is what lets the server draw the first frame correctly. Every one of these
 decides something visible in that frame, which is why they are cookies and not
 just storage keys.
 
 | Cookie           | Meaning                          | Polarity when unset |
 | ---------------- | -------------------------------- | ------------------- |
-| `kn_token`       | session/API token (mirrors localStorage; `SameSite=Lax`, not httpOnly — it is readable client-side anyway) | anonymous |
+| `kn_token`       | the `ks_` session, **HttpOnly**, set and cleared by the API only (#650, [06](06-auth-acl.md#the-browser-session-is-an-httponly-cookie-650)) | anonymous |
 | `kn_ws`          | active workspace                 | the demo workspace (`DEMO_WORKSPACE_ID`) |
 | `kn_proj`        | active project ([../features/11-projects.md](../features/11-projects.md)) | `null` = the whole workspace |
 | `kn_lang`        | UI language (mirrors `users.locale`) | `Accept-Language`, then `en` |
@@ -221,7 +222,9 @@ The server talks to the API directly; the browser goes through the Vite dev
 proxy, which rewrites `/api` away and forwards to `API_URL_INTERNAL` — so the
 browser is always same-origin and there is no CORS configuration anywhere. There
 is one HTTP stack, `shared/api/http.ts`'s axios instance, which attaches
-`Authorization`, `Accept-Language` and `x-request-id` (#472 removed the older
+`Accept-Language`, `x-request-id` and the `X-Requested-With` CSRF header, plus
+`Authorization` during SSR only (in the browser the HttpOnly session cookie
+authenticates the call, #650) (#472 removed the older
 `apiFetch`; raw `fetch` is a lint error outside an allowlist,
 [10](10-caching.md#the-web-client-one-client-one-cache)).
 
@@ -231,11 +234,9 @@ credential, so the same document renders correctly through the dev proxy, in
 production, and in anything else reading the markdown. Only the environment
 prefix is added at render time. `<img>` and `<object>` cannot send an
 `Authorization` header, so those routes authenticate from the `kn_token` session
-cookie instead, never a token in the URL (#102, [06-auth-acl.md](06-auth-acl.md)).
-That holds only while the API is same-origin under `/api`; a cross-origin
-`VITE_API_URL` would 401 every attachment and avatar. The client re-writes the
-cookie from `localStorage` on every load, so its 30-day max-age cannot lapse
-under a live session.
+cookie like every other browser call, never a token in the URL (#102,
+[06-auth-acl.md](06-auth-acl.md)). That holds only while the API is same-origin
+under `/api`; a cross-origin `VITE_API_URL` would 401 every call.
 
 ## Language, resolved twice the same way
 

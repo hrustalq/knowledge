@@ -1,5 +1,6 @@
 // Auth store: resolves /v1/me once per app instance (per SSR request / per
-// client load), owns the session token, and drives router guards + nav state.
+// client load) and drives router guards + nav state. The session itself is an
+// HttpOnly cookie the API sets and clears (#650); nothing here can read it.
 import { defineStore } from 'pinia'
 import { hasCapability } from '@knowledge/contracts'
 import type {
@@ -13,8 +14,35 @@ import type {
   WorkspaceRole,
 } from '@knowledge/contracts'
 import { api, fetchApi, isApiRequestError } from '@/shared/api/queries'
-import { getWorkspaceId, setActiveWorkspace, setToken } from '@/shared/api/api'
+import { getWorkspaceId, setActiveWorkspace } from '@/shared/api/api'
 import { clearPwaCaches } from '@/shared/utils/pwa'
+
+/**
+ * #650 migration: a tab signed in before the session became an HttpOnly cookie
+ * still has the token in localStorage. Hand it to the API once as a bearer, so
+ * it comes back as the cookie, then forget it. A network failure keeps it for
+ * the next load; an answer (live or dead session) drops it.
+ */
+// ponytail: one-release bridge; delete with POST /v1/auth/session-cookie once a session TTL (30 days) has passed after the release that ships it
+async function adoptLegacySession(): Promise<void> {
+  let token: string | null = null
+  try {
+    token = localStorage.getItem('kn_token')
+  } catch {
+    return
+  }
+  if (!token) return
+  try {
+    await api.post('/v1/auth/session-cookie', { config: { headers: { Authorization: `Bearer ${token}` } } })
+  } catch (e) {
+    if (!(isApiRequestError(e) && e.status === 401)) return
+  }
+  try {
+    localStorage.removeItem('kn_token')
+  } catch {
+    /* storage went away; nothing left to forget */
+  }
+}
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -72,6 +100,7 @@ export const useAuthStore = defineStore('auth', {
   actions: {
     async ensureLoaded() {
       if (this.loaded) return
+      if (!import.meta.env.SSR) await adoptLegacySession()
       try {
         this.adopt(await fetchApi(this.queryClient, '/v1/me', undefined, { fresh: true }))
       } catch (e) {
@@ -134,7 +163,6 @@ export const useAuthStore = defineStore('auth', {
       } catch {
         /* revoking a dead session is fine */
       }
-      setToken(null)
       this.me = null
       // Nothing the signed-out session read may answer for the next one.
       this.queryClient.clear()
@@ -143,8 +171,8 @@ export const useAuthStore = defineStore('auth', {
     setWorkspace(workspaceId: string) {
       setActiveWorkspace(workspaceId)
     },
+    /** The response set the session cookie; only the identity is left to take. */
     adoptSession(res: AuthSessionResponse) {
-      setToken(res.token)
       this.adopt(res.me)
       this.loaded = true
     },

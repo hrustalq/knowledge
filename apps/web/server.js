@@ -348,6 +348,8 @@ app.use('*all', async (req, res) => {
     const html = template
       .replace(`<!--app-lang-->`, locale)
       .replace(`<!--app-css-->`, devStyles)
+      // The route's own name (#644), already escaped; signed out it stays "Knowledge".
+      .replace(`<title>Knowledge</title>`, () => `<title>${rendered.title ?? 'Knowledge'}</title>`)
       .replace(`<!--app-head-->`, rendered.head ?? '')
       .replace(`<!--app-html-->`, rendered.html ?? '')
 

@@ -7,6 +7,7 @@ import { apiQueryOptions } from '@/shared/api/queries'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
 import { useWorkflowsStore } from '@/entities/workflow'
+import { documentDetailQuery } from '@/entities/document'
 import { aiSectionLabel } from '@/modules/assistant'
 
 /**
@@ -29,6 +30,8 @@ export interface Crumb {
   to?: string
   /** A page the reader may not open (#76): named generically, never linked. */
   restricted?: boolean
+  /** An act on the crumb before it (Edit): the tab title keeps both (#644). */
+  action?: boolean
 }
 
 // Route -> message key, translated at render: a crumb must follow the language
@@ -88,12 +91,23 @@ export function useCrumbs(): ComputedRef<Crumb[]> {
     })),
   )
 
-  /** Pages live inside a project, so page trails lead with the active project. */
-  function pageRoot(): Crumb[] {
-    const name = projects.activeName
+  /**
+   * A page the tree does not hold — another project's, or one opened before the
+   * tree has it — is named from its own detail (#644), the page view's query by
+   * the same key, prefetched for the server render. A page the reader may not
+   * open has no detail (403/404), so it is still never named.
+   */
+  const docId = computed(() => (route.path.startsWith('/documents/') ? String(route.params.id) : null))
+  const docQuery = useQuery(
+    computed(() => ({ ...documentDetailQuery(docId.value ?? ''), enabled: docId.value !== null })),
+  )
+
+  /** Pages live inside a project, so page trails lead with theirs — the active one unless named. */
+  function pageRoot(projectId = projects.activeId): Crumb[] {
+    const name = projectId === projects.activeId ? projects.activeName : projects.items.find((p) => p.projectId === projectId)?.name
     // The project's own page (feature 24), not the settings roster (#645).
-    return name && projects.activeId
-      ? [{ label: name, to: `/projects/${projects.activeId}` }, { label: t('nav.pages'), to: '/documents' }]
+    return name && projectId
+      ? [{ label: name, to: `/projects/${projectId}` }, { label: t('nav.pages'), to: '/documents' }]
       : [{ label: t('nav.pages'), to: '/documents' }]
   }
 
@@ -103,14 +117,16 @@ export function useCrumbs(): ComputedRef<Crumb[]> {
     if (path.startsWith('/documents/')) {
       const id = route.params.id as string
       const trail = store.pathTo(id)
-      const list: Crumb[] = pageRoot()
+      const doc = trail.length === 0 ? docQuery.data.value?.document : undefined
+      const list: Crumb[] = pageRoot(doc?.projectId ?? projects.activeId)
       // What sits above the first page the tree can draw, when some of it is
       // hidden from this reader (a guest's ungranted parent).
       for (const a of store.hiddenAbove[id] ?? []) {
         list.push(a.hidden ? { label: t('access.restrictedPage'), restricted: true } : { label: a.title, to: `/documents/${a.documentId}` })
       }
       for (const node of trail) list.push({ label: node.title, to: `/documents/${node.documentId}` })
-      if (path.endsWith('/edit')) list.push({ label: t('nav.edit') })
+      if (doc) list.push({ label: doc.title, to: `/documents/${id}` })
+      if (path.endsWith('/edit')) list.push({ label: t('nav.edit'), action: true })
       return list
     }
     // A project's own page (docs/features/24). Leads with the roster, then the
@@ -175,7 +191,7 @@ export function useCrumbs(): ComputedRef<Crumb[]> {
         // Editing is its own route, so it is its own crumb — and the workflow's
         // name above it becomes the way back to reading it, exactly as a page's
         // does under /documents/:id/edit.
-        if (path.endsWith('/edit')) list.push({ label: t('nav.edit') })
+        if (path.endsWith('/edit')) list.push({ label: t('nav.edit'), action: true })
         return list
       }
       // One connector (docs/features/32). The name is not in any store — a

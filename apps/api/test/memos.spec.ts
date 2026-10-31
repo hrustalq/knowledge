@@ -158,27 +158,44 @@ describe('MemoRetentionSweeper', () => {
     const purged: string[] = []
     const prisma = {
       memo: {
-        findMany: vi.fn(async ({ where }: { where: { status: unknown } }) =>
-          where.status === 'pending' ? [{ id: 'p1', audioKey: 'k/p1' }] : [{ id: 'd1', audioKey: 'k/d1' }],
+        findMany: vi.fn(async ({ where }: { where: { status: unknown; updatedAt?: unknown } }) =>
+          where.updatedAt
+            ? [{ id: 'lost' }]
+            : where.status === 'pending'
+              ? [{ id: 'p1', audioKey: 'k/p1' }]
+              : [{ id: 'd1', audioKey: 'k/d1' }],
         ),
         update: vi.fn(async () => ({})),
         deleteMany: vi.fn(async () => ({ count: 1 })),
       },
     }
     const storage = { purgeObjectVersions: vi.fn(async (key: string) => void purged.push(key)) }
+    const producer = { enqueue: vi.fn(async () => undefined) }
     const config = { get: () => days }
-    return { prisma, purged, run: new MemoRetentionSweeper(prisma as never, storage as never, config as never) }
+    return { prisma, purged, producer, run: new MemoRetentionSweeper(prisma as never, storage as never, producer as never, config as never) }
   }
 
   it('purges every version of settled audio past retention, keeps the transcript, and drops stale reservations', async () => {
     const { prisma, purged, run } = sweeper(30)
     const now = new Date('2026-12-01T00:00:00Z')
     await run.sweep(now)
-    const settled = prisma.memo.findMany.mock.calls[0]![0] as { where: Record<string, unknown> }
+    const settled = prisma.memo.findMany.mock.calls[1]![0] as { where: Record<string, unknown> }
     expect(settled.where).toMatchObject({ audioPurgedAt: null, status: { in: ['done', 'failed'] } })
     expect(purged).toEqual(['k/d1', 'k/p1'])
     expect(prisma.memo.update).toHaveBeenCalledWith({ where: { id: 'd1' }, data: { audioPurgedAt: now } })
     expect(prisma.memo.deleteMany).toHaveBeenCalledWith({ where: { id: 'p1', status: 'pending' } })
+  })
+
+  it('re-enqueues an uploaded or resumed memo whose job was lost (#657)', async () => {
+    const { prisma, producer, run } = sweeper(0)
+    const now = new Date('2026-12-01T00:00:00Z')
+    await run.sweep(now)
+    const relay = prisma.memo.findMany.mock.calls[0]![0] as { where: Record<string, unknown> }
+    expect(relay.where).toEqual({
+      status: { in: ['uploaded', 'transcribed'] },
+      updatedAt: { lt: new Date(now.getTime() - 10 * 60_000) },
+    })
+    expect(producer.enqueue).toHaveBeenCalledExactlyOnceWith('lost')
   })
 
   it('keeps audio forever at 0 days, but still clears abandoned reservations', async () => {

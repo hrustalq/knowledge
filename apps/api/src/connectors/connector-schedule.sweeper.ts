@@ -7,6 +7,9 @@ import { aclSyncDue } from './connector-acl.js';
 import { ConnectorsService } from './connectors.service.js';
 
 const SWEEP_INTERVAL_MS = 5 * 60_000;
+/** A run still `queued` this long after its last slice (or its creation) has probably lost its job (#657). */
+const STALE_QUEUED_MS = 15 * 60_000;
+const RELAY_BATCH = 20;
 
 /**
  * Enqueues scheduled syncs (docs/features/19), mirroring StaleSweeper, and
@@ -16,12 +19,18 @@ const SWEEP_INTERVAL_MS = 5 * 60_000;
  * second run while one is in flight — so a connector whose sync takes longer
  * than its interval falls behind rather than piling up, which is the behaviour
  * you want from a poller against a rate-limited API.
+ *
+ * It is also the outbox relay for `connector_runs` (#657), on whether or not
+ * schedules are: a run is committed `queued` before its job, so a lost enqueue
+ * would otherwise hold the connector's one in-flight slot until someone
+ * cancelled by hand.
  */
 @Injectable()
 export class ConnectorScheduleSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ConnectorScheduleSweeper.name);
   private timer?: NodeJS.Timeout;
   private running = false;
+  private schedulesEnabled = false;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -31,12 +40,37 @@ export class ConnectorScheduleSweeper implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit(): void {
-    if (!this.config.get('CONNECTOR_SCHEDULE_ENABLED', { infer: true })) {
-      this.logger.log('Connector schedule sweeper disabled (CONNECTOR_SCHEDULE_ENABLED=false)');
-      return;
+    this.schedulesEnabled = this.config.get('CONNECTOR_SCHEDULE_ENABLED', { infer: true });
+    if (!this.schedulesEnabled) {
+      this.logger.log('Connector schedules disabled (CONNECTOR_SCHEDULE_ENABLED=false); run recovery stays on');
     }
     this.timer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS);
     this.timer.unref();
+  }
+
+  /**
+   * A first slice is enqueued again under the run's own id, so a job that is
+   * merely waiting — or held back by the push debounce — absorbs it. A
+   * continuation's last jobId is not recorded, so it gets one `#relay` job:
+   * removed on completion, so a later relay can add it again, and a duplicate
+   * of a live continuation loses the processor's `status: 'queued'` claim.
+   */
+  private async relayQueued(): Promise<void> {
+    const cutoff = new Date(Date.now() - STALE_QUEUED_MS);
+    const stale = await this.prisma.connectorRun.findMany({
+      where: {
+        status: 'queued',
+        OR: [{ startedAt: null, createdAt: { lt: cutoff } }, { startedAt: { lt: cutoff } }],
+      },
+      select: { id: true, phase: true },
+      orderBy: { createdAt: 'asc' },
+      take: RELAY_BATCH,
+    });
+    for (const run of stale) {
+      this.logger.log(`Re-enqueueing stale queued connector run ${run.id}`);
+      if (run.phase === null) await this.producer.enqueue(run.id);
+      else await this.producer.enqueueRetry(run.id, 'relay');
+    }
   }
 
   onModuleDestroy(): void {
@@ -47,6 +81,8 @@ export class ConnectorScheduleSweeper implements OnModuleInit, OnModuleDestroy {
     if (this.running) return; // a slow sweep must not stack on itself
     this.running = true;
     try {
+      await this.relayQueued();
+      if (!this.schedulesEnabled) return;
       const due = await this.prisma.connector.findMany({
         where: { enabled: true, OR: [{ syncIntervalMinutes: { not: null } }, { aclMode: { not: 'off' } }] },
       });

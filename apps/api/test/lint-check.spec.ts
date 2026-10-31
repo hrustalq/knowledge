@@ -277,6 +277,8 @@ function trigger(over: {
       updateMany: vi.fn(async () => ({ count: 1 })),
     },
     aiAgent: { findUnique: vi.fn(async () => null) },
+    withTransaction: vi.fn(async (fn: () => Promise<unknown>) => fn()),
+    onCommit: vi.fn((fn: () => Promise<unknown>) => void fn()),
   };
   const checks = { ceiling: 'warn', policyFor: vi.fn(async () => ({ effective: over.effective ?? 'warn' })) };
   const skills = {

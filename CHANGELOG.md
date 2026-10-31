@@ -84,6 +84,21 @@ in the pull request that introduces them — see
   underscores (`snake_case`) keep them.
 - **The web server no longer sends `X-Powered-By: Express`** (#645), and app pages now state
   `Referrer-Policy: strict-origin-when-cross-origin` (the browsers' default) beside the other security headers.
+- **Search results can be reached from the keyboard** (#651). In the search sheet and on `/search`, ↓ and ↑ now
+  move through the results while you stay in the query field, Enter opens the marked one, and screen readers
+  hear which result is marked. The bare relevance number beside each result (such as `0.0325`) is gone. It
+  was a rank-fusion value, not a percentage, and read as a weak match.
+- **A merge request's breadcrumb shows its title** (#651), not the first eight characters of its id.
+- **The assistant's example prompts can be clicked, and come from your own pages** (#651). Clicking one puts it
+  in the message box, ready to send or reword. The examples name the project's pages instead of topics that
+  may not exist in your workspace. A chat with no title or messages yet is called "Untitled chat" (translated),
+  not "New chat", so it no longer reads as a second New chat button.
+- **The first visit to the knowledge-base graph reads it once** (#651). Right after signing in, the page read
+  the whole workspace's graph, release tags and timeline, then read them again for the project. It now waits
+  for the project and reads each once.
+- **A wrong password is reported on the form** (#651), not only in a passing notification. The message appears
+  under the fields and is read out by screen readers, the password field is marked invalid, and the cursor
+  goes back to it.
 
 ## [0.41.0] — 2026-10-31
 

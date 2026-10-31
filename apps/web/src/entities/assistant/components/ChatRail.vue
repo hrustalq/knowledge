@@ -132,7 +132,7 @@ function open(threadId: string) {
                 class="truncate text-sm leading-tight"
                 :class="thread.id === assistant.activeThread?.id ? 'font-medium text-primary' : 'text-foreground/90'"
               >
-                {{ threadLabel(thread) }}
+                {{ threadLabel(thread, t('chat.untitled')) }}
               </span>
               <span class="truncate text-caption text-muted-foreground">{{ relativeTime(thread.updatedAt) }}</span>
             </button>
@@ -145,7 +145,7 @@ function open(threadId: string) {
                   variant="ghost"
                   size="icon-sm"
                   class="mr-1 shrink-0 opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
-                  :aria-label="t('chat.actionsFor', { name: threadLabel(thread) })"
+                  :aria-label="t('chat.actionsFor', { name: threadLabel(thread, t('chat.untitled')) })"
                 >
                   <MoreHorizontal class="size-4" />
                 </Button>

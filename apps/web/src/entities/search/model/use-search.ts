@@ -43,8 +43,6 @@ export interface SearchHit {
   /** `href` leaves the app (a chat platform's link, #339): opens in a new tab. */
   external?: boolean
   snippet: SearchSnippetPart[]
-  /** Omitted where the source does not rank by a score worth showing. */
-  score?: number
   trust?: SourceVerificationState
   badges: { key: string; label: string }[]
   /** #81: when this text stopped being the page's content, on an `asOf` search. */

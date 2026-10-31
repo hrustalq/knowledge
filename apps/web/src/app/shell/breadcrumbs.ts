@@ -1,6 +1,9 @@
 import { computed, type ComputedRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
+import { useQuery } from '@tanstack/vue-query'
+import type { MergeRequestInfo } from '@knowledge/contracts'
+import { apiQueryOptions } from '@/shared/api/queries'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
 import { useWorkflowsStore } from '@/entities/workflow'
@@ -72,6 +75,19 @@ export function useCrumbs(): ComputedRef<Crumb[]> {
   const projects = useProjectsStore()
   const workflows = useWorkflowsStore()
 
+  /**
+   * A merge request's crumb is its title (#651). The query is the detail page's
+   * own, by the same key, so it shares that request rather than adding one; off
+   * the route it is disabled.
+   */
+  const mrId = computed(() => (route.path.startsWith('/merge-requests/') ? String(route.params.id) : null))
+  const mrQuery = useQuery(
+    computed(() => ({
+      ...apiQueryOptions('/v1/merge-requests/{id}', { path: { id: mrId.value ?? '' } }),
+      enabled: mrId.value !== null,
+    })),
+  )
+
   /** Pages live inside a project, so page trails lead with the active project. */
   function pageRoot(): Crumb[] {
     const name = projects.activeName
@@ -106,9 +122,10 @@ export function useCrumbs(): ComputedRef<Crumb[]> {
       return [{ label: t('nav.projects'), to: '/settings/projects' }, { label: name }]
     }
     if (path.startsWith('/merge-requests/')) {
+      const mr = (mrQuery.data.value as { mergeRequest: MergeRequestInfo } | undefined)?.mergeRequest
       return [
         { label: t('nav.mergeRequests'), to: '/merge-requests' },
-        { label: (route.params.id as string).slice(0, 8) },
+        { label: mr?.title ?? (route.params.id as string).slice(0, 8) },
       ]
     }
     if (path.startsWith('/settings')) {

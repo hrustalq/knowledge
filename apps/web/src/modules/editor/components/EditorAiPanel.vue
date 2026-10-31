@@ -49,7 +49,7 @@ const pane = ref<InstanceType<typeof ChatPane> | null>(null)
 /** The chat, or the list of chats — one column, so browsing replaces rather than squeezes. */
 const view = ref<'chat' | 'threads'>('chat')
 
-const subtitle = computed(() => (assistant.activeThread ? threadLabel(assistant.activeThread) : t('editorAi.newChat')))
+const subtitle = computed(() => (assistant.activeThread ? threadLabel(assistant.activeThread, t('chat.untitled')) : t('editorAi.newChat')))
 
 /** Settles once the panel knows which chat it is showing — what `fill` waits for. */
 let opened: Promise<void> = Promise.resolve()

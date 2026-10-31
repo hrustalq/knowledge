@@ -61,7 +61,7 @@ const auth = useAuthStore()
 const composerEl = ref<InstanceType<typeof ChatComposer> | null>(null)
 const transcriptEl = ref<InstanceType<typeof ChatTranscript> | null>(null)
 
-const title = computed(() => (assistant.activeThread ? threadLabel(assistant.activeThread) : t('chat.newChat')))
+const title = computed(() => (assistant.activeThread ? threadLabel(assistant.activeThread, t('chat.untitled')) : t('chat.newChat')))
 
 const placeholder = computed(() =>
   props.embedded
@@ -181,6 +181,7 @@ async function handleEdit(payload: { message: AssistantMessageInfo; content: str
 /** For a host's empty state: put a suggestion in the composer, ready to send or reword. */
 function prefill(text: string) {
   composerEl.value?.setDraft(text)
+  void nextTick(() => composerEl.value?.focus())
 }
 
 /**
@@ -261,6 +262,7 @@ async function startNewThread() {
       @switch-mode="handleModeSwitch"
       @reset="resetting = $event"
       @edit="handleEdit"
+      @prompt="prefill"
     >
       <template v-if="$slots.empty" #empty>
         <slot name="empty" :prefill="prefill" />

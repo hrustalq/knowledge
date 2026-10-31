@@ -15,7 +15,7 @@
  * An LDAP provider (#75 phase 7) has no identity provider to redirect to: its
  * button opens a username + password step in this card instead.
  */
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
@@ -69,8 +69,18 @@ onMounted(async () => {
 const emailFirst = computed(() => sso.value !== null)
 const showPassword = computed(() => !emailFirst.value || step.value === 'password')
 
+/**
+ * A refused sign-in is said under the form, not only in a toast (#651): the
+ * message is announced (`role="alert"`), the password field is marked invalid
+ * and takes focus, so the next keystroke retypes it.
+ */
+const formError = ref<string | null>(null)
+const passwordInvalid = ref(false)
+watch(password, () => (passwordInvalid.value = false))
+
 async function submit() {
   busy.value = true
+  formError.value = null
   try {
     if (emailFirst.value && step.value === 'email') {
       const found = await auth.discover(email.value)
@@ -80,16 +90,24 @@ async function submit() {
       step.value = found.method === 'sso' ? 'sso' : 'password'
       return
     }
-    await auth.login(email.value, password.value)
+    try {
+      await auth.login(email.value, password.value)
+    } catch (e) {
+      formError.value = (e as Error).message
+      passwordInvalid.value = true
+      void nextTick(() => document.getElementById('password')?.focus())
+      return
+    }
     await router.push(redirect.value)
   } catch (e) {
-    toast.error((e as Error).message)
+    formError.value = (e as Error).message
   } finally {
     busy.value = false
   }
 }
 
 function changeEmail() {
+  formError.value = null
   step.value = 'email'
   password.value = ''
   matched.value = []
@@ -218,9 +236,18 @@ async function submitLdap() {
             <p v-if="emailFirst && !passwordAllowed" class="text-sm text-muted-foreground">{{ t(domainEnforced ? 'auth.sso.domainEnforced' : 'auth.sso.passwordDisabled') }}</p>
             <div v-else class="space-y-1">
               <label class="text-sm font-medium" for="password">{{ t('auth.password') }}</label>
-              <Input id="password" v-model="password" type="password" required autocomplete="current-password" />
+              <Input
+                id="password"
+                v-model="password"
+                type="password"
+                required
+                autocomplete="current-password"
+                :aria-invalid="passwordInvalid || undefined"
+                :aria-describedby="passwordInvalid ? 'login-error' : undefined"
+              />
             </div>
           </template>
+          <p v-if="formError" id="login-error" role="alert" class="text-sm text-destructive">{{ formError }}</p>
           <Button v-if="!showPassword" class="w-full" type="submit" :disabled="busy">
             {{ busy ? t('auth.sso.checking') : t('auth.sso.continue') }}
           </Button>

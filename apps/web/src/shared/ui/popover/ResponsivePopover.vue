@@ -43,6 +43,13 @@ const props = withDefaults(
     sideOffset?: number
     /** Applied to the popover box; the sheet sizes itself. */
     panelClass?: HTMLAttributes['class']
+    /**
+     * Open with focus on the panel, not its first control — for a panel whose
+     * first control acts at once (the bell's "Mark all as read", #649), where
+     * the Enter that opened it would be one keypress from firing it. The sheet
+     * always does this.
+     */
+    focusPanel?: boolean
   }>(),
   { side: 'top', align: 'start', sideOffset: 8 },
 )
@@ -53,6 +60,12 @@ const sheetEl = ref<unknown>(null)
 
 function close() {
   open.value = false
+}
+
+function onPopoverOpen(event: Event) {
+  if (!props.focusPanel) return
+  event.preventDefault()
+  ;(event.target as HTMLElement | null)?.focus()
 }
 
 function onSheetOpen(event: Event) {
@@ -74,6 +87,7 @@ function onSheetOpen(event: Event) {
       :side-offset="sideOffset"
       :class="props.panelClass"
       :aria-label="title"
+      @open-auto-focus="onPopoverOpen"
     >
       <slot :compact="false" :close="close" />
     </PopoverContent>

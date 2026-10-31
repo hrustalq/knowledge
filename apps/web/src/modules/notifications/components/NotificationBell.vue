@@ -67,6 +67,7 @@ watch(
     align="end"
     side="bottom"
     panel-class="w-[22rem] p-2"
+    focus-panel
   >
     <!-- Named by its content, so the visible count is part of the name
          (WCAG 2.5.3) — an aria-label would drop it. -->

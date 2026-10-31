@@ -44,7 +44,9 @@ withDefaults(
 
 <template>
   <div class="kn-subrail" :data-open="permanent || open" :style="{ '--kn-subrail-w': width }">
-    <nav :aria-label="label" class="kn-subrail-inner bg-sidebar">
+    <!-- Closed is 0px wide (or tall), not gone: without `inert` its buttons
+         stay in the tab order, invisible under the app sidebar (#649). -->
+    <nav :aria-label="label" class="kn-subrail-inner bg-sidebar" :inert="!permanent && !open">
       <slot />
     </nav>
   </div>

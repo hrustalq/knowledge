@@ -19,8 +19,11 @@ import { getSidebarPane, setSidebarPane, type SidebarPane } from '@/shared/api/a
 export const useSidebarNavStore = defineStore('sidebarNav', {
   state: () => ({
     pane: getSidebarPane() as SidebarPane,
-    /** Drives which transition plays; 'pop' only ever follows a `back()`. */
-    direction: 'push' as 'push' | 'pop',
+    /**
+     * Drives which transition plays; 'pop' only ever follows a `back()`, and
+     * 'none' a `land()` — a pane resolved on load was never travelled to.
+     */
+    direction: 'push' as 'push' | 'pop' | 'none',
   }),
   actions: {
     go(pane: SidebarPane, direction: 'push' | 'pop') {
@@ -36,6 +39,15 @@ export const useSidebarNavStore = defineStore('sidebarNav', {
     /** Back out to the project roster. */
     back() {
       this.go('projects', 'pop')
+    },
+    /**
+     * Start on a pane the load resolved (#671): no transition and no cookie,
+     * because nobody chose it — the remembered pane still stands for the next
+     * load that does not resolve one.
+     */
+    land(pane: SidebarPane) {
+      this.direction = 'none'
+      this.pane = pane
     },
   },
 })

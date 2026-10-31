@@ -22,6 +22,7 @@ function appPinia(queryClient = new QueryClient({ defaultOptions: { queries: { r
 
 const { useProjectsStore } = await import('./projects')
 const { useWorkspacesStore } = await import('./workspaces')
+const { useSidebarNavStore } = await import('./sidebar-nav')
 
 const project = (projectId: string) => ({ projectId, name: projectId })
 
@@ -132,5 +133,47 @@ describe('roster fetches share one request while in flight (#279)', () => {
     await direct
     expect(store.loaded).toBe(true)
     expect(store.items).toHaveLength(1)
+  })
+})
+
+describe('a one-project roster lands the rail on its pages (#671)', () => {
+  it('the first load of one project opens Pages without travel or a cookie write', async () => {
+    apiFetch.mockResolvedValue({ projects: [project('p-1')] })
+    const nav = useSidebarNavStore()
+    expect(nav.pane).toBe('projects')
+    await useProjectsStore().fetchList()
+    expect(nav.pane).toBe('pages')
+    expect(nav.direction).toBe('none')
+    expect(document.cookie).not.toContain('pages')
+  })
+
+  it('zero or two projects leave the remembered pane alone', async () => {
+    for (const projects of [[], [project('p-1'), project('p-2')]]) {
+      setActivePinia(appPinia().pinia)
+      apiFetch.mockResolvedValueOnce({ projects })
+      await useProjectsStore().fetchList()
+      expect(useSidebarNavStore().pane).toBe('projects')
+    }
+  })
+
+  it('a roster that drops to one mid-session does not move the rail', async () => {
+    apiFetch.mockResolvedValueOnce({ projects: [project('p-1'), project('p-2')] })
+    const store = useProjectsStore()
+    await store.fetchList()
+    apiFetch.mockResolvedValueOnce({ projects: [project('p-1')] })
+    await queryClient.invalidateQueries({ queryKey: ['/v1/projects'] })
+    expect(store.items).toHaveLength(1)
+    expect(useSidebarNavStore().pane).toBe('projects')
+  })
+
+  it('back from a landed pane holds for the session', async () => {
+    apiFetch.mockResolvedValue({ projects: [project('p-1')] })
+    const store = useProjectsStore()
+    await store.fetchList()
+    const nav = useSidebarNavStore()
+    nav.back()
+    await store.fetchList({ fresh: true })
+    expect(nav.pane).toBe('projects')
+    expect(nav.direction).toBe('pop')
   })
 })

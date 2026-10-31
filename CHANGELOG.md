@@ -33,6 +33,16 @@ in the pull request that introduces them — see
   formats in one menu. The panel holds focus while open, closes on ×, the backdrop or Escape, and hands focus
   back to the button. Wider screens are unchanged.
 
+### Changed
+
+- **A workspace with one project opens the rail on its pages** (#671). The left rail used to start on the
+  project roster whenever it had not been left on Pages: after a first visit, a workspace switch, or a reload
+  after going back. With a single project that meant clicking its only row before any page was reachable. Now a
+  one-project workspace always loads straight into the page tree, server-rendered with no slide-in, on the
+  desktop rail and the phone drawer alike. The project's name at the top still goes back to the roster and its
+  **+ New project** button, and that stays put for the rest of the visit. Workspaces with no projects or with
+  several behave as before.
+
 ### Operations
 
 - **Run `make page-links-backfill` once after deploying #673** (in production, `node

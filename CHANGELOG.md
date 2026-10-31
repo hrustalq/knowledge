@@ -15,6 +15,27 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Added
+
+- **A page knows which pages link to it** (#673). Every internal link on a page's published version is now
+  recorded with the heading it points at: the `/documents/<id>#heading` form the editor writes, and the same
+  address pasted in full from this deployment's own web address (`WEB_BASE_URL`); links to anywhere else are
+  not. A **Linked from** widget in the page rail lists those pages with the headings they cite, and appears
+  only when there are any. `GET /v1/documents/:id/backlinks` returns the same list (`?anchor=` narrows it to
+  one heading), and MCP `knowledge_get_document` now carries it as `backlinks`. A page the reader may not
+  open is left out entirely, never counted, and pages still awaiting a merge request or archived are not
+  listed. A link removed from a page drops off once its new version is indexed, and a deleted page takes
+  its links with it. A draft branch links nothing until it is merged.
+
+### Operations
+
+- **Run `make page-links-backfill` once after deploying #673** (in production, `node
+  dist/scripts/page-links-backfill.main.js` in the API container). Pages indexed earlier have no recorded
+  links until their next edit; the script reads each page's indexed published version and records them.
+  Idempotent and safe beside a running worker; `--dry-run` only counts, `--workspace <id>` limits it to one
+  workspace. The migration only adds the `page_links` table, which the previous release never reads, so a
+  rollback by retag needs nothing.
+
 ### Fixed
 
 - **Every browser tab was titled "Knowledge"** (#644). The member app now names the route in the tab, in

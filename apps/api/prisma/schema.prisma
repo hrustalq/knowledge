@@ -4397,6 +4397,25 @@ model RevisionEmbed {
   @@map("revision_embeds")
 }
 
+/// One internal link on a page's default-branch head (#673): `/documents/<id>`
+/// or the same path on WEB_BASE_URL, with its `#anchor` when it has one. The
+/// worker replaces a page's rows whenever its head is indexed, so the table
+/// only ever holds what the pages say now; backlinks read it by target. No FK
+/// on either document (house policy): a target may not exist, and the source's
+/// rows go with it in `cascadeDocuments`.
+model PageLink {
+  id               String  @id @default(uuid()) @db.Uuid
+  workspaceId      String  @map("workspace_id") @db.Uuid
+  sourceDocumentId String  @map("source_document_id") @db.Uuid
+  sourceRevisionId String  @map("source_revision_id") @db.Uuid
+  targetDocumentId String  @map("target_document_id") @db.Uuid
+  targetAnchor     String? @map("target_anchor")
+
+  @@index([sourceDocumentId])
+  @@index([workspaceId, targetDocumentId])
+  @@map("page_links")
+}
+
 /// A pinned node as it is in Figma now (#470): the file's current version and
 /// the node's subtree hash, written by the Figma connector's change check.
 /// "Design changed" is derived on read — this hash against the pinned one in

@@ -322,7 +322,8 @@
       "named": "Branch {name} — not published.",
       "edit": "Open in editor",
       "published": "Published page"
-    }
+    },
+    "backlinksHint": "Pages whose current text links here."
   },
   "settings": {
     "projectsHint": "Organize documents",
@@ -2079,7 +2080,8 @@
     "tools": "no tools | {n} tool | {n} tools",
     "openIssues": "{n} open report | {n} open reports",
     "usages": "{n} usage site | {n} usage sites",
-    "branches": "No branches | {n} branch | {n} branches"
+    "branches": "No branches | {n} branch | {n} branches",
+    "backlinks": "{n} page | {n} pages"
   },
   "chat": {
     "needsAgentMode": "This needs Agent mode",
@@ -3172,7 +3174,8 @@
     "quality": "Quality",
     "conflicts": "Contradictions",
     "insights": "Insights",
-    "branches": "Branches"
+    "branches": "Branches",
+    "linkedFrom": "Linked from"
   },
   "knowledgeIssue": {
     "report": "Report a problem",

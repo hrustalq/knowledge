@@ -9785,6 +9785,51 @@
       "ancestors"
     ]
   },
+  "DocumentBacklink": {
+    "type": "object",
+    "properties": {
+      "documentId": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string"
+      },
+      "projectId": {
+        "type": "string",
+        "nullable": true
+      },
+      "anchors": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "documentId",
+      "title",
+      "projectId",
+      "anchors"
+    ]
+  },
+  "DocumentBacklinksResponse": {
+    "type": "object",
+    "properties": {
+      "documentId": {
+        "type": "string"
+      },
+      "backlinks": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/DocumentBacklink"
+        }
+      }
+    },
+    "required": [
+      "documentId",
+      "backlinks"
+    ]
+  },
   "DocumentCategory": {
     "type": "string",
     "enum": [

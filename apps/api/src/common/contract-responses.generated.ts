@@ -106,6 +106,7 @@ import type {
   DeleteWorkspaceResponse,
   DismissAgentFindingResponse,
   DocumentAncestorsResponse,
+  DocumentBacklinksResponse,
   DocumentConnectorResponse,
   DocumentContentResponse,
   DocumentDetailResponse,
@@ -446,6 +447,7 @@ export interface ContractResponses {
   DeleteWorkspaceResponse: DeleteWorkspaceResponse;
   DismissAgentFindingResponse: DismissAgentFindingResponse;
   DocumentAncestorsResponse: DocumentAncestorsResponse;
+  DocumentBacklinksResponse: DocumentBacklinksResponse;
   DocumentConnectorResponse: DocumentConnectorResponse;
   DocumentContentResponse: DocumentContentResponse;
   DocumentDetailResponse: DocumentDetailResponse;

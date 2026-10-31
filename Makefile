@@ -150,6 +150,11 @@ graph-live-backfill: ## One-time (#83, #81): stamp each page's live revision and
 	$(API) run build
 	$(API) exec node dist/scripts/graph-live-backfill.main.js $(ARGS)
 
+.PHONY: page-links-backfill
+page-links-backfill: ## One-time (#673): record the links on every page's indexed head, for backlinks. ARGS="--workspace <id>" | "--dry-run"
+	$(API) run build
+	$(API) exec node dist/scripts/page-links-backfill.main.js $(ARGS)
+
 .PHONY: clean
 clean: ## Remove build artifacts and turbo cache
 	rm -rf .turbo apps/api/dist apps/web/dist

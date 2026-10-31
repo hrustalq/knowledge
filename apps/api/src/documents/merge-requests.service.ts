@@ -188,47 +188,47 @@ export class MergeRequestsService {
     await this.rejectDuplicateOpen(source, target);
     this.assertTargetsExist(await this.changedPages(source, target.name), target.name);
 
-    const mr = await this.prisma.mergeRequest.create({
-      data: {
-        documentId,
-        sourceBranchId: source.id,
-        targetBranchId: target.id,
+    // The row, the un-restricted branches and the author's subscription are one
+    // change (#658): an open MR over a branch its readers cannot open is worse
+    // than no MR. `recordActivity` defers its publish to the commit.
+    const mr = await this.prisma.withTransaction(async () => {
+      const mr = await this.prisma.mergeRequest.create({
+        data: {
+          documentId,
+          sourceBranchId: source.id,
+          targetBranchId: target.id,
+          title: dto.title,
+          description: dto.description ?? null,
+          authorId,
+          ...(opts.provenance ? { provenance: opts.provenance } : {}),
+          ...(opts.captureId ? { captureId: opts.captureId } : {}),
+        },
+        include: MR_INCLUDE,
+      });
+      // A merge request is read by everyone who can read the page, so a private
+      // branch it names stops being private (#474), on every page it spans
+      // (#636). Only someone who may edit that branch got this far (the guard
+      // holds `sourceBranch` and `targetBranch`).
+      await this.prisma.documentBranch.updateMany({
+        where: {
+          OR: [{ id: { in: [source.id, target.id] } }, ...(source.projectBranchId ? [{ projectBranchId: source.projectBranchId }] : [])],
+          restricted: true,
+        },
+        data: { restricted: false },
+      });
+      const page = await this.recordActivity(mr.documentId, 'merge-request.created', mr.id, authorId, {
         title: dto.title,
-        description: dto.description ?? null,
-        authorId,
-        ...(opts.provenance ? { provenance: opts.provenance } : {}),
-        ...(opts.captureId ? { captureId: opts.captureId } : {}),
-      },
-      include: MR_INCLUDE,
+        sourceBranch: source.name,
+        targetBranch: target.name,
+      });
+      // Opening a merge request is watching it. Recorded as a subscription rather
+      // than inferred from `authorId` at fan-out time so that unwatching your own
+      // merge request actually works.
+      if (page) {
+        await this.notifications.ensureSubscription(page.workspaceId, authorId, 'merge-request', mr.id, 'author');
+      }
+      return mr;
     });
-    // A merge request is read by everyone who can read the page, so a private
-    // branch it names stops being private (#474), on every page it spans
-    // (#636). Only someone who may edit that branch got this far (the guard
-    // holds `sourceBranch` and `targetBranch`).
-    await this.prisma.documentBranch.updateMany({
-      where: {
-        OR: [{ id: { in: [source.id, target.id] } }, ...(source.projectBranchId ? [{ projectBranchId: source.projectBranchId }] : [])],
-        restricted: true,
-      },
-      data: { restricted: false },
-    });
-    const page = await this.recordActivity(mr.documentId, 'merge-request.created', mr.id, authorId, {
-      title: dto.title,
-      sourceBranch: source.name,
-      targetBranch: target.name,
-    });
-    // Opening a merge request is watching it. Recorded as a subscription rather
-    // than inferred from `authorId` at fan-out time so that unwatching your own
-    // merge request actually works.
-    if (page) {
-      await this.notifications.ensureSubscription(
-        page.workspaceId,
-        authorId,
-        'merge-request',
-        mr.id,
-        'author',
-      );
-    }
     return { mergeRequest: await this.toDetail(mr) };
   }
 

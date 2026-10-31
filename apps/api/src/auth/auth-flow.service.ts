@@ -80,30 +80,37 @@ export class AuthFlowService {
     const existing = await this.prisma.user.findUnique({ where: { email: normalized } });
     if (existing) throw new ConflictException(t('error.auth.emailTaken'));
 
-    const user = await this.prisma.user.create({
-      data: {
-        email: normalized,
-        displayName: displayName.trim(),
-        passwordHash: await hashPassword(password),
-        // The language the signup form was in, so the first mail can be read.
-        locale: currentLocale(),
-      },
-    });
-    await this.sendVerification(user);
+    const passwordHash = await hashPassword(password);
+    // The account, its verification token and its default membership are one
+    // commit (#658): a user left without the membership could not retry, the
+    // address being taken. The mail is enqueued after the commit.
+    const user = await this.prisma.withTransaction(async () => {
+      const user = await this.prisma.user.create({
+        data: {
+          email: normalized,
+          displayName: displayName.trim(),
+          passwordHash,
+          // The language the signup form was in, so the first mail can be read.
+          locale: currentLocale(),
+        },
+      });
+      await this.sendVerification(user);
 
-    // Auto-join the default workspace (demo by default) so the app is usable
-    // right after signup. Skipped silently when unset or not yet created.
-    const workspaceId = this.config.get<string>('AUTH_DEFAULT_WORKSPACE_ID');
-    if (workspaceId) {
-      const workspace = await this.prisma.workspace.findUnique({ where: { id: workspaceId } });
-      if (workspace) {
-        await this.prisma.workspaceMember.upsert({
-          where: { workspaceId_userId: { workspaceId, userId: user.id } },
-          update: {},
-          create: { workspaceId, userId: user.id, role: this.config.get<string>('AUTH_DEFAULT_ROLE') ?? 'viewer' },
-        });
+      // Auto-join the default workspace (demo by default) so the app is usable
+      // right after signup. Skipped silently when unset or not yet created.
+      const workspaceId = this.config.get<string>('AUTH_DEFAULT_WORKSPACE_ID');
+      if (workspaceId) {
+        const workspace = await this.prisma.workspace.findUnique({ where: { id: workspaceId } });
+        if (workspace) {
+          await this.prisma.workspaceMember.upsert({
+            where: { workspaceId_userId: { workspaceId, userId: user.id } },
+            update: {},
+            create: { workspaceId, userId: user.id, role: this.config.get<string>('AUTH_DEFAULT_ROLE') ?? 'viewer' },
+          });
+        }
       }
-    }
+      return user;
+    });
     return this.issueSession(user, meta, { authMethod: 'password', workspaceId: null, via: 'signup' });
   }
 
@@ -273,16 +280,20 @@ export class AuthFlowService {
     if (!row || row.expiresAt < now || row.user.email !== row.email || row.user.disabledAt) {
       throw new BadRequestException(t('error.auth.invalidVerifyToken'));
     }
-    const spent = await this.prisma.emailVerificationToken.updateMany({
-      where: { id: row.id, usedAt: null },
-      data: { usedAt: now },
+    // The spent token and the verified address commit together (#658), or a
+    // failure between them burns the link and leaves the address unverified.
+    await this.prisma.withTransaction(async () => {
+      const spent = await this.prisma.emailVerificationToken.updateMany({
+        where: { id: row.id, usedAt: null },
+        data: { usedAt: now },
+      });
+      // Already used: fine if it already verified (the second tab of a double
+      // click), refused otherwise.
+      if (spent.count === 0 && !row.user.emailVerifiedAt) {
+        throw new BadRequestException(t('error.auth.invalidVerifyToken'));
+      }
+      await this.prisma.user.updateMany({ where: { id: row.userId, emailVerifiedAt: null }, data: { emailVerifiedAt: now } });
     });
-    // Already used: fine if it already verified (the second tab of a double
-    // click), refused otherwise.
-    if (spent.count === 0 && !row.user.emailVerifiedAt) {
-      throw new BadRequestException(t('error.auth.invalidVerifyToken'));
-    }
-    await this.prisma.user.updateMany({ where: { id: row.userId, emailVerifiedAt: null }, data: { emailVerifiedAt: now } });
   }
 
   async resendVerification(principal: Principal): Promise<ResendVerificationResponse> {
@@ -312,7 +323,9 @@ export class AuthFlowService {
     await this.prisma.emailVerificationToken.create({
       data: { userId: user.id, email: user.email, tokenHash, expiresAt: new Date(Date.now() + hours * 3_600_000) },
     });
-    await this.mail.enqueue({ template: 'verify-email', userId: user.id, token });
+    // Post-commit: `signup` calls this inside its boundary, and a mail for a
+    // token that rolled back would carry a dead link. Never throws either way.
+    this.prisma.onCommit(() => this.mail.enqueue({ template: 'verify-email', userId: user.id, token }));
     return token;
   }
 

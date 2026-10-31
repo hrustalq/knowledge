@@ -222,48 +222,66 @@ export class ConnectorItemsService {
         throw new ConflictException(t('error.connector.revertHasChildren', { count: children }));
       }
 
+      // Outside any boundary: `cascadeDocuments` opens a raw `$transaction`,
+      // which deadlocks against an open one (prisma/transaction.ts). A crash
+      // after it leaves the item `applied` over a deleted page, and a second
+      // REVERT finds no page and only records the revert.
       const document = await this.prisma.document.findUnique({ where: { id: item.documentId } });
       if (document) {
         await this.cascade.cascadeDocuments([item.documentId], document.workspaceId);
       }
-    } else if (item.previousRevisionId) {
-      const previous = await this.prisma.documentRevision.findUnique({ where: { id: item.previousRevisionId } });
-      if (!previous) throw new ConflictException(t('error.connector.revertNoPrevious'));
-
-      const markdown = await this.storage.getObjectText(previous.s3Key);
-      const revision = await this.documents.createRevision(item.documentId, {
-        message: t('connector.revertRevisionMessage'),
-        contentType: 'text/markdown',
-      });
-      const row = await this.prisma.documentRevision.findUniqueOrThrow({ where: { id: revision.revisionId } });
-      await this.storage.putObjectText(row.s3Key, markdown, 'text/markdown');
-      await this.documents.finalizeRevision(item.documentId, revision.revisionId);
-
-      if (item.linkId) {
-        await this.prisma.connectorLink.update({
-          where: { id: item.linkId },
-          data: { contentHash: sha256(markdown), revisionId: revision.revisionId },
-        });
-      }
-    } else {
-      throw new ConflictException(t('error.connector.revertNoPrevious'));
+      return this.recordRevert(item);
     }
+    if (!item.previousRevisionId) throw new ConflictException(t('error.connector.revertNoPrevious'));
+    const previous = await this.prisma.documentRevision.findUnique({ where: { id: item.previousRevisionId } });
+    if (!previous) throw new ConflictException(t('error.connector.revertNoPrevious'));
+    const markdown = await this.storage.getObjectText(previous.s3Key);
 
-    const run = await this.prisma.connectorRun.update({
-      where: { id: item.runId },
-      data: { reverted: { increment: 1 } },
-    });
-    await this.events.publish({
-      workspaceId: run.workspaceId,
-      type: 'connector.item.reverted',
-      subjectId: run.id,
-      documentId: item.documentId,
-      title: item.title,
-    });
+    // The restoring revision, the link's `contentHash` and the item commit
+    // together (#658), or the next pull reads our own revert as a local edit.
+    // The MinIO PUT is inside, hence `createPage`'s raised timeout.
+    const documentId = item.documentId;
+    return this.prisma.withTransaction(
+      async () => {
+        const revision = await this.documents.createRevision(documentId, {
+          message: t('connector.revertRevisionMessage'),
+          contentType: 'text/markdown',
+        });
+        const row = await this.prisma.documentRevision.findUniqueOrThrow({ where: { id: revision.revisionId } });
+        await this.storage.putObjectText(row.s3Key, markdown, 'text/markdown');
+        await this.documents.finalizeRevision(documentId, revision.revisionId);
+        if (item.linkId) {
+          await this.prisma.connectorLink.update({
+            where: { id: item.linkId },
+            data: { contentHash: sha256(markdown), revisionId: revision.revisionId },
+          });
+        }
+        return this.recordRevert(item);
+      },
+      { timeout: 30_000, maxWait: 10_000 },
+    );
+  }
 
-    return this.prisma.connectorRunItem.update({
-      where: { id: item.id },
-      data: { status: 'reverted', createdDocument: false },
+  /** The run's counter and the item's status move together; the frame follows the commit. */
+  private recordRevert(item: ConnectorRunItem): Promise<ConnectorRunItem> {
+    return this.prisma.withTransaction(async () => {
+      const run = await this.prisma.connectorRun.update({
+        where: { id: item.runId },
+        data: { reverted: { increment: 1 } },
+      });
+      this.prisma.onCommit(() =>
+        this.events.publish({
+          workspaceId: run.workspaceId,
+          type: 'connector.item.reverted',
+          subjectId: run.id,
+          documentId: item.documentId ?? undefined,
+          title: item.title,
+        }),
+      );
+      return this.prisma.connectorRunItem.update({
+        where: { id: item.id },
+        data: { status: 'reverted', createdDocument: false },
+      });
     });
   }
 
@@ -350,11 +368,15 @@ export class ConnectorItemsService {
         });
         break;
       case 'APPROVE_ALL':
-        await this.prisma.connectorRunItem.updateMany({
-          where: { runId, status: 'staged' },
-          data: { status: 'approved' },
+        // One commit (#658): approved items under a run still `awaiting-review`
+        // hide APPROVE_ALL and strand the run.
+        await this.prisma.withTransaction(async () => {
+          await this.prisma.connectorRunItem.updateMany({
+            where: { runId, status: 'staged' },
+            data: { status: 'approved' },
+          });
+          await this.startApplying(runId, run);
         });
-        await this.startApplying(runId, run);
         break;
     }
 
@@ -370,15 +392,16 @@ export class ConnectorItemsService {
    * restart the walk they stopped.
    */
   private async startApplying(runId: string, run: ConnectorRun): Promise<void> {
+    // Enqueues are post-commit: APPROVE_ALL calls this inside its boundary.
     if (run.status === 'paused') {
-      await this.producer.enqueueTask(runId, { kind: 'apply' }, String(Date.now()));
+      this.prisma.onCommit(() => this.producer.enqueueTask(runId, { kind: 'apply' }, String(Date.now())));
       return;
     }
     await this.prisma.connectorRun.update({
       where: { id: runId },
       data: { status: 'queued', phase: 'applying' },
     });
-    await this.producer.enqueueRetry(runId, String(run.discovered + run.applied + 1));
+    this.prisma.onCommit(() => this.producer.enqueueRetry(runId, String(run.discovered + run.applied + 1)));
   }
 
   /**

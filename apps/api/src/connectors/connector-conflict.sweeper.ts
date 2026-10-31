@@ -59,24 +59,33 @@ export class ConnectorConflictSweeper implements OnModuleInit, OnModuleDestroy {
       for (const conflict of pending) {
         try {
           if (supersedes(conflict.reason) && (await this.supersededBeforeOpening(conflict))) continue;
-          const created = await withLocale(asLocale(conflict.connector.locale), async () =>
-            this.mergeRequests.create(
-              conflict.documentId,
-              await this.mergeRequestText(conflict, conflict.connector),
-              // A regenerated wiki page is the connector owner's act (docs/features/46):
-              // their agent wrote it, their budget paid for it. A conflict keeps
-              // the stub it always had — nobody in particular raised it.
-              conflict.reason === 'regenerated' && conflict.connector.createdBy ? conflict.connector.createdBy : undefined,
-            ),
+          // The merge request and the conflict's `resolved` commit together
+          // (#658): an open MR under a still-`pending` conflict makes the next
+          // sweep hit `rejectDuplicateOpen` and mark the conflict `failed`.
+          // The text is read first, so no boundary waits on storage; the
+          // failure write in the catch stays outside, so it survives.
+          const locale = asLocale(conflict.connector.locale);
+          const text = await withLocale(locale, () => this.mergeRequestText(conflict, conflict.connector));
+          await withLocale(locale, () =>
+            this.prisma.withTransaction(async () => {
+              const created = await this.mergeRequests.create(
+                conflict.documentId,
+                text,
+                // A regenerated wiki page is the connector owner's act (docs/features/46):
+                // their agent wrote it, their budget paid for it. A conflict keeps
+                // the stub it always had — nobody in particular raised it.
+                conflict.reason === 'regenerated' && conflict.connector.createdBy ? conflict.connector.createdBy : undefined,
+              );
+              await this.prisma.connectorConflict.update({
+                where: { id: conflict.id },
+                data: {
+                  status: 'resolved',
+                  mergeRequestId: created.mergeRequest.mergeRequestId,
+                  resolvedAt: new Date(),
+                },
+              });
+            }),
           );
-          await this.prisma.connectorConflict.update({
-            where: { id: conflict.id },
-            data: {
-              status: 'resolved',
-              mergeRequestId: created.mergeRequest.mergeRequestId,
-              resolvedAt: new Date(),
-            },
-          });
           if (supersedes(conflict.reason)) await this.closeOlder(conflict);
         } catch (err) {
           // Record and move on: one unopenable merge request (the branch was

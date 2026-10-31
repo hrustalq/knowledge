@@ -167,13 +167,19 @@ export class WorkflowsService {
 
   async remove(id: string, userId?: string): Promise<void> {
     const definition = await this.requireDefinition(id);
-    const live = await this.prisma.workflowRun.count({
-      where: { definitionId: id, status: { notIn: ['completed', 'cancelled', 'failed'] } },
-    });
     // Runs restrict-reference their definition, so deleting one out from under
-    // a live run would fail at the database anyway — this turns that into an
-    // explanation instead of a 500.
-    if (live > 0) {
+    // a live run fails at the database. Only finished runs go with it, in one
+    // boundary (#658): a live run, even one started a moment ago, makes the FK
+    // refuse (P2003) and the whole delete roll back, and that is the 409.
+    const terminal = ['completed', 'cancelled', 'failed'];
+    try {
+      await this.prisma.withTransaction(async () => {
+        await this.prisma.workflowRun.deleteMany({ where: { definitionId: id, status: { in: terminal } } });
+        await this.prisma.workflowDefinition.delete({ where: { id } });
+      });
+    } catch (e) {
+      if ((e as { code?: string }).code !== 'P2003') throw e;
+      const live = await this.prisma.workflowRun.count({ where: { definitionId: id, status: { notIn: terminal } } });
       throw new ConflictException({
         statusCode: 409,
         message: t('error.workflow.runsInFlight', { count: live }),
@@ -181,8 +187,6 @@ export class WorkflowsService {
         runs: live,
       });
     }
-    await this.prisma.workflowRun.deleteMany({ where: { definitionId: id } });
-    await this.prisma.workflowDefinition.delete({ where: { id } });
     void this.activity.record({
       workspaceId: definition.workspaceId,
       actor: userId,
@@ -376,24 +380,27 @@ export class WorkflowsService {
     }
 
     const terminal = next.status === 'cancelled' || next.status === 'completed';
-    const updated = await this.prisma.workflowRun.update({
-      where: { id },
-      data: {
-        status: next.status,
-        snapshot: next.snapshot as unknown as Prisma.InputJsonValue,
-        ...(terminal ? { finishedAt: new Date() } : {}),
-      },
-      include: { definition: { select: { name: true } } },
-    });
-
-    // Cancelling has to stop the work, not just relabel it: pending nodes are
-    // skipped so the worker has nothing left to pick up.
-    if (next.status === 'cancelled') {
-      await this.prisma.workflowRunNode.updateMany({
-        where: { runId: id, status: { in: ['pending', 'running', 'awaiting-review'] } },
-        data: { status: 'skipped' },
+    const updated = await this.prisma.withTransaction(async () => {
+      const row = await this.prisma.workflowRun.update({
+        where: { id },
+        data: {
+          status: next.status,
+          snapshot: next.snapshot as unknown as Prisma.InputJsonValue,
+          ...(terminal ? { finishedAt: new Date() } : {}),
+        },
+        include: { definition: { select: { name: true } } },
       });
-    }
+      // Cancelling has to stop the work, not just relabel it: pending nodes are
+      // skipped so the worker has nothing left to pick up — in the same commit,
+      // or a cancelled run keeps nodes that can still be approved (#658).
+      if (next.status === 'cancelled') {
+        await this.prisma.workflowRunNode.updateMany({
+          where: { runId: id, status: { in: ['pending', 'running', 'awaiting-review'] } },
+          data: { status: 'skipped' },
+        });
+      }
+      return row;
+    });
     if (type === 'RESUME') await this.runner.enqueueReady(id);
 
     void this.activity.record({
@@ -475,9 +482,14 @@ export class WorkflowsService {
     };
 
     let current: WorkflowRunNode;
-    let childrenSpawned = false;
     if (nextStatus !== 'materializing') {
-      current = await this.prisma.workflowRunNode.update({ where: { id: nodeId }, data: nodeUpdate });
+      // A node that finished its life opens the next steps of the graph, in the
+      // same commit: `WorkflowSweeper` never revisits an `approved` node (#658).
+      current = await this.prisma.withTransaction(async () => {
+        const row = await this.prisma.workflowRunNode.update({ where: { id: nodeId }, data: nodeUpdate });
+        if (row.status === 'approved' || row.status === 'materialized') await this.runner.spawnChildren(run, row, step);
+        return row;
+      });
     } else {
       try {
         // The status write, the page and the `documentId` back-reference commit
@@ -506,7 +518,6 @@ export class WorkflowsService {
               data: { status: 'materialized', documentId },
             });
             await this.runner.spawnChildren(run, done, step);
-            childrenSpawned = true;
             this.prisma.onCommit(() =>
               this.activity.record({
                 workspaceId: run.workspaceId,
@@ -540,11 +551,6 @@ export class WorkflowsService {
       }
     }
 
-    // A node that finished its life opens the next steps of the graph — unless
-    // the boundary above already did it, transactionally with the page.
-    if (!childrenSpawned && (current.status === 'materialized' || current.status === 'approved')) {
-      await this.runner.spawnChildren(run, current, step);
-    }
     // A fresh jobId: the kept failed job blocks reuse of the original, exactly
     // as `StaleSweeper.enqueueRetry` handles a re-queued ingestion job.
     if (type === 'RETRY') await this.producer.enqueueRetry(nodeId, current.attempt);

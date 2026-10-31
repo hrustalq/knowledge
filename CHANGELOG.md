@@ -22,6 +22,9 @@ in the pull request that introduces them — see
   `Merge requests · Knowledge`, `AI · Settings · Knowledge`, in the UI's language, both in the server render
   and after each navigation. A page the reader may not open is never named. A page from another project now
   also gets its own breadcrumb, under its own project, instead of only "Pages".
+- **In Russian at phone width the top bar pushed the account menu off-screen** (#647). The search trigger kept
+  the full width of its longer placeholder, so at 390 px the bar was 421 px wide and Log out sat under a 7 px
+  sliver. The trigger now gives way and truncates; the bar fits from 360 px up in both languages.
 
 ## [0.42.0] — 2026-10-31
 

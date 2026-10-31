@@ -78,6 +78,9 @@ async function prefetchShell(router: Router, pinia: Pinia, queryClient: QueryCli
     if (fallback && !workspaces.items.some((w) => w.workspaceId === request.workspaceId)) {
       // The project check below then drops the old workspace's tree.
       request.workspaceId = workspaces.fallbackId = fallback
+      // The fallback's roster is this render's first load, not a refresh of
+      // the gone workspace's empty one: the rail lands by it (#671).
+      projects.loaded = false
       await projects.fetchList().catch(() => undefined)
     }
   }

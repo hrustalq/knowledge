@@ -66,6 +66,11 @@ in the pull request that introduces them — see
   only with `AGENT_SCHEDULE_ENABLED=true`, so with schedules off (the default) a crashed manual, trigger, lint,
   drift or memo run stayed "Running" forever. It now runs whatever that flag says, and so does the connector
   recovery whatever `CONNECTOR_SCHEDULE_ENABLED` says; the flags still decide whether scheduled runs start.
+- **Merge-request and revision status badges are translated** (#648). The merge request header, the page
+  header, the page's Overview rail and the History table printed the raw value (`open`, `indexed`,
+  `finalized`), in English even in the Russian interface. They now read "Open" / «Открыт» and "Indexed" /
+  «Проиндексирована», the same words the lists use, and a status the interface does not know yet still shows
+  as itself.
 
 ## [0.41.0] — 2026-10-31
 

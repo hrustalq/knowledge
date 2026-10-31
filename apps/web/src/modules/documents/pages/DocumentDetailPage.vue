@@ -973,7 +973,7 @@ watch(
     <PageLayout variant="detail" :title="detail.document.title">
       <template #status>
         <Badge variant="outline">{{ labelFor(t, 'category', detail.document.category) }}</Badge>
-        <Badge :variant="statusVariant(detail.revision.status)">{{ detail.revision.status }}</Badge>
+        <Badge :variant="statusVariant(detail.revision.status)">{{ labelFor(t, 'revisionStatus', detail.revision.status) }}</Badge>
         <Badge v-if="templateChip" variant="outline" class="text-muted-foreground gap-1 font-normal">
           <LayoutTemplate class="size-3" aria-hidden="true" />
           {{ templateChip }}
@@ -1029,7 +1029,7 @@ watch(
               </dd>
               <dt class="text-muted-foreground">{{ t('documents.status') }}</dt>
               <dd class="text-right">
-                <Badge :variant="statusVariant(detail.revision.status)">{{ detail.revision.status }}</Badge>
+                <Badge :variant="statusVariant(detail.revision.status)">{{ labelFor(t, 'revisionStatus', detail.revision.status) }}</Badge>
               </dd>
               <dt class="text-muted-foreground">{{ t('documents.category') }}</dt>
               <dd class="truncate text-right">{{ labelFor(t, 'category', detail.document.category) }}</dd>

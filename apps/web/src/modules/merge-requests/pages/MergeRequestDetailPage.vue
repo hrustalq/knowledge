@@ -11,6 +11,7 @@
 // Overview is one timeline. State changes come from the activity log, threads
 // from the review API, and they are sorted together — see MrActivityFeed.
 import { useI18n } from 'vue-i18n'
+import { labelFor } from '@/shared/i18n/labels'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { warnMentionedWithoutAccess } from '@/entities/access'
@@ -383,7 +384,7 @@ function refresh() {
         <component :is="mrIcon(mr).icon" class="size-5 shrink-0" :class="mrIcon(mr).class" />
         <h1 class="font-display text-2xl font-bold tracking-tight">{{ mr.title }}</h1>
         <Badge :variant="mr.status === 'open' ? 'default' : mr.status === 'merged' ? 'secondary' : 'outline'">
-          {{ mr.status }}
+          {{ labelFor(t, 'mr.state', mr.status) }}
         </Badge>
         <Badge v-if="mr.isDraft" variant="outline">{{ t('mr.draft') }}</Badge>
         <Button

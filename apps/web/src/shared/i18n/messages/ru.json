@@ -1551,10 +1551,10 @@
   },
   "mr": {
     "state": {
-      "merged": "влит",
-      "closed": "закрыт",
-      "draft": "черновик",
-      "open": "открыт"
+      "merged": "Влит",
+      "closed": "Закрыт",
+      "draft": "Черновик",
+      "open": "Открыт"
     },
     "aiReviewHeading": "**Проверка ИИ** — {findings} в ветке `{branch}`",
     "aiNotConfigured": "Проверка ИИ не настроена на этом сервере ({setting}).",

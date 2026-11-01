@@ -15,12 +15,14 @@ import { labelFor } from '@/shared/i18n/labels'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { warnMentionedWithoutAccess } from '@/entities/access'
+import { documentDetailQuery } from '@/entities/document'
 import { useMembers } from '@/entities/person'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 import { Pencil } from 'lucide-vue-next'
 import type {
   DocumentContentResponse,
+  DocumentDetailResponse,
   ListMergeRequestThreadsResponse,
   MergeRequestApiChangesResponse,
   MergeRequestPage,
@@ -168,6 +170,16 @@ const contentQuery = useQuery(
 )
 const reviewContent = computed(
   () => (contentQuery.data.value as DocumentContentResponse | undefined) ?? null,
+)
+/** The page's project, so review mode links only its vocabulary (#702). Shares the page view's cache entry. */
+const reviewDocQuery = useQuery(
+  computed(() => ({
+    ...documentDetailQuery(mr.value?.documentId ?? ''),
+    enabled: tab.value === 'review' && !!mr.value?.documentId,
+  })),
+)
+const reviewProjectId = computed(
+  () => (reviewDocQuery.data.value as DocumentDetailResponse | undefined)?.document.projectId ?? null,
 )
 
 const threadsQuery = useQuery(
@@ -491,6 +503,7 @@ function refresh() {
             v-else
             :markdown="reviewContent.markdown"
             :document-id="reviewContent.documentId"
+            :project-id="reviewProjectId"
             :frontmatter="reviewContent.frontmatter"
             :revision-id="reviewContent.revisionId"
             :threads="threads"

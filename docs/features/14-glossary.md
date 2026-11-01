@@ -134,13 +134,19 @@ findings carry the same project, and **Add to glossary** on a finding
 there with `source: 'ai'` without a second model call
 ([53](53-doc-quality.md)).
 
-**The roster is one lazily-loaded pinia store, and it follows the project
-switcher.** Every rendered page wants it, so it must not become a request per
-page; it is small, changes rarely, and is fetched on the first render that
-asks. `rescope()` is called from the projects store next to the documents
-store's — showing project A's definitions under project B's pages would be
-worse than showing none. A failed load degrades to no links rather than to a
-failed page: the prose is already on screen by then.
+**The roster is one lazily-loaded pinia store, and the page picks its terms,
+not the project switcher.** Every rendered page wants it, so it must not become
+a request per page; it is small, changes rarely, and is fetched once for the
+whole workspace on the first render that asks. Which of those terms apply is
+the page's call: `pageTerms` keeps only the terms whose `projectId` is the
+page's own, so a page reached from search, a link or a merge request in another
+project gets its own vocabulary whatever the switcher shows, and a page whose
+project is not known links nothing. The roster used to follow the switcher,
+and since opening a page does not switch the project, a page could be drawn
+with another project's definitions, or every project's when none was active
+(#702) — showing project A's definitions under project B's pages is worse than
+showing none. A failed load degrades to no links rather than to a failed page:
+the prose is already on screen by then.
 
 ## Shape
 

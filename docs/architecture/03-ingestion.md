@@ -439,6 +439,43 @@ original id and a plain re-enqueue would silently do nothing.
 `reindexDrifted()` uses plain `enqueue` instead, because it creates new job
 rows with ids of their own.
 
+## Source-backed pages (#674)
+
+A `web` connector writes its pages through the ordinary connector staging path, and from there they take
+the same finalize → outbox → worker route as any other revision. The full record is
+[doc 72](../features/72-source-backed-pages.md). What belongs here is where it touches ingestion:
+
+- **The read-only rule sits at the revision write, not in ingestion.** `DocumentsService.createDraftRevision`
+  refuses any writer but the page's own connector (`sourceConnectorOf`, `documents/source-backed.ts`).
+  Every writer, editor, MCP, git push, merge and co-editing publish included, creates its revision there, so
+  nothing in the pipeline has to check it again.
+- **Staging decides whether bytes become a revision at all** (`ConnectorStagingService`, in the worker).
+  These outcomes write nothing and mark the run item `unchanged`, so no ingestion job is queued:
+  - a 304 or an unchanged hash;
+  - a paused link, which only counts how far behind it is;
+  - a version failing its extraction recipe checks, held for review;
+  - a spec that no longer parses, also held;
+  - a transient failure, which waits for its delayed retry run.
+
+  A version that passes is converted to markdown by `WebSourcesService.read` / `readNew` (the recipe, or the
+  implicit one) and written directly, with no merge request. The fetched body is kept in the bucket per link
+  (`body_hash`, `sourceBodyObjectKey`), so a recipe preview or re-run never fetches again.
+- **A spec source is a spec document.** A body with a top-level `openapi` / `swagger` / `asyncapi` key lands
+  as `kind: openapi|asyncapi` and goes through the [spec branch](#spec-documents) like any other: the
+  projection, `api_operations`, the revision-scoped `spec` edges. After it lands, `WebSourcesService.specLanded`
+  diffs it against the previous revision and raises a `breaking` alert.
+- **The dependent pass hangs off the first index.** `IngestionProcessor` calls
+  `SourceDependentsService.revisionIndexed` when a live default-head revision is indexed for the first time,
+  never on a re-index of the same text and never for a `dependent-reindex` job. It must wait for the index,
+  because dropped entity keys are the previous revision's live keys minus the new one's, both read through
+  `GraphService`. Removed or renamed anchors are matched against `page_links.target_anchor`. Either finding
+  flags the linking page `requested` with no model call. The same call then queues a `sentinel` run with
+  `input.sourceChange` for the pages the pass could not decide, and `SourceChangePublishSweeper` publishes
+  its verdicts from the API. The call is non-fatal: if it fails, the revision is still `indexed`.
+- **A source-backed page never writes another page's body.** Dependent reindex (feature 04) is unchanged and
+  touches only the index. Changes to a dependent's text arrive as flags, or as merge requests in `propose`
+  mode, and never as writes.
+
 ## Audio: memos (#551)
 
 A second write path that starts from bytes, not markdown, and ends in merge requests, never in an indexed
@@ -469,6 +506,7 @@ revision. A memo's transcript is never chunked, embedded or searched. The full r
 | `component_declarations` | One row per page with a `component:` block: resolved connector, paths, symbols, warning, `missing_paths`. Written by ingestion, re-resolved per pull.       |
 | `documents.kind`, `documents.spec_slug` | `page` \| `openapi` \| `asyncapi`, default `page`. The slug is pinned at a spec's first indexed revision (feature 52). |
 | `page_links` | One row per (target page, anchor) on each page's default-branch head (#673). Replaced whenever a head indexes; no FK on either page, the source's rows deleted by the project cascade. |
+| `connector_links` (web columns), `source_recipes` | A source-backed page's sync state (pause, ahead count, failure and gone streaks, retry, baseline, fingerprint, held reason, last body hash) and its immutable recipe versions, page or connector scope (#674, doc 72). Written by staging and the source routes, never by the pipeline. |
 | `revision_embeds` | One row per embed item per revision (#470): group, position, URL, file/node/version, caption, `warning`. Rewritten per revision; no FK, deleted by the project cascade. |
 | `embed_nodes`, `embed_files`, `embed_node_heads` | The snapshot cache (immutable per pinned version), the allowlist's files as last listed, and each pinned node's current hash from the change check (feature 64). |
 | `api_operations` | One row per operation or channel per revision: protocol, method, path, `entity_key`, summary, tags, `pointer`. A projection, replaced per revision; unique on `(revision_id, entity_key, method)`, because an AsyncAPI channel carries both a send and a receive. |
@@ -494,7 +532,7 @@ workspace.
 | Module                  | Contents                                              | Loaded by                      |
 | ----------------------- | ----------------------------------------------------- | ------------------------------ |
 | `IngestionModule`       | Producer only (`IngestionProducer`, queue registration) | API and worker                 |
-| `IngestionWorkerModule` | `IngestionProcessor`, `OutboxSweeper`, `StaleSweeper`   | the worker entrypoint **only** |
+| `IngestionWorkerModule` | `IngestionProcessor`, `OutboxSweeper`, `StaleSweeper`, `SourceDependentsService` (#674) | the worker entrypoint **only** |
 | `IngestionAdminModule`  | `IngestionController`, `IngestionAdminService`          | `AppModule` and `McpModule`    |
 | `EmbedsCoreModule`      | `EmbedsService`, the `embeds` queue (#470)              | API, worker, MCP, public       |
 | `EmbedsWorkerModule`    | `EmbedSnapshotService`, `EmbedsProcessor`, `EmbedChangeSweeper` | the worker entrypoint **only** |

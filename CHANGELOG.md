@@ -13,6 +13,14 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Fixed
+
+- **Table column labels are no longer glossary links** (#703). A header cell such as "Category" or "Status" was
+  drawn as a link to the glossary entry of the same spelling. Header cells are now skipped like headings; the
+  same word in a body cell still links.
+
 ## [0.43.0] — 2026-11-01
 
 ### Added

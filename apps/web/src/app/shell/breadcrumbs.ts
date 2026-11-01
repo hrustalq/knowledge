@@ -127,6 +127,8 @@ export function useCrumbs(): ComputedRef<Crumb[]> {
       for (const node of trail) list.push({ label: node.title, to: `/documents/${node.documentId}` })
       if (doc) list.push({ label: doc.title, to: `/documents/${id}` })
       if (path.endsWith('/edit')) list.push({ label: t('nav.edit'), action: true })
+      // A source-backed page's recipe (#674): the page above it is the way back.
+      else if (path.endsWith('/source/recipe')) list.push({ label: t('sources.recipe.heading'), action: true })
       return list
     }
     // A project's own page (docs/features/24). Leads with the roster, then the

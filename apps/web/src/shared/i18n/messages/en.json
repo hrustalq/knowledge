@@ -7373,7 +7373,7 @@
       "submit": "Link source"
     },
     "interval": {
-      "label": "Check",
+      "label": "Check for changes",
       "m15": "Every 15 minutes",
       "m60": "Hourly",
       "m360": "Every 6 hours",
@@ -7400,6 +7400,11 @@
     "webhook": {
       "create": "Webhook…",
       "rotate": "New webhook secret",
+      "rotateConfirm": {
+        "title": "Replace the webhook secret?",
+        "body": "The current secret stops working at once: anything still signing with it gets refused until it is given the new one.",
+        "action": "Replace secret"
+      },
       "once": "Shown once. POST to this URL, signing the raw body as {header}: sha256=<hex HMAC>.",
       "copy": {
         "url": "Copy webhook URL",
@@ -7408,7 +7413,7 @@
       "copyFailed": "Could not copy"
     },
     "follows": "Follows its source",
-    "followsHint": "Only its source writes this page. Use the Source panel to pause it or restore a revision.",
+    "followsHint": "Only its source writes this page. Pause it from the Source panel; restore an earlier version from History.",
     "restore": {
       "row": "Restore",
       "title": "Restore revision {n}?",
@@ -7529,7 +7534,28 @@
         "active": "Recipe v{n}",
         "implicit": "Automatic extraction",
         "open": "Recipe…"
-      }
+      },
+      "card": {
+        "title": "Recipe",
+        "lede": "How the fetched page becomes this page: what is kept, what is removed, and what must stay in place."
+      },
+      "previewLede": "What this recipe makes of the last version read from {host}.",
+      "pane": "Recipe or preview",
+      "unsaved": "Unsaved changes",
+      "ready": "Every check passes.",
+      "sameResult": "This recipe produces the page as it is now.",
+      "showPage": "Show the page",
+      "dock": {
+        "noBody": "Nothing read yet",
+        "previewFailed": "The preview failed",
+        "checking": "Checking the recipe…",
+        "failing": "{n} check fails | {n} checks fail",
+        "unchanged": "No changes",
+        "ready": "Ready to save",
+        "readyApprove": "Ready to approve"
+      },
+      "subtitle": "How the fetched source becomes this page, checked against its last version before anything is saved.",
+      "openSource": "Open {host}"
     }
   }
 }

@@ -45,8 +45,8 @@ author wrote; the glossary decides on each render which of them are
 vocabulary. That is what makes a definition editable in one place — fix the
 entry and every page follows on its next render — and what makes retiring a
 term a one-row change instead of a mass edit. It also means the linker can be
-conservative for free: it skips code, headings, existing links and review
-annotations, and links at most the first three occurrences of a term per page,
+conservative for free: it skips code, headings, table header cells, existing
+links and review annotations, and links at most the first three occurrences of a term per page,
 because a page where every instance of a word is a link is unreadable.
 
 **Word boundaries are spelled out, not `\b`.** The terms most in need of
@@ -79,6 +79,12 @@ decorations over document positions, exactly as `comment-anchors.ts` draws
 commented passages and for exactly the same reason. The invariant is unchanged
 and is what makes the move safe: a decoration is not content, so still nothing
 is written to the page.
+
+A table header cell is skipped for the reason a heading is: "Category" at the
+top of a column names a field, it does not use the word (#703). The skip is
+checked while descending, because a cell's text sits in a paragraph inside the
+cell, so the text node's own parent is never the header. Body cells link like
+prose.
 
 **An ambiguous spelling links to nothing.** Two entries can claim one word — a
 headword here, an alias there. The old matcher kept whichever it saw first,

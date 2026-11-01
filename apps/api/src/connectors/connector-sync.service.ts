@@ -159,7 +159,7 @@ export class ConnectorSyncService {
 
       const outcome = await this.discovery.step(row, runRow, adapter, ctx, budget);
       if (outcome.truncated) {
-        pushWarning(warnings, null, null, t('connector.stoppedAtMax', { max: this.maxItems }));
+        pushWarning(warnings, null, null, t('connector.stoppedAtMax', { max: this.discovery.max(ctx) }));
       }
       if (outcome.removed) {
         pushWarning(warnings, null, null, t('connector.warning.removedFound', { count: outcome.removed }));
@@ -169,6 +169,8 @@ export class ConnectorSyncService {
         return { done: false };
       }
 
+      // A crawled tree hangs by URL path, not by the page that happened to link first (#674).
+      if (!outcome.incremental) await this.discovery.nest(runRow, adapter, ctx);
       const orphans = outcome.incremental ? 0 : await this.discovery.repairOrphans(runRow, adapter, ctx);
       if (orphans > 0) pushWarning(warnings, null, null, t('connector.warning.orphansFound', { count: orphans }));
 
@@ -198,7 +200,15 @@ export class ConnectorSyncService {
         return { done: false };
       }
 
-      // Everything fetched. An unattended run applies; anything else waits.
+      // Everything fetched. An unattended run applies; anything else waits —
+      // and so does a crawl whose change is too large to land unasked (#674).
+      // It becomes a reviewed run, so its staged pages are decided one by one like any other's.
+      const confirm = runRow.mode === 'auto' && row.kind === 'web' ? await this.webSources.confirmation(row, runRow) : null;
+      if (confirm) {
+        pushWarning(warnings, null, null, confirm);
+        await this.prisma.connectorRun.update({ where: { id: runRow.id }, data: { mode: 'review' } });
+        return this.parkForReview(row, runRow, totals, warnings);
+      }
       if (runRow.mode === 'auto') {
         await this.prisma.connectorRunItem.updateMany({
           where: { runId: runRow.id, status: 'staged' },
@@ -558,8 +568,9 @@ export class ConnectorSyncService {
       type: totals.failed > 0 ? 'connector.run.failed' : 'connector.run.succeeded',
       subjectId: row.id,
       title: row.name,
-    });    // A web source's transient failures are retried by a later run (#674).
-    if (row.kind === 'web') await this.webSources.afterRun(row);
+    });
+    // A web source's transient failures are retried by a later run, and a crawl counts its dropped pages (#674).
+    if (row.kind === 'web') await this.webSources.afterRun(row, runRow);
   }
 
   private async push(

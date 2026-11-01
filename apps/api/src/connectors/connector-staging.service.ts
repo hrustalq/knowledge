@@ -482,7 +482,8 @@ export class ConnectorStagingService {
    * behaviour that lets somebody decline one page without losing its subtree.
    */
   private async resolveParent(row: Connector, item: ConnectorRunItem): Promise<string | null> {
-    if (!row.preserveHierarchy) return row.parentId;
+    // A crawled `web` tree always nests by URL path (#674); it offers no flat option.
+    if (!row.preserveHierarchy && row.kind !== 'web') return row.parentId;
 
     let top: ConnectorRunItem = item;
     // Bounded by the tree's own depth; the guard is against a cycle the far side

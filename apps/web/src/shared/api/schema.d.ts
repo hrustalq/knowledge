@@ -4085,6 +4085,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sources/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The workspace's crawl limits: what it asks for, the deployment's ceiling, and what applies */
+        get: operations["WebSourcesController_getSettings"];
+        /** Set the crawl limits; null inherits the WEB_SOURCE_CRAWL_* env, which a value may only lower */
+        put: operations["WebSourcesController_setSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sources": {
         parameters: {
             query?: never;
@@ -9122,6 +9140,16 @@ export interface components {
                 [key: string]: string;
             };
         };
+        UpdateSourceSettingsDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /** @description Pages one crawl reads; null = WEB_SOURCE_CRAWL_MAX_PAGES */
+            maxPages: number | null;
+            /** @description New pages a first crawl may create before it waits for a person; null = WEB_SOURCE_CRAWL_CONFIRM_FIRST */
+            confirmFirst: number | null;
+            /** @description Pages a later crawl may add plus drop before it waits for a person; null = WEB_SOURCE_CRAWL_CONFIRM_CHANGE */
+            confirmChange: number | null;
+        };
         CreateSourcePageDto: {
             /** Format: uuid */
             workspaceId: string;
@@ -9140,6 +9168,8 @@ export interface components {
             intervalMinutes?: 15 | 60 | 360 | 1440 | null;
             /** @description For a host that needs one: a token (sent as Bearer) or `Header-Name: value`. Saved as a connection for the host */
             credential?: string;
+            /** @description Also sync every page under this URL, nested beneath this one. Omitted reads as false */
+            crawl?: boolean;
         };
         UpdateDocumentSourceDto: {
             /**
@@ -12584,6 +12614,11 @@ export interface components {
             retryAt: string | null;
             webhookConfigured: boolean;
             recipe: components["schemas"]["DocumentSourceRecipeState"];
+            tree: {
+                rootDocumentId: string;
+                pages: number;
+                awaitingRunId: string | null;
+            } | null;
         };
         DocumentSourceRecipeState: {
             active: components["schemas"]["SourceRecipeVersion"] | null;
@@ -15093,6 +15128,11 @@ export interface components {
         };
         /** @enum {string} */
         SourceCheckFailure: "no-content" | "landmark" | "words" | "headings" | "unsupported";
+        SourceCrawlLimits: {
+            maxPages: number;
+            confirmFirst: number;
+            confirmChange: number;
+        };
         SourcePolicy: {
             id: string;
             workspaceId: string;
@@ -15152,6 +15192,16 @@ export interface components {
             recipe: components["schemas"]["SourceRecipe"];
             note: string | null;
             createdAt: string;
+        };
+        SourceSettingsResponse: {
+            workspaceId: string;
+            requested: {
+                maxPages: number | null;
+                confirmFirst: number | null;
+                confirmChange: number | null;
+            };
+            ceiling: components["schemas"]["SourceCrawlLimits"];
+            effective: components["schemas"]["SourceCrawlLimits"];
         };
         /** @enum {string} */
         SourceVerificationState: "verified" | "expired" | "edited" | "requested" | "outdated" | "flagged" | "unverified";
@@ -29503,6 +29553,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConnectorWorkItemResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WebSourcesController_getSettings: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceSettingsResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WebSourcesController_setSettings: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSourceSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceSettingsResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

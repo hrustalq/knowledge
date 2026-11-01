@@ -616,6 +616,8 @@ export type I18nTranslations = {
                 "firstSheetOnly": string;
             };
             "sourceNoArticle": string;
+            "crawlConfirmFirst": string;
+            "crawlConfirmChange": string;
         };
         "pushVersionMessage": string;
         "syncRevisionMessage": string;

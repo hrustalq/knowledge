@@ -10179,6 +10179,31 @@
       },
       "recipe": {
         "$ref": "#/components/schemas/DocumentSourceRecipeState"
+      },
+      "tree": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "rootDocumentId": {
+                "type": "string"
+              },
+              "pages": {
+                "type": "number"
+              },
+              "awaitingRunId": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "rootDocumentId",
+              "pages",
+              "awaitingRunId"
+            ]
+          }
+        ],
+        "nullable": true
       }
     },
     "required": [
@@ -10195,7 +10220,8 @@
       "failures",
       "retryAt",
       "webhookConfigured",
-      "recipe"
+      "recipe",
+      "tree"
     ]
   },
   "DocumentSourceRecipeState": {
@@ -21135,6 +21161,25 @@
       "unsupported"
     ]
   },
+  "SourceCrawlLimits": {
+    "type": "object",
+    "properties": {
+      "maxPages": {
+        "type": "number"
+      },
+      "confirmFirst": {
+        "type": "number"
+      },
+      "confirmChange": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "maxPages",
+      "confirmFirst",
+      "confirmChange"
+    ]
+  },
   "SourcePolicy": {
     "type": "object",
     "properties": {
@@ -21381,6 +21426,48 @@
       "recipe",
       "note",
       "createdAt"
+    ]
+  },
+  "SourceSettingsResponse": {
+    "type": "object",
+    "properties": {
+      "workspaceId": {
+        "type": "string"
+      },
+      "requested": {
+        "type": "object",
+        "properties": {
+          "maxPages": {
+            "type": "number",
+            "nullable": true
+          },
+          "confirmFirst": {
+            "type": "number",
+            "nullable": true
+          },
+          "confirmChange": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": [
+          "maxPages",
+          "confirmFirst",
+          "confirmChange"
+        ]
+      },
+      "ceiling": {
+        "$ref": "#/components/schemas/SourceCrawlLimits"
+      },
+      "effective": {
+        "$ref": "#/components/schemas/SourceCrawlLimits"
+      }
+    },
+    "required": [
+      "workspaceId",
+      "requested",
+      "ceiling",
+      "effective"
     ]
   },
   "SourceVerificationState": {

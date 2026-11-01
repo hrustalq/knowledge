@@ -22013,6 +22013,135 @@
         ]
       }
     },
+    "/v1/sources/settings": {
+      "get": {
+        "operationId": "WebSourcesController_getSettings",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceSettingsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The workspace's crawl limits: what it asks for, the deployment's ceiling, and what applies",
+        "tags": [
+          "sources"
+        ]
+      },
+      "put": {
+        "operationId": "WebSourcesController_setSettings",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSourceSettingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceSettingsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Set the crawl limits; null inherits the WEB_SOURCE_CRAWL_* env, which a value may only lower",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
     "/v1/sources": {
       "post": {
         "operationId": "WebSourcesController_link",
@@ -44156,6 +44285,39 @@
           }
         }
       },
+      "UpdateSourceSettingsDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "maxPages": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 1,
+            "description": "Pages one crawl reads; null = WEB_SOURCE_CRAWL_MAX_PAGES"
+          },
+          "confirmFirst": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "description": "New pages a first crawl may create before it waits for a person; null = WEB_SOURCE_CRAWL_CONFIRM_FIRST"
+          },
+          "confirmChange": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "description": "Pages a later crawl may add plus drop before it waits for a person; null = WEB_SOURCE_CRAWL_CONFIRM_CHANGE"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "maxPages",
+          "confirmFirst",
+          "confirmChange"
+        ]
+      },
       "CreateSourcePageDto": {
         "type": "object",
         "properties": {
@@ -44197,6 +44359,10 @@
             "type": "string",
             "maxLength": 4000,
             "description": "For a host that needs one: a token (sent as Bearer) or `Header-Name: value`. Saved as a connection for the host"
+          },
+          "crawl": {
+            "type": "boolean",
+            "description": "Also sync every page under this URL, nested beneath this one. Omitted reads as false"
           }
         },
         "required": [
@@ -57261,6 +57427,31 @@
           },
           "recipe": {
             "$ref": "#/components/schemas/DocumentSourceRecipeState"
+          },
+          "tree": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "rootDocumentId": {
+                    "type": "string"
+                  },
+                  "pages": {
+                    "type": "number"
+                  },
+                  "awaitingRunId": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "rootDocumentId",
+                  "pages",
+                  "awaitingRunId"
+                ]
+              }
+            ],
+            "nullable": true
           }
         },
         "required": [
@@ -57277,7 +57468,8 @@
           "failures",
           "retryAt",
           "webhookConfigured",
-          "recipe"
+          "recipe",
+          "tree"
         ]
       },
       "DocumentSourceRecipeState": {
@@ -68217,6 +68409,25 @@
           "unsupported"
         ]
       },
+      "SourceCrawlLimits": {
+        "type": "object",
+        "properties": {
+          "maxPages": {
+            "type": "number"
+          },
+          "confirmFirst": {
+            "type": "number"
+          },
+          "confirmChange": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "maxPages",
+          "confirmFirst",
+          "confirmChange"
+        ]
+      },
       "SourcePolicy": {
         "type": "object",
         "properties": {
@@ -68463,6 +68674,48 @@
           "recipe",
           "note",
           "createdAt"
+        ]
+      },
+      "SourceSettingsResponse": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string"
+          },
+          "requested": {
+            "type": "object",
+            "properties": {
+              "maxPages": {
+                "type": "number",
+                "nullable": true
+              },
+              "confirmFirst": {
+                "type": "number",
+                "nullable": true
+              },
+              "confirmChange": {
+                "type": "number",
+                "nullable": true
+              }
+            },
+            "required": [
+              "maxPages",
+              "confirmFirst",
+              "confirmChange"
+            ]
+          },
+          "ceiling": {
+            "$ref": "#/components/schemas/SourceCrawlLimits"
+          },
+          "effective": {
+            "$ref": "#/components/schemas/SourceCrawlLimits"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "requested",
+          "ceiling",
+          "effective"
         ]
       },
       "SourceVerificationState": {

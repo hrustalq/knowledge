@@ -766,6 +766,15 @@ export const envSchema = z.object({
    * only an admin sets up a connector.
    */
   WEB_SOURCE_ALLOW_PRIVATE: boolish(false),
+  /**
+   * Crawled `web` trees (#674, phase 3), each a ceiling a workspace setting
+   * may only lower: pages one crawl reads, and the change that waits for a
+   * person — more than CONFIRM_FIRST new pages on a first crawl, or more than
+   * CONFIRM_CHANGE added plus dropped on a later one.
+   */
+  WEB_SOURCE_CRAWL_MAX_PAGES: z.coerce.number().int().positive().default(200),
+  WEB_SOURCE_CRAWL_CONFIRM_FIRST: z.coerce.number().int().nonnegative().default(50),
+  WEB_SOURCE_CRAWL_CONFIRM_CHANGE: z.coerce.number().int().nonnegative().default(20),
   /** Items one sync run will touch, so a 50k-page space cannot pin a worker forever. */
   CONNECTOR_SYNC_MAX_ITEMS: z.coerce.number().int().positive().default(1_000),
   /** Wall-clock ceiling for one sync run. */

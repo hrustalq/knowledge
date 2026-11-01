@@ -4047,6 +4047,12 @@ model WorkspaceSettings {
   /// #339 searchable chat: days a message is kept; null inherits
   /// CHAT_SEARCH_RETENTION_DAYS, and a value may only shorten it.
   chatSearchRetentionDays Int?     @map("chat_search_retention_days")
+  /// #674 crawled web sources, each null = its WEB_SOURCE_CRAWL_* ceiling, and
+  /// a value may only lower it: pages per crawl, and the change that waits for
+  /// a person on a first crawl / a later one.
+  sourceCrawlMaxPages      Int?     @map("source_crawl_max_pages")
+  sourceCrawlConfirmFirst  Int?     @map("source_crawl_confirm_first")
+  sourceCrawlConfirmChange Int?     @map("source_crawl_confirm_change")
   /// #424 handoff rules, each null = off, all under
   /// WORK_ITEM_AUTOCREATE_MAX_PER_TICK. WORK_ITEM_ISSUE_RULES — off | high | medium | all.
   workItemIssues          String?  @map("work_item_issues")

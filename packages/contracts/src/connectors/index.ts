@@ -621,7 +621,8 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
   },
   {
     // Source-backed pages (#674): a markdown or HTML URL whose page here is
-    // read-only and replaced by each new version. No push, no tree yet.
+    // read-only and replaced by each new version. No push. A crawled tree
+    // always nests by URL path, so `tree` (the preserve-hierarchy toggle) stays off.
     kind: 'web',
     label: 'Web page',
     capabilities: { pull: true, push: false, webhook: true, tree: false },
@@ -634,6 +635,18 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
         required: true,
         placeholder: 'https://example.com/docs/guide.md',
         help: 'A markdown file or an HTML page. The page it becomes is read-only and follows the source.',
+      },
+      {
+        // WEB_CRAWL_CONFIG_KEY, spelled out: that constant is declared further down this module.
+        key: 'crawl',
+        label: 'Pages',
+        kind: 'select',
+        required: false,
+        options: [
+          { value: 'page', label: 'This URL only' },
+          { value: 'tree', label: 'This URL and every page under it' },
+        ],
+        help: 'A tree follows links and sitemap.xml under the URL’s path, nested by URL. A large crawl waits for you to confirm it.',
       },
     ],
   },
@@ -2244,6 +2257,43 @@ export const SOURCE_FAILURE_LIMIT = 3;
 export const SOURCE_RETRY_DELAYS_MIN = [1, 5, 25] as const;
 
 /**
+ * A `web` source that crawls (#674, phase 3): its `config.crawl` is `tree`,
+ * and every page under the root URL's path prefix syncs too, nested by URL path.
+ */
+export const WEB_CRAWL_CONFIG_KEY = 'crawl';
+export function webCrawls(config: unknown): boolean {
+  return (config as Record<string, unknown> | null)?.[WEB_CRAWL_CONFIG_KEY] === 'tree';
+}
+
+/**
+ * Crawl limits, each a sparse workspace setting under its `WEB_SOURCE_CRAWL_*`
+ * env ceiling. `maxPages` caps one crawl; a first crawl creating more than
+ * `confirmFirst` pages, or a later one adding plus dropping more than
+ * `confirmChange`, waits for a person to confirm it.
+ */
+export interface SourceCrawlLimits {
+  maxPages: number;
+  confirmFirst: number;
+  confirmChange: number;
+}
+
+// GET/PUT /v1/sources/settings
+export interface SourceSettingsResponse {
+  workspaceId: string;
+  /** What the workspace asks for; null inherits the ceiling. */
+  requested: { [K in keyof SourceCrawlLimits]: number | null };
+  ceiling: SourceCrawlLimits;
+  effective: SourceCrawlLimits;
+}
+
+export interface UpdateSourceSettingsRequest {
+  workspaceId: string;
+  maxPages: number | null;
+  confirmFirst: number | null;
+  confirmChange: number | null;
+}
+
+/**
  * Why a source alerts its connector's owner (an in-app row plus email, reason
  * `alert`). `held`: a version failed its recipe checks (phase 2). Phase 4 adds
  * `breaking` (OpenAPI).
@@ -2274,6 +2324,11 @@ export interface DocumentSourceInfo {
   webhookConfigured: boolean;
   /** How the source is read (phase 2): the recipe in force, a held version, a waiting review. */
   recipe: DocumentSourceRecipeState;
+  /**
+   * Set when the source crawls a tree (phase 3): its root page, how many pages
+   * it syncs, and a run waiting for a person to confirm a large change.
+   */
+  tree: { rootDocumentId: string; pages: number; awaitingRunId: string | null } | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -2382,6 +2437,8 @@ export interface CreateSourcePageRequest {
   intervalMinutes?: number | null;
   /** For a host that needs one: a token (sent as Bearer) or `Header-Name: value`. Saved as a connection for the host. */
   credential?: string;
+  /** Also sync every page under this URL, nested beneath this one (phase 3). */
+  crawl?: boolean;
 }
 
 export interface CreateSourcePageResponse {

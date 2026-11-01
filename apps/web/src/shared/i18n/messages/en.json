@@ -500,7 +500,6 @@
     "branchPending": "more below, not read yet",
     "edited": "edited",
     "aiWrote": "Rewritten by the assistant",
-    "applyToBranch": "Apply to this page and everything under it",
     "subtreeDone": "Applied to {count} page | Applied to {count} pages",
     "itemTitle": "Page title",
     "conversionEmpty": "The conversion produced no text. Check the source page before approving.",
@@ -893,6 +892,20 @@
           "help": "A conversation carrying this tag is harvested when an admin closes it. Leave empty for \"knowledge\"."
         },
         "credential": "The access token of your Intercom app (Developer Hub → your app → Authentication). It must be able to read conversations."
+      },
+      "web": {
+        "url": {
+          "label": "URL",
+          "help": "A markdown file or an HTML page. The page it becomes is read-only and follows the source."
+        },
+        "crawl": {
+          "label": "Pages",
+          "help": "A tree follows links and sitemap.xml under the URL’s path, nested by URL. A large crawl waits for you to confirm it.",
+          "options": {
+            "page": "This URL only",
+            "tree": "This URL and every page under it"
+          }
+        }
       }
     },
     "harvestHint": "Nothing syncs either way. When an issue carrying the harvest label is completed by a linked editor, its description and comments are masked and proposed as captures in their name, for review in the Captures inbox.",
@@ -1033,7 +1046,8 @@
       "jql": "JQL",
       "noProjects": "This workspace has no projects yet, and every connector lands in one.",
       "createProject": "Create a project"
-    }
+    },
+    "moreActions": "More actions for {title}"
   },
   "workflow": {
     "nodeStatus": {
@@ -7370,7 +7384,9 @@
       "titlePlaceholder": "The source's own title",
       "readOnly": "The page is read-only. To keep a version the source has since changed, pause the source and restore that revision.",
       "reading": "Reading the source…",
-      "submit": "Link source"
+      "submit": "Link source",
+      "crawl": "Also sync every page under this URL",
+      "crawlHint": "Pages found by links and sitemap.xml under this path, nested beneath this page by URL. A large crawl waits for you to confirm it."
     },
     "interval": {
       "label": "Check for changes",
@@ -7556,6 +7572,34 @@
       },
       "subtitle": "How the fetched source becomes this page, checked against its last version before anything is saved.",
       "openSource": "Open {host}"
+    },
+    "tree": {
+      "root": "No pages synced under it yet | Syncs {n} page under this URL | Syncs {n} pages under this URL",
+      "awaiting": "A crawl waits for you to confirm it",
+      "review": "Review the pages",
+      "member": "Part of a synced page tree",
+      "openRoot": "Open its root"
+    },
+    "crawlSettings": {
+      "title": "Crawled sources",
+      "intro": "Limits for web sources that sync every page under a URL. The deployment sets each ceiling; a value here can only lower it.",
+      "applies": "Applies:",
+      "ceiling": "Ceiling {n}. Leave empty to use it.",
+      "clamped": "Above the ceiling, so {n} applies.",
+      "invalid": "A whole number, {min} or more.",
+      "saved": "Crawl limits saved",
+      "maxPages": {
+        "label": "Pages per crawl",
+        "hint": "A crawl stops after this many pages, and then counts no page as dropped."
+      },
+      "confirmFirst": {
+        "label": "Confirm a first crawl above",
+        "hint": "A first crawl that would create more pages than this waits for someone to review them."
+      },
+      "confirmChange": {
+        "label": "Confirm a later crawl above",
+        "hint": "A later crawl that would add and drop more pages than this, together, waits for review."
+      }
     }
   }
 }

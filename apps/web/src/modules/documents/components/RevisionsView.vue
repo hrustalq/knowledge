@@ -204,7 +204,7 @@ watch(branchFilter, () => void load())
               <button
                 v-if="sourceBacked && r.contentHash && r.revisionId !== headId"
                 type="button"
-                class="ml-3 text-xs hover:underline disabled:opacity-50"
+                class="ml-3 rounded-sm text-xs outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
                 :disabled="restoring !== null"
                 @click="restore(r)"
               >

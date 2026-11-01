@@ -15,6 +15,7 @@ import type { DocumentSourceInfo, DocumentSourceWebhookResponse } from '@knowled
 import { relativeTime } from '@/shared/api/api'
 import { api, apiQueryOptions } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
+import { confirm } from '@/shared/ui/confirm'
 import { formatDateTime } from '@/shared/utils/format'
 import { Button } from '@/shared/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
@@ -90,11 +91,21 @@ const draftRecipe = () =>
   })
 
 const webhook = ref<DocumentSourceWebhookResponse | null>(null)
-const rotateWebhook = () =>
-  act('webhook', async () => {
+/** Replacing a live secret breaks whatever signs with it, so that one asks first. */
+async function rotateWebhook() {
+  if (source.value?.webhookConfigured) {
+    const ok = await confirm({
+      title: t('sources.webhook.rotateConfirm.title'),
+      description: t('sources.webhook.rotateConfirm.body'),
+      action: t('sources.webhook.rotateConfirm.action'),
+    })
+    if (!ok) return
+  }
+  await act('webhook', async () => {
     webhook.value = await api.post('/v1/documents/{id}/source/webhook', path())
     void query.refetch()
   })
+}
 async function copy(text: string) {
   try {
     await navigator.clipboard.writeText(text)

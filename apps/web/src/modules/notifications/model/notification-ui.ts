@@ -36,13 +36,13 @@ const LOOKS: Record<NotificationCategory, NotificationLook> = {
   verification: { icon: ShieldCheck, class: 'text-teal-500', label: 'notifications.category.verification' },
   access: { icon: KeyRound, class: 'text-orange-500', label: 'notifications.category.access' },
   job: { icon: Play, class: 'text-muted-foreground', label: 'notifications.category.job' },
-  source: { icon: Globe, class: 'text-emerald-600', label: 'notifications.category.source' },
+  source: { icon: Globe, class: 'text-panel-note', label: 'notifications.category.source' },
 }
 
 /** Reasons worth an icon of their own, because they are addressed at a person. */
 const REASON_LOOKS: Record<string, NotificationLook> = {
   assigned: { icon: UserPlus, class: 'text-panel-tip', label: 'notifications.reason.assigned' },
-  alert: { icon: TriangleAlert, class: 'text-destructive', label: 'notifications.reason.alert' },
+  alert: { icon: TriangleAlert, class: 'text-panel-caution', label: 'notifications.reason.alert' },
 }
 
 /** The look of a category itself, for a legend or a settings list. */

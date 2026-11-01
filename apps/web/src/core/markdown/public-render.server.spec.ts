@@ -123,4 +123,42 @@ describe('renderPublicMarkdown', () => {
     expect(html).not.toContain('figma.com')
     expect(html).toContain('Mockup not available publicly')
   })
+  describe('page links, however they are spelled (#705)', () => {
+    const APP = 'https://kb.example'
+    const linking = { ...options, appOrigin: APP, resolvePage: (t: string) => (t.toLowerCase() === 'shared page' ? IN : t === 'Hidden page' ? OUT : null) }
+    const render = (md: string) => renderPublicMarkdown(md, linking).html
+    const hrefs = (html: string) => Array.from(html.matchAll(/href="([^"]*)"/g), (m) => m[1])
+
+    it.each([
+      ['an absolute app URL', `${APP}/documents/${IN}`, `/s/kp_t/${IN}`],
+      ['an absolute URL with a query and fragment', `${APP}/documents/${IN}?branch=x#setup`, `/s/kp_t/${IN}#setup`],
+      ['a relative link with a query', `/documents/${IN}?branch=x`, `/s/kp_t/${IN}`],
+      ['a relative sub-path', `/documents/${IN}/revisions`, `/s/kp_t/${IN}`],
+      ['a percent-encoded title', 'Shared%20Page', `/s/kp_t/${IN}`],
+    ])('links %s to a page in scope', (_, href, expected) => {
+      expect(hrefs(render(`See [it](${href}).`))).toEqual([expected])
+    })
+
+    it('links a title reference with spaces to a page in scope', () => {
+      expect(hrefs(render('See [it](Shared Page).'))).toEqual([`/s/kp_t/${IN}`])
+    })
+
+    it.each([
+      ['an absolute app URL', `${APP}/documents/${OUT}`],
+      ['a relative link with a query', `/documents/${OUT}?branch=x`],
+      ['a title reference', 'Hidden%20page'],
+      ['an unresolved title', 'Nowhere'],
+      ['any other app URL', `${APP}/projects/x`],
+    ])('keeps only the text of %s outside the scope', (_, href) => {
+      const html = render(`See [it](${href}).`)
+      expect(hrefs(html)).toEqual([])
+      expect(html).toContain('it')
+    })
+
+    it('leaves the target off an absolute link it rewrote, and other sites alone', () => {
+      const html = render(`[a](${APP}/documents/${IN}) [b](https://other.example/x)`)
+      expect(html).not.toMatch(new RegExp(`<a href="/s/[^"]*"[^>]*target=`))
+      expect(hrefs(html)).toEqual([`/s/kp_t/${IN}`, 'https://other.example/x'])
+    })
+  })
 })

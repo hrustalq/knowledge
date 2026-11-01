@@ -785,6 +785,27 @@ describe('the reader’s nav, a level at a time (issue #204)', () => {
     ]);
   });
 
+  it('counts an absolute app URL and a title reference as page links, one rule with the reader (#705)', async () => {
+    const { service, documents, sessions } = deeper();
+    documents.getContent.mockImplementation(async (documentId: string, revisionId: string) => ({
+      documentId,
+      revisionId,
+      markdown: `[g](https://kb.example/documents/${DOC_GUIDES}?branch=x) [t](Guides) [d](Deep) [n](Nowhere)`,
+    }));
+    // Deep is members-only: its title resolves to nothing for an anonymous reader.
+    expect((await service.resolve({ slug: 'acme', path: '/guides' })).page?.links).toEqual([
+      { documentId: DOC_GUIDES, slugPath: 'guides' },
+      { documentId: DOC_GUIDES, slugPath: 'guides', ref: 'Guides' },
+    ]);
+
+    sessions.viewer.mockResolvedValue({ kind: 'member' });
+    expect((await service.resolve({ slug: 'acme', path: '/guides' })).page?.links).toContainEqual({
+      documentId: DOC_DEEP,
+      slugPath: 'welcome/install/deep',
+      ref: 'Deep',
+    });
+  });
+
   it('two viewers whose trimmed answers match still get different tags when they see different pages', async () => {
     const { service, prisma, sessions } = deeper();
     Object.assign(prisma.pages.find((p) => p.documentId === DOC_DEEP)!, { audience: 'visitors', audienceClaims: { plan: ['pro'] } });

@@ -10,7 +10,7 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
-import { Copy, ExternalLink, Pause, Play, RefreshCw, Sparkles, Webhook } from 'lucide-vue-next'
+import { Copy, ExternalLink, ListTree, Pause, Play, RefreshCw, Sparkles, Webhook } from 'lucide-vue-next'
 import type { DocumentSourceInfo, DocumentSourceWebhookResponse } from '@knowledge/contracts'
 import { relativeTime } from '@/shared/api/api'
 import { api, apiQueryOptions } from '@/shared/api/queries'
@@ -51,6 +51,11 @@ const DOT: Record<typeof state.value, string> = {
 const attention = computed(() => recipeAttention(source.value?.recipe))
 const router = useRouter()
 const recipePath = computed(() => `/documents/${props.documentId}/source/recipe`)
+
+/** A crawled tree (phase 3): the root counts its pages and holds a large change for confirmation; a page under it points up. */
+const tree = computed(() => source.value?.tree ?? null)
+const isRoot = computed(() => tree.value?.rootDocumentId === props.documentId)
+const linkClass = 'rounded-sm underline underline-offset-2 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50'
 
 const busy = ref<string | null>(null)
 async function act(name: string, run: () => Promise<DocumentSourceInfo | void>, done?: string) {
@@ -147,6 +152,23 @@ async function copy(text: string) {
         <span class="block text-muted-foreground">
           {{ source.lastCheckedAt ? t('sources.lastChecked', { when: relativeTime(source.lastCheckedAt) }) : t('sources.neverChecked') }}
         </span>
+      </span>
+    </p>
+
+    <p v-if="tree" class="flex items-start gap-2 text-xs">
+      <ListTree class="mt-px size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <span class="min-w-0">
+        <template v-if="isRoot">
+          {{ t('sources.tree.root', { n: tree.pages - 1 }, tree.pages - 1) }}
+          <span v-if="tree.awaitingRunId" class="block">
+            <span class="font-medium text-panel-warning-ink">{{ t('sources.tree.awaiting') }}</span>
+            · <RouterLink :to="`/settings/connectors/runs/${tree.awaitingRunId}`" :class="linkClass">{{ t('sources.tree.review') }}</RouterLink>
+          </span>
+        </template>
+        <template v-else>
+          {{ t('sources.tree.member') }}
+          · <RouterLink :to="`/documents/${tree.rootDocumentId}`" :class="linkClass">{{ t('sources.tree.openRoot') }}</RouterLink>
+        </template>
       </span>
     </p>
 

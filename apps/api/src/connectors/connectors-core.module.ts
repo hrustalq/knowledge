@@ -23,6 +23,7 @@ import { VerificationCoreModule } from '../verification/verification-core.module
 import { ConnectorQueueModule } from './connector-queue.module.js';
 import { WebSourcesService } from './web-sources.service.js';
 import { SourceRecipesService } from './source-recipes.service.js';
+import { SourceSettingsService } from './source-settings.service.js';
 import { AgentCoreModule } from '../agents/agent-core.module.js';
 import { AiCoreModule } from '../ai/ai-core.module.js';
 import { AssistantClientModule } from '../assistant/assistant-client.module.js';
@@ -76,6 +77,7 @@ import { AssistantClientModule } from '../assistant/assistant-client.module.js';
     FigmaOauthService,
     WebSourcesService,
     SourceRecipesService,
+    SourceSettingsService,
   ],
   exports: [
     ConnectorsService,
@@ -93,6 +95,7 @@ import { AssistantClientModule } from '../assistant/assistant-client.module.js';
     FigmaFilesService,
     FigmaOauthService,
     WebSourcesService,
+    SourceSettingsService,
   ],
 })
 export class ConnectorsCoreModule {}

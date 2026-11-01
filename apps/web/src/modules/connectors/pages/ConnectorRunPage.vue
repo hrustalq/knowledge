@@ -479,7 +479,9 @@ const showRing = computed(() => items.value.length === 0 && run.value !== null &
     </footer>
 
     <Sheet v-model:open="treeOpen">
-      <SheetContent side="left" class="w-80 max-w-[85vw] p-0">
+      <!-- Full width: on a phone the tree is the task while it is open, and every
+           pixel of it goes to page titles. -->
+      <SheetContent side="left" class="w-full max-w-none p-0 sm:max-w-none">
         <SheetHeader class="sr-only">
           <SheetTitle>{{ t('connectors.itemCount', { count: items.length }, items.length) }}</SheetTitle>
         </SheetHeader>

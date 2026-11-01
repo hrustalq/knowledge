@@ -52,6 +52,16 @@ in the pull request that introduces them — see
   someone presses it. A body that is neither markdown nor HTML is now held rather than counted as a failed
   sync. New routes: `PUT /v1/documents/:id/source/recipe`, and `POST …/recipe/preview`, `…/recipe/draft`,
   `…/recipe/dismiss`.
+- **A linked source can sync every page under its URL** (#674, phase 3). "Link a source" has **Also sync every page
+  under this URL**, and a `web` connector has **Pages → This URL and every page under it**. The crawl follows every
+  link on each page (navigation included) and the site's `sitemap.xml`, keeps to the URL's origin and path (`/docs`
+  holds `/docs/x`, never `/docs-old`), drops query strings and fragments, and skips images and other files. Pages
+  nest by URL path under the root page, so `/docs/a/b` sits under `/docs/a`, or under the root when there is no
+  `/docs/a`. It asks one host one request at a time, a second apart. A first crawl creating more than 50 pages,
+  or a later one adding plus dropping more than 20, waits as a reviewed run; the root page's Source widget says
+  so and links to it. No crawl reads more than 200 pages. A page missing from three complete crawls in a row is
+  archived and its linking pages marked outdated, as for a 404. A crawl stopped at the cap, or whose root failed,
+  never counts a page as missing. Admins can lower the three limits under Settings → Connectors.
 - **A page knows which pages link to it** (#673). Every internal link on a page's published version is now
   recorded with the heading it points at: the `/documents/<id>#heading` form the editor writes, and the same
   address pasted in full from this deployment's own web address (`WEB_BASE_URL`); links to anywhere else are
@@ -70,6 +80,10 @@ in the pull request that introduces them — see
 
 ### Changed
 
+- **Reviewing a sync run no longer covers page titles** (#674). The hover actions on a run's page list used to
+  be laid over the row with no background, so the verbs were painted across the title and its status. The row
+  now shows its likeliest action in words plus a **⋯** menu with the rest, in place of nothing on other rows,
+  and its status wraps beneath. On a phone the page list opens full width.
 - **A workspace with one project opens the rail on its pages** (#671). The left rail used to start on the
   project roster whenever it had not been left on Pages: after a first visit, a workspace switch, or a reload
   after going back. With a single project that meant clicking its only row before any page was reachable. Now a
@@ -86,6 +100,10 @@ in the pull request that introduces them — see
   `MAIL_NOTIFICATIONS_ENABLED` like every other notification mail. The migration only adds nullable or
   defaulted columns to `connectors` and `connector_links`, which the previous release never reads, so a
   rollback by retag needs nothing.
+- **Crawled sources (#674, phase 3) add three nullable columns to `workspace_settings`** and three env ceilings:
+  `WEB_SOURCE_CRAWL_MAX_PAGES` (200), `WEB_SOURCE_CRAWL_CONFIRM_FIRST` (50) and `WEB_SOURCE_CRAWL_CONFIRM_CHANGE`
+  (20). A workspace value may only lower its ceiling. The migration is additive, so a rollback by retag needs
+  nothing undone.
 - **Extraction recipes (#674, phase 2) add a migration that only creates `source_recipes` and adds nullable
   columns to `connector_links`**, which the previous release never reads, so a rollback by retag needs
   nothing. Each `web` source now keeps its last fetched body (at most 5 MB) in the bucket under
@@ -101,6 +119,9 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- **Clicking another page in a sync run's review did nothing** (#674). Switching pages rebuilds the editor
+  pane, and the table controls' teardown read the already-destroyed editor and threw. That aborted the page
+  update, so the first page stayed selected however many times another was clicked.
 - **A long word could push a dialog's title out of the window** on a small screen (#685). An unbroken name, address
   or id in a confirmation (or any dialog) widened the box past the screen edge, taking the buttons with it,
   and a dialog title that wrapped drew its lines on top of each other. Titles and descriptions now break long

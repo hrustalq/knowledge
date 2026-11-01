@@ -5072,6 +5072,26 @@
     },
     {
       "method": "GET",
+      "path": "/v1/sources/settings",
+      "tag": "sources",
+      "summary": "The workspace's crawl limits: what it asks for, the deployment's ceiling, and what applies",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/sources/settings",
+      "tag": "sources",
+      "summary": "Set the crawl limits; null inherits the WEB_SOURCE_CRAWL_* env, which a value may only lower",
+      "role": "admin",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/templates",
       "tag": "templates",
       "summary": "The template gallery: built-ins (in the caller’s language) merged with the workspace’s own",

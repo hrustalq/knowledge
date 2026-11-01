@@ -1,12 +1,13 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { Connector, ConnectorLink } from '@prisma/client';
+import type { Connector, ConnectorLink, ConnectorRun } from '@prisma/client';
 import {
   SOURCE_DEFAULT_INTERVAL_MIN,
   SOURCE_FAILURE_LIMIT,
   SOURCE_INTERVALS_MIN,
   SOURCE_RETRY_DELAYS_MIN,
+  webCrawls,
   type CreateSourcePageRequest,
   type CreateSourcePageResponse,
   type DocumentSourceInfo,
@@ -31,6 +32,7 @@ import { ConnectorProducer } from './connector.producer.js';
 import { ConnectorsService } from './connectors.service.js';
 import type { SourceBody } from './source-recipe.js';
 import { SourceRecipesService } from './source-recipes.service.js';
+import { SourceSettingsService } from './source-settings.service.js';
 
 /** The system's own actor id, used when a connector's owner was deleted. */
 const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
@@ -59,6 +61,7 @@ export class WebSourcesService {
     private readonly events: EventsPublisher,
     private readonly producer: ConnectorProducer,
     private readonly recipes: SourceRecipesService,
+    private readonly settings: SourceSettingsService,
   ) {}
 
   // ------------------------------------------------------------ sync hooks
@@ -145,8 +148,18 @@ export class WebSourcesService {
    * run delayed to its `retry_at` — the run is over, so the connector's one
    * in-flight slot is free. A lost delayed job is re-enqueued by the
    * schedule sweeper's relay under the same job id.
+   *
+   * A complete crawl (phase 3) also counts the pages that dropped out of the
+   * tree toward archiving, the way a 404 does: three crawls in a row without
+   * a page archive it and flag its dependents.
    */
-  async afterRun(row: Connector): Promise<void> {
+  async afterRun(row: Connector, run: ConnectorRun): Promise<void> {
+    for (const link of (await this.dropped(row, run)) ?? []) {
+      const goneCount = link.goneCount + 1;
+      await this.prisma.connectorLink.update({ where: { id: link.id }, data: { goneCount } });
+      if (goneCount >= SOURCE_FAILURE_LIMIT) await this.archiveGone(row, link);
+    }
+
     const due = await this.prisma.connectorLink.findMany({
       where: { connectorId: row.id, retryAt: { not: null } },
       select: { externalId: true, retryAt: true },
@@ -159,6 +172,51 @@ export class WebSourcesService {
     } catch (err) {
       this.logger.warn({ msg: 'Source retry could not be queued', connectorId: row.id, err });
     }
+  }
+
+  /**
+   * Why an unattended crawl waits for a person (phase 3), or null to apply it:
+   * a first crawl creating more than `confirmFirst` pages, or a later one
+   * adding plus dropping more than `confirmChange`. Read once the run's pages
+   * are staged, before anything is written.
+   */
+  async confirmation(row: Connector, run: ConnectorRun): Promise<string | null> {
+    if (!webCrawls(row.config) || Array.isArray(run.scope)) return null;
+    const [limits, links, added] = await Promise.all([
+      this.settings.limits(row.workspaceId),
+      this.prisma.connectorLink.count({ where: { connectorId: row.id } }),
+      this.prisma.connectorRunItem.count({ where: { runId: run.id, status: 'staged', action: 'create' } }),
+    ]);
+    // A page linked by "Link a source" already has its root page.
+    if (links <= 1) {
+      return added > limits.confirmFirst ? t('connector.warning.crawlConfirmFirst', { count: added, limit: limits.confirmFirst }) : null;
+    }
+    const dropped = (await this.dropped(row, run))?.length ?? 0;
+    return added + dropped > limits.confirmChange
+      ? t('connector.warning.crawlConfirmChange', { added, dropped, limit: limits.confirmChange })
+      : null;
+  }
+
+  /**
+   * The live pages a crawl did not find, or null when the run cannot say: a
+   * scoped run (a retry), one stopped at the page cap, or one whose root
+   * failed. A page found but held, or failing on its own, was found.
+   */
+  private async dropped(row: Connector, run: ConnectorRun): Promise<ConnectorLink[] | null> {
+    if (!webCrawls(row.config) || Array.isArray(run.scope)) return null;
+    const root = (row.config as Record<string, unknown>).url;
+    const cap = Math.min((await this.settings.limits(row.workspaceId)).maxPages, this.config.get('CONNECTOR_SYNC_MAX_ITEMS', { infer: true }));
+    const items = await this.prisma.connectorRunItem.findMany({ where: { runId: run.id }, select: { externalId: true, status: true } });
+    if (items.length >= cap || !items.some((i) => i.externalId === root && i.status !== 'failed')) return null;
+    const found = new Set(items.map((i) => i.externalId));
+    const absent = (await this.prisma.connectorLink.findMany({ where: { connectorId: row.id } })).filter((l) => !found.has(l.externalId));
+    if (absent.length === 0) return [];
+    const live = await this.prisma.document.findMany({
+      where: { id: { in: absent.map((l) => l.documentId) }, archivedAt: null },
+      select: { id: true },
+    });
+    const liveIds = new Set(live.map((d) => d.id));
+    return absent.filter((l) => liveIds.has(l.documentId));
   }
 
   /**
@@ -247,7 +305,7 @@ export class WebSourcesService {
         projectId: input.projectId,
         parentId: input.parentId ?? null,
         category: 'reference',
-        config: { url },
+        config: { url, ...(input.crawl ? { crawl: 'tree' } : {}) },
         ...(input.credential ? { credential: input.credential } : {}),
         ...(known ? { connectionId: known.id } : {}),
         syncIntervalMinutes: interval,
@@ -299,7 +357,11 @@ export class WebSourcesService {
             lastPulledAt: new Date(),
           },
         });
-        await this.prisma.connector.update({ where: { id: row.id }, data: { ownerDocumentId: created.documentId, lastSyncedAt: new Date() } });
+        // A crawled tree nests under this page; a page whose path parent was never found lands here too.
+        await this.prisma.connector.update({
+          where: { id: row.id },
+          data: { ownerDocumentId: created.documentId, lastSyncedAt: new Date(), ...(input.crawl ? { parentId: created.documentId } : {}) },
+        });
         return { documentId: created.documentId, connectorId: row.id };
       },
       { timeout: 30_000, maxWait: 10_000 },
@@ -315,6 +377,11 @@ export class WebSourcesService {
       await this.recipes.read(row, linkRow, doc.source).catch((err: unknown) =>
         this.logger.warn({ msg: 'Source baseline not recorded', connectorId: row.id, err: String(err) }),
       );
+    }
+    // The rest of the tree arrives by a run: the person gets their page now, and the crawl fills in under it.
+    if (input.crawl) {
+      const run = await this.connectors.createRun(row, 'pull', 'manual', { actorId: userId });
+      await this.producer.enqueue(run.id);
     }
     return result;
   }
@@ -339,7 +406,23 @@ export class WebSourcesService {
       retryAt: link.retryAt?.toISOString() ?? null,
       webhookConfigured: row.webhookSecret !== null,
       recipe: await this.recipes.state(link),
+      tree: await this.tree(row),
     };
+  }
+
+  /** A crawled source's root page, its page count and any run waiting to be confirmed (phase 3). */
+  private async tree(row: Connector): Promise<DocumentSourceInfo['tree']> {
+    if (!webCrawls(row.config)) return null;
+    const root = (row.config as Record<string, unknown>).url as string;
+    const [rootLink, links, awaiting] = await Promise.all([
+      this.prisma.connectorLink.findFirst({ where: { connectorId: row.id, externalId: root }, select: { documentId: true } }),
+      this.prisma.connectorLink.findMany({ where: { connectorId: row.id }, select: { documentId: true } }),
+      this.prisma.connectorRun.findFirst({ where: { connectorId: row.id, status: 'awaiting-review' }, select: { id: true } }),
+    ]);
+    // Live pages only: one archived as dropped from the tree is no longer synced.
+    const pages = await this.prisma.document.count({ where: { id: { in: links.map((l) => l.documentId) }, archivedAt: null } });
+    const rootDocumentId = row.ownerDocumentId ?? rootLink?.documentId ?? null;
+    return rootDocumentId ? { rootDocumentId, pages, awaitingRunId: awaiting?.id ?? null } : null;
   }
 
   async setInterval(documentId: string, intervalMinutes: number | null): Promise<DocumentSourceInfo> {

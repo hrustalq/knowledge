@@ -120,13 +120,13 @@ export class ConnectorDiscoveryService {
       discovered += created.length;
       frontier = created.filter((i) => i.hasChildren).map(toFrontier);
       await this.saveFrontier(run.id, frontier, discovered);
-      return { done: frontier.length === 0, discovered, truncated: discovered >= this.maxItems, removed };
+      return { done: frontier.length === 0, discovered, truncated: discovered >= this.max(ctx), removed };
     }
 
     let walked = 0;
     while (frontier.length > 0 && walked < budget) {
-      if (discovered >= this.maxItems) {
-        ctx.debug('discovery: stopped at max', { max: this.maxItems });
+      if (discovered >= this.max(ctx)) {
+        ctx.debug('discovery: stopped at max', { max: this.max(ctx) });
         await this.saveFrontier(run.id, [], discovered);
         return { done: true, discovered, truncated: true };
       }
@@ -147,7 +147,12 @@ export class ConnectorDiscoveryService {
     }
 
     await this.saveFrontier(run.id, frontier, discovered);
-    return { done: frontier.length === 0, discovered, truncated: discovered >= this.maxItems };
+    return { done: frontier.length === 0, discovered, truncated: discovered >= this.max(ctx) };
+  }
+
+  /** The run's cap: CONNECTOR_SYNC_MAX_ITEMS, or the connector's own when tighter (a crawl's maxPages). */
+  max(ctx: Pick<ConnectorContext, 'maxItems'>): number {
+    return Math.min(this.maxItems, ctx.maxItems ?? Infinity);
   }
 
   // --- one level ---
@@ -164,7 +169,7 @@ export class ConnectorDiscoveryService {
     let position = 0;
 
     for await (const ref of adapter.children!(ctx, parent)) {
-      if (already + created.length >= this.maxItems) break;
+      if (already + created.length >= this.max(ctx)) break;
       const item = await this.upsertItem(run, ref, parent?.itemId ?? null, depth, position);
       position += 1;
       if (item) created.push(item);
@@ -375,7 +380,7 @@ export class ConnectorDiscoveryService {
     let position = 0;
     let truncated = false;
     for await (const ref of adapter.list(ctx)) {
-      if (position >= this.maxItems) {
+      if (position >= this.max(ctx)) {
         truncated = true;
         break;
       }
@@ -407,7 +412,7 @@ export class ConnectorDiscoveryService {
     try {
       for await (const ref of adapter.list(ctx)) {
         if (known.has(ref.externalId)) continue;
-        if (known.size + added >= this.maxItems) break;
+        if (known.size + added >= this.max(ctx)) break;
         const item = await this.upsertItem(run, ref, null, 0, known.size + added);
         if (item) {
           await this.prisma.connectorRunItem.update({
@@ -426,6 +431,37 @@ export class ConnectorDiscoveryService {
 
     ctx.debug('discovery: orphans attached', { added });
     return added;
+  }
+
+  /**
+   * Re-nest a finished walk by the adapter's own hierarchy (`adapter.nest`).
+   * Depth is recomputed with it, since applying goes parents first by depth.
+   */
+  async nest(run: ConnectorRun, adapter: ConnectorAdapter, ctx: ConnectorContext): Promise<void> {
+    if (!adapter.nest) return;
+    const items = await this.prisma.connectorRunItem.findMany({
+      where: { runId: run.id },
+      select: { id: true, externalId: true, parentItemId: true, depth: true, hasChildren: true },
+    });
+    const parents = adapter.nest(ctx, items.map((i) => i.externalId));
+    const byExternal = new Map(items.map((i) => [i.externalId, i]));
+    const withChildren = new Set([...parents.values()].filter((p): p is string => p !== null));
+    const depthOf = (externalId: string): number => {
+      let depth = 0;
+      for (let cur = parents.get(externalId); cur && byExternal.has(cur) && depth < 64; cur = parents.get(cur)) depth += 1;
+      return depth;
+    };
+    for (const item of items) {
+      const parentExternalId = parents.get(item.externalId) ?? null;
+      const parentItemId = (parentExternalId && byExternal.get(parentExternalId)?.id) || null;
+      const depth = depthOf(item.externalId);
+      const hasChildren = withChildren.has(item.externalId);
+      if (parentItemId === item.parentItemId && depth === item.depth && hasChildren === item.hasChildren) continue;
+      await this.prisma.connectorRunItem.update({
+        where: { id: item.id },
+        data: { parentItemId, externalParentId: parentExternalId, depth, hasChildren },
+      });
+    }
   }
 
   // --- frontier persistence ---

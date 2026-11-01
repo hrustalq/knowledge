@@ -1,6 +1,12 @@
-import { Body, Controller, Get, Param, Patch, Post, Put } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import type { CreateSourcePageResponse, DocumentSourceInfo, DocumentSourceWebhookResponse, SourceRecipePreview } from '@knowledge/contracts';
+import type {
+  CreateSourcePageResponse,
+  DocumentSourceInfo,
+  DocumentSourceWebhookResponse,
+  SourceRecipePreview,
+  SourceSettingsResponse,
+} from '@knowledge/contracts';
 import { Access, CurrentPrincipal, Feature } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
@@ -11,8 +17,11 @@ import {
   PreviewSourceRecipeDto,
   RestoreDocumentSourceDto,
   SaveSourceRecipeDto,
+  SourceSettingsQueryDto,
   UpdateDocumentSourceDto,
+  UpdateSourceSettingsDto,
 } from './web-sources.dto.js';
+import { SourceSettingsService } from './source-settings.service.js';
 import { WebSourcesService } from './web-sources.service.js';
 
 /**
@@ -28,7 +37,25 @@ export class WebSourcesController {
   constructor(
     private readonly sources: WebSourcesService,
     private readonly permissions: PermissionService,
+    private readonly settings: SourceSettingsService,
   ) {}
+
+  @Get('sources/settings')
+  @Returns('SourceSettingsResponse')
+  @Access('admin', 'query')
+  @ApiOperation({ summary: "The workspace's crawl limits: what it asks for, the deployment's ceiling, and what applies" })
+  getSettings(@Query() q: SourceSettingsQueryDto): Promise<SourceSettingsResponse> {
+    return this.settings.get(q.workspaceId);
+  }
+
+  @Put('sources/settings')
+  @Returns('SourceSettingsResponse')
+  @Access('admin', 'body')
+  @ApiOperation({ summary: 'Set the crawl limits; null inherits the WEB_SOURCE_CRAWL_* env, which a value may only lower' })
+  setSettings(@Body() dto: UpdateSourceSettingsDto, @CurrentPrincipal() principal: Principal): Promise<SourceSettingsResponse> {
+    const { workspaceId, ...requested } = dto;
+    return this.settings.set(workspaceId, requested, principal?.userId);
+  }
 
   @Post('sources')
   @Returns('CreateSourcePageResponse')

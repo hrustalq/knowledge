@@ -67,7 +67,9 @@
       "imagesDropped": "{count} image(s) were not carried over: connector pages do not pull images yet.",
       "firstSheetOnly": "Only the first sheet was imported: Google Drive exports a spreadsheet as CSV one sheet at a time."
     },
-    "sourceNoArticle": "No article was found on the page, so all of its text was kept"
+    "sourceNoArticle": "No article was found on the page, so all of its text was kept",
+    "crawlConfirmFirst": "This crawl would create {count} pages, more than the {limit} a first crawl lands without asking. Review the pages, then apply.",
+    "crawlConfirmChange": "This crawl would add {added} pages and drop {dropped}, more than the {limit} a crawl changes without asking. Review the pages, then apply."
   },
   "pushVersionMessage": "Updated from the knowledge base",
   "syncRevisionMessage": "Synced from a connector",

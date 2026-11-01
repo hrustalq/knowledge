@@ -6,6 +6,9 @@
  * page or says, under the URL, why the source could not be read. The token
  * field appears only once the host has refused without one — most sources are
  * public, and a credential box nobody needs reads as a requirement.
+ *
+ * "Also sync every page under it" (phase 3) makes this page the root of a
+ * crawled tree: the page opens at once and the crawl fills in beneath it.
  */
 import { computed, nextTick, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -16,6 +19,7 @@ import { getProjectId, getWorkspaceId } from '@/shared/api/api'
 import { api, isApiRequestError } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
 import { Button } from '@/shared/ui/button'
+import { Checkbox } from '@/shared/ui/checkbox'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
@@ -30,6 +34,7 @@ const url = ref('')
 const title = ref('')
 const interval = ref(intervalValue(SOURCE_DEFAULT_INTERVAL_MIN))
 const credential = ref('')
+const crawl = ref(false)
 const needsCredential = ref(false)
 const error = ref<string | null>(null)
 const reading = ref(false)
@@ -51,6 +56,7 @@ async function submit() {
         ...(title.value.trim() ? { title: title.value.trim() } : {}),
         intervalMinutes: toInterval(interval.value),
         ...(credential.value.trim() ? { credential: credential.value.trim() } : {}),
+        ...(crawl.value ? { crawl: true } : {}),
       },
     })
     await router.push(`/documents/${res.documentId}`)
@@ -94,6 +100,14 @@ async function submit() {
         <p v-if="error" id="source-error" role="alert" class="text-xs [overflow-wrap:anywhere] text-destructive">{{ error }}</p>
         <p v-else id="source-url-hint" class="text-xs text-muted-foreground">{{ t('sources.link.urlHint') }}</p>
       </div>
+
+      <label class="flex items-start gap-2.5">
+        <Checkbox :model-value="crawl" class="mt-0.5" aria-describedby="source-crawl-hint" @update:model-value="crawl = $event === true" />
+        <span class="min-w-0 text-sm">
+          {{ t('sources.link.crawl') }}
+          <span id="source-crawl-hint" class="kn-measure block text-xs text-muted-foreground">{{ t('sources.link.crawlHint') }}</span>
+        </span>
+      </label>
 
       <div v-if="needsCredential" class="space-y-1.5">
         <Label for="source-credential" class="flex items-center gap-1.5">

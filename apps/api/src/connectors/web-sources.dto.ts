@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsObject, IsOptional, IsString, IsUUID, MaxLength, ValidateIf } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsObject, IsOptional, IsString, IsUUID, MaxLength, Min, ValidateIf } from 'class-validator';
 import { SOURCE_INTERVALS_MIN, SOURCE_RECIPE_RULE_KINDS } from '@knowledge/contracts';
 
 /** POST /v1/sources — "Add page → Link a source" (#674). */
@@ -39,6 +39,43 @@ export class CreateSourcePageDto {
   @IsString()
   @MaxLength(4000)
   credential?: string;
+
+  @ApiPropertyOptional({ type: Boolean, description: 'Also sync every page under this URL, nested beneath this one. Omitted reads as false' })
+  @IsOptional()
+  @IsBoolean()
+  crawl?: boolean;
+}
+
+/** GET /v1/sources/settings */
+export class SourceSettingsQueryDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+}
+
+/** PUT /v1/sources/settings — each null inherits its WEB_SOURCE_CRAWL_* ceiling, which a value may only lower. */
+export class UpdateSourceSettingsDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiProperty({ type: Number, nullable: true, minimum: 1, description: 'Pages one crawl reads; null = WEB_SOURCE_CRAWL_MAX_PAGES' })
+  @ValidateIf((_o, v) => v !== null)
+  @IsInt()
+  @Min(1)
+  maxPages!: number | null;
+
+  @ApiProperty({ type: Number, nullable: true, minimum: 0, description: 'New pages a first crawl may create before it waits for a person; null = WEB_SOURCE_CRAWL_CONFIRM_FIRST' })
+  @ValidateIf((_o, v) => v !== null)
+  @IsInt()
+  @Min(0)
+  confirmFirst!: number | null;
+
+  @ApiProperty({ type: Number, nullable: true, minimum: 0, description: 'Pages a later crawl may add plus drop before it waits for a person; null = WEB_SOURCE_CRAWL_CONFIRM_CHANGE' })
+  @ValidateIf((_o, v) => v !== null)
+  @IsInt()
+  @Min(0)
+  confirmChange!: number | null;
 }
 
 /** PATCH /v1/documents/:id/source */

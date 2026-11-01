@@ -8,6 +8,7 @@ import {
   FIGMA_GRANT_CONFIG_KEY,
   FIGMA_HANDLE_CONFIG_KEY,
   GITHUB_INSTALLATION_CONFIG_KEY,
+  webCrawls,
   wikiAutoRegenerate,
   wikiEnabled,
   type ConnectorAclMode,
@@ -38,6 +39,7 @@ import { releaseMirroredAccess } from './connector-acl-release.js';
 import { bindConnection } from './connection-binding.js';
 import { GithubAppService } from './github/github-app.service.js';
 import { FigmaOauthService, pruneFigmaGrants } from '../embeds/figma-oauth.service.js';
+import { SourceSettingsService } from './source-settings.service.js';
 import type { ConnectorContext } from './adapters/connector.types.js';
 
 /** Warnings are capped: a run over a 5 000-page space must not write a novel into one row. */
@@ -93,6 +95,8 @@ export class ConnectorsService {
     private readonly projects: ProjectsService,
     private readonly githubApp: GithubAppService,
     private readonly figmaOauth: FigmaOauthService,
+    // Optional only so the unit specs that build this by hand need not; Nest always injects it.
+    private readonly sourceSettings?: SourceSettingsService,
   ) {
     this.key = parseKey(this.config.get('SETTINGS_ENCRYPTION_KEY', { infer: true }));
     this.allowPrivateUrls = this.config.get('CONNECTOR_ALLOW_PRIVATE_URLS', { infer: true });
@@ -401,6 +405,10 @@ export class ConnectorsService {
       userId: row.createdBy,
       locale: row.locale as ConnectorContext['locale'],
       signal,
+      // A crawled tree stops at the workspace's page cap (#674, phase 3).
+      ...(row.kind === 'web' && webCrawls(row.config) && this.sourceSettings
+        ? { maxItems: (await this.sourceSettings.limits(row.workspaceId)).maxPages }
+        : {}),
     };
   }
 

@@ -213,6 +213,8 @@ export interface ConnectorContext {
    */
   locale: Locale;
   signal?: AbortSignal;
+  /** A cap tighter than CONNECTOR_SYNC_MAX_ITEMS for this connector's runs: a crawled tree's `maxPages` (#674). */
+  maxItems?: number;
 }
 
 export interface ConnectorAdapter {
@@ -244,6 +246,14 @@ export interface ConnectorAdapter {
    * a second request per page.
    */
   children?(ctx: ConnectorContext, parent: ExternalRef | null): AsyncIterable<ExternalRef>;
+
+  /**
+   * Where each discovered item really hangs, once the walk is over: for a
+   * source whose hierarchy is its URLs rather than the order a walk met them
+   * (a crawled `web` tree, #674). Keyed and valued by externalId; null is a
+   * root. Discovery re-nests its rows by it before anything is fetched.
+   */
+  nest?(ctx: ConnectorContext, externalIds: string[]): Map<string, string | null>;
 
   fetch(ctx: ConnectorContext, ref: ExternalRef): Promise<ExternalDocument>;
 

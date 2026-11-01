@@ -2633,7 +2633,8 @@
       "test-suite",
       "test-fixture-ranking",
       "transcription",
-      "memo"
+      "memo",
+      "source-recipe"
     ]
   },
   "AiUsageResponse": {
@@ -10175,6 +10176,9 @@
       },
       "webhookConfigured": {
         "type": "boolean"
+      },
+      "recipe": {
+        "$ref": "#/components/schemas/DocumentSourceRecipeState"
       }
     },
     "required": [
@@ -10190,7 +10194,54 @@
       "headRevisionId",
       "failures",
       "retryAt",
-      "webhookConfigured"
+      "webhookConfigured",
+      "recipe"
+    ]
+  },
+  "DocumentSourceRecipeState": {
+    "type": "object",
+    "properties": {
+      "active": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/SourceRecipeVersion"
+          }
+        ],
+        "nullable": true
+      },
+      "proposal": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/SourceRecipeVersion"
+          }
+        ],
+        "nullable": true
+      },
+      "heldAt": {
+        "type": "string",
+        "nullable": true
+      },
+      "heldReasons": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/SourceCheckFailure"
+        }
+      },
+      "structureChangedAt": {
+        "type": "string",
+        "nullable": true
+      },
+      "hasBody": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "active",
+      "proposal",
+      "heldAt",
+      "heldReasons",
+      "structureChangedAt",
+      "hasBody"
     ]
   },
   "DocumentSourceWebhookResponse": {
@@ -21074,6 +21125,16 @@
       "setAt"
     ]
   },
+  "SourceCheckFailure": {
+    "type": "string",
+    "enum": [
+      "no-content",
+      "landmark",
+      "words",
+      "headings",
+      "unsupported"
+    ]
+  },
   "SourcePolicy": {
     "type": "object",
     "properties": {
@@ -21113,6 +21174,213 @@
       "createdAt",
       "updatedAt",
       "createdBy"
+    ]
+  },
+  "SourceRecipe": {
+    "type": "object",
+    "properties": {
+      "content": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "strip": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "headings": {
+        "type": "object",
+        "properties": {
+          "h1": {
+            "type": "number"
+          },
+          "h2": {
+            "type": "number"
+          },
+          "h3": {
+            "type": "number"
+          },
+          "h4": {
+            "type": "number"
+          },
+          "h5": {
+            "type": "number"
+          },
+          "h6": {
+            "type": "number"
+          }
+        }
+      },
+      "landmarks": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "rules": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/SourceRecipeRule"
+        }
+      }
+    },
+    "required": [
+      "content",
+      "strip",
+      "headings",
+      "landmarks",
+      "rules"
+    ]
+  },
+  "SourceRecipePreview": {
+    "type": "object",
+    "properties": {
+      "before": {
+        "type": "string"
+      },
+      "after": {
+        "type": "string"
+      },
+      "failures": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/SourceCheckFailure"
+        }
+      },
+      "hits": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "number"
+        }
+      }
+    },
+    "required": [
+      "before",
+      "after",
+      "failures",
+      "hits"
+    ]
+  },
+  "SourceRecipeRule": {
+    "anyOf": [
+      {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "drop-section"
+            ]
+          },
+          "heading": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "heading"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "rename-heading"
+            ]
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "from",
+          "to"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "rewrite-links"
+            ]
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "from",
+          "to"
+        ]
+      }
+    ]
+  },
+  "SourceRecipeStatus": {
+    "type": "string",
+    "enum": [
+      "proposed",
+      "active",
+      "superseded",
+      "rejected"
+    ]
+  },
+  "SourceRecipeVersion": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "version": {
+        "type": "number"
+      },
+      "status": {
+        "$ref": "#/components/schemas/SourceRecipeStatus"
+      },
+      "origin": {
+        "type": "string",
+        "enum": [
+          "agent",
+          "person"
+        ]
+      },
+      "connectorScope": {
+        "type": "boolean"
+      },
+      "recipe": {
+        "$ref": "#/components/schemas/SourceRecipe"
+      },
+      "note": {
+        "type": "string",
+        "nullable": true
+      },
+      "createdAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "version",
+      "status",
+      "origin",
+      "connectorScope",
+      "recipe",
+      "note",
+      "createdAt"
     ]
   },
   "SourceVerificationState": {

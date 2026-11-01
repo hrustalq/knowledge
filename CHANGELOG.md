@@ -36,6 +36,22 @@ in the pull request that introduces them — see
   the same sources set up from Settings → Connectors. Off unless `WEB_SOURCES_ENABLED` is on, and a
   workspace admin can switch it off as the `sources` feature; either way the routes 404 and the entry
   points are hidden.
+- **A linked web page is read with an extraction recipe, and a layout change no longer reaches the page**
+  (#674, phase 2). Each version of an HTML source is now checked before it is written. It must have content,
+  keep at least 40% of the last good version's words, and keep most of its top headings (or match every
+  landmark its recipe names). A version that fails is **held**: the page stays on its last good version, the
+  Source widget says "Held for recipe review", and the owner gets a `held` alert (inbox and email). The
+  interpreter agent drafts a recipe for review if one is configured. A new **Extraction recipe** page (from the
+  Source widget, `/documents/<id>/source/recipe`) shows the recipe beside a live before/after preview with a
+  pass/fail line per check and a match count per selector. The recipe has content and removal CSS selectors,
+  landmarks, a heading-level map, and normalization rules: drop a section, rename a heading, rewrite a link
+  prefix. Rules also apply to markdown sources. **Save** (or **Approve and publish** for a draft) is refused
+  while any check fails. Saving re-reads the last fetched version through the recipe and writes the result
+  as a new revision when it differs, so dropping a section removes it at once. A source whose layout changed
+  but still passes shows "Layout changed" with a **Draft recipe** button, and no model is called until
+  someone presses it. A body that is neither markdown nor HTML is now held rather than counted as a failed
+  sync. New routes: `PUT /v1/documents/:id/source/recipe`, and `POST …/recipe/preview`, `…/recipe/draft`,
+  `…/recipe/dismiss`.
 - **A page knows which pages link to it** (#673). Every internal link on a page's published version is now
   recorded with the heading it points at: the `/documents/<id>#heading` form the editor writes, and the same
   address pasted in full from this deployment's own web address (`WEB_BASE_URL`); links to anywhere else are
@@ -70,6 +86,12 @@ in the pull request that introduces them — see
   `MAIL_NOTIFICATIONS_ENABLED` like every other notification mail. The migration only adds nullable or
   defaulted columns to `connectors` and `connector_links`, which the previous release never reads, so a
   rollback by retag needs nothing.
+- **Extraction recipes (#674, phase 2) add a migration that only creates `source_recipes` and adds nullable
+  columns to `connector_links`**, which the previous release never reads, so a rollback by retag needs
+  nothing. Each `web` source now keeps its last fetched body (at most 5 MB) in the bucket under
+  `workspaces/<ws>/sources/`. Recipe drafts are billed as the new `source-recipe` AI usage operation, and
+  only run when a version is held or someone presses Draft recipe. The `interpreter` agent can be switched
+  off per workspace like any built-in agent.
 - **Run `make page-links-backfill` once after deploying #673** (in production, `node
   dist/scripts/page-links-backfill.main.js` in the API container). Pages indexed earlier have no recorded
   links until their next edit; the script reads each page's indexed published version and records them.

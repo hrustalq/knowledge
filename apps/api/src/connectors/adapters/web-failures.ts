@@ -13,6 +13,11 @@ export function isTransient(err: unknown): boolean {
   return err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError');
 }
 
+/** A body that is neither markdown nor HTML (`UnsupportedSourceError`, named here so callers need not reach the adapter). */
+export function isUnsupported(err: unknown): boolean {
+  return err instanceof Error && err.name === 'UnsupportedSourceError';
+}
+
 /** 404 or 410: the source says it is gone. */
 export function isGone(err: unknown): boolean {
   return err instanceof ConnectorRequestError && (err.status === 404 || err.status === 410);

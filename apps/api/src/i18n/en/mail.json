@@ -47,7 +47,8 @@
       "body": "The source of “{title}” needs your attention.",
       "paused": "“{title}” was restored to an earlier revision, so its source is paused. New versions are counted, not written, until someone resumes it.",
       "gone": "The source of “{title}” has answered “not found” three times in a row. The page was archived and the pages that link to it were marked outdated.",
-      "failing": "The last three syncs of “{title}” failed. The page still shows the last version it read."
+      "failing": "The last three syncs of “{title}” failed. The page still shows the last version it read.",
+      "held": "A new version of the source of “{title}” no longer reads the way its extraction recipe expects, so it was held. The page stays on its last good version until someone reviews the recipe."
     }
   },
   "someone": "Someone",

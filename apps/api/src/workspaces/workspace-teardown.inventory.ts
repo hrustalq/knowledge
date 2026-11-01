@@ -56,6 +56,7 @@ export const WORKSPACE_TEARDOWN = {
   ExternalIdentity: 'workspace',
   CodeImport: 'workspace',
   CodeFile: 'workspace',
+  SourceRecipe: 'workspace',
   ProjectTrackerRoute: 'workspace',
   Connector: 'workspace',
   // RESTRICTed by connectors.connection_id, so after them.

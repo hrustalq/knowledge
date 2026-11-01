@@ -303,6 +303,7 @@ import type {
   SiteVersionSummary,
   SiteVisitorSecretResponse,
   SourcePolicy,
+  SourceRecipePreview,
   SsoDiscoverResponse,
   SsoDomainView,
   SsoExchangeResponse,
@@ -647,6 +648,7 @@ export interface ContractResponses {
   SiteVersionSummary: SiteVersionSummary;
   SiteVisitorSecretResponse: SiteVisitorSecretResponse;
   SourcePolicy: SourcePolicy;
+  SourceRecipePreview: SourceRecipePreview;
   SsoDiscoverResponse: SsoDiscoverResponse;
   SsoDomainView: SsoDomainView;
   SsoExchangeResponse: SsoExchangeResponse;

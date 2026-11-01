@@ -1,12 +1,18 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Put } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import type { CreateSourcePageResponse, DocumentSourceInfo, DocumentSourceWebhookResponse } from '@knowledge/contracts';
+import type { CreateSourcePageResponse, DocumentSourceInfo, DocumentSourceWebhookResponse, SourceRecipePreview } from '@knowledge/contracts';
 import { Access, CurrentPrincipal, Feature } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { Returns } from '../common/returns.decorator.js';
-import { CreateSourcePageDto, RestoreDocumentSourceDto, UpdateDocumentSourceDto } from './web-sources.dto.js';
+import {
+  CreateSourcePageDto,
+  PreviewSourceRecipeDto,
+  RestoreDocumentSourceDto,
+  SaveSourceRecipeDto,
+  UpdateDocumentSourceDto,
+} from './web-sources.dto.js';
 import { WebSourcesService } from './web-sources.service.js';
 
 /**
@@ -84,6 +90,45 @@ export class WebSourcesController {
     @CurrentPrincipal() principal: Principal,
   ): Promise<DocumentSourceInfo> {
     return this.sources.restore(id, dto.revisionId, principal.userId);
+  }
+
+  // ---- extraction recipes (#674, phase 2): editor, as editing the page would be.
+
+  @Post('documents/:id/source/recipe/preview')
+  @Returns('SourceRecipePreview')
+  @Access('editor', 'document')
+  @ApiOperation({ summary: 'What a recipe makes of the last fetched version, beside the page as it reads now, with its check results' })
+  previewRecipe(@Param('id', ParseUUIDPipe) id: string, @Body() dto: PreviewSourceRecipeDto): Promise<SourceRecipePreview> {
+    return this.sources.previewRecipe(id, dto.recipe);
+  }
+
+  @Put('documents/:id/source/recipe')
+  @Returns('DocumentSourceInfo')
+  @Access('editor', 'document')
+  @ApiOperation({ summary: "Save the page's extraction recipe, approving a drafted one or not. The current version is re-read through it" })
+  @ApiResponse({ status: 409, description: 'The recipe fails its checks on the current version (`details.failures`), or the proposal is stale' })
+  saveRecipe(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SaveSourceRecipeDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<DocumentSourceInfo> {
+    return this.sources.saveRecipe(id, dto.recipe, dto.proposalId, principal.userId);
+  }
+
+  @Post('documents/:id/source/recipe/draft')
+  @Returns('DocumentSourceInfo')
+  @Access('editor', 'document')
+  @ApiOperation({ summary: 'Ask the interpreter agent to draft a recipe for the last fetched version; it waits for review' })
+  draftRecipe(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<DocumentSourceInfo> {
+    return this.sources.draftRecipe(id, principal.userId, principal.locale);
+  }
+
+  @Post('documents/:id/source/recipe/dismiss')
+  @Returns('DocumentSourceInfo')
+  @Access('editor', 'document')
+  @ApiOperation({ summary: 'Keep the current recipe: reject the drafted one and clear the layout-changed note. A held version stays held' })
+  dismissRecipe(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<DocumentSourceInfo> {
+    return this.sources.dismissRecipe(id, principal.userId);
   }
 
   @Post('documents/:id/source/webhook')

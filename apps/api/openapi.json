@@ -22420,6 +22420,285 @@
         ]
       }
     },
+    "/v1/documents/{id}/source/recipe/preview": {
+      "post": {
+        "operationId": "WebSourcesController_previewRecipe",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewSourceRecipeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceRecipePreview"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "What a recipe makes of the last fetched version, beside the page as it reads now, with its check results",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
+    "/v1/documents/{id}/source/recipe": {
+      "put": {
+        "operationId": "WebSourcesController_saveRecipe",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveSourceRecipeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentSourceInfo"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The recipe fails its checks on the current version (`details.failures`), or the proposal is stale"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Save the page's extraction recipe, approving a drafted one or not. The current version is re-read through it",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
+    "/v1/documents/{id}/source/recipe/draft": {
+      "post": {
+        "operationId": "WebSourcesController_draftRecipe",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentSourceInfo"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Ask the interpreter agent to draft a recipe for the last fetched version; it waits for review",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
+    "/v1/documents/{id}/source/recipe/dismiss": {
+      "post": {
+        "operationId": "WebSourcesController_dismissRecipe",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentSourceInfo"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Keep the current recipe: reject the drafted one and clear the layout-changed note. A held version stays held",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
     "/v1/documents/{id}/source/webhook": {
       "post": {
         "operationId": "WebSourcesController_webhook",
@@ -43958,6 +44237,107 @@
           "revisionId"
         ]
       },
+      "SourceRecipeRuleDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "drop-section",
+              "rename-heading",
+              "rewrite-links"
+            ]
+          },
+          "heading": {
+            "type": "string",
+            "description": "drop-section: the heading whose section is removed"
+          },
+          "from": {
+            "type": "string",
+            "description": "rename-heading: the heading text; rewrite-links: the link prefix"
+          },
+          "to": {
+            "type": "string",
+            "description": "rename-heading: the new text; rewrite-links: the replacement prefix"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "SourceRecipeDto": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "description": "CSS selectors for the content, first that matches wins. Empty = article scoring",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "strip": {
+            "description": "CSS selectors removed first",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "headings": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            },
+            "description": "h1…h6 → the markdown level (1–6) it becomes"
+          },
+          "landmarks": {
+            "description": "CSS selectors that must each match, or the version is held",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SourceRecipeRuleDto"
+            }
+          }
+        },
+        "required": [
+          "content",
+          "strip",
+          "headings",
+          "landmarks",
+          "rules"
+        ]
+      },
+      "PreviewSourceRecipeDto": {
+        "type": "object",
+        "properties": {
+          "recipe": {
+            "$ref": "#/components/schemas/SourceRecipeDto"
+          }
+        },
+        "required": [
+          "recipe"
+        ]
+      },
+      "SaveSourceRecipeDto": {
+        "type": "object",
+        "properties": {
+          "recipe": {
+            "$ref": "#/components/schemas/SourceRecipeDto"
+          },
+          "proposalId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The drafted recipe this approves, if any"
+          }
+        },
+        "required": [
+          "recipe"
+        ]
+      },
       "PutWorkItemRulesDto": {
         "type": "object",
         "properties": {
@@ -49335,7 +49715,8 @@
           "test-suite",
           "test-fixture-ranking",
           "transcription",
-          "memo"
+          "memo",
+          "source-recipe"
         ]
       },
       "AiUsageResponse": {
@@ -56877,6 +57258,9 @@
           },
           "webhookConfigured": {
             "type": "boolean"
+          },
+          "recipe": {
+            "$ref": "#/components/schemas/DocumentSourceRecipeState"
           }
         },
         "required": [
@@ -56892,7 +57276,54 @@
           "headRevisionId",
           "failures",
           "retryAt",
-          "webhookConfigured"
+          "webhookConfigured",
+          "recipe"
+        ]
+      },
+      "DocumentSourceRecipeState": {
+        "type": "object",
+        "properties": {
+          "active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceRecipeVersion"
+              }
+            ],
+            "nullable": true
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceRecipeVersion"
+              }
+            ],
+            "nullable": true
+          },
+          "heldAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "heldReasons": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SourceCheckFailure"
+            }
+          },
+          "structureChangedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "hasBody": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "active",
+          "proposal",
+          "heldAt",
+          "heldReasons",
+          "structureChangedAt",
+          "hasBody"
         ]
       },
       "DocumentSourceWebhookResponse": {
@@ -67776,6 +68207,16 @@
           "setAt"
         ]
       },
+      "SourceCheckFailure": {
+        "type": "string",
+        "enum": [
+          "no-content",
+          "landmark",
+          "words",
+          "headings",
+          "unsupported"
+        ]
+      },
       "SourcePolicy": {
         "type": "object",
         "properties": {
@@ -67815,6 +68256,213 @@
           "createdAt",
           "updatedAt",
           "createdBy"
+        ]
+      },
+      "SourceRecipe": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "strip": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "headings": {
+            "type": "object",
+            "properties": {
+              "h1": {
+                "type": "number"
+              },
+              "h2": {
+                "type": "number"
+              },
+              "h3": {
+                "type": "number"
+              },
+              "h4": {
+                "type": "number"
+              },
+              "h5": {
+                "type": "number"
+              },
+              "h6": {
+                "type": "number"
+              }
+            }
+          },
+          "landmarks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SourceRecipeRule"
+            }
+          }
+        },
+        "required": [
+          "content",
+          "strip",
+          "headings",
+          "landmarks",
+          "rules"
+        ]
+      },
+      "SourceRecipePreview": {
+        "type": "object",
+        "properties": {
+          "before": {
+            "type": "string"
+          },
+          "after": {
+            "type": "string"
+          },
+          "failures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SourceCheckFailure"
+            }
+          },
+          "hits": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "before",
+          "after",
+          "failures",
+          "hits"
+        ]
+      },
+      "SourceRecipeRule": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "drop-section"
+                ]
+              },
+              "heading": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "heading"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "rename-heading"
+                ]
+              },
+              "from": {
+                "type": "string"
+              },
+              "to": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "from",
+              "to"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "rewrite-links"
+                ]
+              },
+              "from": {
+                "type": "string"
+              },
+              "to": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "from",
+              "to"
+            ]
+          }
+        ]
+      },
+      "SourceRecipeStatus": {
+        "type": "string",
+        "enum": [
+          "proposed",
+          "active",
+          "superseded",
+          "rejected"
+        ]
+      },
+      "SourceRecipeVersion": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "number"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SourceRecipeStatus"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "agent",
+              "person"
+            ]
+          },
+          "connectorScope": {
+            "type": "boolean"
+          },
+          "recipe": {
+            "$ref": "#/components/schemas/SourceRecipe"
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "status",
+          "origin",
+          "connectorScope",
+          "recipe",
+          "note",
+          "createdAt"
         ]
       },
       "SourceVerificationState": {

@@ -7,9 +7,10 @@
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { RouterLink, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
-import { Copy, ExternalLink, Pause, Play, RefreshCw, Webhook } from 'lucide-vue-next'
+import { Copy, ExternalLink, Pause, Play, RefreshCw, Sparkles, Webhook } from 'lucide-vue-next'
 import type { DocumentSourceInfo, DocumentSourceWebhookResponse } from '@knowledge/contracts'
 import { relativeTime } from '@/shared/api/api'
 import { api, apiQueryOptions } from '@/shared/api/queries'
@@ -18,6 +19,7 @@ import { formatDateTime } from '@/shared/utils/format'
 import { Button } from '@/shared/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import { SOURCE_INTERVAL_OPTIONS, intervalValue, toInterval } from '../model/source-intervals'
+import { recipeAttention } from '../model/source-recipe'
 
 const props = defineProps<{ documentId: string; canEdit: boolean }>()
 const emit = defineEmits<{ synced: [] }>()
@@ -43,6 +45,11 @@ const DOT: Record<typeof state.value, string> = {
   failing: 'bg-panel-caution',
   retrying: 'bg-panel-warning',
 }
+
+/** The recipe line (phase 2): what the review page would lead with. */
+const attention = computed(() => recipeAttention(source.value?.recipe))
+const router = useRouter()
+const recipePath = computed(() => `/documents/${props.documentId}/source/recipe`)
 
 const busy = ref<string | null>(null)
 async function act(name: string, run: () => Promise<DocumentSourceInfo | void>, done?: string) {
@@ -74,6 +81,13 @@ const syncNow = () =>
   }, 'sources.syncStarted')
 const setInterval = (value: unknown) =>
   act('interval', () => api.patch('/v1/documents/{id}/source', { ...path(), body: { intervalMinutes: toInterval(String(value)) } }))
+
+const draftRecipe = () =>
+  act('draft', async () => {
+    const next = await api.post('/v1/documents/{id}/source/recipe/draft', path())
+    await router.push(recipePath.value)
+    return next
+  })
 
 const webhook = ref<DocumentSourceWebhookResponse | null>(null)
 const rotateWebhook = () =>
@@ -123,6 +137,28 @@ async function copy(text: string) {
           {{ source.lastCheckedAt ? t('sources.lastChecked', { when: relativeTime(source.lastCheckedAt) }) : t('sources.neverChecked') }}
         </span>
       </span>
+    </p>
+
+    <p class="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
+      <template v-if="attention === 'held'">
+        <span class="font-medium text-panel-caution-ink">{{ t('sources.recipe.rail.held') }}</span>
+        <RouterLink :to="recipePath" class="rounded-sm underline underline-offset-2 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">{{ t('sources.recipe.rail.review') }}</RouterLink>
+      </template>
+      <template v-else-if="attention === 'proposal'">
+        <span class="font-medium">{{ t('sources.recipe.rail.proposal') }}</span>
+        <RouterLink :to="recipePath" class="rounded-sm underline underline-offset-2 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">{{ t('sources.recipe.rail.review') }}</RouterLink>
+      </template>
+      <template v-else>
+        <span v-if="attention === 'changed'" class="font-medium text-panel-warning-ink">{{ t('sources.recipe.rail.changed') }}</span>
+        <span v-else class="text-muted-foreground">
+          {{ source.recipe.active ? t('sources.recipe.rail.active', { n: source.recipe.active.version }) : t('sources.recipe.rail.implicit') }}
+        </span>
+        <span class="text-muted-foreground" aria-hidden="true">·</span>
+        <RouterLink :to="recipePath" class="rounded-sm underline underline-offset-2 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">{{ t('sources.recipe.rail.open') }}</RouterLink>
+        <Button v-if="attention === 'changed' && canEdit && source.recipe.hasBody" size="xs" variant="ghost" :disabled="busy !== null" @click="draftRecipe">
+          <Sparkles class="size-3" :class="busy === 'draft' && 'motion-safe:animate-pulse'" /> {{ busy === 'draft' ? t('sources.recipe.drafting') : t('sources.recipe.draft') }}
+        </Button>
+      </template>
     </p>
 
     <template v-if="canEdit">

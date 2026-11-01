@@ -295,6 +295,8 @@ export type I18nTranslations = {
         "testerDesc": string;
         "secretary": string;
         "secretaryDesc": string;
+        "interpreter": string;
+        "interpreterDesc": string;
         "testerRun": {
             "noOperation": string;
             "summary": string;
@@ -670,6 +672,7 @@ export type I18nTranslations = {
         };
         "sourceRemovedNote": string;
         "sourceRestoredMessage": string;
+        "sourceRecipeMessage": string;
     };
     "error": {
         "embed": {
@@ -1597,6 +1600,11 @@ export type I18nTranslations = {
             "notFound": string;
             "revisionNotOfPage": string;
             "interval": string;
+            "recipeInvalid": string;
+            "recipeChecksFail": string;
+            "proposalStale": string;
+            "noBody": string;
+            "draftUnavailable": string;
         };
     };
     "export": {
@@ -1765,6 +1773,7 @@ export type I18nTranslations = {
                 "paused": string;
                 "gone": string;
                 "failing": string;
+                "held": string;
             };
         };
         "someone": string;

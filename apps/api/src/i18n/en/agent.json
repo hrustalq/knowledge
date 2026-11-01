@@ -278,6 +278,8 @@
   "testerDesc": "Writes the QA test requests for one API operation — positive and negative cases derived from the spec — with realistic values. Started by Generate test requests on the operation, for members allowed to generate.",
   "secretary": "Secretary",
   "secretaryDesc": "Reads a memo's transcript against the knowledge base and proposes the pages it changes, each as a merge request citing the moments it rests on. Started when a memo you uploaded is transcribed.",
+  "interpreter": "Interpreter",
+  "interpreterDesc": "Drafts the extraction recipe a linked web page is read with, when a new version of it no longer reads the way its recipe expects. A person approves every recipe against a preview.",
   "testerRun": {
     "noOperation": "The tester was started without an operation; only Generate test requests on an operation can start it.",
     "summary": "Wrote {count} test cases for {method} {path}.",

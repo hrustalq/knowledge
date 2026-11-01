@@ -14,6 +14,7 @@ import { describe, expect, it, vi } from 'vitest';
  *    outdated, alert) and never toward a failed sync.
  * 6. A transient failure retries at 1, 5 and 25 minutes, `Retry-After` only
  *    lengthening one; exhausted retries are a failed sync, alerted once at 3.
+ * 7. An unsupported body is held for recipe review, never a failed sync (phase 2).
  */
 vi.mock('../src/common/safe-fetch.js', () => ({ safeFetch: vi.fn() }));
 
@@ -131,6 +132,9 @@ describe('WebSourcesService.fetchFailed', () => {
       }),
     };
     const events = { announce: vi.fn(async () => undefined) };
+    // Held on the first unsupported body, already held after (phase 2).
+    let held = false;
+    const recipes = { unsupported: vi.fn(async () => !held && (held = true)) };
     const service = new WebSourcesService(
       prisma as never,
       {} as never,
@@ -141,6 +145,7 @@ describe('WebSourcesService.fetchFailed', () => {
       notifications as never,
       events as never,
       {} as never,
+      recipes as never,
     );
     const row = { id: 'c1', workspaceId: 'w1', createdBy: 'owner', config: { url: URL_MD } };
     const fail = (err: unknown) => service.fetchFailed(row as never, { id: 'l1', documentId: 'd1', ...state } as never, err);
@@ -184,7 +189,15 @@ describe('WebSourcesService.fetchFailed', () => {
 
   it('alerts once when the third sync in a row fails', async () => {
     const { calls, fail } = harness({ ...base, failures: 2 });
-    await fail(new UnsupportedSourceError('application/pdf'));
+    await fail(new ConnectorRequestError(400, URL_MD, ''));
     expect(calls.alerts).toEqual(['failing']);
+  });
+
+  it('holds an unsupported body for recipe review instead of failing, alerting once', async () => {
+    const { state, calls, fail } = harness(base);
+    expect(await fail(new UnsupportedSourceError('application/pdf'))).toBe(true);
+    expect(await fail(new UnsupportedSourceError('application/pdf'))).toBe(true);
+    expect(calls.alerts).toEqual(['held']);
+    expect(state.failures).toBe(0);
   });
 });

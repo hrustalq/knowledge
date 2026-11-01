@@ -4991,6 +4991,46 @@
       "platformAdmin": false
     },
     {
+      "method": "PUT",
+      "path": "/v1/documents/{id}/source/recipe",
+      "tag": "sources",
+      "summary": "Save the page's extraction recipe, approving a drafted one or not. The current version is re-read through it",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/source/recipe/dismiss",
+      "tag": "sources",
+      "summary": "Keep the current recipe: reject the drafted one and clear the layout-changed note. A held version stays held",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/source/recipe/draft",
+      "tag": "sources",
+      "summary": "Ask the interpreter agent to draft a recipe for the last fetched version; it waits for review",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/source/recipe/preview",
+      "tag": "sources",
+      "summary": "What a recipe makes of the last fetched version, beside the page as it reads now, with its check results",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "POST",
       "path": "/v1/documents/{id}/source/restore",
       "tag": "sources",

@@ -120,6 +120,15 @@ export class ConnectorStagingService {
       await this.prisma.connectorLink.update({ where: { id: link.id }, data: { lastPulledAt: new Date() } });
       return this.markUnchanged(item, link);
     }
+    // Through the page's extraction recipe (#674, phase 2): a version failing its checks is held, never written.
+    if (web && doc.source) {
+      const markdown = await this.webSources.read(row, web, doc.source);
+      if (markdown === null) {
+        ctx.debug('item: held for recipe review', { id: item.externalId });
+        return this.markUnchanged(item, web);
+      }
+      doc.markdown = markdown;
+    }
     // A Figma frame the source embeds is pinned to its file's current version on pull (#470).
     doc.markdown = await this.figma.pinMarkdown(row.workspaceId, doc.markdown);
     const markdown = composeMarkdown(doc);

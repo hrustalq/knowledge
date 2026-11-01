@@ -71,6 +71,11 @@ export interface ExternalDocument {
   warnings: string[];
   /** The source answered 304 to `ref.knownVersion` (#674): nothing to read, nothing to write. */
   notModified?: boolean;
+  /**
+   * The body as fetched (#674, phase 2), `web` only: staging re-reads it
+   * through the page's extraction recipe and keeps it for preview and re-runs.
+   */
+  source?: { body: string; contentType: string; url: string };
 }
 
 /**

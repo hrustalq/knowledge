@@ -123,5 +123,6 @@
     "closedVia": "Closed in {key}"
   },
   "sourceRemovedNote": "Source removed: “{title}” is no longer published by its source",
-  "sourceRestoredMessage": "Restored revision {number}"
+  "sourceRestoredMessage": "Restored revision {number}",
+  "sourceRecipeMessage": "Re-read with a new extraction recipe"
 }

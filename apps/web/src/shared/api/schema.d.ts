@@ -4171,6 +4171,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/documents/{id}/source/recipe/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** What a recipe makes of the last fetched version, beside the page as it reads now, with its check results */
+        post: operations["WebSourcesController_previewRecipe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{id}/source/recipe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save the page's extraction recipe, approving a drafted one or not. The current version is re-read through it */
+        put: operations["WebSourcesController_saveRecipe"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{id}/source/recipe/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask the interpreter agent to draft a recipe for the last fetched version; it waits for review */
+        post: operations["WebSourcesController_draftRecipe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{id}/source/recipe/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Keep the current recipe: reject the drafted one and clear the layout-changed note. A held version stays held */
+        post: operations["WebSourcesController_dismissRecipe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/documents/{id}/source/webhook": {
         parameters: {
             query?: never;
@@ -9087,6 +9155,40 @@ export interface components {
              */
             revisionId: string;
         };
+        SourceRecipeRuleDto: {
+            /** @enum {string} */
+            kind: "drop-section" | "rename-heading" | "rewrite-links";
+            /** @description drop-section: the heading whose section is removed */
+            heading?: string;
+            /** @description rename-heading: the heading text; rewrite-links: the link prefix */
+            from?: string;
+            /** @description rename-heading: the new text; rewrite-links: the replacement prefix */
+            to?: string;
+        };
+        SourceRecipeDto: {
+            /** @description CSS selectors for the content, first that matches wins. Empty = article scoring */
+            content: string[];
+            /** @description CSS selectors removed first */
+            strip: string[];
+            /** @description h1…h6 → the markdown level (1–6) it becomes */
+            headings: {
+                [key: string]: number;
+            };
+            /** @description CSS selectors that must each match, or the version is held */
+            landmarks: string[];
+            rules: components["schemas"]["SourceRecipeRuleDto"][];
+        };
+        PreviewSourceRecipeDto: {
+            recipe: components["schemas"]["SourceRecipeDto"];
+        };
+        SaveSourceRecipeDto: {
+            recipe: components["schemas"]["SourceRecipeDto"];
+            /**
+             * Format: uuid
+             * @description The drafted recipe this approves, if any
+             */
+            proposalId?: string;
+        };
         PutWorkItemRulesDto: {
             workspaceId: string;
             /**
@@ -10738,7 +10840,7 @@ export interface components {
             createdAt: string;
         };
         /** @enum {string} */
-        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo";
+        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "source-recipe";
         AiUsageResponse: {
             from: string;
             to: string;
@@ -12481,6 +12583,15 @@ export interface components {
             failures: number;
             retryAt: string | null;
             webhookConfigured: boolean;
+            recipe: components["schemas"]["DocumentSourceRecipeState"];
+        };
+        DocumentSourceRecipeState: {
+            active: components["schemas"]["SourceRecipeVersion"] | null;
+            proposal: components["schemas"]["SourceRecipeVersion"] | null;
+            heldAt: string | null;
+            heldReasons: components["schemas"]["SourceCheckFailure"][];
+            structureChangedAt: string | null;
+            hasBody: boolean;
         };
         DocumentSourceWebhookResponse: {
             url: string;
@@ -14980,6 +15091,8 @@ export interface components {
             secret: string;
             setAt: string;
         };
+        /** @enum {string} */
+        SourceCheckFailure: "no-content" | "landmark" | "words" | "headings" | "unsupported";
         SourcePolicy: {
             id: string;
             workspaceId: string;
@@ -14989,6 +15102,56 @@ export interface components {
             createdAt: string;
             updatedAt: string;
             createdBy: string | null;
+        };
+        SourceRecipe: {
+            content: string[];
+            strip: string[];
+            headings: {
+                h1?: number;
+                h2?: number;
+                h3?: number;
+                h4?: number;
+                h5?: number;
+                h6?: number;
+            };
+            landmarks: string[];
+            rules: components["schemas"]["SourceRecipeRule"][];
+        };
+        SourceRecipePreview: {
+            before: string;
+            after: string;
+            failures: components["schemas"]["SourceCheckFailure"][];
+            hits: {
+                [key: string]: number;
+            };
+        };
+        SourceRecipeRule: {
+            /** @enum {string} */
+            kind: "drop-section";
+            heading: string;
+        } | {
+            /** @enum {string} */
+            kind: "rename-heading";
+            from: string;
+            to: string;
+        } | {
+            /** @enum {string} */
+            kind: "rewrite-links";
+            from: string;
+            to: string;
+        };
+        /** @enum {string} */
+        SourceRecipeStatus: "proposed" | "active" | "superseded" | "rejected";
+        SourceRecipeVersion: {
+            id: string;
+            version: number;
+            status: components["schemas"]["SourceRecipeStatus"];
+            /** @enum {string} */
+            origin: "agent" | "person";
+            connectorScope: boolean;
+            recipe: components["schemas"]["SourceRecipe"];
+            note: string | null;
+            createdAt: string;
         };
         /** @enum {string} */
         SourceVerificationState: "verified" | "expired" | "edited" | "requested" | "outdated" | "flagged" | "unverified";
@@ -29602,6 +29765,189 @@ export interface operations {
                 "application/json": components["schemas"]["RestoreDocumentSourceDto"];
             };
         };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSourceInfo"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WebSourcesController_previewRecipe: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewSourceRecipeDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceRecipePreview"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WebSourcesController_saveRecipe: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveSourceRecipeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSourceInfo"];
+                };
+            };
+            /** @description The recipe fails its checks on the current version (`details.failures`), or the proposal is stale */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WebSourcesController_draftRecipe: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSourceInfo"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WebSourcesController_dismissRecipe: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             201: {
                 headers: {

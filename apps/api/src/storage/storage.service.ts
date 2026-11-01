@@ -88,6 +88,16 @@ export class StorageService {
   }
 
   /**
+   * A `web` source's last fetched body (#674, phase 2), as JSON
+   * `{ body, contentType, url }`: what a recipe preview, a re-run and a draft
+   * read, so none of them fetches again. One object per link, overwritten.
+   */
+  // ponytail: outlives a deleted page until workspace teardown purges the prefix; purge per connector if storage matters.
+  sourceBodyObjectKey(workspaceId: string, connectorId: string, linkId: string): string {
+    return `workspaces/${workspaceId}/sources/${connectorId}/${linkId}/body.json`;
+  }
+
+  /**
    * Avatars (docs/features/23). Deliberately outside the `workspaces/` tree
    * that every other key sits under: a user belongs to several workspaces and a
    * face does not change between them, so filing it under one would make the

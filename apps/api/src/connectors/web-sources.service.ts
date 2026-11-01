@@ -11,7 +11,10 @@ import {
   type CreateSourcePageResponse,
   type DocumentSourceInfo,
   type DocumentSourceWebhookResponse,
+  type Locale,
   type SourceAlertKind,
+  type SourceCheckFailure,
+  type SourceRecipePreview,
 } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { DocumentsService } from '../documents/documents.service.js';
@@ -22,10 +25,12 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { VerificationService } from '../verification/verification.service.js';
 import { ConnectorRequestError } from './adapters/connector.types.js';
-import { isGone, isTransient, retryAfterMs } from './adapters/web-failures.js';
+import { isGone, isTransient, isUnsupported, retryAfterMs } from './adapters/web-failures.js';
 import { composeMarkdown, sha256 } from './connector-markdown.js';
 import { ConnectorProducer } from './connector.producer.js';
 import { ConnectorsService } from './connectors.service.js';
+import type { SourceBody } from './source-recipe.js';
+import { SourceRecipesService } from './source-recipes.service.js';
 
 /** The system's own actor id, used when a connector's owner was deleted. */
 const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
@@ -53,6 +58,7 @@ export class WebSourcesService {
     private readonly notifications: NotificationsService,
     private readonly events: EventsPublisher,
     private readonly producer: ConnectorProducer,
+    private readonly recipes: SourceRecipesService,
   ) {}
 
   // ------------------------------------------------------------ sync hooks
@@ -64,6 +70,18 @@ export class WebSourcesService {
       where: { id: link.id },
       data: { failures: 0, goneCount: 0, retryAttempt: 0, retryAt: null },
     });
+  }
+
+  /**
+   * A fetched version through the page's extraction recipe (phase 2): the
+   * markdown to write, or null when its checks failed and it is held — the
+   * owner is alerted on the way in, not on every held sync after.
+   */
+  async read(row: Connector, link: ConnectorLink, source: SourceBody): Promise<string | null> {
+    const read = await this.recipes.read(row, link, source);
+    if (!read.held) return read.markdown;
+    if (read.newlyHeld) await this.alert(row, link.documentId, 'held');
+    return null;
   }
 
   /** A paused page writes nothing; a version it has not counted yet is one more it is behind. */
@@ -83,9 +101,15 @@ export class WebSourcesService {
    * - 404/410 counts toward archiving, never toward a failed sync.
    * - A transient failure schedules a retry at 1, 5 and 25 minutes
    *   (`Retry-After` can only lengthen one); `afterRun` queues it.
+   * - An unsupported body is held for recipe review, never retried.
    * - Anything else, and exhausted retries, is a failed sync.
    */
   async fetchFailed(row: Connector, link: ConnectorLink, err: unknown): Promise<boolean> {
+    // Not markdown, not HTML: a parse failure, never retried — held for review (phase 2).
+    if (isUnsupported(err)) {
+      if (await this.recipes.unsupported(link)) await this.alert(row, link.documentId, 'held');
+      return true;
+    }
     if (isGone(err)) {
       const goneCount = link.goneCount + 1;
       await this.prisma.connectorLink.update({ where: { id: link.id }, data: { goneCount } });
@@ -281,10 +305,18 @@ export class WebSourcesService {
       { timeout: 30_000, maxWait: 10_000 },
     );
     // A connector with no page would show up in the Connectors list as a stray.
-    return created.catch(async (err: unknown) => {
+    const result = await created.catch(async (err: unknown) => {
       await this.prisma.connector.delete({ where: { id: row.id } }).catch(() => undefined);
       throw err;
     });
+    // The first version is the baseline the next one is checked against, and the body a recipe previews on.
+    if (doc.source) {
+      const linkRow = await this.prisma.connectorLink.findFirstOrThrow({ where: { connectorId: row.id } });
+      await this.recipes.read(row, linkRow, doc.source).catch((err: unknown) =>
+        this.logger.warn({ msg: 'Source baseline not recorded', connectorId: row.id, err: String(err) }),
+      );
+    }
+    return result;
   }
 
   async info(documentId: string): Promise<DocumentSourceInfo> {
@@ -306,6 +338,7 @@ export class WebSourcesService {
       failures: link.failures,
       retryAt: link.retryAt?.toISOString() ?? null,
       webhookConfigured: row.webhookSecret !== null,
+      recipe: await this.recipes.state(link),
     };
   }
 
@@ -371,6 +404,35 @@ export class WebSourcesService {
     await this.storage.putObjectText(stored.s3Key, markdown, stored.contentType);
     await this.documents.finalizeRevision(documentId, draft.revisionId);
     await this.alert(row, documentId, 'paused');
+    return this.info(documentId);
+  }
+
+  // ------------------------------------------------------------ extraction recipes (phase 2)
+
+  async previewRecipe(documentId: string, recipe: unknown): Promise<SourceRecipePreview> {
+    const { link } = await this.require(documentId);
+    return this.recipes.preview(link, recipe);
+  }
+
+  /** Save (or approve) a recipe; the current version is re-read through it. */
+  async saveRecipe(documentId: string, recipe: unknown, proposalId: string | undefined, userId: string): Promise<DocumentSourceInfo> {
+    const { row, link } = await this.require(documentId);
+    await this.recipes.save(row, link, recipe, proposalId, userId);
+    return this.info(documentId);
+  }
+
+  /** The agent drafts a recipe for the last fetched version, on a person's ask. */
+  async draftRecipe(documentId: string, userId: string, locale: Locale): Promise<DocumentSourceInfo> {
+    const { row, link } = await this.require(documentId);
+    const failures = (link.heldReason ? link.heldReason.split(',') : []) as SourceCheckFailure[];
+    const drafted = await this.recipes.draft(row, link, failures, userId, locale);
+    if (!drafted) throw new BadRequestException(t('error.source.draftUnavailable'));
+    return this.info(documentId);
+  }
+
+  async dismissRecipe(documentId: string, userId: string): Promise<DocumentSourceInfo> {
+    const { row, link } = await this.require(documentId);
+    await this.recipes.dismiss(row, link, userId);
     return this.info(documentId);
   }
 

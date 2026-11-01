@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { ConnectorCapabilities, ConnectorKind } from '@knowledge/contracts';
 import { t } from '../../i18n/t.js';
-import { extractArticle } from '../../import/parsers/html-to-markdown.js';
+import { extractSource, isHtmlBody, isMarkdownBody } from '../source-recipe.js';
 import { verifyHubSignature } from '../webhook-payload.js';
 import {
   ConnectorRequestError,
@@ -23,9 +23,9 @@ const MAX_BYTES = 5 * 1024 * 1024;
  * A `web` source (#674, phase 1): one URL whose page here is read-only and
  * replaced by each new version.
  *
- * Markdown passes through; HTML goes through `extractArticle`, the house
- * answer to "which part of this page is the article" (Defuddle, then the
- * editor's serializer). Extraction recipes replace that in phase 2.
+ * Markdown passes through; HTML goes through the implicit extraction recipe
+ * (article scoring, `source-recipe.ts`). The fetched body rides along on
+ * `source`, and staging re-reads it through the page's own recipe (phase 2).
  *
  * Every fetch is conditional on the validators the link last agreed on
  * (`ref.knownVersion`), so an unchanged source costs a 304 and nothing else.
@@ -78,13 +78,15 @@ export class WebAdapter implements ConnectorAdapter {
     const nextRef: ExternalRef = { ...ref, url, ...(version ? { version } : {}) };
     const type = (res.headers.get('content-type') ?? '').split(';')[0]!.trim().toLowerCase();
 
-    if (isMarkdown(type, url)) {
-      return { ref: nextRef, title: markdownTitle(body) ?? titleFromUrl(url), markdown: body, warnings: [] };
+    const source = { body, contentType: type, url: res.url || url };
+    if (isMarkdownBody(type, url)) {
+      return { ref: nextRef, title: markdownTitle(body) ?? titleFromUrl(url), markdown: body, warnings: [], source };
     }
-    if (type === 'text/html' || type === 'application/xhtml+xml') {
-      const article = await extractArticle(body, res.url || url);
-      const warnings = article.fellBack ? [t('connector.warning.sourceNoArticle')] : [];
-      return { ref: nextRef, title: article.title ?? titleFromUrl(url), markdown: article.markdown, warnings };
+    if (isHtmlBody(type)) {
+      // The implicit recipe; staging re-reads `source` through the page's own when it has one.
+      const article = await extractSource(source, null);
+      const warnings = article.contentFound ? [] : [t('connector.warning.sourceNoArticle')];
+      return { ref: nextRef, title: article.title ?? titleFromUrl(url), markdown: article.markdown, warnings, source };
     }
     throw new UnsupportedSourceError(type || 'unknown');
   }
@@ -131,13 +133,6 @@ function readValidators(version: string | undefined): { etag?: string; lastModif
   } catch {
     return {};
   }
-}
-
-function isMarkdown(type: string, url: string): boolean {
-  if (type === 'text/markdown' || type === 'text/x-markdown') return true;
-  // Raw file hosts serve `.md` as text/plain (GitHub raw) or with no type.
-  const path = new URL(url).pathname.toLowerCase();
-  return (type === 'text/plain' || type === 'application/octet-stream' || type === '') && /\.(md|markdown|mdx)$/.test(path);
 }
 
 function markdownTitle(markdown: string): string | undefined {

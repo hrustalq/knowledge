@@ -2245,9 +2245,10 @@ export const SOURCE_RETRY_DELAYS_MIN = [1, 5, 25] as const;
 
 /**
  * Why a source alerts its connector's owner (an in-app row plus email, reason
- * `alert`). Later phases add `held` (recipe review) and `breaking` (OpenAPI).
+ * `alert`). `held`: a version failed its recipe checks (phase 2). Phase 4 adds
+ * `breaking` (OpenAPI).
  */
-export const SOURCE_ALERT_KINDS = ['paused', 'gone', 'failing'] as const;
+export const SOURCE_ALERT_KINDS = ['paused', 'gone', 'failing', 'held'] as const;
 export type SourceAlertKind = (typeof SOURCE_ALERT_KINDS)[number];
 
 // GET /v1/documents/:id/source
@@ -2271,6 +2272,104 @@ export interface DocumentSourceInfo {
   /** When the next retry of a transient failure runs, if one is pending. */
   retryAt: string | null;
   webhookConfigured: boolean;
+  /** How the source is read (phase 2): the recipe in force, a held version, a waiting review. */
+  recipe: DocumentSourceRecipeState;
+}
+
+// ---------------------------------------------------------------------------
+// Extraction recipes (#674, phase 2): how a `web` source's HTML becomes its
+// page. Declarative data only, never code. A page recipe replaces the
+// connector's; with neither, the implicit recipe (article scoring) applies.
+// ---------------------------------------------------------------------------
+
+export const SOURCE_RECIPE_RULE_KINDS = ['drop-section', 'rename-heading', 'rewrite-links'] as const;
+export type SourceRecipeRuleKind = (typeof SOURCE_RECIPE_RULE_KINDS)[number];
+
+/**
+ * A normalization rule, applied to the markdown in order (markdown sources
+ * too). `drop-section` removes a heading and everything under it;
+ * `rename-heading` renames one; `rewrite-links` replaces a link-target prefix.
+ * Heading text matches case-insensitively, whitespace folded.
+ */
+export type SourceRecipeRule =
+  | { kind: 'drop-section'; heading: string }
+  | { kind: 'rename-heading'; from: string; to: string }
+  | { kind: 'rewrite-links'; from: string; to: string };
+
+export const SOURCE_HEADING_TAGS = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'] as const;
+export type SourceHeadingTag = (typeof SOURCE_HEADING_TAGS)[number];
+
+export interface SourceRecipe {
+  /** CSS selectors for the content, first that matches wins (all its matches, in order). Empty = article scoring. */
+  content: string[];
+  /** CSS selectors removed before anything else. */
+  strip: string[];
+  /** A source heading tag → the markdown level it becomes (1–6). */
+  headings: Partial<Record<SourceHeadingTag, number>>;
+  /** CSS selectors that must each match, or the version is held. */
+  landmarks: string[];
+  rules: SourceRecipeRule[];
+}
+
+/** Recipe limits: a recipe is a page's reading instructions, not a program. */
+export const SOURCE_RECIPE_MAX_SELECTORS = 20;
+export const SOURCE_RECIPE_MAX_RULES = 50;
+/** A version whose word count falls below this share of the last good one is held. */
+export const SOURCE_MIN_WORDS_RATIO = 0.4;
+
+/** Why a version was held: one per failed check. */
+export const SOURCE_CHECK_FAILURES = ['no-content', 'landmark', 'words', 'headings', 'unsupported'] as const;
+export type SourceCheckFailure = (typeof SOURCE_CHECK_FAILURES)[number];
+
+export type SourceRecipeStatus = 'proposed' | 'active' | 'superseded' | 'rejected';
+
+export interface SourceRecipeVersion {
+  id: string;
+  version: number;
+  status: SourceRecipeStatus;
+  origin: 'agent' | 'person';
+  /** True for the connector's recipe, false for this page's own. */
+  connectorScope: boolean;
+  recipe: SourceRecipe;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface DocumentSourceRecipeState {
+  /** Null while the implicit recipe applies. */
+  active: SourceRecipeVersion | null;
+  /** A drafted recipe waiting for review. */
+  proposal: SourceRecipeVersion | null;
+  /** Set while a version is held: the page stays on its last good revision. */
+  heldAt: string | null;
+  heldReasons: SourceCheckFailure[];
+  /** The source's structure changed while the checks still pass. */
+  structureChangedAt: string | null;
+  /** Whether a fetched body is kept to preview against (false for a source last read before phase 2). */
+  hasBody: boolean;
+}
+
+// POST /v1/documents/:id/source/recipe/preview
+export interface PreviewSourceRecipeRequest {
+  recipe: SourceRecipe;
+}
+
+export interface SourceRecipePreview {
+  /** The page as it reads now (its head). */
+  before: string;
+  /** What the recipe makes of the last fetched version. */
+  after: string;
+  /** Empty when every check passes. */
+  failures: SourceCheckFailure[];
+  /** Selector → elements matched, for the selectors and landmarks the recipe names. */
+  hits: Record<string, number>;
+}
+
+// PUT /v1/documents/:id/source/recipe — refused (409) while its checks fail.
+export interface SaveSourceRecipeRequest {
+  recipe: SourceRecipe;
+  /** The proposal this approves, if any. */
+  proposalId?: string;
 }
 
 // POST /v1/sources

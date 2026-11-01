@@ -2226,6 +2226,7 @@ model Connector {
   project               Project                @relation(fields: [projectId], references: [id])
   connection            Connection?            @relation(fields: [connectionId], references: [id], onDelete: Restrict)
   links                 ConnectorLink[]
+  recipes               SourceRecipe[]
   runs                  ConnectorRun[]
   conflicts             ConnectorConflict[]
   workItems             ConnectorWorkItem[]
@@ -2332,12 +2333,57 @@ model ConnectorLink {
   /// A transient failure's next retry (SOURCE_RETRY_DELAYS_MIN[retry_attempt - 1]).
   retryAttempt Int       @default(0) @map("retry_attempt")
   retryAt      DateTime? @map("retry_at") @db.Timestamptz
+  /// Extraction recipes (#674, phase 2). The last good version's h1/h2
+  /// headings and word count (the implicit checks compare against it), and
+  /// the structural fingerprint the last fetch had.
+  baseline           Json?     @db.JsonB
+  fingerprint        Json?     @db.JsonB
+  /// The fingerprint moved while the recipe's checks still pass: a note and a
+  /// Draft button, no model call. Cleared by a saved recipe or a dismiss.
+  structureChangedAt DateTime? @map("structure_changed_at") @db.Timestamptz
+  /// Set while a version is held: the checks failed, the page stays on its
+  /// last good revision. held_reason = the failed checks, comma-separated.
+  heldAt             DateTime? @map("held_at") @db.Timestamptz
+  heldReason         String?   @map("held_reason")
+  /// sha256 of the last fetched body, stored at sourceBodyObjectKey.
+  bodyHash           String?   @map("body_hash")
 
   connector Connector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
 
   @@unique([connectorId, externalId])
   @@index([documentId])
   @@map("connector_links")
+}
+
+/// An extraction recipe (#674, phase 2): how a `web` source's HTML becomes
+/// its page. Declarative data only — selectors, a heading map, landmarks and
+/// normalization rules — never code. Immutable versions; a page-scope row
+/// (document_id set) replaces the connector-scope one. At most one `active`
+/// and one `proposed` per scope, kept by updateMany-then-insert.
+model SourceRecipe {
+  id          String  @id @default(uuid()) @db.Uuid
+  workspaceId String  @map("workspace_id") @db.Uuid
+  connectorId String  @map("connector_id") @db.Uuid
+  /// Null = the connector's recipe. No FK, like connector_links.document_id.
+  documentId  String? @map("document_id") @db.Uuid
+  version     Int
+  /// proposed | active | superseded | rejected
+  status      String
+  /// agent | person
+  origin      String
+  recipe      Json    @db.JsonB
+  /// The agent's one-line account of what it changed, shown in the review.
+  note        String?
+  createdBy   String?   @map("created_by") @db.Uuid
+  decidedBy   String?   @map("decided_by") @db.Uuid
+  decidedAt   DateTime? @map("decided_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  connector Connector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+
+  @@unique([connectorId, version])
+  @@index([connectorId, documentId, status])
+  @@map("source_recipes")
 }
 
 /// The reverse-import index of a code connector's head (#236): one row per

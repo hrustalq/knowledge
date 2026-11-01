@@ -123,5 +123,6 @@
     "closedVia": "Закрыто в {key}"
   },
   "sourceRemovedNote": "Источник удалён: «{title}» больше не публикуется источником",
-  "sourceRestoredMessage": "Восстановлена ревизия {number}"
+  "sourceRestoredMessage": "Восстановлена ревизия {number}",
+  "sourceRecipeMessage": "Перечитано по новому рецепту извлечения"
 }

@@ -22,6 +22,10 @@ import { NotificationsCoreModule } from '../notifications/notifications-core.mod
 import { VerificationCoreModule } from '../verification/verification-core.module.js';
 import { ConnectorQueueModule } from './connector-queue.module.js';
 import { WebSourcesService } from './web-sources.service.js';
+import { SourceRecipesService } from './source-recipes.service.js';
+import { AgentCoreModule } from '../agents/agent-core.module.js';
+import { AiCoreModule } from '../ai/ai-core.module.js';
+import { AssistantClientModule } from '../assistant/assistant-client.module.js';
 
 /**
  * Connector configuration, credentials, links and the sync engine, with no
@@ -52,6 +56,10 @@ import { WebSourcesService } from './web-sources.service.js';
     VerificationCoreModule,
     NotificationsCoreModule,
     ConnectorQueueModule,
+    // Extraction recipes (#674, phase 2): the `interpreter` drafts one when a version is held.
+    AgentCoreModule,
+    AiCoreModule,
+    AssistantClientModule,
   ],
   providers: [
     ConnectorsService,
@@ -67,6 +75,7 @@ import { WebSourcesService } from './web-sources.service.js';
     // Its OAuth grants (#557): every Figma call resolves its token here, in both processes.
     FigmaOauthService,
     WebSourcesService,
+    SourceRecipesService,
   ],
   exports: [
     ConnectorsService,

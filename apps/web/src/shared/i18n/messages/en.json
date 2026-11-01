@@ -4536,7 +4536,8 @@
     "alert": {
       "paused": "was restored, so its source is paused",
       "gone": "lost its source and was archived",
-      "failing": "failed to sync three times in a row"
+      "failing": "failed to sync three times in a row",
+      "held": "has a new source version held for recipe review"
     }
   },
   "connect": {
@@ -7414,6 +7415,121 @@
       "body": "It becomes the page again, and the source is paused so the next check does not replace it. Resume the source to follow it again.",
       "action": "Restore and pause",
       "done": "Revision {n} restored; the source is paused"
+    },
+    "recipe": {
+      "heading": "Extraction recipe",
+      "backToPage": "Back to the page",
+      "status": {
+        "held": "A new version was held: {checks} failed",
+        "heldHint": "The page stays on its last good version. Draft a recipe or adjust this one until every check passes, then save it.",
+        "proposal": "A drafted recipe is waiting for review",
+        "changed": "The source's layout changed {when}, and the recipe still reads it",
+        "active": "Read with recipe v{n}",
+        "implicit": "Read with automatic extraction"
+      },
+      "byAgent": "Drafted by the interpreter agent",
+      "noNote": "The interpreter left no note.",
+      "paused": "The source is paused. A saved recipe applies to the next version it writes once resumed.",
+      "content": {
+        "label": "Content",
+        "hint": "CSS selectors for the part of the page that becomes this page. The first one that matches wins. None: automatic article extraction.",
+        "row": "Content selector {n}",
+        "placeholder": "main article",
+        "none": "None — automatic article extraction"
+      },
+      "strip": {
+        "label": "Remove",
+        "hint": "CSS selectors removed before anything else: banners, ads, edit links.",
+        "row": "Removed selector {n}",
+        "placeholder": ".cookie-banner",
+        "none": "Nothing removed"
+      },
+      "landmarks": {
+        "label": "Landmarks",
+        "hint": "CSS selectors that must each match. When one stops matching, the layout changed and the version is held.",
+        "row": "Landmark {n}",
+        "placeholder": "main#content",
+        "none": "None — the page's headings stand in for them"
+      },
+      "matches": "{n} match | {n} matches",
+      "noMatch": "no match",
+      "remove": "Remove",
+      "addSelector": "Add selector",
+      "headings": {
+        "label": "Heading levels",
+        "count": "{n} remapped | {n} remapped",
+        "hint": "For a page that misuses heading tags: the level each source heading becomes.",
+        "row": "Level for {tag}",
+        "keep": "Keep",
+        "level": "Level {n}"
+      },
+      "rules": {
+        "label": "Normalization rules",
+        "hint": "Applied in order to the page this recipe produces.",
+        "none": "No rules.",
+        "kind": "Rule {n}",
+        "kinds": {
+          "drop-section": "Drop a section",
+          "rename-heading": "Rename a heading",
+          "rewrite-links": "Rewrite links"
+        },
+        "heading": "Heading of the section to drop",
+        "from": {
+          "rename-heading": "Heading",
+          "rewrite-links": "Link prefix"
+        },
+        "to": {
+          "rename-heading": "New heading",
+          "rewrite-links": "Replacement prefix"
+        },
+        "add": "Add rule"
+      },
+      "approve": "Approve and publish",
+      "save": "Save recipe",
+      "saving": "Saving…",
+      "reject": "Reject draft",
+      "keep": "Keep current recipe",
+      "draft": "Draft recipe",
+      "redraft": "Draft again",
+      "drafting": "Drafting…",
+      "viewerHint": "Only editors can change a page's recipe.",
+      "viewerPreview": "Only editors can preview a recipe.",
+      "preview": "Preview",
+      "previewAs": "Show the preview as",
+      "view": {
+        "changes": "Changes",
+        "page": "Page"
+      },
+      "check": {
+        "no-content": "Content found",
+        "landmark": "Landmarks present",
+        "words": "Word count kept",
+        "headings": "Headings kept",
+        "unsupported": "Markdown or HTML"
+      },
+      "checkPasses": "passes",
+      "checkFails": "fails",
+      "noBody": "No version of this source has been read since recipes arrived. Sync it once from the page's Source panel to preview a recipe.",
+      "emptyResult": "This recipe produces an empty page.",
+      "blocked": {
+        "noBody": "Sync the source once before saving a recipe.",
+        "previewing": "Waiting for the preview…",
+        "checks": "Every check must pass before the recipe can be saved.",
+        "unchanged": "Change the recipe to save it."
+      },
+      "approved": "Recipe approved; the page was re-read with it",
+      "saved": "Recipe saved; the page was re-read with it",
+      "dismissed": "Kept the current recipe",
+      "drafted": "A new recipe was drafted",
+      "rail": {
+        "held": "Held for recipe review",
+        "proposal": "Recipe draft waiting",
+        "review": "Review",
+        "changed": "Layout changed",
+        "active": "Recipe v{n}",
+        "implicit": "Automatic extraction",
+        "open": "Recipe…"
+      }
     }
   }
 }

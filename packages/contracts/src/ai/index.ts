@@ -1217,7 +1217,9 @@ export type AiUsageOperation =
    */
   | 'transcription'
   /** The `secretary` reading one memo's transcript and proposing pages (#551). */
-  | 'memo';
+  | 'memo'
+  /** The `interpreter` drafting a `web` source's extraction recipe (#674): on a held version, or a person's Draft. */
+  | 'source-recipe';
 
 /** One row of the per-user (or per-model) usage breakdown. */
 export interface AiUsageBucket {
@@ -1382,6 +1384,8 @@ export const BUILT_IN_AGENT_KEYS = [
   'tester',
   /** Proposes the pages a memo's transcript changes, as merge requests (#551). Started only by the memo worker. */
   'secretary',
+  /** Drafts a `web` source's extraction recipe when a version fails its checks (#674). Never from the Run button. */
+  'interpreter',
 ] as const;
 export type BuiltInAgentKey = (typeof BUILT_IN_AGENT_KEYS)[number];
 

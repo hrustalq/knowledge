@@ -2427,6 +2427,53 @@ export interface SaveSourceRecipeRequest {
   proposalId?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Tree recipes (#674, phase 3b): the connector's recipe, which every crawled
+// page without its own reads with. Previewed on one page's last fetched
+// version (the root by default); saving queues a pull that re-reads the rest.
+// ---------------------------------------------------------------------------
+
+/** A crawled page, as the tree recipe's preview picker lists it. */
+export interface SourceTreeRecipePage {
+  documentId: string;
+  title: string;
+  url: string;
+  /** False until a version of it was read since recipes arrived: nothing to preview on yet. */
+  hasBody: boolean;
+  /** The page keeps its own recipe, which the tree's does not replace. */
+  ownRecipe: boolean;
+  heldAt: string | null;
+}
+
+// GET /v1/connectors/:id/source/recipe
+export interface SourceTreeRecipeState {
+  connectorId: string;
+  url: string;
+  host: string;
+  rootDocumentId: string | null;
+  /** Null while the implicit recipe applies. */
+  active: SourceRecipeVersion | null;
+  /** A drafted tree recipe waiting for review. */
+  proposal: SourceRecipeVersion | null;
+  /** The crawled pages the caller can see, root first. */
+  pages: SourceTreeRecipePage[];
+}
+
+// POST /v1/connectors/:id/source/recipe/preview — `documentId` picks the page (default: the root).
+export interface PreviewSourceTreeRecipeRequest extends PreviewSourceRecipeRequest {
+  documentId?: string;
+}
+
+// PUT /v1/connectors/:id/source/recipe — checked on `documentId` (default: the root), refused (409) while that fails.
+export interface SaveSourceTreeRecipeRequest extends SaveSourceRecipeRequest {
+  documentId?: string;
+}
+
+// POST /v1/connectors/:id/source/recipe/draft — drafted from `documentId`'s last version (default: the root).
+export interface DraftSourceTreeRecipeRequest {
+  documentId?: string;
+}
+
 // POST /v1/sources
 export interface CreateSourcePageRequest {
   workspaceId: string;

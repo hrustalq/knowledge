@@ -7,6 +7,7 @@ import type {
   SourceRecipe,
   SourceRecipePreview,
   SourceRecipeVersion,
+  SourceTreeRecipeState,
 } from '@knowledge/contracts';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { AiUsageService } from '../ai/ai-usage.service.js';
@@ -15,6 +16,7 @@ import { wrapUntrusted } from '../common/untrusted.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { safeJson } from '../glossary/glossary.service.js';
 import { t } from '../i18n/t.js';
+import { type AccessScope, visibilityWhere } from '../permissions/access-scope.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { sha256 } from './connector-markdown.js';
@@ -40,6 +42,13 @@ const PAGE_EXCERPT = 4_000;
 export type RecipeRead =
   | { held: false; markdown: string }
   | { held: true; newlyHeld: boolean };
+
+/**
+ * Which recipe an operation writes: the page's own, or the connector's (the
+ * tree recipe, #674 phase 3b), which every page without its own reads with.
+ * A tree operation still names a page: the one whose last version it reads.
+ */
+export type RecipeScope = 'page' | 'tree';
 
 /**
  * Extraction recipes (#674, phase 2), the stateful half: which recipe a link
@@ -89,6 +98,22 @@ export class SourceRecipesService {
     return { held: true, newlyHeld };
   }
 
+  /**
+   * A page the crawl found for the first time (phase 3b), read through the
+   * tree recipe before the page exists. Failing checks leave nothing to hold,
+   * so the item fails and the next crawl tries again. Once the page is
+   * written, staging passes the same body through `read` for its baseline.
+   */
+  async readNew(row: Connector, source: SourceBody): Promise<{ markdown: string; failures: SourceCheckFailure[] }> {
+    const active = await this.prisma.sourceRecipe.findFirst({
+      where: { connectorId: row.id, documentId: null, status: 'active' },
+      orderBy: { version: 'desc' },
+    });
+    const recipe = active ? readRecipe(active.recipe).recipe : null;
+    const ex = await extractSource(source, recipe);
+    return { markdown: ex.markdown, failures: checkExtraction(ex, recipe, null) };
+  }
+
   /** A body that is neither markdown nor HTML: held, with nothing to draft from. */
   async unsupported(link: ConnectorLink): Promise<boolean> {
     return this.hold(link, ['unsupported'], null);
@@ -133,7 +158,7 @@ export class SourceRecipesService {
   // ------------------------------------------------------------ page operations
 
   async state(link: ConnectorLink): Promise<DocumentSourceRecipeState> {
-    const [active, proposal] = await Promise.all([this.activeRow(link), this.proposalRow(link)]);
+    const [active, proposal] = await Promise.all([this.activeRow(link), this.proposalRow(link.documentId, link.connectorId)]);
     return {
       active: active ? versionOf(active) : null,
       proposal: proposal ? versionOf(proposal) : null,
@@ -158,7 +183,14 @@ export class SourceRecipesService {
    * is re-read through it, and a different result is written as a revision
    * (unless the source is paused — resuming re-reads anyway).
    */
-  async save(row: Connector, link: ConnectorLink, value: unknown, proposalId: string | undefined, userId: string): Promise<void> {
+  async save(
+    row: Connector,
+    link: ConnectorLink,
+    value: unknown,
+    proposalId: string | undefined,
+    userId: string,
+    scope: RecipeScope = 'page',
+  ): Promise<void> {
     const recipe = this.parse(value);
     const source = await this.body(link);
     const ex = await extractSource(source, recipe);
@@ -166,21 +198,21 @@ export class SourceRecipesService {
     if (failures.length > 0) {
       throw new ConflictException({ statusCode: 409, message: t('error.source.recipeChecksFail', { checks: failures.join(', ') }), failures });
     }
-    const proposal = proposalId ? await this.proposalRow(link) : null;
+    const where = { connectorId: row.id, documentId: scope === 'page' ? link.documentId : null };
+    const proposal = proposalId ? await this.proposalRow(where.documentId, row.id) : null;
     if (proposalId && proposal?.id !== proposalId) throw new ConflictException(t('error.source.proposalStale'));
-    const scope = { connectorId: row.id, documentId: link.documentId };
     const unchanged = proposal && JSON.stringify(readRecipe(proposal.recipe).recipe) === JSON.stringify(recipe);
     const now = new Date();
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.sourceRecipe.updateMany({ where: { ...scope, status: 'active' }, data: { status: 'superseded' } });
+      await tx.sourceRecipe.updateMany({ where: { ...where, status: 'active' }, data: { status: 'superseded' } });
       if (proposal && unchanged) {
         await tx.sourceRecipe.update({ where: { id: proposal.id }, data: { status: 'active', decidedBy: userId, decidedAt: now } });
       } else {
         if (proposal) await tx.sourceRecipe.update({ where: { id: proposal.id }, data: { status: 'superseded', decidedBy: userId, decidedAt: now } });
         await tx.sourceRecipe.create({
           data: {
-            ...scope,
+            ...where,
             workspaceId: row.workspaceId,
             version: await this.nextVersion(tx, row.id),
             status: 'active',
@@ -191,6 +223,16 @@ export class SourceRecipesService {
             decidedAt: now,
           },
         });
+      }
+      if (scope === 'tree') {
+        // Every page that reads with the tree recipe fetches in full on the next pull, which the caller
+        // queues. A recipe moves the fingerprint too, so it re-baselines there rather than reading as a layout change.
+        const own = await tx.sourceRecipe.findMany({ where: { connectorId: row.id, status: 'active', documentId: { not: null } }, select: { documentId: true } });
+        await tx.connectorLink.updateMany({
+          where: { connectorId: row.id, documentId: { notIn: own.map((r) => r.documentId!) } },
+          data: { externalVersion: null, fingerprint: Prisma.DbNull, structureChangedAt: null },
+        });
+        return;
       }
       await tx.connectorLink.update({
         where: { id: link.id },
@@ -203,6 +245,7 @@ export class SourceRecipesService {
         },
       });
     });
+    if (scope === 'tree') return;
 
     const markdown = ex.markdown.trim();
     const hash = sha256(markdown);
@@ -220,13 +263,16 @@ export class SourceRecipesService {
     await this.prisma.connectorLink.update({ where: { id: link.id }, data: { contentHash: hash, revisionId: draft.revisionId, lastPulledAt: new Date() } });
   }
 
-  /** "Keep the current recipe": the open proposal is rejected and the layout note cleared. A held version stays held. */
-  async dismiss(row: Connector, link: ConnectorLink, userId: string): Promise<void> {
+  /**
+   * "Keep the current recipe": the open proposal is rejected and the layout
+   * note cleared. A held version stays held. `link` null: the tree's proposal.
+   */
+  async dismiss(row: Connector, link: ConnectorLink | null, userId: string): Promise<void> {
     await this.prisma.sourceRecipe.updateMany({
-      where: { connectorId: row.id, documentId: link.documentId, status: 'proposed' },
+      where: { connectorId: row.id, documentId: link?.documentId ?? null, status: 'proposed' },
       data: { status: 'rejected', decidedBy: userId, decidedAt: new Date() },
     });
-    await this.prisma.connectorLink.update({ where: { id: link.id }, data: { structureChangedAt: null } });
+    if (link) await this.prisma.connectorLink.update({ where: { id: link.id }, data: { structureChangedAt: null } });
   }
 
   /**
@@ -241,6 +287,7 @@ export class SourceRecipesService {
     failures: SourceCheckFailure[],
     userId: string | null,
     locale: Locale,
+    scope: RecipeScope = 'page',
   ): Promise<SourceRecipeVersion | null> {
     const agent = await this.agents.resolve(row.workspaceId, 'interpreter');
     if (!agent.enabled || !agent.config.enabled) return null;
@@ -248,7 +295,11 @@ export class SourceRecipesService {
     if (!isHtmlBody(source.contentType)) return null;
     const billed = userId ?? AUTHOR_ID_STUB;
     await this.aiUsage.assertWithinBudget(row.workspaceId, billed);
-    const [current, page] = await Promise.all([this.recipeFor(link), this.headMarkdown(link.documentId)]);
+    const documentId = scope === 'page' ? link.documentId : null;
+    const [current, page] = await Promise.all([
+      scope === 'page' ? this.recipeFor(link) : this.activeRow(null, row.id).then((r) => (r ? readRecipe(r.recipe).recipe : null)),
+      this.headMarkdown(link.documentId),
+    ]);
 
     const raw = await this.client.chat(
       { config: agent.config, userId: billed, operation: 'source-recipe', locale },
@@ -273,12 +324,12 @@ export class SourceRecipesService {
     const note = typeof parsed.note === 'string' ? parsed.note.slice(0, 500) : null;
 
     const created = await this.prisma.$transaction(async (tx) => {
-      await tx.sourceRecipe.updateMany({ where: { connectorId: row.id, documentId: link.documentId, status: 'proposed' }, data: { status: 'superseded' } });
+      await tx.sourceRecipe.updateMany({ where: { connectorId: row.id, documentId, status: 'proposed' }, data: { status: 'superseded' } });
       return tx.sourceRecipe.create({
         data: {
           workspaceId: row.workspaceId,
           connectorId: row.id,
-          documentId: link.documentId,
+          documentId,
           version: await this.nextVersion(tx, row.id),
           status: 'proposed',
           origin: 'agent',
@@ -291,6 +342,42 @@ export class SourceRecipesService {
     return versionOf(created);
   }
 
+  // ------------------------------------------------------------ the tree (phase 3b)
+
+  /** The tree recipe and the crawled pages a preview can read, root first, under the caller's scope. */
+  async treeState(row: Connector, scope: AccessScope, rootDocumentId: string | null): Promise<Omit<SourceTreeRecipeState, 'url' | 'host'>> {
+    const [active, proposal, links, own] = await Promise.all([
+      this.activeRow(null, row.id),
+      this.proposalRow(null, row.id),
+      this.prisma.connectorLink.findMany({ where: { connectorId: row.id } }),
+      this.prisma.sourceRecipe.findMany({ where: { connectorId: row.id, status: 'active', documentId: { not: null } }, select: { documentId: true } }),
+    ]);
+    const visible = await this.prisma.document.findMany({
+      where: { AND: [{ id: { in: links.map((l) => l.documentId) }, archivedAt: null }, visibilityWhere(scope)] },
+      select: { id: true, title: true },
+    });
+    const titles = new Map(visible.map((d) => [d.id, d.title]));
+    const ownIds = new Set(own.map((r) => r.documentId));
+    const pages = links
+      .filter((l) => titles.has(l.documentId))
+      .map((l) => ({
+        documentId: l.documentId,
+        title: titles.get(l.documentId)!,
+        url: l.externalUrl ?? l.externalId,
+        hasBody: l.bodyHash !== null,
+        ownRecipe: ownIds.has(l.documentId),
+        heldAt: l.heldAt?.toISOString() ?? null,
+      }))
+      .sort((a, b) => Number(b.documentId === rootDocumentId) - Number(a.documentId === rootDocumentId) || a.url.localeCompare(b.url));
+    return {
+      connectorId: row.id,
+      rootDocumentId,
+      active: active ? versionOf(active) : null,
+      proposal: proposal ? versionOf(proposal) : null,
+      pages,
+    };
+  }
+
   // ------------------------------------------------------------ reads
 
   /** The page's active recipe, else the connector's; null = the implicit one. */
@@ -299,17 +386,20 @@ export class SourceRecipesService {
     return row ? readRecipe(row.recipe).recipe : null;
   }
 
-  private async activeRow(link: ConnectorLink): Promise<SourceRecipeRow | null> {
+  /** A link's: its page's own, else the tree's. `null`: the tree's only. */
+  private async activeRow(link: ConnectorLink | null, connectorId = link!.connectorId): Promise<SourceRecipeRow | null> {
+    const documentId = link?.documentId ?? null;
     const rows = await this.prisma.sourceRecipe.findMany({
-      where: { connectorId: link.connectorId, status: 'active', OR: [{ documentId: link.documentId }, { documentId: null }] },
+      where: { connectorId, status: 'active', OR: [{ documentId }, { documentId: null }] },
       orderBy: { version: 'desc' },
     });
-    return rows.find((r) => r.documentId === link.documentId) ?? rows[0] ?? null;
+    return rows.find((r) => r.documentId === documentId) ?? rows[0] ?? null;
   }
 
-  private proposalRow(link: ConnectorLink): Promise<SourceRecipeRow | null> {
+  /** The waiting draft for a page, or (`null`) for the tree. */
+  private proposalRow(documentId: string | null, connectorId: string): Promise<SourceRecipeRow | null> {
     return this.prisma.sourceRecipe.findFirst({
-      where: { connectorId: link.connectorId, documentId: link.documentId, status: 'proposed' },
+      where: { connectorId, documentId, status: 'proposed' },
       orderBy: { version: 'desc' },
     });
   }

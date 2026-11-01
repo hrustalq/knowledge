@@ -160,6 +160,7 @@ async function copy(text: string) {
       <span class="min-w-0">
         <template v-if="isRoot">
           {{ t('sources.tree.root', { n: tree.pages - 1 }, tree.pages - 1) }}
+          · <RouterLink :to="`/settings/connectors/${source.connectorId}/recipe`" :class="linkClass">{{ t('sources.tree.recipe') }}</RouterLink>
           <span v-if="tree.awaitingRunId" class="block">
             <span class="font-medium text-panel-warning-ink">{{ t('sources.tree.awaiting') }}</span>
             · <RouterLink :to="`/settings/connectors/runs/${tree.awaitingRunId}`" :class="linkClass">{{ t('sources.tree.review') }}</RouterLink>
@@ -184,7 +185,11 @@ async function copy(text: string) {
       <template v-else>
         <span v-if="attention === 'changed'" class="font-medium text-panel-warning-ink">{{ t('sources.recipe.rail.changed') }}</span>
         <span v-else class="text-muted-foreground">
-          {{ source.recipe.active ? t('sources.recipe.rail.active', { n: source.recipe.active.version }) : t('sources.recipe.rail.implicit') }}
+          {{
+            source.recipe.active
+              ? t(source.recipe.active.connectorScope ? 'sources.recipe.rail.activeTree' : 'sources.recipe.rail.active', { n: source.recipe.active.version })
+              : t('sources.recipe.rail.implicit')
+          }}
         </span>
         <span class="text-muted-foreground" aria-hidden="true">·</span>
         <RouterLink :to="recipePath" class="rounded-sm underline underline-offset-2 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">{{ t('sources.recipe.rail.open') }}</RouterLink>

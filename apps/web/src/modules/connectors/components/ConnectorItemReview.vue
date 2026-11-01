@@ -39,7 +39,7 @@ import { DiffView } from '@/entities/document'
 import { RichEditor } from '@/entities/rich-editor'
 import { useDocumentsStore } from '@/stores/documents'
 import { lineDiff } from '@/core/line-diff'
-import { ACTION_CLASS, ACTION_ICON, ACTION_LABEL, ITEM_STATUS_LABEL } from '../model/connector-ui'
+import { ACTION_CLASS, ACTION_ICON, ACTION_LABEL, ITEM_STATUS_LABEL, sourceVersionLabel } from '../model/connector-ui'
 
 const props = defineProps<{
   item: ConnectorRunItemInfo
@@ -270,7 +270,7 @@ defineExpose({
           </div>
           <div v-if="item.externalVersion" class="flex justify-between gap-3">
             <dt class="text-muted-foreground">{{ t('connectors.externalVersion') }}</dt>
-            <dd class="tabular-nums">{{ item.externalVersion }}</dd>
+            <dd class="min-w-0 truncate tabular-nums" :title="item.externalVersion">{{ sourceVersionLabel(item.externalVersion) }}</dd>
           </div>
           <div class="flex justify-between gap-3">
             <dt class="text-muted-foreground">{{ t('connectors.treeDepth') }}</dt>

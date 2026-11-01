@@ -924,6 +924,7 @@
     "interval": "The check interval must be one of {allowed} minutes, or empty",
     "recipeInvalid": "The recipe is not valid: {errors}",
     "recipeChecksFail": "The recipe fails its checks on the current version ({checks}), so it was not saved",
+    "firstReadFails": "The tree recipe fails its checks on this page ({checks}), so the page was not created. The next sync tries again",
     "proposalStale": "That drafted recipe is no longer the one waiting for review — reload the page",
     "noBody": "No version of this source has been read since recipes arrived. Sync it once, then try again",
     "draftUnavailable": "No recipe can be drafted: the interpreter agent is off, or the source is not an HTML page"

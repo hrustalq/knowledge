@@ -7549,7 +7549,8 @@
         "changed": "Layout changed",
         "active": "Recipe v{n}",
         "implicit": "Automatic extraction",
-        "open": "Recipe…"
+        "open": "Recipe…",
+        "activeTree": "Tree recipe v{n}"
       },
       "card": {
         "title": "Recipe",
@@ -7571,14 +7572,26 @@
         "readyApprove": "Ready to approve"
       },
       "subtitle": "How the fetched source becomes this page, checked against its last version before anything is saved.",
-      "openSource": "Open {host}"
+      "openSource": "Open {host}",
+      "tree": {
+        "heading": "Tree recipe",
+        "subtitle": "How every crawled page without its own recipe is read. Saving re-reads them all.",
+        "pages": "No page reads with it | {n} page reads with it | {n} pages read with it",
+        "previewOn": "Preview on",
+        "root": "root",
+        "ownRecipe": "This page keeps its own recipe, which the tree recipe does not replace. The preview shows what the tree recipe would make of it.",
+        "held": "This page is held: its last version failed its checks.",
+        "openRoot": "Root page"
+      },
+      "treeSaved": "Tree recipe saved. Every page without its own recipe is being re-read"
     },
     "tree": {
       "root": "No pages synced under it yet | Syncs {n} page under this URL | Syncs {n} pages under this URL",
       "awaiting": "A crawl waits for you to confirm it",
       "review": "Review the pages",
       "member": "Part of a synced page tree",
-      "openRoot": "Open its root"
+      "openRoot": "Open its root",
+      "recipe": "Tree recipe"
     },
     "crawlSettings": {
       "title": "Crawled sources",

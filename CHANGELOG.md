@@ -62,6 +62,19 @@ in the pull request that introduces them — see
   so and links to it. No crawl reads more than 200 pages. A page missing from three complete crawls in a row is
   archived and its linking pages marked outdated, as for a 404. A crawl stopped at the cap, or whose root failed,
   never counts a page as missing. Admins can lower the three limits under Settings → Connectors.
+- **A crawled tree has one recipe for all its pages** (#674, phase 3b). The root page's Source widget links to a
+  **Tree recipe** page (`/settings/connectors/<id>/recipe`). It is the same workbench as a page's recipe, with a
+  **Preview on** picker that previews the recipe on the root page or any crawled page you can open. Every page
+  without its own recipe reads with the tree recipe, and a page's own recipe still replaces it. **Save** is
+  refused while the previewed page fails a check. Saving queues a sync that refetches each of those pages and
+  reads it through the new recipe. A page that then fails is held on its own while the rest are updated, and a
+  recipe change does not flag pages as "Layout changed". The interpreter agent can draft a tree recipe from the
+  previewed page, with the same Approve / Reject review. A newly crawled page now goes through the tree recipe
+  on its first version too, and its first version is kept as the baseline for the next. A new page that fails the
+  recipe is not created: the run lists it as failed, saying which checks failed, and the next crawl tries again.
+  A page's Source widget names "Tree recipe v*n*" when that is what it reads with. Editors can change a tree
+  recipe, as they can a page's. New routes: `GET`/`PUT /v1/connectors/:id/source/recipe`, and
+  `POST …/preview`, `…/draft`, `…/dismiss`.
 - **A page knows which pages link to it** (#673). Every internal link on a page's published version is now
   recorded with the heading it points at: the `/documents/<id>#heading` form the editor writes, and the same
   address pasted in full from this deployment's own web address (`WEB_BASE_URL`); links to anywhere else are
@@ -122,6 +135,10 @@ in the pull request that introduces them — see
 - **Clicking another page in a sync run's review did nothing** (#674). Switching pages rebuilds the editor
   pane, and the table controls' teardown read the already-destroyed editor and threw. That aborted the page
   update, so the first page stayed selected however many times another was clicked.
+- **A source page's version in a sync run read as raw JSON** (#674). "Source version" in a run's page panel showed
+  `{"lastModified":"Sun, 01 Nov 2026 01:42:48 GMT"}`. It now shows that date in the reader's language, or a
+  short ETag when the source sends no date. A crawl waiting for confirmation also now says why above
+  **Approve all** ("This crawl would add 60 pages…"). Before, that reason was stored but never shown.
 - **A long word could push a dialog's title out of the window** on a small screen (#685). An unbroken name, address
   or id in a confirmation (or any dialog) widened the box past the screen edge, taking the buttons with it,
   and a dialog title that wrapped drew its lines on top of each other. Titles and descriptions now break long

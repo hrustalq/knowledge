@@ -18,6 +18,7 @@ import { StorageService } from '../storage/storage.service.js';
 import type { ConnectorAdapter, ConnectorContext, ExternalDocument, ExternalRef } from './adapters/connector.types.js';
 import { composeMarkdown, sha256, stagedObject } from './connector-markdown.js';
 import { ConnectorAclService } from './connector-acl.service.js';
+import type { SourceBody } from './source-recipe.js';
 import { WebSourcesService } from './web-sources.service.js';
 import type { StoredAcl } from './connector-acl.js';
 
@@ -31,6 +32,8 @@ export interface ItemDraft {
   edited?: boolean;
   /** An API spec file (#78): stored as written, created as a spec document, updated by merge request. */
   spec?: ExternalDocument['spec'];
+  /** A crawled page's first fetched body (#674, phase 3b), kept once the page exists as what its next version is checked against. */
+  source?: string;
 }
 
 export interface StageOutcome {
@@ -129,6 +132,14 @@ export class ConnectorStagingService {
       }
       doc.markdown = markdown;
     }
+    // A page the crawl found for the first time reads through the tree recipe too (phase 3b);
+    // failing its checks fails the item, and the next crawl tries again.
+    let firstSource: string | null = null;
+    if (row.kind === 'web' && !link && doc.source) {
+      doc.markdown = await this.webSources.readNew(row, doc.source);
+      firstSource = this.storage.connectorItemObjectKey(row.workspaceId, run.id, item.id, 'source.json');
+      await this.storage.putObjectText(firstSource, JSON.stringify(doc.source), 'application/json');
+    }
     // A Figma frame the source embeds is pinned to its file's current version on pull (#470).
     doc.markdown = await this.figma.pinMarkdown(row.workspaceId, doc.markdown);
     const markdown = composeMarkdown(doc);
@@ -182,6 +193,7 @@ export class ConnectorStagingService {
       ...prior,
       ...(warnings.length > 0 ? { warnings } : {}),
       ...(doc.spec ? { spec: doc.spec } : {}),
+      ...(firstSource ? { source: firstSource } : {}),
     };
 
     ctx.debug('item: staged', { id: item.externalId, action, hash: hash.slice(0, 12) });
@@ -387,6 +399,23 @@ export class ConnectorStagingService {
       timeout: 30_000,
       maxWait: 10_000,
     });
+    await this.adoptSource(row, item);
+  }
+
+  /**
+   * A crawled page's first version (#674, phase 3b): its body is kept for a
+   * recipe to preview on and its baseline recorded, as `link` does for the
+   * root, so the next version is checked against it.
+   */
+  private async adoptSource(row: Connector, item: ConnectorRunItem): Promise<void> {
+    const key = (item.draft as ItemDraft | null)?.source;
+    if (row.kind !== 'web' || !key) return;
+    try {
+      const link = await this.prisma.connectorLink.findFirst({ where: { connectorId: row.id, externalId: item.externalId } });
+      if (link) await this.webSources.read(row, link, JSON.parse(await this.storage.getObjectText(key)) as SourceBody);
+    } catch (err) {
+      this.logger.warn({ msg: 'Source baseline not recorded', connectorId: row.id, externalId: item.externalId, err: String(err) });
+    }
   }
 
   private async writePage(

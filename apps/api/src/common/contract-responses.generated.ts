@@ -305,6 +305,7 @@ import type {
   SourcePolicy,
   SourceRecipePreview,
   SourceSettingsResponse,
+  SourceTreeRecipeState,
   SsoDiscoverResponse,
   SsoDomainView,
   SsoExchangeResponse,
@@ -651,6 +652,7 @@ export interface ContractResponses {
   SourcePolicy: SourcePolicy;
   SourceRecipePreview: SourceRecipePreview;
   SourceSettingsResponse: SourceSettingsResponse;
+  SourceTreeRecipeState: SourceTreeRecipeState;
   SsoDiscoverResponse: SsoDiscoverResponse;
   SsoDomainView: SsoDomainView;
   SsoExchangeResponse: SsoExchangeResponse;

@@ -161,11 +161,17 @@ both whole app catalogs into the reader's bundle. That one import was 377 KB.
   supports. It then does MarkdownView's passes: heading ids, table wrappers,
   file cards, drawings and the TOC block.
 - **Links and assets are rewritten into the share's scope.** A reference to a
-  page the link reaches becomes a reader URL. Any other `/documents/<id>` keeps
-  its text and loses its target, as does every other same-origin path, since
-  nothing behind the login is reachable. Attachments go through the public
-  attachment route, and member-only images (avatars) are dropped. Page-title
-  references and glossary linking are off: both need the workspace's roster.
+  page the link reaches becomes a reader URL. What counts as a page link is one
+  rule, `documentHrefTarget` in contracts (#705): `/documents/<id>` relative or
+  as an absolute URL (pasted from the address bar), with any sub-path or query
+  dropped and the `#fragment` kept. Any other page link keeps its text and
+  loses its target, as does every other same-origin path, an absolute link on
+  the app's origin (`WEB_BASE_URL`) and a bare relative href, since nothing
+  behind the login is reachable. A title reference (`[text](Page Title)`,
+  encoded or not) resolves against the share's own tree and nothing else, so a
+  reader learns no title outside the link. Attachments go through the public
+  attachment route, and member-only images (avatars) are dropped. Glossary
+  linking is off: it needs the workspace's roster.
 - **The client only upgrades mermaid**, and the download dialog. Moving between
   pages is a plain link and a full server render, so what a reader sees is
   always what the API just authorised.

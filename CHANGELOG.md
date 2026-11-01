@@ -13,6 +13,21 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Fixed
+
+- **Page links on share links and published sites stay on the share or site** (#705). A link written as a full
+  app URL (`https://…/documents/<id>`) sent readers into the app, behind its login, even when the target was part
+  of the same share or site; a link with `?branch=` lost its target; and title references (`[text](Page Title)`)
+  showed as brackets or as a relative link that 404'd. Every spelling now opens the page's public URL when the
+  reader may see it there, and keeps only its text otherwise. No link in a public page leads into the app.
+
+### Operations
+
+- The public reader reads `WEB_BASE_URL` (already set for the web container) to unlink any other link on the
+  app's own origin. Without it, page links still resolve; other absolute app URLs are left as written.
+
 ## [0.43.0] — 2026-11-01
 
 ### Added

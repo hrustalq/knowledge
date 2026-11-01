@@ -419,9 +419,31 @@ export function pageTitleHref(href: string): string | null {
 const PAGE_LINK_RE = /(!?)\[((?:\\.|[^[\]\\\n])+)\]\(([^()\n]*)\)/g;
 /** A CommonMark link title: `"…"`, `'…'` or `(…)`. */
 const PAGE_LINK_TITLE_RE = /^("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\((?:[^()\\]|\\.)*\))$/;
-const DOCUMENT_HREF_RE = /^\/documents\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})(?:[?#].*)?$/;
+/** `/documents/<id>`, relative or on any origin, then an optional sub-path, query and `#fragment`. */
+const DOCUMENT_HREF_RE =
+  /^(?:https?:\/\/[^/?#\s]+)?\/documents\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})(?:\/[^?#]*)?(?:\?[^#]*)?(#.*)?$/i;
 const FENCE_OPEN_RE = /^ {0,3}(`{3,}|~{3,})/;
 const INLINE_CODE_RE = /(`+)[^`\n][\s\S]*?\1/g;
+
+/**
+ * The page an href points at, or null (#705). The one rule for "this is a page
+ * link", shared by `extractPageLinks` (the quality auditor, a published site's
+ * `page.links`) and the public renderer, so what the API counts as a link is
+ * what the reader rewrites.
+ *
+ * An absolute URL counts as well as `/documents/<id>`: a URL pasted from the
+ * address bar is the commonest way to link a page, and on a public surface it
+ * would otherwise lead into the app, behind its login. The query is dropped
+ * (`?branch=` and the like mean nothing outside the app); the `#fragment` is
+ * kept, empty when there is none.
+ *
+ * ponytail: any origin counts, since contracts cannot know the app's; pass the
+ * origin in if a foreign site's `/documents/<uuid>` links turn up.
+ */
+export function documentHrefTarget(href: string): { documentId: string; fragment: string } | null {
+  const match = DOCUMENT_HREF_RE.exec(href);
+  return match ? { documentId: match[1].toLowerCase(), fragment: match[2] ?? '' } : null;
+}
 
 /** One reference from a page to another page, as written. */
 export type PageLink =
@@ -464,9 +486,9 @@ export function extractPageLinks(markdown: string): PageLink[] {
       continue;
     }
     const destination = split ? split[1] : inner;
-    const id = DOCUMENT_HREF_RE.exec(destination);
-    if (id) {
-      links.push({ kind: 'id', documentId: id[1].toLowerCase(), text: label, href: destination });
+    const target = documentHrefTarget(destination);
+    if (target) {
+      links.push({ kind: 'id', documentId: target.documentId, text: label, href: destination });
       continue;
     }
     const title = pageTitleHref(destination);

@@ -44,6 +44,21 @@ export function spellingMatches(candidate: Candidate, matched: string): boolean 
   return !candidate.term.caseSensitive || candidate.pattern === matched
 }
 
+/**
+ * The terms one page may link (#702): enabled, from the page's own project,
+ * and not defined by the page itself (the link would go where the reader
+ * already is). The page decides, never the project switcher, so a page reached
+ * from search or a link gets its own project's vocabulary. A page whose project
+ * is unknown links nothing rather than guessing.
+ */
+export function pageTerms(
+  terms: GlossaryTerm[],
+  page: { projectId?: string | null; documentId: string },
+): GlossaryTerm[] {
+  if (!page.projectId) return []
+  return terms.filter((t) => t.enabled && t.projectId === page.projectId && t.documentId !== page.documentId)
+}
+
 export const GLOSSARY_ATTR = 'data-kn-glossary'
 /** The document position a decoration starts at, for anchoring an exclusion. */
 export const GLOSSARY_AT_ATTR = 'data-kn-glossary-at'

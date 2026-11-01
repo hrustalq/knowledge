@@ -12,7 +12,7 @@ export { default as VerificationBadge } from './components/VerificationBadge.vue
 export { default as VerificationBar } from './components/VerificationBar.vue'
 export { default as WorkItemChips } from './components/WorkItemChips.vue'
 export { embedTile, figmaLiveUrl } from './model/embeds'
-export { buildMatcher, GLOSSARY_AT_ATTR, GLOSSARY_ATTR, glossaryHref, linkCap, MAX_LINKS_PER_TERM, spellingMatches } from './model/glossary'
+export { buildMatcher, GLOSSARY_AT_ATTR, GLOSSARY_ATTR, glossaryHref, linkCap, MAX_LINKS_PER_TERM, pageTerms, spellingMatches } from './model/glossary'
 export { useGlossaryStore } from './model/glossary.store'
 export { type ContentAt, documentContentQuery, documentDetailQuery, prefetchDocument } from './model/page-queries'
 export { mayContainPageRef, type PageRefResolver } from './model/page-refs'

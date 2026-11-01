@@ -81,11 +81,10 @@ export const useProjectsStore = defineStore('projects', {
       this.activeId = projectId
       setActiveProject(projectId)
       useSidebarNavStore().openPages()
-      // The glossary (14), the workflow roster (17) and the templates (#69)
-      // are project-scoped too, so they rescope alongside the page tree rather
-      // than decorating the new project's pages with the previous one's
-      // vocabulary, or offering chains and templates that would write into the
-      // project you just left.
+      // The workflow roster (17) and the templates (#69) are project-scoped
+      // too, so they rescope alongside the page tree rather than offering
+      // chains and templates that would write into the project you just left.
+      // The glossary does not: the page being read picks its terms (#702).
       await Promise.all([
         useDocumentsStore().rescope(),
         ...[...projectScoped].map((useStore) => useStore().rescope()),

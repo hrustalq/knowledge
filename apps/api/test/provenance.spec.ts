@@ -18,6 +18,7 @@ function prismaWith(docs: unknown[], revisions: unknown[], users: unknown[]) {
     user: { findMany: vi.fn(async () => users) },
     // No open reports: nothing is flagged (phase 3 counts them here).
     knowledgeIssue: { groupBy: vi.fn(async () => []) },
+    connectorLink: { findMany: vi.fn(async () => []) }, // no source-backed pages (#674)
   };
 }
 

@@ -158,6 +158,8 @@ function doc(over: Record<string, unknown> = {}) {
 
 function harness(row: Record<string, unknown>, updateCount = 1) {
   const prisma = {
+    // No page here is source-backed (#674).
+    connectorLink: { findFirst: vi.fn(async () => null) },
     document: {
       findUnique: vi.fn(async () => row),
       updateMany: vi.fn(async () => ({ count: updateCount })),

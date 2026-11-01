@@ -12745,6 +12745,10 @@ export interface components {
             createdAt: string;
             kind?: components["schemas"]["ApiDocumentKind"];
             sourceBacked?: boolean;
+            sourceSync?: {
+                host: string;
+                checkedAt: string | null;
+            } | null;
             verifiedAt?: string | null;
             verifiedBy?: string | null;
             verifiedRevisionId?: string | null;
@@ -12793,6 +12797,10 @@ export interface components {
             createdAt: string;
             kind?: components["schemas"]["ApiDocumentKind"];
             sourceBacked?: boolean;
+            sourceSync?: {
+                host: string;
+                checkedAt: string | null;
+            } | null;
             verifiedAt?: string | null;
             verifiedBy?: string | null;
             verifiedRevisionId?: string | null;

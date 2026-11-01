@@ -38,6 +38,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { VerificationPolicyService } from './verification-policy.service.js';
 import { VerificationService } from './verification.service.js';
 import type { FlagOptions } from './verification.service.js';
+import { sourceStateSql } from '../documents/source-backed.js';
 
 export type HealthSort = 'activity' | 'title';
 
@@ -283,6 +284,7 @@ export class KnowledgeHealthService {
                   WHERE ki.document_id = d.id AND ki.status IN (${Prisma.join([...OPEN_KNOWLEDGE_ISSUE_STATUSES])})
                ) THEN 'flagged'
                WHEN d.verification_flag = 'requested' THEN 'requested'
+               ${sourceStateSql('d', now)}
                WHEN d.verified_revision_id IS NULL THEN 'unverified'
                WHEN b.head_revision_id IS NULL OR b.head_revision_id <> d.verified_revision_id THEN 'edited'
                WHEN d.verification_expires_at IS NOT NULL AND d.verification_expires_at <= ${now}::timestamptz THEN 'expired'

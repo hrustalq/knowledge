@@ -192,21 +192,16 @@ export class WebSourcesService {
   }
 
   /**
-   * A new spec version landed (phase 4). A breaking diff alerts the owner;
-   * removed operations or channels flag every page linking the spec
-   * `requested`. Phase 5 narrows that to the pages the removal concerns.
+   * A new spec version landed (phase 4): a breaking diff alerts the owner.
+   * The pages that relied on a removed operation are flagged once the version
+   * is indexed (`SourceDependentsService`, phase 5).
    */
   async specLanded(row: Connector, documentId: string, previousRevisionId: string | null, revisionId: string): Promise<void> {
     if (!previousRevisionId) return;
     const diff = await this.specDiff.diff(documentId, previousRevisionId, revisionId);
     if (!diff || diff.summary.breaking === 0) return;
-    const removed = diff.changes.filter((c) => c.rule === 'operation-removed' || c.rule === 'channel-removed');
-    await this.alert(row, documentId, 'breaking', { breaking: diff.summary.breaking, removed: removed.length });
-    if (removed.length === 0) return;
-    const names = removed.slice(0, 10).map((c) => (c.method ? `${c.method.toUpperCase()} ${c.path}` : c.path));
-    if (removed.length > names.length) names.push('…');
-    const document = await this.prisma.document.findUnique({ where: { id: documentId }, select: { title: true } });
-    await this.flagDependents(row, documentId, 'requested', t('connector.specOperationsRemovedNote', { title: document?.title ?? '', operations: names.join(', ') }));
+    const removed = diff.changes.filter((c) => c.rule === 'operation-removed' || c.rule === 'channel-removed').length;
+    await this.alert(row, documentId, 'breaking', { breaking: diff.summary.breaking, removed });
   }
 
   /** A new version landed: the connector's owner hears; watchers hear through `revision.finalized`. */

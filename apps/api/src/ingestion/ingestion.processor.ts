@@ -17,6 +17,7 @@ import { EmbedsService } from '../embeds/embeds.service.js';
 import { chunkEmbedText, chunkSections, splitMarkdown } from './markdown.js';
 import { extractFrontmatterFacts } from './relations.js';
 import { pageLinkTargets, replacePageLinks } from './page-links.js';
+import { SourceDependentsService } from '../connectors/source-dependents.service.js';
 import { ExtractorFactory } from '../extraction/extractor-factory.service.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 import { IngestionProducer } from './ingestion.producer.js';
@@ -50,6 +51,7 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
     private readonly conflicts: ConflictsService,
     private readonly apiFixtures: ApiFixturesService,
     private readonly embeds: EmbedsService,
+    private readonly sourceDependents: SourceDependentsService,
   ) {
     super();
   }
@@ -473,6 +475,14 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       if (reason !== 'dependent-reindex') {
         await this.reindexDependents(revision.document.workspaceId, revision.documentId).catch((e) =>
           this.logger.warn(`Dependent reindex failed (non-fatal): ${(e as Error).message}`),
+        );
+      }
+      // #674 phase 5: a source-backed page's new version flags the pages that
+      // relied on a section or entity it dropped. Once per revision — its
+      // first index, never a re-index of the same text.
+      if (live && revision.indexedAt === null && reason !== 'dependent-reindex') {
+        await this.sourceDependents.revisionIndexed(revision.id).catch((e) =>
+          this.logger.warn(`Source dependents check failed (non-fatal): ${(e as Error).message}`),
         );
       }
     } catch (e) {

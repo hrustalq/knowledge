@@ -126,6 +126,15 @@ export function channelEntityKey(slug: string, address: string): string {
   return normalizeEntityKey(`channel:${apiSpecSlug(slug)}:${address.trim()}`);
 }
 
+/**
+ * The element id an operation's card carries on its spec page, so `#op-…`
+ * links keep working: the web draws it, and a source-backed spec's dependent
+ * check (#674) reads which of them a new version dropped.
+ */
+export function operationAnchor(o: { entityKey: string; method: string | null }): string {
+  return `op-${`${o.entityKey} ${o.method ?? ''}`.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`;
+}
+
 // ---------------------------------------------------------------------------
 // The parsed shape the ingestion worker projects and stores per revision.
 // ---------------------------------------------------------------------------

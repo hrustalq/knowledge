@@ -9,6 +9,8 @@ import { EventsModule } from '../events/events.module.js';
 import { ComponentsCoreModule } from '../components/components-core.module.js';
 import { ApiSpecsCoreModule } from '../api-specs/api-specs-core.module.js';
 import { EmbedsCoreModule } from '../embeds/embeds-core.module.js';
+import { VerificationCoreModule } from '../verification/verification-core.module.js';
+import { SourceDependentsService } from '../connectors/source-dependents.service.js';
 import { IngestionModule } from './ingestion.module.js';
 import { IngestionProcessor } from './ingestion.processor.js';
 import { OutboxSweeper } from './outbox.sweeper.js';
@@ -16,7 +18,7 @@ import { StaleSweeper } from './stale.sweeper.js';
 
 /** Consumer side — imported ONLY by the worker entrypoint (worker.module.ts). */
 @Module({
-  imports: [IngestionModule, StorageModule, GraphModule, EmbeddingModule, ExtractionModule, FulltextModule, EventsModule, ComponentsCoreModule, ApiSpecsCoreModule, ConflictsCoreModule, EmbedsCoreModule],
-  providers: [IngestionProcessor, OutboxSweeper, StaleSweeper],
+  imports: [IngestionModule, StorageModule, GraphModule, EmbeddingModule, ExtractionModule, FulltextModule, EventsModule, ComponentsCoreModule, ApiSpecsCoreModule, ConflictsCoreModule, EmbedsCoreModule, VerificationCoreModule],
+  providers: [IngestionProcessor, OutboxSweeper, StaleSweeper, SourceDependentsService],
 })
 export class IngestionWorkerModule {}

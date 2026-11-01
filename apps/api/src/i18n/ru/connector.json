@@ -124,8 +124,13 @@
     "deleted": "Объекта базы знаний, для которого заведена эта задача, больше нет.",
     "closedVia": "Закрыто в {key}"
   },
-  "specOperationsRemovedNote": "Источник удалил из «{title}»: {operations}",
   "sourceRemovedNote": "Источник удалён: «{title}» больше не публикуется источником",
+  "sourceChangedNote": "Источник «{title}» изменился: {changes}",
+  "sourceChange": {
+    "anchorRemoved": "раздел #{anchor} удалён",
+    "anchorRenamed": "#{from} теперь #{to}",
+    "keyDropped": "{key} больше не описан"
+  },
   "sourceRestoredMessage": "Восстановлена ревизия {number}",
   "sourceRecipeMessage": "Перечитано по новому рецепту извлечения"
 }

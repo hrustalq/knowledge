@@ -30,6 +30,7 @@ const point = (at: number, ref = 'tag:v1'): TemporalPoint => ({
 
 function build(at: TemporalPoint | undefined) {
   const prisma = {
+    connectorLink: { findMany: vi.fn(async () => []) }, // no source-backed pages (#674)
     document: {
       findMany: vi.fn(async () => [
         {

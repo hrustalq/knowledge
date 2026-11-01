@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
+import { load as parseYaml } from 'js-yaml';
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Connector, ConnectorLink, ConnectorRun } from '@prisma/client';
@@ -7,7 +8,9 @@ import {
   SOURCE_FAILURE_LIMIT,
   SOURCE_INTERVALS_MIN,
   SOURCE_RETRY_DELAYS_MIN,
+  isApiSpecKind,
   webCrawls,
+  type ApiSpecKind,
   type CreateSourcePageRequest,
   type CreateSourcePageResponse,
   type DocumentSourceInfo,
@@ -17,7 +20,11 @@ import {
   type SourceCheckFailure,
   type SourceRecipePreview,
   type SourceTreeRecipeState,
+  type VerificationFlag,
 } from '@knowledge/contracts';
+import { ApiSpecError } from '../api-specs/api-spec.parser.js';
+import { ApiSpecDiffService } from '../api-specs/api-spec-diff.service.js';
+import { ApiSpecsService } from '../api-specs/api-specs.service.js';
 import type { Env } from '../config/env.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { EventsPublisher } from '../events/events.publisher.js';
@@ -27,7 +34,7 @@ import type { AccessScope } from '../permissions/access-scope.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { VerificationService } from '../verification/verification.service.js';
-import { ConnectorRequestError } from './adapters/connector.types.js';
+import { ConnectorRequestError, type ExternalDocument } from './adapters/connector.types.js';
 import { isGone, isTransient, isUnsupported, retryAfterMs } from './adapters/web-failures.js';
 import { composeMarkdown, sha256 } from './connector-markdown.js';
 import { ConnectorProducer } from './connector.producer.js';
@@ -64,6 +71,8 @@ export class WebSourcesService {
     private readonly producer: ConnectorProducer,
     private readonly recipes: SourceRecipesService,
     private readonly settings: SourceSettingsService,
+    private readonly specs: ApiSpecsService,
+    private readonly specDiff: ApiSpecDiffService,
   ) {}
 
   // ------------------------------------------------------------ sync hooks
@@ -145,6 +154,59 @@ export class WebSourcesService {
     // Once, on the run that reaches the limit, not on every run after it.
     if (failures === SOURCE_FAILURE_LIMIT) await this.alert(row, link.documentId, 'failing');
     return false;
+  }
+
+  /**
+   * An API spec source (phase 4), before anything is written: true when the
+   * version is held — it no longer parses, or the source now serves a
+   * different kind than its page holds. A version that parses releases a
+   * held spec. Nothing to do for a page that is not a spec and a body that is not one.
+   */
+  async specHeld(row: Connector, link: ConnectorLink, doc: ExternalDocument): Promise<boolean> {
+    const page = await this.prisma.document.findUnique({ where: { id: link.documentId }, select: { kind: true } });
+    const pageKind = page && isApiSpecKind(page.kind) ? page.kind : null;
+    if (!doc.spec && !pageKind) return false;
+    const problem =
+      doc.spec?.kind !== pageKind
+        ? t('error.source.kindChanged', { now: doc.spec?.kind ?? 'page', was: pageKind ?? 'page' })
+        : await this.specProblem(doc.markdown, doc.spec.kind);
+    if (!problem) {
+      await this.recipes.specParsed(link);
+      return false;
+    }
+    if (await this.recipes.invalidSpec(link, problem)) await this.alert(row, link.documentId, 'held');
+    return true;
+  }
+
+  /** Why a spec body cannot be a page, or null: split across files, or refused by the parser. */
+  async specProblem(text: string, kind: ApiSpecKind): Promise<string | null> {
+    const ref = externalRef(text);
+    if (ref) return t('error.source.splitSpec', { ref });
+    try {
+      await this.specs.parse(text, kind);
+      return null;
+    } catch (err) {
+      if (err instanceof ApiSpecError) return err.message;
+      throw err;
+    }
+  }
+
+  /**
+   * A new spec version landed (phase 4). A breaking diff alerts the owner;
+   * removed operations or channels flag every page linking the spec
+   * `requested`. Phase 5 narrows that to the pages the removal concerns.
+   */
+  async specLanded(row: Connector, documentId: string, previousRevisionId: string | null, revisionId: string): Promise<void> {
+    if (!previousRevisionId) return;
+    const diff = await this.specDiff.diff(documentId, previousRevisionId, revisionId);
+    if (!diff || diff.summary.breaking === 0) return;
+    const removed = diff.changes.filter((c) => c.rule === 'operation-removed' || c.rule === 'channel-removed');
+    await this.alert(row, documentId, 'breaking', { breaking: diff.summary.breaking, removed: removed.length });
+    if (removed.length === 0) return;
+    const names = removed.slice(0, 10).map((c) => (c.method ? `${c.method.toUpperCase()} ${c.path}` : c.path));
+    if (removed.length > names.length) names.push('…');
+    const document = await this.prisma.document.findUnique({ where: { id: documentId }, select: { title: true } });
+    await this.flagDependents(row, documentId, 'requested', t('connector.specOperationsRemovedNote', { title: document?.title ?? '', operations: names.join(', ') }));
   }
 
   /** A new version landed: the connector's owner hears; watchers hear through `revision.finalized`. */
@@ -237,27 +299,28 @@ export class WebSourcesService {
     const document = await this.prisma.document.findUnique({ where: { id: link.documentId }, select: { title: true, archivedAt: true } });
     if (!document || document.archivedAt) return;
     await this.verification.archive(link.documentId, actorId, false);
+    await this.flagDependents(row, link.documentId, 'outdated', t('connector.sourceRemovedNote', { title: document.title }));
+    await this.alert(row, link.documentId, 'gone');
+  }
+
+  /** Every page linking this one gets the flag; an `outdated` page is never downgraded. */
+  private async flagDependents(row: Connector, documentId: string, flag: VerificationFlag, note: string): Promise<void> {
+    const actorId = row.createdBy ?? AUTHOR_ID_STUB;
     const dependents = await this.prisma.pageLink.findMany({
-      where: { workspaceId: row.workspaceId, targetDocumentId: link.documentId, sourceDocumentId: { not: link.documentId } },
+      where: { workspaceId: row.workspaceId, targetDocumentId: documentId, sourceDocumentId: { not: documentId } },
       select: { sourceDocumentId: true },
       distinct: ['sourceDocumentId'],
     });
     for (const { sourceDocumentId } of dependents) {
       await this.verification
-        .flag(sourceDocumentId, 'outdated', {
-          actorId,
-          note: t('connector.sourceRemovedNote', { title: document.title }),
-          source: { kind: 'source', by: actorId },
-          keepOutdated: true,
-        })
+        .flag(sourceDocumentId, flag, { actorId, note, source: { kind: 'source', by: actorId }, keepOutdated: true })
         .catch((err: unknown) => this.logger.warn({ msg: 'Dependent page could not be flagged', sourceDocumentId, err }));
     }
-    await this.alert(row, link.documentId, 'gone');
   }
 
   /** In-app plus email (reason `alert`), to the connector's owner. */
-  private alert(row: Connector, documentId: string, kind: SourceAlertKind): Promise<void> {
-    return this.tell(row, documentId, 'source.alert', 'alert', { alert: kind });
+  private alert(row: Connector, documentId: string, kind: SourceAlertKind, extra: Record<string, unknown> = {}): Promise<void> {
+    return this.tell(row, documentId, 'source.alert', 'alert', { ...extra, alert: kind });
   }
 
   /** One row to the connector's owner, who may be gone (a deleted creator). */
@@ -338,6 +401,14 @@ export class WebSourcesService {
       throw new BadRequestException({ statusCode: 400, message: t('error.source.unreadable', { detail }) });
     }
 
+    // An API spec (phase 4) becomes a spec page, as written; it has nothing to crawl.
+    const spec = doc.spec;
+    const problem = !spec ? null : input.crawl ? t('error.source.specCrawl') : await this.specProblem(doc.markdown, spec.kind);
+    if (problem) {
+      await this.prisma.connector.delete({ where: { id: row.id } }).catch(() => undefined);
+      throw new BadRequestException({ statusCode: 400, message: t('error.source.unreadable', { detail: problem }) });
+    }
+
     const markdown = composeMarkdown(doc);
     const created = this.prisma.withTransaction(
       async () => {
@@ -348,7 +419,8 @@ export class WebSourcesService {
             ...(input.parentId ? { parentId: input.parentId } : {}),
             title: input.title?.trim() || doc.title || url,
             category: 'reference',
-            content: { mode: 'inline', format: 'markdown', text: markdown },
+            ...(spec ? { kind: spec.kind } : {}),
+            content: { mode: 'inline', format: spec?.syntax ?? 'markdown', text: markdown },
           },
           userId,
         );
@@ -414,6 +486,7 @@ export class WebSourcesService {
       failures: link.failures,
       retryAt: link.retryAt?.toISOString() ?? null,
       webhookConfigured: row.webhookSecret !== null,
+      spec: document && isApiSpecKind(document.kind) ? document.kind : null,
       recipe: await this.recipes.state(link),
       tree: await this.tree(row),
     };
@@ -647,4 +720,27 @@ function hostOf(row: Connector): string | null {
   } catch {
     return null;
   }
+}
+
+/** The first `$ref` that is not internal (`#/…`), or null: a split spec cannot be one page (phase 4). */
+function externalRef(text: string): string | null {
+  let value: unknown;
+  try {
+    value = parseYaml(text);
+  } catch {
+    return null; // the parser says why
+  }
+  const seen = new WeakSet<object>();
+  const walk = (node: unknown): string | null => {
+    if (!node || typeof node !== 'object' || seen.has(node)) return null;
+    seen.add(node);
+    const ref = (node as { $ref?: unknown }).$ref;
+    if (typeof ref === 'string' && !ref.startsWith('#')) return ref;
+    for (const child of Object.values(node)) {
+      const found = walk(child);
+      if (found) return found;
+    }
+    return null;
+  };
+  return walk(value);
 }

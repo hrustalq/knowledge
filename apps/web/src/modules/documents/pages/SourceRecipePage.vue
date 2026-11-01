@@ -98,7 +98,7 @@ const source = computed(() => {
 const state = computed<DocumentSourceRecipeState | undefined>(() => {
   if (!tree.value) return pageSource.value?.recipe
   const s = treeState.value
-  return s && { active: s.active, proposal: s.proposal, heldAt: null, heldReasons: [], structureChangedAt: null, hasBody: !!picked.value?.hasBody }
+  return s && { active: s.active, proposal: s.proposal, heldAt: null, heldReasons: [], heldDetail: null, structureChangedAt: null, hasBody: !!picked.value?.hasBody }
 })
 const attention = computed(() => recipeAttention(state.value))
 const canEdit = computed(() => auth.canEdit)

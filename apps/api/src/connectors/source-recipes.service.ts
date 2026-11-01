@@ -119,6 +119,17 @@ export class SourceRecipesService {
     return this.hold(link, ['unsupported'], null);
   }
 
+  /** An API spec source that no longer parses (phase 4): held with the parser's message; there is no recipe to draft. */
+  async invalidSpec(link: ConnectorLink, detail: string): Promise<boolean> {
+    return this.hold(link, ['spec-invalid'], null, detail.slice(0, 1000));
+  }
+
+  /** A spec version parsed: a held spec source is released. */
+  async specParsed(link: ConnectorLink): Promise<void> {
+    if (!link.heldAt) return;
+    await this.prisma.connectorLink.update({ where: { id: link.id }, data: { heldAt: null, heldReason: null, heldDetail: null } });
+  }
+
   /** The baseline moves to this version, a held link is released, and a moved fingerprint leaves a note. */
   private async passed(link: ConnectorLink, ex: SourceExtraction): Promise<void> {
     const before = (link.fingerprint as SourceFingerprint | null)?.hash;
@@ -136,9 +147,14 @@ export class SourceRecipesService {
   }
 
   /** Returns true on the transition into held, the one that alerts. */
-  private async hold(link: ConnectorLink, failures: SourceCheckFailure[], fingerprint: SourceFingerprint | null): Promise<boolean> {
+  private async hold(
+    link: ConnectorLink,
+    failures: SourceCheckFailure[],
+    fingerprint: SourceFingerprint | null,
+    detail: string | null = null,
+  ): Promise<boolean> {
     // The source was read, so "checked" moves even though nothing is written.
-    const fp = { lastPulledAt: new Date(), ...(fingerprint ? { fingerprint: fingerprint as unknown as Prisma.InputJsonValue } : {}) };
+    const fp = { lastPulledAt: new Date(), heldDetail: detail, ...(fingerprint ? { fingerprint: fingerprint as unknown as Prisma.InputJsonValue } : {}) };
     const { count } = await this.prisma.connectorLink.updateMany({
       where: { id: link.id, heldAt: null },
       data: { heldAt: new Date(), heldReason: failures.join(','), ...fp },
@@ -164,6 +180,7 @@ export class SourceRecipesService {
       proposal: proposal ? versionOf(proposal) : null,
       heldAt: link.heldAt?.toISOString() ?? null,
       heldReasons: (link.heldReason ? link.heldReason.split(',') : []) as SourceCheckFailure[],
+      heldDetail: link.heldDetail,
       structureChangedAt: link.structureChangedAt?.toISOString() ?? null,
       hasBody: link.bodyHash !== null,
     };

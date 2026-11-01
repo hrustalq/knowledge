@@ -75,6 +75,17 @@ in the pull request that introduces them — see
   A page's Source widget names "Tree recipe v*n*" when that is what it reads with. Editors can change a tree
   recipe, as they can a page's. New routes: `GET`/`PUT /v1/connectors/:id/source/recipe`, and
   `POST …/preview`, `…/draft`, `…/dismiss`.
+- **A linked source can be an OpenAPI or AsyncAPI spec** (#674, phase 4). "Link a source" on a URL serving a spec
+  (JSON or YAML with a top-level `openapi`, `swagger` or `asyncapi` key, such as `/openapi.json` or
+  `/v3/api-docs`) creates an API reference page, stored as written. Each new version replaces it directly, with no
+  merge request, whatever the workspace's breaking-change policy. Specs from repositories still go through merge
+  requests. When a version breaks clients, the connector's owner gets a **breaking** alert (in-app and email). If
+  it removes an operation or channel, every page linking the spec is asked for a check, and the note names the
+  removed operations. A version that no longer parses is held: the page stays on its last good version, the Source
+  widget shows the parser's message, the owner is alerted once, and the next version that parses lands normally.
+  A spec split across files (a `$ref` to another file) is refused with "bundle the spec into one file", and a
+  spec cannot be crawled. Recipes do not apply to a spec, so its Source widget says it is stored as written
+  instead of linking to one.
 - **A page knows which pages link to it** (#673). Every internal link on a page's published version is now
   recorded with the heading it points at: the `/documents/<id>#heading` form the editor writes, and the same
   address pasted in full from this deployment's own web address (`WEB_BASE_URL`); links to anywhere else are
@@ -113,6 +124,8 @@ in the pull request that introduces them — see
   `MAIL_NOTIFICATIONS_ENABLED` like every other notification mail. The migration only adds nullable or
   defaulted columns to `connectors` and `connector_links`, which the previous release never reads, so a
   rollback by retag needs nothing.
+- **Spec sources (#674, phase 4) add one nullable column, `connector_links.held_detail`**, which the previous
+  release never reads, so a rollback by retag needs nothing.
 - **Crawled sources (#674, phase 3) add three nullable columns to `workspace_settings`** and three env ceilings:
   `WEB_SOURCE_CRAWL_MAX_PAGES` (200), `WEB_SOURCE_CRAWL_CONFIRM_FIRST` (50) and `WEB_SOURCE_CRAWL_CONFIRM_CHANGE`
   (20). A workspace value may only lower its ceiling. The migration is additive, so a rollback by retag needs

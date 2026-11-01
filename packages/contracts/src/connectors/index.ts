@@ -2295,10 +2295,10 @@ export interface UpdateSourceSettingsRequest {
 
 /**
  * Why a source alerts its connector's owner (an in-app row plus email, reason
- * `alert`). `held`: a version failed its recipe checks (phase 2). Phase 4 adds
- * `breaking` (OpenAPI).
+ * `alert`). `held`: a version failed its recipe checks (phase 2), or a spec no
+ * longer parses. `breaking`: a new spec version breaks clients (phase 4).
  */
-export const SOURCE_ALERT_KINDS = ['paused', 'gone', 'failing', 'held'] as const;
+export const SOURCE_ALERT_KINDS = ['paused', 'gone', 'failing', 'held', 'breaking'] as const;
 export type SourceAlertKind = (typeof SOURCE_ALERT_KINDS)[number];
 
 // GET /v1/documents/:id/source
@@ -2322,6 +2322,8 @@ export interface DocumentSourceInfo {
   /** When the next retry of a transient failure runs, if one is pending. */
   retryAt: string | null;
   webhookConfigured: boolean;
+  /** Set when the source is an API spec (phase 4): stored as written, never through a recipe. */
+  spec: ApiSpecKind | null;
   /** How the source is read (phase 2): the recipe in force, a held version, a waiting review. */
   recipe: DocumentSourceRecipeState;
   /**
@@ -2372,8 +2374,8 @@ export const SOURCE_RECIPE_MAX_RULES = 50;
 /** A version whose word count falls below this share of the last good one is held. */
 export const SOURCE_MIN_WORDS_RATIO = 0.4;
 
-/** Why a version was held: one per failed check. */
-export const SOURCE_CHECK_FAILURES = ['no-content', 'landmark', 'words', 'headings', 'unsupported'] as const;
+/** Why a version was held: one per failed check. `spec-invalid`: an API spec source no longer parses (phase 4). */
+export const SOURCE_CHECK_FAILURES = ['no-content', 'landmark', 'words', 'headings', 'unsupported', 'spec-invalid'] as const;
 export type SourceCheckFailure = (typeof SOURCE_CHECK_FAILURES)[number];
 
 export type SourceRecipeStatus = 'proposed' | 'active' | 'superseded' | 'rejected';
@@ -2398,6 +2400,8 @@ export interface DocumentSourceRecipeState {
   /** Set while a version is held: the page stays on its last good revision. */
   heldAt: string | null;
   heldReasons: SourceCheckFailure[];
+  /** The source's own words for why, when a check names one: the parser's message for `spec-invalid`. */
+  heldDetail: string | null;
   /** The source's structure changed while the checks still pass. */
   structureChangedAt: string | null;
   /** Whether a fetched body is kept to preview against (false for a source last read before phase 2). */

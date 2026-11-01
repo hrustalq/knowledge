@@ -123,6 +123,11 @@ export class ConnectorStagingService {
       await this.prisma.connectorLink.update({ where: { id: link.id }, data: { lastPulledAt: new Date() } });
       return this.markUnchanged(item, link);
     }
+    // An API spec source (phase 4) that no longer parses, or changed kind, is held, never written.
+    if (web && (await this.webSources.specHeld(row, web, doc))) {
+      ctx.debug('item: spec held', { id: item.externalId });
+      return this.markUnchanged(item, web);
+    }
     // Through the page's extraction recipe (#674, phase 2): a version failing its checks is held, never written.
     if (web && doc.source) {
       const markdown = await this.webSources.read(row, web, doc.source);
@@ -306,8 +311,10 @@ export class ConnectorStagingService {
     // A spec (#78) is never written straight to its page, in any mode: the
     // breaking-change merge gate is enforced at merge, so a sync that wrote the
     // page directly would be a way round it. Approving the item in a reviewed
-    // run approves opening the merge request, not merging it.
-    if (spec && (item.action === 'update' || item.action === 'conflict')) {
+    // run approves opening the merge request, not merging it. A `web` source's
+    // spec (#674, phase 4) is the exception: its page is read-only and the
+    // upstream API has already changed, so it lands and a breaking diff alerts.
+    if (spec && row.kind !== 'web' && (item.action === 'update' || item.action === 'conflict')) {
       await this.openConflictBranch(row, run, link, item, markdown, item.action === 'conflict' ? 'conflict' : 'spec-changed');
       await this.acl.applyToPage(row, link, storedAcl(item));
       return;
@@ -340,9 +347,9 @@ export class ConnectorStagingService {
     // pull and raises a false conflict. The revision is inside rather than
     // written first because that gap is the bug; the MinIO PUT then holds the
     // connection, hence `createPage`'s raised timeout.
-    await this.prisma.withTransaction(
+    const revisionId = await this.prisma.withTransaction(
       async () => {
-        const revisionId = await this.writeRevision(writerOf(row), link.documentId, markdown);
+        const revisionId = await this.writeRevision(writerOf(row), link.documentId, markdown, undefined, spec);
         await this.prisma.connectorLink.update({
           where: { id: link.id },
           data: {
@@ -365,11 +372,19 @@ export class ConnectorStagingService {
             error: null,
           },
         });
+        return revisionId;
       },
       { timeout: 30_000, maxWait: 10_000 },
     );
     await this.acl.applyToPage(row, link, storedAcl(item));
-    if (row.kind === 'web') await this.webSources.updated(row, link.documentId);
+    if (row.kind === 'web') {
+      await this.webSources.updated(row, link.documentId);
+      if (spec) {
+        await this.webSources
+          .specLanded(row, link.documentId, previousRevisionId, revisionId)
+          .catch((err: unknown) => this.logger.warn({ msg: 'Spec diff after sync failed', documentId: link.documentId, err: String(err) }));
+      }
+    }
   }
 
   private async createPage(

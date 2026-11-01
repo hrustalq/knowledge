@@ -163,6 +163,7 @@ async function resolveShareView(url: string, ctx: PublicRenderContext): Promise<
     const page = await apiGet<PublicSharePage>(`/v1/public/shares/${enc}/pages/${documentId}`, ctx)
     const inTree = new Set(share.tree.map((n) => n.documentId))
     const body = renderPublicMarkdown(page.markdown, {
+      title: page.title,
       pageHref: (id) => (inTree.has(id) ? shareHref(token, id, share.rootDocumentId) : null),
       attachmentHref: (id, download) => `${apiPublic}${publicShareAttachmentPath(token, id)}${download ? '?download=1' : ''}`,
       embedSrc: (id) => `${apiPublic}/v1/public/shares/${enc}/embeds/${encodeURIComponent(id)}`,
@@ -295,6 +296,7 @@ async function resolveSiteView(url: string, ctx: PublicRenderContext): Promise<S
   // page this body links to lives, among those this reader may see.
   const slugOf = new Map([...res.tree, ...res.page.links].map((n) => [n.documentId, n.slugPath]))
   const body = renderPublicMarkdown(res.page.markdown, {
+    title: res.page.title,
     pageHref: (id) => {
       const slugPath = slugOf.get(id)
       return slugPath === undefined ? null : hrefFor(id, slugPath)

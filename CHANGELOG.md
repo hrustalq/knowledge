@@ -178,6 +178,12 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- **Share links, published sites and exports showed a page's title twice** (#692). A page whose body opens with
+  `# <its title>` (most imported, captured and agent-written pages) got the surface's own title, then the same
+  heading again, and on a published site the title was also the first entry of "On this page". Share links,
+  site pages and PDF, HTML and DOCX exports now drop that leading heading with the same rule the editor and the
+  in-app reader use (#646). A first heading that says something else still shows. Stored markdown and the `.md`
+  / `llms.txt` outputs are unchanged.
 - **Clicking another page in a sync run's review did nothing** (#674). Switching pages rebuilds the editor
   pane, and the table controls' teardown read the already-destroyed editor and threw. That aborted the page
   update, so the first page stayed selected however many times another was clicked.

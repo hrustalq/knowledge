@@ -27,7 +27,7 @@
 import { JSDOM } from 'jsdom'
 import createDOMPurify, { type WindowLike } from 'dompurify'
 import { parseAttachmentPath } from '@knowledge/contracts/publishing'
-import { markdownToHtml, SANITIZE_CONFIG, slugifyHeading } from './render'
+import { markdownToHtml, SANITIZE_CONFIG, slugifyHeading, splitTitleHeading } from './render'
 import { parseScene, renderSceneToSvg } from './drawing'
 import { asEmbedLayout } from '@knowledge/contracts/embeds'
 import { KN, attachmentKind, carryDiagramLayout, embedCaptionOf, escapeHtml } from './nodes'
@@ -39,6 +39,11 @@ export interface PublicHeading {
 }
 
 export interface PublicRenderOptions {
+  /**
+   * The title the surface draws above the body. A leading `# <title>` in the
+   * markdown is dropped (#692, `splitTitleHeading`), so it shows once.
+   */
+  title: string
   /**
    * The reader URL of a page this link reaches, or null to unlink a reference
    * to it. A `#heading` on the reference is kept unless the URL has its own.
@@ -92,7 +97,7 @@ const DESCRIPTION_MAX = 160
 export function renderPublicMarkdown(markdown: string, options: PublicRenderOptions): PublicRenderResult {
   const doc = window.document
   const host = doc.createElement('div')
-  host.innerHTML = purify.sanitize(markdownToHtml(markdown ?? ''), { ...SANITIZE_CONFIG }) as unknown as string
+  host.innerHTML = purify.sanitize(markdownToHtml(splitTitleHeading(markdown ?? '', options.title).body), { ...SANITIZE_CONFIG }) as unknown as string
 
   const headings = assignHeadingIds(host, options.idPrefix ?? '')
   wrapTables(host, doc)

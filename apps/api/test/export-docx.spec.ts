@@ -77,6 +77,14 @@ describe('writeDocx — document shape', () => {
     expect(xml.match(/<w:sectPr/g)).toHaveLength(1);
   });
 
+  it('writes a body that opens with the page title as its title once, and keeps a different first heading (#692)', async () => {
+    const titled = await xmlOf('# Руководство\n\nBody');
+    expect(titled.match(/<w:pStyle w:val="Heading1"\/>/g)).toHaveLength(1);
+    expect(titled.match(/>Руководство</g)).toHaveLength(1);
+    const other = await xmlOf('# Обзор\n\nBody');
+    expect(paragraph(other, '>Обзор<')).toContain('w:val="Heading2"');
+  });
+
   it('gives several pages a title page and contents linked to each page, and a section (a new sheet) per page', async () => {
     const zip = await files([
       { documentId: A, title: 'Guide', depth: 0, markdown: 'One' },

@@ -141,6 +141,7 @@ function renderPdf(req: ExportRenderRequest, deps: ExportRenderDeps): ExportRend
 
   const articles = req.pages.map((p, i) => {
     const body = renderPublicMarkdown(p.markdown, {
+      title: p.title,
       pageHref: (id) => (inExport.has(id) ? `#${anchor(id)}` : null),
       attachmentHref: (id) => req.assets[id] ?? null,
       // An embedded design's snapshot travels as an asset keyed by its item id (#470).
@@ -219,6 +220,7 @@ function renderBundle(req: ExportRenderRequest, deps: ExportRenderDeps): ExportR
 
   const rendered = req.pages.map((page) =>
     renderPublicMarkdown(page.markdown, {
+      title: page.title,
       pageHref: (id) => {
         const target = pathOf.get(id)
         return target ? relativeHref(page.path, target) : null

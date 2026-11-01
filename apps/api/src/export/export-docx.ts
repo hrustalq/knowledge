@@ -24,7 +24,7 @@ import {
   type ParagraphChild,
 } from 'docx';
 import { parseAttachmentPath } from '@knowledge/contracts/publishing';
-import { markdownTokens, panelOf, slugifyHeading, type Token, type Tokens } from '@knowledge/editor-schema/markdown';
+import { markdownTokens, panelOf, slugifyHeading, splitTitleHeading, type Token, type Tokens } from '@knowledge/editor-schema/markdown';
 import { KN, isStatusColor, type PanelType, type StatusColor } from '@knowledge/editor-schema/nodes';
 
 /**
@@ -851,7 +851,7 @@ export async function writeDocx(input: DocxExportInput): Promise<Uint8Array> {
       ]),
     );
   }
-  input.pages.forEach((p, i) => sections.push(section(new PageWriter(writer, i, markdownTokens(p.markdown)).write(p.title))));
+  input.pages.forEach((p, i) => sections.push(section(new PageWriter(writer, i, markdownTokens(splitTitleHeading(p.markdown, p.title).body)).write(p.title))));
 
   const doc = new Document({
     title: input.title,

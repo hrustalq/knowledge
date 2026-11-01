@@ -10681,6 +10681,7 @@ export interface components {
             documentId: string;
             fromRevisionId: string;
             toRevisionId: string;
+            flagged?: string[];
         };
         /** @enum {string} */
         AgentRunStatus: "pending" | "running" | "succeeded" | "failed" | "cancelled";

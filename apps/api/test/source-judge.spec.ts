@@ -20,6 +20,8 @@ import { SourceChangePublishSweeper } from '../src/connectors/drift/source-chang
  * 5. No owner or no model queues nothing; a pending run absorbs a newer version.
  * 6. The publisher flags found and unchecked pages in both modes, and opens a
  *    drafted fix only in `propose` mode with an editor owner.
+ * 7. In `propose` mode a page the deterministic pass flagged is judged too,
+ *    for its fix, and keeps the pass's note; a person's flag still skips it.
  */
 
 describe('what changed', () => {
@@ -79,15 +81,22 @@ describe('what changed', () => {
 });
 
 describe('the sentinel judging a source change', () => {
-  function sentinel(opts: { linkers: Array<{ sourceDocumentId: string; targetAnchor: string | null }>; visible: (id: string) => boolean; model?: boolean }) {
+  function sentinel(opts: {
+    linkers: Array<{ sourceDocumentId: string; targetAnchor: string | null }>;
+    visible: (id: string) => boolean;
+    model?: boolean;
+    mode?: 'flag' | 'propose';
+    passFlagged?: string[];
+  }) {
     const prisma = {
       document: {
         findFirst: async () => ({ id: 'src', title: 'Vendor API', kind: 'page' }),
-        // `flagged` already carries a flag, so the query leaves it out.
-        findMany: async ({ where }: { where: { id: { in: string[] } } }) => where.id.in.filter((id) => id !== 'flagged').map((id) => ({ id, title: `Page ${id}` })),
+        // `flagged` already carries a flag.
+        findMany: async ({ where }: { where: { id: { in: string[] } } }) =>
+          where.id.in.map((id) => ({ id, title: `Page ${id}`, verificationFlag: id === 'flagged' ? 'requested' : null })),
       },
       connectorLink: {
-        findFirst: async () => ({ externalUrl: 'https://vendor.example/api', externalId: 'x' }),
+        findFirst: async () => ({ externalUrl: 'https://vendor.example/api', externalId: 'x', connector: { config: { misalignment: opts.mode ?? 'flag' } } }),
         findMany: async () => [{ documentId: 'sourced' }],
       },
       pageLink: { findMany: async () => opts.linkers },
@@ -144,7 +153,7 @@ describe('the sentinel judging a source change', () => {
       agentKey: 'sentinel',
       createdBy: 'u',
       locale: 'en',
-      input: { sourceChange: { documentId: 'src', fromRevisionId: 'r1', toRevisionId: 'r2' } },
+      input: { sourceChange: { documentId: 'src', fromRevisionId: 'r1', toRevisionId: 'r2', flagged: opts.passFlagged ?? [] } },
     } as unknown as AgentRun;
     const agent = { key: 'sentinel', instructions: 'judge', skillIds: [], config: { enabled: opts.model ?? true }, missing: ['tools'] };
     return { result: () => executor.run(run, agent as never, { userId: 'u' } as never, async () => undefined), client };
@@ -173,6 +182,20 @@ describe('the sentinel judging a source change', () => {
     expect(out.details).toEqual({ sourceUnchecked: [{ documentId: 'secret', reason: 'restricted' }] });
   });
 
+  it('in propose mode, also judges a page the deterministic pass flagged, for its fix', async () => {
+    const linkers = [{ sourceDocumentId: 'flagged', targetAnchor: 'limits' }];
+    const skipped = sentinel({ linkers, visible: () => true, passFlagged: ['flagged'] });
+    await skipped.result();
+    expect(skipped.client.chat).not.toHaveBeenCalled();
+    // A flag the pass did not set (a person's) still keeps the page out.
+    const personal = sentinel({ linkers, visible: () => true, mode: 'propose' });
+    await personal.result();
+    expect(personal.client.chat).not.toHaveBeenCalled();
+    const proposing = sentinel({ linkers, visible: () => true, mode: 'propose', passFlagged: ['flagged'] });
+    await proposing.result();
+    expect(proposing.client.chat).toHaveBeenCalledTimes(1);
+  });
+
   it('caps the judged pages, and the rest wait for a person', async () => {
     const linkers = Array.from({ length: 21 }, (_, i) => ({ sourceDocumentId: `p${i}`, targetAnchor: null }));
     const { result, client } = sentinel({ linkers, visible: () => true, model: false });
@@ -198,7 +221,7 @@ describe('queueing the check', () => {
     const registry = { resolve: async () => ({ enabled: opts.enabled ?? true, config: { enabled: true }, missing: [] }) };
     const producer = { enqueue: vi.fn(async () => undefined) };
     const svc = new SourceDependentsService(prisma as never, {} as never, {} as never, {} as never, registry as never, producer as never);
-    const ask = () => svc.requestJudge({ id: 'src', workspaceId: 'w' }, { createdBy: opts.owner === undefined ? 'owner' : opts.owner, locale: 'ru' }, 'r1', 'r2');
+    const ask = () => svc.requestJudge({ id: 'src', workspaceId: 'w' }, { createdBy: opts.owner === undefined ? 'owner' : opts.owner, locale: 'ru' }, 'r1', 'r2', ['dep']);
     return { ask, prisma, created, producer };
   }
 
@@ -206,7 +229,7 @@ describe('queueing the check', () => {
     const { ask, created, producer } = trigger({});
     expect(await ask()).toBe('new-run');
     expect(created).toEqual([
-      expect.objectContaining({ agentKey: 'sentinel', trigger: 'source', createdBy: 'owner', locale: 'ru', input: { sourceChange: { documentId: 'src', fromRevisionId: 'r1', toRevisionId: 'r2' } } }),
+      expect.objectContaining({ agentKey: 'sentinel', trigger: 'source', createdBy: 'owner', locale: 'ru', input: { sourceChange: { documentId: 'src', fromRevisionId: 'r1', toRevisionId: 'r2', flagged: ['dep'] } } }),
     ]);
     expect(producer.enqueue).toHaveBeenCalledWith('new-run');
   });
@@ -218,11 +241,11 @@ describe('queueing the check', () => {
   });
 
   it('lets a waiting run absorb the newer version, keeping where it started', async () => {
-    const { ask, prisma, created } = trigger({ waiting: { id: 'old', input: { sourceChange: { documentId: 'src', fromRevisionId: 'r0', toRevisionId: 'r1' } } } });
+    const { ask, prisma, created } = trigger({ waiting: { id: 'old', input: { sourceChange: { documentId: 'src', fromRevisionId: 'r0', toRevisionId: 'r1', flagged: ['earlier'] } } } });
     expect(await ask()).toBe('old');
     expect(prisma.agentRun.updateMany).toHaveBeenCalledWith({
       where: { id: 'old', status: 'pending' },
-      data: { input: { sourceChange: { documentId: 'src', fromRevisionId: 'r0', toRevisionId: 'r2' } } },
+      data: { input: { sourceChange: { documentId: 'src', fromRevisionId: 'r0', toRevisionId: 'r2', flagged: ['earlier', 'dep'] } } },
     });
     expect(created).toEqual([]);
   });
@@ -250,7 +273,8 @@ describe('publishing the verdicts', () => {
       createdBy: 'u',
       createdAt: new Date(),
       locale: 'en',
-      input: { sourceChange: { documentId: 'src', fromRevisionId: 'r1', toRevisionId: 'r2' } },
+      // `a` was flagged by the deterministic pass: its note stays, its fix is proposed.
+      input: { sourceChange: { documentId: 'src', fromRevisionId: 'r1', toRevisionId: 'r2', flagged: ['a'] } },
       findings: [
         { kind: 'stale', severity: 'warning', title: 'A', detail: 'Says 100.', documentIds: ['a'], documentTitles: ['A'], draft: { title: 'A', markdown: 'fixed' } },
         { kind: 'stale', severity: 'warning', title: 'B', detail: 'Wrong.', documentIds: ['b'], documentTitles: ['B'] },
@@ -263,7 +287,7 @@ describe('publishing the verdicts', () => {
   it('flags what it found and what it could not check, proposing nothing in flag mode', async () => {
     const { publish, flagged, findings } = publisher('flag');
     await publish();
-    expect(flagged.map(([id]) => id)).toEqual(['a', 'b', 'r']);
+    expect(flagged.map(([id]) => id)).toEqual(['b', 'r']);
     expect(flagged[0]![1]).toBe('connector.sourceChangedNote');
     expect(findings.propose).not.toHaveBeenCalled();
   });
@@ -276,7 +300,7 @@ describe('publishing the verdicts', () => {
 
     const viewer = publisher('propose', false);
     await viewer.publish();
-    expect(viewer.flagged).toHaveLength(3);
+    expect(viewer.flagged).toHaveLength(2);
     expect(viewer.findings.propose).not.toHaveBeenCalled();
   });
 });

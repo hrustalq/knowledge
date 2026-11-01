@@ -110,7 +110,8 @@ in the pull request that introduces them — see
   check with "not checked" in the note instead. A new **When a change may break a page linking this** setting on
   the page's Source widget (and **When a change may break a page** on a `web` connector) chooses between **Ask
   its owner to check it** (the default) and **Ask its owner and propose a fix**, which also opens the sentinel's
-  corrected page as a merge request from the connector's owner. `PATCH /v1/documents/:id/source` takes
+  corrected page as a merge request from the connector's owner. In that mode the pages the deterministic check
+  flagged (a cited section removed or renamed) are judged too, for their fix, and keep the check's note. `PATCH /v1/documents/:id/source` takes
   `misalignment` (`flag` | `propose`), and both fields are now optional. A version arriving while the previous
   check still waits replaces it rather than queueing a second one. No check runs when the sentinel is switched
   off or has no model, or when the source has no owner; the deterministic flags still apply.

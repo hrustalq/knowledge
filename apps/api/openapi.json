@@ -48973,6 +48973,12 @@
           },
           "toRevisionId": {
             "type": "string"
+          },
+          "flagged": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [

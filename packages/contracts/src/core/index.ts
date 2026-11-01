@@ -691,7 +691,7 @@ export interface SourceSyncHealth {
  * A source-backed page's sync is healthy: not paused, not held for recipe
  * review, no failed sync in a row, and — on a schedule — last answered within
  * two intervals. A manual-only source has no clock to fall behind. Mirrored in
- * SQL by `sourceHealthySql` (apps/api/src/documents/source-backed.ts).
+ * SQL by `sourceStateSql` (apps/api/src/documents/source-backed.ts).
  */
 export function sourceSyncHealthy(s: SourceSyncHealth, now: Date = new Date()): boolean {
   if (s.pausedAt || s.heldAt || s.failures > 0) return false;

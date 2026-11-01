@@ -255,7 +255,7 @@ export const KIND_STEPS: Record<ConnectorKind, KindStep[]> = {
     },
   ],
   // A web source (#674): the URL and, for a host that needs one, its token.
-  web: [{ name: 'source', meta: { labelKey: 'connectors.step.source', fields: ['url', 'crawl'], credential: true } }],
+  web: [{ name: 'source', meta: { labelKey: 'connectors.step.source', fields: ['url', 'crawl', 'misalignment'], credential: true } }],
 }
 
 export const confluenceSetup = kindMachine('confluenceSetup', KIND_STEPS.confluence)

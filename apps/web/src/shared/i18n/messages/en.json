@@ -905,6 +905,14 @@
             "page": "This URL only",
             "tree": "This URL and every page under it"
           }
+        },
+        "misalignment": {
+          "label": "When a change may break a page",
+          "help": "Pages that link this source are checked against each new version. One it may have made wrong is flagged for its owner; a proposed fix opens as a merge request.",
+          "options": {
+            "flag": "Ask its owner to check it",
+            "propose": "Ask its owner and propose a fix"
+          }
         }
       }
     },
@@ -2475,7 +2483,8 @@
         "schedule": "scheduled",
         "webhook": "pull request",
         "report": "report",
-        "merge-request": "merge request"
+        "merge-request": "merge request",
+        "source": "source changed"
       },
       "stage": {
         "scanning": "Scanning pages",
@@ -7621,6 +7630,11 @@
         "label": "Confirm a later crawl above",
         "hint": "A later crawl that would add and drop more pages than this, together, waits for review."
       }
+    },
+    "misalignment": {
+      "label": "When a change may break a page linking this",
+      "flag": "Ask its owner to check it",
+      "propose": "Ask its owner and propose a fix"
     }
   }
 }

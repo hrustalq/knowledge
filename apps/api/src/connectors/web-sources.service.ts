@@ -7,8 +7,10 @@ import {
   SOURCE_DEFAULT_INTERVAL_MIN,
   SOURCE_FAILURE_LIMIT,
   SOURCE_INTERVALS_MIN,
+  SOURCE_MISALIGNMENT_CONFIG_KEY,
   SOURCE_RETRY_DELAYS_MIN,
   isApiSpecKind,
+  sourceMisalignment,
   webCrawls,
   type ApiSpecKind,
   type CreateSourcePageRequest,
@@ -18,6 +20,7 @@ import {
   type Locale,
   type SourceAlertKind,
   type SourceCheckFailure,
+  type SourceMisalignmentMode,
   type SourceRecipePreview,
   type SourceTreeRecipeState,
   type VerificationFlag,
@@ -484,6 +487,7 @@ export class WebSourcesService {
       spec: document && isApiSpecKind(document.kind) ? document.kind : null,
       recipe: await this.recipes.state(link),
       tree: await this.tree(row),
+      misalignment: sourceMisalignment(row.config),
     };
   }
 
@@ -508,9 +512,15 @@ export class WebSourcesService {
     return link?.documentId ?? null;
   }
 
-  async setInterval(documentId: string, intervalMinutes: number | null): Promise<DocumentSourceInfo> {
+  async update(documentId: string, input: { intervalMinutes?: number | null; misalignment?: SourceMisalignmentMode }): Promise<DocumentSourceInfo> {
     const { row } = await this.require(documentId);
-    await this.prisma.connector.update({ where: { id: row.id }, data: { syncIntervalMinutes: checkInterval(intervalMinutes) } });
+    await this.prisma.connector.update({
+      where: { id: row.id },
+      data: {
+        ...(input.intervalMinutes !== undefined ? { syncIntervalMinutes: checkInterval(input.intervalMinutes) } : {}),
+        ...(input.misalignment ? { config: { ...(row.config as Record<string, unknown>), [SOURCE_MISALIGNMENT_CONFIG_KEY]: input.misalignment } } : {}),
+      },
+    });
     return this.info(documentId);
   }
 

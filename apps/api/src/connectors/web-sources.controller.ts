@@ -90,9 +90,9 @@ export class WebSourcesController {
   @Patch('documents/:id/source')
   @Returns('DocumentSourceInfo')
   @Access('editor', 'document')
-  @ApiOperation({ summary: 'How often the source is checked' })
+  @ApiOperation({ summary: 'How often the source is checked, and what a new version does to pages linking it' })
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateDocumentSourceDto): Promise<DocumentSourceInfo> {
-    return this.sources.setInterval(id, dto.intervalMinutes);
+    return this.sources.update(id, dto);
   }
 
   @Post('documents/:id/source/pause')

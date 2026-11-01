@@ -4134,7 +4134,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** How often the source is checked */
+        /** How often the source is checked, and what a new version does to pages linking it */
         patch: operations["WebSourcesController_update"];
         trace?: never;
     };
@@ -9245,7 +9245,12 @@ export interface components {
              * @description Minutes between checks; null = only on demand
              * @enum {number|null}
              */
-            intervalMinutes: 15 | 60 | 360 | 1440 | null;
+            intervalMinutes?: 15 | 60 | 360 | 1440 | null;
+            /**
+             * @description A page linking this source that a new version may have made wrong: flagged for its owner, or flagged with a proposed fix
+             * @enum {string}
+             */
+            misalignment?: "flag" | "propose";
         };
         RestoreDocumentSourceDto: {
             /**
@@ -10656,6 +10661,7 @@ export interface components {
             payload?: string;
             component?: components["schemas"]["AgentRunComponent"];
             lint?: components["schemas"]["AgentRunLint"];
+            sourceChange?: components["schemas"]["AgentRunSourceChange"];
         };
         AgentRunLint: {
             mergeRequestId: string;
@@ -10670,6 +10676,11 @@ export interface components {
             headRef: string | null;
             baseRef: string | null;
             author: string | null;
+        };
+        AgentRunSourceChange: {
+            documentId: string;
+            fromRevisionId: string;
+            toRevisionId: string;
         };
         /** @enum {string} */
         AgentRunStatus: "pending" | "running" | "succeeded" | "failed" | "cancelled";
@@ -10696,7 +10707,7 @@ export interface components {
             createdAt: string;
         };
         /** @enum {string} */
-        AgentRunTrigger: "manual" | "schedule" | "event" | "webhook" | "report" | "merge-request";
+        AgentRunTrigger: "manual" | "schedule" | "event" | "webhook" | "report" | "merge-request" | "source";
         /** @enum {string} */
         AgentScheduleKind: "interval" | "daily" | "weekly";
         /** @enum {string} */
@@ -10967,7 +10978,7 @@ export interface components {
             createdAt: string;
         };
         /** @enum {string} */
-        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "source-recipe";
+        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "source-recipe" | "source-judge";
         AiUsageResponse: {
             from: string;
             to: string;
@@ -12717,6 +12728,7 @@ export interface components {
                 pages: number;
                 awaitingRunId: string | null;
             } | null;
+            misalignment: components["schemas"]["SourceMisalignmentMode"];
         };
         DocumentSourceRecipeState: {
             active: components["schemas"]["SourceRecipeVersion"] | null;
@@ -15240,6 +15252,8 @@ export interface components {
             confirmFirst: number;
             confirmChange: number;
         };
+        /** @enum {string} */
+        SourceMisalignmentMode: "flag" | "propose";
         SourcePolicy: {
             id: string;
             workspaceId: string;

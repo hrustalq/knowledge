@@ -101,6 +101,19 @@ in the pull request that introduces them — see
   `source_backed`). A person's flag and an open report still outrank it. Search ranking, citations, the page tree
   and Knowledge health all read the same state. `DocumentDetailResponse.document.sourceSync` carries the host and
   last check.
+- **The sentinel checks pages that link a changed source, and can propose the fix** (#674, phase 5b). When a
+  source-backed page gets a new version, the pages linking it that the deterministic check did not already flag
+  are judged against only what changed: the sections whose text differs, or a spec's changed operations. A page
+  that links only sections that did not change is skipped, and a page linking a section sees only that section.
+  A page the sentinel finds wrong is asked for a check (`requested`, its owner notified) with what is wrong in the
+  note. At most 20 pages are judged per version; the rest, and pages not every member may open, are asked for a
+  check with "not checked" in the note instead. A new **When a change may break a page linking this** setting on
+  the page's Source widget (and **When a change may break a page** on a `web` connector) chooses between **Ask
+  its owner to check it** (the default) and **Ask its owner and propose a fix**, which also opens the sentinel's
+  corrected page as a merge request from the connector's owner. `PATCH /v1/documents/:id/source` takes
+  `misalignment` (`flag` | `propose`), and both fields are now optional. A version arriving while the previous
+  check still waits replaces it rather than queueing a second one. No check runs when the sentinel is switched
+  off or has no model, or when the source has no owner; the deterministic flags still apply.
 - **A page knows which pages link to it** (#673). Every internal link on a page's published version is now
   recorded with the heading it points at: the `/documents/<id>#heading` form the editor writes, and the same
   address pasted in full from this deployment's own web address (`WEB_BASE_URL`); links to anywhere else are
@@ -139,6 +152,10 @@ in the pull request that introduces them — see
   `MAIL_NOTIFICATIONS_ENABLED` like every other notification mail. The migration only adds nullable or
   defaulted columns to `connectors` and `connector_links`, which the previous release never reads, so a
   rollback by retag needs nothing.
+- **Each new version of a source-backed page can now cost up to 20 model calls** (#674, phase 5b), one per
+  linking page judged, billed to the source's owner as the new `source-judge` AI usage operation. Only pages
+  linking a changed section or the whole page are judged. Switching the `sentinel` agent off per workspace
+  stops it, and the deterministic flags still run. No migration.
 - **Spec sources (#674, phase 4) add one nullable column, `connector_links.held_detail`**, which the previous
   release never reads, so a rollback by retag needs nothing.
 - **Crawled sources (#674, phase 3) add three nullable columns to `workspace_settings`** and three env ceilings:

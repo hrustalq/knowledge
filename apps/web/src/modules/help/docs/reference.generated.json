@@ -5024,7 +5024,7 @@
       "method": "PATCH",
       "path": "/v1/documents/{id}/source",
       "tag": "sources",
-      "summary": "How often the source is checked",
+      "summary": "How often the source is checked, and what a new version does to pages linking it",
       "role": "editor",
       "source": "document",
       "public": false,

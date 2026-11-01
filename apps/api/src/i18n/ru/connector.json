@@ -129,7 +129,9 @@
   "sourceChange": {
     "anchorRemoved": "раздел #{anchor} удалён",
     "anchorRenamed": "#{from} теперь #{to}",
-    "keyDropped": "{key} больше не описан"
+    "keyDropped": "{key} больше не описан",
+    "notChecked": "не проверено: слишком много зависимых страниц",
+    "notCheckedRestricted": "не проверено автоматически: страница с ограниченным доступом"
   },
   "sourceRestoredMessage": "Восстановлена ревизия {number}",
   "sourceRecipeMessage": "Перечитано по новому рецепту извлечения"

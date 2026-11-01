@@ -129,7 +129,9 @@
   "sourceChange": {
     "anchorRemoved": "#{anchor} removed",
     "anchorRenamed": "#{from} is now #{to}",
-    "keyDropped": "{key} no longer covered"
+    "keyDropped": "{key} no longer covered",
+    "notChecked": "not checked, too many dependents",
+    "notCheckedRestricted": "not checked automatically: restricted page"
   },
   "sourceRestoredMessage": "Restored revision {number}",
   "sourceRecipeMessage": "Re-read with a new extraction recipe"

@@ -217,10 +217,10 @@ export const DRIFT_OUTPUT_CONTRACT =
 
 /**
  * The judgement's parts, validated — `readExcavation`'s rule, shared by the
- * two things the sentinel judges. `null` is "not drifted" or an answer that
+ * three things the sentinel judges. `null` is "not drifted" or an answer that
  * did not meet the contract; either way there is no finding.
  */
-function readVerdict(
+export function readVerdict(
   value: Record<string, unknown> | null,
   page: { markdown: string },
 ): { severity: AgentFinding['severity']; title: string; detail: string; markdown: string | null } | null {
@@ -266,13 +266,18 @@ export function readDriftVerdict(
 
 /** The pull request as a finding's source, its URL built from the run's input rather than anything a model wrote. */
 export function pullRequestSources(pr: AgentRunPullRequest): Pick<AgentFinding, 'sources'> {
+  return webSources(pr.url, `#${pr.number} ${pr.title}`);
+}
+
+/** A URL the run was given, never one a model wrote, as a finding's source; nothing when it does not parse. */
+export function webSources(url: string, title: string): Pick<AgentFinding, 'sources'> {
   let site = '';
   try {
-    site = new URL(pr.url).hostname.replace(/^www\./, '');
+    site = new URL(url).hostname.replace(/^www\./, '');
   } catch {
     site = '';
   }
-  return site ? { sources: [{ kind: 'web' as const, url: pr.url, site, title: `#${pr.number} ${pr.title}`.slice(0, 300) }] } : {};
+  return site ? { sources: [{ kind: 'web' as const, url, site, title: title.slice(0, 300) }] } : {};
 }
 
 /**

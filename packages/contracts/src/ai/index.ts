@@ -1517,6 +1517,13 @@ export interface AgentRunSourceChange {
   documentId: string;
   fromRevisionId: string;
   toRevisionId: string;
+  /**
+   * Pages the deterministic pass flagged for this change (a removed section, a
+   * dropped key). Skipped like any flagged page, except in `propose` mode:
+   * a page linking the source is judged anyway, for the fix, and its flag
+   * keeps the pass's note.
+   */
+  flagged?: string[];
 }
 
 /** What a linter run checks (#74). */

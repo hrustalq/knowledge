@@ -19,7 +19,7 @@ import type {
   MemoSegment,
   RelationInput,
 } from '@knowledge/contracts';
-import { buildTestSuite, isApiSpecKind, operationFingerprint, SOURCE_JUDGE_MAX_PAGES, testCasesFor } from '@knowledge/contracts';
+import { buildTestSuite, isApiSpecKind, operationFingerprint, SOURCE_JUDGE_MAX_PAGES, sourceMisalignment, testCasesFor } from '@knowledge/contracts';
 import { headingSections } from '@knowledge/editor-schema/markdown';
 import type { Env } from '../config/env.js';
 import { EMBEDDING_PROVIDER, type EmbeddingProvider } from '../embedding/embedding.provider.js';
@@ -2409,7 +2409,8 @@ ${diffExcerpt(shown, MAX_DIFF_CHARS)}`,
    * `diff` reads the changed sections — heading sections, or a spec's changed
    * operations under their anchors. `related` keeps the linking pages a change
    * can concern (`judgeCandidates`) and drops those already flagged (the
-   * deterministic pass ran first), archived or source-backed. A page the
+   * deterministic pass ran first; in `propose` mode the pages it flagged stay,
+   * for their fix), archived or source-backed. A page the
    * workspace audience cannot read is not judged, and neither is one past
    * `SOURCE_JUDGE_MAX_PAGES`: both go to `details.sourceUnchecked`, which the
    * publisher flags "not checked". `judging` is one model call per page.
@@ -2433,8 +2434,11 @@ ${diffExcerpt(shown, MAX_DIFF_CHARS)}`,
     if (!source) throw new Error(t('error.document.notFound', { id: change.documentId }));
     const link = await this.prisma.connectorLink.findFirst({
       where: { documentId: source.id, connector: { kind: 'web' } },
-      select: { externalUrl: true, externalId: true },
+      select: { externalUrl: true, externalId: true, connector: { select: { config: true } } },
     });
+    // In `propose` mode the pages the deterministic pass flagged are judged
+    // too: the flag is certain, the fix is what is missing.
+    const proposing = new Set(sourceMisalignment(link?.connector.config) === 'propose' ? (change.flagged ?? []) : []);
     const origin = { title: source.title, url: link?.externalUrl ?? link?.externalId ?? '' };
     const sections = isApiSpecKind(source.kind)
       ? specChangedSections((await this.specDiff.diff(source.id, change.fromRevisionId, change.toRevisionId))?.changes ?? [])
@@ -2453,12 +2457,15 @@ ${diffExcerpt(shown, MAX_DIFF_CHARS)}`,
     const ids = all.map((c) => c.documentId);
     const [open, sourced] = await Promise.all([
       this.prisma.document.findMany({
-        where: { id: { in: ids }, workspaceId: run.workspaceId, archivedAt: null, verificationFlag: null },
-        select: { id: true, title: true },
+        where: { id: { in: ids }, workspaceId: run.workspaceId, archivedAt: null },
+        select: { id: true, title: true, verificationFlag: true },
       }),
       this.prisma.connectorLink.findMany({ where: { documentId: { in: ids }, connector: { kind: 'web' } }, select: { documentId: true } }),
     ]);
-    const titles = new Map(open.map((d) => [d.id, d.title]));
+    // Already asked about is skipped — unless the pass asked and a fix is wanted.
+    const titles = new Map(
+      open.filter((d) => d.verificationFlag === null || (d.verificationFlag === 'requested' && proposing.has(d.id))).map((d) => [d.id, d.title]),
+    );
     const sourceBacked = new Set(sourced.map((l) => l.documentId));
     const live = all.filter((c) => titles.has(c.documentId) && !sourceBacked.has(c.documentId));
     const visible = await this.permissions.visibleDocumentIds(await this.runScope(run, principal), live.map((c) => c.documentId));

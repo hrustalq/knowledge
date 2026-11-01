@@ -108,8 +108,11 @@ export class SourceChangePublishSweeper implements OnModuleInit, OnModuleDestroy
         t(u.reason === 'cap' ? 'connector.sourceChange.notChecked' : 'connector.sourceChange.notCheckedRestricted'),
       ]),
     ];
-    // Flags first, so a proposal that fails does not also silence the page.
+    // Flags first, so a proposal that fails does not also silence the page. A
+    // page the deterministic pass flagged keeps its note: it names what went.
+    const passFlagged = new Set(change.flagged ?? []);
     for (const [documentId, changes] of flags) {
+      if (passFlagged.has(documentId)) continue;
       await this.verification
         .requestVerification(documentId, {
           actorId: run.createdBy,

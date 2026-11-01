@@ -99,11 +99,12 @@ export class SourceDependentsService {
     if (!previous) return 0;
 
     const flagged = await this.flagDropped(document, previous, revision, link.connector.createdBy ?? AUTHOR_ID_STUB);
-    // After the flags, so the run skips the pages they already asked about.
-    await this.requestJudge(document, link.connector, previous.id, revision.id).catch((err: unknown) =>
+    // After the flags: the run skips the pages they asked about, except in
+    // `propose` mode, where it drafts their fix too (`flagged`).
+    await this.requestJudge(document, link.connector, previous.id, revision.id, flagged).catch((err: unknown) =>
       this.logger.warn({ msg: 'Source change check could not be queued', documentId: document.id, err }),
     );
-    return flagged;
+    return flagged.length;
   }
 
   private async flagDropped(
@@ -111,7 +112,7 @@ export class SourceDependentsService {
     previous: { id: string; s3Key: string },
     revision: { id: string; s3Key: string },
     actorId: string,
-  ): Promise<number> {
+  ): Promise<string[]> {
     const spec = isApiSpecKind(document.kind);
     const [before, after, keysBefore, keysAfter] = await Promise.all([
       spec ? this.operationAnchors(previous.id) : this.headingAnchors(previous.s3Key),
@@ -121,7 +122,7 @@ export class SourceDependentsService {
     ]);
     const anchors = anchorChanges(before, after);
     const dropped = [...keysBefore].filter((k) => !keysAfter.has(k));
-    if (anchors.size === 0 && dropped.length === 0) return 0;
+    if (anchors.size === 0 && dropped.length === 0) return [];
 
     // What each dependent relied on that is gone.
     const changes = new Map<string, string[]>();
@@ -141,7 +142,7 @@ export class SourceDependentsService {
       for (const key of keys) add(id, t('connector.sourceChange.keyDropped', { key }));
     }
     changes.delete(document.id);
-    if (changes.size === 0) return 0;
+    if (changes.size === 0) return [];
 
     const [pages, sourced] = await Promise.all([
       this.prisma.document.findMany({
@@ -154,7 +155,7 @@ export class SourceDependentsService {
       }),
     ]);
     const skip = new Set(sourced.map((l) => l.documentId));
-    let flagged = 0;
+    const flagged: string[] = [];
     for (const { id } of pages) {
       if (skip.has(id)) continue;
       const items = changes.get(id)!;
@@ -163,7 +164,7 @@ export class SourceDependentsService {
       const note = t('connector.sourceChangedNote', { title: document.title, changes: shown.join('; ') });
       await this.verification
         .flag(id, 'requested', { actorId, note, source: { kind: 'source', by: actorId }, keepOutdated: true })
-        .then(() => flagged++)
+        .then(() => flagged.push(id))
         .catch((err: unknown) => this.logger.warn({ msg: 'Dependent page could not be flagged', documentId: id, err }));
     }
     return flagged;
@@ -175,6 +176,7 @@ export class SourceDependentsService {
     connector: { createdBy: string | null; locale: string },
     fromRevisionId: string,
     toRevisionId: string,
+    flagged: string[] = [],
   ): Promise<string | null> {
     // A run acts as a person; a connector nobody owns gets no model calls (feature 27).
     if (!connector.createdBy) return null;
@@ -195,7 +197,12 @@ export class SourceDependentsService {
       // Guarded on still pending: a run the worker claimed has frozen its input.
       const absorbed = await this.prisma.agentRun.updateMany({
         where: { id: waiting.id, status: 'pending' },
-        data: { input: { ...input, sourceChange: { ...input.sourceChange!, toRevisionId } } as unknown as Prisma.InputJsonValue },
+        data: {
+          input: {
+            ...input,
+            sourceChange: { ...input.sourceChange!, toRevisionId, flagged: [...new Set([...(input.sourceChange!.flagged ?? []), ...flagged])] },
+          } as unknown as Prisma.InputJsonValue,
+        },
       });
       if (absorbed.count === 1) return waiting.id;
     }
@@ -211,7 +218,7 @@ export class SourceDependentsService {
       where: { workspaceId_key: { workspaceId: document.workspaceId, key: JUDGE_AGENT_KEY } },
       select: { id: true },
     });
-    const input: AgentRunInput = { sourceChange: { documentId: document.id, fromRevisionId, toRevisionId } };
+    const input: AgentRunInput = { sourceChange: { documentId: document.id, fromRevisionId, toRevisionId, flagged } };
     const run = await this.prisma.agentRun.create({
       data: {
         workspaceId: document.workspaceId,

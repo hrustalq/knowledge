@@ -79,13 +79,28 @@ in the pull request that introduces them — see
   (JSON or YAML with a top-level `openapi`, `swagger` or `asyncapi` key, such as `/openapi.json` or
   `/v3/api-docs`) creates an API reference page, stored as written. Each new version replaces it directly, with no
   merge request, whatever the workspace's breaking-change policy. Specs from repositories still go through merge
-  requests. When a version breaks clients, the connector's owner gets a **breaking** alert (in-app and email). If
-  it removes an operation or channel, every page linking the spec is asked for a check, and the note names the
-  removed operations. A version that no longer parses is held: the page stays on its last good version, the Source
+  requests. When a version breaks clients, the connector's owner gets a **breaking** alert (in-app and email).
+  The pages that relied on a removed operation are asked for a check (see the next entry). A version that no
+  longer parses is held: the page stays on its last good version, the Source
   widget shows the parser's message, the owner is alerted once, and the next version that parses lands normally.
   A spec split across files (a `$ref` to another file) is refused with "bundle the spec into one file", and a
   spec cannot be crawled. Recipes do not apply to a spec, so its Source widget says it is stored as written
   instead of linking to one.
+- **Pages that rely on a source hear when it drops what they cite** (#674, phase 5a). Once a new version of a
+  source-backed page is indexed, a page is asked for a check (`requested`, its owner notified) when it links a
+  section the new version removed or renamed, or names an entity the new version no longer describes: a removed
+  API operation, or a `relations:` entry gone from the source's frontmatter. No model is involved. The note says
+  what went, for example "Its source “Vendor guide” changed: #limits removed; #auth is now #authentication". On a
+  spec page the sections are its operations, so only the pages citing a removed operation are asked, not every
+  page linking the spec. A page already flagged, archived, or itself following a source is left alone. Facts a
+  model extracted are not compared, since its reading of the same text can differ between versions.
+- **A source-backed page's trust follows its sync** (#674, phase 5a). It reads as **verified** while its source is
+  healthy (not paused, not held for recipe review, no failed sync, and checked within two intervals; a manual-only
+  source has no deadline) and **expired** otherwise. Its trust row reads "Synced from \<host\> · \<time\>" and has
+  no Verify action, since nobody stamps a page its source writes (`POST /v1/documents/:id/verify` answers 409
+  `source_backed`). A person's flag and an open report still outrank it. Search ranking, citations, the page tree
+  and Knowledge health all read the same state. `DocumentDetailResponse.document.sourceSync` carries the host and
+  last check.
 - **A page knows which pages link to it** (#673). Every internal link on a page's published version is now
   recorded with the heading it points at: the `/documents/<id>#heading` form the editor writes, and the same
   address pasted in full from this deployment's own web address (`WEB_BASE_URL`); links to anywhere else are

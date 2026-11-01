@@ -4761,6 +4761,8 @@
       "neverExpires": "never expires",
       "edited": "Verified by {who} {when}; the page has changed since",
       "expired": "Verified by {who} {when}; the review interval has passed",
+      "synced": "Synced from {host} · {when}",
+      "syncStale": "Last synced from {host} {when}; the source is paused, held or not syncing",
       "requested": "{who} asked for a check {when}",
       "outdated": "Marked outdated by {who} {when}",
       "flagged": "A reader or an agent reported a problem with this page — see Reports in the rail",

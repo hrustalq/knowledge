@@ -85,9 +85,16 @@ const sourceWho = computed(() => {
 })
 const sourceWhen = computed(() => (source.value?.at ? relativeTime(source.value.at) : ''))
 
+/** A source-backed page (#674): its sync's health stands in for a stamp. */
+const sync = computed(() => doc.value.sourceSync ?? null)
+
 const sentence = computed(() => {
   const who = verifier.value
   const when = verifiedWhen.value
+  if (sync.value && (state.value === 'verified' || state.value === 'expired')) {
+    const synced = { host: sync.value.host, when: sync.value.checkedAt ? relativeTime(sync.value.checkedAt) : '' }
+    return t(state.value === 'verified' ? 'verification.describe.synced' : 'verification.describe.syncStale', synced)
+  }
   switch (state.value) {
     case 'verified':
       return t('verification.describe.verified', { who, when })
@@ -108,7 +115,7 @@ const sentence = computed(() => {
 
 /** Only a live stamp has a deadline worth naming. */
 const expiry = computed(() => {
-  if (state.value !== 'verified') return null
+  if (state.value !== 'verified' || sync.value) return null
   const at = doc.value.verificationExpiresAt
   return at
     ? t('verification.describe.expires', { when: formatDate(at) })
@@ -274,7 +281,7 @@ const archivedBy = computed(() => nameOf(doc.value.archivedBy))
         {{ t('verification.action.request') }}
       </Button>
 
-      <DropdownMenu v-if="auth.canEdit">
+      <DropdownMenu v-if="auth.canEdit && !sync">
         <DropdownMenuTrigger as-child>
           <Button variant="outline" size="xs" :disabled="busy" :aria-pressed="state === 'verified'">
             <BadgeCheck class="size-3" :class="state === 'verified' ? 'text-panel-tip-ink' : ''" />

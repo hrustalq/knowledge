@@ -32,7 +32,7 @@ import type {
 } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { toRevisionInfo } from './revision-info.js';
-import { sourceConnectorOf } from './source-backed.js';
+import { sourceConnectorOf, sourceSyncOf } from './source-backed.js';
 import { normalizeRelationTarget, tagFilterKey } from '../common/relations.js';
 import { StorageService } from '../storage/storage.service.js';
 import { GraphService } from '../graph/graph.service.js';
@@ -57,6 +57,7 @@ import {
   entityLayerFor,
   isInactive,
   verificationStateFor,
+  type SourceSyncHealth,
   type VerificationFlag,
   type VerificationSource,
 } from '@knowledge/contracts';
@@ -694,10 +695,11 @@ export class DocumentsService {
     const headIds = page
       .map((d) => d.branches.find((b) => b.name === d.defaultBranch)?.headRevisionId)
       .filter((id): id is string => !!id);
-    const [heads, issues, settings] = await Promise.all([
+    const [heads, issues, settings, sources] = await Promise.all([
       this.prisma.documentRevision.findMany({ where: { id: { in: headIds } } }),
       this.provenance.openIssueCounts(page.map((d) => d.id)),
       this.policy.effective(workspaceId),
+      sourceSyncOf(this.prisma, page.map((d) => d.id)),
     ]);
     const headById = new Map(heads.map((r) => [r.id, r]));
 
@@ -715,7 +717,7 @@ export class DocumentsService {
         headRevisionId: headId,
         headRevisionStatus: (head?.status as RevisionStatus) ?? null,
         createdAt: d.createdAt.toISOString(),
-        ...this.trustFields(d, headId, issues.get(d.id) ?? 0, settings.inactiveAfterDays),
+        ...this.trustFields(d, headId, issues.get(d.id) ?? 0, settings.inactiveAfterDays, sources.get(d.id)),
       };
     });
 
@@ -732,6 +734,7 @@ export class DocumentsService {
     headId: string | null,
     openIssues: number,
     inactiveAfterDays: number,
+    source?: SourceSyncHealth,
   ): Pick<
     DocumentSummary,
     | 'verifiedAt'
@@ -757,7 +760,7 @@ export class DocumentsService {
       verifiedAt: d.verifiedAt?.toISOString() ?? null,
       verifiedBy: d.verifiedBy,
       verifiedRevisionId: d.verifiedRevisionId,
-      verification: verificationStateFor(d, headId, openIssues),
+      verification: verificationStateFor({ ...d, source }, headId, openIssues),
       ownerId: d.ownerId,
       reviewIntervalDays: d.reviewIntervalDays,
       verificationExpiresAt: d.verificationExpiresAt?.toISOString() ?? null,
@@ -874,10 +877,12 @@ export class DocumentsService {
     const headId = document.branches.find((b) => b.name === document.defaultBranch)?.headRevisionId ?? null;
     // An open report flags the page (docs/features/38, phase 3) — the same
     // predicate ProvenanceService applies to a cited source.
-    const [issues, settings] = await Promise.all([
+    const [issues, settings, sources] = await Promise.all([
       this.provenance.openIssueCounts([documentId]),
       this.policy.effective(document.workspaceId),
+      sourceSyncOf(this.prisma, [documentId]),
     ]);
+    const source = sources.get(documentId);
     return {
       document: {
         documentId: document.id,
@@ -891,10 +896,11 @@ export class DocumentsService {
         headRevisionStatus: (revision.status as RevisionStatus) ?? null,
         createdAt: document.createdAt.toISOString(),
         kind: document.kind as ApiDocumentKind,
-        sourceBacked: (await sourceConnectorOf(this.prisma, document.id)) !== null,
+        sourceBacked: !!source,
+        sourceSync: source ? { host: source.host, checkedAt: source.lastPulledAt ? new Date(source.lastPulledAt).toISOString() : null } : null,
         // The stamp, the flag and their reading against the head and the
         // clock (docs/features/38 + 39). Writes live in VerificationService.
-        ...this.trustFields(document, headId, issues.get(documentId) ?? 0, settings.inactiveAfterDays),
+        ...this.trustFields(document, headId, issues.get(documentId) ?? 0, settings.inactiveAfterDays, source),
       },
       revision: toRevisionInfo(revision),
     };
@@ -1754,9 +1760,12 @@ export class DocumentsService {
         include: { branches: true },
         orderBy: [{ position: 'asc' }, { title: 'asc' }],
       });
-      const issues = await this.provenance.openIssueCounts(docs.map((d) => d.id));
+      const [issues, sources] = await Promise.all([
+        this.provenance.openIssueCounts(docs.map((d) => d.id)),
+        sourceSyncOf(this.prisma, docs.map((d) => d.id)),
+      ]);
       const nodes = new Map<string, DocumentTreeNode>();
-      for (const d of docs) nodes.set(d.id, this.toTreeNode(d, null, issues.get(d.id) ?? 0));
+      for (const d of docs) nodes.set(d.id, this.toTreeNode(d, null, issues.get(d.id) ?? 0, sources.get(d.id)));
       const heads = await this.headStatuses(docs);
       for (const node of nodes.values()) node.headRevisionStatus = heads.get(node.headRevisionId ?? '') ?? null;
 
@@ -1816,7 +1825,7 @@ export class DocumentsService {
     });
     if (docs.length === 0) return [];
 
-    const [heads, counts, issues] = await Promise.all([
+    const [heads, counts, issues, sources] = await Promise.all([
       this.headStatuses(docs),
       this.prisma.document.groupBy({
         by: ['parentId'],
@@ -1824,11 +1833,12 @@ export class DocumentsService {
         _count: { _all: true },
       }),
       this.provenance.openIssueCounts(docs.map((d) => d.id)),
+      sourceSyncOf(this.prisma, docs.map((d) => d.id)),
     ]);
     const countByParent = new Map(counts.map((c) => [c.parentId!, c._count._all]));
 
     const nodes = docs.map((d) => {
-      const node = this.toTreeNode(d, countByParent.get(d.id) ?? 0, issues.get(d.id) ?? 0);
+      const node = this.toTreeNode(d, countByParent.get(d.id) ?? 0, issues.get(d.id) ?? 0, sources.get(d.id));
       node.headRevisionStatus = heads.get(node.headRevisionId ?? '') ?? null;
       return node;
     });
@@ -1849,6 +1859,7 @@ export class DocumentsService {
     d: Document & { branches: { name: string; headRevisionId: string | null }[] },
     childCount: number | null,
     openIssues: number,
+    source?: SourceSyncHealth,
   ): DocumentTreeNode {
     const headId = d.branches.find((b) => b.name === d.defaultBranch)?.headRevisionId ?? null;
     return {
@@ -1864,7 +1875,7 @@ export class DocumentsService {
       createdAt: d.createdAt.toISOString(),
       // What a tree row draws (docs/features/39): the status dot and whether
       // the page is put away. The rest of the trust fields are the detail's.
-      verification: verificationStateFor(d, headId, openIssues),
+      verification: verificationStateFor({ ...d, source }, headId, openIssues),
       verificationFlag: (d.verificationFlag as VerificationFlag | null) ?? null,
       ownerId: d.ownerId,
       archivedAt: d.archivedAt?.toISOString() ?? null,
@@ -2244,9 +2255,10 @@ export class DocumentsService {
     const head = branch?.headRevisionId
       ? await this.prisma.documentRevision.findUnique({ where: { id: branch.headRevisionId } })
       : null;
-    const [issues, settings] = await Promise.all([
+    const [issues, settings, sources] = await Promise.all([
       this.provenance.openIssueCounts([d.id]),
       this.policy.effective(d.workspaceId),
+      sourceSyncOf(this.prisma, [d.id]),
     ]);
     return {
       documentId: d.id,
@@ -2259,7 +2271,7 @@ export class DocumentsService {
       headRevisionId: branch?.headRevisionId ?? null,
       headRevisionStatus: (head?.status as RevisionStatus) ?? null,
       createdAt: d.createdAt.toISOString(),
-      ...this.trustFields(d, branch?.headRevisionId ?? null, issues.get(d.id) ?? 0, settings.inactiveAfterDays),
+      ...this.trustFields(d, branch?.headRevisionId ?? null, issues.get(d.id) ?? 0, settings.inactiveAfterDays, sources.get(d.id)),
     };
   }
 

@@ -63,6 +63,7 @@ const pgRow = (r: WhereRow) => ({
 
 function prismaOver(fixtures: WhereRow[]) {
   return {
+    connectorLink: { findMany: vi.fn(async () => []) }, // no source-backed pages (#674)
     document: {
       findMany: vi.fn(async ({ where }: { where: Prisma.DocumentWhereInput }) =>
         fixtures.filter((r) => matchesWhere(where, r)).map(pgRow),

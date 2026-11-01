@@ -87,7 +87,8 @@
     "archived": "Document {id} is archived — unarchive it before changing it",
     "ownerNotMember": "The owner must be a member of this workspace",
     "foreignIds": "{count} of the given pages belong to another workspace",
-    "sourceBacked": "“{title}” follows its source and cannot be edited here. Pause the source and restore a revision instead"
+    "sourceBacked": "“{title}” follows its source and cannot be edited here. Pause the source and restore a revision instead",
+    "sourceVerify": "“{title}” follows its source: it reads as verified while the sync is healthy, so it takes no stamp"
   },
   "branch": {
     "notFound": "Branch {name} not found on document {documentId}",

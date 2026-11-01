@@ -9,6 +9,7 @@ import type {
 import { VERIFICATION_NOTE_MAX_CHARS } from '@knowledge/contracts';
 import { ActivityService } from '../activity/activity.service.js';
 import { DocumentsService, subtreeWhere } from '../documents/documents.service.js';
+import { sourceConnectorOf } from '../documents/source-backed.js';
 import { t } from '../i18n/t.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -19,6 +20,7 @@ import { expiryFor, VerificationPolicyService } from './verification-policy.serv
 export const VERIFICATION_CONFLICTS = {
   archived: 'document_archived',
   noHead: 'no_head_revision',
+  sourceBacked: 'source_backed',
 } as const;
 
 export interface FlagOptions {
@@ -85,6 +87,14 @@ export class VerificationService {
     });
     if (!document) throw new NotFoundException(t('error.document.notFound', { id: documentId }));
     this.assertNotArchived(document);
+    // #674: a source-backed page's trust is its sync's health; nobody stamps it.
+    if (await sourceConnectorOf(this.prisma, documentId)) {
+      throw new ConflictException({
+        statusCode: 409,
+        message: t('error.document.sourceVerify', { title: document.title }),
+        reason: VERIFICATION_CONFLICTS.sourceBacked,
+      });
+    }
     const headId = document.branches.find((b) => b.name === document.defaultBranch)?.headRevisionId ?? null;
     if (!headId) {
       throw new ConflictException({

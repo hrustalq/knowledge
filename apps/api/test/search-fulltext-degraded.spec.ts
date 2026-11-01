@@ -39,6 +39,7 @@ function doc(id: string) {
 function build(fulltext: { enabled: boolean; search: (...a: unknown[]) => Promise<unknown> }) {
   const docs = [doc('vec'), doc('kw')];
   const prisma = {
+    connectorLink: { findMany: vi.fn(async () => []) }, // no source-backed pages (#674)
     document: {
       findMany: vi.fn(async ({ where }: { where: { id: { in: string[] } } }) => docs.filter((d) => where.id.in.includes(d.id))),
     },

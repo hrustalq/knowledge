@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { AssistantSource, SearchResult, SourceProvenance, SourceVerificationState } from '@knowledge/contracts';
 import { isPageSource, OPEN_KNOWLEDGE_ISSUE_STATUSES, verificationStateFor } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { sourceSyncOf } from '../documents/source-backed.js';
 
 /**
  * What one page is worth as evidence, resolved from PostgreSQL in one batch.
@@ -82,7 +83,10 @@ export class ProvenanceService {
         })
       : [];
     const nameById = new Map(users.map((u) => [u.id, u.displayName]));
-    const openIssues = await this.openIssueCounts(docs.map((d) => d.id));
+    const [openIssues, sources] = await Promise.all([
+      this.openIssueCounts(docs.map((d) => d.id)),
+      sourceSyncOf(this.prisma, docs.map((d) => d.id)),
+    ]);
 
     for (const d of docs) {
       const headId = d.branches.find((b) => b.name === d.defaultBranch)?.headRevisionId ?? null;
@@ -96,7 +100,7 @@ export class ProvenanceService {
         // still reported so the UI can draw initials, the name is simply null.
         authorName: head ? (nameById.get(head.authorId) ?? null) : null,
         changedAt: (head?.finalizedAt ?? head?.createdAt)?.toISOString() ?? null,
-        verification: verificationStateFor(d, headId, openIssues.get(d.id) ?? 0),
+        verification: verificationStateFor({ ...d, source: sources.get(d.id) }, headId, openIssues.get(d.id) ?? 0),
         verifiedAt: d.verifiedAt?.toISOString() ?? null,
         verifiedByName: d.verifiedBy ? (nameById.get(d.verifiedBy) ?? null) : null,
       });

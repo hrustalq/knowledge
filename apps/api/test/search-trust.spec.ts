@@ -73,6 +73,7 @@ function build(
 ) {
   const analytics = { search: vi.fn(() => 'search-1') };
   const prisma = {
+    connectorLink: { findMany: vi.fn(async () => []) }, // no source-backed pages (#674)
     document: {
       findMany: vi.fn(async ({ where }: { where: { id: { in: string[] }; archivedAt?: unknown } }) =>
         docs.filter((d) => where.id.in.includes(d.id) && (where.archivedAt === undefined || d.archivedAt)),

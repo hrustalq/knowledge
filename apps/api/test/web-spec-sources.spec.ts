@@ -10,9 +10,10 @@ import { describe, expect, it, vi } from 'vitest';
  * 2. A spec version is held, alerting once, when it is split across files,
  *    the parser refuses it, or its kind no longer matches the page; a version
  *    that parses releases the hold. A plain page with a plain body is untouched.
- * 3. A landed version with breaking changes alerts `breaking`; removed
- *    operations also flag the pages linking the spec `requested`. A
- *    non-breaking version does neither.
+ * 3. A landed version with breaking changes alerts `breaking`, and flags
+ *    nothing itself: the pages that relied on a removed operation are the
+ *    dependent check's, once the version is indexed (phase 5,
+ *    test/source-dependents.spec.ts). A non-breaking version stays quiet.
  */
 vi.mock('../src/common/safe-fetch.js', () => ({ safeFetch: vi.fn() }));
 
@@ -141,19 +142,14 @@ describe('WebSourcesService.specHeld', () => {
 describe('WebSourcesService.specLanded', () => {
   const change = (rule: string) => ({ rule, severity: 'breaking', method: 'get', path: '/users' });
 
-  it('alerts on a breaking version and flags the pages linking it when an operation is gone', async () => {
+  it('alerts on a breaking version without flagging any page itself', async () => {
     const { calls, landed } = service({ diff: { summary: { breaking: 1, nonBreaking: 0, info: 0 }, changes: [change('operation-removed')] } });
     await landed();
     expect(calls.alerts).toEqual(['breaking']);
-    expect(calls.flagged).toEqual([['dep1', 'requested']]);
+    expect(calls.flagged).toEqual([]);
   });
 
-  it('alerts without flagging when nothing was removed, and stays quiet when nothing breaks', async () => {
-    const breaking = service({ diff: { summary: { breaking: 1, nonBreaking: 0, info: 0 }, changes: [change('param-required-added')] } });
-    await breaking.landed();
-    expect(breaking.calls.alerts).toEqual(['breaking']);
-    expect(breaking.calls.flagged).toEqual([]);
-
+  it('stays quiet when nothing breaks', async () => {
     const quiet = service({ diff: { summary: { breaking: 0, nonBreaking: 2, info: 0 }, changes: [] } });
     await quiet.landed();
     expect(quiet.calls.alerts).toEqual([]);

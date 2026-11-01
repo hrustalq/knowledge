@@ -124,8 +124,13 @@
     "deleted": "The knowledge object this ticket was for no longer exists.",
     "closedVia": "Closed in {key}"
   },
-  "specOperationsRemovedNote": "Its source removed from “{title}”: {operations}",
   "sourceRemovedNote": "Source removed: “{title}” is no longer published by its source",
+  "sourceChangedNote": "Its source “{title}” changed: {changes}",
+  "sourceChange": {
+    "anchorRemoved": "#{anchor} removed",
+    "anchorRenamed": "#{from} is now #{to}",
+    "keyDropped": "{key} no longer covered"
+  },
   "sourceRestoredMessage": "Restored revision {number}",
   "sourceRecipeMessage": "Re-read with a new extraction recipe"
 }

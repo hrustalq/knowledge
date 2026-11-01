@@ -57995,6 +57995,27 @@
           "sourceBacked": {
             "type": "boolean"
           },
+          "sourceSync": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "host": {
+                    "type": "string"
+                  },
+                  "checkedAt": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "host",
+                  "checkedAt"
+                ]
+              }
+            ],
+            "nullable": true
+          },
           "verifiedAt": {
             "type": "string",
             "nullable": true
@@ -58201,6 +58222,27 @@
           },
           "sourceBacked": {
             "type": "boolean"
+          },
+          "sourceSync": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "host": {
+                    "type": "string"
+                  },
+                  "checkedAt": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "host",
+                  "checkedAt"
+                ]
+              }
+            ],
+            "nullable": true
           },
           "verifiedAt": {
             "type": "string",

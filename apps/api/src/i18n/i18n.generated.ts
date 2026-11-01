@@ -672,8 +672,13 @@ export type I18nTranslations = {
             "deleted": string;
             "closedVia": string;
         };
-        "specOperationsRemovedNote": string;
         "sourceRemovedNote": string;
+        "sourceChangedNote": string;
+        "sourceChange": {
+            "anchorRemoved": string;
+            "anchorRenamed": string;
+            "keyDropped": string;
+        };
         "sourceRestoredMessage": string;
         "sourceRecipeMessage": string;
     };
@@ -767,6 +772,7 @@ export type I18nTranslations = {
             "ownerNotMember": string;
             "foreignIds": string;
             "sourceBacked": string;
+            "sourceVerify": string;
         };
         "branch": {
             "notFound": string;

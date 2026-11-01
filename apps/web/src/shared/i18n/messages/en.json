@@ -312,6 +312,7 @@
     "fromTemplateUnnamed": "From a template, v{version}",
     "moreActions": "More actions",
     "fullWidth": "Full width",
+    "pageRail": "Page details",
     "asOfBanner": "As of {date}",
     "asOfBannerTag": "As of {tag}, {date}",
     "unplacedCommentsHint": "On the page as a whole, or on a passage that has since changed.",

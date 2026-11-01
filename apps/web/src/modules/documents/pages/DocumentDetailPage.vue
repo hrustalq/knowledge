@@ -43,6 +43,7 @@ import {
   Info,
   Link2,
   Network,
+  PanelRight,
   Pencil,
   Scale,
   Send,
@@ -147,6 +148,24 @@ const queryClient = useQueryClient()
 const auth = useAuthStore()
 const layout = useLayoutStore()
 const store = useDocumentsStore()
+
+/*
+ * The info rail shown or hidden (#698): the reader's choice once made
+ * (`kn_pagerail`), else their role — a viewer or guest came to read, and most
+ * of the rail is editor actions. The role is loaded before render on both
+ * sides, so SSR and hydration agree. A `?tab=` link shows a hidden rail for
+ * that visit only and leaves the stored choice alone.
+ */
+const tabShowsRail = ref(typeof route.query.tab === 'string')
+watch(
+  () => route.query.tab,
+  (tab) => (tabShowsRail.value = typeof tab === 'string'),
+)
+const railShown = computed(() => tabShowsRail.value || (layout.pageRail ?? auth.canEdit))
+function setRailShown(shown: boolean) {
+  tabShowsRail.value = false
+  layout.setPageRail(shown)
+}
 const events = useEventsStore()
 
 const RAIL_WIDGETS = [
@@ -984,6 +1003,9 @@ watch(
               <DropdownMenuCheckboxItem :model-value="layout.fullWidth" @update:model-value="layout.setFullWidth">
                 {{ t('documents.fullWidth') }}
               </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem :model-value="railShown" @update:model-value="setRailShown">
+                {{ t('documents.pageRail') }}
+              </DropdownMenuCheckboxItem>
               <!-- Only on pages that actually have vocabulary in them: a switch
                    for something the page does not do is noise. -->
               <DropdownMenuCheckboxItem
@@ -1029,6 +1051,10 @@ watch(
           <Check class="size-4" :class="layout.fullWidth ? '' : 'invisible'" aria-hidden="true" />
           <span class="kn-bar-label">{{ t('documents.fullWidth') }}</span>
         </Button>
+        <Button variant="ghost" size="sm" :aria-pressed="railShown" @click="setRailShown(!railShown)">
+          <Check class="size-4" :class="railShown ? '' : 'invisible'" aria-hidden="true" />
+          <span class="kn-bar-label">{{ t('documents.pageRail') }}</span>
+        </Button>
         <Button
           v-if="canvasEl?.hasGlossary"
           variant="ghost"
@@ -1051,14 +1077,32 @@ watch(
        re-flow the moment the real thing lands on top of it. -->
   <div v-else-if="!detail" class="space-y-4">
     <Skeleton class="h-8 w-1/2" />
-    <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem] xl:grid-cols-[minmax(0,1fr)_28rem]">
+    <div :class="railShown ? 'grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem] xl:grid-cols-[minmax(0,1fr)_28rem]' : ''">
       <Skeleton class="h-96 w-full" />
-      <Skeleton class="hidden h-72 w-full lg:block" />
+      <Skeleton v-if="railShown" class="hidden h-72 w-full lg:block" />
     </div>
   </div>
 
   <template v-else>
     <PageLayout variant="detail" :title="detail.document.title">
+      <!-- The rail's switch (#698) on the title's row, at its far end: above
+           the rail's corner when the rail is there, so it reads as that
+           panel's control. A column only exists from `lg`; below it ⋯ → View
+           and the phone aside carry the same switch. -->
+      <template #actions>
+        <Button
+          variant="ghost"
+          size="icon-lg"
+          class="hidden lg:inline-flex"
+          :class="railShown ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'"
+          :aria-pressed="railShown"
+          :aria-label="t('documents.pageRail')"
+          :title="t('documents.pageRail')"
+          @click="setRailShown(!railShown)"
+        >
+          <PanelRight class="size-5" aria-hidden="true" />
+        </Button>
+      </template>
       <template #status>
         <Badge variant="outline">{{ labelFor(t, 'category', detail.document.category) }}</Badge>
         <Badge :variant="statusVariant(detail.revision.status)">{{ labelFor(t, 'revisionStatus', detail.revision.status) }}</Badge>
@@ -1081,7 +1125,7 @@ watch(
       </template>
 
       <!-- Rail: everything about the page rather than in it ------------- -->
-      <template #rail>
+      <template v-if="railShown" #rail>
         <PageRail
           :widgets="visibleWidgets"
           surface="document"

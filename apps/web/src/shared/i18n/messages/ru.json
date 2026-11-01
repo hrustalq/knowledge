@@ -312,6 +312,7 @@
     "fromTemplateUnnamed": "Из шаблона, v{version}",
     "moreActions": "Ещё действия",
     "fullWidth": "Во всю ширину",
+    "pageRail": "Сведения о странице",
     "asOfBanner": "На {date}",
     "asOfBannerTag": "На {tag}, {date}",
     "unplacedCommentsHint": "К странице целиком или к фрагменту, который с тех пор изменился.",

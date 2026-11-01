@@ -17,6 +17,12 @@ in the pull request that introduces them — see
 
 ### Added
 
+- **Hide a page's info rail** (#698). The rail beside a document (Overview, Verification, Revisions, Graph,
+  Comments and the table of contents) can now be hidden from ⋯ → View → **Page details**, the same switch in
+  the phone menu, or a panel button at the end of the title row; the page then reads at full width. The choice applies
+  to every page and is remembered across sessions. Until someone chooses, viewers and guests get the rail
+  hidden and editors and admins get it shown, as before. A link to a rail widget (`?tab=revisions`) still
+  opens it, showing the rail for that visit only.
 - **Pages that follow an external source** (#674, phase 1). "Add page → **Link a source**" takes a markdown file
   or an HTML page by URL and makes a page whose body belongs to that source: it reads the source at once (an
   unreadable URL is refused there, with the HTTP status), then again on its check interval (15 min to daily, or

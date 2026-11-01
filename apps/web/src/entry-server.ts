@@ -26,6 +26,7 @@ interface SsrRequestContext {
   glossary: string | null
   aiPanel: string | null
   measure: string | null
+  pageRail: string | null
   treeOpen: string | null
   locale: Locale | null
   /** The server's trace id for this page request, so API calls made during the render join it. */
@@ -141,6 +142,7 @@ export async function render(url: string, ctx: Partial<SsrRequestContext> = {}) 
     glossary: ctx.glossary ?? null,
     aiPanel: ctx.aiPanel ?? null,
     measure: ctx.measure ?? null,
+    pageRail: ctx.pageRail ?? null,
     treeOpen: ctx.treeOpen ?? null,
     locale: ctx.locale ?? null,
     traceId: ctx.traceId ?? null,

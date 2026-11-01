@@ -32,7 +32,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
-import { ArrowLeft, FileStack, Loader2, PanelLeft } from 'lucide-vue-next'
+import { ArrowLeft, CircleAlert, FileStack, Loader2, PanelLeft } from 'lucide-vue-next'
 import {
   allowedRunEvents,
   type ConnectorItemEventType,
@@ -337,6 +337,14 @@ const stage = computed(() => {
   return r.stage ?? (r.phase ? t(PHASE_LABEL[r.phase]) : t(RUN_STATUS_LABEL[r.status]))
 })
 
+/**
+ * Why a run waits, said where it is approved: its own warnings (no page named)
+ * while it is up for review — a crawl too large to land unasked (#674), say.
+ */
+const runNotes = computed(() =>
+  run.value?.status === 'awaiting-review' ? run.value.warnings.filter((w) => w.externalId === null).map((w) => w.message) : [],
+)
+
 /** Nothing found yet: the ring is the whole story, so it gets the room. */
 const showRing = computed(() => items.value.length === 0 && run.value !== null && isRunActive(run.value.status))
 </script>
@@ -445,6 +453,13 @@ const showRing = computed(() => items.value.length === 0 && run.value !== null &
           </div>
         </div>
       </template>
+    </div>
+
+    <div v-if="runNotes.length" class="kn-callout-warning flex shrink-0 items-start gap-2 border-t px-4 py-2.5 text-xs text-panel-warning-ink lg:px-6" role="status">
+      <CircleAlert class="mt-px size-3.5 shrink-0" aria-hidden="true" />
+      <ul class="min-w-0 space-y-1 [overflow-wrap:anywhere]">
+        <li v-for="(note, i) in runNotes" :key="i">{{ note }}</li>
+      </ul>
     </div>
 
     <!-- Fixed frame, part two: the run's controls, in one place, always. -->

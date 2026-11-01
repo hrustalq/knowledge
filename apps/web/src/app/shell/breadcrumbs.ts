@@ -211,6 +211,9 @@ export function useCrumbs(): ComputedRef<Crumb[]> {
         const id = route.params.id as string | undefined
         if (id) list.push({ label: id.slice(0, 8) })
         else list.push({ label: t('connectors.tabRuns') })
+        // A crawled tree's recipe (#674). Not linked back: a page-owned tree's connector has no
+        // page of its own, so the page head's root-page action is the way back.
+        if (id && path.endsWith('/recipe')) list.push({ label: t('sources.recipe.tree.heading'), action: true })
         return list
       }
       const key = SETTINGS[path]

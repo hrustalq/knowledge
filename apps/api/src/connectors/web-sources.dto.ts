@@ -143,3 +143,29 @@ export class SaveSourceRecipeDto extends PreviewSourceRecipeDto {
   @IsUUID()
   proposalId?: string;
 }
+
+const TREE_PAGE = 'A crawled page of this connector to read the last version of. Omitted: the root page';
+
+/** POST /v1/connectors/:id/source/recipe/draft */
+export class DraftSourceTreeRecipeDto {
+  @ApiPropertyOptional({ format: 'uuid', description: TREE_PAGE })
+  @IsOptional()
+  @IsUUID()
+  documentId?: string;
+}
+
+/** POST /v1/connectors/:id/source/recipe/preview */
+export class PreviewSourceTreeRecipeDto extends PreviewSourceRecipeDto {
+  @ApiPropertyOptional({ format: 'uuid', description: TREE_PAGE })
+  @IsOptional()
+  @IsUUID()
+  documentId?: string;
+}
+
+/** PUT /v1/connectors/:id/source/recipe */
+export class SaveSourceTreeRecipeDto extends SaveSourceRecipeDto {
+  @ApiPropertyOptional({ format: 'uuid', description: `${TREE_PAGE}. Its checks must pass for the recipe to be saved` })
+  @IsOptional()
+  @IsUUID()
+  documentId?: string;
+}

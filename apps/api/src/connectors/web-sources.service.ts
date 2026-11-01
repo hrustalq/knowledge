@@ -16,12 +16,14 @@ import {
   type SourceAlertKind,
   type SourceCheckFailure,
   type SourceRecipePreview,
+  type SourceTreeRecipeState,
 } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 import { t } from '../i18n/t.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
+import type { AccessScope } from '../permissions/access-scope.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { VerificationService } from '../verification/verification.service.js';
@@ -85,6 +87,13 @@ export class WebSourcesService {
     if (!read.held) return read.markdown;
     if (read.newlyHeld) await this.alert(row, link.documentId, 'held');
     return null;
+  }
+
+  /** A page the crawl found for the first time (phase 3b): its markdown through the tree recipe, else an error that fails the item. */
+  async readNew(row: Connector, source: SourceBody): Promise<string> {
+    const { markdown, failures } = await this.recipes.readNew(row, source);
+    if (failures.length > 0) throw new Error(t('error.source.firstReadFails', { checks: failures.join(', ') }));
+    return markdown;
   }
 
   /** A paused page writes nothing; a version it has not counted yet is one more it is behind. */
@@ -413,16 +422,22 @@ export class WebSourcesService {
   /** A crawled source's root page, its page count and any run waiting to be confirmed (phase 3). */
   private async tree(row: Connector): Promise<DocumentSourceInfo['tree']> {
     if (!webCrawls(row.config)) return null;
-    const root = (row.config as Record<string, unknown>).url as string;
-    const [rootLink, links, awaiting] = await Promise.all([
-      this.prisma.connectorLink.findFirst({ where: { connectorId: row.id, externalId: root }, select: { documentId: true } }),
+    const [rootDocumentId, links, awaiting] = await Promise.all([
+      this.rootDocumentId(row),
       this.prisma.connectorLink.findMany({ where: { connectorId: row.id }, select: { documentId: true } }),
       this.prisma.connectorRun.findFirst({ where: { connectorId: row.id, status: 'awaiting-review' }, select: { id: true } }),
     ]);
     // Live pages only: one archived as dropped from the tree is no longer synced.
     const pages = await this.prisma.document.count({ where: { id: { in: links.map((l) => l.documentId) }, archivedAt: null } });
-    const rootDocumentId = row.ownerDocumentId ?? rootLink?.documentId ?? null;
     return rootDocumentId ? { rootDocumentId, pages, awaitingRunId: awaiting?.id ?? null } : null;
+  }
+
+  /** The page the source's own URL landed on: the linking page, else the root URL's link. */
+  private async rootDocumentId(row: Connector): Promise<string | null> {
+    if (row.ownerDocumentId) return row.ownerDocumentId;
+    const root = (row.config as Record<string, unknown>).url as string;
+    const link = await this.prisma.connectorLink.findFirst({ where: { connectorId: row.id, externalId: root }, select: { documentId: true } });
+    return link?.documentId ?? null;
   }
 
   async setInterval(documentId: string, intervalMinutes: number | null): Promise<DocumentSourceInfo> {
@@ -448,14 +463,18 @@ export class WebSourcesService {
       where: { id: link.id },
       data: { pausedAt: null, aheadCount: 0, aheadHash: null, contentHash: null, externalVersion: null },
     });
+    await this.pull(row, actorId);
+    return this.info(documentId);
+  }
+
+  /** A manual pull now. A run already in flight reads the links as they are by the time it reaches them. */
+  private async pull(row: Connector, actorId: string): Promise<void> {
     try {
       const run = await this.connectors.createRun(row, 'pull', 'manual', { actorId });
       await this.producer.enqueue(run.id);
     } catch (err) {
-      // A run already in flight picks the resumed link up.
       if (!(err instanceof ConflictException)) throw err;
     }
-    return this.info(documentId);
   }
 
   /**
@@ -517,6 +536,71 @@ export class WebSourcesService {
     const { row, link } = await this.require(documentId);
     await this.recipes.dismiss(row, link, userId);
     return this.info(documentId);
+  }
+
+  // ------------------------------------------------------------ tree recipes (phase 3b)
+
+  /**
+   * A `web` connector and the page a tree-recipe operation reads the last
+   * version of: `documentId`, else the root. The caller checks the person may
+   * view that page before anything of it is returned.
+   */
+  async treePage(connectorId: string, documentId?: string): Promise<{ row: Connector; link: ConnectorLink }> {
+    const row = await this.requireWeb(connectorId);
+    const id = documentId ?? (await this.rootDocumentId(row));
+    const link = id ? await this.prisma.connectorLink.findFirst({ where: { connectorId: row.id, documentId: id } }) : null;
+    if (!link) throw new NotFoundException(t('error.source.notFound', { id: id ?? connectorId }));
+    return { row, link };
+  }
+
+  private async requireWeb(connectorId: string): Promise<Connector> {
+    this.connectors.assertKindEnabled('web');
+    const row = await this.connectors.require(connectorId);
+    if (row.kind !== 'web') throw new NotFoundException(t('error.source.notFound', { id: connectorId }));
+    return row;
+  }
+
+  async workspaceOf(connectorId: string): Promise<string> {
+    return (await this.connectors.require(connectorId)).workspaceId;
+  }
+
+  async treeRecipe(connectorId: string, scope: AccessScope): Promise<SourceTreeRecipeState> {
+    const row = await this.requireWeb(connectorId);
+    const url = (row.config as Record<string, unknown>).url as string;
+    return { ...(await this.recipes.treeState(row, scope, await this.rootDocumentId(row))), url, host: new URL(url).host };
+  }
+
+  /**
+   * Save (or approve) the tree recipe, checked on one page. Every page
+   * without its own recipe is re-read by a pull queued now; one failing the
+   * new recipe is held on its own, the rest land.
+   */
+  async saveTreeRecipe(
+    page: { row: Connector; link: ConnectorLink },
+    recipe: unknown,
+    proposalId: string | undefined,
+    userId: string,
+    scope: AccessScope,
+  ): Promise<SourceTreeRecipeState> {
+    await this.recipes.save(page.row, page.link, recipe, proposalId, userId, 'tree');
+    await this.pull(page.row, userId);
+    return this.treeRecipe(page.row.id, scope);
+  }
+
+  async draftTreeRecipe(page: { row: Connector; link: ConnectorLink }, userId: string, locale: Locale, scope: AccessScope): Promise<SourceTreeRecipeState> {
+    const failures = (page.link.heldReason ? page.link.heldReason.split(',') : []) as SourceCheckFailure[];
+    const drafted = await this.recipes.draft(page.row, page.link, failures, userId, locale, 'tree');
+    if (!drafted) throw new BadRequestException(t('error.source.draftUnavailable'));
+    return this.treeRecipe(page.row.id, scope);
+  }
+
+  previewTreeRecipe(page: { link: ConnectorLink }, recipe: unknown): Promise<SourceRecipePreview> {
+    return this.recipes.preview(page.link, recipe);
+  }
+
+  async dismissTreeRecipe(connectorId: string, userId: string, scope: AccessScope): Promise<SourceTreeRecipeState> {
+    await this.recipes.dismiss(await this.requireWeb(connectorId), null, userId);
+    return this.treeRecipe(connectorId, scope);
   }
 
   /** A fresh signing secret, shown once; the old one stops working. */

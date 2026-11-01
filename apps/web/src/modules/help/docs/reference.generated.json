@@ -4962,6 +4962,56 @@
     },
     {
       "method": "GET",
+      "path": "/v1/connectors/{id}/source/recipe",
+      "tag": "sources",
+      "summary": "The connector's tree recipe, a drafted one waiting for review, and the crawled pages a preview can read",
+      "role": "viewer",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/connectors/{id}/source/recipe",
+      "tag": "sources",
+      "summary": "Save the connector's tree recipe, approving a drafted one or not. Checked on one page (default: the root); a pull is queued that re-reads every page without its own recipe",
+      "role": "editor",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/connectors/{id}/source/recipe/dismiss",
+      "tag": "sources",
+      "summary": "Keep the current tree recipe: reject the drafted one",
+      "role": "editor",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/connectors/{id}/source/recipe/draft",
+      "tag": "sources",
+      "summary": "Ask the interpreter agent to draft a tree recipe from one crawled page's last version (default: the root)",
+      "role": "editor",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/connectors/{id}/source/recipe/preview",
+      "tag": "sources",
+      "summary": "What a tree recipe makes of one crawled page's last fetched version (default: the root), with its check results",
+      "role": "editor",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/documents/{id}/source",
       "tag": "sources",
       "summary": "The page's source: where it reads from, when it last checked, paused, failing or behind",

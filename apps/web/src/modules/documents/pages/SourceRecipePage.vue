@@ -11,6 +11,11 @@
  * whose checks fail — the disabled button only says so first. Selectors are
  * editable while a review is open (a draft waits, or a version is held);
  * normalization rules always are.
+ *
+ * The same workbench edits a crawled tree's recipe (phase 3b) at
+ * /settings/connectors/:id/recipe: every page without its own reads with it.
+ * The preview runs on one crawled page, the root unless another is picked,
+ * and selectors are always editable there — writing one is the point.
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -28,6 +33,7 @@ import {
   CloudOff,
   ExternalLink,
   LayoutTemplate,
+  ListTree,
   LoaderCircle,
   Pause,
   Plus,
@@ -40,9 +46,11 @@ import {
   SOURCE_RECIPE_RULE_KINDS,
   type CompareResponse,
   type DocumentSourceInfo,
+  type DocumentSourceRecipeState,
   type SourceRecipe,
   type SourceRecipePreview,
   type SourceRecipeRule,
+  type SourceTreeRecipeState,
 } from '@knowledge/contracts'
 import { lineDiff } from '@/core/line-diff'
 import { DiffView, MarkdownView } from '@/entities/document'
@@ -64,16 +72,41 @@ const router = useRouter()
 const auth = useAuthStore()
 const queryClient = useQueryClient()
 
-const documentId = computed(() => String(route.params.id))
-const path = () => ({ path: { id: documentId.value } })
+/** A crawled tree's recipe (the connector's), rather than one page's. */
+const tree = computed(() => route.path.startsWith('/settings/connectors/'))
+/** The page id, or for a tree the connector id. */
+const id = computed(() => String(route.params.id))
+const path = () => ({ path: { id: id.value } })
 const sourceOptions = computed(() => apiQueryOptions('/v1/documents/{id}/source', path()))
-const sourceQuery = useQuery(sourceOptions)
+const sourceQuery = useQuery(computed(() => ({ ...sourceOptions.value, enabled: !tree.value })))
+const treeOptions = computed(() => apiQueryOptions('/v1/connectors/{id}/source/recipe', path()))
+const treeQuery = useQuery(computed(() => ({ ...treeOptions.value, enabled: tree.value })))
+const loadError = computed(() => (tree.value ? treeQuery : sourceQuery).error.value)
 
-const source = computed(() => sourceQuery.data.value as DocumentSourceInfo | undefined)
-const state = computed(() => source.value?.recipe)
+const pageSource = computed(() => sourceQuery.data.value as DocumentSourceInfo | undefined)
+const treeState = computed(() => treeQuery.data.value as SourceTreeRecipeState | undefined)
+/** The crawled page the tree's preview reads; the root (listed first) until another is picked. */
+const pickedId = ref<string | null>(null)
+const picked = computed(() => treeState.value?.pages.find((p) => p.documentId === pickedId.value) ?? treeState.value?.pages[0] ?? null)
+/** What the head reads: the page's source, or the tree's root URL. */
+const source = computed(() => {
+  if (!tree.value) return pageSource.value
+  const s = treeState.value
+  return s ? { url: s.url, host: s.host, pausedAt: null as string | null } : undefined
+})
+/** A tree has no held version or layout note of its own: those are each page's. */
+const state = computed<DocumentSourceRecipeState | undefined>(() => {
+  if (!tree.value) return pageSource.value?.recipe
+  const s = treeState.value
+  return s && { active: s.active, proposal: s.proposal, heldAt: null, heldReasons: [], structureChangedAt: null, hasBody: !!picked.value?.hasBody }
+})
 const attention = computed(() => recipeAttention(state.value))
 const canEdit = computed(() => auth.canEdit)
-const selectorsEditable = computed(() => canEdit.value && (attention.value === 'held' || attention.value === 'proposal'))
+const selectorsEditable = computed(() => canEdit.value && (tree.value || attention.value === 'held' || attention.value === 'proposal'))
+/** Where the person goes once the recipe is saved: the page, or the tree's root. */
+const home = computed(() =>
+  tree.value ? (treeState.value?.rootDocumentId ? `/documents/${treeState.value.rootDocumentId}` : `/settings/connectors/${id.value}`) : `/documents/${id.value}`,
+)
 
 // ---------------------------------------------------------------- the working copy
 
@@ -106,6 +139,11 @@ const headingCount = computed(() => Object.keys(draft.value.headings).length)
 
 // ---------------------------------------------------------------- the preview
 
+/** The tree routes' page argument: the picked page, or nothing for the root. */
+const pageArg = () => (picked.value ? { documentId: picked.value.documentId } : {})
+/** Pages that read with the tree's recipe: those without their own. */
+const treeReaders = computed(() => treeState.value?.pages.filter((p) => !p.ownRecipe).length ?? 0)
+
 const preview = ref<SourceRecipePreview | null>(null)
 const previewError = ref<string | null>(null)
 const previewing = ref(false)
@@ -117,7 +155,10 @@ async function runPreview() {
   const seq = ++previewSeq
   previewing.value = true
   try {
-    const next = await api.post('/v1/documents/{id}/source/recipe/preview', { ...path(), body: { recipe: cleanRecipe(draft.value) } })
+    const recipe = cleanRecipe(draft.value)
+    const next = tree.value
+      ? await api.post('/v1/connectors/{id}/source/recipe/preview', { ...path(), body: { recipe, ...pageArg() } })
+      : await api.post('/v1/documents/{id}/source/recipe/preview', { ...path(), body: { recipe } })
     if (seq !== previewSeq) return
     preview.value = next
     previewError.value = null
@@ -135,7 +176,7 @@ watch(
   },
   { deep: true },
 )
-watch(() => state.value?.hasBody, (has) => has && runPreview(), { immediate: true })
+watch(() => [state.value?.hasBody, picked.value?.documentId] as const, ([has]) => has && runPreview(), { immediate: true })
 onBeforeUnmount(() => clearTimeout(timer))
 
 const view = ref<'changes' | 'page'>('changes')
@@ -143,9 +184,9 @@ const compare = computed<CompareResponse | null>(() => {
   if (!preview.value) return null
   const { hunks, additions, deletions } = lineDiff(preview.value.before, preview.value.after)
   return {
-    documentId: documentId.value,
-    from: { revisionId: `${documentId.value}:head`, revisionNumber: 0, branch: null, contentHash: null },
-    to: { revisionId: `${documentId.value}:recipe`, revisionNumber: 0, branch: null, contentHash: null },
+    documentId: picked.value?.documentId ?? id.value,
+    from: { revisionId: `${id.value}:head`, revisionNumber: 0, branch: null, contentHash: null },
+    to: { revisionId: `${id.value}:recipe`, revisionNumber: 0, branch: null, contentHash: null },
     comparisonMode: 'direct',
     mergeBaseRevisionId: null,
     summary: { additions, deletions },
@@ -181,7 +222,7 @@ const readingWith = computed(() =>
   state.value?.proposal
     ? t('sources.recipe.rail.proposal')
     : state.value?.active
-      ? t('sources.recipe.rail.active', { n: state.value.active.version })
+      ? t(state.value.active.connectorScope && !tree.value ? 'sources.recipe.rail.activeTree' : 'sources.recipe.rail.active', { n: state.value.active.version })
       : t('sources.recipe.rail.implicit'),
 )
 
@@ -226,43 +267,67 @@ const blockedReason = computed(() => {
   return null
 })
 
-async function act(name: NonNullable<typeof busy.value>, run: () => Promise<DocumentSourceInfo>, done: string, leave = false) {
+async function act(name: NonNullable<typeof busy.value>, run: () => Promise<DocumentSourceInfo | SourceTreeRecipeState>, done: string, leave = false) {
   if (busy.value) return
   busy.value = name
   try {
     const next = await run()
-    queryClient.setQueryData(sourceOptions.value.queryKey, next)
+    queryClient.setQueryData((tree.value ? treeOptions : sourceOptions).value.queryKey, next as never)
     toast.success(t(done))
-    if (leave) await router.push(`/documents/${documentId.value}`)
+    if (leave) await router.push(home.value)
   } catch (e) {
     toast.error(errorMessage(e, t))
   } finally {
     busy.value = null
   }
 }
-const save = () =>
-  act(
+const save = () => {
+  const body = { recipe: cleanRecipe(draft.value), ...(state.value?.proposal ? { proposalId: state.value.proposal.id } : {}) }
+  return act(
     'save',
     () =>
-      api.put('/v1/documents/{id}/source/recipe', {
-        ...path(),
-        body: { recipe: cleanRecipe(draft.value), ...(state.value?.proposal ? { proposalId: state.value.proposal.id } : {}) },
-      }),
-    state.value?.proposal ? 'sources.recipe.approved' : 'sources.recipe.saved',
+      tree.value
+        ? api.put('/v1/connectors/{id}/source/recipe', { ...path(), body: { ...body, ...pageArg() } })
+        : api.put('/v1/documents/{id}/source/recipe', { ...path(), body }),
+    tree.value ? 'sources.recipe.treeSaved' : state.value?.proposal ? 'sources.recipe.approved' : 'sources.recipe.saved',
     true,
   )
-const dismiss = () => act('dismiss', () => api.post('/v1/documents/{id}/source/recipe/dismiss', path()), 'sources.recipe.dismissed')
-const redraft = () => act('draft', () => api.post('/v1/documents/{id}/source/recipe/draft', path()), 'sources.recipe.drafted')
+}
+const dismiss = () =>
+  act(
+    'dismiss',
+    () => (tree.value ? api.post('/v1/connectors/{id}/source/recipe/dismiss', path()) : api.post('/v1/documents/{id}/source/recipe/dismiss', path())),
+    'sources.recipe.dismissed',
+  )
+const redraft = () =>
+  act(
+    'draft',
+    () =>
+      tree.value
+        ? api.post('/v1/connectors/{id}/source/recipe/draft', { ...path(), body: pageArg() })
+        : api.post('/v1/documents/{id}/source/recipe/draft', path()),
+    'sources.recipe.drafted',
+  )
 </script>
 
 <template>
-  <PageLayout variant="list" :title="t('sources.recipe.heading')" :subtitle="t('sources.recipe.subtitle')">
+  <PageLayout
+    variant="list"
+    :title="tree ? t('sources.recipe.tree.heading') : t('sources.recipe.heading')"
+    :subtitle="tree ? t('sources.recipe.tree.subtitle') : t('sources.recipe.subtitle')"
+  >
     <!-- The standard head: what it reads with as a badge, the source as the one action. Breadcrumbs lead back to the page. -->
     <template v-if="state" #status>
       <Badge variant="outline">{{ readingWith }}</Badge>
+      <Badge v-if="tree" variant="outline" class="tabular-nums">{{ t('sources.recipe.tree.pages', { n: treeReaders }, treeReaders) }}</Badge>
       <Badge v-if="source?.pausedAt" variant="outline" class="gap-1 text-muted-foreground"><Pause class="size-3" aria-hidden="true" />{{ t('sources.state.paused') }}</Badge>
     </template>
     <template v-if="source" #actions>
+      <Button v-if="tree && treeState?.rootDocumentId" as-child size="sm" variant="outline">
+        <RouterLink :to="`/documents/${treeState.rootDocumentId}`">
+          <ListTree class="size-3.5" aria-hidden="true" /> {{ t('sources.recipe.tree.openRoot') }}
+        </RouterLink>
+      </Button>
       <Button as-child size="sm" variant="outline">
         <a :href="source.url" target="_blank" rel="noopener noreferrer" :title="source.url">
           <ExternalLink class="size-3.5" aria-hidden="true" /> {{ t('sources.recipe.openSource', { host: source.host }) }}
@@ -270,7 +335,7 @@ const redraft = () => act('draft', () => api.post('/v1/documents/{id}/source/rec
       </Button>
     </template>
 
-    <PageState v-if="sourceQuery.isError.value" state="error" :error="sourceQuery.error.value" />
+    <PageState v-if="loadError" state="error" :error="loadError" />
 
     <template v-else-if="source && state">
       <!-- What is asked of the person, when anything is. The steady state has no banner. -->
@@ -498,6 +563,21 @@ const redraft = () => act('draft', () => api.post('/v1/documents/{id}/source/rec
                   </button>
                 </div>
               </header>
+
+              <!-- A tree previews on one crawled page at a time: the root unless another is picked. -->
+              <div v-if="tree && treeState?.pages.length" class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-5 py-2.5 text-ui">
+                <label for="recipe-page" class="shrink-0 text-muted-foreground">{{ t('sources.recipe.tree.previewOn') }}</label>
+                <Select :model-value="picked?.documentId" @update:model-value="pickedId = String($event)">
+                  <SelectTrigger id="recipe-page" size="sm" class="min-w-0 flex-1 basis-48"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="p in treeState.pages" :key="p.documentId" :value="p.documentId">
+                      {{ p.title }}<template v-if="p.documentId === treeState.rootDocumentId"> · {{ t('sources.recipe.tree.root') }}</template>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p v-if="picked?.ownRecipe" class="basis-full text-caption text-muted-foreground">{{ t('sources.recipe.tree.ownRecipe') }}</p>
+                <p v-else-if="picked?.heldAt" class="basis-full text-caption text-panel-caution-ink">{{ t('sources.recipe.tree.held') }}</p>
+              </div>
 
               <ul v-if="preview" class="flex flex-wrap gap-x-5 gap-y-1.5 border-b bg-muted/30 px-5 py-2.5 text-ui">
                 <li v-for="c in checks" :key="c.kind" class="flex items-center gap-1.5" :class="c.ok ? 'text-muted-foreground' : 'font-medium text-panel-caution-ink'">

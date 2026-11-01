@@ -21470,6 +21470,87 @@
       "effective"
     ]
   },
+  "SourceTreeRecipePage": {
+    "type": "object",
+    "properties": {
+      "documentId": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string"
+      },
+      "url": {
+        "type": "string"
+      },
+      "hasBody": {
+        "type": "boolean"
+      },
+      "ownRecipe": {
+        "type": "boolean"
+      },
+      "heldAt": {
+        "type": "string",
+        "nullable": true
+      }
+    },
+    "required": [
+      "documentId",
+      "title",
+      "url",
+      "hasBody",
+      "ownRecipe",
+      "heldAt"
+    ]
+  },
+  "SourceTreeRecipeState": {
+    "type": "object",
+    "properties": {
+      "connectorId": {
+        "type": "string"
+      },
+      "url": {
+        "type": "string"
+      },
+      "host": {
+        "type": "string"
+      },
+      "rootDocumentId": {
+        "type": "string",
+        "nullable": true
+      },
+      "active": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/SourceRecipeVersion"
+          }
+        ],
+        "nullable": true
+      },
+      "proposal": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/SourceRecipeVersion"
+          }
+        ],
+        "nullable": true
+      },
+      "pages": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/SourceTreeRecipePage"
+        }
+      }
+    },
+    "required": [
+      "connectorId",
+      "url",
+      "host",
+      "rootDocumentId",
+      "active",
+      "proposal",
+      "pages"
+    ]
+  },
   "SourceVerificationState": {
     "type": "string",
     "enum": [

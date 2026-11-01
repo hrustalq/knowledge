@@ -23,6 +23,7 @@ import type {
   ConnectorRunPhase,
   ConnectorRunStatus,
 } from '@knowledge/contracts'
+import { formatDateTime } from '@/shared/utils/format'
 
 /**
  * One vocabulary for connector run icons and labels (docs/features/26), so the
@@ -277,3 +278,22 @@ export function descendantsOf<T extends { id: string; parentItemId: string | nul
   }
   return out
 }
+
+/**
+ * A far-side version as a person reads it. A `web` source (#674) stores its
+ * HTTP validators as JSON: Last-Modified shows as a date, else a short ETag.
+ * Any other connector's version is shown as stored.
+ */
+export function sourceVersionLabel(version: string): string {
+  if (!version.startsWith('{')) return version
+  try {
+    const v = JSON.parse(version) as { etag?: unknown; lastModified?: unknown }
+    const date = typeof v.lastModified === 'string' ? new Date(v.lastModified) : null
+    if (date && !Number.isNaN(date.getTime())) return formatDateTime(date)
+    if (typeof v.etag === 'string') return v.etag.replace(/^W\//, '').replaceAll('"', '').slice(0, 12)
+  } catch {
+    // Not JSON after all: shown as stored.
+  }
+  return version
+}
+

@@ -4257,6 +4257,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/connectors/{id}/source/recipe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The connector's tree recipe, a drafted one waiting for review, and the crawled pages a preview can read */
+        get: operations["WebSourcesController_treeRecipe"];
+        /** Save the connector's tree recipe, approving a drafted one or not. Checked on one page (default: the root); a pull is queued that re-reads every page without its own recipe */
+        put: operations["WebSourcesController_saveTreeRecipe"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connectors/{id}/source/recipe/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** What a tree recipe makes of one crawled page's last fetched version (default: the root), with its check results */
+        post: operations["WebSourcesController_previewTreeRecipe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connectors/{id}/source/recipe/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask the interpreter agent to draft a tree recipe from one crawled page's last version (default: the root) */
+        post: operations["WebSourcesController_draftTreeRecipe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connectors/{id}/source/recipe/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Keep the current tree recipe: reject the drafted one */
+        post: operations["WebSourcesController_dismissTreeRecipe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/documents/{id}/source/webhook": {
         parameters: {
             query?: never;
@@ -9218,6 +9287,34 @@ export interface components {
              * @description The drafted recipe this approves, if any
              */
             proposalId?: string;
+        };
+        PreviewSourceTreeRecipeDto: {
+            recipe: components["schemas"]["SourceRecipeDto"];
+            /**
+             * Format: uuid
+             * @description A crawled page of this connector to read the last version of. Omitted: the root page
+             */
+            documentId?: string;
+        };
+        SaveSourceTreeRecipeDto: {
+            recipe: components["schemas"]["SourceRecipeDto"];
+            /**
+             * Format: uuid
+             * @description The drafted recipe this approves, if any
+             */
+            proposalId?: string;
+            /**
+             * Format: uuid
+             * @description A crawled page of this connector to read the last version of. Omitted: the root page. Its checks must pass for the recipe to be saved
+             */
+            documentId?: string;
+        };
+        DraftSourceTreeRecipeDto: {
+            /**
+             * Format: uuid
+             * @description A crawled page of this connector to read the last version of. Omitted: the root page
+             */
+            documentId?: string;
         };
         PutWorkItemRulesDto: {
             workspaceId: string;
@@ -15202,6 +15299,23 @@ export interface components {
             };
             ceiling: components["schemas"]["SourceCrawlLimits"];
             effective: components["schemas"]["SourceCrawlLimits"];
+        };
+        SourceTreeRecipePage: {
+            documentId: string;
+            title: string;
+            url: string;
+            hasBody: boolean;
+            ownRecipe: boolean;
+            heldAt: string | null;
+        };
+        SourceTreeRecipeState: {
+            connectorId: string;
+            url: string;
+            host: string;
+            rootDocumentId: string | null;
+            active: components["schemas"]["SourceRecipeVersion"] | null;
+            proposal: components["schemas"]["SourceRecipeVersion"] | null;
+            pages: components["schemas"]["SourceTreeRecipePage"][];
         };
         /** @enum {string} */
         SourceVerificationState: "verified" | "expired" | "edited" | "requested" | "outdated" | "flagged" | "unverified";
@@ -30091,6 +30205,235 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DocumentSourceInfo"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WebSourcesController_treeRecipe: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceTreeRecipeState"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WebSourcesController_saveTreeRecipe: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveSourceTreeRecipeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceTreeRecipeState"];
+                };
+            };
+            /** @description The recipe fails its checks on that page (`details.failures`), or the proposal is stale */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WebSourcesController_previewTreeRecipe: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewSourceTreeRecipeDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceRecipePreview"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WebSourcesController_draftTreeRecipe: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DraftSourceTreeRecipeDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceTreeRecipeState"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WebSourcesController_dismissTreeRecipe: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceTreeRecipeState"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

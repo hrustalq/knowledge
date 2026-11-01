@@ -10,6 +10,8 @@ export const routes: RouteRecordRaw[] = [
   { path: '/create/source', component: () => import('./pages/LinkSourcePage.vue'), meta: { feature: 'sources' } },
   // Its extraction recipe and the review of a drafted one (#674, phase 2).
   { path: '/documents/:id/source/recipe', component: () => import('./pages/SourceRecipePage.vue'), meta: { feature: 'sources' } },
+  // The same workbench for a crawled tree's recipe, which every page without its own reads with (phase 3b).
+  { path: '/settings/connectors/:id/recipe', component: () => import('./pages/SourceRecipePage.vue'), meta: { feature: 'sources' } },
   { path: '/search', component: () => import('./pages/SearchPage.vue') },
   // Contradictions between pages (#81).
   { path: '/conflicts', component: () => import('./pages/ConflictsPage.vue'), meta: { feature: 'conflicts' } },

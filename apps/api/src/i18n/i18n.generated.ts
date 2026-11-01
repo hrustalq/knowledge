@@ -1604,6 +1604,7 @@ export type I18nTranslations = {
             "interval": string;
             "recipeInvalid": string;
             "recipeChecksFail": string;
+            "firstReadFails": string;
             "proposalStale": string;
             "noBody": string;
             "draftUnavailable": string;

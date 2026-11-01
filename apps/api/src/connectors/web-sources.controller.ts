@@ -6,6 +6,7 @@ import type {
   DocumentSourceWebhookResponse,
   SourceRecipePreview,
   SourceSettingsResponse,
+  SourceTreeRecipeState,
 } from '@knowledge/contracts';
 import { Access, CurrentPrincipal, Feature } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
@@ -14,9 +15,12 @@ import { PermissionService } from '../permissions/permission.service.js';
 import { Returns } from '../common/returns.decorator.js';
 import {
   CreateSourcePageDto,
+  DraftSourceTreeRecipeDto,
   PreviewSourceRecipeDto,
+  PreviewSourceTreeRecipeDto,
   RestoreDocumentSourceDto,
   SaveSourceRecipeDto,
+  SaveSourceTreeRecipeDto,
   SourceSettingsQueryDto,
   UpdateDocumentSourceDto,
   UpdateSourceSettingsDto,
@@ -156,6 +160,80 @@ export class WebSourcesController {
   @ApiOperation({ summary: 'Keep the current recipe: reject the drafted one and clear the layout-changed note. A held version stays held' })
   dismissRecipe(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<DocumentSourceInfo> {
     return this.sources.dismissRecipe(id, principal.userId);
+  }
+
+  // ---- tree recipes (#674, phase 3b): the connector's recipe, editor like Sync now.
+  // The page a preview, save or draft reads is one the caller may view: its text is in the answer.
+
+  @Get('connectors/:id/source/recipe')
+  @Returns('SourceTreeRecipeState')
+  @Access('viewer', 'connector')
+  @ApiOperation({ summary: "The connector's tree recipe, a drafted one waiting for review, and the crawled pages a preview can read" })
+  async treeRecipe(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<SourceTreeRecipeState> {
+    return this.sources.treeRecipe(id, await this.treeScope(id, principal));
+  }
+
+  @Post('connectors/:id/source/recipe/preview')
+  @Returns('SourceRecipePreview')
+  @Access('editor', 'connector')
+  @ApiOperation({ summary: "What a tree recipe makes of one crawled page's last fetched version (default: the root), with its check results" })
+  async previewTreeRecipe(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: PreviewSourceTreeRecipeDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<SourceRecipePreview> {
+    return this.sources.previewTreeRecipe((await this.treePage(id, dto.documentId, principal)).page, dto.recipe);
+  }
+
+  @Put('connectors/:id/source/recipe')
+  @Returns('SourceTreeRecipeState')
+  @Access('editor', 'connector')
+  @ApiOperation({
+    summary:
+      "Save the connector's tree recipe, approving a drafted one or not. Checked on one page (default: the root); " +
+      'a pull is queued that re-reads every page without its own recipe',
+  })
+  @ApiResponse({ status: 409, description: 'The recipe fails its checks on that page (`details.failures`), or the proposal is stale' })
+  async saveTreeRecipe(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SaveSourceTreeRecipeDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<SourceTreeRecipeState> {
+    const { page, scope } = await this.treePage(id, dto.documentId, principal);
+    return this.sources.saveTreeRecipe(page, dto.recipe, dto.proposalId, principal.userId, scope);
+  }
+
+  @Post('connectors/:id/source/recipe/draft')
+  @Returns('SourceTreeRecipeState')
+  @Access('editor', 'connector')
+  @ApiOperation({ summary: "Ask the interpreter agent to draft a tree recipe from one crawled page's last version (default: the root)" })
+  async draftTreeRecipe(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: DraftSourceTreeRecipeDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<SourceTreeRecipeState> {
+    const { page, scope } = await this.treePage(id, dto.documentId, principal);
+    return this.sources.draftTreeRecipe(page, principal.userId, principal.locale, scope);
+  }
+
+  @Post('connectors/:id/source/recipe/dismiss')
+  @Returns('SourceTreeRecipeState')
+  @Access('editor', 'connector')
+  @ApiOperation({ summary: 'Keep the current tree recipe: reject the drafted one' })
+  async dismissTreeRecipe(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<SourceTreeRecipeState> {
+    return this.sources.dismissTreeRecipe(id, principal.userId, await this.treeScope(id, principal));
+  }
+
+  private async treeScope(connectorId: string, principal: Principal) {
+    return this.permissions.scopeFor(principal, await this.sources.workspaceOf(connectorId));
+  }
+
+  /** The page an operation reads, refused like any page the caller may not open, and the caller's scope. */
+  private async treePage(connectorId: string, documentId: string | undefined, principal: Principal) {
+    const page = await this.sources.treePage(connectorId, documentId);
+    const scope = await this.permissions.scopeFor(principal, page.row.workspaceId);
+    await this.permissions.requireLevel(scope, { type: 'document', id: page.link.documentId }, 'view');
+    return { page, scope };
   }
 
   @Post('documents/:id/source/webhook')

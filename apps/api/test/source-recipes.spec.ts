@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { describe, expect, it, vi } from 'vitest';
 import type { SourceRecipe } from '@knowledge/contracts';
 import { applyRules, checkExtraction, extractSource, readRecipe, sourceOutline } from '../src/connectors/source-recipe.js';
@@ -17,6 +18,9 @@ import { SourceRecipesService } from '../src/connectors/source-recipes.service.j
  * 5. readRecipe keeps the declared shape and names what it dropped.
  * 6. A failing version is held once (one draft), and a passing one releases it.
  * 7. A save that fails its checks is refused and writes nothing.
+ * 8. A tree save (phase 3b) writes a connector-scope recipe, drops the
+ *    validators of only the pages without their own, and writes no revision.
+ * 9. A newly crawled page reads through the tree recipe, with no baseline.
  */
 
 const URL = 'https://docs.example.com/guide';
@@ -174,5 +178,38 @@ describe('SourceRecipesService', () => {
       status: 409,
     });
     expect(h.prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('saves a tree recipe for the connector and leaves the re-read to a pull', async () => {
+    const h = harness();
+    await h.read(html(BODY));
+    (h.service as unknown as { body: () => Promise<unknown> }).body = async () => source(html(BODY));
+    const tx = {
+      sourceRecipe: {
+        updateMany: vi.fn(async () => ({ count: 0 })),
+        create: vi.fn(async () => ({})),
+        aggregate: vi.fn(async () => ({ _max: { version: 2 } })),
+        findMany: vi.fn(async () => [{ documentId: 'd-own' }]),
+      },
+      connectorLink: { update: vi.fn(), updateMany: vi.fn(async () => ({ count: 3 })) },
+    };
+    h.prisma.$transaction.mockImplementation(async (fn: (t: typeof tx) => unknown) => fn(tx));
+    await h.service.save({ id: 'c1', workspaceId: 'w1' } as never, h.link as never, recipe(), undefined, 'u1', 'tree');
+
+    expect(tx.sourceRecipe.create).toHaveBeenCalledWith({ data: expect.objectContaining({ connectorId: 'c1', documentId: null, version: 3, status: 'active' }) });
+    expect(tx.connectorLink.updateMany).toHaveBeenCalledWith({
+      where: { connectorId: 'c1', documentId: { notIn: ['d-own'] } },
+      data: { externalVersion: null, fingerprint: Prisma.DbNull, structureChangedAt: null },
+    });
+    // The previewed page's baseline is the pull's to move, not the save's.
+    expect(tx.connectorLink.update).not.toHaveBeenCalled();
+  });
+
+  it('reads a newly crawled page through the tree recipe', async () => {
+    const h = harness();
+    h.prisma.sourceRecipe.findFirst.mockResolvedValueOnce({ recipe: recipe() } as never);
+    expect((await h.service.readNew({ id: 'c1' } as never, source(html(BODY)))).failures).toEqual([]);
+    h.prisma.sourceRecipe.findFirst.mockResolvedValueOnce({ recipe: recipe({ landmarks: ['#gone'] }) } as never);
+    expect((await h.service.readNew({ id: 'c1' } as never, source(html(BODY)))).failures).toEqual(['landmark']);
   });
 });

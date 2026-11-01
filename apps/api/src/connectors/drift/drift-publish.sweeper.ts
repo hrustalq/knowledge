@@ -75,9 +75,11 @@ const listsDetails = (details: unknown) => listsUsages(details) || listedSpecs(d
  *
  * Report checks (`input.issueId`, docs/features/38) share the agent and are
  * excluded here — `ReportPublishSweeper` claims those, so neither steals the
- * other's run. A comment that fails is logged, not retried — the next push to
- * the branch starts a new check and a new comment, and retrying a failing host
- * every tick would be the only thing this sweeper did.
+ * other's run — and so are source-change checks (#674), which
+ * `SourceChangePublishSweeper` claims. A comment that fails is logged, not
+ * retried — the next push to the branch starts a new check and a new
+ * comment, and retrying a failing host every tick would be the only thing
+ * this sweeper did.
  */
 @Injectable()
 export class DriftPublishSweeper implements OnModuleInit, OnModuleDestroy {
@@ -119,6 +121,7 @@ export class DriftPublishSweeper implements OnModuleInit, OnModuleDestroy {
            AND finished_at >= ${since}
            AND COALESCE(input ->> 'publishedAt', '') = ''
            AND COALESCE(input ->> 'issueId', '') = ''
+           AND input -> 'sourceChange' IS NULL
          ORDER BY finished_at ASC
          LIMIT ${BATCH}
       `;

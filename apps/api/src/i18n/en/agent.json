@@ -309,5 +309,11 @@
     "noneWritten": "No community could be summarised.",
     "budgetSpent": "The AI budget ran out after {done} summaries; the next run finishes the rest.",
     "summary": "Summarised {n} communities covering {pages} pages."
+  },
+  "sourceChange": {
+    "noChange": "The new version of \"{title}\" changed no section a page can link.",
+    "noRelated": "No page links a section of \"{title}\" that changed.",
+    "noModel": "No model is configured for the sentinel, so the pages linking \"{title}\" were not judged.",
+    "summary": "Judged {pages} linking \"{title}\" against its new version: {drifted} may now be wrong."
   }
 }

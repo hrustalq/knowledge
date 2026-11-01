@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsBoolean, IsIn, IsInt, IsObject, IsOptional, IsString, IsUUID, MaxLength, Min, ValidateIf } from 'class-validator';
-import { SOURCE_INTERVALS_MIN, SOURCE_RECIPE_RULE_KINDS } from '@knowledge/contracts';
+import { SOURCE_INTERVALS_MIN, SOURCE_MISALIGNMENT_MODES, SOURCE_RECIPE_RULE_KINDS, type SourceMisalignmentMode } from '@knowledge/contracts';
 
 /** POST /v1/sources — "Add page → Link a source" (#674). */
 export class CreateSourcePageDto {
@@ -78,12 +78,17 @@ export class UpdateSourceSettingsDto {
   confirmChange!: number | null;
 }
 
-/** PATCH /v1/documents/:id/source */
+/** PATCH /v1/documents/:id/source — each field omitted is left as it is. */
 export class UpdateDocumentSourceDto {
-  @ApiProperty({ type: Number, nullable: true, enum: SOURCE_INTERVALS_MIN, description: 'Minutes between checks; null = only on demand' })
-  @ValidateIf((_o, v) => v !== null)
+  @ApiPropertyOptional({ type: Number, nullable: true, enum: SOURCE_INTERVALS_MIN, description: 'Minutes between checks; null = only on demand' })
+  @IsOptional()
   @IsIn([...SOURCE_INTERVALS_MIN])
-  intervalMinutes!: number | null;
+  intervalMinutes?: number | null;
+
+  @ApiPropertyOptional({ enum: SOURCE_MISALIGNMENT_MODES, description: 'A page linking this source that a new version may have made wrong: flagged for its owner, or flagged with a proposed fix' })
+  @IsOptional()
+  @IsIn([...SOURCE_MISALIGNMENT_MODES])
+  misalignment?: SourceMisalignmentMode;
 }
 
 /** POST /v1/documents/:id/source/restore */

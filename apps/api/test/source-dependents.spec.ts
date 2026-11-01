@@ -112,7 +112,9 @@ describe('SourceDependentsService.revisionIndexed', () => {
       documentsNamingKeys: vi.fn(async () => opts.holders ?? new Map()),
     };
     const verification = { flag: vi.fn(async (id: string, flag: string, o: { note: string }) => flagged.push([id, flag, o.note])) };
-    const svc = new SourceDependentsService(prisma as never, storage as never, graph as never, verification as never);
+    // The sentinel is off here: phase 5b's judge is pinned in source-judge.spec.ts.
+    const registry = { resolve: async () => ({ enabled: false, config: { enabled: false }, missing: [] }) };
+    const svc = new SourceDependentsService(prisma as never, storage as never, graph as never, verification as never, registry as never, {} as never);
     return { svc, flagged, graph };
   }
 

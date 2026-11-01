@@ -327,6 +327,12 @@ export type I18nTranslations = {
             "budgetSpent": string;
             "summary": string;
         };
+        "sourceChange": {
+            "noChange": string;
+            "noRelated": string;
+            "noModel": string;
+            "summary": string;
+        };
     };
     "assistant": {
         "disabled": string;
@@ -678,6 +684,8 @@ export type I18nTranslations = {
             "anchorRemoved": string;
             "anchorRenamed": string;
             "keyDropped": string;
+            "notChecked": string;
+            "notCheckedRestricted": string;
         };
         "sourceRestoredMessage": string;
         "sourceRecipeMessage": string;

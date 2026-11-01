@@ -11,7 +11,7 @@ import { RouterLink, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Copy, ExternalLink, ListTree, Pause, Play, RefreshCw, Sparkles, Webhook } from 'lucide-vue-next'
-import type { DocumentSourceInfo, DocumentSourceWebhookResponse } from '@knowledge/contracts'
+import { SOURCE_MISALIGNMENT_MODES, type DocumentSourceInfo, type DocumentSourceWebhookResponse, type SourceMisalignmentMode } from '@knowledge/contracts'
 import { relativeTime } from '@/shared/api/api'
 import { api, apiQueryOptions } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
@@ -87,6 +87,9 @@ const syncNow = () =>
   }, 'sources.syncStarted')
 const setInterval = (value: unknown) =>
   act('interval', () => api.patch('/v1/documents/{id}/source', { ...path(), body: { intervalMinutes: toInterval(String(value)) } }))
+/** Phase 5b: what a new version does to a page linking this one that it may have made wrong. */
+const setMisalignment = (value: unknown) =>
+  act('misalignment', () => api.patch('/v1/documents/{id}/source', { ...path(), body: { misalignment: value as SourceMisalignmentMode } }))
 
 const draftRecipe = () =>
   act('draft', async () => {
@@ -213,6 +216,16 @@ async function copy(text: string) {
           <SelectTrigger :id="`source-interval-${documentId}`" size="sm" class="w-full"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem v-for="o in SOURCE_INTERVAL_OPTIONS" :key="o.value" :value="o.value">{{ t(o.label) }}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div class="space-y-1.5">
+        <label :for="`source-misalignment-${documentId}`" class="text-xs text-muted-foreground">{{ t('sources.misalignment.label') }}</label>
+        <Select :model-value="source.misalignment" :disabled="busy !== null" @update:model-value="setMisalignment">
+          <SelectTrigger :id="`source-misalignment-${documentId}`" size="sm" class="w-full"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem v-for="m in SOURCE_MISALIGNMENT_MODES" :key="m" :value="m">{{ t(`sources.misalignment.${m}`) }}</SelectItem>
           </SelectContent>
         </Select>
       </div>

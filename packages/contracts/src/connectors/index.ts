@@ -648,6 +648,18 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
         ],
         help: 'A tree follows links and sitemap.xml under the URL’s path, nested by URL. A large crawl waits for you to confirm it.',
       },
+      {
+        // SOURCE_MISALIGNMENT_CONFIG_KEY, spelled out for the same reason.
+        key: 'misalignment',
+        label: 'When a change may break a page',
+        kind: 'select',
+        required: false,
+        options: [
+          { value: 'flag', label: 'Ask its owner to check it' },
+          { value: 'propose', label: 'Ask its owner, and propose a fix' },
+        ],
+        help: 'Pages that link this source are checked against each new version. One it may have made wrong is flagged for its owner; a proposed fix opens as a merge request.',
+      },
     ],
   },
 ];
@@ -2266,6 +2278,21 @@ export function webCrawls(config: unknown): boolean {
 }
 
 /**
+ * What a source does about a page that links it and that a new version may
+ * have made wrong (#674, phase 5b). `flag`, the default and what an absent key
+ * reads as: `requested`, its owner notified. `propose`: that, plus a fix the
+ * sentinel drafts, opened as a merge request.
+ */
+export const SOURCE_MISALIGNMENT_MODES = ['flag', 'propose'] as const;
+export type SourceMisalignmentMode = (typeof SOURCE_MISALIGNMENT_MODES)[number];
+export const SOURCE_MISALIGNMENT_CONFIG_KEY = 'misalignment';
+export function sourceMisalignment(config: unknown): SourceMisalignmentMode {
+  return (config as Record<string, unknown> | null)?.[SOURCE_MISALIGNMENT_CONFIG_KEY] === 'propose' ? 'propose' : 'flag';
+}
+/** Linking pages one new version sends to the sentinel; the rest are flagged "not checked". */
+export const SOURCE_JUDGE_MAX_PAGES = 20;
+
+/**
  * Crawl limits, each a sparse workspace setting under its `WEB_SOURCE_CRAWL_*`
  * env ceiling. `maxPages` caps one crawl; a first crawl creating more than
  * `confirmFirst` pages, or a later one adding plus dropping more than
@@ -2331,6 +2358,8 @@ export interface DocumentSourceInfo {
    * it syncs, and a run waiting for a person to confirm a large change.
    */
   tree: { rootDocumentId: string; pages: number; awaitingRunId: string | null } | null;
+  /** What happens to a page linking this source that a new version may have made wrong (phase 5b). */
+  misalignment: SourceMisalignmentMode;
 }
 
 // ---------------------------------------------------------------------------

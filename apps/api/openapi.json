@@ -22341,7 +22341,7 @@
             }
           }
         },
-        "summary": "How often the source is checked",
+        "summary": "How often the source is checked, and what a new version does to pages linking it",
         "tags": [
           "sources"
         ]
@@ -44735,11 +44735,16 @@
               1440
             ],
             "description": "Minutes between checks; null = only on demand"
+          },
+          "misalignment": {
+            "type": "string",
+            "enum": [
+              "flag",
+              "propose"
+            ],
+            "description": "A page linking this source that a new version may have made wrong: flagged for its owner, or flagged with a proposed fix"
           }
-        },
-        "required": [
-          "intervalMinutes"
-        ]
+        }
       },
       "RestoreDocumentSourceDto": {
         "type": "object",
@@ -48894,6 +48899,9 @@
           },
           "lint": {
             "$ref": "#/components/schemas/AgentRunLint"
+          },
+          "sourceChange": {
+            "$ref": "#/components/schemas/AgentRunSourceChange"
           }
         }
       },
@@ -48952,6 +48960,25 @@
           "headRef",
           "baseRef",
           "author"
+        ]
+      },
+      "AgentRunSourceChange": {
+        "type": "object",
+        "properties": {
+          "documentId": {
+            "type": "string"
+          },
+          "fromRevisionId": {
+            "type": "string"
+          },
+          "toRevisionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "documentId",
+          "fromRevisionId",
+          "toRevisionId"
         ]
       },
       "AgentRunStatus": {
@@ -49078,7 +49105,8 @@
           "event",
           "webhook",
           "report",
-          "merge-request"
+          "merge-request",
+          "source"
         ]
       },
       "AgentScheduleKind": {
@@ -50280,7 +50308,8 @@
           "test-fixture-ranking",
           "transcription",
           "memo",
-          "source-recipe"
+          "source-recipe",
+          "source-judge"
         ]
       },
       "AiUsageResponse": {
@@ -57858,6 +57887,9 @@
               }
             ],
             "nullable": true
+          },
+          "misalignment": {
+            "$ref": "#/components/schemas/SourceMisalignmentMode"
           }
         },
         "required": [
@@ -57876,7 +57908,8 @@
           "webhookConfigured",
           "spec",
           "recipe",
-          "tree"
+          "tree",
+          "misalignment"
         ]
       },
       "DocumentSourceRecipeState": {
@@ -68881,6 +68914,13 @@
           "maxPages",
           "confirmFirst",
           "confirmChange"
+        ]
+      },
+      "SourceMisalignmentMode": {
+        "type": "string",
+        "enum": [
+          "flag",
+          "propose"
         ]
       },
       "SourcePolicy": {

@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { headingSections } from '@knowledge/editor-schema/markdown';
-import { isApiSpecKind, operationAnchor } from '@knowledge/contracts';
+import { isApiSpecKind, operationAnchor, type AgentRunInput } from '@knowledge/contracts';
+import { AgentRegistryService } from '../agents/agent-registry.service.js';
+import { AgentProducer } from '../agents/agent.producer.js';
 import { UNFILTERED } from '../common/document-acl.js';
 import { GraphService } from '../graph/graph.service.js';
 import { t } from '../i18n/t.js';
@@ -12,6 +15,10 @@ import { VerificationService } from '../verification/verification.service.js';
 const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
 /** Changes named in one dependent's note; the rest is "…". */
 const MAX_NOTE_ITEMS = 10;
+/** The agent that judges the linking pages (phase 5b). */
+const JUDGE_AGENT_KEY = 'sentinel';
+/** Waiting source checks one workspace may hold — the drift trigger's cap, for its reason. */
+const MAX_PENDING = 20;
 
 export interface Anchor {
   id: string;
@@ -52,6 +59,12 @@ export function anchorChanges(before: Anchor[], after: Anchor[]): Map<string, st
  * Runs in the worker, after the revision is indexed (the new facts exist only
  * then). A page already flagged is left alone — its owner is already asked —
  * and so is another source-backed page, which no person can correct.
+ *
+ * Then (phase 5b) it queues the sentinel to judge the linking pages the pass
+ * did not flag, against what changed (`checkSourceChange` in the executor).
+ * No run when the sentinel has no model or the connector no owner: the
+ * deterministic flags are the floor. A run still pending absorbs a newer
+ * version — the drift trigger's coalescing rule.
  */
 @Injectable()
 export class SourceDependentsService {
@@ -62,6 +75,8 @@ export class SourceDependentsService {
     private readonly storage: StorageService,
     private readonly graph: GraphService,
     private readonly verification: VerificationService,
+    private readonly registry: AgentRegistryService,
+    private readonly producer: AgentProducer,
   ) {}
 
   /** Returns how many pages were flagged. */
@@ -74,7 +89,7 @@ export class SourceDependentsService {
     const { document } = revision;
     const link = await this.prisma.connectorLink.findFirst({
       where: { documentId: document.id, connector: { kind: 'web' } },
-      select: { connector: { select: { createdBy: true } } },
+      select: { connector: { select: { createdBy: true, locale: true } } },
     });
     if (!link) return 0;
     const previous = await this.prisma.documentRevision.findFirst({
@@ -83,6 +98,20 @@ export class SourceDependentsService {
     });
     if (!previous) return 0;
 
+    const flagged = await this.flagDropped(document, previous, revision, link.connector.createdBy ?? AUTHOR_ID_STUB);
+    // After the flags, so the run skips the pages they already asked about.
+    await this.requestJudge(document, link.connector, previous.id, revision.id).catch((err: unknown) =>
+      this.logger.warn({ msg: 'Source change check could not be queued', documentId: document.id, err }),
+    );
+    return flagged;
+  }
+
+  private async flagDropped(
+    document: { id: string; workspaceId: string; title: string; kind: string },
+    previous: { id: string; s3Key: string },
+    revision: { id: string; s3Key: string },
+    actorId: string,
+  ): Promise<number> {
     const spec = isApiSpecKind(document.kind);
     const [before, after, keysBefore, keysAfter] = await Promise.all([
       spec ? this.operationAnchors(previous.id) : this.headingAnchors(previous.s3Key),
@@ -125,7 +154,6 @@ export class SourceDependentsService {
       }),
     ]);
     const skip = new Set(sourced.map((l) => l.documentId));
-    const actorId = link.connector.createdBy ?? AUTHOR_ID_STUB;
     let flagged = 0;
     for (const { id } of pages) {
       if (skip.has(id)) continue;
@@ -139,6 +167,64 @@ export class SourceDependentsService {
         .catch((err: unknown) => this.logger.warn({ msg: 'Dependent page could not be flagged', documentId: id, err }));
     }
     return flagged;
+  }
+
+  /** The sentinel run that will judge the linking pages, or null when none was queued. */
+  async requestJudge(
+    document: { id: string; workspaceId: string },
+    connector: { createdBy: string | null; locale: string },
+    fromRevisionId: string,
+    toRevisionId: string,
+  ): Promise<string | null> {
+    // A run acts as a person; a connector nobody owns gets no model calls (feature 27).
+    if (!connector.createdBy) return null;
+    const agent = await this.registry.resolve(document.workspaceId, JUDGE_AGENT_KEY);
+    // 'tools' is a preference, not a prerequisite — the sentinel's own rule.
+    if (!agent.enabled || !agent.config.enabled || agent.missing.some((c) => c !== 'tools')) return null;
+    const linked = await this.prisma.pageLink.count({
+      where: { workspaceId: document.workspaceId, targetDocumentId: document.id, sourceDocumentId: { not: document.id } },
+    });
+    if (linked === 0) return null;
+
+    const waiting = await this.prisma.agentRun.findFirst({
+      where: { workspaceId: document.workspaceId, agentKey: JUDGE_AGENT_KEY, status: 'pending', input: { path: ['sourceChange', 'documentId'], equals: document.id } },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (waiting) {
+      const input = (waiting.input ?? {}) as AgentRunInput;
+      // Guarded on still pending: a run the worker claimed has frozen its input.
+      const absorbed = await this.prisma.agentRun.updateMany({
+        where: { id: waiting.id, status: 'pending' },
+        data: { input: { ...input, sourceChange: { ...input.sourceChange!, toRevisionId } } as unknown as Prisma.InputJsonValue },
+      });
+      if (absorbed.count === 1) return waiting.id;
+    }
+
+    const pending = await this.prisma.agentRun.count({
+      where: { workspaceId: document.workspaceId, agentKey: JUDGE_AGENT_KEY, status: 'pending' },
+    });
+    if (pending >= MAX_PENDING) {
+      this.logger.warn(`source change check for ${document.id} dropped: ${pending} checks already waiting`);
+      return null;
+    }
+    const override = await this.prisma.aiAgent.findUnique({
+      where: { workspaceId_key: { workspaceId: document.workspaceId, key: JUDGE_AGENT_KEY } },
+      select: { id: true },
+    });
+    const input: AgentRunInput = { sourceChange: { documentId: document.id, fromRevisionId, toRevisionId } };
+    const run = await this.prisma.agentRun.create({
+      data: {
+        workspaceId: document.workspaceId,
+        agentKey: JUDGE_AGENT_KEY,
+        agentId: override?.id ?? null,
+        trigger: 'source',
+        createdBy: connector.createdBy,
+        locale: connector.locale,
+        input: input as Prisma.InputJsonValue,
+      },
+    });
+    await this.producer.enqueue(run.id);
+    return run.id;
   }
 
   private async headingAnchors(s3Key: string): Promise<Anchor[]> {

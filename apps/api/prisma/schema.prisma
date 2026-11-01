@@ -1579,7 +1579,7 @@ model AgentRun {
   /// The override row, when one exists. Null for an untouched built-in.
   agentId     String? @map("agent_id") @db.Uuid
 
-  /// 'manual' | 'schedule' | 'event' | 'webhook' | 'report' — see
+  /// 'manual' | 'schedule' | 'event' | 'webhook' | 'report' | 'merge-request' | 'source' — see
   /// AGENT_RUN_TRIGGERS. 'event' is written only by AgentTriggerService (#70).
   trigger    String  @default("manual")
   /// The agent_triggers row behind an 'event' run. No FK: deleting a trigger

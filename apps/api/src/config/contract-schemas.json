@@ -1248,6 +1248,9 @@
       },
       "lint": {
         "$ref": "#/components/schemas/AgentRunLint"
+      },
+      "sourceChange": {
+        "$ref": "#/components/schemas/AgentRunSourceChange"
       }
     }
   },
@@ -1306,6 +1309,25 @@
       "headRef",
       "baseRef",
       "author"
+    ]
+  },
+  "AgentRunSourceChange": {
+    "type": "object",
+    "properties": {
+      "documentId": {
+        "type": "string"
+      },
+      "fromRevisionId": {
+        "type": "string"
+      },
+      "toRevisionId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "documentId",
+      "fromRevisionId",
+      "toRevisionId"
     ]
   },
   "AgentRunStatus": {
@@ -1432,7 +1454,8 @@
       "event",
       "webhook",
       "report",
-      "merge-request"
+      "merge-request",
+      "source"
     ]
   },
   "AgentScheduleKind": {
@@ -2634,7 +2657,8 @@
       "test-fixture-ranking",
       "transcription",
       "memo",
-      "source-recipe"
+      "source-recipe",
+      "source-judge"
     ]
   },
   "AiUsageResponse": {
@@ -10212,6 +10236,9 @@
           }
         ],
         "nullable": true
+      },
+      "misalignment": {
+        "$ref": "#/components/schemas/SourceMisalignmentMode"
       }
     },
     "required": [
@@ -10230,7 +10257,8 @@
       "webhookConfigured",
       "spec",
       "recipe",
-      "tree"
+      "tree",
+      "misalignment"
     ]
   },
   "DocumentSourceRecipeState": {
@@ -21235,6 +21263,13 @@
       "maxPages",
       "confirmFirst",
       "confirmChange"
+    ]
+  },
+  "SourceMisalignmentMode": {
+    "type": "string",
+    "enum": [
+      "flag",
+      "propose"
     ]
   },
   "SourcePolicy": {

@@ -19,7 +19,8 @@ import type {
   MemoSegment,
   RelationInput,
 } from '@knowledge/contracts';
-import { buildTestSuite, operationFingerprint, testCasesFor } from '@knowledge/contracts';
+import { buildTestSuite, isApiSpecKind, operationFingerprint, SOURCE_JUDGE_MAX_PAGES, testCasesFor } from '@knowledge/contracts';
+import { headingSections } from '@knowledge/editor-schema/markdown';
 import type { Env } from '../config/env.js';
 import { EMBEDDING_PROVIDER, type EmbeddingProvider } from '../embedding/embedding.provider.js';
 import {
@@ -69,6 +70,7 @@ import { PermissionService } from '../permissions/permission.service.js';
 import { AccessService } from '../auth/access.service.js';
 import { ApiFixturesService } from '../api-specs/api-fixtures.service.js';
 import { ApiTestSuitesService } from '../api-specs/api-test-suites.service.js';
+import { ApiSpecDiffService } from '../api-specs/api-spec-diff.service.js';
 import { AgentRegistryService, type ResolvedAgent } from './agent-registry.service.js';
 import { runCodeReadingLoop } from './code-reading-loop.js';
 import { AiSkillsService } from '../ai/ai-skills.service.js';
@@ -121,6 +123,16 @@ import {
   type DriftCandidate,
 } from './drift.js';
 import { apiDriftFinding, apiDriftPromptNote } from './api-drift.js';
+import {
+  MAX_CHANGE_CHARS,
+  SOURCE_CHANGE_OUTPUT_CONTRACT,
+  changeExcerpt,
+  changedSections,
+  judgeCandidates,
+  readSourceVerdict,
+  sourceChangePrompt,
+  specChangedSections,
+} from './source-change.js';
 import { LINT_TEXT_MAX, enabledRules, lintMessages, readLintViolations } from './lint.js';
 import { changedText, styleFindings } from '../documents/lint/lint-check.js';
 import {
@@ -329,6 +341,7 @@ export class AgentExecutor {
     private readonly testSuites: ApiTestSuitesService,
     private readonly fixtures: ApiFixturesService,
     private readonly decision: DecisionClient,
+    private readonly specDiff: ApiSpecDiffService,
   ) {}
 
   /**
@@ -512,6 +525,7 @@ export class AgentExecutor {
       case 'sentinel': {
         const input = (run.input ?? {}) as AgentRunInput;
         if (input.issueId) return this.checkReport(run, agent, principal, report);
+        if (input.sourceChange) return this.checkSourceChange(run, agent, principal, report);
         if (input.apiSpecDocumentId) return this.checkApiDrift(run, principal, report);
         return this.checkDrift(run, agent, principal, report);
       }
@@ -2386,6 +2400,126 @@ ${diffExcerpt(shown, MAX_DIFF_CHARS)}`,
       // a person, and the publisher reads an info finding as exactly that.
       return { summary: t('agent.report.summaryNoModel', { title: page.title }), findings: [echo] };
     }
+  }
+
+  /**
+   * The sentinel pointed at a source-backed page's new version (#674, phase
+   * 5b): the pages linking it, judged against only what changed.
+   *
+   * `diff` reads the changed sections — heading sections, or a spec's changed
+   * operations under their anchors. `related` keeps the linking pages a change
+   * can concern (`judgeCandidates`) and drops those already flagged (the
+   * deterministic pass ran first), archived or source-backed. A page the
+   * workspace audience cannot read is not judged, and neither is one past
+   * `SOURCE_JUDGE_MAX_PAGES`: both go to `details.sourceUnchecked`, which the
+   * publisher flags "not checked". `judging` is one model call per page.
+   *
+   * Nothing here writes: `SourceChangePublishSweeper` flags the pages and, in
+   * `propose` mode, opens the drafted fixes — API-side, as the run's owner.
+   */
+  private async checkSourceChange(
+    run: AgentRun,
+    agent: ResolvedAgent,
+    principal: Principal,
+    report: AgentReporter,
+  ): Promise<AgentRunResult> {
+    const change = ((run.input ?? {}) as AgentRunInput).sourceChange!;
+
+    await report({ stage: 'diff', progress: 0.05 });
+    const source = await this.prisma.document.findFirst({
+      where: { id: change.documentId, workspaceId: run.workspaceId },
+      select: { id: true, title: true, kind: true },
+    });
+    if (!source) throw new Error(t('error.document.notFound', { id: change.documentId }));
+    const link = await this.prisma.connectorLink.findFirst({
+      where: { documentId: source.id, connector: { kind: 'web' } },
+      select: { externalUrl: true, externalId: true },
+    });
+    const origin = { title: source.title, url: link?.externalUrl ?? link?.externalId ?? '' };
+    const sections = isApiSpecKind(source.kind)
+      ? specChangedSections((await this.specDiff.diff(source.id, change.fromRevisionId, change.toRevisionId))?.changes ?? [])
+      : changedSections(
+          headingSections((await this.documents.getContent(source.id, change.fromRevisionId)).markdown),
+          headingSections((await this.documents.getContent(source.id, change.toRevisionId)).markdown),
+        );
+    if (sections.length === 0) return { summary: t('agent.sourceChange.noChange', { title: source.title }), findings: [] };
+
+    await report({ stage: 'related', progress: 0.2 });
+    const links = await this.prisma.pageLink.findMany({
+      where: { workspaceId: run.workspaceId, targetDocumentId: source.id, sourceDocumentId: { not: source.id } },
+      select: { sourceDocumentId: true, targetAnchor: true },
+    });
+    const all = judgeCandidates(links, new Set(sections.map((s) => s.id)));
+    const ids = all.map((c) => c.documentId);
+    const [open, sourced] = await Promise.all([
+      this.prisma.document.findMany({
+        where: { id: { in: ids }, workspaceId: run.workspaceId, archivedAt: null, verificationFlag: null },
+        select: { id: true, title: true },
+      }),
+      this.prisma.connectorLink.findMany({ where: { documentId: { in: ids }, connector: { kind: 'web' } }, select: { documentId: true } }),
+    ]);
+    const titles = new Map(open.map((d) => [d.id, d.title]));
+    const sourceBacked = new Set(sourced.map((l) => l.documentId));
+    const live = all.filter((c) => titles.has(c.documentId) && !sourceBacked.has(c.documentId));
+    const visible = await this.permissions.visibleDocumentIds(await this.runScope(run, principal), live.map((c) => c.documentId));
+    const readable = live.filter((c) => visible.has(c.documentId));
+    const unchecked: NonNullable<AgentRunDetails['sourceUnchecked']> = [
+      ...live.filter((c) => !visible.has(c.documentId)).map((c) => ({ documentId: c.documentId, reason: 'restricted' as const })),
+      ...readable.slice(SOURCE_JUDGE_MAX_PAGES).map((c) => ({ documentId: c.documentId, reason: 'cap' as const })),
+    ];
+    const candidates = readable.slice(0, SOURCE_JUDGE_MAX_PAGES);
+    const details: AgentRunDetails | undefined = unchecked.length ? { sourceUnchecked: unchecked } : undefined;
+    if (candidates.length === 0) return { summary: t('agent.sourceChange.noRelated', { title: source.title }), findings: [], details };
+
+    const blocking = agent.missing.filter((capability) => capability !== 'tools');
+    if (!agent.config.enabled || blocking.length > 0) {
+      // Queued with a model that has since gone: nothing judged, nothing claimed.
+      return { summary: t('agent.sourceChange.noModel', { title: source.title }), findings: [], details };
+    }
+
+    const skills = await this.guidance(run, agent);
+    const call = { config: agent.config, userId: run.createdBy, operation: 'source-judge' as const, locale: run.locale as Locale };
+    const tools = this.readTools.definitions();
+    const toolCtx = this.toolCtx(run, principal);
+    const execute = (name: string, args: Record<string, unknown>) => this.readTools.execute(name, args, toolCtx);
+
+    const findings: AgentFinding[] = [];
+    let checked = 0;
+    for (const [at, candidate] of candidates.entries()) {
+      const title = titles.get(candidate.documentId)!;
+      await report({ stage: 'judging', progress: 0.3 + (0.65 * at) / candidates.length });
+      const content = await this.documents.getContent(candidate.documentId).catch(() => null);
+      if (!content || !content.markdown.trim()) continue;
+      const page = { id: candidate.documentId, title, markdown: content.markdown };
+      const messages: ChatCompletionMessageParam[] = [
+        { role: 'system', content: `${agent.instructions}\n\n${SOURCE_CHANGE_OUTPUT_CONTRACT}${skills}` },
+        { role: 'user', content: sourceChangePrompt(origin, changeExcerpt(sections, candidate.anchors, MAX_CHANGE_CHARS), page, MAX_PAGE_CHARS) },
+      ];
+      try {
+        const raw = agent.missing.includes('tools')
+          ? await this.client.chat(call, messages, { json: true })
+          : (await this.client.runWithTools(call, messages, tools, execute, { jsonFinalRound: true })).content;
+        checked += 1;
+        const finding = readSourceVerdict(safeJson(raw), page, origin);
+        if (finding) findings.push(finding);
+      } catch (error) {
+        if (error instanceof HttpException && error.getStatus() === HttpStatus.TOO_MANY_REQUESTS) {
+          await report({ warning: t('agent.drift.budgetSpent', { checked, pages: candidates.length }) });
+          break;
+        }
+        if (error instanceof ProviderAccountError) {
+          await report({ warning: t('agent.warning.stopped', { error: error.message }) });
+          break;
+        }
+        this.logger.warn(`Sentinel could not judge "${title}" against ${source.id}: ${String(error)}`);
+        await report({ warning: t('agent.warning.pageNotReviewed', { title, error: reasonOf(error) }) });
+      }
+    }
+    return {
+      summary: t('agent.sourceChange.summary', { title: source.title, pages: t('agent.count.pages', { count: checked }), drifted: findings.length }),
+      findings: findings.slice(0, MAX_FINDINGS),
+      details,
+    };
   }
 
   /**

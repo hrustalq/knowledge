@@ -125,7 +125,7 @@ import {
  * Bumped by hand at every release, with swagger.ts (docs/versioning.md#known-drift).
  * Named because the connection page and the skill report it too.
  */
-export const MCP_SERVER_VERSION = '0.42.0';
+export const MCP_SERVER_VERSION = '0.43.0';
 
 /**
  * MCP tools (plan.md §9). Tool names use underscores (MCP tool names must

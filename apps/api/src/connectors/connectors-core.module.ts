@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ApiSpecsCoreModule } from '../api-specs/api-specs-core.module.js';
 import { DocumentsCoreModule } from '../documents/documents-core.module.js';
 import { EventsModule } from '../events/events.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
@@ -43,6 +44,7 @@ import { AssistantClientModule } from '../assistant/assistant-client.module.js';
     EventsModule,
     ProjectsCoreModule,
     DocumentsCoreModule,
+    ApiSpecsCoreModule,
     ConnectorAdaptersModule,
     // ConnectorsService resolves a picker-configured connector's credential to
     // a freshly minted installation token, so the worker needs this too.

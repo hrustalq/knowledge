@@ -173,7 +173,14 @@ async function copy(text: string) {
       </span>
     </p>
 
-    <p class="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
+    <!-- An API spec (phase 4) is stored as written: no recipe to open, and a held version says why in the parser's words. -->
+    <p v-if="source.spec" class="text-xs">
+      <span v-if="source.recipe.heldAt" class="font-medium break-words text-panel-caution-ink">
+        {{ t('sources.spec.held', { detail: source.recipe.heldDetail ?? t('sources.recipe.rail.held') }) }}
+      </span>
+      <span v-else class="text-muted-foreground">{{ t('sources.spec.line', { kind: source.spec === 'openapi' ? 'OpenAPI' : 'AsyncAPI' }) }}</span>
+    </p>
+    <p v-else class="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
       <template v-if="attention === 'held'">
         <span class="font-medium text-panel-caution-ink">{{ t('sources.recipe.rail.held') }}</span>
         <RouterLink :to="recipePath" class="rounded-sm underline underline-offset-2 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">{{ t('sources.recipe.rail.review') }}</RouterLink>

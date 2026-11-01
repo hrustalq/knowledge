@@ -4551,7 +4551,8 @@
       "paused": "was restored, so its source is paused",
       "gone": "lost its source and was archived",
       "failing": "failed to sync three times in a row",
-      "held": "has a new source version held for recipe review"
+      "held": "has a new source version held for review",
+      "breaking": "took an API version from its source with breaking changes"
     }
   },
   "connect": {
@@ -7526,7 +7527,8 @@
         "landmark": "Landmarks present",
         "words": "Word count kept",
         "headings": "Headings kept",
-        "unsupported": "Markdown or HTML"
+        "unsupported": "Markdown or HTML",
+        "spec-invalid": "Parses as an API spec"
       },
       "checkPasses": "passes",
       "checkFails": "fails",
@@ -7584,6 +7586,10 @@
         "openRoot": "Root page"
       },
       "treeSaved": "Tree recipe saved. Every page without its own recipe is being re-read"
+    },
+    "spec": {
+      "line": "{kind} spec, stored as written",
+      "held": "A new version was held: {detail}"
     },
     "tree": {
       "root": "No pages synced under it yet | Syncs {n} page under this URL | Syncs {n} pages under this URL",

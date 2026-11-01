@@ -672,6 +672,7 @@ export type I18nTranslations = {
             "deleted": string;
             "closedVia": string;
         };
+        "specOperationsRemovedNote": string;
         "sourceRemovedNote": string;
         "sourceRestoredMessage": string;
         "sourceRecipeMessage": string;
@@ -1608,6 +1609,9 @@ export type I18nTranslations = {
             "proposalStale": string;
             "noBody": string;
             "draftUnavailable": string;
+            "splitSpec": string;
+            "specCrawl": string;
+            "kindChanged": string;
         };
     };
     "export": {
@@ -1777,6 +1781,7 @@ export type I18nTranslations = {
                 "gone": string;
                 "failing": string;
                 "held": string;
+                "breaking": string;
             };
         };
         "someone": string;

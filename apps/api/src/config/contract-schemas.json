@@ -10177,6 +10177,14 @@
       "webhookConfigured": {
         "type": "boolean"
       },
+      "spec": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ApiSpecKind"
+          }
+        ],
+        "nullable": true
+      },
       "recipe": {
         "$ref": "#/components/schemas/DocumentSourceRecipeState"
       },
@@ -10220,6 +10228,7 @@
       "failures",
       "retryAt",
       "webhookConfigured",
+      "spec",
       "recipe",
       "tree"
     ]
@@ -10253,6 +10262,10 @@
           "$ref": "#/components/schemas/SourceCheckFailure"
         }
       },
+      "heldDetail": {
+        "type": "string",
+        "nullable": true
+      },
       "structureChangedAt": {
         "type": "string",
         "nullable": true
@@ -10266,6 +10279,7 @@
       "proposal",
       "heldAt",
       "heldReasons",
+      "heldDetail",
       "structureChangedAt",
       "hasBody"
     ]
@@ -21158,7 +21172,8 @@
       "landmark",
       "words",
       "headings",
-      "unsupported"
+      "unsupported",
+      "spec-invalid"
     ]
   },
   "SourceCrawlLimits": {

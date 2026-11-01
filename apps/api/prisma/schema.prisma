@@ -2345,6 +2345,9 @@ model ConnectorLink {
   /// last good revision. held_reason = the failed checks, comma-separated.
   heldAt             DateTime? @map("held_at") @db.Timestamptz
   heldReason         String?   @map("held_reason")
+  /// Why, in the source's own words, when a check names one: the parser's
+  /// message for a spec that no longer parses (phase 4).
+  heldDetail         String?   @map("held_detail")
   /// sha256 of the last fetched body, stored at sourceBodyObjectKey.
   bodyHash           String?   @map("body_hash")
 

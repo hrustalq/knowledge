@@ -1,10 +1,12 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 import { Injectable } from '@nestjs/common';
-import { webCrawls, type ConnectorCapabilities, type ConnectorKind } from '@knowledge/contracts';
+import { load as parseYaml } from 'js-yaml';
+import { webCrawls, type ApiSpecKind, type ApiSpecSyntax, type ConnectorCapabilities, type ConnectorKind } from '@knowledge/contracts';
 import { t } from '../../i18n/t.js';
 import { extractSource, isHtmlBody, isMarkdownBody } from '../source-recipe.js';
 import { crawlScope, foldUrl, inScope, pageLinks, pathParents, sitemapLocs } from '../web-crawl.js';
 import { verifyHubSignature } from '../webhook-payload.js';
+import { specKindOf } from './repo-specs.js';
 import { retryAfterMs } from './web-failures.js';
 import {
   ConnectorRequestError,
@@ -207,7 +209,7 @@ export class WebAdapter implements ConnectorAdapter {
     const url = ref.url ?? ref.externalId;
     const known = readValidators(ref.knownVersion);
     const headers: Record<string, string> = {
-      accept: 'text/markdown, text/x-markdown, text/html;q=0.9, text/plain;q=0.8',
+      accept: 'text/markdown, text/x-markdown, text/html;q=0.9, application/json;q=0.8, application/yaml;q=0.8, text/plain;q=0.8',
       'user-agent': WEB_SOURCE_USER_AGENT,
       ...(known.etag ? { 'if-none-match': known.etag } : {}),
       ...(known.lastModified ? { 'if-modified-since': known.lastModified } : {}),
@@ -231,6 +233,10 @@ export class WebAdapter implements ConnectorAdapter {
     const version = writeValidators(res.headers.get('etag'), res.headers.get('last-modified'));
     const nextRef: ExternalRef = { ...ref, url, ...(version ? { version } : {}) };
     const type = (res.headers.get('content-type') ?? '').split(';')[0]!.trim().toLowerCase();
+
+    // An OpenAPI/AsyncAPI document (phase 4): stored as written, never through a recipe, so no `source`.
+    const spec = readSpec(body, type, url);
+    if (spec) return { ref: nextRef, title: spec.title ?? titleFromUrl(url), markdown: body, spec: { kind: spec.kind, syntax: spec.syntax }, warnings: [] };
 
     const source = { body, contentType: type, url: res.url || url };
     if (isMarkdownBody(type, url)) {
@@ -273,6 +279,34 @@ export function credentialHeaders(credential: string | null): Record<string, str
   if (!credential) return {};
   const header = /^([A-Za-z0-9-]+):\s*(\S.*)$/.exec(credential.trim());
   return header ? { [header[1]!.toLowerCase()]: header[2]! } : { authorization: `Bearer ${credential.trim()}` };
+}
+
+/**
+ * The spec a body is, by its top-level key (`specKindOf`), when it is served as
+ * JSON or YAML, or as text under a `.json` / `.yaml` / `.yml` path. Anything
+ * else — a JSON body that is not a spec included — is not one.
+ */
+export function readSpec(
+  body: string,
+  contentType: string,
+  url: string,
+): { kind: ApiSpecKind; syntax: ApiSpecSyntax; title: string | null } | null {
+  const path = new URL(url).pathname.toLowerCase();
+  const typed = /[/+](json|yaml|x-yaml)$/.test(contentType);
+  const named = /\.(json|ya?ml)$/.test(path) && (contentType === 'text/plain' || contentType === 'application/octet-stream' || contentType === '');
+  if (!typed && !named) return null;
+  let value: unknown;
+  try {
+    value = parseYaml(body); // JSON is YAML
+  } catch {
+    return null;
+  }
+  const kind = specKindOf(value);
+  if (!kind) return null;
+  const syntax: ApiSpecSyntax = /json$/.test(contentType) || path.endsWith('.json') || body.trimStart().startsWith('{') ? 'json' : 'yaml';
+  const info = (value as { info?: { title?: unknown } }).info;
+  const title = typeof info?.title === 'string' && info.title.trim() ? info.title.trim().slice(0, 200) : null;
+  return { kind, syntax, title };
 }
 
 /** ETag and Last-Modified, as one link version. */

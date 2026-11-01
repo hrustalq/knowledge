@@ -12710,6 +12710,7 @@ export interface components {
             failures: number;
             retryAt: string | null;
             webhookConfigured: boolean;
+            spec: components["schemas"]["ApiSpecKind"] | null;
             recipe: components["schemas"]["DocumentSourceRecipeState"];
             tree: {
                 rootDocumentId: string;
@@ -12722,6 +12723,7 @@ export interface components {
             proposal: components["schemas"]["SourceRecipeVersion"] | null;
             heldAt: string | null;
             heldReasons: components["schemas"]["SourceCheckFailure"][];
+            heldDetail: string | null;
             structureChangedAt: string | null;
             hasBody: boolean;
         };
@@ -15224,7 +15226,7 @@ export interface components {
             setAt: string;
         };
         /** @enum {string} */
-        SourceCheckFailure: "no-content" | "landmark" | "words" | "headings" | "unsupported";
+        SourceCheckFailure: "no-content" | "landmark" | "words" | "headings" | "unsupported" | "spec-invalid";
         SourceCrawlLimits: {
             maxPages: number;
             confirmFirst: number;

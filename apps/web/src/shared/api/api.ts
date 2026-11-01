@@ -21,6 +21,11 @@ const GLOSSARY_KEY = 'kn_glossary'
 const AI_PANEL_KEY = 'kn_aipanel'
 /** Whether page text fills the column or stops at the reading measure (#422). */
 const MEASURE_KEY = 'kn_measure'
+/**
+ * Whether the document page's info rail is shown (#698). Not `kn_rail`, which
+ * is the navigation rail's width.
+ */
+const PAGE_RAIL_KEY = 'kn_pagerail'
 /** Which branches of the sidebar page tree are open. */
 const TREE_OPEN_KEY = 'kn_tree'
 /**
@@ -50,6 +55,7 @@ interface SsrRequestContext {
   glossary: string | null
   aiPanel: string | null
   measure: string | null
+  pageRail: string | null
   treeOpen: string | null
   locale: Locale | null
   traceId: string | null
@@ -91,6 +97,7 @@ let clientFilterRail: string | null = null
 let clientGlossary: string | null = null
 let clientAiPanel: string | null = null
 let clientMeasure: string | null = null
+let clientPageRail: string | null = null
 let clientTreeOpen: string | null = null
 let clientLocale: Locale | null = null
 if (!import.meta.env.SSR) {
@@ -109,6 +116,7 @@ if (!import.meta.env.SSR) {
     clientGlossary = localStorage.getItem(GLOSSARY_KEY)
     clientAiPanel = localStorage.getItem(AI_PANEL_KEY)
     clientMeasure = localStorage.getItem(MEASURE_KEY)
+    clientPageRail = localStorage.getItem(PAGE_RAIL_KEY)
     clientTreeOpen = localStorage.getItem(TREE_OPEN_KEY)
     const storedLocale = localStorage.getItem(LANG_KEY)
     if (isLocale(storedLocale)) {
@@ -318,6 +326,28 @@ export function setFullWidth(full: boolean): void {
   try {
     localStorage.setItem(MEASURE_KEY, value)
     document.cookie = `${MEASURE_KEY}=${value}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Whether the document page's info rail is shown (#698), or `null` when the
+ * reader has never chosen — the page then seeds it from their role. Server-read
+ * because it decides the content column's width on the first painted frame.
+ */
+export function getPageRail(): boolean | null {
+  const raw = import.meta.env.SSR ? ssrContext()?.pageRail : clientPageRail
+  return raw === '1' ? true : raw === '0' ? false : null
+}
+
+export function setPageRail(open: boolean): void {
+  if (import.meta.env.SSR) return
+  const value = open ? '1' : '0'
+  clientPageRail = value
+  try {
+    localStorage.setItem(PAGE_RAIL_KEY, value)
+    document.cookie = `${PAGE_RAIL_KEY}=${value}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`
   } catch {
     /* ignore */
   }

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { getFullWidth, setFullWidth } from '@/shared/api/api'
+import { getFullWidth, getPageRail, setFullWidth, setPageRail } from '@/shared/api/api'
 
 /**
  * Chrome state that outlives a route but not a session.
@@ -49,6 +49,12 @@ export const useLayoutStore = defineStore('layout', {
      * server read too, so both sides draw the first frame at the same width.
      */
     fullWidth: getFullWidth(),
+    /**
+     * The document page's info rail shown or hidden (#698), seeded from
+     * `kn_pagerail` like `fullWidth`. `null` = never chosen: the page falls back
+     * to the reader's role, which this store does not know.
+     */
+    pageRail: getPageRail(),
   }),
   getters: {
     /**
@@ -75,6 +81,10 @@ export const useLayoutStore = defineStore('layout', {
     setFullWidth(full: boolean) {
       this.fullWidth = full
       setFullWidth(full)
+    },
+    setPageRail(open: boolean) {
+      this.pageRail = open
+      setPageRail(open)
     },
   },
 })

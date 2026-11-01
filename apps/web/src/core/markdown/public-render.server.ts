@@ -12,12 +12,14 @@
  * public:
  *
  * - Every link and asset is rewritten into the share's own scope. A page
- *   reference to a page the link reaches becomes a reader URL; anything else
- *   internal is unlinked, because nothing behind the app's login is reachable
- *   from here. Attachments go through the public attachment route, never
- *   `resolveAssetUrl` (whose routes authenticate a member by session cookie).
- * - Glossary linking and page-title references are off: both need the
- *   workspace's roster, which is exactly what a reader must not learn.
+ *   reference to a page the link reaches becomes a reader URL, however it was
+ *   spelled (`documentHrefTarget`, #705); anything else internal is unlinked,
+ *   because nothing behind the app's login is reachable from here. Attachments
+ *   go through the public attachment route, never `resolveAssetUrl` (whose
+ *   routes authenticate a member by session cookie).
+ * - Glossary linking is off: it needs the workspace's roster, which is exactly
+ *   what a reader must not learn. Page-title references resolve only against
+ *   the pages the caller hands in (`resolvePage`), the share's or the site's.
  *
  * Mermaid stays a `[data-kn-mermaid]` block for the client to upgrade.
  *
@@ -26,6 +28,7 @@
  */
 import { JSDOM } from 'jsdom'
 import createDOMPurify, { type WindowLike } from 'dompurify'
+import { documentHrefTarget, pageTitleHref, type PageRefResolver } from '@knowledge/contracts/content'
 import { parseAttachmentPath } from '@knowledge/contracts/publishing'
 import { markdownToHtml, SANITIZE_CONFIG, slugifyHeading, splitTitleHeading } from './render'
 import { parseScene, renderSceneToSvg } from './drawing'
@@ -49,6 +52,17 @@ export interface PublicRenderOptions {
    * to it. A `#heading` on the reference is kept unless the URL has its own.
    */
   pageHref: (documentId: string) => string | null
+  /**
+   * Resolves `[text](Page Title)` to a page id, among the pages this surface
+   * reaches and nothing else. Absent leaves title references as text.
+   */
+  resolvePage?: PageRefResolver
+  /**
+   * The app's own origin (`https://knowledge.example`). An absolute link on it
+   * that is not a page link is unlinked, like a relative app path; null or
+   * absent leaves absolute links alone.
+   */
+  appOrigin?: string | null
   /**
    * The public URL of an attachment of a page in scope, or null when there is
    * none (an export that left the file out): the image goes, a link keeps its
@@ -97,7 +111,8 @@ const DESCRIPTION_MAX = 160
 export function renderPublicMarkdown(markdown: string, options: PublicRenderOptions): PublicRenderResult {
   const doc = window.document
   const host = doc.createElement('div')
-  host.innerHTML = purify.sanitize(markdownToHtml(splitTitleHeading(markdown ?? '', options.title).body), { ...SANITIZE_CONFIG }) as unknown as string
+  const body = splitTitleHeading(markdown ?? '', options.title).body
+  host.innerHTML = purify.sanitize(markdownToHtml(body, { resolvePage: options.resolvePage }), { ...SANITIZE_CONFIG }) as unknown as string
 
   const headings = assignHeadingIds(host, options.idPrefix ?? '')
   wrapTables(host, doc)
@@ -159,17 +174,20 @@ function rewriteLinks(root: HTMLElement, doc: Document, options: PublicRenderOpt
     // File cards rewrite their own links below.
     if (a.closest(`[${KN.file}]`)) continue
     const href = a.getAttribute('href') ?? ''
-    const page = /^\/documents\/([0-9a-fA-F-]{36})(#.*)?$/.exec(href)
+    const page = documentHrefTarget(href)
     if (page) {
-      const target = options.pageHref(page[1])
+      const target = options.pageHref(page.documentId)
       if (!target) {
         const span = doc.createElement('span')
         span.append(...Array.from(a.childNodes))
         a.replaceWith(span)
         continue
       }
-      a.setAttribute('href', target.includes('#') ? target : target + (page[2] ?? ''))
+      a.setAttribute('href', target.includes('#') ? target : target + page.fragment)
       a.removeAttribute(KN.mention)
+      // An absolute app URL was rendered as an external link; it is ours now.
+      a.removeAttribute('target')
+      a.removeAttribute('rel')
       continue
     }
     const attachment = parseAttachmentPath(href)
@@ -183,8 +201,19 @@ function rewriteLinks(root: HTMLElement, doc: Document, options: PublicRenderOpt
       a.setAttribute('href', `#${options.idPrefix}${href.slice(1)}`)
       continue
     }
-    // Anything else on this origin is the app, behind its login.
-    if (href.startsWith('/') && !href.startsWith('//')) unwrap(a)
+    // Anything else on this origin is the app, behind its login. A bare
+    // relative href is a title reference nothing resolved: there are no
+    // relative paths between pages, so as a link it would only 404.
+    if ((href.startsWith('/') && !href.startsWith('//')) || pageTitleHref(href) || onOrigin(href, options.appOrigin)) unwrap(a)
+  }
+}
+
+function onOrigin(href: string, origin: string | null | undefined): boolean {
+  if (!origin || !/^https?:\/\//i.test(href)) return false
+  try {
+    return new URL(href).origin === new URL(origin).origin
+  } catch {
+    return false
   }
 }
 

@@ -1,6 +1,8 @@
 import { renderToString } from 'vue/server-renderer'
 import {
+  buildPageRefResolver,
   isApiErrorPayload,
+  pageRefKey,
   type Locale,
   type PublicSharePage,
   type PublicShareResponse,
@@ -95,6 +97,8 @@ const apiInternal = () => process.env.API_URL_INTERNAL ?? 'http://localhost:3000
 // What the *browser* calls: the same base the app uses (Caddy and the Vite
 // proxy both strip `/api`).
 const apiPublic = import.meta.env.VITE_API_URL ?? '/api'
+/** The app's own origin: a link on it that is not a page in scope is unlinked (#705). */
+const appOrigin = () => process.env.WEB_BASE_URL || null
 
 class ApiAnswer extends Error {
   readonly status: number
@@ -165,6 +169,9 @@ async function resolveShareView(url: string, ctx: PublicRenderContext): Promise<
     const body = renderPublicMarkdown(page.markdown, {
       title: page.title,
       pageHref: (id) => (inTree.has(id) ? shareHref(token, id, share.rootDocumentId) : null),
+      // Title references resolve among the shared pages only (#705).
+      resolvePage: buildPageRefResolver(share.tree),
+      appOrigin: appOrigin(),
       attachmentHref: (id, download) => `${apiPublic}${publicShareAttachmentPath(token, id)}${download ? '?download=1' : ''}`,
       embedSrc: (id) => `${apiPublic}/v1/public/shares/${enc}/embeds/${encodeURIComponent(id)}`,
       labels: labelsFor(ctx.locale),
@@ -295,12 +302,16 @@ async function resolveSiteView(url: string, ctx: PublicRenderContext): Promise<S
   // The tree no longer names every page (issue #204): the API says where each
   // page this body links to lives, among those this reader may see.
   const slugOf = new Map([...res.tree, ...res.page.links].map((n) => [n.documentId, n.slugPath]))
+  // Title references the API resolved among the pages this reader may see (#705).
+  const byRef = new Map(res.page.links.flatMap((l) => (l.ref ? [[pageRefKey(l.ref), l.documentId] as const] : [])))
   const body = renderPublicMarkdown(res.page.markdown, {
     title: res.page.title,
     pageHref: (id) => {
       const slugPath = slugOf.get(id)
       return slugPath === undefined ? null : hrefFor(id, slugPath)
     },
+    resolvePage: (title) => byRef.get(pageRefKey(title)) ?? null,
+    appOrigin: appOrigin(),
     attachmentHref: (id, download) =>
       `${apiPublic}${publicSiteAttachmentPath(site.id, version.id, id)}${download ? '?download=1' : ''}`,
     embedSrc: (id) => `${apiPublic}/v1/public/sites/${site.id}/versions/${version.id}/embeds/${encodeURIComponent(id)}`,

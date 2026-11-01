@@ -9,6 +9,8 @@ import {
   normalizeSiteTheme,
   siteHomeDocumentId,
   sitePagePath,
+  buildPageRefResolver,
+  extractPageLinks,
   siteRootUrl,
   siteViewerCanSee,
   type PublicSiteLogo,
@@ -37,7 +39,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const MAX_PATH_CHARS = 2000;
 
 /** Bumped when the resolve answer changes shape, so every cached render goes stale. */
-const RESOLVE_FORMAT_VERSION = 4;
+const RESOLVE_FORMAT_VERSION = 5;
 
 /**
  * A snapshot row without its search text (up to 100k characters a page),
@@ -117,8 +119,6 @@ export function treeLevel(rows: SnapshotRow[], parentIds: ReadonlySet<string | n
     }));
 }
 
-/** `/documents/<id>` references in a page body: the targets its links and mentions name. */
-const PAGE_LINK_RE = /\/documents\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/g;
 
 /** How a request names a site: its slug (path mode, or a base-domain host), or a custom hostname. */
 export type SiteKey = { slug: string } | { hostname: string };
@@ -590,13 +590,21 @@ export class PublicSitesService {
     };
   }
 
-  /** The visible pages a body links to, with where each lives. */
+  /**
+   * The visible pages a body links to, with where each lives. One rule with the
+   * reader (#705): `extractPageLinks` finds both `/documents/<id>` links, on any
+   * origin, and title references, which resolve among the visible pages only.
+   */
   private pageLinks(markdown: string, byId: Map<string, SnapshotRow>): PublicSitePage['links'] {
-    const ids = new Set(Array.from(markdown.matchAll(PAGE_LINK_RE), (m) => m[1].toLowerCase()));
-    return [...ids].flatMap((id) => {
-      const row = byId.get(id);
-      return row ? [{ documentId: row.documentId, slugPath: row.slugPath }] : [];
-    });
+    const resolve = buildPageRefResolver([...byId.values()]);
+    const out = new Map<string, PublicSitePage['links'][number]>();
+    for (const link of extractPageLinks(markdown)) {
+      const row = byId.get(link.kind === 'id' ? link.documentId : (resolve(link.title) ?? ''));
+      if (!row) continue;
+      const ref = link.kind === 'title' ? link.title : undefined;
+      out.set(`${row.documentId} ${ref ?? ''}`, { documentId: row.documentId, slugPath: row.slugPath, ...(ref ? { ref } : {}) });
+    }
+    return [...out.values()];
   }
 
   /**

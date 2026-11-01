@@ -49,6 +49,10 @@ export const useProjectsStore = defineStore('projects', {
         this.queryClient,
         apiQueryOptions('/v1/projects', { query: { workspaceId: getWorkspaceId() } }),
         (res) => {
+          // A one-project roster is a choice with one option, so the first
+          // load opens the rail on its pages (#671). Only the first: a roster
+          // that shrinks to one mid-session leaves the rail where it is.
+          if (!this.loaded && res.projects.length === 1) useSidebarNavStore().land('pages')
           this.items = res.projects
           this.loaded = true
 

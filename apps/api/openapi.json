@@ -7099,6 +7099,78 @@
         ]
       }
     },
+    "/v1/documents/{id}/backlinks": {
+      "get": {
+        "operationId": "DocumentsController_backlinks",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "anchor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentBacklinksResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Pages linking to this one (#673), only those the caller may open; anchor = one heading",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
     "/v1/documents/{id}/graph": {
       "get": {
         "operationId": "DocumentsController_graph",
@@ -14171,7 +14243,8 @@
                 "document",
                 "verification",
                 "access",
-                "job"
+                "job",
+                "source"
               ]
             }
           },
@@ -21940,6 +22013,1236 @@
         ]
       }
     },
+    "/v1/sources/settings": {
+      "get": {
+        "operationId": "WebSourcesController_getSettings",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceSettingsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The workspace's crawl limits: what it asks for, the deployment's ceiling, and what applies",
+        "tags": [
+          "sources"
+        ]
+      },
+      "put": {
+        "operationId": "WebSourcesController_setSettings",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSourceSettingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceSettingsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Set the crawl limits; null inherits the WEB_SOURCE_CRAWL_* env, which a value may only lower",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
+    "/v1/sources": {
+      "post": {
+        "operationId": "WebSourcesController_link",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSourcePageDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateSourcePageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The URL could not be read; `details.needsCredential` when the host refused without one"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create a source-backed page from a URL (markdown or HTML). The first version is read now; the page is read-only and follows the source on its interval, webhook or Sync now",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
+    "/v1/documents/{id}/source": {
+      "get": {
+        "operationId": "WebSourcesController_info",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentSourceInfo"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The page's source: where it reads from, when it last checked, paused, failing or behind",
+        "tags": [
+          "sources"
+        ]
+      },
+      "patch": {
+        "operationId": "WebSourcesController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDocumentSourceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentSourceInfo"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "How often the source is checked, and what a new version does to pages linking it",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
+    "/v1/documents/{id}/source/pause": {
+      "post": {
+        "operationId": "WebSourcesController_pause",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentSourceInfo"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Stop writing new versions; they are counted until the source is resumed",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
+    "/v1/documents/{id}/source/resume": {
+      "post": {
+        "operationId": "WebSourcesController_resume",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentSourceInfo"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Follow the source again: a sync is queued and writes whatever it says now",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
+    "/v1/documents/{id}/source/restore": {
+      "post": {
+        "operationId": "WebSourcesController_restore",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreDocumentSourceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentSourceInfo"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Restore an earlier revision of the page. Pauses the source and alerts its owner",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
+    "/v1/documents/{id}/source/recipe/preview": {
+      "post": {
+        "operationId": "WebSourcesController_previewRecipe",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewSourceRecipeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceRecipePreview"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "What a recipe makes of the last fetched version, beside the page as it reads now, with its check results",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
+    "/v1/documents/{id}/source/recipe": {
+      "put": {
+        "operationId": "WebSourcesController_saveRecipe",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveSourceRecipeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentSourceInfo"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The recipe fails its checks on the current version (`details.failures`), or the proposal is stale"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Save the page's extraction recipe, approving a drafted one or not. The current version is re-read through it",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
+    "/v1/documents/{id}/source/recipe/draft": {
+      "post": {
+        "operationId": "WebSourcesController_draftRecipe",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentSourceInfo"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Ask the interpreter agent to draft a recipe for the last fetched version; it waits for review",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
+    "/v1/documents/{id}/source/recipe/dismiss": {
+      "post": {
+        "operationId": "WebSourcesController_dismissRecipe",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentSourceInfo"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Keep the current recipe: reject the drafted one and clear the layout-changed note. A held version stays held",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
+    "/v1/connectors/{id}/source/recipe": {
+      "get": {
+        "operationId": "WebSourcesController_treeRecipe",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceTreeRecipeState"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The connector's tree recipe, a drafted one waiting for review, and the crawled pages a preview can read",
+        "tags": [
+          "sources"
+        ]
+      },
+      "put": {
+        "operationId": "WebSourcesController_saveTreeRecipe",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveSourceTreeRecipeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceTreeRecipeState"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The recipe fails its checks on that page (`details.failures`), or the proposal is stale"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Save the connector's tree recipe, approving a drafted one or not. Checked on one page (default: the root); a pull is queued that re-reads every page without its own recipe",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
+    "/v1/connectors/{id}/source/recipe/preview": {
+      "post": {
+        "operationId": "WebSourcesController_previewTreeRecipe",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewSourceTreeRecipeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceRecipePreview"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "What a tree recipe makes of one crawled page's last fetched version (default: the root), with its check results",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
+    "/v1/connectors/{id}/source/recipe/draft": {
+      "post": {
+        "operationId": "WebSourcesController_draftTreeRecipe",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftSourceTreeRecipeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceTreeRecipeState"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Ask the interpreter agent to draft a tree recipe from one crawled page's last version (default: the root)",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
+    "/v1/connectors/{id}/source/recipe/dismiss": {
+      "post": {
+        "operationId": "WebSourcesController_dismissTreeRecipe",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceTreeRecipeState"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Keep the current tree recipe: reject the drafted one",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
+    "/v1/documents/{id}/source/webhook": {
+      "post": {
+        "operationId": "WebSourcesController_webhook",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentSourceWebhookResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A new webhook signing secret for the page's source, shown once; the old one stops working",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
     "/v1/connectors/github/installations": {
       "get": {
         "operationId": "GithubController_installations",
@@ -23056,7 +24359,8 @@
                 "linear",
                 "zendesk",
                 "intercom",
-                "figma"
+                "figma",
+                "web"
               ],
               "type": "string"
             }
@@ -38890,7 +40194,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.41.0",
+    "version": "0.42.0",
     "contact": {}
   },
   "tags": [],
@@ -39596,7 +40900,8 @@
                 "memos",
                 "conflicts",
                 "assistant",
-                "git"
+                "git",
+                "sources"
               ]
             }
           }
@@ -41300,7 +42605,8 @@
                 "document",
                 "verification",
                 "access",
-                "job"
+                "job",
+                "source"
               ]
             }
           },
@@ -41343,7 +42649,8 @@
               "document",
               "verification",
               "access",
-              "job"
+              "job",
+              "source"
             ],
             "description": "Narrows `all` to one category, so clearing comments leaves reviews unread."
           }
@@ -42893,7 +44200,8 @@
               "linear",
               "zendesk",
               "intercom",
-              "figma"
+              "figma",
+              "web"
             ]
           },
           "name": {
@@ -43328,6 +44636,277 @@
           }
         }
       },
+      "UpdateSourceSettingsDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "maxPages": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 1,
+            "description": "Pages one crawl reads; null = WEB_SOURCE_CRAWL_MAX_PAGES"
+          },
+          "confirmFirst": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "description": "New pages a first crawl may create before it waits for a person; null = WEB_SOURCE_CRAWL_CONFIRM_FIRST"
+          },
+          "confirmChange": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "description": "Pages a later crawl may add plus drop before it waits for a person; null = WEB_SOURCE_CRAWL_CONFIRM_CHANGE"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "maxPages",
+          "confirmFirst",
+          "confirmChange"
+        ]
+      },
+      "CreateSourcePageDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "parentId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "url": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "A markdown file or an HTML page, https"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "The page title. Empty: the source's own title"
+          },
+          "intervalMinutes": {
+            "type": "number",
+            "nullable": true,
+            "enum": [
+              15,
+              60,
+              360,
+              1440
+            ],
+            "description": "Minutes between checks; null = only on demand. Omitted reads as 60"
+          },
+          "credential": {
+            "type": "string",
+            "maxLength": 4000,
+            "description": "For a host that needs one: a token (sent as Bearer) or `Header-Name: value`. Saved as a connection for the host"
+          },
+          "crawl": {
+            "type": "boolean",
+            "description": "Also sync every page under this URL, nested beneath this one. Omitted reads as false"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "projectId",
+          "url"
+        ]
+      },
+      "UpdateDocumentSourceDto": {
+        "type": "object",
+        "properties": {
+          "intervalMinutes": {
+            "type": "number",
+            "nullable": true,
+            "enum": [
+              15,
+              60,
+              360,
+              1440
+            ],
+            "description": "Minutes between checks; null = only on demand"
+          },
+          "misalignment": {
+            "type": "string",
+            "enum": [
+              "flag",
+              "propose"
+            ],
+            "description": "A page linking this source that a new version may have made wrong: flagged for its owner, or flagged with a proposed fix"
+          }
+        }
+      },
+      "RestoreDocumentSourceDto": {
+        "type": "object",
+        "properties": {
+          "revisionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "An earlier revision of this page"
+          }
+        },
+        "required": [
+          "revisionId"
+        ]
+      },
+      "SourceRecipeRuleDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "drop-section",
+              "rename-heading",
+              "rewrite-links"
+            ]
+          },
+          "heading": {
+            "type": "string",
+            "description": "drop-section: the heading whose section is removed"
+          },
+          "from": {
+            "type": "string",
+            "description": "rename-heading: the heading text; rewrite-links: the link prefix"
+          },
+          "to": {
+            "type": "string",
+            "description": "rename-heading: the new text; rewrite-links: the replacement prefix"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "SourceRecipeDto": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "description": "CSS selectors for the content, first that matches wins. Empty = article scoring",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "strip": {
+            "description": "CSS selectors removed first",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "headings": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            },
+            "description": "h1…h6 → the markdown level (1–6) it becomes"
+          },
+          "landmarks": {
+            "description": "CSS selectors that must each match, or the version is held",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SourceRecipeRuleDto"
+            }
+          }
+        },
+        "required": [
+          "content",
+          "strip",
+          "headings",
+          "landmarks",
+          "rules"
+        ]
+      },
+      "PreviewSourceRecipeDto": {
+        "type": "object",
+        "properties": {
+          "recipe": {
+            "$ref": "#/components/schemas/SourceRecipeDto"
+          }
+        },
+        "required": [
+          "recipe"
+        ]
+      },
+      "SaveSourceRecipeDto": {
+        "type": "object",
+        "properties": {
+          "recipe": {
+            "$ref": "#/components/schemas/SourceRecipeDto"
+          },
+          "proposalId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The drafted recipe this approves, if any"
+          }
+        },
+        "required": [
+          "recipe"
+        ]
+      },
+      "PreviewSourceTreeRecipeDto": {
+        "type": "object",
+        "properties": {
+          "recipe": {
+            "$ref": "#/components/schemas/SourceRecipeDto"
+          },
+          "documentId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "A crawled page of this connector to read the last version of. Omitted: the root page"
+          }
+        },
+        "required": [
+          "recipe"
+        ]
+      },
+      "SaveSourceTreeRecipeDto": {
+        "type": "object",
+        "properties": {
+          "recipe": {
+            "$ref": "#/components/schemas/SourceRecipeDto"
+          },
+          "proposalId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The drafted recipe this approves, if any"
+          },
+          "documentId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "A crawled page of this connector to read the last version of. Omitted: the root page. Its checks must pass for the recipe to be saved"
+          }
+        },
+        "required": [
+          "recipe"
+        ]
+      },
+      "DraftSourceTreeRecipeDto": {
+        "type": "object",
+        "properties": {
+          "documentId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "A crawled page of this connector to read the last version of. Omitted: the root page"
+          }
+        }
+      },
       "PutWorkItemRulesDto": {
         "type": "object",
         "properties": {
@@ -43450,7 +45029,8 @@
               "linear",
               "zendesk",
               "intercom",
-              "figma"
+              "figma",
+              "web"
             ]
           },
           "site": {
@@ -43497,7 +45077,8 @@
               "linear",
               "zendesk",
               "intercom",
-              "figma"
+              "figma",
+              "web"
             ]
           },
           "projectId": {
@@ -47318,6 +48899,9 @@
           },
           "lint": {
             "$ref": "#/components/schemas/AgentRunLint"
+          },
+          "sourceChange": {
+            "$ref": "#/components/schemas/AgentRunSourceChange"
           }
         }
       },
@@ -47376,6 +48960,31 @@
           "headRef",
           "baseRef",
           "author"
+        ]
+      },
+      "AgentRunSourceChange": {
+        "type": "object",
+        "properties": {
+          "documentId": {
+            "type": "string"
+          },
+          "fromRevisionId": {
+            "type": "string"
+          },
+          "toRevisionId": {
+            "type": "string"
+          },
+          "flagged": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "documentId",
+          "fromRevisionId",
+          "toRevisionId"
         ]
       },
       "AgentRunStatus": {
@@ -47502,7 +49111,8 @@
           "event",
           "webhook",
           "report",
-          "merge-request"
+          "merge-request",
+          "source"
         ]
       },
       "AgentScheduleKind": {
@@ -48703,7 +50313,9 @@
           "test-suite",
           "test-fixture-ranking",
           "transcription",
-          "memo"
+          "memo",
+          "source-recipe",
+          "source-judge"
         ]
       },
       "AiUsageResponse": {
@@ -53928,7 +55540,8 @@
           "linear",
           "zendesk",
           "intercom",
-          "figma"
+          "figma",
+          "web"
         ]
       },
       "ConnectionResource": {
@@ -54397,7 +56010,8 @@
           "linear",
           "zendesk",
           "intercom",
-          "figma"
+          "figma",
+          "web"
         ]
       },
       "ConnectorLinkSummary": {
@@ -55469,6 +57083,21 @@
           "requestedExpiresAt"
         ]
       },
+      "CreateSourcePageResponse": {
+        "type": "object",
+        "properties": {
+          "documentId": {
+            "type": "string"
+          },
+          "connectorId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "documentId",
+          "connectorId"
+        ]
+      },
       "CreateUploadResponse": {
         "type": "object",
         "properties": {
@@ -55855,6 +57484,51 @@
           "ancestors"
         ]
       },
+      "DocumentBacklink": {
+        "type": "object",
+        "properties": {
+          "documentId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string",
+            "nullable": true
+          },
+          "anchors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "documentId",
+          "title",
+          "projectId",
+          "anchors"
+        ]
+      },
+      "DocumentBacklinksResponse": {
+        "type": "object",
+        "properties": {
+          "documentId": {
+            "type": "string"
+          },
+          "backlinks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentBacklink"
+            }
+          }
+        },
+        "required": [
+          "documentId",
+          "backlinks"
+        ]
+      },
       "DocumentCategory": {
         "type": "string",
         "enum": [
@@ -56136,6 +57810,184 @@
           "lowThreshold"
         ]
       },
+      "DocumentSourceInfo": {
+        "type": "object",
+        "properties": {
+          "documentId": {
+            "type": "string"
+          },
+          "connectorId": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "intervalMinutes": {
+            "type": "number",
+            "nullable": true
+          },
+          "pausedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "aheadCount": {
+            "type": "number"
+          },
+          "lastCheckedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "syncedRevisionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "headRevisionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "failures": {
+            "type": "number"
+          },
+          "retryAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "webhookConfigured": {
+            "type": "boolean"
+          },
+          "spec": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApiSpecKind"
+              }
+            ],
+            "nullable": true
+          },
+          "recipe": {
+            "$ref": "#/components/schemas/DocumentSourceRecipeState"
+          },
+          "tree": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "rootDocumentId": {
+                    "type": "string"
+                  },
+                  "pages": {
+                    "type": "number"
+                  },
+                  "awaitingRunId": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "rootDocumentId",
+                  "pages",
+                  "awaitingRunId"
+                ]
+              }
+            ],
+            "nullable": true
+          },
+          "misalignment": {
+            "$ref": "#/components/schemas/SourceMisalignmentMode"
+          }
+        },
+        "required": [
+          "documentId",
+          "connectorId",
+          "url",
+          "host",
+          "intervalMinutes",
+          "pausedAt",
+          "aheadCount",
+          "lastCheckedAt",
+          "syncedRevisionId",
+          "headRevisionId",
+          "failures",
+          "retryAt",
+          "webhookConfigured",
+          "spec",
+          "recipe",
+          "tree",
+          "misalignment"
+        ]
+      },
+      "DocumentSourceRecipeState": {
+        "type": "object",
+        "properties": {
+          "active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceRecipeVersion"
+              }
+            ],
+            "nullable": true
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceRecipeVersion"
+              }
+            ],
+            "nullable": true
+          },
+          "heldAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "heldReasons": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SourceCheckFailure"
+            }
+          },
+          "heldDetail": {
+            "type": "string",
+            "nullable": true
+          },
+          "structureChangedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "hasBody": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "active",
+          "proposal",
+          "heldAt",
+          "heldReasons",
+          "heldDetail",
+          "structureChangedAt",
+          "hasBody"
+        ]
+      },
+      "DocumentSourceWebhookResponse": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "secret": {
+            "type": "string"
+          },
+          "header": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "secret",
+          "header"
+        ]
+      },
       "DocumentSummary": {
         "type": "object",
         "properties": {
@@ -56178,6 +58030,30 @@
           },
           "kind": {
             "$ref": "#/components/schemas/ApiDocumentKind"
+          },
+          "sourceBacked": {
+            "type": "boolean"
+          },
+          "sourceSync": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "host": {
+                    "type": "string"
+                  },
+                  "checkedAt": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "host",
+                  "checkedAt"
+                ]
+              }
+            ],
+            "nullable": true
           },
           "verifiedAt": {
             "type": "string",
@@ -56382,6 +58258,30 @@
           },
           "kind": {
             "$ref": "#/components/schemas/ApiDocumentKind"
+          },
+          "sourceBacked": {
+            "type": "boolean"
+          },
+          "sourceSync": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "host": {
+                    "type": "string"
+                  },
+                  "checkedAt": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "host",
+                  "checkedAt"
+                ]
+              }
+            ],
+            "nullable": true
           },
           "verifiedAt": {
             "type": "string",
@@ -61024,6 +62924,9 @@
               },
               "job": {
                 "type": "number"
+              },
+              "source": {
+                "type": "number"
               }
             },
             "required": [
@@ -61033,7 +62936,8 @@
               "document",
               "verification",
               "access",
-              "job"
+              "job",
+              "source"
             ]
           }
         },
@@ -62682,7 +64586,8 @@
           "document",
           "verification",
           "access",
-          "job"
+          "job",
+          "source"
         ]
       },
       "NotificationEntry": {
@@ -62803,6 +64708,7 @@
           "owner",
           "assigned",
           "review-requested",
+          "alert",
           "mention"
         ]
       },
@@ -62886,6 +64792,9 @@
               },
               "job": {
                 "type": "number"
+              },
+              "source": {
+                "type": "number"
               }
             },
             "required": [
@@ -62895,7 +64804,8 @@
               "document",
               "verification",
               "access",
-              "job"
+              "job",
+              "source"
             ]
           }
         },
@@ -66982,6 +68892,43 @@
           "setAt"
         ]
       },
+      "SourceCheckFailure": {
+        "type": "string",
+        "enum": [
+          "no-content",
+          "landmark",
+          "words",
+          "headings",
+          "unsupported",
+          "spec-invalid"
+        ]
+      },
+      "SourceCrawlLimits": {
+        "type": "object",
+        "properties": {
+          "maxPages": {
+            "type": "number"
+          },
+          "confirmFirst": {
+            "type": "number"
+          },
+          "confirmChange": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "maxPages",
+          "confirmFirst",
+          "confirmChange"
+        ]
+      },
+      "SourceMisalignmentMode": {
+        "type": "string",
+        "enum": [
+          "flag",
+          "propose"
+        ]
+      },
       "SourcePolicy": {
         "type": "object",
         "properties": {
@@ -67021,6 +68968,336 @@
           "createdAt",
           "updatedAt",
           "createdBy"
+        ]
+      },
+      "SourceRecipe": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "strip": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "headings": {
+            "type": "object",
+            "properties": {
+              "h1": {
+                "type": "number"
+              },
+              "h2": {
+                "type": "number"
+              },
+              "h3": {
+                "type": "number"
+              },
+              "h4": {
+                "type": "number"
+              },
+              "h5": {
+                "type": "number"
+              },
+              "h6": {
+                "type": "number"
+              }
+            }
+          },
+          "landmarks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SourceRecipeRule"
+            }
+          }
+        },
+        "required": [
+          "content",
+          "strip",
+          "headings",
+          "landmarks",
+          "rules"
+        ]
+      },
+      "SourceRecipePreview": {
+        "type": "object",
+        "properties": {
+          "before": {
+            "type": "string"
+          },
+          "after": {
+            "type": "string"
+          },
+          "failures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SourceCheckFailure"
+            }
+          },
+          "hits": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "before",
+          "after",
+          "failures",
+          "hits"
+        ]
+      },
+      "SourceRecipeRule": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "drop-section"
+                ]
+              },
+              "heading": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "heading"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "rename-heading"
+                ]
+              },
+              "from": {
+                "type": "string"
+              },
+              "to": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "from",
+              "to"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "rewrite-links"
+                ]
+              },
+              "from": {
+                "type": "string"
+              },
+              "to": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "from",
+              "to"
+            ]
+          }
+        ]
+      },
+      "SourceRecipeStatus": {
+        "type": "string",
+        "enum": [
+          "proposed",
+          "active",
+          "superseded",
+          "rejected"
+        ]
+      },
+      "SourceRecipeVersion": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "number"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SourceRecipeStatus"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "agent",
+              "person"
+            ]
+          },
+          "connectorScope": {
+            "type": "boolean"
+          },
+          "recipe": {
+            "$ref": "#/components/schemas/SourceRecipe"
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "status",
+          "origin",
+          "connectorScope",
+          "recipe",
+          "note",
+          "createdAt"
+        ]
+      },
+      "SourceSettingsResponse": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string"
+          },
+          "requested": {
+            "type": "object",
+            "properties": {
+              "maxPages": {
+                "type": "number",
+                "nullable": true
+              },
+              "confirmFirst": {
+                "type": "number",
+                "nullable": true
+              },
+              "confirmChange": {
+                "type": "number",
+                "nullable": true
+              }
+            },
+            "required": [
+              "maxPages",
+              "confirmFirst",
+              "confirmChange"
+            ]
+          },
+          "ceiling": {
+            "$ref": "#/components/schemas/SourceCrawlLimits"
+          },
+          "effective": {
+            "$ref": "#/components/schemas/SourceCrawlLimits"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "requested",
+          "ceiling",
+          "effective"
+        ]
+      },
+      "SourceTreeRecipePage": {
+        "type": "object",
+        "properties": {
+          "documentId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "hasBody": {
+            "type": "boolean"
+          },
+          "ownRecipe": {
+            "type": "boolean"
+          },
+          "heldAt": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "documentId",
+          "title",
+          "url",
+          "hasBody",
+          "ownRecipe",
+          "heldAt"
+        ]
+      },
+      "SourceTreeRecipeState": {
+        "type": "object",
+        "properties": {
+          "connectorId": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "rootDocumentId": {
+            "type": "string",
+            "nullable": true
+          },
+          "active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceRecipeVersion"
+              }
+            ],
+            "nullable": true
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceRecipeVersion"
+              }
+            ],
+            "nullable": true
+          },
+          "pages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SourceTreeRecipePage"
+            }
+          }
+        },
+        "required": [
+          "connectorId",
+          "url",
+          "host",
+          "rootDocumentId",
+          "active",
+          "proposal",
+          "pages"
         ]
       },
       "SourceVerificationState": {
@@ -68729,7 +71006,8 @@
           "person",
           "drift",
           "curator",
-          "mcp"
+          "mcp",
+          "source"
         ]
       },
       "VerifyEmailResponse": {
@@ -69723,7 +72001,8 @@
           "memos",
           "conflicts",
           "assistant",
-          "git"
+          "git",
+          "sources"
         ]
       },
       "WorkspaceFeaturesResponse": {
@@ -69737,11 +72016,18 @@
             "items": {
               "$ref": "#/components/schemas/WorkspaceFeature"
             }
+          },
+          "unavailable": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceFeature"
+            }
           }
         },
         "required": [
           "workspaceId",
-          "disabled"
+          "disabled",
+          "unavailable"
         ]
       },
       "WorkspaceGraphNode": {

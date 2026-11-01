@@ -26,10 +26,13 @@ import {
   Activity as ActivityIcon,
   BadgeCheck,
   Braces,
+  Check,
+  ChevronDown,
   Download,
   Flag,
   Gauge,
   GitMerge,
+  Globe,
   History,
   LayoutTemplate,
   Lock,
@@ -38,7 +41,9 @@ import {
   NotepadTextDashed,
   Plug,
   Info,
+  Link2,
   Network,
+  PanelRight,
   Pencil,
   Scale,
   Send,
@@ -51,6 +56,7 @@ import {
 import { toast } from 'vue-sonner'
 import type {
   CodeUsagesResponse,
+  DocumentBacklinksResponse,
   ComponentDeclarationView,
   DocumentConnectorResponse,
   DocumentContentResponse,
@@ -114,6 +120,8 @@ import { LazyGraphView as GraphView } from '@/entities/graph'
 import { WorkflowRail } from '@/entities/workflow'
 import { ConnectorRail } from '@/entities/connector'
 import ConflictsRail from '@/modules/documents/components/ConflictsRail.vue'
+import BacklinksRail from '@/modules/documents/components/BacklinksRail.vue'
+import SourceRail from '@/modules/documents/components/SourceRail.vue'
 import KnowledgeIssuesRail from '@/modules/documents/components/KnowledgeIssuesRail.vue'
 import { QualityRail } from '@/entities/insight'
 import { PageInsightsRail } from '@/entities/insight'
@@ -140,6 +148,24 @@ const queryClient = useQueryClient()
 const auth = useAuthStore()
 const layout = useLayoutStore()
 const store = useDocumentsStore()
+
+/*
+ * The info rail shown or hidden (#698): the reader's choice once made
+ * (`kn_pagerail`), else their role — a viewer or guest came to read, and most
+ * of the rail is editor actions. The role is loaded before render on both
+ * sides, so SSR and hydration agree. A `?tab=` link shows a hidden rail for
+ * that visit only and leaves the stored choice alone.
+ */
+const tabShowsRail = ref(typeof route.query.tab === 'string')
+watch(
+  () => route.query.tab,
+  (tab) => (tabShowsRail.value = typeof tab === 'string'),
+)
+const railShown = computed(() => tabShowsRail.value || (layout.pageRail ?? auth.canEdit))
+function setRailShown(shown: boolean) {
+  tabShowsRail.value = false
+  layout.setPageRail(shown)
+}
 const events = useEventsStore()
 
 const RAIL_WIDGETS = [
@@ -150,6 +176,8 @@ const RAIL_WIDGETS = [
   // about the page, so it heads the rail, and a widget like the rest so it
   // folds away and is remembered the same way.
   { id: 'verification', label: t('verification.title'), icon: BadgeCheck, expandable: false },
+  // Where a source-backed page reads from, and pause / resume / sync (#674): only on one.
+  { id: 'source', label: t('rail.source'), icon: Globe, expandable: false },
   { id: 'overview', label: t('rail.overview'), icon: Info, expandable: false },
   // Comments with no place on the text (#439): on the page as a whole, or on a
   // passage edited away. Only while there are any.
@@ -165,6 +193,8 @@ const RAIL_WIDGETS = [
   // Passages another page contradicts (#81): only while one is open.
   { id: 'conflicts', label: t('rail.conflicts'), icon: Scale, expandable: false },
   { id: 'graph', label: t('rail.graph'), icon: Share2, expandable: true },
+  // Pages whose text links here (#673): only while there are any.
+  { id: 'backlinks', label: t('rail.linkedFrom'), icon: Link2, expandable: false },
   // How often the page is read and by whom — people, the assistant, agents (#79).
   { id: 'insights', label: t('rail.insights'), icon: Eye, expandable: false },
   // Where the code a component page declares is used (#236): only on a page
@@ -205,7 +235,7 @@ onMounted(() => {
  */
 // A section the workspace switched off (#604) takes its rail row with it.
 const features = useFeaturesStore()
-const WIDGET_FEATURE: Partial<Record<RailWidget, WorkspaceFeature>> = { conflicts: 'conflicts', insights: 'analytics', workflows: 'workflows' }
+const WIDGET_FEATURE: Partial<Record<RailWidget, WorkspaceFeature>> = { conflicts: 'conflicts', insights: 'analytics', workflows: 'workflows', source: 'sources' }
 
 const visibleWidgets = computed(() =>
   RAIL_WIDGETS.filter(
@@ -213,8 +243,12 @@ const visibleWidgets = computed(() =>
       (!WIDGET_FEATURE[w.id] || features.isOn(WIDGET_FEATURE[w.id]!)) &&
       (w.id !== 'frontmatter' || !!content.value?.frontmatter) &&
       (w.id !== 'used-by' || !!declaration.value) &&
+      (w.id !== 'source' || sourceBacked.value) &&
+      // The source's own connector is the Source widget, not a second row.
+      (w.id !== 'connectors' || !sourceBacked.value) &&
       (w.id !== 'quality' || !!quality.value?.score) &&
       (w.id !== 'conflicts' || openConflicts.value > 0) &&
+      (w.id !== 'backlinks' || backlinkCount.value > 0) &&
       (w.id !== 'comments' || unplacedThreads.value.length > 0) &&
       (w.id !== 'operations' || isSpec.value),
   ),
@@ -325,6 +359,8 @@ onMounted(() => whenIdle(() => (railReady.value = true), 1000))
 // hands it the detail and takes the detail back. Archived pages are
 // read-only: the Edit action goes, and the editor route sends you back here.
 const archived = computed(() => !!detail.value?.document.archivedAt)
+/** Its body belongs to an external source (#674): only that source writes it, so nothing here offers to. */
+const sourceBacked = computed(() => !!detail.value?.document.sourceBacked)
 
 /* ------------------------------------------------------------ page data */
 
@@ -685,6 +721,13 @@ const usagesPreview = useQuery(
   })),
 )
 
+const backlinksPreview = useQuery(
+  computed(() => ({ ...apiQueryOptions('/v1/documents/{id}/backlinks', { path: { id: documentId.value } }), enabled: railReady.value })),
+)
+const backlinkCount = computed(
+  () => (backlinksPreview.data.value as DocumentBacklinksResponse | undefined)?.backlinks.length ?? 0,
+)
+
 const previewFor = computed<Record<RailWidget, string | null>>(() => {
   const revisions = (revisionsPreview.data.value as ListRevisionsResponse | undefined)?.revisions
   const mrs = (mergeRequestsPreview.data.value as ListMergeRequestsResponse | undefined)?.mergeRequests
@@ -717,6 +760,11 @@ const previewFor = computed<Record<RailWidget, string | null>>(() => {
     connectors: connectorLinks?.length
       ? (connectorLinks[0].connectorName ?? null)
       : null,
+    // Where it reads from; the widget says whether it is following (#674).
+    source: (() => {
+      const url = connectorLinks?.find((l) => l.kind === 'web')?.link.externalUrl
+      return url ? new URL(url).host : null
+    })(),
     frontmatter: frontmatterKeys ? t('count.fields', { n: frontmatterKeys }, frontmatterKeys) : null,
     revisions: revisions ? t('count.revisions', { n: revisions.length }, revisions.length) : null,
     'merge-requests': mrs
@@ -727,6 +775,7 @@ const previewFor = computed<Record<RailWidget, string | null>>(() => {
           : 'none'
       : null,
     conflicts: openConflicts.value ? String(openConflicts.value) : null,
+    backlinks: backlinkCount.value ? t('count.backlinks', { n: backlinkCount.value }, backlinkCount.value) : null,
     comments: unplacedOpen.value
       ? t('count.openComments', { n: unplacedOpen.value }, unplacedOpen.value)
       : t('count.threads', { n: unplacedThreads.value.length }, unplacedThreads.value.length),
@@ -897,7 +946,16 @@ watch(
         <Send class="size-3.5" aria-hidden="true" />
         <span class="kn-bar-label">{{ t('access.draft.publish') }}</span>
       </Button>
-      <Button v-if="auth.canEdit && !archived" variant="outline" size="sm" as-child>
+      <!-- A source-backed page (#674) has no Edit: the rail's Source widget is where it is acted on. -->
+      <span
+        v-if="sourceBacked"
+        class="inline-flex h-8 items-center gap-1.5 px-2 text-xs text-muted-foreground"
+        :title="t('sources.followsHint')"
+      >
+        <Globe class="size-3.5" aria-hidden="true" />
+        <span class="kn-bar-label">{{ t('sources.follows') }}</span>
+      </span>
+      <Button v-else-if="auth.canEdit && !archived" variant="outline" size="sm" as-child>
         <RouterLink
           :to="`/documents/${detail.document.documentId}/${isSpec ? 'spec' : isFixture ? 'fixture' : 'edit'}`"
           :title="hasUnstaged ? t('editor.unstaged.label') : t('common.edit')"
@@ -910,7 +968,13 @@ watch(
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger as-child>
-          <Button variant="ghost" size="icon-sm" :aria-label="t('documents.moreActions')" :title="t('documents.moreActions')">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            class="kn-row-only"
+            :aria-label="t('documents.moreActions')"
+            :title="t('documents.moreActions')"
+          >
             <MoreHorizontal class="size-4" />
           </Button>
         </DropdownMenuTrigger>
@@ -939,6 +1003,9 @@ watch(
               <DropdownMenuCheckboxItem :model-value="layout.fullWidth" @update:model-value="layout.setFullWidth">
                 {{ t('documents.fullWidth') }}
               </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem :model-value="railShown" @update:model-value="setRailShown">
+                {{ t('documents.pageRail') }}
+              </DropdownMenuCheckboxItem>
               <!-- Only on pages that actually have vocabulary in them: a switch
                    for something the page does not do is noise. -->
               <DropdownMenuCheckboxItem
@@ -952,6 +1019,53 @@ watch(
           </DropdownMenuSub>
         </DropdownMenuContent>
       </DropdownMenu>
+      <!-- ⋯ spelled out for the phone's aside (assets/style.css), which has
+           the room to show every action at once: the same items, as rows. -->
+      <span class="kn-bar-rule kn-aside-only" aria-hidden="true" />
+      <!-- Export stays one row with its formats behind it, as in ⋯. -->
+      <DropdownMenu>
+        <DropdownMenuTrigger as-child>
+          <Button variant="ghost" size="sm" class="kn-aside-only">
+            <Download class="size-4" aria-hidden="true" />
+            <span class="kn-bar-label">{{ t('export.heading') }}</span>
+            <ChevronDown class="kn-aside-chevron size-4" aria-hidden="true" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" class="w-56">
+          <DropdownMenuItem v-for="f in EXPORT_FORMATS" :key="f" @select="openExport(f)">
+            {{ t(`export.format.${f}`) }}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <template v-if="auth.canEdit && saveAsPage">
+        <span class="kn-bar-rule kn-aside-only" aria-hidden="true" />
+        <Button variant="ghost" size="sm" class="kn-aside-only" @click="saveAsOpen = true">
+          <LayoutTemplate class="size-4" aria-hidden="true" />
+          <span class="kn-bar-label">{{ t('templates.saveAs.action') }}</span>
+        </Button>
+      </template>
+      <span class="kn-bar-rule kn-aside-only" aria-hidden="true" />
+      <div class="kn-aside-only" role="group" :aria-label="t('documents.menu.view')">
+        <p class="kn-aside-caption" aria-hidden="true">{{ t('documents.menu.view') }}</p>
+        <Button variant="ghost" size="sm" :aria-pressed="layout.fullWidth" @click="layout.setFullWidth(!layout.fullWidth)">
+          <Check class="size-4" :class="layout.fullWidth ? '' : 'invisible'" aria-hidden="true" />
+          <span class="kn-bar-label">{{ t('documents.fullWidth') }}</span>
+        </Button>
+        <Button variant="ghost" size="sm" :aria-pressed="railShown" @click="setRailShown(!railShown)">
+          <Check class="size-4" :class="railShown ? '' : 'invisible'" aria-hidden="true" />
+          <span class="kn-bar-label">{{ t('documents.pageRail') }}</span>
+        </Button>
+        <Button
+          v-if="canvasEl?.hasGlossary"
+          variant="ghost"
+          size="sm"
+          :aria-pressed="!!canvasEl?.glossaryOn"
+          @click="canvasEl?.toggleGlossaryLinks()"
+        >
+          <Check class="size-4" :class="canvasEl?.glossaryOn ? '' : 'invisible'" aria-hidden="true" />
+          <span class="kn-bar-label">{{ t('glossary.toggleLinks') }}</span>
+        </Button>
+      </div>
     </template>
   </Teleport>
 
@@ -963,14 +1077,32 @@ watch(
        re-flow the moment the real thing lands on top of it. -->
   <div v-else-if="!detail" class="space-y-4">
     <Skeleton class="h-8 w-1/2" />
-    <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem] xl:grid-cols-[minmax(0,1fr)_28rem]">
+    <div :class="railShown ? 'grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem] xl:grid-cols-[minmax(0,1fr)_28rem]' : ''">
       <Skeleton class="h-96 w-full" />
-      <Skeleton class="hidden h-72 w-full lg:block" />
+      <Skeleton v-if="railShown" class="hidden h-72 w-full lg:block" />
     </div>
   </div>
 
   <template v-else>
     <PageLayout variant="detail" :title="detail.document.title">
+      <!-- The rail's switch (#698) on the title's row, at its far end: above
+           the rail's corner when the rail is there, so it reads as that
+           panel's control. A column only exists from `lg`; below it ⋯ → View
+           and the phone aside carry the same switch. -->
+      <template #actions>
+        <Button
+          variant="ghost"
+          size="icon-lg"
+          class="hidden lg:inline-flex"
+          :class="railShown ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'"
+          :aria-pressed="railShown"
+          :aria-label="t('documents.pageRail')"
+          :title="t('documents.pageRail')"
+          @click="setRailShown(!railShown)"
+        >
+          <PanelRight class="size-5" aria-hidden="true" />
+        </Button>
+      </template>
       <template #status>
         <Badge variant="outline">{{ labelFor(t, 'category', detail.document.category) }}</Badge>
         <Badge :variant="statusVariant(detail.revision.status)">{{ labelFor(t, 'revisionStatus', detail.revision.status) }}</Badge>
@@ -993,11 +1125,11 @@ watch(
       </template>
 
       <!-- Rail: everything about the page rather than in it ------------- -->
-      <template #rail>
+      <template v-if="railShown" #rail>
         <PageRail
           :widgets="visibleWidgets"
           surface="document"
-          :default-open="['operations', 'verification', 'overview', 'comments']"
+          :default-open="['operations', 'verification', 'source', 'overview', 'comments']"
           :previews="previewFor"
           @expand="expanded = $event"
         >
@@ -1017,6 +1149,10 @@ watch(
               @reload="load()"
             />
             <p v-else class="text-xs text-muted-foreground">{{ t('verification.headOnly') }}</p>
+          </template>
+
+          <template #widget-source>
+            <SourceRail :document-id="documentId" :can-edit="auth.canEdit && !archived" @synced="load()" />
           </template>
 
           <!-- What this page *is*: the facts a reader checks before trusting it. -->
@@ -1094,7 +1230,7 @@ watch(
             <pre class="overflow-x-auto rounded bg-muted/40 p-2 text-xs">{{ JSON.stringify(content?.frontmatter, null, 2) }}</pre>
           </template>
 
-          <template #widget-revisions><RevisionsView :document-id="documentId" /></template>
+          <template #widget-revisions><RevisionsView :document-id="documentId" :source-backed="sourceBacked && auth.canEdit && !archived" @restored="load()" /></template>
           <template #widget-merge-requests><MergeRequestList :document-id="documentId" /></template>
           <template #widget-conflicts>
             <ConflictsRail :document-id="documentId" />
@@ -1110,6 +1246,7 @@ watch(
             <QualityRail v-if="quality?.score" :quality="quality" />
           </template>
           <template #widget-graph><GraphView :document-id="documentId" /></template>
+          <template #widget-backlinks><BacklinksRail :document-id="documentId" /></template>
           <template #widget-insights>
             <PageInsightsRail v-if="insights" :insights="insights" />
           </template>
@@ -1179,7 +1316,7 @@ watch(
             }}
           </span>
           <RouterLink
-            v-if="auth.canEdit && !archived"
+            v-if="auth.canEdit && !archived && !sourceBacked"
             :to="branchOwner === auth.me?.userId ? `/documents/${documentId}/edit` : `/documents/${documentId}/edit?branch=${encodeURIComponent(viewingBranch)}`"
             class="underline"
           >
@@ -1232,7 +1369,7 @@ watch(
           <DialogTitle>{{ expandedWidget?.label }} — {{ detail.document.title }}</DialogTitle>
         </DialogHeader>
         <div class="max-h-[70vh] overflow-auto pr-1">
-          <RevisionsView v-if="expanded === 'revisions'" :document-id="documentId" />
+          <RevisionsView v-if="expanded === 'revisions'" :document-id="documentId" :source-backed="sourceBacked && auth.canEdit && !archived" @restored="load()" />
           <MergeRequestList v-else-if="expanded === 'merge-requests'" :document-id="documentId" />
           <!-- Sized under the dialog's own 70vh so the feed keeps the scroll,
                for the same reason it does in the rail. -->

@@ -1248,6 +1248,9 @@
       },
       "lint": {
         "$ref": "#/components/schemas/AgentRunLint"
+      },
+      "sourceChange": {
+        "$ref": "#/components/schemas/AgentRunSourceChange"
       }
     }
   },
@@ -1306,6 +1309,31 @@
       "headRef",
       "baseRef",
       "author"
+    ]
+  },
+  "AgentRunSourceChange": {
+    "type": "object",
+    "properties": {
+      "documentId": {
+        "type": "string"
+      },
+      "fromRevisionId": {
+        "type": "string"
+      },
+      "toRevisionId": {
+        "type": "string"
+      },
+      "flagged": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "documentId",
+      "fromRevisionId",
+      "toRevisionId"
     ]
   },
   "AgentRunStatus": {
@@ -1432,7 +1460,8 @@
       "event",
       "webhook",
       "report",
-      "merge-request"
+      "merge-request",
+      "source"
     ]
   },
   "AgentScheduleKind": {
@@ -2633,7 +2662,9 @@
       "test-suite",
       "test-fixture-ranking",
       "transcription",
-      "memo"
+      "memo",
+      "source-recipe",
+      "source-judge"
     ]
   },
   "AiUsageResponse": {
@@ -7858,7 +7889,8 @@
       "linear",
       "zendesk",
       "intercom",
-      "figma"
+      "figma",
+      "web"
     ]
   },
   "ConnectionResource": {
@@ -8327,7 +8359,8 @@
       "linear",
       "zendesk",
       "intercom",
-      "figma"
+      "figma",
+      "web"
     ]
   },
   "ConnectorLinkSummary": {
@@ -9399,6 +9432,21 @@
       "requestedExpiresAt"
     ]
   },
+  "CreateSourcePageResponse": {
+    "type": "object",
+    "properties": {
+      "documentId": {
+        "type": "string"
+      },
+      "connectorId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "documentId",
+      "connectorId"
+    ]
+  },
   "CreateUploadResponse": {
     "type": "object",
     "properties": {
@@ -9785,6 +9833,51 @@
       "ancestors"
     ]
   },
+  "DocumentBacklink": {
+    "type": "object",
+    "properties": {
+      "documentId": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string"
+      },
+      "projectId": {
+        "type": "string",
+        "nullable": true
+      },
+      "anchors": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "documentId",
+      "title",
+      "projectId",
+      "anchors"
+    ]
+  },
+  "DocumentBacklinksResponse": {
+    "type": "object",
+    "properties": {
+      "documentId": {
+        "type": "string"
+      },
+      "backlinks": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/DocumentBacklink"
+        }
+      }
+    },
+    "required": [
+      "documentId",
+      "backlinks"
+    ]
+  },
   "DocumentCategory": {
     "type": "string",
     "enum": [
@@ -10066,6 +10159,184 @@
       "lowThreshold"
     ]
   },
+  "DocumentSourceInfo": {
+    "type": "object",
+    "properties": {
+      "documentId": {
+        "type": "string"
+      },
+      "connectorId": {
+        "type": "string"
+      },
+      "url": {
+        "type": "string"
+      },
+      "host": {
+        "type": "string"
+      },
+      "intervalMinutes": {
+        "type": "number",
+        "nullable": true
+      },
+      "pausedAt": {
+        "type": "string",
+        "nullable": true
+      },
+      "aheadCount": {
+        "type": "number"
+      },
+      "lastCheckedAt": {
+        "type": "string",
+        "nullable": true
+      },
+      "syncedRevisionId": {
+        "type": "string",
+        "nullable": true
+      },
+      "headRevisionId": {
+        "type": "string",
+        "nullable": true
+      },
+      "failures": {
+        "type": "number"
+      },
+      "retryAt": {
+        "type": "string",
+        "nullable": true
+      },
+      "webhookConfigured": {
+        "type": "boolean"
+      },
+      "spec": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ApiSpecKind"
+          }
+        ],
+        "nullable": true
+      },
+      "recipe": {
+        "$ref": "#/components/schemas/DocumentSourceRecipeState"
+      },
+      "tree": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "rootDocumentId": {
+                "type": "string"
+              },
+              "pages": {
+                "type": "number"
+              },
+              "awaitingRunId": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "rootDocumentId",
+              "pages",
+              "awaitingRunId"
+            ]
+          }
+        ],
+        "nullable": true
+      },
+      "misalignment": {
+        "$ref": "#/components/schemas/SourceMisalignmentMode"
+      }
+    },
+    "required": [
+      "documentId",
+      "connectorId",
+      "url",
+      "host",
+      "intervalMinutes",
+      "pausedAt",
+      "aheadCount",
+      "lastCheckedAt",
+      "syncedRevisionId",
+      "headRevisionId",
+      "failures",
+      "retryAt",
+      "webhookConfigured",
+      "spec",
+      "recipe",
+      "tree",
+      "misalignment"
+    ]
+  },
+  "DocumentSourceRecipeState": {
+    "type": "object",
+    "properties": {
+      "active": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/SourceRecipeVersion"
+          }
+        ],
+        "nullable": true
+      },
+      "proposal": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/SourceRecipeVersion"
+          }
+        ],
+        "nullable": true
+      },
+      "heldAt": {
+        "type": "string",
+        "nullable": true
+      },
+      "heldReasons": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/SourceCheckFailure"
+        }
+      },
+      "heldDetail": {
+        "type": "string",
+        "nullable": true
+      },
+      "structureChangedAt": {
+        "type": "string",
+        "nullable": true
+      },
+      "hasBody": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "active",
+      "proposal",
+      "heldAt",
+      "heldReasons",
+      "heldDetail",
+      "structureChangedAt",
+      "hasBody"
+    ]
+  },
+  "DocumentSourceWebhookResponse": {
+    "type": "object",
+    "properties": {
+      "url": {
+        "type": "string"
+      },
+      "secret": {
+        "type": "string"
+      },
+      "header": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "url",
+      "secret",
+      "header"
+    ]
+  },
   "DocumentSummary": {
     "type": "object",
     "properties": {
@@ -10108,6 +10379,30 @@
       },
       "kind": {
         "$ref": "#/components/schemas/ApiDocumentKind"
+      },
+      "sourceBacked": {
+        "type": "boolean"
+      },
+      "sourceSync": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "host": {
+                "type": "string"
+              },
+              "checkedAt": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "host",
+              "checkedAt"
+            ]
+          }
+        ],
+        "nullable": true
       },
       "verifiedAt": {
         "type": "string",
@@ -10312,6 +10607,30 @@
       },
       "kind": {
         "$ref": "#/components/schemas/ApiDocumentKind"
+      },
+      "sourceBacked": {
+        "type": "boolean"
+      },
+      "sourceSync": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "host": {
+                "type": "string"
+              },
+              "checkedAt": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "host",
+              "checkedAt"
+            ]
+          }
+        ],
+        "nullable": true
       },
       "verifiedAt": {
         "type": "string",
@@ -14954,6 +15273,9 @@
           },
           "job": {
             "type": "number"
+          },
+          "source": {
+            "type": "number"
           }
         },
         "required": [
@@ -14963,7 +15285,8 @@
           "document",
           "verification",
           "access",
-          "job"
+          "job",
+          "source"
         ]
       }
     },
@@ -16612,7 +16935,8 @@
       "document",
       "verification",
       "access",
-      "job"
+      "job",
+      "source"
     ]
   },
   "NotificationEntry": {
@@ -16733,6 +17057,7 @@
       "owner",
       "assigned",
       "review-requested",
+      "alert",
       "mention"
     ]
   },
@@ -16816,6 +17141,9 @@
           },
           "job": {
             "type": "number"
+          },
+          "source": {
+            "type": "number"
           }
         },
         "required": [
@@ -16825,7 +17153,8 @@
           "document",
           "verification",
           "access",
-          "job"
+          "job",
+          "source"
         ]
       }
     },
@@ -20912,6 +21241,43 @@
       "setAt"
     ]
   },
+  "SourceCheckFailure": {
+    "type": "string",
+    "enum": [
+      "no-content",
+      "landmark",
+      "words",
+      "headings",
+      "unsupported",
+      "spec-invalid"
+    ]
+  },
+  "SourceCrawlLimits": {
+    "type": "object",
+    "properties": {
+      "maxPages": {
+        "type": "number"
+      },
+      "confirmFirst": {
+        "type": "number"
+      },
+      "confirmChange": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "maxPages",
+      "confirmFirst",
+      "confirmChange"
+    ]
+  },
+  "SourceMisalignmentMode": {
+    "type": "string",
+    "enum": [
+      "flag",
+      "propose"
+    ]
+  },
   "SourcePolicy": {
     "type": "object",
     "properties": {
@@ -20951,6 +21317,336 @@
       "createdAt",
       "updatedAt",
       "createdBy"
+    ]
+  },
+  "SourceRecipe": {
+    "type": "object",
+    "properties": {
+      "content": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "strip": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "headings": {
+        "type": "object",
+        "properties": {
+          "h1": {
+            "type": "number"
+          },
+          "h2": {
+            "type": "number"
+          },
+          "h3": {
+            "type": "number"
+          },
+          "h4": {
+            "type": "number"
+          },
+          "h5": {
+            "type": "number"
+          },
+          "h6": {
+            "type": "number"
+          }
+        }
+      },
+      "landmarks": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "rules": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/SourceRecipeRule"
+        }
+      }
+    },
+    "required": [
+      "content",
+      "strip",
+      "headings",
+      "landmarks",
+      "rules"
+    ]
+  },
+  "SourceRecipePreview": {
+    "type": "object",
+    "properties": {
+      "before": {
+        "type": "string"
+      },
+      "after": {
+        "type": "string"
+      },
+      "failures": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/SourceCheckFailure"
+        }
+      },
+      "hits": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "number"
+        }
+      }
+    },
+    "required": [
+      "before",
+      "after",
+      "failures",
+      "hits"
+    ]
+  },
+  "SourceRecipeRule": {
+    "anyOf": [
+      {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "drop-section"
+            ]
+          },
+          "heading": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "heading"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "rename-heading"
+            ]
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "from",
+          "to"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "rewrite-links"
+            ]
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "from",
+          "to"
+        ]
+      }
+    ]
+  },
+  "SourceRecipeStatus": {
+    "type": "string",
+    "enum": [
+      "proposed",
+      "active",
+      "superseded",
+      "rejected"
+    ]
+  },
+  "SourceRecipeVersion": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "version": {
+        "type": "number"
+      },
+      "status": {
+        "$ref": "#/components/schemas/SourceRecipeStatus"
+      },
+      "origin": {
+        "type": "string",
+        "enum": [
+          "agent",
+          "person"
+        ]
+      },
+      "connectorScope": {
+        "type": "boolean"
+      },
+      "recipe": {
+        "$ref": "#/components/schemas/SourceRecipe"
+      },
+      "note": {
+        "type": "string",
+        "nullable": true
+      },
+      "createdAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "version",
+      "status",
+      "origin",
+      "connectorScope",
+      "recipe",
+      "note",
+      "createdAt"
+    ]
+  },
+  "SourceSettingsResponse": {
+    "type": "object",
+    "properties": {
+      "workspaceId": {
+        "type": "string"
+      },
+      "requested": {
+        "type": "object",
+        "properties": {
+          "maxPages": {
+            "type": "number",
+            "nullable": true
+          },
+          "confirmFirst": {
+            "type": "number",
+            "nullable": true
+          },
+          "confirmChange": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": [
+          "maxPages",
+          "confirmFirst",
+          "confirmChange"
+        ]
+      },
+      "ceiling": {
+        "$ref": "#/components/schemas/SourceCrawlLimits"
+      },
+      "effective": {
+        "$ref": "#/components/schemas/SourceCrawlLimits"
+      }
+    },
+    "required": [
+      "workspaceId",
+      "requested",
+      "ceiling",
+      "effective"
+    ]
+  },
+  "SourceTreeRecipePage": {
+    "type": "object",
+    "properties": {
+      "documentId": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string"
+      },
+      "url": {
+        "type": "string"
+      },
+      "hasBody": {
+        "type": "boolean"
+      },
+      "ownRecipe": {
+        "type": "boolean"
+      },
+      "heldAt": {
+        "type": "string",
+        "nullable": true
+      }
+    },
+    "required": [
+      "documentId",
+      "title",
+      "url",
+      "hasBody",
+      "ownRecipe",
+      "heldAt"
+    ]
+  },
+  "SourceTreeRecipeState": {
+    "type": "object",
+    "properties": {
+      "connectorId": {
+        "type": "string"
+      },
+      "url": {
+        "type": "string"
+      },
+      "host": {
+        "type": "string"
+      },
+      "rootDocumentId": {
+        "type": "string",
+        "nullable": true
+      },
+      "active": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/SourceRecipeVersion"
+          }
+        ],
+        "nullable": true
+      },
+      "proposal": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/SourceRecipeVersion"
+          }
+        ],
+        "nullable": true
+      },
+      "pages": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/SourceTreeRecipePage"
+        }
+      }
+    },
+    "required": [
+      "connectorId",
+      "url",
+      "host",
+      "rootDocumentId",
+      "active",
+      "proposal",
+      "pages"
     ]
   },
   "SourceVerificationState": {
@@ -22659,7 +23355,8 @@
       "person",
       "drift",
       "curator",
-      "mcp"
+      "mcp",
+      "source"
     ]
   },
   "VerifyEmailResponse": {
@@ -23653,7 +24350,8 @@
       "memos",
       "conflicts",
       "assistant",
-      "git"
+      "git",
+      "sources"
     ]
   },
   "WorkspaceFeaturesResponse": {
@@ -23667,11 +24365,18 @@
         "items": {
           "$ref": "#/components/schemas/WorkspaceFeature"
         }
+      },
+      "unavailable": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/WorkspaceFeature"
+        }
       }
     },
     "required": [
       "workspaceId",
-      "disabled"
+      "disabled",
+      "unavailable"
     ]
   },
   "WorkspaceGraphNode": {

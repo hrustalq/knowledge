@@ -39,6 +39,12 @@ export interface ExternalRef {
    * lazily discovered tree must never do.
    */
   hasChildren?: boolean;
+  /**
+   * The version the link last agreed on, for a conditional fetch (#674): the
+   * `web` adapter sends it as If-None-Match / If-Modified-Since. Set by
+   * staging, never by an adapter's own listing.
+   */
+  knownVersion?: string;
 }
 
 export interface ExternalAttachment {
@@ -63,6 +69,13 @@ export interface ExternalDocument {
   attachments?: ExternalAttachment[];
   /** What the conversion could not carry. Surfaced verbatim on the run. */
   warnings: string[];
+  /** The source answered 304 to `ref.knownVersion` (#674): nothing to read, nothing to write. */
+  notModified?: boolean;
+  /**
+   * The body as fetched (#674, phase 2), `web` only: staging re-reads it
+   * through the page's extraction recipe and keeps it for preview and re-runs.
+   */
+  source?: { body: string; contentType: string; url: string };
 }
 
 /**
@@ -200,6 +213,8 @@ export interface ConnectorContext {
    */
   locale: Locale;
   signal?: AbortSignal;
+  /** A cap tighter than CONNECTOR_SYNC_MAX_ITEMS for this connector's runs: a crawled tree's `maxPages` (#674). */
+  maxItems?: number;
 }
 
 export interface ConnectorAdapter {
@@ -231,6 +246,14 @@ export interface ConnectorAdapter {
    * a second request per page.
    */
   children?(ctx: ConnectorContext, parent: ExternalRef | null): AsyncIterable<ExternalRef>;
+
+  /**
+   * Where each discovered item really hangs, once the walk is over: for a
+   * source whose hierarchy is its URLs rather than the order a walk met them
+   * (a crawled `web` tree, #674). Keyed and valued by externalId; null is a
+   * root. Discovery re-nests its rows by it before anything is fetched.
+   */
+  nest?(ctx: ConnectorContext, externalIds: string[]): Map<string, string | null>;
 
   fetch(ctx: ConnectorContext, ref: ExternalRef): Promise<ExternalDocument>;
 

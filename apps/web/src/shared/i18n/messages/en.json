@@ -180,7 +180,9 @@
     "loadingPage": "Loading page",
     "skipToContent": "Skip to content",
     "navigation": "Navigation",
-    "features": "Features"
+    "features": "Features",
+    "pageActions": "Page actions",
+    "linkSource": "Link a source"
   },
   "role": {
     "guest": "Guest",
@@ -310,6 +312,7 @@
     "fromTemplateUnnamed": "From a template, v{version}",
     "moreActions": "More actions",
     "fullWidth": "Full width",
+    "pageRail": "Page details",
     "asOfBanner": "As of {date}",
     "asOfBannerTag": "As of {tag}, {date}",
     "unplacedCommentsHint": "On the page as a whole, or on a passage that has since changed.",
@@ -322,7 +325,8 @@
       "named": "Branch {name} — not published.",
       "edit": "Open in editor",
       "published": "Published page"
-    }
+    },
+    "backlinksHint": "Pages whose current text links here."
   },
   "settings": {
     "projectsHint": "Organize documents",
@@ -461,7 +465,8 @@
       "folder": "Folder",
       "harvest": "Workspace and label",
       "figmaAccess": "Access",
-      "harvestTag": "Tag"
+      "harvestTag": "Tag",
+      "source": "Source"
     },
     "testing": "Checking the connection",
     "testingHint": "Making one request to prove the credential reaches the right place.",
@@ -496,7 +501,6 @@
     "branchPending": "more below, not read yet",
     "edited": "edited",
     "aiWrote": "Rewritten by the assistant",
-    "applyToBranch": "Apply to this page and everything under it",
     "subtreeDone": "Applied to {count} page | Applied to {count} pages",
     "itemTitle": "Page title",
     "conversionEmpty": "The conversion produced no text. Check the source page before approving.",
@@ -889,6 +893,28 @@
           "help": "A conversation carrying this tag is harvested when an admin closes it. Leave empty for \"knowledge\"."
         },
         "credential": "The access token of your Intercom app (Developer Hub → your app → Authentication). It must be able to read conversations."
+      },
+      "web": {
+        "url": {
+          "label": "URL",
+          "help": "A markdown file or an HTML page. The page it becomes is read-only and follows the source."
+        },
+        "crawl": {
+          "label": "Pages",
+          "help": "A tree follows links and sitemap.xml under the URL’s path, nested by URL. A large crawl waits for you to confirm it.",
+          "options": {
+            "page": "This URL only",
+            "tree": "This URL and every page under it"
+          }
+        },
+        "misalignment": {
+          "label": "When a change may break a page",
+          "help": "Pages that link this source are checked against each new version. One it may have made wrong is flagged for its owner; a proposed fix opens as a merge request.",
+          "options": {
+            "flag": "Ask its owner to check it",
+            "propose": "Ask its owner and propose a fix"
+          }
+        }
       }
     },
     "harvestHint": "Nothing syncs either way. When an issue carrying the harvest label is completed by a linked editor, its description and comments are masked and proposed as captures in their name, for review in the Captures inbox.",
@@ -1029,7 +1055,8 @@
       "jql": "JQL",
       "noProjects": "This workspace has no projects yet, and every connector lands in one.",
       "createProject": "Create a project"
-    }
+    },
+    "moreActions": "More actions for {title}"
   },
   "workflow": {
     "nodeStatus": {
@@ -2079,7 +2106,8 @@
     "tools": "no tools | {n} tool | {n} tools",
     "openIssues": "{n} open report | {n} open reports",
     "usages": "{n} usage site | {n} usage sites",
-    "branches": "No branches | {n} branch | {n} branches"
+    "branches": "No branches | {n} branch | {n} branches",
+    "backlinks": "{n} page | {n} pages"
   },
   "chat": {
     "needsAgentMode": "This needs Agent mode",
@@ -2456,7 +2484,8 @@
         "schedule": "scheduled",
         "webhook": "pull request",
         "report": "report",
-        "merge-request": "merge request"
+        "merge-request": "merge request",
+        "source": "source changed"
       },
       "stage": {
         "scanning": "Scanning pages",
@@ -3172,7 +3201,9 @@
     "quality": "Quality",
     "conflicts": "Contradictions",
     "insights": "Insights",
-    "branches": "Branches"
+    "branches": "Branches",
+    "linkedFrom": "Linked from",
+    "source": "Source"
   },
   "knowledgeIssue": {
     "report": "Report a problem",
@@ -3602,6 +3633,7 @@
     "turnInto": "Turn into",
     "text": "Text",
     "headingPlaceholder": "Heading",
+    "bodyLabel": "Page body",
     "linkAdd": "Add link",
     "linkEdit": "Edit link",
     "linkUpdate": "Update",
@@ -4448,7 +4480,8 @@
       "document": "Page changes",
       "verification": "Verification",
       "job": "Runs",
-      "access": "Access"
+      "access": "Access",
+      "source": "Sources"
     },
     "categoryHint": {
       "mention": "Somebody named you in a comment.",
@@ -4457,10 +4490,12 @@
       "document": "A page you follow was edited, renamed or moved.",
       "verification": "A page you own needs a check, was marked outdated, is about to expire, or was handed to you.",
       "job": "A workflow, agent, import or sync you started finished.",
-      "access": "Requests to open a page you manage, and answers to your own."
+      "access": "Requests to open a page you manage, and answers to your own.",
+      "source": "A page you linked to a source took a new version, or its source needs you."
     },
     "reason": {
-      "assigned": "Assigned to you"
+      "assigned": "Assigned to you",
+      "alert": "Needs attention"
     },
     "subject": {
       "document": "Page",
@@ -4518,7 +4553,16 @@
       "work-item.closed": "closed the tracker ticket for this",
       "connector.harvest.proposed": "a resolved item you closed was harvested into captures for review",
       "memo.done": "your memo was read and its proposals opened for review",
-      "memo.failed": "your memo could not be analysed"
+      "memo.failed": "your memo could not be analysed",
+      "source.updated": "took a new version from its source",
+      "source.alert": "needs attention: its source"
+    },
+    "alert": {
+      "paused": "was restored, so its source is paused",
+      "gone": "lost its source and was archived",
+      "failing": "failed to sync three times in a row",
+      "held": "has a new source version held for review",
+      "breaking": "took an API version from its source with breaking changes"
     }
   },
   "connect": {
@@ -4727,6 +4771,8 @@
       "neverExpires": "never expires",
       "edited": "Verified by {who} {when}; the page has changed since",
       "expired": "Verified by {who} {when}; the review interval has passed",
+      "synced": "Synced from {host} · {when}",
+      "syncStale": "Last synced from {host} {when}; the source is paused, held or not syncing",
       "requested": "{who} asked for a check {when}",
       "outdated": "Marked outdated by {who} {when}",
       "flagged": "A reader or an agent reported a problem with this page — see Reports in the rail",
@@ -4736,7 +4782,8 @@
       "sentinel": "the sentinel",
       "curator": "the curator",
       "mcp": "an agent over MCP",
-      "someone": "somebody"
+      "someone": "somebody",
+      "source": "its source"
     },
     "sourceLink": "Open the pull request",
     "owner": "Owner",
@@ -5589,7 +5636,8 @@
       "colCreated": "Asked",
       "summary": "{pages} pages · {size}",
       "expires": "deleted {when}"
-    }
+    },
+    "heading": "Export"
   },
   "chatBots": {
     "title": "Chat bots",
@@ -7309,11 +7357,14 @@
       "memos": "Uploading meeting recordings and the merge requests proposed from them.",
       "conflicts": "The list of contradictions between pages and resolving them.",
       "assistant": "The Assistant page, its saved conversations and the chat panel beside the editor. Review, lint and suggestion helpers stay.",
-      "git": "Cloning and fetching this workspace's projects with git, over HTTPS with an API key."
+      "git": "Cloning and fetching this workspace's projects with git, over HTTPS with an API key.",
+      "sources": "Pages that follow a web page or markdown file: \"Link a source\" in the new-page menu and the Source panel on such a page."
     },
     "names": {
-      "git": "Git remote"
-    }
+      "git": "Git remote",
+      "sources": "Source-backed pages"
+    },
+    "serverOff": "Off on this server (WEB_SOURCES_ENABLED), whatever is chosen here."
   },
   "git": {
     "clone": {
@@ -7330,6 +7381,261 @@
       "shownOnce": "The new key is in the commands below. Copy them now: it is shown only this once. Keep {env} set in the shell you run git from.",
       "terminal": "Terminal",
       "pushHint": "To propose a change, push a branch: {command}"
+    }
+  },
+  "sources": {
+    "link": {
+      "heading": "Link a source",
+      "lede": "A page that follows a markdown file or a web page. It reads the source now and again on every check, and nobody edits it here.",
+      "url": "Source URL",
+      "urlPlaceholder": "https://example.com/docs/guide.md",
+      "urlHint": "A markdown file or an HTML page, over https.",
+      "credential": "Token or header",
+      "credentialPlaceholder": "token, or X-Api-Key: value",
+      "credentialHint": "Sent as a Bearer token, or as the header you name. Saved for this host, so the next source on it will not ask.",
+      "title": "Title",
+      "titlePlaceholder": "The source's own title",
+      "readOnly": "The page is read-only. To keep a version the source has since changed, pause the source and restore that revision.",
+      "reading": "Reading the source…",
+      "submit": "Link source",
+      "crawl": "Also sync every page under this URL",
+      "crawlHint": "Pages found by links and sitemap.xml under this path, nested beneath this page by URL. A large crawl waits for you to confirm it."
+    },
+    "interval": {
+      "label": "Check for changes",
+      "m15": "Every 15 minutes",
+      "m60": "Hourly",
+      "m360": "Every 6 hours",
+      "m1440": "Daily",
+      "manual": "Only when asked"
+    },
+    "syncedFrom": "Synced from {host}",
+    "state": {
+      "following": "Following the source",
+      "paused": "Paused",
+      "ahead": "{n} new version since | {n} new versions since",
+      "failing": "Last sync failed | Last {n} syncs failed",
+      "retryAt": "retrying {at}",
+      "retrying": "Unreachable, retrying {at}"
+    },
+    "lastChecked": "Checked {when}",
+    "neverChecked": "Not checked yet",
+    "syncNow": "Sync now",
+    "pause": "Pause",
+    "resume": "Resume",
+    "paused": "Source paused",
+    "resumed": "Following the source again",
+    "syncStarted": "Checking the source",
+    "webhook": {
+      "create": "Webhook…",
+      "rotate": "New webhook secret",
+      "rotateConfirm": {
+        "title": "Replace the webhook secret?",
+        "body": "The current secret stops working at once: anything still signing with it gets refused until it is given the new one.",
+        "action": "Replace secret"
+      },
+      "once": "Shown once. POST to this URL, signing the raw body as {header}: sha256=<hex HMAC>.",
+      "copy": {
+        "url": "Copy webhook URL",
+        "secret": "Copy signing secret"
+      },
+      "copyFailed": "Could not copy"
+    },
+    "follows": "Follows its source",
+    "followsHint": "Only its source writes this page. Pause it from the Source panel; restore an earlier version from History.",
+    "restore": {
+      "row": "Restore",
+      "title": "Restore revision {n}?",
+      "body": "It becomes the page again, and the source is paused so the next check does not replace it. Resume the source to follow it again.",
+      "action": "Restore and pause",
+      "done": "Revision {n} restored; the source is paused"
+    },
+    "recipe": {
+      "heading": "Extraction recipe",
+      "backToPage": "Back to the page",
+      "status": {
+        "held": "A new version was held: {checks} failed",
+        "heldHint": "The page stays on its last good version. Draft a recipe or adjust this one until every check passes, then save it.",
+        "proposal": "A drafted recipe is waiting for review",
+        "changed": "The source's layout changed {when}, and the recipe still reads it",
+        "active": "Read with recipe v{n}",
+        "implicit": "Read with automatic extraction"
+      },
+      "byAgent": "Drafted by the interpreter agent",
+      "noNote": "The interpreter left no note.",
+      "paused": "The source is paused. A saved recipe applies to the next version it writes once resumed.",
+      "content": {
+        "label": "Content",
+        "hint": "CSS selectors for the part of the page that becomes this page. The first one that matches wins. None: automatic article extraction.",
+        "row": "Content selector {n}",
+        "placeholder": "main article",
+        "none": "None — automatic article extraction"
+      },
+      "strip": {
+        "label": "Remove",
+        "hint": "CSS selectors removed before anything else: banners, ads, edit links.",
+        "row": "Removed selector {n}",
+        "placeholder": ".cookie-banner",
+        "none": "Nothing removed"
+      },
+      "landmarks": {
+        "label": "Landmarks",
+        "hint": "CSS selectors that must each match. When one stops matching, the layout changed and the version is held.",
+        "row": "Landmark {n}",
+        "placeholder": "main#content",
+        "none": "None — the page's headings stand in for them"
+      },
+      "matches": "{n} match | {n} matches",
+      "noMatch": "no match",
+      "remove": "Remove",
+      "addSelector": "Add selector",
+      "headings": {
+        "label": "Heading levels",
+        "count": "{n} remapped | {n} remapped",
+        "hint": "For a page that misuses heading tags: the level each source heading becomes.",
+        "row": "Level for {tag}",
+        "keep": "Keep",
+        "level": "Level {n}"
+      },
+      "rules": {
+        "label": "Normalization rules",
+        "hint": "Applied in order to the page this recipe produces.",
+        "none": "No rules.",
+        "kind": "Rule {n}",
+        "kinds": {
+          "drop-section": "Drop a section",
+          "rename-heading": "Rename a heading",
+          "rewrite-links": "Rewrite links"
+        },
+        "heading": "Heading of the section to drop",
+        "from": {
+          "rename-heading": "Heading",
+          "rewrite-links": "Link prefix"
+        },
+        "to": {
+          "rename-heading": "New heading",
+          "rewrite-links": "Replacement prefix"
+        },
+        "add": "Add rule"
+      },
+      "approve": "Approve and publish",
+      "save": "Save recipe",
+      "saving": "Saving…",
+      "reject": "Reject draft",
+      "keep": "Keep current recipe",
+      "draft": "Draft recipe",
+      "redraft": "Draft again",
+      "drafting": "Drafting…",
+      "viewerHint": "Only editors can change a page's recipe.",
+      "viewerPreview": "Only editors can preview a recipe.",
+      "preview": "Preview",
+      "previewAs": "Show the preview as",
+      "view": {
+        "changes": "Changes",
+        "page": "Page"
+      },
+      "check": {
+        "no-content": "Content found",
+        "landmark": "Landmarks present",
+        "words": "Word count kept",
+        "headings": "Headings kept",
+        "unsupported": "Markdown or HTML",
+        "spec-invalid": "Parses as an API spec"
+      },
+      "checkPasses": "passes",
+      "checkFails": "fails",
+      "noBody": "No version of this source has been read since recipes arrived. Sync it once from the page's Source panel to preview a recipe.",
+      "emptyResult": "This recipe produces an empty page.",
+      "blocked": {
+        "noBody": "Sync the source once before saving a recipe.",
+        "previewing": "Waiting for the preview…",
+        "checks": "Every check must pass before the recipe can be saved.",
+        "unchanged": "Change the recipe to save it."
+      },
+      "approved": "Recipe approved; the page was re-read with it",
+      "saved": "Recipe saved; the page was re-read with it",
+      "dismissed": "Kept the current recipe",
+      "drafted": "A new recipe was drafted",
+      "rail": {
+        "held": "Held for recipe review",
+        "proposal": "Recipe draft waiting",
+        "review": "Review",
+        "changed": "Layout changed",
+        "active": "Recipe v{n}",
+        "implicit": "Automatic extraction",
+        "open": "Recipe…",
+        "activeTree": "Tree recipe v{n}"
+      },
+      "card": {
+        "title": "Recipe",
+        "lede": "How the fetched page becomes this page: what is kept, what is removed, and what must stay in place."
+      },
+      "previewLede": "What this recipe makes of the last version read from {host}.",
+      "pane": "Recipe or preview",
+      "unsaved": "Unsaved changes",
+      "ready": "Every check passes.",
+      "sameResult": "This recipe produces the page as it is now.",
+      "showPage": "Show the page",
+      "dock": {
+        "noBody": "Nothing read yet",
+        "previewFailed": "The preview failed",
+        "checking": "Checking the recipe…",
+        "failing": "{n} check fails | {n} checks fail",
+        "unchanged": "No changes",
+        "ready": "Ready to save",
+        "readyApprove": "Ready to approve"
+      },
+      "subtitle": "How the fetched source becomes this page, checked against its last version before anything is saved.",
+      "openSource": "Open {host}",
+      "tree": {
+        "heading": "Tree recipe",
+        "subtitle": "How every crawled page without its own recipe is read. Saving re-reads them all.",
+        "pages": "No page reads with it | {n} page reads with it | {n} pages read with it",
+        "previewOn": "Preview on",
+        "root": "root",
+        "ownRecipe": "This page keeps its own recipe, which the tree recipe does not replace. The preview shows what the tree recipe would make of it.",
+        "held": "This page is held: its last version failed its checks.",
+        "openRoot": "Root page"
+      },
+      "treeSaved": "Tree recipe saved. Every page without its own recipe is being re-read"
+    },
+    "spec": {
+      "line": "{kind} spec, stored as written",
+      "held": "A new version was held: {detail}"
+    },
+    "tree": {
+      "root": "No pages synced under it yet | Syncs {n} page under this URL | Syncs {n} pages under this URL",
+      "awaiting": "A crawl waits for you to confirm it",
+      "review": "Review the pages",
+      "member": "Part of a synced page tree",
+      "openRoot": "Open its root",
+      "recipe": "Tree recipe"
+    },
+    "crawlSettings": {
+      "title": "Crawled sources",
+      "intro": "Limits for web sources that sync every page under a URL. The deployment sets each ceiling; a value here can only lower it.",
+      "applies": "Applies:",
+      "ceiling": "Ceiling {n}. Leave empty to use it.",
+      "clamped": "Above the ceiling, so {n} applies.",
+      "invalid": "A whole number, {min} or more.",
+      "saved": "Crawl limits saved",
+      "maxPages": {
+        "label": "Pages per crawl",
+        "hint": "A crawl stops after this many pages, and then counts no page as dropped."
+      },
+      "confirmFirst": {
+        "label": "Confirm a first crawl above",
+        "hint": "A first crawl that would create more pages than this waits for someone to review them."
+      },
+      "confirmChange": {
+        "label": "Confirm a later crawl above",
+        "hint": "A later crawl that would add and drop more pages than this, together, waits for review."
+      }
+    },
+    "misalignment": {
+      "label": "When a change may break a page linking this",
+      "flag": "Ask its owner to check it",
+      "propose": "Ask its owner and propose a fix"
     }
   }
 }

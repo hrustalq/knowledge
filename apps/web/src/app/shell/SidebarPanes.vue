@@ -66,7 +66,8 @@ function markInert(el: Element) {
        to the direction hands the departing pane the previous direction's
        classes. See the pane block in style.css. -->
   <div class="relative mt-4 min-h-0 flex-1 overflow-hidden" :data-pane-dir="nav.direction">
-    <Transition name="pane" @leave="markInert">
+    <!-- A landed pane (resolved by the roster after mount) swaps without travel. -->
+    <Transition name="pane" :css="nav.direction !== 'none'" @leave="markInert">
       <SidebarPagesPane v-if="nav.pane === 'pages'" key="pages" @back="nav.back()" />
       <SidebarProjectsPane
         v-else

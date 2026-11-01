@@ -246,14 +246,16 @@ export class AuthFlowService {
       throw new BadRequestException(t('error.auth.invalidResetToken'));
     }
     const now = new Date();
-    await this.prisma.$transaction([
-      this.prisma.passwordResetToken.update({ where: { id: reset.id }, data: { usedAt: now } }),
-      this.prisma.user.update({ where: { id: reset.userId }, data: { passwordHash: await hashPassword(password) } }),
-      this.prisma.user.updateMany({ where: { id: reset.userId, emailVerifiedAt: null }, data: { emailVerifiedAt: now } }),
-    ]);
-    await this.sessions.revokeAllForUser(reset.userId); // stolen-session hygiene
-    // An invite sets a first password; there was no previous one to warn about.
-    if (reset.purpose !== 'invite') await this.mail.enqueue({ template: 'password-changed', userId: reset.userId });
+    const passwordHash = await hashPassword(password); // before the boundary: hashing holds no connection
+    // The revoke commits with the reset (#656): the token is spent, so a retry could never repair a missed one.
+    await this.prisma.withTransaction(async () => {
+      await this.prisma.passwordResetToken.update({ where: { id: reset.id }, data: { usedAt: now } });
+      await this.prisma.user.update({ where: { id: reset.userId }, data: { passwordHash } });
+      await this.prisma.user.updateMany({ where: { id: reset.userId, emailVerifiedAt: null }, data: { emailVerifiedAt: now } });
+      await this.sessions.revokeAllForUser(reset.userId); // stolen-session hygiene
+      // An invite sets a first password; there was no previous one to warn about.
+      if (reset.purpose !== 'invite') this.prisma.onCommit(() => this.mail.enqueue({ template: 'password-changed', userId: reset.userId }));
+    });
   }
 
   async changePassword(principal: Principal, currentPassword: string, newPassword: string): Promise<void> {
@@ -262,9 +264,13 @@ export class AuthFlowService {
     if (!user?.passwordHash || !(await verifyPassword(currentPassword, user.passwordHash))) {
       throw new UnauthorizedException(t('error.auth.currentPasswordIncorrect'));
     }
-    await this.prisma.user.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(newPassword) } });
-    await this.sessions.revokeAllForUser(user.id, principal.sessionId);
-    await this.mail.enqueue({ template: 'password-changed', userId: user.id });
+    const passwordHash = await hashPassword(newPassword);
+    // One commit (#656): once the hash lands the old password no longer proves anything, so a retry cannot redo the revoke.
+    await this.prisma.withTransaction(async () => {
+      await this.prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+      await this.sessions.revokeAllForUser(user.id, principal.sessionId);
+      this.prisma.onCommit(() => this.mail.enqueue({ template: 'password-changed', userId: user.id }));
+    });
   }
 
   /**

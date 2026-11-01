@@ -27,6 +27,18 @@ territory. So:
   detail page gains a **Content** tab that shows the rendered body plus the
   frontmatter block.
 
+- **Info rail toggle** (#698): the rail beside the page (Overview,
+  Verification, Revisions, Graph, Comments… and the table of contents) can be
+  hidden from ⋯ → View → **Page details**, its twin in the phone aside, or the
+  panel button at the end of the title row (from `lg`, above the rail's corner). Hidden, the content takes the full width at
+  every breakpoint. It is one per-reader preference for every document page,
+  kept in the `kn_pagerail` cookie that SSR reads, so the first frame already
+  has the right layout. Until the reader chooses, it follows the role: shown
+  for editors and admins, hidden for viewers and guests, who came to read and
+  cannot act on most of it. A `?tab=<widget>` link shows a hidden rail for that
+  visit and leaves the stored choice alone; widget open state survives a
+  hide/show.
+
 ## Notes
 
 - Rendering happens client-side only (`onMounted`) — DOMPurify needs a DOM, and

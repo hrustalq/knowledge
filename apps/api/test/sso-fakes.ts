@@ -58,6 +58,8 @@ export function fakePrisma() {
       return row[k] === v;
     });
   const prisma = {
+    withTransaction: async (fn: () => Promise<unknown>) => fn(),
+    onCommit: (fn: () => Promise<unknown>) => void fn(),
     idpGroupMapping: { findMany: vi.fn(async () => []) },
     identityProvider: {
       findFirst: vi.fn(async ({ where }: Row) => db.providers.find((p) => match(p, where)) ?? null),
@@ -176,6 +178,8 @@ export function ssoHarness(config = fakeConfig(), defaults: Row = {}) {
 export function identityProvidersHarness(config = fakeConfig()) {
   const rows: Row[] = [];
   const prisma = {
+    withTransaction: async (fn: () => Promise<unknown>) => fn(),
+    onCommit: (fn: () => Promise<unknown>) => void fn(),
     identityProvider: {
       create: vi.fn(async ({ data }: Row) => {
         const row = { id: randomUUID(), createdAt: new Date(), updatedAt: new Date(), enabled: false, showOnLogin: true, platformWide: false, jitEnabled: false, defaultRole: null, allowedDomains: [], groupsClaim: null, groupSyncMode: 'additive', sessionTtlHours: null, secretCipher: null, ...data };

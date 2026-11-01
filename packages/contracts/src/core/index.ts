@@ -88,6 +88,18 @@ export interface DocumentSummary {
    */
   kind?: ApiDocumentKind;
   /**
+   * The body belongs to an external source (#674) and only that source writes
+   * it: the editor, REST, MCP and git refuse a revision. Filled in by the
+   * detail route; absent elsewhere, where it reads as false.
+   */
+  sourceBacked?: boolean;
+  /**
+   * Where a source-backed page syncs from and when it last answered (#674,
+   * phase 5): its trust badge reads "Synced from <host> · <time>" in place of
+   * a stamp. Filled in by the detail route; absent on any other page.
+   */
+  sourceSync?: { host: string; checkedAt: string | null } | null;
+  /**
    * The manual verification stamp (docs/features/38): who last said "this page
    * is right" and at which revision. Optional because only the detail route
    * fills it in — a tree node or a list row never needs it. `verification` is
@@ -427,6 +439,10 @@ export const KNOWN_EVENT_TYPES = [
   // the uploader alone; `title` is their own memo's, metadata carries counts.
   'memo.done',
   'memo.failed',
+  // A source-backed page took a new version from its source (#674), told to
+  // the connector's owner; an alert is directed at them (reason `alert`).
+  'source.updated',
+  'source.alert',
   'connector.created',
   'connector.updated',
   'connector.deleted',
@@ -637,7 +653,8 @@ export const VERIFICATION_FLAGS = ['requested', 'outdated'] as const;
 export type VerificationFlag = (typeof VERIFICATION_FLAGS)[number];
 
 /** Who set the flag. `drift` and `curator` are the agents of docs/features/35 and 20. */
-export const VERIFICATION_SOURCE_KINDS = ['person', 'drift', 'curator', 'mcp'] as const;
+// `source`: a source-backed page this one depends on went away (#674).
+export const VERIFICATION_SOURCE_KINDS = ['person', 'drift', 'curator', 'mcp', 'source'] as const;
 export type VerificationSourceKind = (typeof VERIFICATION_SOURCE_KINDS)[number];
 
 export interface VerificationSource {
@@ -657,6 +674,29 @@ export interface VerificationInput {
   verifiedRevisionId: string | null | undefined;
   verificationExpiresAt?: Date | string | null;
   verificationFlag?: VerificationFlag | string | null;
+  /** Set on a source-backed page (#674): its sync health stands in for the stamp. */
+  source?: SourceSyncHealth | null;
+}
+
+/** What a source-backed page's sync reads as (#674, phase 5): its `web` link and the connector's interval. */
+export interface SourceSyncHealth {
+  pausedAt: Date | string | null;
+  heldAt: Date | string | null;
+  failures: number;
+  lastPulledAt: Date | string | null;
+  intervalMinutes: number | null;
+}
+
+/**
+ * A source-backed page's sync is healthy: not paused, not held for recipe
+ * review, no failed sync in a row, and — on a schedule — last answered within
+ * two intervals. A manual-only source has no clock to fall behind. Mirrored in
+ * SQL by `sourceStateSql` (apps/api/src/documents/source-backed.ts).
+ */
+export function sourceSyncHealthy(s: SourceSyncHealth, now: Date = new Date()): boolean {
+  if (s.pausedAt || s.heldAt || s.failures > 0) return false;
+  if (s.intervalMinutes === null) return true;
+  return !!s.lastPulledAt && now.getTime() - new Date(s.lastPulledAt).getTime() <= 2 * s.intervalMinutes * 60_000;
 }
 
 export function verificationStateFor(
@@ -668,6 +708,8 @@ export function verificationStateFor(
   if (doc.verificationFlag === 'outdated') return 'outdated';
   if (openIssueCount > 0) return 'flagged';
   if (doc.verificationFlag === 'requested') return 'requested';
+  // A person's flag outranks it, but nobody stamps a page its source writes.
+  if (doc.source) return sourceSyncHealthy(doc.source, now) ? 'verified' : 'expired';
   if (!doc.verifiedRevisionId) return 'unverified';
   if (!headRevisionId || doc.verifiedRevisionId !== headRevisionId) return 'edited';
   const expires = doc.verificationExpiresAt ? new Date(doc.verificationExpiresAt) : null;

@@ -112,6 +112,17 @@ describe('renderExport: pdf', () => {
     expect(single).not.toContain('kn-export-contents')
   })
 
+  it('shows a page title once when the body opens with it, and keeps a different first heading (#692)', () => {
+    const pages = [
+      { documentId: A, title: 'Guides', depth: 0, path: 'pages/guides.html', markdown: '# Guides\n\nBody.' },
+      { documentId: C, title: 'FAQ', depth: 0, path: 'pages/faq.html', markdown: '# Questions\n\nBody.' },
+    ]
+    const pdf = file(renderExport(request('pdf', { pages }), deps), 'index.html')
+    const html = file(renderExport(request('html', { pages }), deps), 'pages/guides.html')
+    for (const doc of [pdf, html]) expect(doc.match(/<h1[^>]*>Guides<\/h1>/g)).toHaveLength(1)
+    expect(pdf).toMatch(/<h1 id="p1-questions">Questions<\/h1>/)
+  })
+
   it('waits for diagrams before printing', () => {
     const withDiagram = renderExport(
       request('pdf', { pages: [{ documentId: A, title: 'Flow', depth: 0, path: 'pages/flow.html', markdown: '```mermaid\ngraph TD; a-->b\n```' }] }),

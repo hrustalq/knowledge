@@ -30,6 +30,7 @@ import type { SearchDto } from './search.dto.js';
 import { communityPrior, firstPerPage, floorTextHits, floorVectorHits, fuseHits, type PriorCommunity, type SearchPool } from './ranking.js';
 import { flatFollow, layeredFollow, walkRelated } from './expansion.js';
 import { snippetPartsOf } from './snippet.js';
+import { sourceSyncOf } from '../documents/source-backed.js';
 
 @Injectable()
 export class SearchService {
@@ -411,13 +412,16 @@ export class SearchService {
     docs: Awaited<ReturnType<SearchService['loadDocs']>>,
     inactiveAfterDays: number,
   ): Promise<Map<string, DocumentTrust>> {
-    const issues = await this.provenance.openIssueCounts(docs.map((d) => d.id));
+    const [issues, sources] = await Promise.all([
+      this.provenance.openIssueCounts(docs.map((d) => d.id)),
+      sourceSyncOf(this.prisma, docs.map((d) => d.id)),
+    ]);
     const now = new Date();
     return new Map(
       docs.map((d) => {
         const headId = d.branches.find((b) => b.name === d.defaultBranch)?.headRevisionId ?? null;
         const trust: DocumentTrust = {
-          status: verificationStateFor(d, headId, issues.get(d.id) ?? 0, now),
+          status: verificationStateFor({ ...d, source: sources.get(d.id) }, headId, issues.get(d.id) ?? 0, now),
           verifiedAt: d.verifiedAt?.toISOString() ?? null,
           expiresAt: d.verificationExpiresAt?.toISOString() ?? null,
           ownerId: d.ownerId,

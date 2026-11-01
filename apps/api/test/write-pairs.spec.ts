@@ -12,6 +12,14 @@ import { ChatAnswersService } from '../src/chat/chat-answers.service.js';
 import { AuthFlowService } from '../src/auth/auth-flow.service.js';
 import { ImportService } from '../src/import/import.service.js';
 import { AttachmentsService } from '../src/attachments/attachments.service.js';
+import { Prisma } from '@prisma/client';
+import { IdentityProvidersService } from '../src/auth/sso/identity-providers.service.js';
+import { SsoFlowService } from '../src/auth/sso/sso-flow.service.js';
+import { GroupMappingsService } from '../src/auth/sso/group-mappings.service.js';
+import { RoleSyncService } from '../src/auth/sso/role-sync.service.js';
+import { UsersService } from '../src/users/users.service.js';
+import { ScimService } from '../src/scim/scim.service.js';
+import { hashPassword } from '../src/auth/password.js';
 
 /**
  * #658: write pairs that must commit together. Each case fails the LAST write
@@ -53,6 +61,9 @@ function fakePrisma(handlers: Record<string, Handler>) {
       get: (_t, prop: string) => {
         if (prop === 'then') return undefined;
         if (prop === '$transaction') throw new Error('raw $transaction used');
+        if (prop === '$executeRaw') {
+          return async () => ((buffer ?? committed).push('$executeRaw'), (handlers.$executeRaw as number | undefined) ?? 1);
+        }
         if (prop === 'onCommit') {
           return (fn: () => Promise<unknown>) => (effects ? effects.push(fn) : void fn());
         }
@@ -343,5 +354,209 @@ describe('#658 write pairs commit together', () => {
     });
     await expect(svc.complete('d1', 'a1')).rejects.toThrow('boom');
     expect(storage.deleteObject).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * #656: a security change and the revoke/offboard it demands commit together.
+ * Each case fails the step after the change and asserts that neither is
+ * committed — a retry of every one of these is refused, so a half-commit would
+ * leave sessions alive for good — and that no audit row or mail went out.
+ */
+describe('#656 revoke and offboard commit with the change', () => {
+  const U = '22222222-2222-4222-8222-222222222222';
+  const G = '33333333-3333-4333-8333-333333333333';
+  const P = '44444444-4444-4444-8444-444444444444';
+  const audit = () => ({ record: vi.fn(async () => undefined) });
+  const failingSessions = () => ({ revokeAllForUser: vi.fn(boom) });
+  const scimConfig = config({ API_PUBLIC_URL: 'http://x', AUTH_SCIM_MAX_PAGE: 100, AUTH_SCIM_ENABLED: true, AUTH_MODE: 'api-key' });
+  const caller = { workspaceId: WS, tokenId: 't1' };
+
+  it.each(['session.updateMany', 'identityProvider.delete'])('provider delete, %s fails: the provider stays while its sessions stay', async (failing) => {
+    const { prisma, committed } = fakePrisma({
+      'identityProvider.findFirst': { id: P, workspaceId: WS, kind: 'oidc', name: 'IdP' },
+      'session.updateMany': { count: 2 },
+      'identityProvider.delete': {},
+      [failing]: boom,
+    });
+    const a = audit();
+    const oidc = { forget: vi.fn() };
+    const policy = { invalidate: vi.fn() };
+    const svc = new IdentityProvidersService(prisma, config({}), oidc as never, a as never, policy as never, _, _);
+    await expect(svc.remove(WS, P, { userId: 'u1' } as never)).rejects.toThrow('boom');
+    expect(committed).toEqual([]);
+    expect(a.record).not.toHaveBeenCalled();
+    expect(oidc.forget).not.toHaveBeenCalled();
+  });
+
+  describe('back-channel logout', () => {
+    const flow = (prisma: never, a: ReturnType<typeof audit>) =>
+      new SsoFlowService(
+        prisma,
+        config({ WEB_BASE_URL: 'http://x', AUTH_SSO_STATE_TTL_SEC: 600 }),
+        { logoutClaims: async () => ({ jti: 'j1', sid: 's1', sub: 'sub1' }) } as never,
+        _,
+        _,
+        a as never,
+        _,
+        _,
+        _,
+      );
+    const provider = { id: P, workspaceId: WS, kind: 'oidc', enabled: true };
+
+    it('no spent jti without the revoke, so the IdP can retry', async () => {
+      const { prisma, committed } = fakePrisma({
+        'identityProvider.findFirst': provider,
+        'ssoAuthRequest.create': {},
+        'userIdentity.findUnique': { userId: U },
+        'session.updateMany': boom,
+      });
+      const a = audit();
+      await expect(flow(prisma, a).backchannelLogout(P, 'tok', { ip: null } as never)).rejects.toThrow('boom');
+      expect(committed).toEqual([]);
+      expect(a.record).not.toHaveBeenCalled();
+    });
+
+    it('a replayed token is still refused, with the same reason', async () => {
+      const { prisma, committed } = fakePrisma({
+        'identityProvider.findFirst': provider,
+        'ssoAuthRequest.create': () => {
+          throw new Prisma.PrismaClientKnownRequestError('dup', { code: 'P2002', clientVersion: 'x' });
+        },
+      });
+      const a = audit();
+      await expect(flow(prisma, a).backchannelLogout(P, 'tok', { ip: null } as never)).resolves.toBe(false);
+      expect(committed).toEqual([]);
+      expect(a.record).toHaveBeenCalledWith(expect.objectContaining({ ok: false, error: 'logout token replayed' }));
+    });
+  });
+
+  describe('passwords', () => {
+    const auth = (prisma: never, mail: { enqueue: ReturnType<typeof vi.fn> }) =>
+      new AuthFlowService(prisma, config({}), failingSessions() as never, mail as never, {} as never, {} as never);
+
+    it('resetPassword: the token stays unspent and the old hash stays', async () => {
+      const { prisma, committed } = fakePrisma({
+        'passwordResetToken.findUnique': { id: 'rt1', userId: U, usedAt: null, expiresAt: new Date(Date.now() + 60_000), purpose: 'reset' },
+        'passwordResetToken.update': {},
+        'user.update': {},
+        'user.updateMany': { count: 0 },
+      });
+      const mail = { enqueue: vi.fn() };
+      await expect(auth(prisma, mail).resetPassword('kr_x', 'correct horse battery')).rejects.toThrow('boom');
+      expect(committed).toEqual([]);
+      expect(mail.enqueue).not.toHaveBeenCalled();
+    });
+
+    it('changePassword: the old hash stays', async () => {
+      const { prisma, committed } = fakePrisma({
+        'user.findUnique': { id: U, passwordHash: await hashPassword('old password 1') },
+        'user.update': {},
+      });
+      const mail = { enqueue: vi.fn() };
+      const principal = { mode: 'api-key', userId: U, sessionId: 's1' } as never;
+      await expect(auth(prisma, mail).changePassword(principal, 'old password 1', 'new password 2')).rejects.toThrow('boom');
+      expect(committed).toEqual([]);
+      expect(mail.enqueue).not.toHaveBeenCalled();
+    });
+
+    it('admin disable: the account is not disabled while its sessions live', async () => {
+      const { prisma, committed } = fakePrisma({ 'user.findUnique': { id: U, disabledAt: null }, 'user.update': {} });
+      const mail = { enqueue: vi.fn() };
+      const svc = new UsersService(prisma, failingSessions() as never, mail as never, config({}), _);
+      await expect(svc.update({ userId: 'u1' } as never, U, { disabled: true, password: 'override password 3' })).rejects.toThrow('boom');
+      expect(committed).toEqual([]);
+      expect(mail.enqueue).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('SCIM', () => {
+    const scim = (prisma: never, opts: { roleSync?: unknown; sessions?: unknown; a?: ReturnType<typeof audit> } = {}) =>
+      new ScimService(prisma, (opts.roleSync ?? { applyScim: vi.fn(async () => []) }) as never, (opts.sessions ?? failingSessions()) as never, (opts.a ?? audit()) as never, scimConfig);
+    const call = <T>(svc: ScimService, method: string, ...args: unknown[]) =>
+      (svc as unknown as Record<string, (...a: unknown[]) => Promise<T>>)[method](...args);
+    const rec = { userId: U, userName: 'a@x.test', externalId: null, active: true, user: { email: 'a@x.test', displayName: 'A' } };
+
+    it('createUser active=false: no scim_users row without the offboard', async () => {
+      const { prisma, committed } = fakePrisma({
+        'scimUser.findFirst': null,
+        'ssoDomain.findFirst': null,
+        'user.findUnique': null,
+        'user.create': { id: U },
+        'scimUser.create': {},
+      });
+      const a = audit();
+      const body = { schemas: ['urn:ietf:params:scim:schemas:core:2.0:User'], userName: 'a@x.test', active: false, emails: [{ value: 'a@x.test', primary: true }] };
+      await expect(scim(prisma, { a }).createUser(caller, body)).rejects.toThrow('boom');
+      expect(committed).toEqual([]);
+      expect(a.record).not.toHaveBeenCalled();
+    });
+
+    it('deleteUser: the row stays while access and sessions stay (through the real role sync)', async () => {
+      const { prisma, committed } = fakePrisma({
+        'scimUser.findUnique': rec,
+        'ssoDomain.findFirst': null,
+        'scimGroupMember.deleteMany': {},
+        'scimUser.deleteMany': {},
+        'scimUser.findMany': [],
+        'scimGroupMember.findMany': [],
+        'idpGroupMapping.findMany': [],
+        'workspaceMember.findMany': [{ workspaceId: WS, userId: U, role: 'editor', trustedOperator: false, source: 'scim' }],
+        'workspaceSettings.findUnique': null,
+        'userGroupMember.deleteMany': {},
+        'accessGrant.deleteMany': {},
+      });
+      const a = audit();
+      // Real RoleSyncService: removeMemberGuarded → dropWorkspaceAccess, which must join the boundary, not open a raw $transaction.
+      const roleSync = new RoleSyncService(prisma, a as never);
+      await expect(scim(prisma, { roleSync, a }).deleteUser(caller, U)).rejects.toThrow('boom');
+      expect(committed).toEqual([]);
+      expect(a.record).not.toHaveBeenCalled();
+    });
+
+    it('deactivate: active stays true, so a retry still offboards', async () => {
+      const { prisma, committed } = fakePrisma({ 'ssoDomain.findFirst': null, 'scimUser.update': {} });
+      const a = audit();
+      const fields = { userName: rec.userName, externalId: null, active: false, email: rec.user.email, displayName: 'A', raw: {} };
+      await expect(call(scim(prisma, { a }), 'update', caller, rec, fields)).rejects.toThrow('boom');
+      expect(committed).toEqual([]);
+      expect(a.record).not.toHaveBeenCalled();
+    });
+
+    const failingSync = () => ({ applyScim: vi.fn(boom) });
+    const group = { id: G, workspaceId: WS, displayName: 'G', externalId: null, members: [{ userId: U, user: { displayName: 'A' } }] };
+
+    it('group update: removed members stay while their re-sync fails', async () => {
+      const { prisma, committed } = fakePrisma({ 'scimGroupMember.deleteMany': {} });
+      const next = { displayName: 'G', externalId: null, members: new Set<string>() };
+      await expect(call(scim(prisma, { roleSync: failingSync() }), 'writeGroup', caller, group, next)).rejects.toThrow('boom');
+      expect(committed).toEqual([]);
+    });
+
+    it('group delete: the group stays while its re-sync fails', async () => {
+      const { prisma, committed } = fakePrisma({ 'scimGroup.findFirst': group, 'scimGroup.delete': {}, 'idpGroupMapping.deleteMany': {} });
+      await expect(scim(prisma, { roleSync: failingSync() }).deleteGroup(caller, G)).rejects.toThrow('boom');
+      expect(committed).toEqual([]);
+    });
+
+    it('group create: no members without their grant', async () => {
+      const { prisma, committed } = fakePrisma({ 'scimGroup.create': { id: G }, 'scimUser.findMany': [{ userId: U }], 'scimGroupMember.createMany': {} });
+      const body = { schemas: ['urn:ietf:params:scim:schemas:core:2.0:Group'], displayName: 'G', members: [{ value: U }] };
+      await expect(scim(prisma, { roleSync: failingSync() }).createGroup(caller, body)).rejects.toThrow('boom');
+      expect(committed).toEqual([]);
+    });
+
+    it('SCIM mapping delete: the mapping stays while its re-sync fails', async () => {
+      const { prisma, committed } = fakePrisma({
+        'idpGroupMapping.findFirst': { id: 'm1', workspaceId: WS, providerId: null, externalGroup: G, role: 'editor', trustedOperator: false },
+        'idpGroupMapping.delete': {},
+        'scimGroupMember.findMany': [{ userId: U }],
+      });
+      const a = audit();
+      const svc = new GroupMappingsService(prisma, a as never, failingSync() as never, scimConfig);
+      await expect(svc.remove(WS, 'm1', { userId: 'u1' } as never)).rejects.toThrow('boom');
+      expect(committed).toEqual([]);
+      expect(a.record).not.toHaveBeenCalled();
+    });
   });
 });

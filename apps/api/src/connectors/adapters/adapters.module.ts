@@ -11,6 +11,7 @@ import { GoogleDriveAdapter } from './google-drive.adapter.js';
 import { JiraAdapter } from './jira.adapter.js';
 import { LinearAdapter } from './linear.adapter.js';
 import { FigmaAdapter } from './figma.adapter.js';
+import { WebAdapter } from './web.adapter.js';
 import { ZendeskAdapter } from './zendesk.adapter.js';
 import { IntercomAdapter } from './intercom.adapter.js';
 import { MarkdownGitAdapter } from './markdown-git.adapter.js';
@@ -50,6 +51,7 @@ import { TreeSitterService } from './tree-sitter.service.js';
     ZendeskAdapter,
     IntercomAdapter,
     FigmaAdapter,
+    WebAdapter,
     NotionAdapter,
     MarkdownGitAdapter,
     CodebaseAdapter,

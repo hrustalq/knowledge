@@ -87,8 +87,9 @@ export async function removeMemberGuarded(
  * grants held the day the person is re-added — access nobody granted.
  */
 export async function dropWorkspaceAccess(prisma: PrismaService, workspaceId: string, userId: string): Promise<void> {
-  await prisma.$transaction([
-    prisma.userGroupMember.deleteMany({ where: { userId, group: { workspaceId } } }),
-    prisma.accessGrant.deleteMany({ where: { workspaceId, subjectType: 'user', subjectId: userId } }),
-  ]);
+  // withTransaction, not $transaction: SCIM offboarding reaches this from inside its own boundary (#656).
+  await prisma.withTransaction(async () => {
+    await prisma.userGroupMember.deleteMany({ where: { userId, group: { workspaceId } } });
+    await prisma.accessGrant.deleteMany({ where: { workspaceId, subjectType: 'user', subjectId: userId } });
+  });
 }

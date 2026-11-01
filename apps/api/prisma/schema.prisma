@@ -1579,7 +1579,7 @@ model AgentRun {
   /// The override row, when one exists. Null for an untouched built-in.
   agentId     String? @map("agent_id") @db.Uuid
 
-  /// 'manual' | 'schedule' | 'event' | 'webhook' | 'report' — see
+  /// 'manual' | 'schedule' | 'event' | 'webhook' | 'report' | 'merge-request' | 'source' — see
   /// AGENT_RUN_TRIGGERS. 'event' is written only by AgentTriggerService (#70).
   trigger    String  @default("manual")
   /// The agent_triggers row behind an 'event' run. No FK: deleting a trigger
@@ -2213,6 +2213,12 @@ model Connector {
   /// the previous image still syncs against a migrated database.
   connectionId String? @map("connection_id") @db.Uuid
 
+  /// The page a `web` connector belongs to (#674): "Add page → Link a source"
+  /// makes one connector per page, hidden from the Connectors list and
+  /// managed from that page. Null for every connector a person set up. No FK,
+  /// like documents.parent_id: the page's teardown deletes the connector.
+  ownerDocumentId String? @map("owner_document_id") @db.Uuid
+
   createdBy String?  @map("created_by") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
@@ -2220,6 +2226,7 @@ model Connector {
   project               Project                @relation(fields: [projectId], references: [id])
   connection            Connection?            @relation(fields: [connectionId], references: [id], onDelete: Restrict)
   links                 ConnectorLink[]
+  recipes               SourceRecipe[]
   runs                  ConnectorRun[]
   conflicts             ConnectorConflict[]
   workItems             ConnectorWorkItem[]
@@ -2232,6 +2239,7 @@ model Connector {
 
   @@unique([workspaceId, name])
   @@index([workspaceId, kind])
+  @@index([ownerDocumentId])
   @@map("connectors")
 }
 
@@ -2312,11 +2320,73 @@ model ConnectorLink {
   lastPushedAt DateTime? @map("last_pushed_at") @db.Timestamptz
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
+  /// Source-backed pages (#674), `web` links only. Paused: the source writes
+  /// nothing, and counts in ahead_count the new versions it would have
+  /// written (ahead_hash = the last one counted).
+  pausedAt     DateTime? @map("paused_at") @db.Timestamptz
+  aheadCount   Int       @default(0) @map("ahead_count")
+  aheadHash    String?   @map("ahead_hash")
+  /// Consecutive failed syncs (retries exhausted, or unparseable), and
+  /// consecutive 404/410s; SOURCE_FAILURE_LIMIT of the second archives the page.
+  failures     Int       @default(0)
+  goneCount    Int       @default(0) @map("gone_count")
+  /// A transient failure's next retry (SOURCE_RETRY_DELAYS_MIN[retry_attempt - 1]).
+  retryAttempt Int       @default(0) @map("retry_attempt")
+  retryAt      DateTime? @map("retry_at") @db.Timestamptz
+  /// Extraction recipes (#674, phase 2). The last good version's h1/h2
+  /// headings and word count (the implicit checks compare against it), and
+  /// the structural fingerprint the last fetch had.
+  baseline           Json?     @db.JsonB
+  fingerprint        Json?     @db.JsonB
+  /// The fingerprint moved while the recipe's checks still pass: a note and a
+  /// Draft button, no model call. Cleared by a saved recipe or a dismiss.
+  structureChangedAt DateTime? @map("structure_changed_at") @db.Timestamptz
+  /// Set while a version is held: the checks failed, the page stays on its
+  /// last good revision. held_reason = the failed checks, comma-separated.
+  heldAt             DateTime? @map("held_at") @db.Timestamptz
+  heldReason         String?   @map("held_reason")
+  /// Why, in the source's own words, when a check names one: the parser's
+  /// message for a spec that no longer parses (phase 4).
+  heldDetail         String?   @map("held_detail")
+  /// sha256 of the last fetched body, stored at sourceBodyObjectKey.
+  bodyHash           String?   @map("body_hash")
+
   connector Connector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
 
   @@unique([connectorId, externalId])
   @@index([documentId])
   @@map("connector_links")
+}
+
+/// An extraction recipe (#674, phase 2): how a `web` source's HTML becomes
+/// its page. Declarative data only — selectors, a heading map, landmarks and
+/// normalization rules — never code. Immutable versions; a page-scope row
+/// (document_id set) replaces the connector-scope one. At most one `active`
+/// and one `proposed` per scope, kept by updateMany-then-insert.
+model SourceRecipe {
+  id          String  @id @default(uuid()) @db.Uuid
+  workspaceId String  @map("workspace_id") @db.Uuid
+  connectorId String  @map("connector_id") @db.Uuid
+  /// Null = the connector's recipe. No FK, like connector_links.document_id.
+  documentId  String? @map("document_id") @db.Uuid
+  version     Int
+  /// proposed | active | superseded | rejected
+  status      String
+  /// agent | person
+  origin      String
+  recipe      Json    @db.JsonB
+  /// The agent's one-line account of what it changed, shown in the review.
+  note        String?
+  createdBy   String?   @map("created_by") @db.Uuid
+  decidedBy   String?   @map("decided_by") @db.Uuid
+  decidedAt   DateTime? @map("decided_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  connector Connector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+
+  @@unique([connectorId, version])
+  @@index([connectorId, documentId, status])
+  @@map("source_recipes")
 }
 
 /// The reverse-import index of a code connector's head (#236): one row per
@@ -3980,6 +4050,12 @@ model WorkspaceSettings {
   /// #339 searchable chat: days a message is kept; null inherits
   /// CHAT_SEARCH_RETENTION_DAYS, and a value may only shorten it.
   chatSearchRetentionDays Int?     @map("chat_search_retention_days")
+  /// #674 crawled web sources, each null = its WEB_SOURCE_CRAWL_* ceiling, and
+  /// a value may only lower it: pages per crawl, and the change that waits for
+  /// a person on a first crawl / a later one.
+  sourceCrawlMaxPages      Int?     @map("source_crawl_max_pages")
+  sourceCrawlConfirmFirst  Int?     @map("source_crawl_confirm_first")
+  sourceCrawlConfirmChange Int?     @map("source_crawl_confirm_change")
   /// #424 handoff rules, each null = off, all under
   /// WORK_ITEM_AUTOCREATE_MAX_PER_TICK. WORK_ITEM_ISSUE_RULES — off | high | medium | all.
   workItemIssues          String?  @map("work_item_issues")
@@ -4395,6 +4471,25 @@ model RevisionEmbed {
   @@index([documentId, fileKey, nodeId, version])
   @@index([workspaceId, fileKey])
   @@map("revision_embeds")
+}
+
+/// One internal link on a page's default-branch head (#673): `/documents/<id>`
+/// or the same path on WEB_BASE_URL, with its `#anchor` when it has one. The
+/// worker replaces a page's rows whenever its head is indexed, so the table
+/// only ever holds what the pages say now; backlinks read it by target. No FK
+/// on either document (house policy): a target may not exist, and the source's
+/// rows go with it in `cascadeDocuments`.
+model PageLink {
+  id               String  @id @default(uuid()) @db.Uuid
+  workspaceId      String  @map("workspace_id") @db.Uuid
+  sourceDocumentId String  @map("source_document_id") @db.Uuid
+  sourceRevisionId String  @map("source_revision_id") @db.Uuid
+  targetDocumentId String  @map("target_document_id") @db.Uuid
+  targetAnchor     String? @map("target_anchor")
+
+  @@index([sourceDocumentId])
+  @@index([workspaceId, targetDocumentId])
+  @@map("page_links")
 }
 
 /// A pinned node as it is in Figma now (#470): the file's current version and

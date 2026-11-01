@@ -1217,7 +1217,11 @@ export type AiUsageOperation =
    */
   | 'transcription'
   /** The `secretary` reading one memo's transcript and proposing pages (#551). */
-  | 'memo';
+  | 'memo'
+  /** The `interpreter` drafting a `web` source's extraction recipe (#674): on a held version, or a person's Draft. */
+  | 'source-recipe'
+  /** The `sentinel` judging a page that links a `web` source against what its new version changed (#674, phase 5b). One row per page. */
+  | 'source-judge';
 
 /** One row of the per-user (or per-model) usage breakdown. */
 export interface AiUsageBucket {
@@ -1382,6 +1386,8 @@ export const BUILT_IN_AGENT_KEYS = [
   'tester',
   /** Proposes the pages a memo's transcript changes, as merge requests (#551). Started only by the memo worker. */
   'secretary',
+  /** Drafts a `web` source's extraction recipe when a version fails its checks (#674). Never from the Run button. */
+  'interpreter',
 ] as const;
 export type BuiltInAgentKey = (typeof BUILT_IN_AGENT_KEYS)[number];
 
@@ -1497,6 +1503,27 @@ export interface AgentRunInput {
    * revision even if the branch has moved since.
    */
   lint?: AgentRunLint;
+  /**
+   * A sentinel run judging the pages that link a source-backed page against
+   * what its new version changed (#674, phase 5b). Set only by
+   * `SourceDependentsService`; a run still pending absorbs a newer version by
+   * moving `toRevisionId`, so `fromRevisionId` stays the last version judged.
+   */
+  sourceChange?: AgentRunSourceChange;
+}
+
+/** What a source-change sentinel run compares (#674). */
+export interface AgentRunSourceChange {
+  documentId: string;
+  fromRevisionId: string;
+  toRevisionId: string;
+  /**
+   * Pages the deterministic pass flagged for this change (a removed section, a
+   * dropped key). Skipped like any flagged page, except in `propose` mode:
+   * a page linking the source is judged anyway, for the fix, and its flag
+   * keeps the pass's note.
+   */
+  flagged?: string[];
 }
 
 /** What a linter run checks (#74). */
@@ -2020,6 +2047,12 @@ export const AGENT_RUN_TRIGGERS = [
    * `linter`, and never from the event bus.
    */
   'merge-request',
+  /**
+   * A source-backed page's new version needed the pages linking it judged
+   * (#674, phase 5b). Emitted by exactly one service, `SourceDependentsService`,
+   * for the `sentinel`, and never from the event bus.
+   */
+  'source',
 ] as const;
 export type AgentRunTrigger = (typeof AGENT_RUN_TRIGGERS)[number];
 
@@ -2680,6 +2713,12 @@ export interface AgentRunDetails {
    * compares, so a ranking of a set that has since changed is not applied.
    */
   fixtureRanking?: { candidatesHash: string; order: Array<{ documentId: string; explanation: string | null }> };
+  /**
+   * The dependent pages a source-change run left unjudged (#674, phase 5b):
+   * past the cap, or restricted from the workspace audience the run reads
+   * under. Ids only, never titles; the publisher flags each `requested`.
+   */
+  sourceUnchecked?: Array<{ documentId: string; reason: 'cap' | 'restricted' }>;
 }
 
 /**

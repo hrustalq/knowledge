@@ -200,6 +200,8 @@ export class ProjectCascadeService {
     // to avoid.
     await tx.glossaryExclusion.deleteMany({ where: docs });
     await tx.revisionEmbed.deleteMany({ where: docs });
+    // A page's outgoing links; rows pointing *at* it stay with their sources.
+    await tx.pageLink.deleteMany({ where: { sourceDocumentId: { in: documentIds } } });
     await tx.connectorLink.deleteMany({ where: docs });
     await tx.connectorConflict.deleteMany({ where: docs });
     await tx.notification.deleteMany({ where: docs });

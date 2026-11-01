@@ -21,6 +21,7 @@ import { StorageService } from '../storage/storage.service.js';
 import { ConnectorProducer } from './connector.producer.js';
 import type { RunWarning } from './connector-sync.service.js';
 import type { ItemDraft } from './connector-staging.service.js';
+import { sourceConnectorOf } from '../documents/source-backed.js';
 import { sha256, stagedObject } from './connector-markdown.js';
 import { MAX_WARNINGS, toRunInfo } from './connectors.service.js';
 
@@ -241,19 +242,29 @@ export class ConnectorItemsService {
     // together (#658), or the next pull reads our own revert as a local edit.
     // The MinIO PUT is inside, hence `createPage`'s raised timeout.
     const documentId = item.documentId;
+    // A source-backed page (#674) is written only by its own connector — this
+    // item's — and a revert pauses its source, or the next sync undoes it.
+    const source = await sourceConnectorOf(this.prisma, documentId);
     return this.prisma.withTransaction(
       async () => {
-        const revision = await this.documents.createRevision(documentId, {
-          message: t('connector.revertRevisionMessage'),
-          contentType: 'text/markdown',
-        });
+        const revision = await this.documents.createRevision(
+          documentId,
+          { message: t('connector.revertRevisionMessage'), contentType: 'text/markdown' },
+          undefined,
+          undefined,
+          source ? { connectorId: source } : undefined,
+        );
         const row = await this.prisma.documentRevision.findUniqueOrThrow({ where: { id: revision.revisionId } });
         await this.storage.putObjectText(row.s3Key, markdown, 'text/markdown');
         await this.documents.finalizeRevision(documentId, revision.revisionId);
         if (item.linkId) {
           await this.prisma.connectorLink.update({
             where: { id: item.linkId },
-            data: { contentHash: sha256(markdown), revisionId: revision.revisionId },
+            data: {
+              contentHash: sha256(markdown),
+              revisionId: revision.revisionId,
+              ...(source ? { pausedAt: new Date(), aheadCount: 0, aheadHash: null } : {}),
+            },
           });
         }
         return this.recordRevert(item);

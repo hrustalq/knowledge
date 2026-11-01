@@ -12,10 +12,13 @@
  * simply wrong on any route without a trail. `--kn-chrome-h` is published from
  * the chrome actually rendered, and the sub-rails read it.
  */
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, useSSRContext, watch, watchEffect } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { FocusScope } from 'reka-ui'
+import { useMediaQuery } from '@vueuse/core'
+import { PanelRightOpen, X } from 'lucide-vue-next'
+import { Button } from '@/shared/ui/button'
 import { Toaster } from '@/shared/ui/sonner'
 import { useSidebarStore } from '@/stores/sidebar'
 import { useLayoutStore } from '@/stores/layout'
@@ -28,6 +31,7 @@ import VerifyEmailBanner from './VerifyEmailBanner.vue'
 import AppTopbar from './AppTopbar.vue'
 import AppBreadcrumbs from './AppBreadcrumbs.vue'
 import { useCrumbs } from './breadcrumbs'
+import { APP_NAME, titleFor } from './document-title'
 import { slowNavigation } from '@/app/router/navigation'
 
 const route = useRoute()
@@ -74,6 +78,20 @@ const crumbs = useCrumbs()
  */
 const showCrumbs = computed(() => !route.meta.bare && crumbs.value.length > 0)
 
+/**
+ * The tab title names the route (#644). The server reads it after the render,
+ * once the prefetches have filled what the trail names; signed out, the tab
+ * goes back to the app's name.
+ */
+const documentTitle = computed(() => titleFor(crumbs.value))
+if (import.meta.env.SSR) {
+  const ssr = useSSRContext<{ title?: () => string }>()
+  if (ssr) ssr.title = () => documentTitle.value
+} else {
+  watchEffect(() => (document.title = documentTitle.value))
+  onBeforeUnmount(() => (document.title = APP_NAME))
+}
+
 /** An unconfirmed address (docs/features/41), until dismissed for this load. */
 const auth = useAuthStore()
 const bannerDismissed = ref(false)
@@ -115,8 +133,43 @@ watch(
   () => route.fullPath,
   () => {
     mobileOpen.value = false
+    actionsOpen.value = false
   },
 )
+
+/**
+ * A phone's page actions: below `sm` the row keeps the trail and one toggle,
+ * and the actions slide in as an aside from the end (the stylesheet turns the
+ * same `#kn-page-actions` element into the panel, so the page's teleport and
+ * the server's splice never move). Modal while open, like the drawer above:
+ * focus trapped, Escape and the scrim close it. Widening past `sm` closes it,
+ * since the panel is the inline row again there.
+ */
+const actionsOpen = ref(false)
+const narrow = useMediaQuery('(width < 40rem)')
+watch(narrow, (isNarrow) => {
+  if (!isNarrow) actionsOpen.value = false
+})
+// Both after the patch (`post`): before it the panel is still `visibility:
+// hidden`, where a control silently refuses focus, and the trap is still on,
+// which pulls focus that leaves it straight back in.
+const actionsToggle = ref<InstanceType<typeof Button> | null>(null)
+let returnFocus = false
+watch(
+  actionsOpen,
+  (open) => {
+    if (open) document.querySelector<HTMLElement>('#kn-page-actions :is(button, a):not([disabled])')?.focus()
+    else if (returnFocus) (actionsToggle.value?.$el as HTMLElement | undefined)?.focus()
+    returnFocus = false
+  },
+  { flush: 'post' },
+)
+/** Closed by the person (Escape, the scrim, ×): focus goes back to the toggle. A navigation leaves it where it lands. */
+function closeActions() {
+  if (!actionsOpen.value) return
+  returnFocus = true
+  actionsOpen.value = false
+}
 
 /**
  * The skip link moves focus rather than following its `#main` hash: a hash
@@ -206,9 +259,42 @@ function skipToMain() {
            teleport never misses one; each is drawn only while it holds
            something. `id` stays the first attribute: entry-server splices the
            server's teleport buffers in by it. -->
-      <div class="kn-trail">
+      <div class="kn-trail" :data-actions-open="actionsOpen || undefined">
         <AppBreadcrumbs v-if="showCrumbs" :crumbs="crumbs" />
-        <div id="kn-page-actions" class="kn-page-actions" />
+        <!-- Phones only (the stylesheet shows it while the page has actions):
+             the one control the row keeps, opening them as an aside. -->
+        <Button
+          ref="actionsToggle"
+          variant="ghost"
+          size="icon-sm"
+          class="kn-actions-toggle"
+          aria-controls="kn-page-actions"
+          :aria-expanded="actionsOpen"
+          :aria-label="t('nav.pageActions')"
+          :title="t('nav.pageActions')"
+          @click="actionsOpen = !actionsOpen"
+        >
+          <PanelRightOpen class="size-4" aria-hidden="true" />
+        </Button>
+        <div class="kn-actions-scrim" aria-hidden="true" @click="closeActions" />
+        <FocusScope
+          class="kn-actions-panel"
+          :trapped="actionsOpen"
+          loop
+          :role="actionsOpen ? 'dialog' : undefined"
+          :aria-modal="actionsOpen ? 'true' : undefined"
+          :aria-label="actionsOpen ? t('nav.pageActions') : undefined"
+          @keydown.esc="closeActions"
+          @mount-auto-focus.prevent
+        >
+          <div class="kn-actions-head">
+            <p class="kn-actions-title">{{ t('nav.pageActions') }}</p>
+            <Button variant="ghost" size="icon-sm" :aria-label="t('common.close')" @click="closeActions">
+              <X class="size-4" aria-hidden="true" />
+            </Button>
+          </div>
+          <div id="kn-page-actions" class="kn-page-actions" />
+        </FocusScope>
       </div>
       <!-- The editor's bar (#441): the state of the edit on the left, its acts on
            the right, the formatting toolbar directly beneath — too much to share

@@ -132,13 +132,18 @@ export class IdentityProvidersService {
   /** Deleting a provider also ends the sessions it vouched for: nothing stands behind them any more. */
   async remove(workspaceId: string, providerId: string, principal: Principal): Promise<void> {
     const existing = await this.owned(workspaceId, providerId);
-    await this.prisma.identityProvider.delete({ where: { id: existing.id } });
-    const { count } = await this.prisma.session.updateMany({
-      where: { providerId: existing.id, revokedAt: null },
-      data: { revokedAt: new Date() },
+    // One commit (#656): a retry 404s in owned(), so a delete that outlived a failed revoke would leave the sessions live for good.
+    await this.prisma.withTransaction(async () => {
+      const { count } = await this.prisma.session.updateMany({
+        where: { providerId: existing.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      await this.prisma.identityProvider.delete({ where: { id: existing.id } });
+      this.prisma.onCommit(async () => {
+        this.oidc.forget(existing.id);
+        await this.audit.record({ ...this.entry(principal, existing, [], { sessionsRevoked: count }), action: 'sso.provider_deleted' });
+      });
     });
-    this.oidc.forget(existing.id);
-    void this.audit.record({ ...this.entry(principal, existing, [], { sessionsRevoked: count }), action: 'sso.provider_deleted' });
     this.policy.invalidate();
   }
 

@@ -86,7 +86,9 @@
     "revisionNotDraft": "Revision {id} is {status}, expected draft",
     "archived": "Document {id} is archived — unarchive it before changing it",
     "ownerNotMember": "The owner must be a member of this workspace",
-    "foreignIds": "{count} of the given pages belong to another workspace"
+    "foreignIds": "{count} of the given pages belong to another workspace",
+    "sourceBacked": "“{title}” follows its source and cannot be edited here. Pause the source and restore a revision instead",
+    "sourceVerify": "“{title}” follows its source: it reads as verified while the sync is healthy, so it takes no stamp"
   },
   "branch": {
     "notFound": "Branch {name} not found on document {documentId}",
@@ -911,5 +913,24 @@
       "mrMerged": "Merged merge request \"{title}\":\n  {url}"
     },
     "tooLarge": "The push is larger than this remote accepts (256 MB). Push fewer commits at a time."
+  },
+  "source": {
+    "disabled": "Source-backed pages are switched off on this server",
+    "tooLarge": "The source is larger than {mb} MB",
+    "unsupportedType": "The source is {type}, not markdown or HTML",
+    "needsCredential": "The host refused the request ({status}). Add a token or a header it accepts",
+    "unreadable": "The source could not be read: {detail}",
+    "notFound": "Page {id} is not linked to a source",
+    "revisionNotOfPage": "Revision {id} is not a published revision of this page",
+    "interval": "The check interval must be one of {allowed} minutes, or empty",
+    "recipeInvalid": "The recipe is not valid: {errors}",
+    "recipeChecksFail": "The recipe fails its checks on the current version ({checks}), so it was not saved",
+    "firstReadFails": "The tree recipe fails its checks on this page ({checks}), so the page was not created. The next sync tries again",
+    "proposalStale": "That drafted recipe is no longer the one waiting for review — reload the page",
+    "noBody": "No version of this source has been read since recipes arrived. Sync it once, then try again",
+    "draftUnavailable": "No recipe can be drafted: the interpreter agent is off, or the source is not an HTML page",
+    "splitSpec": "The spec references another file ({ref}). Bundle the spec into one file and link that",
+    "specCrawl": "An API spec has no pages under it to crawl. Link it without crawling",
+    "kindChanged": "The source now serves {now}, but this page holds {was}"
   }
 }

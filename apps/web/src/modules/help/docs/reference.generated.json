@@ -2892,6 +2892,16 @@
     },
     {
       "method": "GET",
+      "path": "/v1/documents/{id}/backlinks",
+      "tag": "documents",
+      "summary": "Pages linking to this one (#673), only those the caller may open; anchor = one heading",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/documents/{id}/branches",
       "tag": "documents",
       "summary": "List branches with head revisions",
@@ -4952,6 +4962,186 @@
     },
     {
       "method": "GET",
+      "path": "/v1/connectors/{id}/source/recipe",
+      "tag": "sources",
+      "summary": "The connector's tree recipe, a drafted one waiting for review, and the crawled pages a preview can read",
+      "role": "viewer",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/connectors/{id}/source/recipe",
+      "tag": "sources",
+      "summary": "Save the connector's tree recipe, approving a drafted one or not. Checked on one page (default: the root); a pull is queued that re-reads every page without its own recipe",
+      "role": "editor",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/connectors/{id}/source/recipe/dismiss",
+      "tag": "sources",
+      "summary": "Keep the current tree recipe: reject the drafted one",
+      "role": "editor",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/connectors/{id}/source/recipe/draft",
+      "tag": "sources",
+      "summary": "Ask the interpreter agent to draft a tree recipe from one crawled page's last version (default: the root)",
+      "role": "editor",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/connectors/{id}/source/recipe/preview",
+      "tag": "sources",
+      "summary": "What a tree recipe makes of one crawled page's last fetched version (default: the root), with its check results",
+      "role": "editor",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/documents/{id}/source",
+      "tag": "sources",
+      "summary": "The page's source: where it reads from, when it last checked, paused, failing or behind",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/documents/{id}/source",
+      "tag": "sources",
+      "summary": "How often the source is checked, and what a new version does to pages linking it",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/source/pause",
+      "tag": "sources",
+      "summary": "Stop writing new versions; they are counted until the source is resumed",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/documents/{id}/source/recipe",
+      "tag": "sources",
+      "summary": "Save the page's extraction recipe, approving a drafted one or not. The current version is re-read through it",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/source/recipe/dismiss",
+      "tag": "sources",
+      "summary": "Keep the current recipe: reject the drafted one and clear the layout-changed note. A held version stays held",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/source/recipe/draft",
+      "tag": "sources",
+      "summary": "Ask the interpreter agent to draft a recipe for the last fetched version; it waits for review",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/source/recipe/preview",
+      "tag": "sources",
+      "summary": "What a recipe makes of the last fetched version, beside the page as it reads now, with its check results",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/source/restore",
+      "tag": "sources",
+      "summary": "Restore an earlier revision of the page. Pauses the source and alerts its owner",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/source/resume",
+      "tag": "sources",
+      "summary": "Follow the source again: a sync is queued and writes whatever it says now",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/source/webhook",
+      "tag": "sources",
+      "summary": "A new webhook signing secret for the page's source, shown once; the old one stops working",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sources",
+      "tag": "sources",
+      "summary": "Create a source-backed page from a URL (markdown or HTML). The first version is read now; the page is read-only and follows the source on its interval, webhook or Sync now",
+      "role": "editor",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/sources/settings",
+      "tag": "sources",
+      "summary": "The workspace's crawl limits: what it asks for, the deployment's ceiling, and what applies",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/sources/settings",
+      "tag": "sources",
+      "summary": "Set the crawl limits; null inherits the WEB_SOURCE_CRAWL_* env, which a value may only lower",
+      "role": "admin",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/templates",
       "tag": "templates",
       "summary": "The template gallery: built-ins (in the caller’s language) merged with the workspace’s own",
@@ -5972,7 +6162,7 @@
     },
     {
       "name": "knowledge_get_document",
-      "description": "Get a document, its head (or a given) revision and indexed chunk summaries.",
+      "description": "Get a document, its head (or a given) revision and indexed chunk summaries, plus `backlinks`: the pages you can open whose current text links to it, with the headings they link to.",
       "inputs": [
         {
           "name": "documentId",

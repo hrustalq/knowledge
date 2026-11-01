@@ -21,9 +21,10 @@
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ChevronRight, Loader2, Sparkles } from 'lucide-vue-next'
+import { ChevronRight, Loader2, MoreHorizontal, Sparkles } from 'lucide-vue-next'
 import { allowedItemEvents, type ConnectorItemEventType } from '@knowledge/contracts'
 import { Collapse } from '@/shared/ui/collapse'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/shared/ui/dropdown-menu'
 import {
   ACTION_CLASS,
   ACTION_ICON,
@@ -85,6 +86,20 @@ const subtreeEvents = computed(() =>
       )
     : [],
 )
+
+/**
+ * The one verb the row says in words: what a reviewer most likely came to do.
+ * Every other verb, the branch ones included, is a word in the row's menu —
+ * never a fifth button fighting the title for width.
+ */
+const PRIMARY_ORDER: ConnectorItemEventType[] = ['APPROVE', 'RETRY', 'FETCH']
+const primary = computed<ConnectorItemEventType | null>(
+  () => PRIMARY_ORDER.find((e) => events.value.includes(e)) ?? events.value[0] ?? null,
+)
+const rest = computed(() => events.value.filter((e) => e !== primary.value))
+/** Open menu keeps the toolbar up while the pointer is in the menu's portal. */
+const menuOpen = ref(false)
+const toolbarShown = computed(() => props.selectedId === item.value.id || menuOpen.value)
 
 const indent = computed(() => `${0.5 + props.depth * 0.85}rem`)
 </script>
@@ -167,52 +182,59 @@ const indent = computed(() => `${0.5 + props.depth * 0.85}rem`)
            row being reviewed — a control that vanishes when the pointer leaves
            is unreachable from the pane you just walked over to.
 
-           They are *laid over* the row rather than sitting beside it. In flow
-           they were `shrink-0` while the title was `truncate`, so four Russian
-           verbs — none of them visible until hover — permanently took the whole
-           width of a 24rem column and squeezed every page title to nothing. What
-           a tree of 468 pages showed was 468 rows with no names on them.
-           Covering the row being pointed at is the right trade: that is the one
-           row whose title you are not reading, and the selected row's title is
-           set in 2.5rem type in the pane beside it.
-
-           The row's own verbs come first and the branch verbs after, because an
-           overlay capped at the row's width clips its tail: on a deeply indented
-           row it is "Approve branch" that goes, never "Approve". -->
+           In flow, but only on that one row. Rendered on every row (as they
+           once were, `shrink-0` and merely invisible) four Russian verbs took
+           the width of a 24rem column from every title in the tree; laid over
+           the row instead, they covered the title and status they act on. Shown
+           only where the pointer, focus or selection is, they take room from
+           that row alone: its title truncates and its status wraps beneath, and
+           nothing is drawn on top of anything. At most two controls — the row's
+           likeliest verb, in words, and a menu with the rest. -->
       <span
         v-if="events.length"
-        class="absolute inset-y-px right-px flex max-w-full items-center gap-0.5 overflow-hidden rounded-md pr-1 pl-3 opacity-0 transition-opacity group-hover/row:opacity-100"
-        :class="
-          selectedId === item.id
-            ? 'opacity-100'
-            : 'pointer-events-none group-hover/row:pointer-events-auto focus-within:pointer-events-auto'
-        "
+        class="relative shrink-0 items-center gap-px self-center group-focus-within/row:flex group-hover/row:flex"
+        :class="toolbarShown ? 'flex' : 'hidden'"
       >
         <button
-          v-for="type in events"
-          :key="type"
+          v-if="primary"
           type="button"
-          class="text-muted-foreground hover:bg-muted hover:text-foreground shrink-0 rounded text-caption font-medium disabled:opacity-50 focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none"
-          :class="ITEM_EVENT_ICON[type] ? 'grid size-6 place-items-center' : 'px-1.5 py-0.5'"
+          class="rounded px-2 py-0.5 text-caption font-medium text-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50"
+          :class="ITEM_EVENT_ICON[primary] && 'grid size-6 place-items-center px-0'"
           :disabled="busy"
-          :title="ITEM_EVENT_ICON[type] ? t(ITEM_EVENT_LABEL[type]) : undefined"
-          :aria-label="ITEM_EVENT_ICON[type] ? t(ITEM_EVENT_LABEL[type]) : undefined"
-          @click="emit('event', { itemId: item.id, type, subtree: false })"
+          :title="ITEM_EVENT_ICON[primary] ? t(ITEM_EVENT_LABEL[primary]) : undefined"
+          :aria-label="ITEM_EVENT_ICON[primary] ? t(ITEM_EVENT_LABEL[primary]) : undefined"
+          @click="emit('event', { itemId: item.id, type: primary, subtree: false })"
         >
-          <component :is="ITEM_EVENT_ICON[type]" v-if="ITEM_EVENT_ICON[type]" class="size-3.5" aria-hidden="true" />
-          <template v-else>{{ t(ITEM_EVENT_LABEL[type]) }}</template>
+          <component :is="ITEM_EVENT_ICON[primary]" v-if="ITEM_EVENT_ICON[primary]" class="size-3.5" aria-hidden="true" />
+          <template v-else>{{ t(ITEM_EVENT_LABEL[primary]) }}</template>
         </button>
-        <button
-          v-for="type in subtreeEvents"
-          :key="`sub-${type}`"
-          type="button"
-          class="text-muted-foreground hover:bg-muted hover:text-foreground shrink-0 rounded px-1.5 py-0.5 text-caption disabled:opacity-50 focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none"
-          :disabled="busy"
-          :title="t('connectors.applyToBranch')"
-          @click="emit('event', { itemId: item.id, type, subtree: true })"
-        >
-          {{ t(SUBTREE_EVENT_LABEL[type]) }}
-        </button>
+
+        <DropdownMenu v-if="rest.length || subtreeEvents.length" v-model:open="menuOpen">
+          <DropdownMenuTrigger as-child>
+            <button
+              type="button"
+              class="grid size-6 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50"
+              :disabled="busy"
+              :aria-label="t('connectors.moreActions', { title: item.title })"
+            >
+              <MoreHorizontal class="size-3.5" aria-hidden="true" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" class="min-w-44">
+            <DropdownMenuItem v-for="type in rest" :key="type" @select="emit('event', { itemId: item.id, type, subtree: false })">
+              <component :is="ITEM_EVENT_ICON[type]" v-if="ITEM_EVENT_ICON[type]" class="size-3.5" aria-hidden="true" />
+              {{ t(ITEM_EVENT_LABEL[type]) }}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator v-if="rest.length && subtreeEvents.length" />
+            <DropdownMenuItem
+              v-for="type in subtreeEvents"
+              :key="`sub-${type}`"
+              @select="emit('event', { itemId: item.id, type, subtree: true })"
+            >
+              {{ t(SUBTREE_EVENT_LABEL[type]) }}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </span>
     </div>
 

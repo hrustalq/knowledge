@@ -339,6 +339,7 @@ app.use('*all', async (req, res) => {
       glossary: readCookie(req.headers.cookie, 'kn_glossary'),
       aiPanel: readCookie(req.headers.cookie, 'kn_aipanel'),
       measure: readCookie(req.headers.cookie, 'kn_measure'),
+      pageRail: readCookie(req.headers.cookie, 'kn_pagerail'),
       treeOpen: readCookie(req.headers.cookie, 'kn_tree'),
       workspaceId: readCookie(req.headers.cookie, 'kn_ws'),
       locale,
@@ -348,6 +349,8 @@ app.use('*all', async (req, res) => {
     const html = template
       .replace(`<!--app-lang-->`, locale)
       .replace(`<!--app-css-->`, devStyles)
+      // The route's own name (#644), already escaped; signed out it stays "Knowledge".
+      .replace(`<title>Knowledge</title>`, () => `<title>${rendered.title ?? 'Knowledge'}</title>`)
       .replace(`<!--app-head-->`, rendered.head ?? '')
       .replace(`<!--app-html-->`, rendered.html ?? '')
 

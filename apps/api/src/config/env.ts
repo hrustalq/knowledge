@@ -754,6 +754,27 @@ export const envSchema = z.object({
    * settings form is also the classic SSRF shape. Mirrors AI_PLUGINS_ALLOW_PRIVATE_URLS.
    */
   CONNECTOR_ALLOW_PRIVATE_URLS: boolish(false),
+  /**
+   * Source-backed pages (#674): the `web` connector kind, "Link a source" and
+   * the page source panel. A ceiling over the workspace `sources` toggle: off,
+   * the routes 404, web sources never sync and the UI hides them.
+   */
+  WEB_SOURCES_ENABLED: boolish(false),
+  /**
+   * Let a `web` source fetch a private or loopback address. Separate from
+   * CONNECTOR_ALLOW_PRIVATE_URLS because any editor can link a source, where
+   * only an admin sets up a connector.
+   */
+  WEB_SOURCE_ALLOW_PRIVATE: boolish(false),
+  /**
+   * Crawled `web` trees (#674, phase 3), each a ceiling a workspace setting
+   * may only lower: pages one crawl reads, and the change that waits for a
+   * person — more than CONFIRM_FIRST new pages on a first crawl, or more than
+   * CONFIRM_CHANGE added plus dropped on a later one.
+   */
+  WEB_SOURCE_CRAWL_MAX_PAGES: z.coerce.number().int().positive().default(200),
+  WEB_SOURCE_CRAWL_CONFIRM_FIRST: z.coerce.number().int().nonnegative().default(50),
+  WEB_SOURCE_CRAWL_CONFIRM_CHANGE: z.coerce.number().int().nonnegative().default(20),
   /** Items one sync run will touch, so a 50k-page space cannot pin a worker forever. */
   CONNECTOR_SYNC_MAX_ITEMS: z.coerce.number().int().positive().default(1_000),
   /** Wall-clock ceiling for one sync run. */

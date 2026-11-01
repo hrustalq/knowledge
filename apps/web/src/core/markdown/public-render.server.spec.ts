@@ -13,6 +13,7 @@ const OUT = '22222222-2222-4222-8222-222222222222'
 const ATT = '33333333-3333-4333-8333-333333333333'
 
 const options: PublicRenderOptions = {
+  title: 'Page',
   pageHref: (id) => (id === IN ? `/s/kp_t/${id}` : null),
   attachmentHref: (id, download) => `/api/v1/public/shares/kp_t/attachments/${id}${download ? '?download=1' : ''}`,
   labels: {
@@ -31,6 +32,14 @@ describe('renderPublicMarkdown', () => {
     const { html, headings } = renderPublicMarkdown('# Install\n\nFirst step.\n\n## Install\n\n## Настройка', options)
     expect(html).toContain('<h1 id="install">Install</h1>')
     expect(headings.map((h) => h.id)).toEqual(['install', 'install-1', 'настройка'])
+  })
+
+  it('drops a leading heading that repeats the title the surface already draws, and keeps one that does not (#692)', () => {
+    const titled = renderPublicMarkdown('# Install guide\n\nFirst step.\n\n## Setup', { ...options, title: 'install Guide' })
+    expect(titled.html).not.toContain('<h1')
+    expect(titled.headings.map((h) => h.id)).toEqual(['setup'])
+    const other = renderPublicMarkdown('# Overview\n\nFirst step.', { ...options, title: 'Install guide' })
+    expect(other.html).toContain('<h1 id="overview">Overview</h1>')
   })
 
   it('keeps a diagram\'s size and placement on what the reader is served (#476)', () => {

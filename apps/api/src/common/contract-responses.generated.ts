@@ -96,6 +96,7 @@ import type {
   CreatePageFromFindingResponse,
   CreateProjectResponse,
   CreateShareLinkResponse,
+  CreateSourcePageResponse,
   CreateUploadResponse,
   CreateWorkspaceResponse,
   DeleteAnswerFeedbackResponse,
@@ -106,12 +107,15 @@ import type {
   DeleteWorkspaceResponse,
   DismissAgentFindingResponse,
   DocumentAncestorsResponse,
+  DocumentBacklinksResponse,
   DocumentConnectorResponse,
   DocumentContentResponse,
   DocumentDetailResponse,
   DocumentEmbedsResponse,
   DocumentGraphResponse,
   DocumentQualityResponse,
+  DocumentSourceInfo,
+  DocumentSourceWebhookResponse,
   DocumentSummary,
   DocumentThreadResponse,
   DocumentTreeResponse,
@@ -299,6 +303,9 @@ import type {
   SiteVersionSummary,
   SiteVisitorSecretResponse,
   SourcePolicy,
+  SourceRecipePreview,
+  SourceSettingsResponse,
+  SourceTreeRecipeState,
   SsoDiscoverResponse,
   SsoDomainView,
   SsoExchangeResponse,
@@ -436,6 +443,7 @@ export interface ContractResponses {
   CreatePageFromFindingResponse: CreatePageFromFindingResponse;
   CreateProjectResponse: CreateProjectResponse;
   CreateShareLinkResponse: CreateShareLinkResponse;
+  CreateSourcePageResponse: CreateSourcePageResponse;
   CreateUploadResponse: CreateUploadResponse;
   CreateWorkspaceResponse: CreateWorkspaceResponse;
   DeleteAnswerFeedbackResponse: DeleteAnswerFeedbackResponse;
@@ -446,12 +454,15 @@ export interface ContractResponses {
   DeleteWorkspaceResponse: DeleteWorkspaceResponse;
   DismissAgentFindingResponse: DismissAgentFindingResponse;
   DocumentAncestorsResponse: DocumentAncestorsResponse;
+  DocumentBacklinksResponse: DocumentBacklinksResponse;
   DocumentConnectorResponse: DocumentConnectorResponse;
   DocumentContentResponse: DocumentContentResponse;
   DocumentDetailResponse: DocumentDetailResponse;
   DocumentEmbedsResponse: DocumentEmbedsResponse;
   DocumentGraphResponse: DocumentGraphResponse;
   DocumentQualityResponse: DocumentQualityResponse;
+  DocumentSourceInfo: DocumentSourceInfo;
+  DocumentSourceWebhookResponse: DocumentSourceWebhookResponse;
   DocumentSummary: DocumentSummary;
   DocumentThreadResponse: DocumentThreadResponse;
   DocumentTreeResponse: DocumentTreeResponse;
@@ -639,6 +650,9 @@ export interface ContractResponses {
   SiteVersionSummary: SiteVersionSummary;
   SiteVisitorSecretResponse: SiteVisitorSecretResponse;
   SourcePolicy: SourcePolicy;
+  SourceRecipePreview: SourceRecipePreview;
+  SourceSettingsResponse: SourceSettingsResponse;
+  SourceTreeRecipeState: SourceTreeRecipeState;
   SsoDiscoverResponse: SsoDiscoverResponse;
   SsoDomainView: SsoDomainView;
   SsoExchangeResponse: SsoExchangeResponse;

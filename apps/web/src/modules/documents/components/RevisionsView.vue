@@ -12,7 +12,10 @@ import type {
   ListRevisionsResponse,
   RevisionNode,
 } from '@knowledge/contracts'
-import { fetchApi } from '@/shared/api/queries'
+import { toast } from 'vue-sonner'
+import { api, fetchApi } from '@/shared/api/queries'
+import { errorMessage } from '@/shared/api/errors'
+import { confirm } from '@/shared/ui/confirm'
 import { statusVariant } from '@/shared/api/api'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
@@ -32,7 +35,10 @@ import { ApiChangesPanel } from '@/entities/api-operation'
 
 const { t } = useI18n()
 
-const props = defineProps<{ documentId: string }>()
+// `sourceBacked` (#674): the page follows a source and the reader may act on
+// it, so an earlier revision offers Restore — which pauses the source.
+const props = defineProps<{ documentId: string; sourceBacked?: boolean }>()
+const emit = defineEmits<{ restored: [] }>()
 const queryClient = useQueryClient()
 
 const revisions = ref<RevisionNode[] | null>(null)
@@ -80,6 +86,30 @@ async function runCompare() {
     compare.value = null
   } finally {
     busy.value = false
+  }
+}
+
+/** Newest first, and a source-backed page has one branch: the first readable row is the head. */
+const headId = computed(() => revisions.value?.find((r) => r.contentHash)?.revisionId ?? null)
+
+const restoring = ref<string | null>(null)
+async function restore(r: RevisionNode) {
+  const ok = await confirm({
+    title: t('sources.restore.title', { n: r.revisionNumber }),
+    description: t('sources.restore.body'),
+    action: t('sources.restore.action'),
+  })
+  if (!ok) return
+  restoring.value = r.revisionId
+  try {
+    await api.post('/v1/documents/{id}/source/restore', { path: { id: props.documentId }, body: { revisionId: r.revisionId } })
+    toast.success(t('sources.restore.done', { n: r.revisionNumber }))
+    await load()
+    emit('restored')
+  } catch (e) {
+    toast.error(errorMessage(e, t))
+  } finally {
+    restoring.value = null
   }
 }
 
@@ -171,6 +201,15 @@ watch(branchFilter, () => void load())
               >
                 {{ t('revisions.view') }}
               </RouterLink>
+              <button
+                v-if="sourceBacked && r.contentHash && r.revisionId !== headId"
+                type="button"
+                class="ml-3 rounded-sm text-xs outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
+                :disabled="restoring !== null"
+                @click="restore(r)"
+              >
+                {{ t('sources.restore.row') }}
+              </button>
             </td>
           </tr>
         </tbody>

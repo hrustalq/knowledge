@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ApiSpecsCoreModule } from '../api-specs/api-specs-core.module.js';
 import { DocumentsCoreModule } from '../documents/documents-core.module.js';
 import { EventsModule } from '../events/events.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
@@ -18,6 +19,15 @@ import { GithubCoreModule } from './github/github-core.module.js';
 import { RepoWikiService } from './repo-wiki.service.js';
 import { FigmaFilesService } from '../embeds/figma-files.service.js';
 import { FigmaOauthService } from '../embeds/figma-oauth.service.js';
+import { NotificationsCoreModule } from '../notifications/notifications-core.module.js';
+import { VerificationCoreModule } from '../verification/verification-core.module.js';
+import { ConnectorQueueModule } from './connector-queue.module.js';
+import { WebSourcesService } from './web-sources.service.js';
+import { SourceRecipesService } from './source-recipes.service.js';
+import { SourceSettingsService } from './source-settings.service.js';
+import { AgentCoreModule } from '../agents/agent-core.module.js';
+import { AiCoreModule } from '../ai/ai-core.module.js';
+import { AssistantClientModule } from '../assistant/assistant-client.module.js';
 
 /**
  * Connector configuration, credentials, links and the sync engine, with no
@@ -34,6 +44,7 @@ import { FigmaOauthService } from '../embeds/figma-oauth.service.js';
     EventsModule,
     ProjectsCoreModule,
     DocumentsCoreModule,
+    ApiSpecsCoreModule,
     ConnectorAdaptersModule,
     // ConnectorsService resolves a picker-configured connector's credential to
     // a freshly minted installation token, so the worker needs this too.
@@ -43,6 +54,15 @@ import { FigmaOauthService } from '../embeds/figma-oauth.service.js';
     // Component declarations re-resolve and their code edges rebuild after
     // each codebase pull (#236).
     ComponentsCoreModule,
+    // Source-backed pages (#674): archive a gone source, flag its dependents,
+    // alert the owner, and queue retries and resumes.
+    VerificationCoreModule,
+    NotificationsCoreModule,
+    ConnectorQueueModule,
+    // Extraction recipes (#674, phase 2): the `interpreter` drafts one when a version is held.
+    AgentCoreModule,
+    AiCoreModule,
+    AssistantClientModule,
   ],
   providers: [
     ConnectorsService,
@@ -57,6 +77,9 @@ import { FigmaOauthService } from '../embeds/figma-oauth.service.js';
     FigmaFilesService,
     // Its OAuth grants (#557): every Figma call resolves its token here, in both processes.
     FigmaOauthService,
+    WebSourcesService,
+    SourceRecipesService,
+    SourceSettingsService,
   ],
   exports: [
     ConnectorsService,
@@ -73,6 +96,8 @@ import { FigmaOauthService } from '../embeds/figma-oauth.service.js';
     CodeImportsService,
     FigmaFilesService,
     FigmaOauthService,
+    WebSourcesService,
+    SourceSettingsService,
   ],
 })
 export class ConnectorsCoreModule {}

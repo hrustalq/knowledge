@@ -222,10 +222,15 @@ onMounted(() => {
   props.editor.registerPlugin(keys)
 })
 onBeforeUnmount(() => {
+  // The parent editor unmounting destroys the editor before this runs, and a
+  // destroyed editor's `view` getter throws: the error aborted the parent's
+  // update, so a run review whose pane re-keys its editor ignored every click.
+  // Its DOM goes with it, so there is nothing left to unbind.
+  if (props.editor.isDestroyed) return
   const dom = props.editor.view.dom
   dom.removeEventListener('pointermove', onPointerMove)
   dom.removeEventListener('pointerleave', onPointerLeave)
-  if (!props.editor.isDestroyed) props.editor.unregisterPlugin(keys.spec.key!)
+  props.editor.unregisterPlugin(keys.spec.key!)
 })
 
 /* ------------------------------------------------------------ geometry */

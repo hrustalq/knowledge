@@ -41,3 +41,17 @@ _Avoid_: export, sync, escalation
 **Anchor** («Привязка»):
 The knowledge object a work item points at: a reported issue, a knowledge conflict, a page's verification flag, or a page. Always a row; a finding on an agent run becomes a reported issue before it can be one.
 _Avoid_: link (a link maps external content onto a page), source, subject
+
+## Keeping pages in step with external sources
+
+**Source-backed page** («Страница из источника»):
+A read-only page whose body belongs to an external source (a web page, a tree of pages, an API spec) and is replaced by each new version of that source.
+_Avoid_: referenced document, mirror, external page, linked page
+
+**Dependent page** («Зависимая страница»):
+A page that refers to a source-backed page — by a link, a relation or a shared entity — and so may stop being true when that source changes.
+_Avoid_: referencing page, backlink, child page
+
+**Extraction recipe** («Рецепт извлечения»):
+The per-source description of where a source's content is and how to turn it into a page; when the source's shape changes, a person reviews a new recipe.
+_Avoid_: parser, script, scraper

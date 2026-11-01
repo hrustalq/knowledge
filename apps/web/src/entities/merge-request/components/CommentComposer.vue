@@ -191,6 +191,7 @@ function cancel() {
         :agents="agents"
         :resolve-document-id="resolveDocumentId"
         :placeholder="t('mr.composerHint', { placeholder: placeholderText })"
+        :label="placeholderText"
       />
     </div>
     <div class="flex items-center gap-2">

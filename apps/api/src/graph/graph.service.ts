@@ -1094,6 +1094,51 @@ export class GraphService {
   }
 
   /**
+   * The entity keys one revision's own deterministic facts name (#674, phase
+   * 5): frontmatter and spec, never `inferred` — a model's reading drifts
+   * between two revisions of the same text, and a dropped key here flags other
+   * pages as certain. Expired (re-extracted away) and retracted rows are out.
+   */
+  async revisionEntityKeys(workspaceId: string, documentId: string, revisionId: string): Promise<Set<string>> {
+    const rows = await Promise.all(
+      RELATION_EDGE_TYPES.map((type) =>
+        this.arcade
+          .query<{ targetKey: string }>(
+            'sql',
+            `SELECT targetKey FROM ${type} WHERE workspaceId = :workspaceId AND documentId = :documentId AND revisionId = :revisionId AND extractor IN ['frontmatter', 'spec'] AND expiredAt IS NULL AND retractedBy IS NULL LIMIT 20000`,
+            { workspaceId, documentId, revisionId },
+          )
+          .catch(() => []),
+      ),
+    );
+    return new Set(rows.flat().map((r) => r.targetKey));
+  }
+
+  /** The pages with a live edge to any of `keys`, each with the keys it names — `keys` is small, the pages are not known. */
+  async documentsNamingKeys(workspaceId: string, keys: string[], acl: DocumentAclFilter): Promise<Map<string, string[]>> {
+    const out = new Map<string, string[]>();
+    if (keys.length === 0) return out;
+    const pushed = aclClause(acl);
+    const rows = await Promise.all(
+      RELATION_EDGE_TYPES.map((type) =>
+        this.arcade
+          .query<{ documentId: string; targetKey: string }>(
+            'sql',
+            `SELECT documentId, targetKey FROM ${type} WHERE workspaceId = :workspaceId AND targetKey IN :keys AND ${LIVE}${pushed?.sql ?? ''} LIMIT 20000`,
+            { workspaceId, keys, ...pushed?.params },
+          )
+          .catch(() => []),
+      ),
+    );
+    for (const r of rows.flat()) {
+      if (!aclAdmits(acl, r.documentId)) continue;
+      const named = out.get(r.documentId) ?? [];
+      if (!named.includes(r.targetKey)) out.set(r.documentId, [...named, r.targetKey]);
+    }
+    return out;
+  }
+
+  /**
    * Relation edges of a document, with provenance (workspace-scoped).
    *
    * `liveOnly` (#83) restricts to the live projection — what the page asserts

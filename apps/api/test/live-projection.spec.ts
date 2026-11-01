@@ -197,7 +197,7 @@ describe('IngestionProcessor stamps and reconciles the live projection (#83)', (
       { embedBatch: vi.fn(async (xs: string[]) => xs.map(() => emb)) } as never,
       { forWorkspace: vi.fn(async () => ({ extractor: { enabled: false }, tuning: {}, config: {} })) } as never,
       fulltext as never,
-      { get: vi.fn(() => 0) } as never,
+      { get: vi.fn((key: string) => (key === 'WEB_BASE_URL' ? 'http://localhost:5173' : 0)) } as never,
       { publish: vi.fn() } as never,
       { enqueue: vi.fn() } as never,
       { record: vi.fn(async () => false), rebuild: vi.fn() } as never,

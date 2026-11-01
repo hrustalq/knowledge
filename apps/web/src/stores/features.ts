@@ -18,10 +18,12 @@ const optionsFor = (id: string) => apiQueryOptions('/v1/workspaces/{id}/features
 export const useFeaturesStore = defineStore('features', {
   state: () => ({
     disabled: [] as WorkspaceFeature[],
+    /** Off on the server (an env ceiling), whatever `disabled` says. */
+    unavailable: [] as WorkspaceFeature[],
     loaded: false,
   }),
   getters: {
-    isOn: (s) => (feature: WorkspaceFeature): boolean => !s.disabled.includes(feature),
+    isOn: (s) => (feature: WorkspaceFeature): boolean => !s.disabled.includes(feature) && !s.unavailable.includes(feature),
   },
   actions: {
     async ensureLoaded(): Promise<void> {
@@ -31,6 +33,7 @@ export const useFeaturesStore = defineStore('features', {
         if (id) {
           await bindStoreQuery<WorkspaceFeaturesResponse>(this, 'features', this.queryClient, optionsFor(id), (res) => {
             this.disabled = res.disabled
+            this.unavailable = res.unavailable ?? []
           })
         }
       } catch {
@@ -44,6 +47,7 @@ export const useFeaturesStore = defineStore('features', {
       const res = await api.put('/v1/workspaces/{id}/features', { path: { id }, body: { disabled } })
       this.queryClient.setQueryData(optionsFor(id).queryKey, res)
       this.disabled = res.disabled
+      this.unavailable = res.unavailable ?? []
     },
   },
 })

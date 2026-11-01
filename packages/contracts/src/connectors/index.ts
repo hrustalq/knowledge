@@ -24,6 +24,8 @@ export const CONNECTOR_KINDS = [
   'zendesk',
   'intercom',
   'figma',
+  // A source-backed page's source (#674): one URL, fetched and replaced whole.
+  'web',
 ] as const;
 export type ConnectorKind = (typeof CONNECTOR_KINDS)[number];
 
@@ -617,6 +619,49 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
       },
     ],
   },
+  {
+    // Source-backed pages (#674): a markdown or HTML URL whose page here is
+    // read-only and replaced by each new version. No push. A crawled tree
+    // always nests by URL path, so `tree` (the preserve-hierarchy toggle) stays off.
+    kind: 'web',
+    label: 'Web page',
+    capabilities: { pull: true, push: false, webhook: true, tree: false },
+    credentialLabel: 'Token, or Header-Name: value',
+    fields: [
+      {
+        key: 'url',
+        label: 'URL',
+        kind: 'text',
+        required: true,
+        placeholder: 'https://example.com/docs/guide.md',
+        help: 'A markdown file or an HTML page. The page it becomes is read-only and follows the source.',
+      },
+      {
+        // WEB_CRAWL_CONFIG_KEY, spelled out: that constant is declared further down this module.
+        key: 'crawl',
+        label: 'Pages',
+        kind: 'select',
+        required: false,
+        options: [
+          { value: 'page', label: 'This URL only' },
+          { value: 'tree', label: 'This URL and every page under it' },
+        ],
+        help: 'A tree follows links and sitemap.xml under the URL’s path, nested by URL. A large crawl waits for you to confirm it.',
+      },
+      {
+        // SOURCE_MISALIGNMENT_CONFIG_KEY, spelled out for the same reason.
+        key: 'misalignment',
+        label: 'When a change may break a page',
+        kind: 'select',
+        required: false,
+        options: [
+          { value: 'flag', label: 'Ask its owner to check it' },
+          { value: 'propose', label: 'Ask its owner, and propose a fix' },
+        ],
+        help: 'Pages that link this source are checked against each new version. One it may have made wrong is flagged for its owner; a proposed fix opens as a merge request.',
+      },
+    ],
+  },
 ];
 
 export function connectorKindInfo(kind: string): ConnectorKindInfo | null {
@@ -645,6 +690,8 @@ export const CONNECTION_PROVIDERS = [
   'zendesk',
   'intercom',
   'figma',
+  // Any host a `web` source reads (#674), one connection per origin.
+  'web',
 ] as const;
 export type ConnectionProvider = (typeof CONNECTION_PROVIDERS)[number];
 
@@ -702,6 +749,8 @@ export function connectionProviderFor(kind: ConnectorKind, config: Record<string
     case 'linear':
     case 'figma':
       return { provider: kind, site: null };
+    case 'web':
+      return { provider: 'web', site: originOf(config.url) };
   }
 }
 
@@ -756,6 +805,7 @@ export const CONNECTOR_RESOURCE_KEYS: Record<ConnectorKind, readonly string[]> =
   zendesk: ['baseUrl', 'harvestLabel'],
   intercom: ['region', 'harvestLabel'],
   figma: [FIGMA_ALLOWLIST_CONFIG_KEY],
+  web: ['url'],
 };
 
 /** The duplicate-link key: the resource keys, trimmed, case-folded, without a trailing `/` or `.git`. */
@@ -2203,4 +2253,294 @@ export interface DraftComponentResponse {
   /** The page's title, and the merge request's. */
   title: string;
   paths: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Source-backed pages (#674): a read-only page whose body belongs to a `web`
+// source and is replaced by each new version of it.
+// ---------------------------------------------------------------------------
+
+/** The check intervals the page source panel offers, in minutes. */
+export const SOURCE_INTERVALS_MIN = [15, 60, 360, 1440] as const;
+export const SOURCE_DEFAULT_INTERVAL_MIN = 60;
+/** Consecutive failed syncs before an alert, and consecutive 404/410s before the page is archived. */
+export const SOURCE_FAILURE_LIMIT = 3;
+/** Minutes before each retry of a transient failure (timeout, 5xx, 429, DNS); `Retry-After` can only lengthen one. */
+export const SOURCE_RETRY_DELAYS_MIN = [1, 5, 25] as const;
+
+/**
+ * A `web` source that crawls (#674, phase 3): its `config.crawl` is `tree`,
+ * and every page under the root URL's path prefix syncs too, nested by URL path.
+ */
+export const WEB_CRAWL_CONFIG_KEY = 'crawl';
+export function webCrawls(config: unknown): boolean {
+  return (config as Record<string, unknown> | null)?.[WEB_CRAWL_CONFIG_KEY] === 'tree';
+}
+
+/**
+ * What a source does about a page that links it and that a new version may
+ * have made wrong (#674, phase 5b). `flag`, the default and what an absent key
+ * reads as: `requested`, its owner notified. `propose`: that, plus a fix the
+ * sentinel drafts, opened as a merge request.
+ */
+export const SOURCE_MISALIGNMENT_MODES = ['flag', 'propose'] as const;
+export type SourceMisalignmentMode = (typeof SOURCE_MISALIGNMENT_MODES)[number];
+export const SOURCE_MISALIGNMENT_CONFIG_KEY = 'misalignment';
+export function sourceMisalignment(config: unknown): SourceMisalignmentMode {
+  return (config as Record<string, unknown> | null)?.[SOURCE_MISALIGNMENT_CONFIG_KEY] === 'propose' ? 'propose' : 'flag';
+}
+/** Linking pages one new version sends to the sentinel; the rest are flagged "not checked". */
+export const SOURCE_JUDGE_MAX_PAGES = 20;
+
+/**
+ * Crawl limits, each a sparse workspace setting under its `WEB_SOURCE_CRAWL_*`
+ * env ceiling. `maxPages` caps one crawl; a first crawl creating more than
+ * `confirmFirst` pages, or a later one adding plus dropping more than
+ * `confirmChange`, waits for a person to confirm it.
+ */
+export interface SourceCrawlLimits {
+  maxPages: number;
+  confirmFirst: number;
+  confirmChange: number;
+}
+
+// GET/PUT /v1/sources/settings
+export interface SourceSettingsResponse {
+  workspaceId: string;
+  /** What the workspace asks for; null inherits the ceiling. */
+  requested: { [K in keyof SourceCrawlLimits]: number | null };
+  ceiling: SourceCrawlLimits;
+  effective: SourceCrawlLimits;
+}
+
+export interface UpdateSourceSettingsRequest {
+  workspaceId: string;
+  maxPages: number | null;
+  confirmFirst: number | null;
+  confirmChange: number | null;
+}
+
+/**
+ * Why a source alerts its connector's owner (an in-app row plus email, reason
+ * `alert`). `held`: a version failed its recipe checks (phase 2), or a spec no
+ * longer parses. `breaking`: a new spec version breaks clients (phase 4).
+ */
+export const SOURCE_ALERT_KINDS = ['paused', 'gone', 'failing', 'held', 'breaking'] as const;
+export type SourceAlertKind = (typeof SOURCE_ALERT_KINDS)[number];
+
+// GET /v1/documents/:id/source
+export interface DocumentSourceInfo {
+  documentId: string;
+  connectorId: string;
+  url: string;
+  host: string;
+  intervalMinutes: number | null;
+  /** Set while the source writes nothing (paused by hand or by a restore). */
+  pausedAt: string | null;
+  /** New versions the source has published since the page was paused. */
+  aheadCount: number;
+  /** The last successful check, changed or not. */
+  lastCheckedAt: string | null;
+  /** The revision the source last wrote, and the page's head now (they differ after a restore). */
+  syncedRevisionId: string | null;
+  headRevisionId: string | null;
+  /** Consecutive failed syncs. */
+  failures: number;
+  /** When the next retry of a transient failure runs, if one is pending. */
+  retryAt: string | null;
+  webhookConfigured: boolean;
+  /** Set when the source is an API spec (phase 4): stored as written, never through a recipe. */
+  spec: ApiSpecKind | null;
+  /** How the source is read (phase 2): the recipe in force, a held version, a waiting review. */
+  recipe: DocumentSourceRecipeState;
+  /**
+   * Set when the source crawls a tree (phase 3): its root page, how many pages
+   * it syncs, and a run waiting for a person to confirm a large change.
+   */
+  tree: { rootDocumentId: string; pages: number; awaitingRunId: string | null } | null;
+  /** What happens to a page linking this source that a new version may have made wrong (phase 5b). */
+  misalignment: SourceMisalignmentMode;
+}
+
+// ---------------------------------------------------------------------------
+// Extraction recipes (#674, phase 2): how a `web` source's HTML becomes its
+// page. Declarative data only, never code. A page recipe replaces the
+// connector's; with neither, the implicit recipe (article scoring) applies.
+// ---------------------------------------------------------------------------
+
+export const SOURCE_RECIPE_RULE_KINDS = ['drop-section', 'rename-heading', 'rewrite-links'] as const;
+export type SourceRecipeRuleKind = (typeof SOURCE_RECIPE_RULE_KINDS)[number];
+
+/**
+ * A normalization rule, applied to the markdown in order (markdown sources
+ * too). `drop-section` removes a heading and everything under it;
+ * `rename-heading` renames one; `rewrite-links` replaces a link-target prefix.
+ * Heading text matches case-insensitively, whitespace folded.
+ */
+export type SourceRecipeRule =
+  | { kind: 'drop-section'; heading: string }
+  | { kind: 'rename-heading'; from: string; to: string }
+  | { kind: 'rewrite-links'; from: string; to: string };
+
+export const SOURCE_HEADING_TAGS = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'] as const;
+export type SourceHeadingTag = (typeof SOURCE_HEADING_TAGS)[number];
+
+export interface SourceRecipe {
+  /** CSS selectors for the content, first that matches wins (all its matches, in order). Empty = article scoring. */
+  content: string[];
+  /** CSS selectors removed before anything else. */
+  strip: string[];
+  /** A source heading tag → the markdown level it becomes (1–6). */
+  headings: Partial<Record<SourceHeadingTag, number>>;
+  /** CSS selectors that must each match, or the version is held. */
+  landmarks: string[];
+  rules: SourceRecipeRule[];
+}
+
+/** Recipe limits: a recipe is a page's reading instructions, not a program. */
+export const SOURCE_RECIPE_MAX_SELECTORS = 20;
+export const SOURCE_RECIPE_MAX_RULES = 50;
+/** A version whose word count falls below this share of the last good one is held. */
+export const SOURCE_MIN_WORDS_RATIO = 0.4;
+
+/** Why a version was held: one per failed check. `spec-invalid`: an API spec source no longer parses (phase 4). */
+export const SOURCE_CHECK_FAILURES = ['no-content', 'landmark', 'words', 'headings', 'unsupported', 'spec-invalid'] as const;
+export type SourceCheckFailure = (typeof SOURCE_CHECK_FAILURES)[number];
+
+export type SourceRecipeStatus = 'proposed' | 'active' | 'superseded' | 'rejected';
+
+export interface SourceRecipeVersion {
+  id: string;
+  version: number;
+  status: SourceRecipeStatus;
+  origin: 'agent' | 'person';
+  /** True for the connector's recipe, false for this page's own. */
+  connectorScope: boolean;
+  recipe: SourceRecipe;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface DocumentSourceRecipeState {
+  /** Null while the implicit recipe applies. */
+  active: SourceRecipeVersion | null;
+  /** A drafted recipe waiting for review. */
+  proposal: SourceRecipeVersion | null;
+  /** Set while a version is held: the page stays on its last good revision. */
+  heldAt: string | null;
+  heldReasons: SourceCheckFailure[];
+  /** The source's own words for why, when a check names one: the parser's message for `spec-invalid`. */
+  heldDetail: string | null;
+  /** The source's structure changed while the checks still pass. */
+  structureChangedAt: string | null;
+  /** Whether a fetched body is kept to preview against (false for a source last read before phase 2). */
+  hasBody: boolean;
+}
+
+// POST /v1/documents/:id/source/recipe/preview
+export interface PreviewSourceRecipeRequest {
+  recipe: SourceRecipe;
+}
+
+export interface SourceRecipePreview {
+  /** The page as it reads now (its head). */
+  before: string;
+  /** What the recipe makes of the last fetched version. */
+  after: string;
+  /** Empty when every check passes. */
+  failures: SourceCheckFailure[];
+  /** Selector → elements matched, for the selectors and landmarks the recipe names. */
+  hits: Record<string, number>;
+}
+
+// PUT /v1/documents/:id/source/recipe — refused (409) while its checks fail.
+export interface SaveSourceRecipeRequest {
+  recipe: SourceRecipe;
+  /** The proposal this approves, if any. */
+  proposalId?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Tree recipes (#674, phase 3b): the connector's recipe, which every crawled
+// page without its own reads with. Previewed on one page's last fetched
+// version (the root by default); saving queues a pull that re-reads the rest.
+// ---------------------------------------------------------------------------
+
+/** A crawled page, as the tree recipe's preview picker lists it. */
+export interface SourceTreeRecipePage {
+  documentId: string;
+  title: string;
+  url: string;
+  /** False until a version of it was read since recipes arrived: nothing to preview on yet. */
+  hasBody: boolean;
+  /** The page keeps its own recipe, which the tree's does not replace. */
+  ownRecipe: boolean;
+  heldAt: string | null;
+}
+
+// GET /v1/connectors/:id/source/recipe
+export interface SourceTreeRecipeState {
+  connectorId: string;
+  url: string;
+  host: string;
+  rootDocumentId: string | null;
+  /** Null while the implicit recipe applies. */
+  active: SourceRecipeVersion | null;
+  /** A drafted tree recipe waiting for review. */
+  proposal: SourceRecipeVersion | null;
+  /** The crawled pages the caller can see, root first. */
+  pages: SourceTreeRecipePage[];
+}
+
+// POST /v1/connectors/:id/source/recipe/preview — `documentId` picks the page (default: the root).
+export interface PreviewSourceTreeRecipeRequest extends PreviewSourceRecipeRequest {
+  documentId?: string;
+}
+
+// PUT /v1/connectors/:id/source/recipe — checked on `documentId` (default: the root), refused (409) while that fails.
+export interface SaveSourceTreeRecipeRequest extends SaveSourceRecipeRequest {
+  documentId?: string;
+}
+
+// POST /v1/connectors/:id/source/recipe/draft — drafted from `documentId`'s last version (default: the root).
+export interface DraftSourceTreeRecipeRequest {
+  documentId?: string;
+}
+
+// POST /v1/sources
+export interface CreateSourcePageRequest {
+  workspaceId: string;
+  projectId: string;
+  parentId?: string | null;
+  url: string;
+  title?: string;
+  intervalMinutes?: number | null;
+  /** For a host that needs one: a token (sent as Bearer) or `Header-Name: value`. Saved as a connection for the host. */
+  credential?: string;
+  /** Also sync every page under this URL, nested beneath this one (phase 3). */
+  crawl?: boolean;
+}
+
+export interface CreateSourcePageResponse {
+  documentId: string;
+  connectorId: string;
+}
+
+// PATCH /v1/documents/:id/source
+export interface UpdateDocumentSourceRequest {
+  intervalMinutes: number | null;
+}
+
+// POST /v1/documents/:id/source/restore
+export interface RestoreDocumentSourceRequest {
+  /** An earlier revision of this page; restoring it pauses the source. */
+  revisionId: string;
+}
+
+// POST /v1/documents/:id/source/webhook — shown once.
+export interface DocumentSourceWebhookResponse {
+  url: string;
+  secret: string;
+  /** The header the sender signs the raw body with: `sha256=<hex HMAC-SHA256>`. */
+  header: string;
 }

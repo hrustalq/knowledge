@@ -13,6 +13,227 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.43.0] — 2026-11-01
+
+### Added
+
+- **Hide a page's info rail** (#698). The rail beside a document (Overview, Verification, Revisions, Graph,
+  Comments and the table of contents) can now be hidden from ⋯ → View → **Page details**, the same switch in
+  the phone menu, or a panel button at the end of the title row; the page then reads at full width. The choice applies
+  to every page and is remembered across sessions. Until someone chooses, viewers and guests get the rail
+  hidden and editors and admins get it shown, as before. A link to a rail widget (`?tab=revisions`) still
+  opens it, showing the rail for that visit only.
+- **Pages that follow an external source** (#674, phase 1). "Add page → **Link a source**" takes a markdown file
+  or an HTML page by URL and makes a page whose body belongs to that source: it reads the source at once (an
+  unreadable URL is refused there, with the HTTP status), then again on its check interval (15 min to daily, or
+  only when asked), on **Sync now**, or on a signed webhook (`X-Hub-Signature-256`, secret shown once). A fetch
+  is conditional on the last ETag / Last-Modified, so an unchanged source writes nothing. A new version lands
+  directly as a revision, never as a merge request, and the person who linked it is told. The page is
+  read-only: the editor, REST revisions and uploads, MCP `knowledge_create_revision`, git push, merges and
+  co-editing publishes are all refused with 409 `source-backed`, and the page shows "Follows its source"
+  instead of Edit. A **Source** widget in the rail says where it reads from, when it last checked, and
+  whether it is following, paused (with how many versions the source is ahead) or failing; it pauses,
+  resumes and syncs. **Restore** on an earlier History row writes that revision back and pauses the source.
+  A host that refuses without credentials asks for a token or a `Header-Name: value` header once and saves
+  it as a connection for that host. Timeouts, 5xx and 429 retry at 1, 5 and 25 minutes (`Retry-After` can
+  only lengthen one). After three failed syncs in a row, three 404/410s in a row (the page is then archived
+  and the pages linking to it are marked outdated, "source removed"), or a restore, the owner gets an
+  **alert**: a new `Sources` inbox category, and email like a mention. A `web` connector kind exists for
+  the same sources set up from Settings → Connectors. Off unless `WEB_SOURCES_ENABLED` is on, and a
+  workspace admin can switch it off as the `sources` feature; either way the routes 404 and the entry
+  points are hidden.
+- **A linked web page is read with an extraction recipe, and a layout change no longer reaches the page**
+  (#674, phase 2). Each version of an HTML source is now checked before it is written. It must have content,
+  keep at least 40% of the last good version's words, and keep most of its top headings (or match every
+  landmark its recipe names). A version that fails is **held**: the page stays on its last good version, the
+  Source widget says "Held for recipe review", and the owner gets a `held` alert (inbox and email). The
+  interpreter agent drafts a recipe for review if one is configured. A new **Extraction recipe** page (from the
+  Source widget, `/documents/<id>/source/recipe`) shows the recipe beside a live before/after preview with a
+  pass/fail line per check and a match count per selector. The recipe has content and removal CSS selectors,
+  landmarks, a heading-level map, and normalization rules: drop a section, rename a heading, rewrite a link
+  prefix. Rules also apply to markdown sources. **Save** (or **Approve and publish** for a draft) is refused
+  while any check fails. Saving re-reads the last fetched version through the recipe and writes the result
+  as a new revision when it differs, so dropping a section removes it at once. A source whose layout changed
+  but still passes shows "Layout changed" with a **Draft recipe** button, and no model is called until
+  someone presses it. A body that is neither markdown nor HTML is now held rather than counted as a failed
+  sync. New routes: `PUT /v1/documents/:id/source/recipe`, and `POST …/recipe/preview`, `…/recipe/draft`,
+  `…/recipe/dismiss`.
+- **A linked source can sync every page under its URL** (#674, phase 3). "Link a source" has **Also sync every page
+  under this URL**, and a `web` connector has **Pages → This URL and every page under it**. The crawl follows every
+  link on each page (navigation included) and the site's `sitemap.xml`, keeps to the URL's origin and path (`/docs`
+  holds `/docs/x`, never `/docs-old`), drops query strings and fragments, and skips images and other files. Pages
+  nest by URL path under the root page, so `/docs/a/b` sits under `/docs/a`, or under the root when there is no
+  `/docs/a`. It asks one host one request at a time, a second apart. A first crawl creating more than 50 pages,
+  or a later one adding plus dropping more than 20, waits as a reviewed run; the root page's Source widget says
+  so and links to it. No crawl reads more than 200 pages. A page missing from three complete crawls in a row is
+  archived and its linking pages marked outdated, as for a 404. A crawl stopped at the cap, or whose root failed,
+  never counts a page as missing. Admins can lower the three limits under Settings → Connectors.
+- **A crawled tree has one recipe for all its pages** (#674, phase 3b). The root page's Source widget links to a
+  **Tree recipe** page (`/settings/connectors/<id>/recipe`). It is the same workbench as a page's recipe, with a
+  **Preview on** picker that previews the recipe on the root page or any crawled page you can open. Every page
+  without its own recipe reads with the tree recipe, and a page's own recipe still replaces it. **Save** is
+  refused while the previewed page fails a check. Saving queues a sync that refetches each of those pages and
+  reads it through the new recipe. A page that then fails is held on its own while the rest are updated, and a
+  recipe change does not flag pages as "Layout changed". The interpreter agent can draft a tree recipe from the
+  previewed page, with the same Approve / Reject review. A newly crawled page now goes through the tree recipe
+  on its first version too, and its first version is kept as the baseline for the next. A new page that fails the
+  recipe is not created: the run lists it as failed, saying which checks failed, and the next crawl tries again.
+  A page's Source widget names "Tree recipe v*n*" when that is what it reads with. Editors can change a tree
+  recipe, as they can a page's. New routes: `GET`/`PUT /v1/connectors/:id/source/recipe`, and
+  `POST …/preview`, `…/draft`, `…/dismiss`.
+- **A linked source can be an OpenAPI or AsyncAPI spec** (#674, phase 4). "Link a source" on a URL serving a spec
+  (JSON or YAML with a top-level `openapi`, `swagger` or `asyncapi` key, such as `/openapi.json` or
+  `/v3/api-docs`) creates an API reference page, stored as written. Each new version replaces it directly, with no
+  merge request, whatever the workspace's breaking-change policy. Specs from repositories still go through merge
+  requests. When a version breaks clients, the connector's owner gets a **breaking** alert (in-app and email).
+  The pages that relied on a removed operation are asked for a check (see the next entry). A version that no
+  longer parses is held: the page stays on its last good version, the Source
+  widget shows the parser's message, the owner is alerted once, and the next version that parses lands normally.
+  A spec split across files (a `$ref` to another file) is refused with "bundle the spec into one file", and a
+  spec cannot be crawled. Recipes do not apply to a spec, so its Source widget says it is stored as written
+  instead of linking to one.
+- **Pages that rely on a source hear when it drops what they cite** (#674, phase 5a). Once a new version of a
+  source-backed page is indexed, a page is asked for a check (`requested`, its owner notified) when it links a
+  section the new version removed or renamed, or names an entity the new version no longer describes: a removed
+  API operation, or a `relations:` entry gone from the source's frontmatter. No model is involved. The note says
+  what went, for example "Its source “Vendor guide” changed: #limits removed; #auth is now #authentication". On a
+  spec page the sections are its operations, so only the pages citing a removed operation are asked, not every
+  page linking the spec. A page already flagged, archived, or itself following a source is left alone. Facts a
+  model extracted are not compared, since its reading of the same text can differ between versions.
+- **A source-backed page's trust follows its sync** (#674, phase 5a). It reads as **verified** while its source is
+  healthy (not paused, not held for recipe review, no failed sync, and checked within two intervals; a manual-only
+  source has no deadline) and **expired** otherwise. Its trust row reads "Synced from \<host\> · \<time\>" and has
+  no Verify action, since nobody stamps a page its source writes (`POST /v1/documents/:id/verify` answers 409
+  `source_backed`). A person's flag and an open report still outrank it. Search ranking, citations, the page tree
+  and Knowledge health all read the same state. `DocumentDetailResponse.document.sourceSync` carries the host and
+  last check.
+- **The sentinel checks pages that link a changed source, and can propose the fix** (#674, phase 5b). When a
+  source-backed page gets a new version, the pages linking it that the deterministic check did not already flag
+  are judged against only what changed: the sections whose text differs, or a spec's changed operations. A page
+  that links only sections that did not change is skipped, and a page linking a section sees only that section.
+  A page the sentinel finds wrong is asked for a check (`requested`, its owner notified) with what is wrong in the
+  note. At most 20 pages are judged per version; the rest, and pages not every member may open, are asked for a
+  check with "not checked" in the note instead. A new **When a change may break a page linking this** setting on
+  the page's Source widget (and **When a change may break a page** on a `web` connector) chooses between **Ask
+  its owner to check it** (the default) and **Ask its owner and propose a fix**, which also opens the sentinel's
+  corrected page as a merge request from the connector's owner. In that mode the pages the deterministic check
+  flagged (a cited section removed or renamed) are judged too, for their fix, and keep the check's note. `PATCH /v1/documents/:id/source` takes
+  `misalignment` (`flag` | `propose`), and both fields are now optional. A version arriving while the previous
+  check still waits replaces it rather than queueing a second one. No check runs when the sentinel is switched
+  off or has no model, or when the source has no owner; the deterministic flags still apply.
+- **A page knows which pages link to it** (#673). Every internal link on a page's published version is now
+  recorded with the heading it points at: the `/documents/<id>#heading` form the editor writes, and the same
+  address pasted in full from this deployment's own web address (`WEB_BASE_URL`); links to anywhere else are
+  not. A **Linked from** widget in the page rail lists those pages with the headings they cite, and appears
+  only when there are any. `GET /v1/documents/:id/backlinks` returns the same list (`?anchor=` narrows it to
+  one heading), and MCP `knowledge_get_document` now carries it as `backlinks`. A page the reader may not
+  open is left out entirely, never counted, and pages still awaiting a merge request or archived are not
+  listed. A link removed from a page drops off once its new version is indexed, and a deleted page takes
+  its links with it. A draft branch links nothing until it is merged.
+- **On a phone, a page's actions open as a side panel** (#685). Below 640 px the breadcrumb row used to split in two,
+  the trail on one line and six small icons on the next. The row is one line again: the breadcrumbs, then a
+  single button that slides the actions in from the right, each with its name (Watch, Share, Access, Copy page,
+  Edit, Export, Save as template and the view options), so nothing hides behind ⋯ any more and Export keeps its
+  formats in one menu. The panel holds focus while open, closes on ×, the backdrop or Escape, and hands focus
+  back to the button. Wider screens are unchanged.
+
+### Changed
+
+- **Reviewing a sync run no longer covers page titles** (#674). The hover actions on a run's page list used to
+  be laid over the row with no background, so the verbs were painted across the title and its status. The row
+  now shows its likeliest action in words plus a **⋯** menu with the rest, in place of nothing on other rows,
+  and its status wraps beneath. On a phone the page list opens full width.
+- **A workspace with one project opens the rail on its pages** (#671). The left rail used to start on the
+  project roster whenever it had not been left on Pages: after a first visit, a workspace switch, or a reload
+  after going back. With a single project that meant clicking its only row before any page was reachable. Now a
+  one-project workspace always loads straight into the page tree, server-rendered with no slide-in, on the
+  desktop rail and the phone drawer alike. The project's name at the top still goes back to the roster and its
+  **+ New project** button, and that stays put for the rest of the visit. Workspaces with no projects or with
+  several behave as before.
+
+### Operations
+
+- **Source-backed pages are off until `WEB_SOURCES_ENABLED=true`** (#674, default `false`).
+  `WEB_SOURCE_ALLOW_PRIVATE` (default `false`) lets a source fetch private or loopback addresses; it is
+  separate from `CONNECTOR_ALLOW_PRIVATE_URLS` because any editor can link a source. Email alerts need
+  `MAIL_NOTIFICATIONS_ENABLED` like every other notification mail. The migration only adds nullable or
+  defaulted columns to `connectors` and `connector_links`, which the previous release never reads, so a
+  rollback by retag needs nothing.
+- **Each new version of a source-backed page can now cost up to 20 model calls** (#674, phase 5b), one per
+  linking page judged, billed to the source's owner as the new `source-judge` AI usage operation. Only pages
+  linking a changed section or the whole page are judged. Switching the `sentinel` agent off per workspace
+  stops it, and the deterministic flags still run. No migration.
+- **Spec sources (#674, phase 4) add one nullable column, `connector_links.held_detail`**, which the previous
+  release never reads, so a rollback by retag needs nothing.
+- **Crawled sources (#674, phase 3) add three nullable columns to `workspace_settings`** and three env ceilings:
+  `WEB_SOURCE_CRAWL_MAX_PAGES` (200), `WEB_SOURCE_CRAWL_CONFIRM_FIRST` (50) and `WEB_SOURCE_CRAWL_CONFIRM_CHANGE`
+  (20). A workspace value may only lower its ceiling. The migration is additive, so a rollback by retag needs
+  nothing undone.
+- **Extraction recipes (#674, phase 2) add a migration that only creates `source_recipes` and adds nullable
+  columns to `connector_links`**, which the previous release never reads, so a rollback by retag needs
+  nothing. Each `web` source now keeps its last fetched body (at most 5 MB) in the bucket under
+  `workspaces/<ws>/sources/`. Recipe drafts are billed as the new `source-recipe` AI usage operation, and
+  only run when a version is held or someone presses Draft recipe. The `interpreter` agent can be switched
+  off per workspace like any built-in agent.
+- **Run `make page-links-backfill` once after deploying #673** (in production, `node
+  dist/scripts/page-links-backfill.main.js` in the API container). Pages indexed earlier have no recorded
+  links until their next edit; the script reads each page's indexed published version and records them.
+  Idempotent and safe beside a running worker; `--dry-run` only counts, `--workspace <id>` limits it to one
+  workspace. The migration only adds the `page_links` table, which the previous release never reads, so a
+  rollback by retag needs nothing.
+
+### Fixed
+
+- **Share links, published sites and exports showed a page's title twice** (#692). A page whose body opens with
+  `# <its title>` (most imported, captured and agent-written pages) got the surface's own title, then the same
+  heading again, and on a published site the title was also the first entry of "On this page". Share links,
+  site pages and PDF, HTML and DOCX exports now drop that leading heading with the same rule the editor and the
+  in-app reader use (#646). A first heading that says something else still shows. Stored markdown and the `.md`
+  / `llms.txt` outputs are unchanged.
+- **Clicking another page in a sync run's review did nothing** (#674). Switching pages rebuilds the editor
+  pane, and the table controls' teardown read the already-destroyed editor and threw. That aborted the page
+  update, so the first page stayed selected however many times another was clicked.
+- **A source page's version in a sync run read as raw JSON** (#674). "Source version" in a run's page panel showed
+  `{"lastModified":"Sun, 01 Nov 2026 01:42:48 GMT"}`. It now shows that date in the reader's language, or a
+  short ETag when the source sends no date. A crawl waiting for confirmation also now says why above
+  **Approve all** ("This crawl would add 60 pages…"). Before, that reason was stored but never shown.
+- **A long word could push a dialog's title out of the window** on a small screen (#685). An unbroken name, address
+  or id in a confirmation (or any dialog) widened the box past the screen edge, taking the buttons with it,
+  and a dialog title that wrapped drew its lines on top of each other. Titles and descriptions now break long
+  words onto the next line and the dialog stays inside the screen.
+- **Every browser tab was titled "Knowledge"** (#644). The member app now names the route in the tab, in
+  history and to a screen reader, from the same trail as the breadcrumb: `‹page› · ‹project› · Knowledge`,
+  `Merge requests · Knowledge`, `AI · Settings · Knowledge`, in the UI's language, both in the server render
+  and after each navigation. A page the reader may not open is never named. A page from another project now
+  also gets its own breadcrumb, under its own project, instead of only "Pages".
+- **In Russian at phone width the top bar pushed the account menu off-screen** (#647). The search trigger kept
+  the full width of its longer placeholder, so at 390 px the bar was 421 px wide and Log out sat under a 7 px
+  sliver. The trigger now gives way and truncates; the bar fits from 360 px up in both languages.
+- **On a phone you could not publish an edit** (#681). The editor's action bar was wider than the screen in both
+  languages (about 500 px of controls on a 360 px phone in Russian), so Save draft and Publish sat off the
+  right edge, and the bar does not scroll. On a narrow bar, Assistant, Settings, Share and Cancel now move
+  into the ⋯ menu, under the same names, and Save draft folds to an icon like its neighbours. Publish keeps
+  its word. The bar fits from 360 px up in both languages. Wide screens are unchanged, except that Save draft
+  now has an icon beside its label.
+- **Three keyboard and screen-reader gaps** (#649). The page body in the editor is now announced as a labelled
+  multi-line text field ("Page body"; a comment, a glossary definition and a template body each carry their
+  own name) instead of an unnamed editable region. A closed side rail, such as the Filters rail on Merge
+  requests, no longer leaves its invisible buttons in the tab order. Opening the notifications bell puts focus
+  on the panel rather than on "Mark all as read", so the Enter that opened it can no longer clear every
+  unread notification.
+
+### Security
+
+- **A failure partway through a security change could leave sessions signed in for good** (#656). Deleting an
+  identity provider, a back-channel logout, a password reset or change, an admin disabling an account or
+  overriding its password, and every SCIM change that removes access (deactivating, deleting or creating an
+  inactive user, removing someone from a group, deleting a group, deleting a SCIM group mapping) used to commit
+  the change first and end the sessions or access second. A crash or dropped connection between the two kept the
+  change but not the revoke, and the retry was refused (the token spent, the provider gone, the IdP's logout
+  token "replayed"), so nothing ever repaired it. Each now commits as one unit: both happen or neither does, and
+  the retry works. A replayed logout token is still refused. The audit row and the "password changed" mail now
+  go out only once the change has committed.
+
 ## [0.42.0] — 2026-10-31
 
 ### Breaking
@@ -5613,7 +5834,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.42.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.43.0...HEAD
+[0.43.0]: https://github.com/hrustalq/knowledge/compare/v0.42.0...v0.43.0
 [0.42.0]: https://github.com/hrustalq/knowledge/compare/v0.41.1...v0.42.0
 [0.41.1]: https://github.com/hrustalq/knowledge/compare/v0.41.0...v0.41.1
 [0.41.0]: https://github.com/hrustalq/knowledge/compare/v0.40.0...v0.41.0

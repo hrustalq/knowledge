@@ -230,6 +230,15 @@ export function markdownTokens(md: string): TokensList {
   return marked.lexer(md ?? '');
 }
 
+/** Every link token in a body, nested ones included (lists, tables, panels), as this parser reads them. */
+export function markdownLinks(md: string): Tokens.Link[] {
+  const links: Tokens.Link[] = [];
+  marked.walkTokens(markdownTokens(md), (token) => {
+    if (token.type === 'link') links.push(token as Tokens.Link);
+  });
+  return links;
+}
+
 /* ------------------------------------------------------------------ embeds */
 
 export interface EmbedGroup {
@@ -440,6 +449,41 @@ export const SANITIZE_CONFIG: { ADD_TAGS: string[]; ADD_ATTR: string[] } = {
  */
 export function slugifyHeading(text: string): string {
   return slugifyPath(text);
+}
+
+/**
+ * A body's h1–h3 with the ids the read view gives them (deduped the way
+ * MarkdownView does) and the text under each up to the next one — what a
+ * source-backed page's dependent check (#674) diffs to find a linked section
+ * that was removed or renamed.
+ */
+export function headingSections(md: string): Array<{ id: string; body: string }> {
+  const out: Array<{ id: string; body: string }> = [];
+  const seen = new Map<string, number>();
+  // ponytail: top-level headings only; one nested in a panel or <details> shifts no id here but does in the reader.
+  for (const token of markdownTokens(md)) {
+    if (token.type === 'heading' && (token as Tokens.Heading).depth <= 3) {
+      let id = slugifyHeading(inlineText((token as Tokens.Heading).tokens)) || 'section';
+      const count = seen.get(id) ?? 0;
+      seen.set(id, count + 1);
+      if (count > 0) id = `${id}-${count}`;
+      out.push({ id, body: '' });
+    } else if (out.length > 0) {
+      out[out.length - 1]!.body += token.raw;
+    }
+  }
+  return out.map((s) => ({ id: s.id, body: s.body.trim() }));
+}
+
+/** A heading's text as the DOM's `textContent` reads it: marks dropped, entities decoded. */
+function inlineText(tokens: Token[] | undefined): string {
+  let out = '';
+  for (const t of tokens ?? []) {
+    const children = (t as { tokens?: Token[] }).tokens;
+    if (t.type === 'html') continue;
+    out += children?.length ? inlineText(children) : decodeEntities((t as { text?: string }).text ?? '');
+  }
+  return out;
 }
 
 /**

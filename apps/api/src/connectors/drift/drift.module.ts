@@ -4,6 +4,7 @@ import { PrismaModule } from '../../prisma/prisma.module.js';
 import { ConnectorsCoreModule } from '../connectors-core.module.js';
 import { VerificationCoreModule } from '../../verification/verification-core.module.js';
 import { DriftPublishSweeper } from './drift-publish.sweeper.js';
+import { SourceChangePublishSweeper } from './source-change-publish.sweeper.js';
 
 /**
  * The API half of the drift check (docs/features/35) — publishing a finished
@@ -19,6 +20,8 @@ import { DriftPublishSweeper } from './drift-publish.sweeper.js';
  */
 @Module({
   imports: [PrismaModule, AiModule, ConnectorsCoreModule, VerificationCoreModule],
-  providers: [DriftPublishSweeper],
+  // The source-change publisher (#674, phase 5b) shares the sentinel and the
+  // same two needs: a principal for proposals, and the page flags.
+  providers: [DriftPublishSweeper, SourceChangePublishSweeper],
 })
 export class DriftModule {}

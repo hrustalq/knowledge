@@ -30,6 +30,9 @@ export const NOTIFICATION_REASONS = [
   'owner',
   'assigned',
   'review-requested',
+  // A source-backed page's source needs its owner (#674): paused, gone,
+  // failing. Directed and emailed like a mention, ranked just below one.
+  'alert',
   'mention',
 ] as const;
 export type NotificationReason = (typeof NOTIFICATION_REASONS)[number];
@@ -50,7 +53,7 @@ export function notificationReasonRank(reason: string): number {
  * export and a connector sync because they are one thing to the reader — background work
  * they started, now finished.
  */
-export const NOTIFICATION_CATEGORIES = ['mention', 'review', 'comment', 'document', 'verification', 'access', 'job'] as const;
+export const NOTIFICATION_CATEGORIES = ['mention', 'review', 'comment', 'document', 'verification', 'access', 'job', 'source'] as const;
 export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
 
 /**
@@ -79,6 +82,7 @@ export function notificationCategoryFor(type: string): NotificationCategory | nu
   if (NOTIFIED_VERIFICATION_TYPES.includes(type)) return 'verification';
   if (NOTIFIED_ACCESS_TYPES.includes(type)) return 'access';
   if (NOTIFIED_JOB_TYPES.includes(type)) return 'job';
+  if (type === 'source.updated' || type === 'source.alert') return 'source';
   return null;
 }
 
@@ -204,6 +208,7 @@ const DIRECTED_REASON_CATEGORY: Record<string, NotificationCategory | undefined>
   mention: 'mention',
   assigned: 'review',
   'review-requested': 'review',
+  alert: 'source',
 };
 
 /** One inbox row. */

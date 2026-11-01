@@ -204,6 +204,8 @@ function fakeDb() {
     userGroupMember: { deleteMany: vi.fn(async () => ({ count: 0 })) },
     accessGrant: { deleteMany: vi.fn(async () => ({ count: 0 })) },
     $transaction: vi.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
+    withTransaction: async (fn: () => Promise<unknown>) => fn(),
+    onCommit: (fn: () => Promise<unknown>) => void fn(),
     // The two guarded statements of membership-guards.ts, by bound value order.
     $executeRaw: vi.fn(async (strings: TemplateStringsArray, ...v: unknown[]) => {
       const sql = strings.join('?');

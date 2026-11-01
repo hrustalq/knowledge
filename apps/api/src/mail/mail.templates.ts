@@ -1,4 +1,4 @@
-import type { Locale } from '@knowledge/contracts';
+import { SOURCE_ALERT_KINDS, type Locale } from '@knowledge/contracts';
 import { t } from '../i18n/t.js';
 
 export interface RenderedMail {
@@ -114,19 +114,24 @@ const REASON_KEY: Record<string, string> = {
   mention: 'mention',
   'review-requested': 'reviewRequested',
   assigned: 'assigned',
+  alert: 'alert',
 };
+
+const ALERT_KINDS: ReadonlySet<string> = new Set(SOURCE_ALERT_KINDS);
 
 export function notificationMail(
   to: Recipient,
-  input: { reason: string; actor: string; title: string; url: string; settingsUrl: string },
+  input: { reason: string; actor: string; title: string; url: string; settingsUrl: string; alert?: string },
 ): RenderedMail {
   const l = to.locale;
   const key = REASON_KEY[input.reason] ?? 'mention';
   const args = { actor: input.actor, title: input.title };
+  // An alert's body says which one (#674); an unknown kind reads as the generic line.
+  const body = key === 'alert' && input.alert && ALERT_KINDS.has(input.alert) ? `mail.notification.alert.${input.alert}` : `mail.notification.${key}.body`;
   return layout({
     subject: t(`mail.notification.${key}.subject`, args, l),
     greeting: t('mail.greeting', { name: to.displayName }, l),
-    paragraphs: [t(`mail.notification.${key}.body`, args, l)],
+    paragraphs: [t(body, args, l)],
     action: { label: t('mail.notification.action', undefined, l), url: input.url },
     footer: t('mail.notification.footer', { url: input.settingsUrl }, l),
   });

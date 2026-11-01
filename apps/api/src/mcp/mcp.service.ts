@@ -125,7 +125,7 @@ import {
  * Bumped by hand at every release, with swagger.ts (docs/versioning.md#known-drift).
  * Named because the connection page and the skill report it too.
  */
-export const MCP_SERVER_VERSION = '0.42.0';
+export const MCP_SERVER_VERSION = '0.43.0';
 
 /**
  * MCP tools (plan.md §9). Tool names use underscores (MCP tool names must
@@ -1508,7 +1508,9 @@ export class McpService {
     server.registerTool(
       'knowledge_get_document',
       {
-        description: 'Get a document, its head (or a given) revision and indexed chunk summaries.',
+        description:
+          'Get a document, its head (or a given) revision and indexed chunk summaries, plus `backlinks`: the pages ' +
+          'you can open whose current text links to it, with the headings they link to.',
         inputSchema: {
           documentId: z.string().uuid(),
           revisionId: z.string().uuid().optional(),
@@ -1519,7 +1521,8 @@ export class McpService {
         if (revisionId) await guard.branches(documentId, { revisionIds: [revisionId] }, 'viewer');
         const doc = await this.documents.getDocument(documentId, revisionId);
         void this.analytics.view(caller, documentId, revisionId);
-        return this.json(doc);
+        const { backlinks } = await this.documents.getBacklinks(documentId, await this.permissions.scopeForDocument(principal, documentId));
+        return this.json({ ...doc, backlinks });
       },
     );
 

@@ -14,6 +14,9 @@ import { ConnectorList } from '@/entities/connector'
 import ConnectionList from '@/modules/connectors/components/ConnectionList.vue'
 import ConnectorRuns from '@/modules/connectors/components/ConnectorRuns.vue'
 import ConnectorLinks from '@/modules/connectors/components/ConnectorLinks.vue'
+import SourceCrawlSettings from '@/modules/connectors/components/SourceCrawlSettings.vue'
+import { getWorkspaceId } from '@/shared/api/api'
+import { useFeaturesStore } from '@/stores/features'
 
 const { t } = useI18n()
 
@@ -33,6 +36,9 @@ const auth = useAuthStore()
 // Every write endpoint behind this page is @Access('admin', …) except starting
 // a sync, so a non-admin is told plainly rather than shown a wall of 403s.
 const canManage = computed(() => auth.canAdminWorkspace)
+// Crawl limits for web sources (#674): workspace administration, and only where sources are on.
+const features = useFeaturesStore()
+const showCrawlSettings = computed(() => canManage.value && features.isOn('sources'))
 </script>
 
 <template>
@@ -51,7 +57,10 @@ const canManage = computed(() => auth.canAdminWorkspace)
     <PageTabs v-model="tab" :tabs="tabs" :label="t('connectors.tabsLabel')" />
 
     <div :id="panelId(tab)" role="tabpanel" :aria-labelledby="tabId(tab)" class="min-h-0 flex-1">
-      <ConnectorList v-if="tab === 'connectors'" :can-manage="canManage" />
+      <div v-if="tab === 'connectors'" class="space-y-8">
+        <ConnectorList :can-manage="canManage" />
+        <SourceCrawlSettings v-if="showCrawlSettings" :workspace-id="getWorkspaceId()" />
+      </div>
       <ConnectionList v-else-if="tab === 'connections'" :can-manage="canManage" />
       <ConnectorRuns v-else-if="tab === 'runs'" :can-manage="canManage" />
       <ConnectorLinks v-else :can-manage="canManage" />

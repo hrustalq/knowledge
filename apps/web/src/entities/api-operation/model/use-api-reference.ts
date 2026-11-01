@@ -1,14 +1,12 @@
 import { computed, nextTick, ref, watch, type Ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
-import type { ApiOperationInfo, ApiSpecDocumentResponse, ListApiOperationsResponse } from '@knowledge/contracts'
+import { operationAnchor, type ApiOperationInfo, type ApiSpecDocumentResponse, type ListApiOperationsResponse } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { groupByTag, operationRowKey } from '@/entities/api-operation/model/api-spec'
 
 /** The element id an operation's card carries: stable, so `#op-…` links keep working. */
-export function operationDomId(o: { entityKey: string; method: string | null }): string {
-  return `op-${operationRowKey(o).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`
-}
+export const operationDomId = operationAnchor
 
 /**
  * One spec's reference state (#78), shared by the Operations widget in the page

@@ -60,7 +60,6 @@ const route = useRoute()
 
 const canvas = computed(() => isCanvas(props.variant))
 const hasSubRail = computed(() => !!slots['sub-rail'])
-const hasRail = computed(() => !!slots.rail)
 const hasHead = computed(
   () => !!props.title || !!slots.title || !!slots.status || !!slots.actions || !!slots.meta,
 )
@@ -137,8 +136,11 @@ const bodyClass = computed(() =>
       <!-- One subject plus the facts about it. The rail is `lg`-and-up only;
            below that it falls under the content, which is the order you would
            read them in anyway. -->
+      <!-- `$slots`, not a computed over `useSlots()`: slots are not reactive, so
+           a computed would keep the first answer when a page drops its rail
+           with `v-if` (the document page's toggle, #698). -->
       <div
-        v-if="hasRail"
+        v-if="$slots.rail"
         class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem] xl:grid-cols-[minmax(0,1fr)_28rem] xl:gap-8"
       >
         <div class="min-w-0 space-y-6"><slot /></div>

@@ -26,6 +26,7 @@ interface SsrRequestContext {
   glossary: string | null
   aiPanel: string | null
   measure: string | null
+  pageRail: string | null
   treeOpen: string | null
   locale: Locale | null
   /** The server's trace id for this page request, so API calls made during the render join it. */
@@ -78,6 +79,9 @@ async function prefetchShell(router: Router, pinia: Pinia, queryClient: QueryCli
     if (fallback && !workspaces.items.some((w) => w.workspaceId === request.workspaceId)) {
       // The project check below then drops the old workspace's tree.
       request.workspaceId = workspaces.fallbackId = fallback
+      // The fallback's roster is this render's first load, not a refresh of
+      // the gone workspace's empty one: the rail lands by it (#671).
+      projects.loaded = false
       await projects.fetchList().catch(() => undefined)
     }
   }
@@ -138,6 +142,7 @@ export async function render(url: string, ctx: Partial<SsrRequestContext> = {}) 
     glossary: ctx.glossary ?? null,
     aiPanel: ctx.aiPanel ?? null,
     measure: ctx.measure ?? null,
+    pageRail: ctx.pageRail ?? null,
     treeOpen: ctx.treeOpen ?? null,
     locale: ctx.locale ?? null,
     traceId: ctx.traceId ?? null,
@@ -152,7 +157,7 @@ export async function render(url: string, ctx: Partial<SsrRequestContext> = {}) 
     await messagesReady
     await prefetchShell(router, pinia, queryClient, request)
 
-    const ssrContext: { teleports?: Record<string, string> } = {}
+    const ssrContext: { teleports?: Record<string, string>; title?: () => string } = {}
     let html = await renderToString(app, ssrContext)
     // The page action bar (#441) is a teleport into the shell's own markup, so
     // its buffer goes back into that element here; the client hydrates it there.
@@ -173,6 +178,9 @@ export async function render(url: string, ctx: Partial<SsrRequestContext> = {}) 
     ).replace(/</g, '\\u003c')
     const head = `<script>window.__PINIA__ = ${state};window.__QUERIES__ = ${queries}</script>`
 
-    return { html, head }
+    // Set by the shell (#644); escaped here, since server.js splices it in raw.
+    const title = ssrContext.title?.().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+    return { html, head, title }
   })
 }

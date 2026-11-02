@@ -8096,6 +8096,10 @@ export interface components {
             ownerId?: string | null;
             /** @description Review interval in days; null inherits, 0 never expires */
             reviewIntervalDays?: number | null;
+            /** @description Child template: a template uuid or builtin:<key>; null clears it */
+            childTemplateRef?: string | null;
+            /** @description Child title pattern ({{n:W}}, {{date}}); blank or null clears it */
+            childTitlePattern?: string | null;
         };
         MoveDocumentDto: {
             /** Format: uuid */
@@ -9704,6 +9708,8 @@ export interface components {
              * @description Fills `{{parent}}`
              */
             parentId?: string;
+            /** @description Leave declared placeholders as {{name}} instead of requiring them: a collection child page skeleton (#716) */
+            skeleton?: boolean;
         };
         CreateTemplateDto: {
             /** Format: uuid */
@@ -12897,6 +12903,8 @@ export interface components {
             archivedBy?: string | null;
             templateRef?: string | null;
             templateVersion?: number | null;
+            childTemplateRef?: string | null;
+            childTitlePattern?: string | null;
             restricted?: boolean;
             draftOwnerId?: string | null;
             hidden?: boolean;
@@ -12949,6 +12957,8 @@ export interface components {
             archivedBy?: string | null;
             templateRef?: string | null;
             templateVersion?: number | null;
+            childTemplateRef?: string | null;
+            childTitlePattern?: string | null;
             restricted?: boolean;
             draftOwnerId?: string | null;
             hidden?: boolean;

@@ -46,6 +46,15 @@ in the pull request that introduces them — see
   restricted project is restricted before its first page is written, so its pages are never visible
   workspace-wide. `GET /v1/blueprints` lists the built-ins for any workspace member, and
   `POST /v1/projects/scaffold` takes `restricted`, `avatarEmoji` and `avatarColor`.
+- **Any page can be a numbered collection** (#716, phase 3 of 7). Under *Page settings → Collection*, pick the
+  template new child pages start from and a title pattern (`ADR {{n:4}}: `, `{{n:2}} — `, `{{date}} session`);
+  the field previews the next title. *New page* on that page's row in the tree then opens with the next number
+  already typed (`ADR 0020: `) and the template laid in. Its placeholders stay as `{{name}}` for you to fill, as
+  in a scaffolded page, instead of the template asking for them first. Numbers count archived children too, so one
+  is never handed out twice; gaps are kept. Collections from a blueprint work this way from the start. The rule is
+  saved on its own, not with Publish. `PATCH /v1/documents/:id` takes `childTemplateRef` and `childTitlePattern`
+  (a template that does not resolve in the workspace is a 404), and `POST /v1/templates/render` takes
+  `skeleton: true`.
 - **A *Research question* page template** (`builtin:research-question`): Question, Options, Criteria, Findings,
   Decision, Open questions.
 

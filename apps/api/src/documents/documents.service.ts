@@ -753,6 +753,8 @@ export class DocumentsService {
     | 'archivedBy'
     | 'templateRef'
     | 'templateVersion'
+    | 'childTemplateRef'
+    | 'childTitlePattern'
     | 'restricted'
     | 'draftOwnerId'
   > {
@@ -775,6 +777,8 @@ export class DocumentsService {
       // the full page row, and a second spread at each would be a third place to forget.
       templateRef: d.templateRef,
       templateVersion: d.templateVersion,
+      childTemplateRef: d.childTemplateRef,
+      childTitlePattern: d.childTitlePattern,
       restricted: d.restrictedBy.length > 0,
       draftOwnerId: d.draftOwnerId,
     };
@@ -1355,9 +1359,18 @@ export class DocumentsService {
       projectId?: string;
       reviewIntervalDays?: number | null;
       verificationExpiresAt?: Date | null;
+      childTemplateRef?: string | null;
+      childTitlePattern?: string | null;
     } = {};
     if (dto.title !== undefined) data.title = dto.title;
     if (dto.category !== undefined) data.category = dto.category;
+    // A collection's rule (#716). The template must resolve in this workspace,
+    // and is stored in its canonical spelling; a blank pattern clears it.
+    if (dto.childTemplateRef !== undefined) {
+      data.childTemplateRef =
+        dto.childTemplateRef === null ? null : (await this.templates.resolve(document.workspaceId, dto.childTemplateRef)).ref;
+    }
+    if (dto.childTitlePattern !== undefined) data.childTitlePattern = dto.childTitlePattern?.trim() ? dto.childTitlePattern.trimStart() : null;
     if (dto.reviewIntervalDays !== undefined && dto.reviewIntervalDays !== document.reviewIntervalDays) {
       data.reviewIntervalDays = dto.reviewIntervalDays;
       // A stamped page's deadline moves with its interval, from the same

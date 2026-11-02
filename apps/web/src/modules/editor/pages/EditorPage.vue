@@ -135,6 +135,8 @@ import { ApiOperationPicker, type PickedOperation } from '@/entities/api-operati
 import { ApiOperationRef } from '@/entities/api-operation'
 import { SaveAsTemplateDialog, type SaveAsTemplatePage } from '@/entities/template'
 import { useWorkingCopy } from '@/modules/editor/model/use-working-copy'
+import { nextInCollection, type CollectionRule } from '@/modules/editor/model/collection'
+import CollectionRuleFields from '@/modules/editor/components/CollectionRuleFields.vue'
 import { docToMarkdown } from '@/entities/rich-editor'
 import type { CollabHandle } from '@/entities/rich-editor'
 import { loadCollab } from '@/entities/rich-editor'
@@ -164,6 +166,8 @@ const isEdit = computed(() => editId.value !== null)
 // but its author; the page itself offers Publish. An existing page is read on
 // load, and until then (or when the load fails) is taken as published.
 const isDraft = ref(editId.value === null)
+/** The page's collection rule (#716), read on load and saved on its own from page settings. */
+const collectionRule = ref<CollectionRule>({ childTemplateRef: null, childTitlePattern: null })
 
 const title = ref('')
 const category = ref<DocumentCategory>('other')
@@ -237,6 +241,8 @@ const shareOpen = ref(false)
  * project; the template is applied once the editor is ready (`openTemplate`).
  */
 let openingTemplate: string | null = null
+/** The parent the instruction named, so a collection's rule can apply (#716). */
+let openingParent: string | null = null
 
 function readOpening(): boolean {
   if (isEdit.value) return false
@@ -248,6 +254,7 @@ function readOpening(): boolean {
   if (project) projectId.value = project
   if (parent) parentId.value = parent
   openingTemplate = ref || null
+  openingParent = parent || null
   return true
 }
 /** An instruction arrived with this visit, so a stored new-page draft is offered, not restored over it. */
@@ -728,7 +735,7 @@ function discardUnstaged() {
  * template arrived stays, with the skeleton after it, and tags and relations
  * are a union (`mergeTemplateDefaults`).
  */
-async function openTemplate(ref: string) {
+async function openTemplate(ref: string, { skeleton = false } = {}) {
   let rendered = templates.takeRendered(ref)
   if (!rendered) {
     try {
@@ -736,6 +743,9 @@ async function openTemplate(ref: string) {
         body: {
           workspaceId: getWorkspaceId(),
           ref,
+          // A collection's child (#716) opens as the skeleton a scaffold writes:
+          // its placeholders stay `{{name}}` for the author, nothing is asked first.
+          ...(skeleton ? { skeleton: true } : {}),
           ...(title.value.trim() ? { title: title.value.trim() } : {}),
           ...(projectId.value ? { projectId: projectId.value } : {}),
           ...(parentId.value ? { parentId: parentId.value } : {}),
@@ -760,16 +770,28 @@ async function openTemplate(ref: string) {
 
 /** Act on the visit's opening instruction once the editor can take it, then drop it from the address. */
 async function followOpening() {
-  const ref = openingTemplate
+  let ref = openingTemplate
+  const parent = openingParent
   openingTemplate = null
+  openingParent = null
   if (route.query.template || route.query.parent || route.query.project) {
     await router.replace({ path: route.path, hash: route.hash })
+  }
+  // A plain "New page" under a collection starts numbered, from its child
+  // template (#716). A template picked in the gallery is the author's choice
+  // and wins. An unreadable parent just means an ordinary new page.
+  let skeleton = false
+  if (!ref && parent) {
+    const next = await nextInCollection(queryClient, parent).catch(() => null)
+    if (next?.title && !title.value.trim()) title.value = next.title
+    ref = next?.templateRef ?? null
+    skeleton = ref !== null
   }
   if (!ref) return
   // Taken before rendering, so a render that fails and reopens the gallery
   // does not leave the request behind for some later visit to send.
   const prompt = templates.takeFill(ref)
-  await openTemplate(ref)
+  await openTemplate(ref, { skeleton })
   if (prompt && template.value?.ref === ref) await fillWithAi(prompt)
 }
 
@@ -975,6 +997,10 @@ async function loadPage() {
           }))
         : defaultContent
     isDraft.value = !!detail.document.draftOwnerId
+    collectionRule.value = {
+      childTemplateRef: detail.document.childTemplateRef ?? null,
+      childTitlePattern: detail.document.childTitlePattern ?? null,
+    }
     title.value = detail.document.title
     category.value = detail.document.category
     parentId.value = detail.document.parentId ?? ''
@@ -1992,6 +2018,9 @@ onBeforeUnmount(() => {
             <Label for="editor-tags" class="kn-field-label">{{ t('editor.tags') }}</Label>
             <Input id="editor-tags" v-model="tags" :placeholder="t('editor.tagsPlaceholder')" class="h-8 text-xs" />
           </div>
+
+          <!-- Needs the page to exist: the rule is saved on its own, not at Publish. -->
+          <CollectionRuleFields v-if="editId" :document-id="editId" :rule="collectionRule" @saved="collectionRule = $event" />
         </fieldset>
       </SheetContent>
     </Sheet>

@@ -203,4 +203,12 @@ export class RenderTemplateDto {
   @IsOptional()
   @IsUUID()
   parentId?: string;
+
+  @ApiPropertyOptional({
+    type: Boolean,
+    description: 'Leave declared placeholders as {{name}} instead of requiring them: a collection child page skeleton (#716)',
+  })
+  @IsOptional()
+  @IsBoolean()
+  skeleton?: boolean;
 }

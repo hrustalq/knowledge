@@ -41619,6 +41619,16 @@
             "type": "number",
             "nullable": true,
             "description": "Review interval in days; null inherits, 0 never expires"
+          },
+          "childTemplateRef": {
+            "type": "string",
+            "nullable": true,
+            "description": "Child template: a template uuid or builtin:<key>; null clears it"
+          },
+          "childTitlePattern": {
+            "type": "string",
+            "nullable": true,
+            "description": "Child title pattern ({{n:W}}, {{date}}); blank or null clears it"
           }
         }
       },
@@ -45971,6 +45981,10 @@
             "type": "string",
             "format": "uuid",
             "description": "Fills `{{parent}}`"
+          },
+          "skeleton": {
+            "type": "boolean",
+            "description": "Leave declared placeholders as {{name}} instead of requiring them: a collection child page skeleton (#716)"
           }
         },
         "required": [
@@ -58520,6 +58534,14 @@
             "type": "number",
             "nullable": true
           },
+          "childTemplateRef": {
+            "type": "string",
+            "nullable": true
+          },
+          "childTitlePattern": {
+            "type": "string",
+            "nullable": true
+          },
           "restricted": {
             "type": "boolean"
           },
@@ -58746,6 +58768,14 @@
           },
           "templateVersion": {
             "type": "number",
+            "nullable": true
+          },
+          "childTemplateRef": {
+            "type": "string",
+            "nullable": true
+          },
+          "childTitlePattern": {
+            "type": "string",
             "nullable": true
           },
           "restricted": {

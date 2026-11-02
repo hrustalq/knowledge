@@ -546,6 +546,14 @@ describe('TemplatesService', () => {
     const ok = await service.render({ workspaceId: WS, ref: created.id!, values: { who: USER } });
     expect(ok.body).toBe(`<span data-kn-user="${USER}">@Ada</span>`);
   });
+
+  it('a skeleton render (#716) leaves declared placeholders literal instead of requiring them', async () => {
+    const { service } = makeService();
+    const rendered = await service.render({ workspaceId: WS, ref: 'builtin:adr', title: 'ADR 0001: Queue', skeleton: true });
+    expect(rendered.body).toContain('# ADR 0001: Queue');
+    expect(rendered.body).toContain('{{deciders}}');
+    expect(rendered.templateRef).toBe('builtin:adr');
+  });
 });
 
 // ------------------------------------------------------------------ access

@@ -3895,6 +3895,13 @@
         "reviewTitle": "Published page → your draft",
         "reviewDesc": "Removed lines are on the published page and not in your draft: publishing drops them."
       }
+    },
+    "collection": {
+      "title": "Collection",
+      "hint": "New pages added under this one get a numbered title and start from a template. Saved on its own, not with Publish.",
+      "save": "Save rule",
+      "saving": "Saving…",
+      "saved": "Collection rule saved"
     }
   },
   "toolbar": {

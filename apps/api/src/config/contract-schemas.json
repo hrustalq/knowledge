@@ -10667,6 +10667,14 @@
         "type": "number",
         "nullable": true
       },
+      "childTemplateRef": {
+        "type": "string",
+        "nullable": true
+      },
+      "childTitlePattern": {
+        "type": "string",
+        "nullable": true
+      },
       "restricted": {
         "type": "boolean"
       },
@@ -10893,6 +10901,14 @@
       },
       "templateVersion": {
         "type": "number",
+        "nullable": true
+      },
+      "childTemplateRef": {
+        "type": "string",
+        "nullable": true
+      },
+      "childTitlePattern": {
+        "type": "string",
         "nullable": true
       },
       "restricted": {

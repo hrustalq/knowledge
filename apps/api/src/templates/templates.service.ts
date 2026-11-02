@@ -79,6 +79,11 @@ export interface RenderTemplateInput {
   values?: TemplateValues;
   projectId?: string;
   parentId?: string;
+  /**
+   * Leave declared placeholders as `{{name}}` rather than require them: the
+   * skeleton a scaffold writes (`defaults`), for a collection's new page (#716).
+   */
+  skeleton?: boolean;
 }
 
 export interface TemplateDefaultsInput {
@@ -303,7 +308,7 @@ export class TemplatesService {
           .map((p) => p.name),
       ]),
     ];
-    if (missing.length > 0) {
+    if (missing.length > 0 && !input.skeleton) {
       throw new BadRequestException({
         statusCode: 400,
         message: t('error.template.placeholderMissing', { names: missing.join(', ') }),
@@ -319,12 +324,14 @@ export class TemplatesService {
       parent: parent?.title ?? '',
       labels,
     };
-    const body = renderTemplate(template.parsed.body, meta, values, ctx);
+    // As in `defaults`: with no declarations, only system names are filled.
+    const shape = input.skeleton ? { ...meta, placeholders: [] } : meta;
+    const body = renderTemplate(template.parsed.body, shape, values, ctx);
     const frontmatter = renderTemplateFrontmatter(template.parsed.data, meta, values, ctx);
     return {
       templateRef: template.ref,
       templateVersion: template.version,
-      title: renderTemplateTitle(meta, values, ctx),
+      title: renderTemplateTitle(shape, values, ctx),
       category: meta.category,
       frontmatter,
       body,

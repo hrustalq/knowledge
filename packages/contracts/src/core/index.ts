@@ -137,6 +137,13 @@ export interface DocumentSummary {
   templateRef?: string | null;
   templateVersion?: number | null;
   /**
+   * A collection's rule (#716): the template a new child page starts from and
+   * the title it is numbered with (`ADR {{n:4}}: `, see `nextChildTitle`).
+   * Null on an ordinary page. Set in page settings, or by a scaffold.
+   */
+  childTemplateRef?: string | null;
+  childTitlePattern?: string | null;
+  /**
    * The page is not open to the whole workspace: it, its project or an
    * ancestor is restricted (#76). Drawn as a lock.
    */

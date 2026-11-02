@@ -619,7 +619,6 @@ export type I18nTranslations = {
                 "skipped": string;
                 "oversizeName": string;
                 "imagesDropped": string;
-                "firstSheetOnly": string;
             };
             "sourceNoArticle": string;
             "crawlConfirmFirst": string;
@@ -1687,6 +1686,8 @@ export type I18nTranslations = {
             "rebuilding-structure": string;
             "formatting": string;
             "parsing": string;
+            "reading-workbook": string;
+            "reading-sheet": string;
         };
         "warning": {
             "passthrough": string;
@@ -1725,6 +1726,40 @@ export type I18nTranslations = {
             "singleCodeBlock": string;
             "rowsTruncated": string;
             "wideTable": string;
+            "inSheet": string;
+            "hiddenSheets": {
+                "one": string;
+                "other": string;
+                "few": string;
+                "many": string;
+            };
+            "formulasWithoutValue": {
+                "one": string;
+                "other": string;
+                "few": string;
+                "many": string;
+            };
+            "lostCharts": {
+                "one": string;
+                "other": string;
+                "few": string;
+                "many": string;
+            };
+            "lostImages": {
+                "one": string;
+                "other": string;
+                "few": string;
+                "many": string;
+            };
+            "lostPivots": {
+                "one": string;
+                "other": string;
+                "few": string;
+                "many": string;
+            };
+            "lostComments": string;
+            "sheetFormattingDropped": string;
+            "emptyWorkbook": string;
         };
     };
     "knowledgeIssue": {

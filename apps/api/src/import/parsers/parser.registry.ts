@@ -8,6 +8,7 @@ import { PlaintextParser } from './plaintext.parser.js';
 import { PptxParser } from './pptx.parser.js';
 import { StructuredParser } from './structured.parser.js';
 import { TabularParser } from './tabular.parser.js';
+import { XlsxParser } from './xlsx.parser.js';
 import type { DocumentParser } from './parser.types.js';
 
 /**
@@ -27,12 +28,13 @@ export class ParserRegistry {
     docx: DocxParser,
     pptx: PptxParser,
     html: HtmlParser,
+    xlsx: XlsxParser,
     tabular: TabularParser,
     structured: StructuredParser,
     plaintext: PlaintextParser,
     ocr: OcrParser,
   ) {
-    this.byId = { pdf, docx, pptx, html, tabular, structured, plaintext, ocr };
+    this.byId = { pdf, docx, pptx, html, xlsx, tabular, structured, plaintext, ocr };
   }
 
   /** Null when nothing handles the file — the caller turns that into a 415. */

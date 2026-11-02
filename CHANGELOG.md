@@ -15,6 +15,20 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Added
+
+- **Excel workbooks (.xlsx) can be imported** (#707). Each visible sheet becomes a `##` section holding a table of
+  its displayed values: formula results, dates as `YYYY-MM-DD`, hyperlinks as links. Empty sheets are skipped;
+  hidden sheets, formulas with no saved result, and the charts, images, pivot tables and comments that do not
+  carry over are listed in the import's warnings. Each sheet keeps its first 2000 rows, as a CSV does. `.xls`,
+  `.xlsm` and `.ods` are still refused.
+
+### Changed
+
+- **Google Sheets synced through the Google Drive connector arrive with every tab** (#707). They were exported as
+  CSV, which kept only the first sheet; they are now exported as `.xlsx` and imported one section per tab. The
+  "only the first sheet was imported" warning is gone. Existing Sheet pages change on their next sync.
+
 ### Fixed
 
 - **The glossary no longer names pages a reader may not open** (#712). Settings → Glossary and

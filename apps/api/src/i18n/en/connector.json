@@ -64,8 +64,7 @@
     "googleDrive": {
       "skipped": "{count} file(s) in \"{folder}\" were skipped because no importer reads them: {names}.",
       "oversizeName": "{name} (too large)",
-      "imagesDropped": "{count} image(s) were not carried over: connector pages do not pull images yet.",
-      "firstSheetOnly": "Only the first sheet was imported: Google Drive exports a spreadsheet as CSV one sheet at a time."
+      "imagesDropped": "{count} image(s) were not carried over: connector pages do not pull images yet."
     },
     "sourceNoArticle": "No article was found on the page, so all of its text was kept",
     "crawlConfirmFirst": "This crawl would create {count} pages, more than the {limit} a first crawl lands without asking. Review the pages, then apply.",

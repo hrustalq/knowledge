@@ -10,6 +10,7 @@ import { PlaintextParser } from './plaintext.parser.js';
 import { PptxParser } from './pptx.parser.js';
 import { StructuredParser } from './structured.parser.js';
 import { TabularParser } from './tabular.parser.js';
+import { XlsxParser } from './xlsx.parser.js';
 
 /**
  * The parsing half of the import feature. Nothing in the API process should
@@ -29,6 +30,7 @@ import { TabularParser } from './tabular.parser.js';
     DocxParser,
     PptxParser,
     HtmlParser,
+    XlsxParser,
     TabularParser,
     StructuredParser,
     PlaintextParser,

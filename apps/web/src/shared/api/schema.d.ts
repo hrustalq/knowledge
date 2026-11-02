@@ -13412,7 +13412,7 @@ export interface components {
             needsOcr?: boolean;
         };
         /** @enum {string} */
-        ImportParserId: "pdf" | "docx" | "pptx" | "html" | "tabular" | "structured" | "plaintext" | "ocr";
+        ImportParserId: "pdf" | "docx" | "pptx" | "html" | "xlsx" | "tabular" | "structured" | "plaintext" | "ocr";
         /** @enum {string} */
         ImportStatus: "awaiting-upload" | "queued" | "running" | "parsed" | "failed" | "submitted";
         IngestionJobInfo: {

@@ -216,7 +216,7 @@ function contentTypeFor(path: string): string {
   return known[ext] ?? 'application/octet-stream';
 }
 
-function decodeXml(value: string): string {
+export function decodeXml(value: string): string {
   return value
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')

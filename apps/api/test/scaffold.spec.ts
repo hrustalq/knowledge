@@ -12,6 +12,7 @@ import { parseBlueprint } from '../src/blueprints/blueprint.schema.js';
 import { BUILT_IN_BLUEPRINTS } from '../src/blueprints/built-in/index.js';
 import { BUILT_IN_TEMPLATES } from '../src/templates/built-in/index.js';
 import { ProjectScaffoldService } from '../src/projects/project-scaffold.service.js';
+import { BlueprintsService } from '../src/blueprints/blueprints.service.js';
 
 // #716 phase 1: blueprints, the numbering helper, the stub predicate and the scaffold writer.
 
@@ -145,6 +146,7 @@ describe('ProjectScaffoldService', () => {
       skills as never,
       permissions as never,
       { changed: vi.fn() } as never,
+      new BlueprintsService({ projectBlueprint: { findFirst: vi.fn(async () => null) } } as never),
     );
     return { service, prisma, documents, projects, templates, skills, created };
   }
@@ -153,7 +155,7 @@ describe('ProjectScaffoldService', () => {
 
   it('writes the built-in tree depth-first, in the chosen language, every page a stamped stub', async () => {
     const { service, prisma, created } = setup();
-    const blueprint = service.resolve({ blueprintKey: 'code-product' });
+    const blueprint = await service.resolve({ workspaceId: 'ws', blueprintKey: 'code-product' });
     const res = await service.scaffold(dto({ blueprintKey: 'code-product' }) as never, blueprint, principal);
     const total = walk(blueprint.tree).length;
     expect(res.pageCount).toBe(total);
@@ -182,7 +184,7 @@ describe('ProjectScaffoldService', () => {
         },
       ],
     };
-    await service.scaffold(dto({ locale: 'en', blueprint }) as never, service.resolve({ blueprint } as never), principal);
+    await service.scaffold(dto({ locale: 'en', blueprint }) as never, await service.resolve({ blueprint } as never), principal);
     expect(created.map((c) => c.title)).toEqual(['Decisions', 'ADR 0001: Use Postgres', 'ADR 0002: Use Redis']);
     expect(created[1]!.template).toEqual({ ref: 'builtin:adr' });
     expect(created[1]!.text).toContain('tags:');
@@ -235,17 +237,17 @@ describe('ProjectScaffoldService', () => {
     expect(open.prisma.accessGrant.create).not.toHaveBeenCalled();
   });
 
-  it('wants exactly one of a key and a blueprint', () => {
+  it('wants exactly one of a key and a blueprint', async () => {
     const { service } = setup();
-    expect(() => service.resolve({})).toThrow(/oneSource/);
-    expect(() => service.resolve({ blueprintKey: 'blank', blueprint: {} })).toThrow(/oneSource/);
+    await expect(service.resolve({ workspaceId: 'ws' })).rejects.toThrow(/oneSource/);
+    await expect(service.resolve({ workspaceId: 'ws', blueprintKey: 'blank', blueprint: {} })).rejects.toThrow(/oneSource/);
   });
 
   it('propagates a failure out of the transaction, so nothing commits', async () => {
     const { service, documents } = setup();
     documents.createDocument.mockRejectedValueOnce(new Error('storage down'));
     await expect(
-      service.scaffold(dto({ blueprintKey: 'discovery' }) as never, service.resolve({ blueprintKey: 'discovery' }), principal),
+      service.scaffold(dto({ blueprintKey: 'discovery' }) as never, await service.resolve({ workspaceId: 'ws', blueprintKey: 'discovery' }), principal),
     ).rejects.toThrow('storage down');
   });
 });

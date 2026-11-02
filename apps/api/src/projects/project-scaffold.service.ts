@@ -19,7 +19,7 @@ import { normalizeAliases } from '../glossary/glossary.service.js';
 import { composeFrontmatter } from '../common/frontmatter.js';
 import { SCAFFOLD_ORIGIN } from '../common/scaffold-stub.js';
 import { parseBlueprint } from '../blueprints/blueprint.schema.js';
-import { BUILT_IN_BLUEPRINTS } from '../blueprints/built-in/index.js';
+import { BlueprintsService } from '../blueprints/blueprints.service.js';
 import type { Principal } from '../auth/principal.js';
 import type { ScaffoldProjectDto } from './projects.dto.js';
 import { ProjectsService } from './projects.service.js';
@@ -59,12 +59,13 @@ export class ProjectScaffoldService {
     private readonly skills: AiSkillsService,
     private readonly permissions: PermissionService,
     private readonly aclEvents: AclEventsService,
+    private readonly blueprints: BlueprintsService,
   ) {}
 
-  /** The blueprint a request names: a built-in by key, or an inline one parsed by the one schema. */
-  resolve(dto: Pick<ScaffoldProjectDto, 'blueprintKey' | 'blueprint'>): Blueprint {
+  /** The blueprint a request names: a built-in or saved one by key, or an inline one parsed by the one schema. */
+  async resolve(dto: Pick<ScaffoldProjectDto, 'workspaceId' | 'blueprintKey' | 'blueprint'>): Promise<Blueprint> {
     if (!dto.blueprintKey === !dto.blueprint) throw new BadRequestException(t('error.blueprint.oneSource'));
-    return dto.blueprint ? parseBlueprint(dto.blueprint) : BUILT_IN_BLUEPRINTS[dto.blueprintKey!];
+    return dto.blueprint ? parseBlueprint(dto.blueprint) : this.blueprints.resolve(dto.workspaceId, dto.blueprintKey!);
   }
 
   async scaffold(dto: ScaffoldProjectDto, blueprint: Blueprint, principal: Principal): Promise<ScaffoldProjectResponse> {

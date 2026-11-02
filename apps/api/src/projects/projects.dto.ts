@@ -19,7 +19,6 @@ import {
   BUILT_IN_BLUEPRINT_KEYS,
   PROJECT_DELETION_MODES,
   SUPPORTED_LOCALES,
-  type BuiltInBlueprintKey,
   type Locale,
   type ProjectDeletionMode,
 } from '@knowledge/contracts';
@@ -98,10 +97,14 @@ export class ScaffoldProjectDto {
   @IsIn(SUPPORTED_LOCALES, { message: vmsg('isIn') })
   locale!: Locale;
 
-  @ApiPropertyOptional({ enum: BUILT_IN_BLUEPRINT_KEYS, description: 'A built-in blueprint. Exactly one of blueprintKey and blueprint.' })
+  @ApiPropertyOptional({
+    type: String,
+    description: `A built-in blueprint (${BUILT_IN_BLUEPRINT_KEYS.join(', ')}) or a saved one's id, as \`GET /v1/blueprints\` lists it. Exactly one of blueprintKey and blueprint.`,
+  })
   @IsOptional()
-  @IsIn(BUILT_IN_BLUEPRINT_KEYS, { message: vmsg('isIn') })
-  blueprintKey?: BuiltInBlueprintKey;
+  @IsString()
+  @MaxLength(100)
+  blueprintKey?: string;
 
   @ApiPropertyOptional({
     type: 'object',

@@ -78,6 +78,10 @@ export interface Blueprint {
 export const BUILT_IN_BLUEPRINT_KEYS = ['discovery', 'code-product', 'service-docs', 'blank'] as const;
 export type BuiltInBlueprintKey = (typeof BUILT_IN_BLUEPRINT_KEYS)[number];
 
+export function isBuiltInBlueprintKey(value: unknown): value is BuiltInBlueprintKey {
+  return (BUILT_IN_BLUEPRINT_KEYS as readonly unknown[]).includes(value);
+}
+
 /** Pages one scaffold may write; the tree depth it may nest. */
 export const BLUEPRINT_MAX_PAGES = 200;
 export const BLUEPRINT_MAX_DEPTH = 5;
@@ -123,13 +127,41 @@ export function nextChildTitle(pattern: string, siblings: readonly string[], tit
 
 // --- GET /v1/blueprints ------------------------------------------------------------
 
+/**
+ * One blueprint a project can start from. Built-ins come first, in their fixed
+ * order, with the workspace's override applied; then saved ones, newest first.
+ */
 export interface BlueprintEntry {
-  key: BuiltInBlueprintKey;
+  /** What `POST /v1/projects/scaffold` takes as `blueprintKey`: the built-in key, or a saved blueprint's id. */
+  key: string;
+  builtIn: boolean;
+  /** The workspace's row: a saved blueprint, or its override of a built-in. Null for an untouched built-in. */
+  id: string | null;
+  /** False = a hidden built-in (or a switched-off saved one); listed only with `includeDisabled`. */
+  enabled: boolean;
+  /** The row's current version; 0 for a built-in served from code. */
+  version: number;
   blueprint: Blueprint;
 }
 
 export interface ListBlueprintsResponse {
   blueprints: BlueprintEntry[];
+}
+
+// --- POST /v1/blueprints/derive -------------------------------------------------------
+
+/**
+ * A blueprint read off an existing project: its tree to depth 3 (titles and
+ * headings only, never page text), numbered or same-shaped leaves folded into
+ * collections, its templates as conventions, and — drafted by the `scaffolder`
+ * when `assistant` is on — a styleguide and per-page guidance.
+ */
+export interface DeriveBlueprintResponse {
+  blueprint: Blueprint;
+  /** The source project's glossary, offered unchecked. Empty unless the source is in the same workspace. */
+  glossary: BlueprintGlossaryTerm[];
+  /** Whether the model drafted the styleguide and guidance; false = rules only. */
+  drafted: boolean;
 }
 
 // --- POST /v1/projects/scaffold (the body is ScaffoldProjectDto) ------------------

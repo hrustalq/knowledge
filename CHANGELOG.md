@@ -55,6 +55,16 @@ in the pull request that introduces them — see
   saved on its own, not with Publish. `PATCH /v1/documents/:id` takes `childTemplateRef` and `childTitlePattern`
   (a template that does not resolve in the workspace is a 404), and `POST /v1/templates/render` takes
   `skeleton: true`.
+- **Blueprints can be saved, customised and read off an existing project** (#716, phase 4a of 7: API only, the
+  wizard and settings tab come next). `POST /v1/blueprints/derive` turns a project you can see, in any of your
+  workspaces, into a blueprint: its tree three levels deep, its pages' headings as their skeletons, numbered pages
+  (`ADR 0007: …`, `01 — …`) or three or more same-shaped pages folded into a collection rule instead of copied, and
+  its templates. Page text never leaves the source, and a page you cannot open contributes nothing, not even its
+  title. Glossary terms are offered only when the project is in the same workspace. When the workspace runs the
+  assistant, the new *Scaffolder* agent drafts a styleguide and a line of guidance per page; otherwise, or if that
+  call fails, the result is the rules alone (`drafted: false`). Workspace admins can save blueprints, customise or
+  hide a built-in, and reset or delete them (`POST`, `PATCH`, `DELETE /v1/blueprints`); `GET /v1/blueprints` lists
+  saved ones after the built-ins, and `POST /v1/projects/scaffold` takes a saved blueprint's id as `blueprintKey`.
 - **A *Research question* page template** (`builtin:research-question`): Question, Options, Criteria, Findings,
   Decision, Open questions.
 
@@ -88,6 +98,8 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- Migration `20261231100000_project_blueprints` adds two new tables (`project_blueprints`,
+  `project_blueprint_versions`). The previous image never reads them, so a code rollback is safe.
 - Migration `20261230100000_scaffold_origin` adds three nullable columns (`document_revisions.origin`,
   `documents.child_template_ref`, `documents.child_title_pattern`), with no backfill. The previous image runs
   against it unchanged, so a code rollback is safe.

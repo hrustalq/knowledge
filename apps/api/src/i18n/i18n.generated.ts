@@ -297,6 +297,8 @@ export type I18nTranslations = {
         "secretaryDesc": string;
         "interpreter": string;
         "interpreterDesc": string;
+        "scaffolder": string;
+        "scaffolderDesc": string;
         "testerRun": {
             "noOperation": string;
             "summary": string;
@@ -1225,6 +1227,10 @@ export type I18nTranslations = {
         "blueprint": {
             "invalid": string;
             "oneSource": string;
+            "notFound": string;
+            "limitReached": string;
+            "alreadyCustomized": string;
+            "contentRequired": string;
         };
         "share": {
             "notFound": string;
@@ -1948,6 +1954,7 @@ export type I18nTranslations = {
         "savedFilter": string;
         "sourcePolicy": string;
         "template": string;
+        "blueprint": string;
         "shareLink": string;
         "site": string;
         "siteVersion": string;

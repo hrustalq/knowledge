@@ -117,6 +117,7 @@ export const WORKSPACE_TEARDOWN = {
   McpToolCall: 'workspace',
   OpsEvent: 'workspace',
   PageTemplate: 'workspace',
+  ProjectBlueprint: 'workspace',
   PageView: 'workspace',
   ReleaseTag: 'workspace',
   SavedFilter: 'workspace',
@@ -157,6 +158,7 @@ export const WORKSPACE_TEARDOWN = {
   ScimGroupMember: 'parent',
   UserGroupMember: 'parent',
   PageTemplateVersion: 'parent',
+  ProjectBlueprintVersion: 'parent',
 
   Workspace: 'platform',
   User: 'platform',

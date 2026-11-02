@@ -932,14 +932,56 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Blueprints a project can be scaffolded from (built-ins, in both languages) */
+        /**
+         * Blueprints a project can be scaffolded from: built-ins with overrides applied, then saved ones
+         * @description Hidden built-ins and switched-off saved blueprints only with `includeDisabled`.
+         */
         get: operations["BlueprintsController_list"];
         put?: never;
-        post?: never;
+        /** Save a blueprint, or customise or hide a built-in (`builtInKey`) */
+        post: operations["BlueprintsController_create"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/v1/blueprints/derive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read a blueprint off an existing project: titles and headings only, never page text
+         * @description The source project may be in any workspace the caller belongs to and is read under their access there. Glossary terms are offered only from the same workspace. With `assistant` on, the scaffolder drafts a styleguide and page guidance; otherwise, or when that call fails, `drafted` is false.
+         */
+        post: operations["BlueprintsController_derive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/blueprints/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a saved blueprint, or reset a built-in by deleting its override */
+        delete: operations["BlueprintsController_remove"];
+        options?: never;
+        head?: never;
+        /** Change a saved blueprint or an override; a changed blueprint appends a version */
+        patch: operations["BlueprintsController_update"];
         trace?: never;
     };
     "/v1/groups": {
@@ -7930,11 +7972,8 @@ export interface components {
              * @enum {string}
              */
             locale: "en" | "ru";
-            /**
-             * @description A built-in blueprint. Exactly one of blueprintKey and blueprint.
-             * @enum {string}
-             */
-            blueprintKey?: "discovery" | "code-product" | "service-docs" | "blank";
+            /** @description A built-in blueprint (discovery, code-product, service-docs, blank) or a saved one's id, as `GET /v1/blueprints` lists it. Exactly one of blueprintKey and blueprint. */
+            blueprintKey?: string;
             /** @description An inline `Blueprint` (@knowledge/contracts), validated server-side. Exactly one of blueprintKey and blueprint. */
             blueprint?: {
                 [key: string]: unknown;
@@ -7956,6 +7995,40 @@ export interface components {
             description?: string | null;
             avatarEmoji?: string | null;
             avatarColor?: string | null;
+        };
+        DeriveBlueprintDto: {
+            /**
+             * Format: uuid
+             * @description The workspace the new project is for; the model call is billed here.
+             */
+            workspaceId: string;
+            /**
+             * Format: uuid
+             * @description The project to read, in any workspace the caller belongs to.
+             */
+            projectId: string;
+        };
+        CreateBlueprintDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /**
+             * @description Override this built-in instead of adding a blueprint.
+             * @enum {string}
+             */
+            builtInKey?: "discovery" | "code-product" | "service-docs" | "blank";
+            /** @description A `Blueprint` (@knowledge/contracts), validated server-side by the same schema scaffold uses. */
+            blueprint?: {
+                [key: string]: unknown;
+            };
+            /** @description False hides it from the Start step. Defaults to true. */
+            enabled?: boolean;
+        };
+        UpdateBlueprintDto: {
+            /** @description A `Blueprint` (@knowledge/contracts), validated server-side by the same schema scaffold uses. A change appends a version. */
+            blueprint?: {
+                [key: string]: unknown;
+            };
+            enabled?: boolean;
         };
         CreateUserGroupDto: {
             workspaceId: string;
@@ -11051,7 +11124,7 @@ export interface components {
             createdAt: string;
         };
         /** @enum {string} */
-        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "source-recipe" | "source-judge";
+        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "source-recipe" | "source-judge" | "blueprint-derive";
         AiUsageResponse: {
             from: string;
             to: string;
@@ -11854,7 +11927,11 @@ export interface components {
             glossary?: components["schemas"]["BlueprintGlossaryTerm"][];
         };
         BlueprintEntry: {
-            key: components["schemas"]["BuiltInBlueprintKey"];
+            key: string;
+            builtIn: boolean;
+            id: string | null;
+            enabled: boolean;
+            version: number;
             blueprint: components["schemas"]["Blueprint"];
         };
         BlueprintGlossaryTerm: {
@@ -11898,8 +11975,6 @@ export interface components {
             restricted: boolean;
             createdAt: string;
         };
-        /** @enum {string} */
-        BuiltInBlueprintKey: "discovery" | "code-product" | "service-docs" | "blank";
         /** @enum {string} */
         BuiltInTemplateKey: "adr" | "rfc" | "runbook" | "postmortem" | "api-spec" | "use-case" | "entity" | "component" | "test-plan" | "test-case" | "test-data" | "bug-report" | "research-question";
         BulkRejectCapturesResponse: {
@@ -12731,6 +12806,11 @@ export interface components {
             workspaceId: string;
             deletedAt: string;
             counts: components["schemas"]["WorkspaceDeletionCounts"];
+        };
+        DeriveBlueprintResponse: {
+            blueprint: components["schemas"]["Blueprint"];
+            glossary: components["schemas"]["BlueprintGlossaryTerm"][];
+            drafted: boolean;
         };
         DiffHunk: {
             oldStart: number;
@@ -19265,6 +19345,8 @@ export interface operations {
         parameters: {
             query: {
                 workspaceId: string;
+                /** @description Include hidden built-ins and switched-off saved blueprints (the settings view). Off by default. */
+                includeDisabled?: boolean;
             };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
@@ -19281,6 +19363,180 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ListBlueprintsResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    BlueprintsController_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateBlueprintDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlueprintEntry"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    BlueprintsController_derive: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeriveBlueprintDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeriveBlueprintResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    BlueprintsController_remove: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    BlueprintsController_update: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateBlueprintDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlueprintEntry"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

@@ -2664,7 +2664,8 @@
       "transcription",
       "memo",
       "source-recipe",
-      "source-judge"
+      "source-judge",
+      "blueprint-derive"
     ]
   },
   "AiUsageResponse": {
@@ -6117,7 +6118,20 @@
     "type": "object",
     "properties": {
       "key": {
-        "$ref": "#/components/schemas/BuiltInBlueprintKey"
+        "type": "string"
+      },
+      "builtIn": {
+        "type": "boolean"
+      },
+      "id": {
+        "type": "string",
+        "nullable": true
+      },
+      "enabled": {
+        "type": "boolean"
+      },
+      "version": {
+        "type": "number"
       },
       "blueprint": {
         "$ref": "#/components/schemas/Blueprint"
@@ -6125,6 +6139,10 @@
     },
     "required": [
       "key",
+      "builtIn",
+      "id",
+      "enabled",
+      "version",
       "blueprint"
     ]
   },
@@ -6283,15 +6301,6 @@
       "ownerId",
       "restricted",
       "createdAt"
-    ]
-  },
-  "BuiltInBlueprintKey": {
-    "type": "string",
-    "enum": [
-      "discovery",
-      "code-product",
-      "service-docs",
-      "blank"
     ]
   },
   "BuiltInTemplateKey": {
@@ -9915,6 +9924,28 @@
       "workspaceId",
       "deletedAt",
       "counts"
+    ]
+  },
+  "DeriveBlueprintResponse": {
+    "type": "object",
+    "properties": {
+      "blueprint": {
+        "$ref": "#/components/schemas/Blueprint"
+      },
+      "glossary": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/BlueprintGlossaryTerm"
+        }
+      },
+      "drafted": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "blueprint",
+      "glossary",
+      "drafted"
     ]
   },
   "DiffHunk": {

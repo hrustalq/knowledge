@@ -95,7 +95,7 @@ export class ProjectsController {
   @Access('editor', 'body')
   @ApiOperation({ summary: 'Create a project from a blueprint: pages, styleguide, templates and glossary in one go' })
   async scaffold(@Body() dto: ScaffoldProjectDto, @CurrentPrincipal() principal: Principal): Promise<ScaffoldProjectResponse> {
-    const blueprint = this.scaffolder.resolve(dto);
+    const blueprint = await this.scaffolder.resolve(dto);
     if (blueprint.conventions?.styleguide && !dto.parentId) await this.access.requireRole(principal, dto.workspaceId, 'admin');
     return this.scaffolder.scaffold(dto, blueprint, principal);
   }

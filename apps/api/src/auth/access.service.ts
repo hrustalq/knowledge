@@ -356,6 +356,12 @@ export class AccessService {
     return template.workspaceId;
   }
 
+  async workspaceOfBlueprint(blueprintId: string): Promise<string> {
+    const row = await this.prisma.projectBlueprint.findUnique({ where: { id: blueprintId }, select: { workspaceId: true } });
+    if (!row) throw new NotFoundException(t('error.blueprint.notFound', { key: blueprintId }));
+    return row.workspaceId;
+  }
+
   async workspaceOfShareLink(shareId: string): Promise<string> {
     const share = await this.prisma.shareLink.findUnique({ where: { id: shareId }, select: { workspaceId: true } });
     if (!share) throw new NotFoundException(t('error.share.notFound'));

@@ -405,6 +405,47 @@ describe('page permissions (e2e, #76)', () => {
     });
   });
 
+  describe('glossary (#712)', () => {
+    let termId: string;
+    const glossaryTitle = async (p: Person) => {
+      const list = await http().get('/v1/glossary').query({ workspaceId: WORKSPACE, projectId }).set(as(p)).expect(ok(200));
+      const one = await http().get(`/v1/glossary/${termId}`).set(as(p)).expect(ok(200));
+      const listed = (list.body.terms as Array<{ termId: string; documentTitle: string | null }>).find((x) => x.termId === termId);
+      return [listed?.documentTitle, one.body.documentTitle];
+    };
+
+    beforeAll(async () => {
+      const res = await http()
+        .post('/v1/glossary')
+        .set(as(people.admin))
+        .send({ workspaceId: WORKSPACE, projectId, term: `Ledger ${nonce}`, definition: 'The payroll record.', documentId: ids.P })
+        .expect(ok(201));
+      termId = res.body.termId;
+      expect(res.body.documentTitle).toBe(titles.P);
+    });
+
+    it("names a term's defining page only to someone who may open it", async () => {
+      expect(await glossaryTitle(people.alice)).toEqual([titles.P, titles.P]);
+      expect(await glossaryTitle(people.bob)).toEqual([null, null]);
+    });
+
+    it('refuses an editor a defining page they cannot open, with no title', async () => {
+      const writes = [
+        http()
+          .post('/v1/glossary')
+          .set(as(people.bob))
+          .send({ workspaceId: WORKSPACE, projectId, term: `Probe ${nonce}`, definition: 'x', documentId: ids.C }),
+        http().patch(`/v1/glossary/${termId}`).set(as(people.bob)).send({ documentId: ids.C }),
+        http().post('/v1/glossary/suggest').set(as(people.bob)).send({ workspaceId: WORKSPACE, documentId: ids.C }),
+      ];
+      for (const res of await Promise.all(writes)) {
+        expect(res.status).toBe(403);
+        expect(res.body.details).toMatchObject({ canRequestAccess: true, resourceType: 'document', resourceId: ids.C });
+        expect(JSON.stringify(res.body)).not.toContain(word);
+      }
+    });
+  });
+
   describe('connector mirroring', () => {
     // No vendor: a stand-in adapter answers the two ACL calls, and the real
     // ConnectorAclService captures, maps and applies what it says.

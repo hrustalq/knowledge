@@ -28,6 +28,7 @@ import { VerificationService } from '../verification/verification.service.js';
 import { GlossaryService } from '../glossary/glossary.service.js';
 import { ConflictsService } from '../conflicts/conflicts.service.js';
 import type { Principal } from '../auth/principal.js';
+import { systemScope } from '../permissions/access-scope.js';
 
 /** How much of a cited page the drafter is shown. The workflow executor's cap. */
 const MAX_DOC_CHARS = 24_000;
@@ -341,6 +342,8 @@ export class AgentFindingsService {
           aliases: edits.aliases ?? proposed.aliases,
           source: 'ai',
         },
+        // No defining page on a finding's term, so no title to scope.
+        systemScope(workspaceId),
         principal.userId,
       );
       await this.prisma.$executeRaw`

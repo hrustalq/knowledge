@@ -165,6 +165,13 @@ the prose is already on screen by then.
 - **Auth** — `WorkspaceSource` gains `'glossary-term'`; the ACL for
   `/:id` routes comes from the term's own row, so an editor of workspace A
   cannot rewrite the definitions workspace B's pages render.
+  The defining page's title is page data, so it is resolved under the
+  caller's `AccessScope` (#712): a page they may not open reads
+  `documentTitle: null`, while `documentId` stays, so the link lands on the
+  page's request-access refusal, which names no title. Setting `documentId`
+  (create/update), or suggesting from a page, needs view on that page and is
+  refused like the page routes: 403 `{ canRequestAccess, resourceType,
+  resourceId }`.
 - **API** — `GET /v1/glossary?workspaceId=&projectId=` (`viewer` — every
   reader needs the roster; an absent `projectId` spans the workspace, the same
   convention as `GET /v1/documents`), `POST` / `PATCH /:id` / `DELETE /:id`

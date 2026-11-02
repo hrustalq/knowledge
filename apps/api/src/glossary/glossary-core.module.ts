@@ -6,6 +6,7 @@ import { ProjectsCoreModule } from '../projects/projects-core.module.js';
 import { AssistantClientModule } from '../assistant/assistant-client.module.js';
 import { AiCoreModule } from '../ai/ai-core.module.js';
 import { AgentCoreModule } from '../agents/agent-core.module.js';
+import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { GlossaryService } from './glossary.service.js';
 
 /**
@@ -16,7 +17,8 @@ import { GlossaryService } from './glossary.service.js';
  *
  * Every dependency resolves to a Core module: the service itself never reaches
  * for AccessService, and the API-side authorisation stays in the controller
- * where it belongs. `GlossaryModule` imports this and re-exports it, so no
+ * where it belongs. PermissionService is the one exception that is not about
+ * the route: a defining page's title is page data, read under a scope (#712). `GlossaryModule` imports this and re-exports it, so no
  * existing `imports: [GlossaryModule]` changes.
  */
 @Module({
@@ -28,6 +30,7 @@ import { GlossaryService } from './glossary.service.js';
     AssistantClientModule,
     AiCoreModule,
     AgentCoreModule,
+    PermissionsCoreModule,
   ],
   providers: [GlossaryService],
   exports: [GlossaryService],

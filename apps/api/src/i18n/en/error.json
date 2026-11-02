@@ -531,7 +531,11 @@
   },
   "blueprint": {
     "invalid": "The blueprint is not valid: {detail}",
-    "oneSource": "Pass either a blueprint key or a blueprint"
+    "oneSource": "Pass either a blueprint key or a blueprint",
+    "notFound": "No blueprint \"{key}\" in this workspace",
+    "limitReached": "A workspace can hold at most {max} blueprints",
+    "alreadyCustomized": "This built-in blueprint is already customised in this workspace",
+    "contentRequired": "A saved blueprint needs its content"
   },
   "share": {
     "notFound": "This link does not exist, has expired or was revoked",

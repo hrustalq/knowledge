@@ -25,6 +25,7 @@
   "savedFilter": "saved filter id",
   "sourcePolicy": "source policy id",
   "template": "template id",
+  "blueprint": "blueprint id",
   "shareLink": "share link id",
   "site": "site id",
   "siteVersion": "site version id",

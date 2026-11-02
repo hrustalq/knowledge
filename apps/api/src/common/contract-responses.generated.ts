@@ -44,6 +44,7 @@ import type {
   AssistantReviewResponse,
   AssistantSuggestResponse,
   AuthSessionResponse,
+  BlueprintEntry,
   BranchAccessResponse,
   BulkRejectCapturesResponse,
   CaptureInfo,
@@ -105,6 +106,7 @@ import type {
   DeleteMergeRequestCommentResponse,
   DeleteProjectResponse,
   DeleteWorkspaceResponse,
+  DeriveBlueprintResponse,
   DismissAgentFindingResponse,
   DocumentAncestorsResponse,
   DocumentBacklinksResponse,
@@ -393,6 +395,7 @@ export interface ContractResponses {
   AssistantReviewResponse: AssistantReviewResponse;
   AssistantSuggestResponse: AssistantSuggestResponse;
   AuthSessionResponse: AuthSessionResponse;
+  BlueprintEntry: BlueprintEntry;
   BranchAccessResponse: BranchAccessResponse;
   BulkRejectCapturesResponse: BulkRejectCapturesResponse;
   CaptureInfo: CaptureInfo;
@@ -454,6 +457,7 @@ export interface ContractResponses {
   DeleteMergeRequestCommentResponse: DeleteMergeRequestCommentResponse;
   DeleteProjectResponse: DeleteProjectResponse;
   DeleteWorkspaceResponse: DeleteWorkspaceResponse;
+  DeriveBlueprintResponse: DeriveBlueprintResponse;
   DismissAgentFindingResponse: DismissAgentFindingResponse;
   DocumentAncestorsResponse: DocumentAncestorsResponse;
   DocumentBacklinksResponse: DocumentBacklinksResponse;

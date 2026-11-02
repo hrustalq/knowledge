@@ -3214,6 +3214,44 @@ model PageTemplateVersion {
   @@map("page_template_versions")
 }
 
+/// A workspace's own project blueprint, or its override of a built-in (#716).
+/// Built-ins are code (`apps/api/src/blueprints/built-in/`) and never seeded:
+/// an override row with `enabled = false` hides one, and deleting it resets.
+/// Nothing pins a blueprint (a scaffold copies it), so a custom row is
+/// deleted, never archived. No FK on workspace_id or created_by (house policy).
+model ProjectBlueprint {
+  id             String   @id @default(uuid()) @db.Uuid
+  workspaceId    String   @map("workspace_id") @db.Uuid
+  /// BUILT_IN_BLUEPRINT_KEYS value when this row overrides a built-in; null for a saved one.
+  builtInKey     String?  @map("built_in_key")
+  /// 0 = no versions of its own: a built-in override that only hides it.
+  currentVersion Int      @default(0) @map("current_version")
+  enabled        Boolean  @default(true)
+  createdBy      String?  @map("created_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  versions ProjectBlueprintVersion[]
+
+  @@index([workspaceId, builtInKey])
+  @@map("project_blueprints")
+}
+
+/// One immutable version of a blueprint: the `Blueprint` JSON as `parseBlueprint` returned it.
+model ProjectBlueprintVersion {
+  id          String   @id @default(uuid()) @db.Uuid
+  blueprintId String   @map("blueprint_id") @db.Uuid
+  version     Int
+  blueprint   Json
+  createdBy   String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  parent ProjectBlueprint @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+
+  @@unique([blueprintId, version])
+  @@map("project_blueprint_versions")
+}
+
 /// A public, read-only link to one page, or to a page and its subtree
 /// (docs/features/43, issue #77 phase 1).
 ///

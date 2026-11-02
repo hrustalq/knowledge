@@ -12,6 +12,10 @@ import { DocumentsCoreModule } from '../documents/documents-core.module.js';
 import { TemplatesCoreModule } from '../templates/templates-core.module.js';
 import { AiCoreModule } from '../ai/ai-core.module.js';
 import { ProjectScaffoldService } from './project-scaffold.service.js';
+import { BlueprintsService } from '../blueprints/blueprints.service.js';
+import { BlueprintDeriveService } from '../blueprints/blueprint-derive.service.js';
+import { AgentCoreModule } from '../agents/agent-core.module.js';
+import { AssistantClientModule } from '../assistant/assistant-client.module.js';
 
 /**
  * Workspace > Project > Document — the organizational layer above pages.
@@ -35,9 +39,12 @@ import { ProjectScaffoldService } from './project-scaffold.service.js';
     DocumentsCoreModule,
     TemplatesCoreModule,
     AiCoreModule,
+    // Derive's one scaffolder call (#716, phase 4); both are controller-free.
+    AgentCoreModule,
+    AssistantClientModule,
   ],
   controllers: [ProjectsController, BlueprintsController],
-  providers: [ProjectOverviewService, ProjectCascadeService, ProjectScaffoldService],
+  providers: [ProjectOverviewService, ProjectCascadeService, ProjectScaffoldService, BlueprintsService, BlueprintDeriveService],
   // The cascade is exported because connector revert reuses it to undo a page
   // this product otherwise has no way to delete (docs/features/26).
   exports: [ProjectsCoreModule, ProjectCascadeService],

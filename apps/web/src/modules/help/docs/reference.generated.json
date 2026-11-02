@@ -4394,9 +4394,49 @@
       "method": "GET",
       "path": "/v1/blueprints",
       "tag": "projects",
-      "summary": "Blueprints a project can be scaffolded from (built-ins, in both languages)",
+      "summary": "Blueprints a project can be scaffolded from: built-ins with overrides applied, then saved ones",
       "role": "viewer",
       "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/blueprints",
+      "tag": "projects",
+      "summary": "Save a blueprint, or customise or hide a built-in (`builtInKey`)",
+      "role": "admin",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/blueprints/{id}",
+      "tag": "projects",
+      "summary": "Delete a saved blueprint, or reset a built-in by deleting its override",
+      "role": "admin",
+      "source": "blueprint",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/blueprints/{id}",
+      "tag": "projects",
+      "summary": "Change a saved blueprint or an override; a changed blueprint appends a version",
+      "role": "admin",
+      "source": "blueprint",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/blueprints/derive",
+      "tag": "projects",
+      "summary": "Read a blueprint off an existing project: titles and headings only, never page text",
+      "role": "editor",
+      "source": "body",
       "public": false,
       "platformAdmin": false
     },

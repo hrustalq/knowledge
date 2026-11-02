@@ -1221,7 +1221,9 @@ export type AiUsageOperation =
   /** The `interpreter` drafting a `web` source's extraction recipe (#674): on a held version, or a person's Draft. */
   | 'source-recipe'
   /** The `sentinel` judging a page that links a `web` source against what its new version changed (#674, phase 5b). One row per page. */
-  | 'source-judge';
+  | 'source-judge'
+  /** The `scaffolder` drafting a derived blueprint's styleguide and page guidance (#716). One row per derive. */
+  | 'blueprint-derive';
 
 /** One row of the per-user (or per-model) usage breakdown. */
 export interface AiUsageBucket {
@@ -1388,6 +1390,8 @@ export const BUILT_IN_AGENT_KEYS = [
   'secretary',
   /** Drafts a `web` source's extraction recipe when a version fails its checks (#674). Never from the Run button. */
   'interpreter',
+  /** Drafts a project blueprint's styleguide and page guidance from a derived tree (#716). Never from the Run button. */
+  'scaffolder',
 ] as const;
 export type BuiltInAgentKey = (typeof BUILT_IN_AGENT_KEYS)[number];
 

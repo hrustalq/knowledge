@@ -2099,6 +2099,28 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
   .kn-prose .kn-anchor-flash { animation: none; outline: 2px solid var(--kn-panel-warning); }
 }
 
+/*
+ * A linked passage (#708): where a passage link points. Indigo, the colour of
+ * structure, so it never reads as a comment's amber; the tint reaches a little
+ * past the block (a spread, not a halo) so a one-line item is not a sliver.
+ * It arrives once, a touch stronger, then settles.
+ */
+.kn-prose .kn-passage-hit {
+  border-radius: 3px;
+  background: color-mix(in oklch, var(--primary) 9%, transparent);
+  box-shadow: 0 0 0 0.35rem color-mix(in oklch, var(--primary) 9%, transparent);
+  animation: kn-passage-arrive 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes kn-passage-arrive {
+  from {
+    background: color-mix(in oklch, var(--primary) 22%, transparent);
+    box-shadow: 0 0 0 0.35rem color-mix(in oklch, var(--primary) 22%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kn-prose .kn-passage-hit { animation: none; }
+}
+
 /* ------------------------------- commented passages (features 13 and 15) */
 /*
  * A passage someone has commented on. Styled as a highlighter stroke rather

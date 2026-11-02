@@ -21,6 +21,11 @@ describe('pageLinkTargets', () => {
     ]);
   });
 
+  it('keeps a passage link\'s #L span as its anchor, pinned revision or not (#708)', () => {
+    const md = `[steps](/documents/${A}#L3-L5) and [pinned](/documents/${A}?revision=${B}#L3-L5)`;
+    expect(pageLinkTargets(md, WEB, SELF)).toEqual([{ targetDocumentId: A, targetAnchor: 'L3-L5' }]);
+  });
+
   it('ignores other origins, code, images, sub-routes and self-links', () => {
     const md = [
       `[other](https://evil.example.com/documents/${A})`,

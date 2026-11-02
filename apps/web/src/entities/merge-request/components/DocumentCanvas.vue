@@ -28,7 +28,7 @@ import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, toRef, watch } from 'vue'
 import { useQueryClient } from '@tanstack/vue-query'
-import { MessageSquarePlus, X } from 'lucide-vue-next'
+import { Link2, MessageSquarePlus, X } from 'lucide-vue-next'
 import type {
   GlossaryExclusion,
   GlossaryTerm,
@@ -40,7 +40,7 @@ import { RichEditor } from '@/entities/rich-editor'
 import { EMBED_DOCUMENT } from '@/entities/rich-editor'
 import ImageLightbox from '@/shared/ui/lightbox/ImageLightbox.vue'
 import DiagramLightbox from '@/shared/ui/lightbox/DiagramLightbox.vue'
-import { ANCHOR_ATTR, anchorFromDomSelection, anchorFromRange, anchorsAtEvent, blockRangeAt, type AnchorAuthor, type CommentAnchor } from '@/entities/rich-editor'
+import { ANCHOR_ATTR, anchorFromDomSelection, anchorFromRange, anchorsAtEvent, blockRangeAt, linesAt, type AnchorAuthor, type CommentAnchor } from '@/entities/rich-editor'
 import type { TextAnchor } from '@/core/anchor-match'
 import { slugifyHeading } from '@/core/markdown/render'
 import ThreadCard from '@/entities/merge-request/components/ThreadCard.vue'
@@ -55,7 +55,7 @@ import { api, fetchApi } from '@/shared/api/queries'
 import { GLOSSARY_AT_ATTR, GLOSSARY_ATTR, pageTerms } from '@/entities/document'
 import { GlossaryCard } from '@/entities/document'
 import { useMediaQuery } from '@vueuse/core'
-import { splitTitleHeading } from '@knowledge/editor-schema/markdown'
+import { formatPageRef, splitTitleHeading, type LineSpan } from '@knowledge/editor-schema/markdown'
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
@@ -79,6 +79,8 @@ const props = withDefaults(
     frontmatter?: Record<string, unknown> | null
     /** Whose threads these are — a page's, or a merge request's in review mode. Read by "Teach agent" (#70). */
     threadKind?: 'document-thread' | 'mr-thread'
+    /** Lines of the stored body to highlight and scroll to — a passage link (#708). */
+    passage?: LineSpan | null
   }>(),
   {
     title: '',
@@ -88,6 +90,7 @@ const props = withDefaults(
     frontmatter: null,
     projectId: null,
     threadKind: 'document-thread',
+    passage: null,
   },
 )
 const emit = defineEmits<{
@@ -144,7 +147,10 @@ watch(
 )
 
 /** The page body without its own `# Title` — the editor holds it out by the same rule. */
-const body = computed(() => splitTitleHeading(props.markdown ?? '', props.title ?? '').body)
+const held = computed(() => splitTitleHeading(props.markdown ?? '', props.title ?? ''))
+const body = computed(() => held.value.body)
+/** The held-out title's lines: a passage link counts them, as the stored body does (#708). */
+const lineOffset = computed(() => held.value.heading.split('\n').length - 1)
 
 const canvas = ref<HTMLElement | null>(null)
 const page = ref<HTMLElement | null>(null)
@@ -341,6 +347,10 @@ const hoverAt = ref<Floater | null>(null)
 const hoverBottom = ref(0)
 /** Same block, in viewport space, for the composer that opens off it. */
 const hoverRect = ref<AnchorRect | null>(null)
+/** That block's lines, for its Copy link control (#708); null for a block with none. */
+const hoverLines = ref<LineSpan | null>(null)
+/** Whether that block has text a comment can quote. */
+const hoverQuotable = ref(false)
 /** The block under the control, and its document range — what a block comment anchors to. */
 let hoverBlock: Element | null = null
 let hoverRange: { from: number; to: number } | null = null
@@ -430,7 +440,7 @@ function toRect(rect: DOMRect): AnchorRect {
  */
 function onPageMove(event: MouseEvent) {
   const root = page.value
-  if (!props.canComment || !root) return
+  if (!root) return
   if (composing.value || openThreadIds.value.length > 0 || selectionAt.value) {
     hoverAt.value = null
     return
@@ -451,9 +461,13 @@ function onPageMove(event: MouseEvent) {
   if (!block || !root.contains(block)) return
   if (block === hoverBlock && hoverAt.value) return
   // A diagram or a whiteboard holds nothing the document can quote, so it gets
-  // no control rather than one that fails on click.
+  // no comment control rather than one that fails on click — but it still has
+  // lines, so it can be linked (#708).
   const range = blockRange(block)
-  if (!range || !editorEl.value?.editor?.state.doc.textBetween(range.from, range.to).trim()) {
+  const doc = editorEl.value?.editor?.state.doc
+  hoverQuotable.value = !!(props.canComment && range && doc?.textBetween(range.from, range.to).trim())
+  hoverLines.value = range && doc ? linesAt(doc, range.from) : null
+  if (!hoverQuotable.value && !hoverLines.value) {
     hoverAt.value = null
     hoverBlock = null
     return
@@ -521,8 +535,10 @@ function flashThread(threadId: string) {
 }
 defineExpose({ flashThread, toggleGlossaryLinks, hasGlossary, glossaryOn: linksOn })
 
+/** The lines a live selection covers, from the block it starts in to the one it ends in (#708). */
+const selectionLines = ref<LineSpan | null>(null)
+
 function readSelection() {
-  if (!props.canComment) return
   const doc = editorEl.value?.editor?.state.doc
   const root = page.value
   if (!doc || !root) return
@@ -543,8 +559,72 @@ function readSelection() {
   // say — cannot be pinned. Offering the comment unanchored beats a Comment
   // button that silently refuses to appear.
   pendingAnchor.value = anchorFromDomSelection(doc, props.revisionId)
+  selectionLines.value = selectedLines(range)
+  if (!props.canComment && !selectionLines.value) {
+    selectionAt.value = null
+    return
+  }
   selectionAt.value = toRect(range.getBoundingClientRect())
 }
+
+function selectedLines(range: Range): LineSpan | null {
+  const view = editorEl.value?.editor?.view
+  if (!view) return null
+  try {
+    const from = linesAt(view.state.doc, view.posAtDOM(range.startContainer, range.startOffset))
+    const to = linesAt(view.state.doc, view.posAtDOM(range.endContainer, range.endOffset))
+    return from && to ? { start: Math.min(from.start, to.start), end: Math.max(from.end, to.end) } : (from ?? to)
+  } catch {
+    return null
+  }
+}
+
+/* ------------------------------------------------------- passage links */
+
+/**
+ * The reference for a span at the revision on screen (#708). Pinned to the
+ * revision, so the lines never drift; a later head re-finds them by quote.
+ */
+function passageUrl(span: LineSpan): string {
+  const path = `/documents/${encodeURIComponent(props.documentId)}?revision=${encodeURIComponent(props.revisionId)}`
+  return `${window.location.origin}${path}#${formatPageRef(span)}`
+}
+
+async function copyPassage(span: LineSpan | null) {
+  if (!span) return
+  try {
+    await navigator.clipboard.writeText(passageUrl(span))
+    toast.success(t('documents.passage.copied'))
+  } catch {
+    // Insecure origins and denied permissions: say so, or the last thing on
+    // the clipboard gets pasted as if it were this link.
+    toast.error(t('documents.passage.copyFailed'))
+  }
+}
+
+function copySelectionLink() {
+  void copyPassage(selectionLines.value)
+  selectionAt.value = null
+  window.getSelection()?.removeAllRanges()
+}
+
+/** Draw `passage` and, the first time it lands, scroll to it. */
+let scrolledTo = ''
+function applyPassage() {
+  const editor = editorEl.value?.editor
+  if (!editor) return
+  editor.commands.setPassage(props.passage)
+  if (!props.passage) return
+  void nextTick(() => {
+    const hit = page.value?.querySelector<HTMLElement>('.kn-passage-hit')
+    const key = `${props.revisionId}#${formatPageRef(props.passage!)}`
+    if (hit && scrolledTo !== key) {
+      scrolledTo = key
+      hit.scrollIntoView({ block: 'center' })
+    }
+  })
+}
+watch(() => props.passage, applyPassage)
 
 function startThread() {
   composing.value = true
@@ -696,7 +776,9 @@ function onOutdated(ids: string[]) {
         :glossary-terms="glossaryTerms"
         :glossary-exclusions="exclusions"
         :comment-anchors="anchors"
+        :line-offset="lineOffset"
         @outdated-anchors="onOutdated"
+        @ready="applyPassage"
       />
     </div>
     <!-- Images and diagrams are block nodes, so a highlight or a glossary term
@@ -704,31 +786,49 @@ function onOutdated(ids: string[]) {
     <ImageLightbox :root="page" />
     <DiagramLightbox :root="page" />
 
-    <!-- Comment on the block under the pointer. Lives in the reading gutter,
-         so it never covers the words it refers to. -->
-    <button
-      v-if="hoverAt && canComment"
+    <!-- Comment on, or link to, the block under the pointer. Lives in the
+         reading gutter, so it never covers the words it refers to. -->
+    <div
+      v-if="hoverAt && (hoverQuotable || hoverLines)"
       data-kn-anno-ui
-      class="kn-comment-affordance absolute z-10 size-6 place-items-center rounded-md border bg-background text-muted-foreground opacity-70 shadow-sm transition-opacity hover:opacity-100"
+      class="kn-comment-affordance absolute z-10 gap-1"
       :style="{ top: `${hoverAt.top}px` }"
-      :title="t('review.commentOnBlock')"
-      :aria-label="t('review.commentOnBlock')"
-      @click="startBlockThread"
     >
-      <MessageSquarePlus class="size-3.5" />
-    </button>
+      <button
+        v-if="hoverQuotable"
+        class="grid size-6 place-items-center rounded-md border bg-background text-muted-foreground opacity-70 shadow-sm transition-opacity hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring"
+        :title="t('review.commentOnBlock')"
+        :aria-label="t('review.commentOnBlock')"
+        @click="startBlockThread"
+      >
+        <MessageSquarePlus class="size-3.5" />
+      </button>
+      <button
+        v-if="hoverLines"
+        class="grid size-6 place-items-center rounded-md border bg-background text-muted-foreground opacity-70 shadow-sm transition-opacity hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring"
+        :title="t('documents.passage.copyBlock')"
+        :aria-label="t('documents.passage.copyBlock')"
+        @click="copyPassage(hoverLines)"
+      >
+        <Link2 class="size-3.5" />
+      </button>
+    </div>
 
     <!-- Floating "comment on this", anchored to the live selection -->
     <div
-      v-if="selectionAt && canComment"
+      v-if="selectionAt"
       :ref="setSelectionEl"
       data-kn-anno-ui
-      class="z-20"
+      class="z-20 flex gap-1"
       :style="selectionStyles"
     >
-      <Button size="xs" class="shadow-md" @mousedown.prevent @click="startThread">
+      <Button v-if="canComment" size="xs" class="shadow-md" @mousedown.prevent @click="startThread">
         <MessageSquarePlus class="size-3.5" />
         {{ t('review.comment') }}
+      </Button>
+      <Button v-if="selectionLines" size="xs" variant="outline" class="shadow-md" @mousedown.prevent @click="copySelectionLink">
+        <Link2 class="size-3.5" />
+        {{ t('documents.passage.copySelection') }}
       </Button>
     </div>
 

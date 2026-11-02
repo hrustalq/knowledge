@@ -120,6 +120,7 @@ import {
   RELEASE_TAG_NAME_PATTERN,
   type MemberCapability,
 } from '@knowledge/contracts';
+import { contentLines } from '../documents/content-lines.js';
 
 /**
  * Bumped by hand at every release, with swagger.ts (docs/versioning.md#known-drift).
@@ -1583,18 +1584,21 @@ export class McpService {
       {
         description:
           'The full markdown (and parsed frontmatter) of a document at its default-branch head or a given revision. Read this before writing a revision: a revision replaces the whole page. ' +
-          '`markdown` is the body without its frontmatter block; posting it back as-is keeps the frontmatter.',
+          '`markdown` is the body without its frontmatter block; posting it back as-is keeps the frontmatter. ' +
+          'Pass `lines` ({ start, end }, 1-based, inclusive, counting that `markdown`) for just those lines: the answer adds startLine, endLine, totalLines and `reference`, ' +
+          'a link to exactly that passage pinned to the revision — cite a passage with it (a reader opens it highlighted, re-found on a newer head). Out of range is an error.',
         inputSchema: {
           documentId: z.string().uuid(),
           revisionId: z.string().uuid().optional(),
+          lines: z.object({ start: z.number().int().min(1), end: z.number().int().min(1) }).optional(),
         },
       },
-      async ({ documentId, revisionId }) => {
+      async ({ documentId, revisionId, lines }) => {
         await guard.doc(documentId, 'viewer');
         if (revisionId) await guard.branches(documentId, { revisionIds: [revisionId] }, 'viewer');
         const content = await this.documents.getContent(documentId, revisionId);
         void this.analytics.view(caller, documentId, content.revisionId);
-        return this.json(content);
+        return this.json(lines ? contentLines(content, lines, this.webUrl()) : content);
       },
     );
 

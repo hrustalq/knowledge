@@ -22,6 +22,12 @@ in the pull request that introduces them — see
   hidden sheets, formulas with no saved result, and the charts, images, pivot tables and comments that do not
   carry over are listed in the import's warnings. Each sheet keeps its first 2000 rows, as a CSV does. `.xls`,
   `.xlsm` and `.ods` are still refused.
+- **Link to a paragraph, list item, table or code block, not just a page** (#708). Hover a block and use the
+  link control beside the comment one, or select text and choose *Copy link*. The link names lines of the page at
+  the revision you were reading (`?revision=…#L40-L52`). Opening it scrolls to and highlights the passage. If the
+  page has changed since, the passage is found again where it now sits, or the page says it is gone and links to
+  the version that was linked. Agents get the same: `knowledge_get_document_content` and
+  `GET /v1/documents/:id/content` take `lines` and return just those lines with a `reference` to cite.
 
 ### Changed
 

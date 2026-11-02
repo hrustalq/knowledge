@@ -84,6 +84,9 @@ import { CommunitiesService } from '../communities/communities.service.js';
 import { AnalyticsRecorder, noTrackOf } from '../analytics/analytics.recorder.js';
 import { Returns } from '../common/returns.decorator.js';
 import { notModified, setCachePolicy } from '../common/http-cache.js';
+import { ConfigService } from '@nestjs/config';
+import type { Env } from '../config/env.js';
+import { contentLines, parseLinesParam } from './content-lines.js';
 
 /** A query-string boolean: `1`, `true` and `yes` are on; anything else, including absence, is off. */
 function flag(value?: string): boolean {
@@ -115,6 +118,7 @@ export class DocumentsController {
     private readonly temporal: TemporalResolverService,
     private readonly communities: CommunitiesService,
     private readonly analytics: AnalyticsRecorder,
+    private readonly config: ConfigService<Env, true>,
   ) {}
 
   @Post()
@@ -299,6 +303,11 @@ export class DocumentsController {
   @ApiOperation({ summary: 'Full raw content of a revision (feature 01; head of the default branch by default)' })
   @ApiQuery({ name: 'revision', required: false })
   @ApiQuery({ name: 'frontmatter', required: false, description: 'With Accept: text/markdown, 1 to include the YAML block' })
+  @ApiQuery({
+    name: 'lines',
+    required: false,
+    description: 'JSON only: `40-52` or `40` — just those 1-based lines of `markdown`, with startLine/endLine/totalLines and the passage `reference` to cite (#708). Out of range is a 400.',
+  })
   @ApiAsOfQuery()
   @ApiHeader({
     name: 'Accept',
@@ -314,7 +323,10 @@ export class DocumentsController {
     @Query('frontmatter') frontmatter?: string,
     @Query('asOf') asOf?: string,
     @Query('knownAt') knownAt?: string,
+    @Query('lines') lines?: string,
   ): Promise<DocumentContentResponse | string | undefined> {
+    // Before the 304 below, so a malformed span is refused rather than revalidated.
+    const span = lines ? parseLinesParam(lines) : null;
     // `asOf` (#81) picks the default-branch revision that was the page's
     // content then; an explicit `revision` wins over it.
     const named = Boolean(revision);
@@ -343,7 +355,8 @@ export class DocumentsController {
     if (named) setCachePolicy(res, 'immutable');
     void this.analytics.view(caller, id, target.revision.id);
     if (notModified(req, res, 'content', target.revision.id, at ?? null)) return undefined;
-    return withAsOf(await this.documents.readContent(target), at);
+    const content = withAsOf(await this.documents.readContent(target), at);
+    return span ? contentLines(content, span, this.config.get('WEB_BASE_URL', { infer: true })) : content;
   }
 
   @Get(':id/connectors')

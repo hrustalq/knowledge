@@ -9962,6 +9962,18 @@
       },
       "resolvedAsOf": {
         "$ref": "#/components/schemas/ResolvedAsOf"
+      },
+      "startLine": {
+        "type": "number"
+      },
+      "endLine": {
+        "type": "number"
+      },
+      "totalLines": {
+        "type": "number"
+      },
+      "reference": {
+        "type": "string"
       }
     },
     "required": [

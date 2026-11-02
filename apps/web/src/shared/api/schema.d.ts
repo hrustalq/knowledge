@@ -12667,6 +12667,10 @@ export interface components {
             } | null;
             markdown: string;
             resolvedAsOf?: components["schemas"]["ResolvedAsOf"];
+            startLine?: number;
+            endLine?: number;
+            totalLines?: number;
+            reference?: string;
         };
         DocumentDetailResponse: {
             document: components["schemas"]["DocumentSummary"];
@@ -20356,6 +20360,8 @@ export interface operations {
                 asOf?: string;
                 /** @description What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now. */
                 knownAt?: string;
+                /** @description JSON only: `40-52` or `40` — just those 1-based lines of `markdown`, with startLine/endLine/totalLines and the passage `reference` to cite (#708). Out of range is a 400. */
+                lines?: string;
             };
             header?: {
                 /** @description text/markdown (ranked above application/json) answers with the same body as GET :id/markdown (issue #68) */

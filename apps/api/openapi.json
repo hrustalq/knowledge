@@ -6847,6 +6847,15 @@
             }
           },
           {
+            "name": "lines",
+            "required": false,
+            "in": "query",
+            "description": "JSON only: `40-52` or `40` — just those 1-based lines of `markdown`, with startLine/endLine/totalLines and the passage `reference` to cite (#708). Out of range is a 400.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "Accept",
             "in": "header",
             "description": "text/markdown (ranked above application/json) answers with the same body as GET :id/markdown (issue #68)",
@@ -57613,6 +57622,18 @@
           },
           "resolvedAsOf": {
             "$ref": "#/components/schemas/ResolvedAsOf"
+          },
+          "startLine": {
+            "type": "number"
+          },
+          "endLine": {
+            "type": "number"
+          },
+          "totalLines": {
+            "type": "number"
+          },
+          "reference": {
+            "type": "string"
           }
         },
         "required": [

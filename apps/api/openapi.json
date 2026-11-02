@@ -4289,6 +4289,72 @@
         ]
       }
     },
+    "/v1/projects/scaffold": {
+      "post": {
+        "operationId": "ProjectsController_scaffold",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScaffoldProjectDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScaffoldProjectResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create a project from a blueprint: pages, styleguide, templates and glossary in one go",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
     "/v1/projects/{id}": {
       "get": {
         "operationId": "ProjectsController_get",
@@ -41021,6 +41087,55 @@
           "name"
         ]
       },
+      "ScaffoldProjectDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "description": "The new project. Required unless parentId is given."
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "locale": {
+            "type": "string",
+            "enum": [
+              "en",
+              "ru"
+            ],
+            "description": "The language titles and skeletons are written in"
+          },
+          "blueprintKey": {
+            "type": "string",
+            "enum": [
+              "discovery",
+              "code-product",
+              "service-docs",
+              "blank"
+            ],
+            "description": "A built-in blueprint. Exactly one of blueprintKey and blueprint."
+          },
+          "blueprint": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "An inline `Blueprint` (@knowledge/contracts), validated server-side. Exactly one of blueprintKey and blueprint."
+          },
+          "parentId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Scaffold under this page of its existing project; conventions are not written"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "locale"
+        ]
+      },
       "UpdateProjectDto": {
         "type": "object",
         "properties": {
@@ -45813,7 +45928,8 @@
               "test-plan",
               "test-case",
               "test-data",
-              "bug-report"
+              "bug-report",
+              "research-question"
             ],
             "description": "Override this built-in for the workspace (`admin`): with `source` to customise it, with `enabled: false` to hide it"
           },
@@ -53787,7 +53903,8 @@
           "test-plan",
           "test-case",
           "test-data",
-          "bug-report"
+          "bug-report",
+          "research-question"
         ]
       },
       "BulkRejectCapturesResponse": {
@@ -67983,6 +68100,21 @@
         },
         "required": [
           "chips"
+        ]
+      },
+      "ScaffoldProjectResponse": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "$ref": "#/components/schemas/ProjectSummary"
+          },
+          "pageCount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "project",
+          "pageCount"
         ]
       },
       "ScimDefaultRole": {

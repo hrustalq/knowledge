@@ -27,6 +27,7 @@ import {
 } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { listedSql } from '../common/listed-page.js';
+import { scaffoldStubSql } from '../common/scaffold-stub.js';
 import { visibilitySql, type AccessScope } from '../permissions/access-scope.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -444,6 +445,8 @@ export class AnalyticsQueryService {
          WHERE d.workspace_id = ${workspaceId}::uuid AND d.archived_at IS NULL
            AND ${projectId ? Prisma.sql`d.project_id = ${projectId}::uuid` : Prisma.sql`TRUE`}
            AND ${listedSql('d')} AND ${visibilitySql(scope, 'd')}
+           -- An unwritten scaffold stub (#716) is quiet by design, not dead.
+           AND NOT ${scaffoldStubSql('d')}
       ) r
        WHERE ${quiet}
        ORDER BY r.created_at ASC, r.id ASC

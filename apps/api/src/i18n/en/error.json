@@ -529,6 +529,10 @@
       "invalidRelation": "Relation {detail} is not one the graph accepts: check its type, and that every placeholder in its target is declared"
     }
   },
+  "blueprint": {
+    "invalid": "The blueprint is not valid: {detail}",
+    "oneSource": "Pass either a blueprint key or a blueprint"
+  },
   "share": {
     "notFound": "This link does not exist, has expired or was revoked",
     "disabledByWorkspace": "Public links are turned off for this workspace",

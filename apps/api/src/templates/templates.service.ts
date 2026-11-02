@@ -404,8 +404,10 @@ export class TemplatesService {
     const parsed = this.parseOrThrow(input.source);
     await this.assertNameFree(input.workspaceId, input.projectId ?? null, name);
 
-    const row = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.pageTemplate.create({
+    // `withTransaction`, not `$transaction`: a scaffold (#716) creates the
+    // project's templates inside its own boundary, and must be able to roll them back.
+    const row = await this.prisma.withTransaction(async () => {
+      const created = await this.prisma.pageTemplate.create({
         data: {
           workspaceId: input.workspaceId,
           projectId: input.projectId ?? null,
@@ -418,7 +420,7 @@ export class TemplatesService {
           createdBy: userId ?? null,
         },
       });
-      await tx.pageTemplateVersion.create({
+      await this.prisma.pageTemplateVersion.create({
         data: { templateId: created.id, version: 1, source: input.source!, meta: this.metaJson(parsed.meta), createdBy: userId ?? null },
       });
       return created;
@@ -756,13 +758,14 @@ export class TemplatesService {
   }
 
   private record(row: PageTemplate, action: string, userId?: string, extra: Record<string, unknown> = {}): void {
-    void this.activity.record({
+    // After commit: `record` publishes on the bus, and an outer boundary may still roll back.
+    this.prisma.onCommit(() => this.activity.record({
       workspaceId: row.workspaceId,
       actor: userId,
       action,
       subjectId: row.id,
       ...(row.projectId ? { projectId: row.projectId } : {}),
       metadata: { title: row.name || row.builtInKey || '', builtInKey: row.builtInKey, ...extra },
-    });
+    }));
   }
 }

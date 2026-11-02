@@ -22,6 +22,7 @@ import { ExtractorFactory } from '../extraction/extractor-factory.service.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 import { IngestionProducer } from './ingestion.producer.js';
 import { UNFILTERED } from '../common/document-acl.js';
+import { isScaffoldStub } from '../common/scaffold-stub.js';
 import { ComponentsService } from '../components/components.service.js';
 import { ApiSpecsService, type ApiSpecProjection } from '../api-specs/api-specs.service.js';
 import { ApiFixturesService, type ApiFixtureProjection } from '../api-specs/api-fixtures.service.js';
@@ -116,6 +117,24 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
     // A private branch's revision is indexed (never `live`) but not announced:
     // its events would reach every reader of the page, and workflows (#474).
     const announce = !revision.branch?.restricted;
+
+    // #716: a scaffold stub is a skeleton, not knowledge — no chunks, no
+    // vectors, no BM25 rows, no events. Marked indexed with the current
+    // signature so the drift sweeper does not keep re-queueing it. The page's
+    // first real revision has no origin and takes the whole pipeline.
+    if (isScaffoldStub(revision)) {
+      await this.prisma.$transaction([
+        this.prisma.ingestionJob.update({
+          where: { id: ingestionJobId },
+          data: { status: 'completed', attempts: { increment: 1 }, startedAt: new Date(), completedAt: new Date() },
+        }),
+        this.prisma.documentRevision.update({
+          where: { id: revision.id },
+          data: { status: 'indexed', indexedAt: new Date(), embeddingModel: embeddingSignature(this.config) },
+        }),
+      ]);
+      return;
+    }
 
     await this.prisma.$transaction([
       this.prisma.ingestionJob.update({

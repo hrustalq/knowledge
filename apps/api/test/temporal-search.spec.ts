@@ -47,6 +47,7 @@ function build(at: TemporalPoint | undefined) {
           lastActivityAt: new Date(),
           archivedAt: null,
           branches: [{ name: 'main', headRevisionId: 'r2' }],
+          revisions: [],
         },
       ]),
       // loadRevisionStamps: validity comes from PG, not from the store.

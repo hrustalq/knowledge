@@ -838,6 +838,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/projects/scaffold": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a project from a blueprint: pages, styleguide, templates and glossary in one go */
+        post: operations["ProjectsController_scaffold"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/projects/{id}": {
         parameters: {
             query?: never;
@@ -7885,6 +7902,32 @@ export interface components {
             name: string;
             description?: string | null;
         };
+        ScaffoldProjectDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /** @description The new project. Required unless parentId is given. */
+            name?: string;
+            description?: string | null;
+            /**
+             * @description The language titles and skeletons are written in
+             * @enum {string}
+             */
+            locale: "en" | "ru";
+            /**
+             * @description A built-in blueprint. Exactly one of blueprintKey and blueprint.
+             * @enum {string}
+             */
+            blueprintKey?: "discovery" | "code-product" | "service-docs" | "blank";
+            /** @description An inline `Blueprint` (@knowledge/contracts), validated server-side. Exactly one of blueprintKey and blueprint. */
+            blueprint?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Format: uuid
+             * @description Scaffold under this page of its existing project; conventions are not written
+             */
+            parentId?: string;
+        };
         UpdateProjectDto: {
             name?: string;
             description?: string | null;
@@ -9651,7 +9694,7 @@ export interface components {
              * @description Override this built-in for the workspace (`admin`): with `source` to customise it, with `enabled: false` to hide it
              * @enum {string}
              */
-            builtInKey?: "adr" | "rfc" | "runbook" | "postmortem" | "api-spec" | "use-case" | "entity" | "component" | "test-plan" | "test-case" | "test-data" | "bug-report";
+            builtInKey?: "adr" | "rfc" | "runbook" | "postmortem" | "api-spec" | "use-case" | "entity" | "component" | "test-plan" | "test-case" | "test-data" | "bug-report" | "research-question";
             /** @description Required for a custom template; a built-in override inherits the built-in name */
             name?: string;
             description?: string | null;
@@ -11780,7 +11823,7 @@ export interface components {
             createdAt: string;
         };
         /** @enum {string} */
-        BuiltInTemplateKey: "adr" | "rfc" | "runbook" | "postmortem" | "api-spec" | "use-case" | "entity" | "component" | "test-plan" | "test-case" | "test-data" | "bug-report";
+        BuiltInTemplateKey: "adr" | "rfc" | "runbook" | "postmortem" | "api-spec" | "use-case" | "entity" | "component" | "test-plan" | "test-case" | "test-data" | "bug-report" | "research-question";
         BulkRejectCapturesResponse: {
             rejected: number;
             closed: number;
@@ -15031,6 +15074,10 @@ export interface components {
             status?: components["schemas"]["MergeRequestStatus"] | "all";
             search?: string;
             chips: components["schemas"]["SavedFilterChip"][];
+        };
+        ScaffoldProjectResponse: {
+            project: components["schemas"]["ProjectSummary"];
+            pageCount: number;
         };
         /** @enum {string} */
         ScimDefaultRole: "none" | "guest" | "viewer" | "editor" | "admin";
@@ -18797,6 +18844,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CreateProjectResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ProjectsController_scaffold: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScaffoldProjectDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScaffoldProjectResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

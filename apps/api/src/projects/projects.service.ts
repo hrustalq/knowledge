@@ -129,13 +129,16 @@ export class ProjectsService {
         description: dto.description?.trim() || null,
       },
     });
-    await this.activity.record({
-      workspaceId: project.workspaceId,
-      actor: actorId,
-      action: 'project.created',
-      subjectId: project.id,
-      metadata: { name: project.name },
-    });
+    // After commit: a scaffold (#716) creates the project inside its own boundary.
+    this.prisma.onCommit(() =>
+      this.activity.record({
+        workspaceId: project.workspaceId,
+        actor: actorId,
+        action: 'project.created',
+        subjectId: project.id,
+        metadata: { name: project.name },
+      }),
+    );
     return { project: toSummary(project, 0) };
   }
 

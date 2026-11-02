@@ -1222,6 +1222,10 @@ export type I18nTranslations = {
                 "invalidRelation": string;
             };
         };
+        "blueprint": {
+            "invalid": string;
+            "oneSource": string;
+        };
         "share": {
             "notFound": string;
             "disabledByWorkspace": string;

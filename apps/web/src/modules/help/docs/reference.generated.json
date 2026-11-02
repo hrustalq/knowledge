@@ -4471,6 +4471,16 @@
       "platformAdmin": false
     },
     {
+      "method": "POST",
+      "path": "/v1/projects/scaffold",
+      "tag": "projects",
+      "summary": "Create a project from a blueprint: pages, styleguide, templates and glossary in one go",
+      "role": "editor",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "GET",
       "path": "/v1/public/domains/allow",
       "tag": "public",

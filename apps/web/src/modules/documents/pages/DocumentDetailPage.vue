@@ -18,6 +18,8 @@ import { errorMessage, isRestrictedRefusal } from '@/shared/api/errors'
 import { labelFor } from '@/shared/i18n/labels'
 import { hasWorkingCopy } from '@/entities/rich-editor'
 import { type ContentAt, documentContentQuery, documentDetailQuery, readFrontmatter } from '@/entities/document'
+import { parsePageRef, type LineSpan } from '@knowledge/editor-schema/markdown'
+import { relocateLines } from '@/core/anchor-match'
 import { usePageView } from '@/entities/insight'
 import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
@@ -441,11 +443,25 @@ async function publishDraft() {
 }
 
 /**
+ * #708: `?revision=X#L40-L52` is a passage pinned to revision X, read on the
+ * current page: the head is shown and the lines re-found in it. Only once
+ * mounted — the server never sees the hash, and the first client render must
+ * be the one it drew. `exact=1` (the "as linked" link) reads X itself.
+ */
+const mounted = ref(false)
+onMounted(() => (mounted.value = true))
+const pageRef = computed(() => (mounted.value ? parsePageRef(route.hash) : null))
+const pinnedRevision = computed(() =>
+  pageRef.value && !route.query.exact ? ((route.query.revision as string | undefined) ?? null) : null,
+)
+const revisionParam = computed(() => (pinnedRevision.value ? undefined : (route.query.revision as string | undefined)))
+
+/**
  * #81: `?asOf=` (a date, `tag:` or `rev:`) asks for the page as it read then.
  * The API picks the default-branch revision current at that point; from there
  * it is the ordinary read-only revision view. An explicit `?revision=` wins.
  */
-const asOfParam = computed(() => (route.query.revision ? null : ((route.query.asOf as string | undefined) ?? null)))
+const asOfParam = computed(() => (revisionParam.value ? null : ((route.query.asOf as string | undefined) ?? null)))
 
 /**
  * #474: `?branch=` reads a working branch — someone's unpublished edit, shared
@@ -453,7 +469,7 @@ const asOfParam = computed(() => (route.query.revision ? null : ((route.query.as
  * any other revision is: read-only, no comments, the stamp left to the head.
  */
 const viewingBranch = computed(() =>
-  route.query.revision || route.query.asOf ? null : ((route.query.branch as string | undefined) ?? null),
+  revisionParam.value || route.query.asOf ? null : ((route.query.branch as string | undefined) ?? null),
 )
 /**
  * Through the cache (#628), so a hover in the tree can have it ready before the
@@ -462,8 +478,8 @@ const viewingBranch = computed(() =>
  * the same object, so the editor below is not rebuilt for nothing.
  */
 const contentAt = computed<ContentAt>(() =>
-  route.query.revision
-    ? { revision: route.query.revision as string }
+  revisionParam.value
+    ? { revision: revisionParam.value }
     : asOfParam.value
       ? { asOf: asOfParam.value }
       : null,
@@ -471,6 +487,24 @@ const contentAt = computed<ContentAt>(() =>
 const contentQuery = useQuery(computed(() => documentContentQuery(documentId.value, contentAt.value)))
 const content = computed(() => (contentQuery.data.value as DocumentContentResponse | undefined) ?? null)
 const contentError = computed(() => contentQuery.error.value?.message ?? null)
+
+/** The pinned revision's body, read only when the head has moved past it. */
+const pinnedQuery = useQuery(
+  computed(() => ({
+    ...documentContentQuery(documentId.value, { revision: pinnedRevision.value ?? '' }),
+    enabled: !!pinnedRevision.value && !!content.value && content.value.revisionId !== pinnedRevision.value,
+  })),
+)
+/** Where the linked lines are on the page shown; `'gone'` when the head no longer has them. */
+const passage = computed<LineSpan | 'gone' | null>(() => {
+  const span = pageRef.value
+  const shown = content.value
+  if (!span || !shown) return null
+  if (!pinnedRevision.value || pinnedRevision.value === shown.revisionId) return span
+  const pinned = pinnedQuery.data.value as DocumentContentResponse | undefined
+  if (!pinned) return null
+  return relocateLines(pinned.markdown, shown.markdown, span) ?? 'gone'
+})
 const asOfRevision = computed(() => (asOfParam.value ? (content.value?.revisionId ?? null) : null))
 const asOfResolved = computed<ResolvedAsOf | null>(() => (asOfParam.value ? (content.value?.resolvedAsOf ?? null) : null))
 const branchRevision = computed(() => (viewingBranch.value ? (content.value?.revisionId ?? null) : null))
@@ -812,7 +846,7 @@ const previewFor = computed<Record<RailWidget, string | null>>(() => {
 /* ------------------------------------------------------------- lifecycle */
 
 const viewingRevision = computed(
-  () => (route.query.revision as string | undefined) ?? asOfRevision.value ?? branchRevision.value,
+  () => revisionParam.value ?? asOfRevision.value ?? branchRevision.value,
 )
 // An API spec (#78) renders as a reference rather than a page, and is edited as text.
 const isSpec = computed(() => detail.value?.document.kind === 'openapi' || detail.value?.document.kind === 'asyncapi')
@@ -1289,6 +1323,18 @@ watch(
 
       <!-- Main column: what this is, what it says, what was said about it -->
       <section class="space-y-2">
+        <!-- #708: a passage link whose lines the head no longer has. Said, never
+             guessed at: the way to the passage is the revision it was taken from. -->
+        <p v-if="passage === 'gone' && pinnedRevision" class="flex items-start gap-1.5 text-xs text-muted-foreground" role="status">
+          <History class="mt-px size-3.5 shrink-0" aria-hidden="true" />
+          <span>
+            {{ t('documents.passage.changed') }}
+            <RouterLink
+              class="underline underline-offset-2 hover:text-foreground"
+              :to="{ query: { revision: pinnedRevision, exact: '1' }, hash: route.hash }"
+            >{{ t('documents.passage.openPinned') }}</RouterLink>
+          </span>
+        </p>
         <!-- #81: as of a point — the date, the tag when it was one, and the
              revision that was the page then. A note, not an alert: the page is
              fine, the reader asked for its past. -->
@@ -1347,6 +1393,7 @@ watch(
           :can-comment="canComment"
           :busy="threadsBusy"
           :resolve-document-id="resolveDocumentId"
+          :passage="passage === 'gone' ? null : passage"
           @create-thread="onCreateThread"
           @reply="onReply"
           @resolve="onResolve"

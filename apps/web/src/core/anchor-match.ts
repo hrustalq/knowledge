@@ -92,3 +92,45 @@ export function contextAround(text: string, start: number, length: number): { pr
     suffix: text.slice(start + length, start + length + CONTEXT_CHARS),
   }
 }
+
+/**
+ * Where lines `span` of `before` now sit in `after` (#708): a passage link
+ * pinned to an older revision, opened on a newer head. The pinned lines are the
+ * quote, the lines around them the context — `findAnchor` over both bodies
+ * with whitespace collapsed, so moved and re-indented text still matches and
+ * edited text does not. Null when the passage is gone: never a nearby guess.
+ */
+export function relocateLines(
+  before: string,
+  after: string,
+  span: { start: number; end: number },
+): { start: number; end: number } | null {
+  const old = before.split('\n')
+  if (span.end > old.length) return null
+  const text = (lines: string[]) => normalizeQuote(lines.join('\n'))
+  const quote = text(old.slice(span.start - 1, span.end))
+  if (!quote) return null
+
+  // The new body as one normalized string, remembering where each line starts.
+  const starts: number[] = []
+  let flat = ''
+  for (const line of after.split('\n')) {
+    const n = normalizeQuote(line)
+    starts.push(n ? flat.length + (flat ? 1 : 0) : -1)
+    if (n) flat += (flat ? ' ' : '') + n
+  }
+  const at = findAnchor(flat, {
+    quote,
+    prefix: text(old.slice(0, span.start - 1)).slice(-CONTEXT_CHARS),
+    suffix: text(old.slice(span.end)).slice(0, CONTEXT_CHARS),
+  })
+  if (at < 0) return null
+  const lineOf = (offset: number) => {
+    let line = 0
+    starts.forEach((s, i) => {
+      if (s !== -1 && s <= offset) line = i
+    })
+    return line + 1
+  }
+  return { start: lineOf(at), end: lineOf(at + quote.length - 1) }
+}

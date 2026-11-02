@@ -780,6 +780,8 @@ export type I18nTranslations = {
             "foreignIds": string;
             "sourceBacked": string;
             "sourceVerify": string;
+            "linesInvalid": string;
+            "linesOutOfRange": string;
         };
         "branch": {
             "notFound": string;

@@ -326,7 +326,15 @@
       "edit": "Open in editor",
       "published": "Published page"
     },
-    "backlinksHint": "Pages whose current text links here."
+    "backlinksHint": "Pages whose current text links here.",
+    "passage": {
+      "copyBlock": "Copy link to this block",
+      "copySelection": "Copy link",
+      "copied": "Link to the passage copied",
+      "copyFailed": "Couldn't copy the link — the browser blocked clipboard access",
+      "changed": "The linked passage has changed since it was linked, and this page no longer has it.",
+      "openPinned": "Read it as linked"
+    }
   },
   "settings": {
     "projectsHint": "Organize documents",

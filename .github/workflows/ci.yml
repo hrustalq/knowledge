@@ -105,14 +105,28 @@ jobs:
           for i in $(seq 1 30); do docker compose exec -T postgres pg_isready -U knowledge && break; sleep 2; done
           pnpm --filter @knowledge/api exec prisma migrate deploy
 
-      - name: Build the API
-        run: pnpm exec turbo run build --filter=@knowledge/api
+      # The web runs as it ships: a production build, not the Vite dev server.
+      # Under the dev server a cold editor load compiled ~500 modules on demand
+      # (~10 s before its first API call), so any wait shorter than that failed
+      # at random — the co-editing and collection specs most often.
+      - name: Build the API and the web
+        run: pnpm exec turbo run build --filter=@knowledge/api --filter=@knowledge/web
 
       # From each app's own directory: the API writes its i18n types relative to cwd.
       # The worker goes first: it creates the graph schema, and the SSR pass
       # reads the graph, so the web cannot render before the schema exists.
+      #
+      # A production server.js installs no /api proxy — Caddy does that in
+      # production — so a Caddy in front plays that part here: :5173 (the
+      # Playwright baseURL and WEB_BASE_URL) strips /api to the API, WebSockets
+      # included, and sends the rest to the SSR app on :5174.
       - name: Start the worker, the API and the web
         run: |
+          printf '%s\n' '{' '  auto_https off' '}' ':5173 {' \
+            '  handle_path /api/* {' '    reverse_proxy localhost:3000' '  }' \
+            '  handle {' '    reverse_proxy localhost:5174' '  }' '}' > "$RUNNER_TEMP/Caddyfile"
+          docker run -d --name e2e-proxy --network host \
+            -v "$RUNNER_TEMP/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine
           (cd apps/api && nohup node dist/worker.main.js > "$RUNNER_TEMP/worker.log" 2>&1 &)
           for i in $(seq 1 60); do
             curl -sf -u root:playwithdata localhost:2480/api/v1/query/knowledge \
@@ -121,19 +135,24 @@ jobs:
             sleep 2
           done
           (cd apps/api && nohup node dist/main.js > "$RUNNER_TEMP/api.log" 2>&1 &)
-          (cd apps/web && nohup node server > "$RUNNER_TEMP/web.log" 2>&1 &)
+          (cd apps/web && NODE_ENV=production PORT=5174 nohup node server > "$RUNNER_TEMP/web.log" 2>&1 &)
           for i in $(seq 1 90); do
-            curl -sf localhost:3000/v1/collab/capabilities | grep -q '"enabled":true' \
+            curl -sf localhost:5173/api/v1/collab/capabilities | grep -q '"enabled":true' \
               && curl -sf -o /dev/null localhost:5173/ && exit 0
             sleep 2
           done
           echo "stack did not come up"
+          docker logs e2e-proxy 2>&1 | tail -20
           tail -50 "$RUNNER_TEMP/worker.log" "$RUNNER_TEMP/api.log" "$RUNNER_TEMP/web.log"; exit 1
 
       - name: Playwright
         run: pnpm --filter @knowledge/web run test:e2e
         env:
           CI: 'true'
+
+      - name: Proxy log on failure
+        if: failure()
+        run: docker logs e2e-proxy > "$RUNNER_TEMP/proxy.log" 2>&1 || true
 
       - name: Logs and report on failure
         if: failure()
@@ -144,6 +163,7 @@ jobs:
             ${{ runner.temp }}/worker.log
             ${{ runner.temp }}/api.log
             ${{ runner.temp }}/web.log
+            ${{ runner.temp }}/proxy.log
             apps/web/playwright-report
             apps/web/test-results
           retention-days: 7

@@ -4,6 +4,9 @@ import { expect, test, type Page } from '@playwright/test'
 // sees, with a named caret, and the title travels too. Needs COLLAB_ENABLED=true.
 const API = process.env.E2E_API_URL ?? 'http://localhost:3000'
 const WORKSPACE = '11111111-1111-4111-8111-111111111111'
+// The editor gives a join COLLAB_JOIN_TIMEOUT_MS (10 s, EditorPage.vue) before
+// it falls back to single-user, so "live" may legitimately take that long.
+const LIVE = { timeout: 15_000 }
 
 test('two contexts co-edit one page: body, caret and title', async ({ browser, request }) => {
   const caps = await (await request.get(`${API}/v1/collab/capabilities`)).json()
@@ -31,7 +34,7 @@ test('two contexts co-edit one page: body, caret and title', async ({ browser, r
   const [pa, pb] = await Promise.all([a.newPage(), b.newPage()])
   const open = async (page: Page) => {
     await page.goto(`/documents/${documentId}/edit`)
-    await expect(page.locator('.kn-collab-status[data-tone="live"]')).toBeVisible()
+    await expect(page.locator('.kn-collab-status[data-tone="live"]')).toBeVisible(LIVE)
   }
   await Promise.all([open(pa), open(pb)])
   const bodyA = pa.locator('.ProseMirror').first()
@@ -56,7 +59,7 @@ test('two contexts co-edit one page: body, caret and title', async ({ browser, r
 
   // A reload rebuilds from the server and this device's copy: still one page.
   await pa.reload()
-  await expect(pa.locator('.kn-collab-status[data-tone="live"]')).toBeVisible()
+  await expect(pa.locator('.kn-collab-status[data-tone="live"]')).toBeVisible(LIVE)
   await expect(pa.locator('.ProseMirror').first().getByText('Seed paragraph.', { exact: false })).toHaveCount(1)
 
   await Promise.all([a.close(), b.close()])

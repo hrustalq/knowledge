@@ -65,6 +65,17 @@ in the pull request that introduces them — see
   call fails, the result is the rules alone (`drafted: false`). Workspace admins can save blueprints, customise or
   hide a built-in, and reset or delete them (`POST`, `PATCH`, `DELETE /v1/blueprints`); `GET /v1/blueprints` lists
   saved ones after the built-ins, and `POST /v1/projects/scaffold` takes a saved blueprint's id as `blueprintKey`.
+- **Start a project from one you already have, and keep blueprints for the workspace** (#716, phase 4b of 7).
+  In the wizard, *From a project* lists the projects you can open in every workspace you belong to. Picking one
+  copies its structure into the outline: page titles, section headings, numbered collections and templates, never
+  page text. Shape then says where the outline came from and whether the assistant drafted the styleguide and
+  guidance or the outline is rules only. Glossary terms from a same-workspace project arrive in Conventions as an
+  unticked checklist. With no project anywhere, the picker shows what the built-ins look like instead. Workspace
+  admins get *Save as blueprint* in the Shape step and *Save structure as blueprint* in a project's settings. A
+  blueprint opened from a saved one can be updated in place, and one opened from a built-in can replace that
+  built-in for the workspace. The new *Settings → Blueprints* page lists built-in and saved blueprints with their
+  page tree and conventions. There, *Open in wizard* starts a project from one, a built-in can be hidden or reset,
+  and a saved blueprint can be switched off or deleted. Saved blueprints appear under *Start* for every editor.
 - **A *Research question* page template** (`builtin:research-question`): Question, Options, Criteria, Findings,
   Decision, Open questions.
 

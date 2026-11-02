@@ -16,5 +16,11 @@ export const routes: RouteRecordRaw[] = [
 /** `/settings/projects`. app/router gives it its children, other modules' pages among them. */
 export const settingsRoute = { path: 'projects', component: () => import('./pages/ProjectsPage.vue') } satisfies RouteRecordRaw
 
+/** `/settings/blueprints` (#716): built-in and saved blueprints, by key (a built-in key or a saved id). */
+export const blueprintsSettingsRoute = {
+  path: 'blueprints/:key?',
+  component: () => import('./pages/BlueprintsSettingsPage.vue'),
+} satisfies RouteRecordRaw
+
 /** The selected project's form: the last child of `settingsRoute`. */
 export const projectDetailRoute: RouteRecordRaw = { path: ':id?', component: () => import('./pages/ProjectDetailPage.vue') }

@@ -15,15 +15,22 @@ import {
   STYLE_RULE_SEVERITIES,
   STYLE_RULE_TEXT_MAX,
   type BlueprintConventions,
+  type BlueprintGlossaryTerm,
   type StyleRuleSeverity,
 } from '@knowledge/contracts'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Textarea } from '@/shared/ui/textarea'
+import { Checkbox } from '@/shared/ui/checkbox'
 import { cloneJson } from '@/modules/projects/model/blueprint-tree'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 
-const props = defineProps<{ conventions: BlueprintConventions; canAdmin: boolean }>()
+const props = defineProps<{
+  conventions: BlueprintConventions
+  canAdmin: boolean
+  /** Terms a derived blueprint's source project offers (same workspace only), unchecked until picked. */
+  offer?: { from: string; terms: BlueprintGlossaryTerm[] } | null
+}>()
 const emit = defineEmits<{ 'update:conventions': [BlueprintConventions] }>()
 
 const { t } = useI18n()
@@ -64,9 +71,26 @@ function addRule() {
 }
 
 /* ---- glossary ---- */
+const key = (g: { term: string }) => g.term.trim().toLowerCase()
+const picked = computed(() => new Set(terms.value.map(key)))
+function toggleOffered(g: BlueprintGlossaryTerm, on: boolean) {
+  update((c) => {
+    c.glossary = (c.glossary ?? []).filter((x) => key(x) !== key(g))
+    if (on) c.glossary.push(cloneJson(g))
+  })
+}
+const offered = computed(() => props.offer?.terms ?? [])
+const offeredKeys = computed(() => new Set(offered.value.map(key)))
+/** The list above the add form: what was typed here, not what was ticked from the offer. */
+const ownTerms = computed(() => terms.value.map((g, i) => ({ g, i })).filter(({ g }) => !offeredKeys.value.has(key(g))))
+
 const term = ref('')
 const definition = ref('')
-const termTaken = computed(() => terms.value.some((g) => g.term.trim().toLowerCase() === term.value.trim().toLowerCase()))
+// An offered term counts too: ticking it is how that one is added.
+const termTaken = computed(() => {
+  const k = key({ term: term.value })
+  return picked.value.has(k) || offeredKeys.value.has(k)
+})
 function addTerm() {
   if (!term.value.trim() || !definition.value.trim() || termTaken.value) return
   update((c) => (c.glossary ??= []).push({ term: term.value.trim(), definition: definition.value.trim() }))
@@ -134,8 +158,29 @@ function addTerm() {
         <h3 id="kn-scaffold-gl" class="text-sm font-medium">{{ t('scaffold.conventions.glossary') }}</h3>
         <p class="text-muted-foreground mt-0.5 text-xs leading-snug">{{ t('scaffold.conventions.glossaryHint') }}</p>
       </div>
-      <ul v-if="terms.length" class="divide-y rounded-lg border">
-        <li v-for="(g, i) in terms" :key="g.term" class="flex items-start gap-3 px-3 py-2.5">
+      <!-- Offered by the source project: a checklist, nothing ticked by default. -->
+      <div v-if="offered.length" class="space-y-1.5">
+        <p class="text-muted-foreground text-xs">
+          {{ t('scaffold.conventions.offered', { from: offer!.from }) }}
+        </p>
+        <ul class="max-h-72 divide-y overflow-y-auto rounded-lg border">
+          <li v-for="g in offered" :key="g.term">
+            <label class="flex cursor-pointer items-start gap-3 px-3 py-2.5">
+              <Checkbox
+                class="mt-0.5"
+                :model-value="picked.has(key(g))"
+                @update:model-value="toggleOffered(g, $event === true)"
+              />
+              <span class="min-w-0 flex-1 text-ui leading-snug wrap-break-word">
+                <span class="font-medium">{{ g.term }}</span>
+                <span class="text-muted-foreground"> — {{ g.definition }}</span>
+              </span>
+            </label>
+          </li>
+        </ul>
+      </div>
+      <ul v-if="ownTerms.length" class="divide-y rounded-lg border">
+        <li v-for="{ g, i } in ownTerms" :key="g.term" class="flex items-start gap-3 px-3 py-2.5">
           <span class="min-w-0 flex-1 text-ui leading-snug wrap-break-word">
             <span class="font-medium">{{ g.term }}</span>
             <span class="text-muted-foreground"> — {{ g.definition }}</span>

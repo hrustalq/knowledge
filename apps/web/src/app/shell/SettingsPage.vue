@@ -12,6 +12,7 @@ import {
   Braces,
   Download,
   FolderKanban,
+  FolderTree,
   Globe,
   LayoutTemplate,
   LockKeyhole,
@@ -45,6 +46,8 @@ const links = computed<SettingsLink[]>(() => [
   { to: '/settings/projects', label: t('nav.projects'), icon: FolderKanban, hint: t('settings.projectsHint') },
   { to: '/settings/glossary', label: t('nav.glossary'), icon: BookMarked, hint: t('settings.glossaryHint') },
   { to: '/settings/templates', label: t('nav.templates'), icon: LayoutTemplate, hint: t('settings.templatesHint') },
+  // What a new project can start from (#716): the template model, one level up.
+  { to: '/settings/blueprints', label: t('nav.blueprints'), icon: FolderTree, hint: t('settings.blueprintsHint') },
   // Named points on the knowledge base's timeline (#81): every role reads them.
   { to: '/settings/releases', label: t('nav.releases'), icon: Milestone, hint: t('settings.releasesHint') },
 

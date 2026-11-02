@@ -64,6 +64,7 @@ export function createRouter() {
           },
           ...documents.settingsRoutes,
           ...templates.settingsRoutes,
+          projects.blueprintsSettingsRoute,
           ...publishing.settingsRoutes,
           ...apiReference.settingsRoutes,
           ...workflows.settingsRoutes,

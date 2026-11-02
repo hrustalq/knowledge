@@ -37,11 +37,23 @@ in the pull request that introduces them — see
   empty project. Scaffolded pages are visible to the workspace from the start. Until someone edits a page, it stays
   out of search, Ask, `llms.txt` and the knowledge-health counts, so empty skeletons never answer a question. The
   tree still shows them. A blueprint carrying a styleguide needs a workspace admin, as editing a styleguide does.
+- **New projects start in a wizard at `/projects/new`** (#716, phase 2 of 7). *New project* in the sidebar
+  and the projects roster opens a full-page flow: pick a start (*Blank*, *Discovery-first*, *Code product*,
+  *Service documentation*), edit the page outline (rename, add, remove, reorder by drag or Alt+arrows, nest, turn a
+  page into a numbered collection with its own template), seed a styleguide (workspace admins) and glossary
+  terms, then name the project, choose the skeleton language (English or Russian), an emoji and whether it is
+  restricted. *Create* makes the project and every page in one go, then opens it. The edits survive a reload. A
+  restricted project is restricted before its first page is written, so its pages are never visible
+  workspace-wide. `GET /v1/blueprints` lists the built-ins for any workspace member, and
+  `POST /v1/projects/scaffold` takes `restricted`, `avatarEmoji` and `avatarColor`.
 - **A *Research question* page template** (`builtin:research-question`): Question, Options, Criteria, Findings,
   Decision, Open questions.
 
 ### Changed
 
+- **Creating a project no longer offers an "invite people" step**, and the quick create dialog makes only
+  workspaces now. After a new workspace, its first project can still be a quick blank one, or *Start from a
+  blueprint instead* switches into the new workspace and opens the wizard.
 - **Google Sheets synced through the Google Drive connector arrive with every tab** (#707). They were exported as
   CSV, which kept only the first sheet; they are now exported as `.xlsx` and imported one section per tab. The
   "only the first sheet was imported" warning is gone. Existing Sheet pages change on their next sync.

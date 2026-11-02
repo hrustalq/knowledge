@@ -14,6 +14,7 @@ import { DocumentsService } from '../documents/documents.service.js';
 import { TemplatesService } from '../templates/templates.service.js';
 import { AiSkillsService } from '../ai/ai-skills.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
+import { AclEventsService } from '../permissions/acl-events.service.js';
 import { normalizeAliases } from '../glossary/glossary.service.js';
 import { composeFrontmatter } from '../common/frontmatter.js';
 import { SCAFFOLD_ORIGIN } from '../common/scaffold-stub.js';
@@ -57,6 +58,7 @@ export class ProjectScaffoldService {
     private readonly templates: TemplatesService,
     private readonly skills: AiSkillsService,
     private readonly permissions: PermissionService,
+    private readonly aclEvents: AclEventsService,
   ) {}
 
   /** The blueprint a request names: a built-in by key, or an inline one parsed by the one schema. */
@@ -90,6 +92,7 @@ export class ProjectScaffoldService {
             (await this.projects.create({ workspaceId, name: dto.name!, description: dto.description }, authorId)).project
               .projectId;
           const target: Target = { workspaceId, projectId, locale, authorId };
+          if (!parent) await this.applyFace(projectId, dto, authorId);
           if (!parent && blueprint.conventions) await this.writeConventions(target, blueprint.conventions, dto.name!);
           const pageCount = await this.writeTree(target, blueprint.tree, parent?.id ?? null, undefined);
           return { projectId, pageCount };
@@ -99,6 +102,39 @@ export class ProjectScaffoldService {
       ),
     );
     return { project: await this.projects.get(projectId, scope), pageCount };
+  }
+
+  /**
+   * The project's emoji and restriction, before any page: a page is born under
+   * its project's restriction (`recomputeRestrictedBy` in `createDocument`), so
+   * a restricted scaffold is never readable workspace-wide, not even between
+   * the commit and a later PUT. The creator gets `manage`, as the access PUT's
+   * self-lockout check would demand of them, and live gateways drop their
+   * cached scopes once it commits — the `createDocument` private-draft rule.
+   */
+  private async applyFace(projectId: string, dto: ScaffoldProjectDto, authorId: string): Promise<void> {
+    const emoji = dto.avatarEmoji?.trim();
+    if (!dto.restricted && !emoji) return;
+    await this.prisma.project.update({
+      where: { id: projectId },
+      data: {
+        ...(emoji ? { avatarEmoji: emoji, avatarColor: dto.avatarColor ?? null, avatarUpdatedAt: new Date() } : {}),
+        ...(dto.restricted ? { restricted: true } : {}),
+      },
+    });
+    if (!dto.restricted) return;
+    await this.prisma.accessGrant.create({
+      data: {
+        workspaceId: dto.workspaceId,
+        resourceType: 'project',
+        resourceId: projectId,
+        subjectType: 'user',
+        subjectId: authorId,
+        level: 'manage',
+        createdBy: authorId,
+      },
+    });
+    this.prisma.onCommit(() => this.aclEvents.changed(dto.workspaceId, authorId));
   }
 
   /** Depth-first, so a page's parent always exists when it is written. Returns pages written. */

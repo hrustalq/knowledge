@@ -21,7 +21,7 @@ import { DialogFooter } from '@/shared/ui/dialog'
 const { t } = useI18n()
 
 const props = defineProps<{ workspaceId: string; workspaceName?: string | null }>()
-const emit = defineEmits<{ created: [ProjectSummary]; skip: [] }>()
+const emit = defineEmits<{ created: [ProjectSummary]; skip: []; wizard: [] }>()
 
 const name = ref('')
 const submitting = ref(false)
@@ -72,6 +72,17 @@ async function submit() {
     </div>
 
     <p v-if="error" role="alert" class="text-destructive text-xs">{{ error }}</p>
+
+    <!-- The wizard runs inside the active workspace, so this switches into the
+         new one first (a reload) and lands there. -->
+    <button
+      type="button"
+      class="text-primary text-xs underline-offset-2 hover:underline disabled:opacity-50"
+      :disabled="submitting"
+      @click="emit('wizard')"
+    >
+      {{ t('scaffold.fromWorkspaceDialog') }}
+    </button>
 
     <DialogFooter class="pt-2">
       <Button type="button" variant="ghost" :disabled="submitting" @click="emit('skip')">

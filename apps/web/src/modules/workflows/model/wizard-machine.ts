@@ -30,6 +30,7 @@
  */
 import { assign, setup, type Snapshot } from 'xstate'
 import type { WorkflowGraph, WorkflowTrigger } from '@knowledge/contracts'
+import { storedJson } from '@/shared/utils/stored-json'
 
 export type WizardLane = 'describe' | 'draw'
 
@@ -164,36 +165,11 @@ export const wizardMachine = setup({
   },
 })
 
-const STORAGE_KEY = 'kn_wf_wizard'
-
 /**
  * The snapshot is plain JSON, which is what would let it move server-side
  * later; today it is per-viewer and needs no schema.
  */
-export function loadSnapshot(): Snapshot<unknown> | undefined {
-  if (typeof localStorage === 'undefined') return undefined
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as Snapshot<unknown>) : undefined
-  } catch {
-    return undefined
-  }
-}
-
-export function saveSnapshot(snapshot: Snapshot<unknown>) {
-  if (typeof localStorage === 'undefined') return
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot))
-  } catch {
-    /* private mode */
-  }
-}
-
-export function clearSnapshot() {
-  if (typeof localStorage === 'undefined') return
-  try {
-    localStorage.removeItem(STORAGE_KEY)
-  } catch {
-    /* private mode */
-  }
-}
+const stored = storedJson<Snapshot<unknown>>('kn_wf_wizard')
+export const loadSnapshot = stored.load
+export const saveSnapshot = stored.save
+export const clearSnapshot = stored.clear

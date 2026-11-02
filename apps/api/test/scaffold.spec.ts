@@ -116,6 +116,9 @@ describe('ProjectScaffoldService', () => {
       document: { update: vi.fn(async () => ({})), findFirst: vi.fn() },
       aiSkill: { findUnique: vi.fn(async () => null) },
       glossaryTerm: { createMany: vi.fn(async () => ({ count: 0 })) },
+      project: { update: vi.fn(async () => ({})) },
+      accessGrant: { create: vi.fn(async () => ({})) },
+      onCommit: vi.fn(),
     };
     const documents = {
       createDocument: vi.fn(async (dto: { title: string; parentId?: string; template?: { ref: string }; content: { text: string } }) => {
@@ -141,6 +144,7 @@ describe('ProjectScaffoldService', () => {
       templates as never,
       skills as never,
       permissions as never,
+      { changed: vi.fn() } as never,
     );
     return { service, prisma, documents, projects, templates, skills, created };
   }
@@ -206,6 +210,29 @@ describe('ProjectScaffoldService', () => {
     expect(under.projects.create).not.toHaveBeenCalled();
     expect(under.skills.upsertStyleguide).not.toHaveBeenCalled();
     expect(under.templates.create).not.toHaveBeenCalled();
+  });
+
+  it('restricts the project and sets its face before the first page, granting the creator manage', async () => {
+    const { service, prisma, documents } = setup();
+    const order: string[] = [];
+    prisma.project.update.mockImplementation(async () => (order.push('project'), {}));
+    documents.createDocument.mockImplementationOnce(async () => (order.push('page'), { documentId: 'd', revisionId: 'r', branch: 'main', status: 'finalized' }));
+    const blueprint: Blueprint = { name: { en: 'X' }, tree: [{ title: { en: 'A' } }] };
+    await service.scaffold(dto({ blueprint, restricted: true, avatarEmoji: '🧭' }) as never, blueprint, principal);
+    expect(order).toEqual(['project', 'page']);
+    expect(prisma.project.update).toHaveBeenCalledWith({
+      where: { id: 'p1' },
+      data: expect.objectContaining({ restricted: true, avatarEmoji: '🧭' }),
+    });
+    expect(prisma.accessGrant.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ resourceType: 'project', resourceId: 'p1', subjectType: 'user', subjectId: 'u1', level: 'manage' }),
+    });
+    expect(prisma.onCommit).toHaveBeenCalledOnce();
+
+    const open = setup();
+    await open.service.scaffold(dto({ blueprint }) as never, blueprint, principal);
+    expect(open.prisma.project.update).not.toHaveBeenCalled();
+    expect(open.prisma.accessGrant.create).not.toHaveBeenCalled();
   });
 
   it('wants exactly one of a key and a blueprint', () => {

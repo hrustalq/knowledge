@@ -63,10 +63,11 @@ export const useWorkspacesStore = defineStore('workspaces', {
      * Full reload, for the same reason switching project does one: the page
      * tree, query cache and live subscription are all scoped to the selection.
      */
-    switchWorkspace(workspaceId: string) {
+    /** `to` is where the reload lands; the page tree by default. */
+    switchWorkspace(workspaceId: string, to = '/documents') {
       if (workspaceId === getWorkspaceId()) return
       setActiveWorkspace(workspaceId)
-      window.location.assign('/documents')
+      window.location.assign(to)
     },
   },
 })

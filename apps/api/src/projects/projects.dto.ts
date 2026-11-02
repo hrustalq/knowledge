@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsIn,
   IsInt,
   IsObject,
@@ -115,6 +116,25 @@ export class ScaffoldProjectDto {
   @IsOptional()
   @IsUUID()
   parentId?: string;
+
+  @ApiPropertyOptional({
+    type: Boolean,
+    description: 'Restrict the new project before its first page is written; the creator is granted manage. Ignored with parentId.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  restricted?: boolean;
+
+  @ApiPropertyOptional({ type: String, description: "The new project's emoji face. Ignored with parentId." })
+  @IsOptional()
+  @IsString()
+  @MaxLength(16, { message: vmsg('maxLength') })
+  avatarEmoji?: string;
+
+  @ApiPropertyOptional({ type: String, description: 'Hex colour behind the emoji, e.g. `#3b82f6`.' })
+  @IsOptional()
+  @Matches(/^#[0-9a-fA-F]{6}$/, { message: vmsg('hexColor') })
+  avatarColor?: string;
 }
 
 export class UpdateProjectDto {

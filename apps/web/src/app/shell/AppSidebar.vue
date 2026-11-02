@@ -5,7 +5,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { BookMarked, ChevronRight, Library } from 'lucide-vue-next'
-import { SwitcherCreateDialog, type ScopeCreated } from '@/modules/projects'
+import { SwitcherCreateDialog } from '@/modules/projects'
 import { Collapse } from '@/shared/ui/collapse'
 import { useAuthStore } from '@/stores/auth'
 import { useFeaturesStore } from '@/stores/features'
@@ -23,9 +23,9 @@ const features = useFeaturesStore()
 const route = useRoute()
 const router = useRouter()
 
-// The create dialog is owned here because both scope levels open it: the
-// workspace row in the switcher above, and the roster's + button below.
-const creating = ref<'workspace' | 'project' | null>(null)
+// The workspace create dialog is owned here; a new project is the
+// /projects/new wizard (#716), carrying whatever was typed into the filter.
+const creating = ref<'workspace' | null>(null)
 const seedName = ref('')
 
 // Loaded on first open and kept after, so closing still animates: its steps,
@@ -36,18 +36,14 @@ watch(creating, (kind) => {
 })
 
 function openCreate(kind: 'workspace' | 'project', query = '') {
+  if (kind === 'project') {
+    void router.push({ path: '/projects/new', query: query.trim() ? { name: query.trim() } : {} })
+    return
+  }
   seedName.value = query
   creating.value = kind
 }
 
-/**
- * The dialog applies the scope switch itself; where to land afterwards is the
- * caller's business. From the rail, a new project means "show me its pages" —
- * a new workspace reloads the app, so there is nothing to route.
- */
-function onCreated(created: ScopeCreated) {
-  if (created.kind === 'project') void router.push('/documents')
-}
 
 /** A link to a section the workspace switched off (#604) is not drawn. */
 const shown = (list: NavItem[]) =>
@@ -120,7 +116,6 @@ watch(inKnowledge, (inside) => {
       :kind="creating"
       :initial-name="seedName"
       @update:kind="creating = $event"
-      @created="onCreated"
     />
   </aside>
 </template>

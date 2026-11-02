@@ -6041,6 +6041,178 @@
     "type": "string",
     "nullable": true
   },
+  "Blueprint": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "$ref": "#/components/schemas/BlueprintText"
+      },
+      "description": {
+        "$ref": "#/components/schemas/BlueprintText"
+      },
+      "icon": {
+        "type": "string"
+      },
+      "tree": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/BlueprintNode"
+        }
+      },
+      "conventions": {
+        "$ref": "#/components/schemas/BlueprintConventions"
+      }
+    },
+    "required": [
+      "name",
+      "tree"
+    ]
+  },
+  "BlueprintCollection": {
+    "type": "object",
+    "properties": {
+      "childTemplateRef": {
+        "$ref": "#/components/schemas/TemplateRef"
+      },
+      "childTitlePattern": {
+        "$ref": "#/components/schemas/BlueprintText"
+      }
+    }
+  },
+  "BlueprintConventions": {
+    "type": "object",
+    "properties": {
+      "styleguide": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StyleRule"
+            }
+          }
+        },
+        "required": [
+          "rules"
+        ]
+      },
+      "templates": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/BlueprintTemplate"
+        }
+      },
+      "glossary": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/BlueprintGlossaryTerm"
+        }
+      }
+    }
+  },
+  "BlueprintEntry": {
+    "type": "object",
+    "properties": {
+      "key": {
+        "$ref": "#/components/schemas/BuiltInBlueprintKey"
+      },
+      "blueprint": {
+        "$ref": "#/components/schemas/Blueprint"
+      }
+    },
+    "required": [
+      "key",
+      "blueprint"
+    ]
+  },
+  "BlueprintGlossaryTerm": {
+    "type": "object",
+    "properties": {
+      "term": {
+        "type": "string"
+      },
+      "definition": {
+        "type": "string"
+      },
+      "aliases": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "term",
+      "definition"
+    ]
+  },
+  "BlueprintNode": {
+    "type": "object",
+    "properties": {
+      "title": {
+        "$ref": "#/components/schemas/BlueprintText"
+      },
+      "category": {
+        "$ref": "#/components/schemas/DocumentCategory"
+      },
+      "templateRef": {
+        "$ref": "#/components/schemas/TemplateRef"
+      },
+      "body": {
+        "$ref": "#/components/schemas/BlueprintText"
+      },
+      "guidance": {
+        "$ref": "#/components/schemas/BlueprintText"
+      },
+      "collection": {
+        "$ref": "#/components/schemas/BlueprintCollection"
+      },
+      "children": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/BlueprintNode"
+        }
+      }
+    },
+    "required": [
+      "title"
+    ]
+  },
+  "BlueprintTemplate": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "source": {
+        "type": "string"
+      },
+      "description": {
+        "type": "string"
+      },
+      "icon": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "name",
+      "source"
+    ]
+  },
+  "BlueprintText": {
+    "type": "object",
+    "properties": {
+      "en": {
+        "type": "string"
+      },
+      "ru": {
+        "type": "string"
+      }
+    }
+  },
   "BranchAccessResponse": {
     "type": "object",
     "properties": {
@@ -6111,6 +6283,15 @@
       "ownerId",
       "restricted",
       "createdAt"
+    ]
+  },
+  "BuiltInBlueprintKey": {
+    "type": "string",
+    "enum": [
+      "discovery",
+      "code-product",
+      "service-docs",
+      "blank"
     ]
   },
   "BuiltInTemplateKey": {
@@ -14696,6 +14877,20 @@
       "workspaceId",
       "entries",
       "nextCursor"
+    ]
+  },
+  "ListBlueprintsResponse": {
+    "type": "object",
+    "properties": {
+      "blueprints": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/BlueprintEntry"
+        }
+      }
+    },
+    "required": [
+      "blueprints"
     ]
   },
   "ListBranchesResponse": {

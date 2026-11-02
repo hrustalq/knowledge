@@ -200,6 +200,7 @@ describe('approving a term', () => {
 
     expect(h.glossary.create).toHaveBeenCalledWith(
       expect.objectContaining({ projectId: PROJECT, term: 'RRF', aliases: ['rank fusion'], source: 'captured' }),
+      expect.objectContaining({ workspaceId: WS }),
       'u-2',
     );
     expect(h.rows[0]).toMatchObject({ status: 'proposed', glossaryTermId: 'term-1' });

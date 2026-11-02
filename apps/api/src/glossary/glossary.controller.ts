@@ -25,16 +25,29 @@ import {
   UpdateGlossaryTermDto,
 } from './glossary.dto.js';
 import { Returns } from '../common/returns.decorator.js';
+import { AccessService } from '../auth/access.service.js';
+import { PermissionService } from '../permissions/permission.service.js';
+import type { AccessScope } from '../permissions/access-scope.js';
 
 /**
  * Glossary (docs/features/14). Reading is `viewer` because every reader needs
  * the roster — the term linker runs on every rendered page — and writing is
  * `editor`, the same bar as editing the documents the vocabulary describes.
+ * A defining page's title is page data, so every route reads it under the
+ * caller's scope (#712).
  */
 @ApiTags('glossary')
 @Controller('v1/glossary')
 export class GlossaryController {
-  constructor(private readonly glossary: GlossaryService) {}
+  constructor(
+    private readonly glossary: GlossaryService,
+    private readonly access: AccessService,
+    private readonly permissions: PermissionService,
+  ) {}
+
+  private async termScope(principal: Principal, termId: string): Promise<AccessScope> {
+    return this.permissions.scopeFor(principal, await this.access.workspaceOfGlossaryTerm(termId));
+  }
 
   @Get()
   @Returns('ListGlossaryResponse')
@@ -46,19 +59,22 @@ export class GlossaryController {
       'The glossary — the roster the read-side term linker matches against. ' +
       'Scoped to one project with projectId; without it, the whole workspace.',
   })
-  list(@Query() query: ListGlossaryQueryDto): Promise<ListGlossaryResponse> {
-    return this.glossary.list(query);
+  async list(
+    @Query() query: ListGlossaryQueryDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<ListGlossaryResponse> {
+    return this.glossary.list(query, await this.permissions.scopeFor(principal, query.workspaceId));
   }
 
   @Post()
   @Returns('GlossaryTerm')
   @Access('editor', 'body')
   @ApiOperation({ summary: 'Add a term to a project (409 when that project already defines it)' })
-  create(
+  async create(
     @Body() dto: CreateGlossaryTermDto,
     @CurrentPrincipal() principal: Principal,
   ): Promise<GlossaryTerm> {
-    return this.glossary.create(dto, principal?.userId);
+    return this.glossary.create(dto, await this.permissions.scopeFor(principal, dto.workspaceId), principal?.userId);
   }
 
   /**
@@ -74,10 +90,17 @@ export class GlossaryController {
       'LLM term extraction over a page or a draft — proposals only, nothing is saved; ' +
       'enabled=false when the assistant provider is none',
   })
-  suggest(
+  async suggest(
     @Body() dto: SuggestGlossaryTermsDto,
     @CurrentPrincipal() principal: Principal,
   ): Promise<SuggestGlossaryTermsResponse> {
+    // The extractor reads the page, so the caller must be able to open it (#712).
+    // Here, not in the service: the glossarist agent calls `suggest` over pages
+    // its run scope already filtered.
+    if (dto.documentId) {
+      const scope = await this.permissions.scopeFor(principal, dto.workspaceId);
+      await this.permissions.requireLevel(scope, { type: 'document', id: dto.documentId }, 'view');
+    }
     return this.glossary.suggest(dto, principal);
   }
 
@@ -85,20 +108,20 @@ export class GlossaryController {
   @Returns('GlossaryTerm')
   @Access('viewer', 'glossary-term')
   @ApiOperation({ summary: 'One glossary entry' })
-  get(@Param('id', ParseUUIDPipe) id: string): Promise<GlossaryTerm> {
-    return this.glossary.get(id);
+  async get(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<GlossaryTerm> {
+    return this.glossary.get(id, await this.termScope(principal, id));
   }
 
   @Patch(':id')
   @Returns('GlossaryTerm')
   @Access('editor', 'glossary-term')
   @ApiOperation({ summary: 'Edit a term, its aliases, its definition or its defining page' })
-  update(
+  async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateGlossaryTermDto,
     @CurrentPrincipal() principal: Principal,
   ): Promise<GlossaryTerm> {
-    return this.glossary.update(id, dto, principal?.userId);
+    return this.glossary.update(id, dto, await this.termScope(principal, id), principal?.userId);
   }
 
   @Delete(':id')

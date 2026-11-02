@@ -17,6 +17,11 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- **The glossary no longer names pages a reader may not open** (#712). Settings → Glossary and
+  `GET /v1/glossary` showed the title of a term's defining page to every workspace viewer, including people the
+  page is restricted from. That title now reads as empty for them. Choosing a defining page, or suggesting terms
+  from a page, now requires being able to open that page, and a refusal gives no title. Terms and definitions
+  themselves are unchanged.
 - **Table column labels are no longer glossary links** (#703). A header cell such as "Category" or "Status" was
   drawn as a link to the glossary entry of the same spelling. Header cells are now skipped like headings; the
   same word in a body cell still links.

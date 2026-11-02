@@ -20,6 +20,8 @@ import { AssistantClient } from '../assistant/assistant.client.js';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { AiUsageService } from '../ai/ai-usage.service.js';
 import type { Principal } from '../auth/principal.js';
+import { PermissionService } from '../permissions/permission.service.js';
+import { visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
 import type {
   CreateGlossaryTermDto,
   ListGlossaryQueryDto,
@@ -63,9 +65,10 @@ export class GlossaryService {
     private readonly client: AssistantClient,
     private readonly agents: AgentRegistryService,
     private readonly aiUsage: AiUsageService,
+    private readonly permissions: PermissionService,
   ) {}
 
-  async list(query: ListGlossaryQueryDto): Promise<ListGlossaryResponse> {
+  async list(query: ListGlossaryQueryDto, scope: AccessScope): Promise<ListGlossaryResponse> {
     const search = query.search?.trim();
     const rows = await this.prisma.glossaryTerm.findMany({
       where: {
@@ -87,25 +90,26 @@ export class GlossaryService {
     return {
       workspaceId: query.workspaceId,
       projectId: query.projectId ?? null,
-      terms: await this.withDocumentTitles(rows),
+      terms: await this.withDocumentTitles(rows, scope),
     };
   }
 
-  async get(termId: string): Promise<GlossaryTerm> {
+  async get(termId: string, scope: AccessScope): Promise<GlossaryTerm> {
     const row = await this.prisma.glossaryTerm.findUnique({ where: { id: termId } });
     if (!row) throw new NotFoundException(t('error.glossary.notFound', { id: termId }));
-    return (await this.withDocumentTitles([row]))[0]!;
+    return (await this.withDocumentTitles([row], scope))[0]!;
   }
 
   /** `source: 'captured'` is the captures inbox approving a term (#73); the REST DTO only admits manual/ai. */
   async create(
     dto: Omit<CreateGlossaryTermDto, 'source'> & { source?: GlossaryTermSource },
+    scope: AccessScope,
     actorId?: string,
   ): Promise<GlossaryTerm> {
     const term = dto.term.trim();
     await this.projects.requireProjectInWorkspace(dto.projectId, dto.workspaceId);
     await this.assertNameFree(dto.projectId, term);
-    if (dto.documentId) await this.assertDocumentInWorkspace(dto.documentId, dto.workspaceId);
+    if (dto.documentId) await this.assertDefiningPage(dto.documentId, dto.workspaceId, scope);
 
     const row = await this.prisma.glossaryTerm.create({
       data: {
@@ -131,10 +135,15 @@ export class GlossaryService {
       documentId: row.documentId ?? undefined,
       metadata: { term: row.term, source: row.source, projectId: row.projectId },
     });
-    return (await this.withDocumentTitles([row]))[0]!;
+    return (await this.withDocumentTitles([row], scope))[0]!;
   }
 
-  async update(termId: string, dto: UpdateGlossaryTermDto, actorId?: string): Promise<GlossaryTerm> {
+  async update(
+    termId: string,
+    dto: UpdateGlossaryTermDto,
+    scope: AccessScope,
+    actorId?: string,
+  ): Promise<GlossaryTerm> {
     const current = await this.prisma.glossaryTerm.findUnique({ where: { id: termId } });
     if (!current) throw new NotFoundException(t('error.glossary.notFound', { id: termId }));
 
@@ -142,7 +151,7 @@ export class GlossaryService {
     if (term && term.toLowerCase() !== current.term.toLowerCase()) {
       await this.assertNameFree(current.projectId, term);
     }
-    if (dto.documentId) await this.assertDocumentInWorkspace(dto.documentId, current.workspaceId);
+    if (dto.documentId) await this.assertDefiningPage(dto.documentId, current.workspaceId, scope);
 
     const row = await this.prisma.glossaryTerm.update({
       where: { id: termId },
@@ -165,7 +174,7 @@ export class GlossaryService {
       documentId: row.documentId ?? undefined,
       metadata: { term: row.term, fields: Object.keys(dto) },
     });
-    return (await this.withDocumentTitles([row]))[0]!;
+    return (await this.withDocumentTitles([row], scope))[0]!;
   }
 
   async remove(termId: string, actorId?: string): Promise<{ deleted: true }> {
@@ -322,9 +331,15 @@ export class GlossaryService {
   }
 
   /**
-   * Defining pages are a soft link (no FK), so the title is resolved here and
-   * a deleted page simply reads as an unlinked term rather than a broken one.
+   * A defining page is one the caller may open (#712): otherwise the entry's
+   * response would hand back the title of a page they were refused. Refused
+   * exactly as the page routes refuse it — 403 with `canRequestAccess`, no title.
    */
+  private async assertDefiningPage(documentId: string, workspaceId: string, scope: AccessScope): Promise<void> {
+    await this.assertDocumentInWorkspace(documentId, workspaceId);
+    await this.permissions.requireLevel(scope, { type: 'document', id: documentId }, 'view');
+  }
+
   /* ------------------------------------------------- per-occurrence exclusions */
 
   async listExclusions(documentId: string): Promise<ListGlossaryExclusionsResponse> {
@@ -375,12 +390,19 @@ export class GlossaryService {
     return { deleted: true };
   }
 
-  private async withDocumentTitles(rows: TermRow[]): Promise<GlossaryTerm[]> {
+  /**
+   * Defining pages are a soft link (no FK), so the title is resolved here and
+   * a deleted page simply reads as an unlinked term rather than a broken one.
+   * Resolved under the reader's scope (#712): a page they may not open reads
+   * the same way, title null. `documentId` stays, so the link lands on the
+   * page's request-access refusal, which names no title either.
+   */
+  private async withDocumentTitles(rows: TermRow[], scope: AccessScope): Promise<GlossaryTerm[]> {
     const ids = [...new Set(rows.map((r) => r.documentId).filter((id): id is string => !!id))];
     const titles = new Map<string, string>();
     if (ids.length) {
       const docs = await this.prisma.document.findMany({
-        where: { id: { in: ids } },
+        where: { id: { in: ids }, AND: [visibilityWhere(scope)] },
         select: { id: true, title: true },
       });
       for (const doc of docs) titles.set(doc.id, doc.title);

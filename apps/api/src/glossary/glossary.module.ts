@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { GlossaryCoreModule } from './glossary-core.module.js';
 import { GlossaryController } from './glossary.controller.js';
+import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 
 /**
  * Glossary (docs/features/14). API-only — the controller depends on the global
@@ -12,7 +13,7 @@ import { GlossaryController } from './glossary.controller.js';
  * existing `imports: [GlossaryModule]` keeps resolving the service.
  */
 @Module({
-  imports: [GlossaryCoreModule],
+  imports: [GlossaryCoreModule, PermissionsCoreModule],
   controllers: [GlossaryController],
   exports: [GlossaryCoreModule],
 })

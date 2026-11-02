@@ -105,6 +105,7 @@ export class CaptureInboxService {
           ...(payload.documentId ? { documentId: payload.documentId } : {}),
           source: 'captured',
         },
+        await this.permissions.scopeFor(principal, row.workspaceId),
         principal.userId,
       );
       await this.prisma.knowledgeCapture.update({ where: { id }, data: { glossaryTermId: term.termId } });

@@ -52,7 +52,7 @@ import { usePageRefsStore } from '@/entities/document'
 import { useGlossaryStore } from '@/entities/document'
 import { getGlossaryLinks, setGlossaryLinks } from '@/shared/api/api'
 import { api, fetchApi } from '@/shared/api/queries'
-import { GLOSSARY_AT_ATTR, GLOSSARY_ATTR } from '@/entities/document'
+import { GLOSSARY_AT_ATTR, GLOSSARY_ATTR, pageTerms } from '@/entities/document'
 import { GlossaryCard } from '@/entities/document'
 import { useMediaQuery } from '@vueuse/core'
 import { splitTitleHeading } from '@knowledge/editor-schema/markdown'
@@ -65,6 +65,8 @@ const props = withDefaults(
     markdown: string
     /** The page being read. Needed so a term cannot link to its own page. */
     documentId: string
+    /** The page's project: only its vocabulary is linked (#702). Absent links nothing. */
+    projectId?: string | null
     /** The document's title, so the body does not repeat it. */
     title?: string
     /** Revision the anchors are recorded against (the head being read). */
@@ -84,6 +86,7 @@ const props = withDefaults(
     busy: false,
     resolveDocumentId: undefined,
     frontmatter: null,
+    projectId: null,
     threadKind: 'document-thread',
   },
 )
@@ -110,8 +113,8 @@ interface Floater {
  */
 const pageRefs = usePageRefsStore()
 /**
- * Vocabulary linking (docs/features/14). The roster is workspace/project-wide
- * and shared with the glossary page, so this only has to ask for it.
+ * Vocabulary linking (docs/features/14). The roster is the whole workspace's,
+ * shared with the glossary page, so this only has to ask for it.
  */
 const glossary = useGlossaryStore()
 onMounted(() => void glossary.ensureLoaded())
@@ -120,9 +123,9 @@ onMounted(() => void glossary.ensureLoaded())
 /**
  * The vocabulary this page links, after three gates.
  *
- * A term defined *by this page* is dropped: the link would go where the reader
- * already is, and on a glossary page it turns every entry into a link to
- * itself. The page can opt out wholesale with `glossary: false` in its
+ * `pageTerms` keeps the page's own project's terms and drops any this page
+ * defines: that link would go where the reader already is, and on a glossary
+ * page it turns every entry into a link to itself. The page can opt out wholesale with `glossary: false` in its
  * frontmatter, and the reader can turn linking off for themselves — the reader
  * wins, because a preference someone set should survive a page that merely has
  * a default.
@@ -130,7 +133,7 @@ onMounted(() => void glossary.ensureLoaded())
 const glossaryTerms = computed(() => {
   if (!linksOn.value) return []
   if (props.frontmatter?.glossary === false) return []
-  return glossary.linkable.filter((term) => term.documentId !== props.documentId)
+  return pageTerms(glossary.terms, props)
 })
 watch(
   () => props.markdown,

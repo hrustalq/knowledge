@@ -1,23 +1,27 @@
 import { defineStore } from 'pinia'
 import type { GlossaryTerm, ListGlossaryResponse } from '@knowledge/contracts'
-import { apiQueryOptions, bindStoreQuery, unbindStoreQuery } from '@/shared/api/queries'
-import { getProjectId, getWorkspaceId } from '@/shared/api/api'
-import { registerProjectScoped } from '@/stores/projects'
+import { apiQueryOptions, bindStoreQuery } from '@/shared/api/queries'
+import { getWorkspaceId } from '@/shared/api/api'
 
 /**
- * The active project's vocabulary, held once for the whole app
- * (docs/features/14).
+ * The workspace's vocabulary, held once for the whole app (docs/features/14).
  *
- * Scoped to the project rather than the workspace because the terms are:
- * a page in project A must not be decorated with project B's definitions. The
- * roster therefore follows the project switcher — `rescope()` is called from
- * the projects store next to the documents store's, for the same reason.
+ * Terms belong to a project, and a page in project A must never be decorated
+ * with project B's definitions. The roster is still loaded for the whole
+ * workspace: the page being read decides which project's terms apply
+ * (`DocumentCanvas` filters on the page's `projectId`), and a page reached from
+ * search or a link is often not in the project the switcher shows (#702). One
+ * request covers every page in the workspace, so a project switch refetches
+ * nothing; a workspace switch reloads the app.
  *
  * Every rendered page asks for it, so it must not become a request per page.
  * The roster is small, changes rarely, and is fetched lazily on the first
  * render that wants it — a workspace with no glossary therefore costs exactly
  * one empty response, and pages render immediately either way because linking
  * is a decoration applied after the markdown is already on screen.
+ *
+ * ponytail: whole-workspace roster, key it by project if a workspace's
+ * glossary grows to thousands of terms.
  */
 export const useGlossaryStore = defineStore('glossary', {
   state: () => ({
@@ -26,12 +30,6 @@ export const useGlossaryStore = defineStore('glossary', {
     /** In-flight fetch, so concurrent page renders share one request. */
     pending: null as Promise<void> | null,
   }),
-  getters: {
-    /** Only enabled terms are linked; the page lists retired ones too. */
-    linkable(state): GlossaryTerm[] {
-      return state.terms.filter((t) => t.enabled)
-    },
-  },
   actions: {
     async ensureLoaded() {
       if (this.loaded) return
@@ -41,14 +39,11 @@ export const useGlossaryStore = defineStore('glossary', {
     },
     async fetchList(fresh = false) {
       try {
-        // No active project yet (the store resolves one asynchronously) means
-        // "the whole workspace" — the same fallback the documents store uses.
-        const projectId = getProjectId()
         await bindStoreQuery<ListGlossaryResponse>(
           this,
           'list',
           this.queryClient,
-          apiQueryOptions('/v1/glossary', { query: { workspaceId: getWorkspaceId(), ...(projectId ? { projectId } : {}) } }),
+          apiQueryOptions('/v1/glossary', { query: { workspaceId: getWorkspaceId() } }),
           (res) => {
             this.terms = res.terms
           },
@@ -67,19 +62,5 @@ export const useGlossaryStore = defineStore('glossary', {
       this.pending = this.fetchList(true).finally(() => (this.pending = null))
       await this.pending
     },
-    /**
-     * The active project changed. Drop the vocabulary immediately — showing
-     * the previous project's definitions under the new project's pages would
-     * be worse than showing none — and refetch only if something was using it.
-     */
-    async rescope() {
-      const wanted = this.loaded
-      unbindStoreQuery(this, 'list')
-      this.terms = []
-      this.loaded = false
-      if (wanted) await this.ensureLoaded()
-    },
   },
 })
-
-registerProjectScoped(useGlossaryStore)

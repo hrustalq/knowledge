@@ -20,6 +20,9 @@ in the pull request that introduces them — see
 - **Table column labels are no longer glossary links** (#703). A header cell such as "Category" or "Status" was
   drawn as a link to the glossary entry of the same spelling. Header cells are now skipped like headings; the
   same word in a body cell still links.
+- **Pages are decorated only with their own project's glossary** (#702). A page opened from search, a link or a
+  merge request in another project was decorated with the terms of whichever project the switcher showed, or of
+  every project when none was active. A page now links only terms defined in its own project.
 
 ## [0.43.0] — 2026-11-01
 

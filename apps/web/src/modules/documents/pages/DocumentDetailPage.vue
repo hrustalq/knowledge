@@ -1339,6 +1339,7 @@ watch(
           ref="canvasEl"
           :markdown="content.markdown"
           :document-id="documentId"
+          :project-id="detail.document.projectId"
           :frontmatter="content.frontmatter"
           :title="detail.document.title"
           :revision-id="content.revisionId"

@@ -12,7 +12,7 @@ import { t } from '../../i18n/t.js';
 /** Past this a markdown table stops being readable and starts being a wall. */
 const WIDE_COLUMNS = 12;
 /** Rows beyond this are dropped: the point of importing a CSV here is prose context, not a database. */
-const MAX_ROWS = 2000;
+export const MAX_ROWS = 2000;
 
 /**
  * CSV/TSV → a markdown table.
@@ -38,30 +38,11 @@ export class TabularParser implements DocumentParser {
       return { markdown: '', warnings: ['The file had no rows.'], meta: { words: 0 } };
     }
 
-    let body = rows.slice(1);
-    if (body.length > MAX_ROWS) {
-      warnings.push(t('import.warning.rowsTruncated', { kept: MAX_ROWS, total: body.length }));
-      body = body.slice(0, MAX_ROWS);
-    }
-
-    const width = Math.max(...rows.map((r) => r.length));
-    if (width > WIDE_COLUMNS) {
-      warnings.push(t('import.warning.wideTable', { count: width }));
-    }
-
     await ctx.onStage(t('import.stage.building-table'), 0.7);
-    const pad = (r: string[]) => [...r, ...Array(Math.max(0, width - r.length)).fill('')].map(escapeCell);
-    const line = (cells: string[]) => `| ${cells.join(' | ')} |`;
-    const header = pad(rows[0]);
+    const table = markdownTable(rows);
+    warnings.push(...table.warnings);
     const title = ctx.filename.replace(/\.[^.]+$/, '');
-
-    const markdown = [
-      `# ${title}`,
-      '',
-      line(header),
-      `| ${Array(width).fill('---').join(' | ')} |`,
-      ...body.map((r) => line(pad(r))),
-    ].join('\n');
+    const markdown = [`# ${title}`, '', ...table.lines].join('\n');
 
     return {
       markdown,
@@ -70,6 +51,33 @@ export class TabularParser implements DocumentParser {
       meta: { sections: 1, words: countWords(markdown) },
     };
   }
+}
+
+/**
+ * Rows → a GFM table, the first row the header. Shared with the Excel parser
+ * (#707) so a CSV and a sheet of the same data import as the same table. Rows
+ * past `MAX_ROWS` are dropped; `total` is the body length before any caller-side
+ * cut, so a streamed sheet that stopped keeping rows still reports the real count.
+ */
+export function markdownTable(rows: string[][], total = rows.length - 1): { lines: string[]; warnings: string[] } {
+  const warnings: string[] = [];
+  let body = rows.slice(1);
+  if (total > MAX_ROWS) {
+    warnings.push(t('import.warning.rowsTruncated', { kept: MAX_ROWS, total }));
+    body = body.slice(0, MAX_ROWS);
+  }
+
+  const width = Math.max(...rows.map((r) => r.length));
+  if (width > WIDE_COLUMNS) {
+    warnings.push(t('import.warning.wideTable', { count: width }));
+  }
+
+  const pad = (r: string[]) => [...r, ...Array(Math.max(0, width - r.length)).fill('')].map(escapeCell);
+  const line = (cells: string[]) => `| ${cells.join(' | ')} |`;
+  return {
+    lines: [line(pad(rows[0])), `| ${Array(width).fill('---').join(' | ')} |`, ...body.map((r) => line(pad(r)))],
+    warnings,
+  };
 }
 
 const countChar = (text: string, ch: string) => text.split(ch).length - 1;

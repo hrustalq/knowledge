@@ -12,7 +12,9 @@
     "building-table": "Building the table",
     "rebuilding-structure": "Rebuilding structure",
     "formatting": "Formatting",
-    "parsing": "Parsing"
+    "parsing": "Parsing",
+    "reading-workbook": "Reading the workbook",
+    "reading-sheet": "Reading sheet “{sheet}”"
   },
   "warning": {
     "passthrough": "{text}",
@@ -42,6 +44,30 @@
     "invalidStructured": "The file is not valid {lang} ({reason}), so it was imported verbatim.",
     "singleCodeBlock": "The file was kept as a single code block because it is too large to split into readable sections.",
     "rowsTruncated": "Only the first {kept} of {total} rows were imported.",
-    "wideTable": "{count} columns is wide for a page — the table will scroll sideways. Consider splitting it before importing."
+    "wideTable": "{count} columns is wide for a page — the table will scroll sideways. Consider splitting it before importing.",
+    "inSheet": "Sheet “{sheet}”: {text}",
+    "hiddenSheets": {
+      "one": "{count} hidden sheet was skipped: {names}.",
+      "other": "{count} hidden sheets were skipped: {names}."
+    },
+    "formulasWithoutValue": {
+      "one": "{count} formula had no saved result, so its formula is shown instead of a value.",
+      "other": "{count} formulas had no saved result, so their formulas are shown instead of values."
+    },
+    "lostCharts": {
+      "one": "{count} chart was not carried over.",
+      "other": "{count} charts were not carried over."
+    },
+    "lostImages": {
+      "one": "{count} image was not carried over.",
+      "other": "{count} images were not carried over."
+    },
+    "lostPivots": {
+      "one": "{count} pivot table was not carried over.",
+      "other": "{count} pivot tables were not carried over."
+    },
+    "lostComments": "cell comments were not carried over.",
+    "sheetFormattingDropped": "Cell formatting, colours and column widths are not carried over — only the values are.",
+    "emptyWorkbook": "The workbook had no sheets with data."
   }
 }

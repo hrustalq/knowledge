@@ -24,6 +24,7 @@ export const PARSER_ICONS: Record<ImportParserId, LucideIcon> = {
   docx: FileText,
   pptx: Presentation,
   html: FileCode2,
+  xlsx: FileSpreadsheet,
   tabular: FileSpreadsheet,
   structured: FileCode2,
   plaintext: FileText,

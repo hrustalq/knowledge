@@ -239,7 +239,7 @@ folder is not a page; its contents land under the connector's destination.
 **Conversion is feature 16's.** `importFormatFor` decides what a file is, and
 `ParserRegistry` converts it, so a Drive file imports exactly as the upload
 wizard would import it. Google-native files are exported first: Docs → DOCX,
-Slides → PPTX, Sheets → CSV (first sheet only, said on the page). Images are
+Slides → PPTX, Sheets → XLSX (every tab, one section each — #707). Images are
 *not* imported: their parser is OCR, which bills a model per file, and an
 unattended sync must not run up a bill on a folder of screenshots. Unsupported
 and oversized (> 20 MB) files are skipped and named in one run warning per

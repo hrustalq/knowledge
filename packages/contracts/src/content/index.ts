@@ -137,6 +137,7 @@ export type ImportParserId =
   | 'docx'
   | 'pptx'
   | 'html'
+  | 'xlsx'
   | 'tabular'
   | 'structured'
   | 'plaintext'
@@ -174,6 +175,12 @@ export const IMPORT_FORMATS: readonly ImportFormat[] = [
     label: 'HTML',
     extensions: ['.html', '.htm'] as string[],
     contentTypes: ['text/html', 'application/xhtml+xml'] as string[],
+  },
+  {
+    parser: 'xlsx',
+    label: 'Excel',
+    extensions: ['.xlsx'] as string[],
+    contentTypes: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'] as string[],
   },
   {
     parser: 'tabular',

@@ -36,23 +36,3 @@ export async function createProject(
   const res = await api.post('/v1/projects', { body: { workspaceId, name, description } })
   return res.project
 }
-
-/**
- * Is there anyone left to invite to this workspace?
- *
- * Asked *before* offering the invite step, because a step whose only control
- * is a disabled empty picker is a dead end, not a choice — and in a workspace
- * where everyone is already a member that is the normal case, not an edge one.
- * Failures answer "no": the step is optional, so it is not worth an error.
- */
-export async function workspaceHasCandidates(workspaceId: string): Promise<boolean> {
-  try {
-    const res = await api.get('/v1/workspaces/{id}/candidates', {
-      path: { id: workspaceId },
-      query: { limit: 1 },
-    })
-    return res.candidates.length > 0
-  } catch {
-    return false
-  }
-}

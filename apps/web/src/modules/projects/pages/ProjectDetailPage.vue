@@ -16,6 +16,7 @@ import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { AvatarPicker } from '@/entities/person'
+import { EMOJI_CHOICES } from '@/modules/projects/model/avatar'
 import DeleteProjectDialog from '@/modules/projects/components/DeleteProjectDialog.vue'
 import ProjectAvatar from '@/modules/projects/components/ProjectAvatar.vue'
 import { PageAccessDialog } from '@/entities/access'
@@ -91,15 +92,6 @@ async function save() {
   }
 }
 
-/**
- * A short, opinionated set rather than a full emoji picker.
- *
- * A picker is a searchable grid of two thousand glyphs, and the decision here is
- * "which of these reads as my project at 20px" — a question a dozen legible,
- * domain-shaped options answer faster than a search box. Anything else is still
- * reachable: the field accepts any emoji the API validates.
- */
-const EMOJI_CHOICES = ['📘', '🧭', '🛠️', '🚀', '🔐', '📊', '🧩', '⚙️', '🗂️', '💡', '🧪', '🌍']
 
 async function setEmoji(emoji: string | null) {
   const p = project.value

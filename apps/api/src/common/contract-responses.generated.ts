@@ -184,6 +184,7 @@ import type {
   ListAssistantThreadsResponse,
   ListAttachmentsResponse,
   ListAuditLogsResponse,
+  ListBlueprintsResponse,
   ListBranchesResponse,
   ListCapturesResponse,
   ListCollabDraftsResponse,
@@ -532,6 +533,7 @@ export interface ContractResponses {
   ListAssistantThreadsResponse: ListAssistantThreadsResponse;
   ListAttachmentsResponse: ListAttachmentsResponse;
   ListAuditLogsResponse: ListAuditLogsResponse;
+  ListBlueprintsResponse: ListBlueprintsResponse;
   ListBranchesResponse: ListBranchesResponse;
   ListCapturesResponse: ListCapturesResponse;
   ListCollabDraftsResponse: ListCollabDraftsResponse;

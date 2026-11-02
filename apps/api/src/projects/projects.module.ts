@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { ProjectsCoreModule } from './projects-core.module.js';
+import { BlueprintsController } from '../blueprints/blueprints.controller.js';
 import { ProjectsController } from './projects.controller.js';
 import { ProjectOverviewService } from './project-overview.service.js';
 import { ProjectCascadeService } from './project-cascade.service.js';
@@ -35,7 +36,7 @@ import { ProjectScaffoldService } from './project-scaffold.service.js';
     TemplatesCoreModule,
     AiCoreModule,
   ],
-  controllers: [ProjectsController],
+  controllers: [ProjectsController, BlueprintsController],
   providers: [ProjectOverviewService, ProjectCascadeService, ProjectScaffoldService],
   // The cascade is exported because connector revert reuses it to undo a page
   // this product otherwise has no way to delete (docs/features/26).

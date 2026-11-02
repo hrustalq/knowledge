@@ -925,6 +925,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/blueprints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Blueprints a project can be scaffolded from (built-ins, in both languages) */
+        get: operations["BlueprintsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/groups": {
         parameters: {
             query?: never;
@@ -7927,6 +7944,12 @@ export interface components {
              * @description Scaffold under this page of its existing project; conventions are not written
              */
             parentId?: string;
+            /** @description Restrict the new project before its first page is written; the creator is granted manage. Ignored with parentId. */
+            restricted?: boolean;
+            /** @description The new project's emoji face. Ignored with parentId. */
+            avatarEmoji?: string;
+            /** @description Hex colour behind the emoji, e.g. `#3b82f6`. */
+            avatarColor?: string;
         };
         UpdateProjectDto: {
             name?: string;
@@ -11805,6 +11828,53 @@ export interface components {
         /** @enum {string} */
         AuthorableRelationType: "DESCRIBES" | "DEPENDS_ON" | "IMPLEMENTS" | "RELATED_TO" | "OWNED_BY" | "SUPERSEDES" | "CONTRADICTS";
         AvatarUrl: string | null;
+        Blueprint: {
+            name: components["schemas"]["BlueprintText"];
+            description?: components["schemas"]["BlueprintText"];
+            icon?: string;
+            tree: components["schemas"]["BlueprintNode"][];
+            conventions?: components["schemas"]["BlueprintConventions"];
+        };
+        BlueprintCollection: {
+            childTemplateRef?: components["schemas"]["TemplateRef"];
+            childTitlePattern?: components["schemas"]["BlueprintText"];
+        };
+        BlueprintConventions: {
+            styleguide?: {
+                description?: string;
+                rules: components["schemas"]["StyleRule"][];
+            };
+            templates?: components["schemas"]["BlueprintTemplate"][];
+            glossary?: components["schemas"]["BlueprintGlossaryTerm"][];
+        };
+        BlueprintEntry: {
+            key: components["schemas"]["BuiltInBlueprintKey"];
+            blueprint: components["schemas"]["Blueprint"];
+        };
+        BlueprintGlossaryTerm: {
+            term: string;
+            definition: string;
+            aliases?: string[];
+        };
+        BlueprintNode: {
+            title: components["schemas"]["BlueprintText"];
+            category?: components["schemas"]["DocumentCategory"];
+            templateRef?: components["schemas"]["TemplateRef"];
+            body?: components["schemas"]["BlueprintText"];
+            guidance?: components["schemas"]["BlueprintText"];
+            collection?: components["schemas"]["BlueprintCollection"];
+            children?: components["schemas"]["BlueprintNode"][];
+        };
+        BlueprintTemplate: {
+            name: string;
+            source: string;
+            description?: string;
+            icon?: string;
+        };
+        BlueprintText: {
+            en?: string;
+            ru?: string;
+        };
         BranchAccessResponse: {
             branchId: string;
             restricted: boolean;
@@ -11822,6 +11892,8 @@ export interface components {
             restricted: boolean;
             createdAt: string;
         };
+        /** @enum {string} */
+        BuiltInBlueprintKey: "discovery" | "code-product" | "service-docs" | "blank";
         /** @enum {string} */
         BuiltInTemplateKey: "adr" | "rfc" | "runbook" | "postmortem" | "api-spec" | "use-case" | "entity" | "component" | "test-plan" | "test-case" | "test-data" | "bug-report" | "research-question";
         BulkRejectCapturesResponse: {
@@ -13778,6 +13850,9 @@ export interface components {
             workspaceId: string;
             entries: components["schemas"]["AuditLogEntry"][];
             nextCursor: string | null;
+        };
+        ListBlueprintsResponse: {
+            blueprints: components["schemas"]["BlueprintEntry"][];
         };
         ListBranchesResponse: {
             branches: components["schemas"]["BranchInfo"][];
@@ -19154,6 +19229,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectDeletionPreview"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    BlueprintsController_list: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListBlueprintsResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

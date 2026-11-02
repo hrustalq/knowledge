@@ -5,6 +5,9 @@ export const routes: RouteRecordRaw[] = [
   // /settings/projects/:id, which is the form you edit it in. Declared
   // before the redirect below so the bare roster path still lands in
   // settings while an id opens the overview.
+  // Creating a project from a blueprint (#716): full-viewport and trail-less,
+  // like the workflow wizard. A static segment outranks `:id` in vue-router.
+  { path: '/projects/new', component: () => import('./pages/ScaffoldWizardPage.vue'), meta: { fill: true, bare: true } },
   { path: '/projects/:id', component: () => import('./pages/ProjectOverviewPage.vue') },
   // Legacy top-level path → its settings home.
   { path: '/projects', redirect: '/settings/projects' },

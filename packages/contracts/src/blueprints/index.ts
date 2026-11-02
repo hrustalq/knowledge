@@ -121,6 +121,17 @@ export function nextChildTitle(pattern: string, siblings: readonly string[], tit
   return name ? `${rendered.trimEnd()} ${name}` : rendered;
 }
 
+// --- GET /v1/blueprints ------------------------------------------------------------
+
+export interface BlueprintEntry {
+  key: BuiltInBlueprintKey;
+  blueprint: Blueprint;
+}
+
+export interface ListBlueprintsResponse {
+  blueprints: BlueprintEntry[];
+}
+
 // --- POST /v1/projects/scaffold (the body is ScaffoldProjectDto) ------------------
 
 export interface ScaffoldProjectResponse {

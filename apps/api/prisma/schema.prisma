@@ -76,6 +76,11 @@ model Document {
   /// the pages made from it. Null = the page did not start from a template.
   templateRef           String?   @map("template_ref")
   templateVersion       Int?      @map("template_version")
+  /// A collection's rule (#716): what a new child starts from (a template ref,
+  /// as `template_ref`) and how it is titled (`ADR {{n:4}}: `, `nextChildTitle`).
+  /// Null = an ordinary page. No FK, as `template_ref`.
+  childTemplateRef      String?   @map("child_template_ref")
+  childTitlePattern     String?   @map("child_title_pattern")
   /// A page that exists only as a merge request (issue #73, Option A): created
   /// head-less by a capture or a chat save, its first content on a branch. Set
   /// to that merge request; listing surfaces (tree, lists, health, export,
@@ -223,6 +228,11 @@ model DocumentRevision {
   // served blob is the pushed one byte for byte. Null = the canonical line a
   // web-written revision is served with (`withIdLine`).
   idLine          Json?     @map("id_line")
+  // #716: who wrote this revision when it was not a person editing the page.
+  // Only `scaffold` (SCAFFOLD_ORIGIN), written by ProjectScaffoldService alone;
+  // a page whose default-branch head has it is a scaffold stub (`isScaffoldStub`
+  // ↔ `scaffoldStubSql`). Null = every other revision.
+  origin          String?
 
   document Document         @relation(fields: [documentId], references: [id])
   branch   DocumentBranch?  @relation(fields: [branchId], references: [id])

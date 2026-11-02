@@ -59,6 +59,7 @@ const pgRow = (r: WhereRow) => ({
   lastActivityAt: new Date(),
   archivedAt: null,
   branches: [],
+  revisions: [],
 });
 
 function prismaOver(fixtures: WhereRow[]) {

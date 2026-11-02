@@ -6127,7 +6127,8 @@
       "test-plan",
       "test-case",
       "test-data",
-      "bug-report"
+      "bug-report",
+      "research-question"
     ]
   },
   "BulkRejectCapturesResponse": {
@@ -20323,6 +20324,21 @@
     },
     "required": [
       "chips"
+    ]
+  },
+  "ScaffoldProjectResponse": {
+    "type": "object",
+    "properties": {
+      "project": {
+        "$ref": "#/components/schemas/ProjectSummary"
+      },
+      "pageCount": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "project",
+      "pageCount"
     ]
   },
   "ScimDefaultRole": {

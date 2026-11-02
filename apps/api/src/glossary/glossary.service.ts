@@ -437,7 +437,7 @@ function readAliases(raw: unknown): string[] {
  * Deduplicated, and never containing the term itself: an alias that equals the
  * headword would make the linker match the same text twice.
  */
-function normalizeAliases(aliases: string[] | undefined, term: string): string[] {
+export function normalizeAliases(aliases: string[] | undefined, term: string): string[] {
   const seen = new Set<string>([term.trim().toLowerCase()]);
   const out: string[] = [];
   for (const alias of aliases ?? []) {

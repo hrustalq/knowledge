@@ -379,6 +379,8 @@ function fakePrisma() {
     },
     user: { findUnique: async () => ({ displayName: 'Grace' }) },
     $transaction: async <T>(fn: (tx: unknown) => Promise<T>) => fn(prisma),
+    withTransaction: async <T>(fn: () => Promise<T>) => fn(),
+    onCommit: (fn: () => Promise<unknown>) => void fn(),
   };
   return prisma;
 }

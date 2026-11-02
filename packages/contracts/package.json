@@ -30,7 +30,8 @@
     "./analytics": "./src/analytics/index.ts",
     "./flows": "./src/flows/index.ts",
     "./embeds": "./src/embeds/index.ts",
-    "./memos": "./src/memos/index.ts"
+    "./memos": "./src/memos/index.ts",
+    "./blueprints": "./src/blueprints/index.ts"
   },
   "scripts": {
     "lint": "echo contracts: no lint",

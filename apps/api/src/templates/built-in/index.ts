@@ -12,6 +12,7 @@ import { TEST_PLAN_TEMPLATE } from './test-plan.js';
 import { TEST_CASE_TEMPLATE } from './test-case.js';
 import { TEST_DATA_TEMPLATE } from './test-data.js';
 import { BUG_REPORT_TEMPLATE } from './bug-report.js';
+import { RESEARCH_QUESTION_TEMPLATE } from './research-question.js';
 
 export type { BuiltInTemplate, BuiltInTemplateText } from './types.js';
 
@@ -33,4 +34,5 @@ export const BUILT_IN_TEMPLATES: Readonly<Record<BuiltInTemplateKey, BuiltInTemp
   'test-case': TEST_CASE_TEMPLATE,
   'test-data': TEST_DATA_TEMPLATE,
   'bug-report': BUG_REPORT_TEMPLATE,
+  'research-question': RESEARCH_QUESTION_TEMPLATE,
 };

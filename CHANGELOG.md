@@ -28,6 +28,17 @@ in the pull request that introduces them — see
   page has changed since, the passage is found again where it now sits, or the page says it is gone and links to
   the version that was linked. Agents get the same: `knowledge_get_document_content` and
   `GET /v1/documents/:id/content` take `lines` and return just those lines with a `reference` to cite.
+- **A project can be created whole from a blueprint** (#716, phase 1 of 7: API only, the wizard comes next).
+  `POST /v1/projects/scaffold` creates the project, its page tree and its conventions (a project styleguide,
+  project templates, glossary terms) in one go: if any part fails, nothing is created. Three built-ins ship in
+  English and Russian: *Discovery-first* (numbered research chapters and a decision summary), *Code product*
+  (product, domain, discovery sessions, architecture, numbered ADRs, gotchas) and *Service documentation*
+  (overview, information model, API, processes, UI/UX, integrations, testing, role model, FAQ); *Blank* creates an
+  empty project. Scaffolded pages are visible to the workspace from the start. Until someone edits a page, it stays
+  out of search, Ask, `llms.txt` and the knowledge-health counts, so empty skeletons never answer a question. The
+  tree still shows them. A blueprint carrying a styleguide needs a workspace admin, as editing a styleguide does.
+- **A *Research question* page template** (`builtin:research-question`): Question, Options, Criteria, Findings,
+  Decision, Open questions.
 
 ### Changed
 
@@ -56,6 +67,9 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- Migration `20261230100000_scaffold_origin` adds three nullable columns (`document_revisions.origin`,
+  `documents.child_template_ref`, `documents.child_title_pattern`), with no backfill. The previous image runs
+  against it unchanged, so a code rollback is safe.
 - The public reader reads `WEB_BASE_URL` (already set for the web container) to unlink any other link on the
   app's own origin. Without it, page links still resolve; other absolute app URLs are left as written.
 

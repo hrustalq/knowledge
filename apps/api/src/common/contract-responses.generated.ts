@@ -288,6 +288,7 @@ import type {
   RotateAgentTriggerSecretResponse,
   RotateApiKeyResponse,
   SavedFilter,
+  ScaffoldProjectResponse,
   ScimSettingsView,
   ScimTokenCreated,
   SearchApiOperationsResponse,
@@ -635,6 +636,7 @@ export interface ContractResponses {
   RotateAgentTriggerSecretResponse: RotateAgentTriggerSecretResponse;
   RotateApiKeyResponse: RotateApiKeyResponse;
   SavedFilter: SavedFilter;
+  ScaffoldProjectResponse: ScaffoldProjectResponse;
   ScimSettingsView: ScimSettingsView;
   ScimTokenCreated: ScimTokenCreated;
   SearchApiOperationsResponse: SearchApiOperationsResponse;

@@ -893,10 +893,12 @@ export interface PublicSitePage {
   next: PublicSitePageRef | null;
   /**
    * Where the pages this body links to live, for those the viewer may see. The
-   * tree no longer names every page, so the reader rewrites `/documents/<id>`
-   * links from this; a link to any other page is unlinked.
+   * tree no longer names every page, so the reader rewrites page links from
+   * this; a link to any other page is unlinked. A title reference
+   * (`[text](Page Title)`) that resolved among those pages comes back as its
+   * own entry with `ref`, the title as written (#705).
    */
-  links: { documentId: string; slugPath: string }[];
+  links: { documentId: string; slugPath: string; ref?: string }[];
 }
 
 // GET /v1/public/sites/resolve?slug=|host=&path=&from=

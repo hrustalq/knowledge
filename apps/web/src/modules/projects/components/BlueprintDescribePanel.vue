@@ -64,7 +64,8 @@ async function draft() {
         ...(start.value ? { blueprint: cloneJson(start.value.blueprint) as unknown as Record<string, unknown> } : {}),
       },
     })
-    if (!left) emit('pick', res.blueprint, { kind: 'described', brief: text })
+    // Without `rounds` the reply is always `done` (#731).
+    if (!left && res.status === 'done') emit('pick', res.blueprint, { kind: 'described', brief: text })
   } catch (e) {
     if (!left) failure.value = errorMessage(e, t)
   } finally {

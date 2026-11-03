@@ -977,7 +977,7 @@ export interface paths {
         put?: never;
         /**
          * Draft a blueprint from a description (Describe it): the scaffolder, with read-only tree and search
-         * @description Writes nothing. The scaffolder may list the workspace tree and search it, each call under the caller's access, and may adapt an optional starting blueprint. Its answer passes the same schema scaffold uses; unknown template refs and malformed pages are dropped. 422 when nothing usable came back.
+         * @description Writes nothing. The scaffolder may list the workspace tree and search it, each call under the caller's access, and may adapt an optional starting blueprint. Its answer passes the same schema scaffold uses; unknown template refs and malformed pages are dropped. 422 when nothing usable came back. With `rounds` (#731) it interviews first: `status: asking` carries the next round of questions, the outline so far and candidate glossary terms; `draft`, the round cap or the model running out of questions ends it with `done`.
          */
         post: operations["BlueprintsController_generate"];
         delete?: never;
@@ -8040,6 +8040,12 @@ export interface components {
             blueprint?: {
                 [key: string]: unknown;
             };
+            /** @description The interview so far (#731): each round's `questions` (`AssistantPromptField[]`) and the person's `answers` (question name → option value, ticked values, own words, or null). Present, even empty, the reply may be `asking`; absent, it is always `done`. Read back as untrusted text. */
+            rounds?: {
+                [key: string]: unknown;
+            }[];
+            /** @description Draft now from the answers so far, asking nothing more. Off unless sent. */
+            draft?: boolean;
         };
         CreateBlueprintDto: {
             /** Format: uuid */
@@ -11157,7 +11163,7 @@ export interface components {
             createdAt: string;
         };
         /** @enum {string} */
-        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "source-recipe" | "source-judge" | "blueprint-derive" | "blueprint-generate";
+        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "source-recipe" | "source-judge" | "blueprint-derive" | "blueprint-generate" | "blueprint-interview";
         AiUsageResponse: {
             from: string;
             to: string;
@@ -11971,6 +11977,13 @@ export interface components {
             term: string;
             definition: string;
             aliases?: string[];
+        };
+        BlueprintInterviewAnswer: (string | string[]) | null;
+        BlueprintInterviewRound: {
+            questions: components["schemas"]["AssistantPromptField"][];
+            answers?: {
+                [key: string]: components["schemas"]["BlueprintInterviewAnswer"];
+            };
         };
         BlueprintNode: {
             title: components["schemas"]["BlueprintText"];
@@ -13394,7 +13407,16 @@ export interface components {
             existing: boolean;
         };
         GenerateBlueprintResponse: {
+            /** @enum {string} */
+            status: "done";
             blueprint: components["schemas"]["Blueprint"];
+            glossary: components["schemas"]["BlueprintGlossaryTerm"][];
+        } | {
+            /** @enum {string} */
+            status: "asking";
+            round: components["schemas"]["BlueprintInterviewRound"];
+            outline: components["schemas"]["BlueprintNode"][];
+            terms: components["schemas"]["BlueprintGlossaryTerm"][];
         };
         GetAssistantThreadResponse: {
             thread: components["schemas"]["AssistantThreadSummary"];

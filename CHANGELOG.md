@@ -13,6 +13,18 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Added
+
+- **`POST /v1/blueprints/generate` can interview before it drafts** (#731). Send `rounds` (the interview so far,
+  `[]` to start) and the reply is either `status: "asking"`, with the next round of up to four questions (each with
+  a recommended option), the outline so far (titles only) and glossary terms read off the person's words, or
+  `status: "done"` with the blueprint. `draft: true`, a fifth answered round, or the scaffolder running out of
+  questions ends the interview with a draft. Each asking round is billed as `blueprint-interview`. Without `rounds`
+  the route drafts at once as before; its reply now also carries `status: "done"` and a `glossary` of terms the
+  brief defines.
+
 ## [0.44.1] — 2026-11-03
 
 ### Changed

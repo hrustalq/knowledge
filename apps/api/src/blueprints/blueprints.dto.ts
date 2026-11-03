@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsBoolean, IsIn, IsObject, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
-import { BUILT_IN_BLUEPRINT_KEYS } from '@knowledge/contracts';
+import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsObject, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import { BLUEPRINT_INTERVIEW_MAX_ROUNDS, BUILT_IN_BLUEPRINT_KEYS } from '@knowledge/contracts';
 import { vmsg } from '../common/validation.js';
 
 const toBool = ({ value }: { value: unknown }) => value === true || value === 'true';
@@ -86,4 +86,23 @@ export class GenerateBlueprintDto {
   @IsOptional()
   @IsObject()
   blueprint?: Record<string, unknown>;
+  @ApiPropertyOptional({
+    type: 'array',
+    maxItems: BLUEPRINT_INTERVIEW_MAX_ROUNDS,
+    items: { type: 'object', additionalProperties: true },
+    description:
+      'The interview so far (#731): each round\'s `questions` (`AssistantPromptField[]`) and the person\'s `answers` ' +
+      '(question name → option value, ticked values, own words, or null). Present, even empty, the reply may be ' +
+      '`asking`; absent, it is always `done`. Read back as untrusted text.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(BLUEPRINT_INTERVIEW_MAX_ROUNDS)
+  @IsObject({ each: true })
+  rounds?: Record<string, unknown>[];
+
+  @ApiPropertyOptional({ type: 'boolean', description: 'Draft now from the answers so far, asking nothing more. Off unless sent.' })
+  @IsOptional()
+  @IsBoolean()
+  draft?: boolean;
 }

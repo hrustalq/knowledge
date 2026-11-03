@@ -14,7 +14,7 @@ import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { createActor, type Actor } from 'xstate'
 import { AnimatePresence, Motion, MotionConfig, motion } from 'motion-v'
 import { toast } from 'vue-sonner'
-import { ArrowLeft, ArrowRight, Check, FilePlus, FolderTree, Loader2, Lock, MessagesSquare } from 'lucide-vue-next'
+import { ArrowLeft, ArrowRight, BookmarkPlus, Check, FilePlus, FolderTree, ListTree, Loader2, Lock, MessagesSquare, Sparkles } from 'lucide-vue-next'
 import {
   BLUEPRINT_MAX_DEPTH,
   BLUEPRINT_MAX_PAGES,
@@ -37,6 +37,8 @@ import { Skeleton } from '@/shared/ui/skeleton'
 import BlueprintOutline from '@/modules/projects/components/BlueprintOutline.vue'
 import BlueprintNodeEditor from '@/modules/projects/components/BlueprintNodeEditor.vue'
 import BlueprintConventions from '@/modules/projects/components/BlueprintConventions.vue'
+import ProjectBlueprintPicker from '@/modules/projects/components/ProjectBlueprintPicker.vue'
+import SaveBlueprintDialog from '@/modules/projects/components/SaveBlueprintDialog.vue'
 import ProjectAvatar from '@/modules/projects/components/ProjectAvatar.vue'
 import { EMOJI_CHOICES } from '@/modules/projects/model/avatar'
 import { cloneJson, countPages, hasUntitled, insertNode, nodeAt, treeDepth, typedText, updateNode, type NodePath } from '@/modules/projects/model/blueprint-tree'
@@ -49,6 +51,7 @@ import {
   SCAFFOLD_STEPS,
   type ScaffoldContext,
   type ScaffoldEvent,
+  type ScaffoldOrigin,
   type ScaffoldStep,
 } from '@/modules/projects/model/scaffold-machine'
 
@@ -122,7 +125,13 @@ async function loadBlueprints() {
     blueprints.value = (await api.get('/v1/blueprints', { query: { workspaceId: getWorkspaceId() } })).blueprints
   } catch (e) {
     loadError.value = (e as Error).message
+    return
   }
+  // `?blueprint=<key>` (Use / Edit in wizard, from settings) opens on it — once, and not over a resumed draft.
+  const wanted = route.query.blueprint
+  const entry = !resumed.value && typeof wanted === 'string' && blueprints.value.find((e) => e.key === wanted)
+  if (typeof wanted === 'string') void router.replace({ query: { ...route.query, blueprint: undefined } })
+  if (entry && auth.canEdit) pick(entry)
 }
 
 interface StartCard {
@@ -154,21 +163,62 @@ const cards = computed<StartCard[]>(() => [
       entry,
     }
   }),
-  // The two sources still to come, drawn so the flow's shape is honest.
-  ...(['derive', 'describe'] as const).map((key) => ({
-    key,
-    icon: key === 'derive' ? FolderTree : MessagesSquare,
-    name: t(`scaffold.start.${key}`),
+  {
+    key: 'derive',
+    icon: FolderTree,
+    name: t('scaffold.start.derive'),
+    meta: t('scaffold.start.deriveMeta'),
+    description: t('scaffold.start.deriveBody'),
+    chips: [],
+    more: 0,
+    soon: false,
+  },
+  // The source still to come (phase 5), drawn so the flow's shape is honest.
+  {
+    key: 'describe',
+    icon: MessagesSquare,
+    name: t('scaffold.start.describe'),
     meta: t('scaffold.start.soon'),
-    description: t(`scaffold.start.${key}Body`),
+    description: t('scaffold.start.describeBody'),
     chips: [],
     more: 0,
     soon: true,
-  })),
+  },
 ])
 
+/** Start shows the cards, or the From a project picker in their place. */
+const startView = ref<'cards' | 'derive'>('cards')
+
+function choose(card: StartCard) {
+  if (card.entry) pick(card.entry)
+  else if (card.key === 'derive') startView.value = 'derive'
+}
+
 function pick(entry: BlueprintEntry) {
-  send({ type: 'PICK', blueprint: cloneJson(entry.blueprint) })
+  send({
+    type: 'PICK',
+    blueprint: cloneJson(entry.blueprint),
+    origin: { kind: 'blueprint', key: entry.key, builtIn: entry.builtIn, id: entry.id },
+  })
+}
+
+function picked(next: Blueprint, from: ScaffoldOrigin) {
+  send({ type: 'PICK', blueprint: cloneJson(next), origin: from })
+}
+
+const origin = computed(() => context.value.origin ?? null)
+const derivedFrom = computed(() => (origin.value?.kind === 'project' ? origin.value : null))
+
+/* ---------------------------------------------------------- save as blueprint */
+
+const saveOpen = ref(false)
+function onSaved(entry: BlueprintEntry) {
+  // Saving again now updates that row — unless the outline came from a project,
+  // whose provenance and offered terms the later steps still need.
+  if (origin.value?.kind !== 'project') {
+    send({ type: 'SET', patch: { origin: { kind: 'blueprint', key: entry.key, builtIn: entry.builtIn, id: entry.id } } })
+  }
+  void loadBlueprints()
 }
 
 /* -------------------------------------------------------------------- shape */
@@ -322,7 +372,17 @@ function leave() {
     <div class="min-h-0 flex-1 overflow-hidden">
       <AnimatePresence mode="wait" :initial="false">
       <!-- 1 · Start ------------------------------------------------------- -->
-      <motion.div v-if="step === 'start'" key="start" class="h-full overflow-y-auto" v-bind="STEP_MOTION">
+      <motion.div v-if="step === 'start' && startView === 'derive'" key="start-derive" class="h-full overflow-y-auto" v-bind="STEP_MOTION">
+        <ProjectBlueprintPicker
+          :built-ins="blueprints ?? []"
+          :locale="lang"
+          :can-edit="auth.canEdit"
+          @back="startView = 'cards'"
+          @pick="picked"
+          @pick-entry="pick"
+        />
+      </motion.div>
+      <motion.div v-else-if="step === 'start'" key="start" class="h-full overflow-y-auto" v-bind="STEP_MOTION">
         <div class="mx-auto flex max-w-4xl flex-col gap-5 px-4 py-8 lg:py-10">
           <div>
             <h2 class="text-lg font-semibold">{{ t('scaffold.start.title') }}</h2>
@@ -357,7 +417,7 @@ function leave() {
               :transition="{ duration: 0.24, delay: i * 0.035, ease: EASE }"
               :while-hover="card.soon || !auth.canEdit ? undefined : { y: -2 }"
               :while-press="card.soon || !auth.canEdit ? undefined : { scale: 0.99 }"
-              @click="card.entry && pick(card.entry)"
+              @click="!card.soon && choose(card)"
             >
               <span class="flex items-center gap-2.5">
                 <span class="bg-muted text-muted-foreground grid size-8 shrink-0 place-items-center rounded-lg text-base" aria-hidden="true">
@@ -384,12 +444,21 @@ function leave() {
       </motion.div>
 
       <!-- 2 · Shape ------------------------------------------------------- -->
-      <motion.div
-        v-else-if="step === 'shape'"
-        key="shape"
-        v-bind="STEP_MOTION"
-        class="grid h-full min-h-0 grid-rows-[minmax(14rem,40%)_minmax(0,1fr)] lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] lg:grid-rows-1"
-      >
+      <motion.div v-else-if="step === 'shape'" key="shape" v-bind="STEP_MOTION" class="flex h-full min-h-0 flex-col">
+        <!-- Where the outline came from, said plainly: a rules-only read is never
+             dressed up as an AI draft. -->
+        <p
+          v-if="derivedFrom"
+          class="text-muted-foreground flex shrink-0 items-start gap-2 border-b px-4 py-2 text-xs leading-snug lg:px-6"
+          role="status"
+        >
+          <component :is="derivedFrom.drafted ? Sparkles : ListTree" class="mt-px size-3.5 shrink-0" aria-hidden="true" />
+          <span>
+            <span class="text-foreground font-medium">{{ t('scaffold.provenance.from', { name: derivedFrom.projectName }) }}</span>
+            {{ derivedFrom.drafted ? t('scaffold.provenance.drafted') : t('scaffold.provenance.rulesOnly') }}
+          </span>
+        </p>
+      <div class="grid min-h-0 flex-1 grid-rows-[minmax(14rem,40%)_minmax(0,1fr)] lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] lg:grid-rows-1">
         <BlueprintOutline
           class="min-h-0 border-b lg:border-r lg:border-b-0"
           :tree="tree"
@@ -426,6 +495,7 @@ function leave() {
             {{ t('scaffold.shape.nothingSelected') }}
           </p>
         </div>
+      </div>
       </motion.div>
 
       <!-- 3 · Conventions ------------------------------------------------- -->
@@ -433,6 +503,7 @@ function leave() {
         <BlueprintConventions
           :conventions="conventions"
           :can-admin="auth.canAdminWorkspace"
+          :offer="derivedFrom?.glossary.length ? { from: derivedFrom.projectName, terms: derivedFrom.glossary } : null"
           @update:conventions="(c) => blueprint && send({ type: 'SET', patch: { blueprint: { ...blueprint, conventions: c } } })"
         />
       </motion.div>
@@ -559,6 +630,17 @@ function leave() {
         {{ t('scaffold.startOver') }}
       </Button>
 
+      <Button
+        v-if="step === 'shape' && auth.canAdminWorkspace"
+        variant="ghost"
+        size="sm"
+        class="gap-1.5"
+        :disabled="!pages || untitled || overLimit"
+        @click="saveOpen = true"
+      >
+        <BookmarkPlus class="size-4" /> <span class="max-sm:sr-only">{{ t('blueprints.save.title') }}</span>
+      </Button>
+
       <p
         v-if="step === 'shape'"
         class="ml-auto text-xs tabular-nums"
@@ -577,6 +659,7 @@ function leave() {
         {{ creating ? t('scaffold.create.creating', { count: pages }, pages) : t('scaffold.create.submitPages', { count: pages }, pages) }}
       </Button>
     </footer>
+    <SaveBlueprintDialog v-if="auth.canAdminWorkspace" v-model:open="saveOpen" :blueprint="blueprint" :origin="origin" :locale="lang" @saved="onSaved" />
   </div>
   </MotionConfig>
 </template>

@@ -5,8 +5,8 @@ import { useI18n } from 'vue-i18n'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
-import { Lock, LockOpen } from 'lucide-vue-next'
-import type { DeleteProjectResponse } from '@knowledge/contracts'
+import { BookmarkPlus, Lock, LockOpen } from 'lucide-vue-next'
+import { SUPPORTED_LOCALES, type DeleteProjectResponse, type Locale } from '@knowledge/contracts'
 import { api } from '@/shared/api/queries'
 import { relativeTime } from '@/shared/api/api'
 import { useAuthStore } from '@/stores/auth'
@@ -19,11 +19,13 @@ import { AvatarPicker } from '@/entities/person'
 import { EMOJI_CHOICES } from '@/modules/projects/model/avatar'
 import DeleteProjectDialog from '@/modules/projects/components/DeleteProjectDialog.vue'
 import ProjectAvatar from '@/modules/projects/components/ProjectAvatar.vue'
+import SaveBlueprintDialog from '@/modules/projects/components/SaveBlueprintDialog.vue'
 import { PageAccessDialog } from '@/entities/access'
 import { RequestAccessCard } from '@/entities/access'
 import { isRestrictedRefusal } from '@/shared/api/errors'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const lang = computed<Locale>(() => (SUPPORTED_LOCALES.includes(locale.value as Locale) ? (locale.value as Locale) : 'en'))
 
 const emit = defineEmits<{ changed: [] }>()
 
@@ -105,6 +107,8 @@ async function setEmoji(emoji: string | null) {
 }
 
 const confirmDelete = ref(false)
+/** "Save structure as blueprint" (#716): derive from this project, keep it for the workspace. Admin, as the route is. */
+const saveBlueprintOpen = ref(false)
 
 /**
  * "Access" (#76): who may open the project and every page in it. Any reader
@@ -277,6 +281,10 @@ async function onDeleted(result: DeleteProjectResponse) {
           <LockOpen v-else class="size-3.5" aria-hidden="true" />
           {{ t('access.action') }}
         </Button>
+        <Button v-if="auth.canAdminWorkspace && project.documentCount" variant="outline" @click="saveBlueprintOpen = true">
+          <BookmarkPlus class="size-3.5" aria-hidden="true" />
+          {{ t('blueprints.save.fromProject') }}
+        </Button>
         <Button
           v-if="auth.canAdminWorkspace"
           variant="ghost"
@@ -294,6 +302,12 @@ async function onDeleted(result: DeleteProjectResponse) {
       :resource-id="project.projectId"
       :title="project.name"
       @saved="onAccessSaved"
+    />
+    <SaveBlueprintDialog
+      v-if="auth.canAdminWorkspace"
+      v-model:open="saveBlueprintOpen"
+      :project-id="project.projectId"
+      :locale="lang"
     />
     <DeleteProjectDialog
       v-if="auth.canAdminWorkspace"

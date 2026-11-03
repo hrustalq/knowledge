@@ -171,7 +171,8 @@
     "navigation": "Navigation",
     "features": "Features",
     "pageActions": "Page actions",
-    "linkSource": "Link a source"
+    "linkSource": "Link a source",
+    "blueprints": "Blueprints"
   },
   "role": {
     "guest": "Guest",
@@ -343,7 +344,8 @@
     "apiReferenceHint": "Try-it proxy for spec pages",
     "securityHint": "Sign-in and the audit trail",
     "releasesHint": "Named points in time",
-    "featuresHint": "Sections this workspace shows"
+    "featuresHint": "Sections this workspace shows",
+    "blueprintsHint": "Page trees a new project starts from"
   },
   "connectors": {
     "pageSubtitle": "Keep pages in step with Confluence, Jira, Notion and markdown in git — in both directions.",
@@ -7668,7 +7670,8 @@
       "derive": "From a project",
       "deriveBody": "Reuse the structure of a project you can already see: titles and headings only, never page text.",
       "describe": "Describe it",
-      "describeBody": "Tell the assistant what the project is about and it drafts a structure for you to edit."
+      "describeBody": "Tell the assistant what the project is about and it drafts a structure for you to edit.",
+      "deriveMeta": "Any project you can open"
     },
     "shape": {
       "outline": "Page outline",
@@ -7730,7 +7733,8 @@
       "termTaken": "That term is already in the list.",
       "templates": "Templates",
       "templatesHint": "Created as this project’s own page templates.",
-      "removeTemplate": "Skip “{name}”"
+      "removeTemplate": "Skip “{name}”",
+      "offered": "Offered from “{from}”: tick the terms to bring along."
     },
     "create": {
       "title": "Name it",
@@ -7752,6 +7756,85 @@
       "submitPages": "Create project | Create project · {count} page | Create project · {count} pages",
       "creating": "Creating… | Creating {count} page… | Creating {count} pages…",
       "created": "Project “{name}” created"
+    },
+    "derive": {
+      "back": "All starting points",
+      "title": "Start from a project",
+      "body": "Pick a project to copy its structure: page titles, section headings, numbered collections and templates. Page text is never copied. Glossary terms are offered only from this workspace.",
+      "loadFailed": "The projects could not be loaded.",
+      "none": "There are no projects to copy from yet. These are the shapes the built-in blueprints start with.",
+      "useSample": "Start from this",
+      "search": "Search projects",
+      "otherWorkspace": "another workspace",
+      "reading": "Reading structure…",
+      "failed": "The structure could not be read.",
+      "empty": "It has no published pages to copy: drafts are skipped."
+    },
+    "provenance": {
+      "from": "Read from “{name}”.",
+      "drafted": "The assistant drafted the styleguide and page guidance; check them before creating.",
+      "rulesOnly": "Outline and headings come from rules only; the assistant did not draft anything."
+    }
+  },
+  "blueprints": {
+    "morePages": "+{count} more page | +{count} more pages",
+    "search": "Search blueprints",
+    "groups": {
+      "builtIn": "Built-in",
+      "saved": "Saved"
+    },
+    "fields": {
+      "name": "Name",
+      "description": "Description"
+    },
+    "save": {
+      "title": "Save as blueprint",
+      "fromProject": "Save structure as blueprint",
+      "fromProjectTitle": "Save this project’s structure",
+      "description": "Every editor in this workspace is offered it under Start when they create a project.",
+      "modeLabel": "Where to save",
+      "replaceBuiltIn": "Replace the built-in for this workspace",
+      "replaceBuiltInHint": "Everyone here starts from your version. Reset in settings brings the original back.",
+      "update": "Update the blueprint you started from",
+      "updateHint": "Adds a new version. Projects already created from it keep their pages.",
+      "asNew": "Save as a new blueprint",
+      "save": "Save blueprint",
+      "saveChanges": "Save changes",
+      "saved": "“{name}” saved as a blueprint",
+      "updated": "“{name}” updated",
+      "openSettings": "Open in settings"
+    },
+    "settings": {
+      "hidden": "Hidden",
+      "off": "Off",
+      "customised": "Customised",
+      "none": "No blueprints.",
+      "new": "New project",
+      "notFound": "This blueprint does not exist in this workspace.",
+      "pick": "Pick a blueprint to see its pages and conventions.",
+      "open": "Open in wizard",
+      "hide": "Hide",
+      "show": "Show",
+      "reset": "Reset to original",
+      "switchOff": "Switch off",
+      "switchOn": "Switch on",
+      "shownToast": "“{name}” is offered again",
+      "hiddenToast": "“{name}” is hidden from Start",
+      "onToast": "“{name}” is offered under Start",
+      "offToast": "“{name}” is switched off",
+      "resetTitle": "Reset “{name}”?",
+      "resetBody": "This workspace’s version is deleted and the original built-in is offered again. Projects already created from it keep their pages.",
+      "resetToast": "“{name}” is back to the original",
+      "deleteTitle": "Delete “{name}”?",
+      "deleteBody": "It is no longer offered under Start, and its versions are deleted. Projects already created from it keep their pages.",
+      "deletedToast": "“{name}” deleted",
+      "editHint": "To change its pages or conventions, open it in the wizard, edit, then Save as blueprint.",
+      "adminOnly": "Only a workspace admin can change blueprints.",
+      "noneSet": "None"
+    },
+    "kind": {
+      "builtIn": "Built-in",
+      "saved": "Saved"
     }
   }
 }

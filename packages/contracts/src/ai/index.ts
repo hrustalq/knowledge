@@ -1225,7 +1225,9 @@ export type AiUsageOperation =
   /** The `scaffolder` drafting a derived blueprint's styleguide and page guidance (#716). One row per derive. */
   | 'blueprint-derive'
   /** The `scaffolder` drafting a whole blueprint from a person's description, with read tools (#716, Describe it). One row per model round. */
-  | 'blueprint-generate';
+  | 'blueprint-generate'
+  /** One round of the Describe it interview: the `scaffolder` asking what the brief left open (#731). The draft that ends it is `blueprint-generate`. */
+  | 'blueprint-interview';
 
 /** One row of the per-user (or per-model) usage breakdown. */
 export interface AiUsageBucket {

@@ -2666,7 +2666,8 @@
       "source-recipe",
       "source-judge",
       "blueprint-derive",
-      "blueprint-generate"
+      "blueprint-generate",
+      "blueprint-interview"
     ]
   },
   "AiUsageResponse": {
@@ -6166,6 +6167,40 @@
     "required": [
       "term",
       "definition"
+    ]
+  },
+  "BlueprintInterviewAnswer": {
+    "anyOf": [
+      {
+        "type": "string"
+      },
+      {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    ],
+    "nullable": true
+  },
+  "BlueprintInterviewRound": {
+    "type": "object",
+    "properties": {
+      "questions": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/AssistantPromptField"
+        }
+      },
+      "answers": {
+        "type": "object",
+        "additionalProperties": {
+          "$ref": "#/components/schemas/BlueprintInterviewAnswer"
+        }
+      }
+    },
+    "required": [
+      "questions"
     ]
   },
   "BlueprintNode": {
@@ -12367,14 +12402,64 @@
     ]
   },
   "GenerateBlueprintResponse": {
-    "type": "object",
-    "properties": {
-      "blueprint": {
-        "$ref": "#/components/schemas/Blueprint"
+    "anyOf": [
+      {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "done"
+            ]
+          },
+          "blueprint": {
+            "$ref": "#/components/schemas/Blueprint"
+          },
+          "glossary": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BlueprintGlossaryTerm"
+            }
+          }
+        },
+        "required": [
+          "status",
+          "blueprint",
+          "glossary"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "asking"
+            ]
+          },
+          "round": {
+            "$ref": "#/components/schemas/BlueprintInterviewRound"
+          },
+          "outline": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BlueprintNode"
+            }
+          },
+          "terms": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BlueprintGlossaryTerm"
+            }
+          }
+        },
+        "required": [
+          "status",
+          "round",
+          "outline",
+          "terms"
+        ]
       }
-    },
-    "required": [
-      "blueprint"
     ]
   },
   "GetAssistantThreadResponse": {

@@ -4995,7 +4995,7 @@
     },
     "/v1/blueprints/generate": {
       "post": {
-        "description": "Writes nothing. The scaffolder may list the workspace tree and search it, each call under the caller's access, and may adapt an optional starting blueprint. Its answer passes the same schema scaffold uses; unknown template refs and malformed pages are dropped. 422 when nothing usable came back.",
+        "description": "Writes nothing. The scaffolder may list the workspace tree and search it, each call under the caller's access, and may adapt an optional starting blueprint. Its answer passes the same schema scaffold uses; unknown template refs and malformed pages are dropped. 422 when nothing usable came back. With `rounds` (#731) it interviews first: `status: asking` carries the next round of questions, the outline so far and candidate glossary terms; `draft`, the round cap or the model running out of questions ends it with `done`.",
         "operationId": "BlueprintsController_generate",
         "parameters": [
           {
@@ -40671,7 +40671,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.43.0",
+    "version": "0.44.1",
     "contact": {}
   },
   "tags": [],
@@ -41601,6 +41601,19 @@
             "type": "object",
             "additionalProperties": true,
             "description": "A `Blueprint` (@knowledge/contracts), validated server-side by the same schema scaffold uses. A starting outline the scaffolder adapts."
+          },
+          "rounds": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            },
+            "description": "The interview so far (#731): each round's `questions` (`AssistantPromptField[]`) and the person's `answers` (question name → option value, ticked values, own words, or null). Present, even empty, the reply may be `asking`; absent, it is always `done`. Read back as untrusted text."
+          },
+          "draft": {
+            "type": "boolean",
+            "description": "Draft now from the answers so far, asking nothing more. Off unless sent."
           }
         },
         "required": [
@@ -50952,7 +50965,8 @@
           "source-recipe",
           "source-judge",
           "blueprint-derive",
-          "blueprint-generate"
+          "blueprint-generate",
+          "blueprint-interview"
         ]
       },
       "AiUsageResponse": {
@@ -54452,6 +54466,40 @@
         "required": [
           "term",
           "definition"
+        ]
+      },
+      "BlueprintInterviewAnswer": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        ],
+        "nullable": true
+      },
+      "BlueprintInterviewRound": {
+        "type": "object",
+        "properties": {
+          "questions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssistantPromptField"
+            }
+          },
+          "answers": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BlueprintInterviewAnswer"
+            }
+          }
+        },
+        "required": [
+          "questions"
         ]
       },
       "BlueprintNode": {
@@ -60653,14 +60701,64 @@
         ]
       },
       "GenerateBlueprintResponse": {
-        "type": "object",
-        "properties": {
-          "blueprint": {
-            "$ref": "#/components/schemas/Blueprint"
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "done"
+                ]
+              },
+              "blueprint": {
+                "$ref": "#/components/schemas/Blueprint"
+              },
+              "glossary": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/BlueprintGlossaryTerm"
+                }
+              }
+            },
+            "required": [
+              "status",
+              "blueprint",
+              "glossary"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "asking"
+                ]
+              },
+              "round": {
+                "$ref": "#/components/schemas/BlueprintInterviewRound"
+              },
+              "outline": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/BlueprintNode"
+                }
+              },
+              "terms": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/BlueprintGlossaryTerm"
+                }
+              }
+            },
+            "required": [
+              "status",
+              "round",
+              "outline",
+              "terms"
+            ]
           }
-        },
-        "required": [
-          "blueprint"
         ]
       },
       "GetAssistantThreadResponse": {

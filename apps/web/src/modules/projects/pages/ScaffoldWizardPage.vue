@@ -7,14 +7,19 @@
  * Create, which sends the edited blueprint inline to `POST /v1/projects/scaffold`:
  * the project, its conventions and every page in one transaction. The pages
  * are published skeletons that stay out of search until someone writes them.
+ *
+ * Every step is a history entry (`?step=`), so the browser's Back and Forward
+ * walk the wizard. From a wide screen up, Start, Shape and Create share one
+ * spine: a 24rem rail on the left, the thing it describes filling the rest.
  */
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, type Component } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch, type Component } from 'vue'
+import { useMediaQuery } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { createActor, type Actor } from 'xstate'
-import { AnimatePresence, Motion, MotionConfig, motion } from 'motion-v'
+import { AnimatePresence, MotionConfig, motion } from 'motion-v'
 import { toast } from 'vue-sonner'
-import { ArrowLeft, ArrowRight, BookmarkPlus, Check, FilePlus, FolderTree, ListTree, Loader2, Lock, MessagesSquare, Sparkles } from 'lucide-vue-next'
+import { ArrowLeft, ArrowRight, BookmarkPlus, Check, ChevronRight, FilePlus, FolderTree, ListTree, Loader2, Lock, MessagesSquare, Sparkles } from 'lucide-vue-next'
 import {
   BLUEPRINT_MAX_DEPTH,
   BLUEPRINT_MAX_PAGES,
@@ -40,6 +45,8 @@ import BlueprintNodeEditor from '@/modules/projects/components/BlueprintNodeEdit
 import BlueprintConventions from '@/modules/projects/components/BlueprintConventions.vue'
 import ProjectBlueprintPicker from '@/modules/projects/components/ProjectBlueprintPicker.vue'
 import BlueprintDescribePanel from '@/modules/projects/components/BlueprintDescribePanel.vue'
+import BlueprintSectionMap from '@/modules/projects/components/BlueprintSectionMap.vue'
+import BlueprintTreePreview from '@/modules/projects/components/BlueprintTreePreview.vue'
 import SaveBlueprintDialog from '@/modules/projects/components/SaveBlueprintDialog.vue'
 import ProjectAvatar from '@/modules/projects/components/ProjectAvatar.vue'
 import { EMOJI_CHOICES } from '@/modules/projects/model/avatar'
@@ -71,6 +78,8 @@ const actor = shallowRef<Actor<typeof scaffoldMachine> | null>(null)
 const step = ref<ScaffoldStep>('start')
 const context = ref<ScaffoldContext>(emptyContext())
 const resumed = ref(false)
+/** Start shows the cards, or the From a project / Describe it panel in their place. */
+const startView = ref<'cards' | 'derive' | 'describe'>('cards')
 
 function start(snapshot?: ReturnType<typeof loadSnapshot>) {
   const running = createActor(scaffoldMachine, snapshot ? { snapshot } : undefined)
@@ -92,6 +101,13 @@ onMounted(() => {
     clearSnapshot()
     actor.value = start()
   }
+  const entry = historyState()
+  base = entry.knWizardBase ?? entry.position ?? 0
+  exit = entry.knWizardExit ?? !!entry.back
+  // A reload, or Forward into the wizard, names its step; a bare visit resumes where the draft was.
+  if (route.query.step && urlPlace.value !== place.value) land(urlPlace.value)
+  // Stamp this entry as the wizard's and put its URL right; later moves push from here.
+  void toUrl(place.value, 'replace')
   resumed.value = step.value !== 'start'
   const seed = typeof route.query.name === 'string' ? route.query.name : ''
   if (!resumed.value && seed) send({ type: 'SET', patch: { name: seed } })
@@ -105,14 +121,75 @@ onBeforeRouteLeave(() => clearSnapshot())
 const send = (event: ScaffoldEvent) => actor.value?.send(event)
 const stepIndex = computed(() => SCAFFOLD_STEPS.indexOf(step.value))
 
-const lang = computed<Locale>(() => context.value.locale ?? (SUPPORTED_LOCALES.includes(uiLocale.value as Locale) ? (uiLocale.value as Locale) : 'en'))
+/* ------------------------------------------------------------------ history */
 
 /**
- * Every centred step body (the Start cards, Conventions, Create): one
- * width, and the header's and footer's gutters, so the content's left edge does
- * not jump as the steps change.
+ * Where the wizard is, as the URL spells it: a machine step, or one of Start's
+ * two panels. A move the wizard makes (Continue, a pick, a panel) pushes an
+ * entry; an entry the browser lands on (Back, Forward) is sent to the machine
+ * as `GOTO`, and a step it refuses (Shape after Start over) rewrites the URL to
+ * where the wizard really is. The footer's Back is the browser's Back whenever
+ * a wizard entry sits behind this one, so the two never disagree.
  */
-const STEP_BODY = 'mx-auto flex w-full max-w-4xl flex-col gap-4 px-4 py-6 lg:px-6'
+const PLACES = ['start', 'from-project', 'describe', 'shape', 'conventions', 'create'] as const
+type Place = (typeof PLACES)[number]
+
+const place = computed<Place>(() => {
+  if (step.value !== 'start') return step.value
+  return startView.value === 'derive' ? 'from-project' : startView.value === 'describe' ? 'describe' : 'start'
+})
+const urlPlace = computed<Place>(() => {
+  const at = route.query.step
+  return typeof at === 'string' && (PLACES as readonly string[]).includes(at) ? (at as Place) : 'start'
+})
+
+interface WizardEntry {
+  position?: number
+  back?: string | null
+  /** The position of the wizard's first entry, carried by every entry after it (and across a reload). */
+  knWizardBase?: number
+  /** Whether a page sits behind that first entry for Cancel to return to. */
+  knWizardExit?: boolean
+}
+const historyState = (): WizardEntry => (window.history.state ?? {}) as WizardEntry
+let base = 0
+let exit = false
+/** The next place change replaces this entry instead of pushing one: a step back taken in place. */
+let replaceNext = false
+
+function toUrl(at: Place, how: 'push' | 'replace') {
+  return router[how]({
+    query: { ...route.query, blueprint: undefined, step: at === 'start' ? undefined : at },
+    state: { knWizardBase: base, knWizardExit: exit },
+  })
+}
+
+function land(at: Place) {
+  const panel = at === 'from-project' ? 'derive' : at === 'describe' && features.isOn('assistant') ? 'describe' : 'cards'
+  startView.value = panel
+  send({ type: 'GOTO', step: at === 'from-project' || at === 'describe' ? 'start' : at })
+}
+
+watch(place, (at) => {
+  if (at === urlPlace.value) return
+  void toUrl(at, replaceNext ? 'replace' : 'push')
+  replaceNext = false
+})
+watch(urlPlace, (at) => {
+  if (!actor.value || at === place.value) return
+  land(at)
+  if (place.value !== at) void toUrl(place.value, 'replace')
+})
+
+/** One step back: the browser's, while the entry behind is the wizard's; else in place (a resumed draft). */
+function stepBack() {
+  if ((historyState().position ?? base) > base) return router.back()
+  replaceNext = true
+  if (step.value === 'start') startView.value = 'cards'
+  else send({ type: 'BACK' })
+}
+
+const lang = computed<Locale>(() => context.value.locale ?? (SUPPORTED_LOCALES.includes(uiLocale.value as Locale) ? (uiLocale.value as Locale) : 'en'))
 
 /* ------------------------------------------------------------------- motion */
 
@@ -140,7 +217,8 @@ async function loadBlueprints() {
   // `?blueprint=<key>` (Use / Edit in wizard, from settings) opens on it — once, and not over a resumed draft.
   const wanted = route.query.blueprint
   const entry = !resumed.value && typeof wanted === 'string' && blueprints.value.find((e) => e.key === wanted)
-  if (typeof wanted === 'string') void router.replace({ query: { ...route.query, blueprint: undefined } })
+  // Settled before the pick pushes Shape, so Back from Shape lands on a clean Start.
+  if (typeof wanted === 'string') await toUrl(place.value, 'replace')
   if (entry && auth.canEdit) pick(entry)
 }
 
@@ -150,12 +228,9 @@ interface StartCard {
   name: string
   meta: string
   description: string
-  chips: string[]
-  more: number
   entry?: BlueprintEntry
 }
 
-const CHIPS = 4
 const cards = computed<StartCard[]>(() => [
   ...(blueprints.value ?? []).map((entry) => {
     const { tree } = entry.blueprint
@@ -166,8 +241,6 @@ const cards = computed<StartCard[]>(() => [
       name: blueprintText(entry.blueprint.name, lang.value),
       meta: tree.length ? t('scaffold.start.pages', { count: pages }, pages) : t('scaffold.start.noPages'),
       description: blueprintText(entry.blueprint.description, lang.value),
-      chips: tree.slice(0, CHIPS).map((n) => blueprintText(n.title, lang.value)),
-      more: Math.max(0, tree.length - CHIPS),
       entry,
     }
   }),
@@ -177,8 +250,6 @@ const cards = computed<StartCard[]>(() => [
     name: t('scaffold.start.derive'),
     meta: t('scaffold.start.deriveMeta'),
     description: t('scaffold.start.deriveBody'),
-    chips: [],
-    more: 0,
   },
   // The scaffolder drafts it: no assistant, no card (the route 404s too).
   ...(features.isOn('assistant')
@@ -189,18 +260,39 @@ const cards = computed<StartCard[]>(() => [
           name: t('scaffold.start.describe'),
           meta: t('scaffold.start.describeMeta'),
           description: t('scaffold.start.describeBody'),
-          chips: [],
-          more: 0,
         },
       ]
     : []),
 ])
 
-/** Start shows the cards, or the From a project / Describe it panel in their place. */
-const startView = ref<'cards' | 'derive' | 'describe'>('cards')
+/** Blueprints with pages lead; Blank and the two panels are the other ways in. */
+const startGroups = computed(() => {
+  const laidOut = (card: StartCard) => !!card.entry?.blueprint.tree.length
+  return [
+    { key: 'blueprints', label: t('scaffold.start.blueprints'), cards: cards.value.filter(laidOut) },
+    { key: 'other', label: t('scaffold.start.otherWays'), cards: cards.value.filter((c) => !laidOut(c)) },
+  ].filter((group) => group.cards.length)
+})
+
+/**
+ * From 64rem up, Start is master-detail: a click previews the blueprint beside
+ * the list, and Use (or a double-click) takes it. Narrower there is no preview
+ * pane, so a tap takes it at once, as it always did.
+ */
+const wide = useMediaQuery('(min-width: 64rem)')
+const previewKey = ref<string | null>(null)
+const previewCard = computed(() => {
+  const entries = cards.value.filter((c) => c.entry)
+  return entries.find((c) => c.key === previewKey.value) ?? entries.find((c) => c.entry!.blueprint.tree.length) ?? entries[0] ?? null
+})
+const previewFacts = computed(() => {
+  const bp = previewCard.value?.entry?.blueprint
+  return bp ? conventionFacts(countPages(bp.tree), bp.conventions) : []
+})
 
 function choose(card: StartCard) {
-  if (card.entry) pick(card.entry)
+  if (card.entry && wide.value) previewKey.value = card.key
+  else if (card.entry) pick(card.entry)
   else if (card.key === 'derive' || card.key === 'describe') startView.value = card.key
 }
 
@@ -288,15 +380,16 @@ const outgoing = computed<Blueprint | null>(() => {
   const kept = auth.canAdminWorkspace && styleguide ? { ...rest, styleguide } : rest
   return { ...blueprint.value, conventions: Object.keys(kept).length ? kept : undefined }
 })
-const summary = computed(() => {
-  const c = outgoing.value?.conventions
+/** What a blueprint makes, one line each: the Start preview's facts and Create's summary. */
+function conventionFacts(n: number, c: Blueprint['conventions']): string[] {
   return [
-    t('scaffold.create.summaryPages', { count: pages.value }, pages.value),
+    t('scaffold.create.summaryPages', { count: n }, n),
     c?.styleguide && t('scaffold.create.summaryRules', { count: c.styleguide.rules.length }, c.styleguide.rules.length),
     c?.glossary && t('scaffold.create.summaryTerms', { count: c.glossary.length }, c.glossary.length),
     c?.templates && t('scaffold.create.summaryTemplates', { count: c.templates.length }, c.templates.length),
   ].filter(Boolean) as string[]
-})
+}
+const summary = computed(() => conventionFacts(pages.value, outgoing.value?.conventions))
 
 const canContinue = computed(() => {
   if (step.value === 'shape') return !overLimit.value && !untitled.value
@@ -335,10 +428,12 @@ async function create() {
   }
 }
 
+/** Cancel unwinds every wizard entry at once, back to the page the wizard was opened from. */
 function leave() {
   clearSnapshot()
-  if (window.history.length > 1) router.back()
-  else void router.push('/documents')
+  const entries = (historyState().position ?? base) - base + 1
+  if (exit) router.go(-entries)
+  else void router.replace('/documents')
 }
 </script>
 
@@ -389,7 +484,7 @@ function leave() {
           :built-ins="blueprints ?? []"
           :locale="lang"
           :can-edit="auth.canEdit"
-          @back="startView = 'cards'"
+          @back="stepBack"
           @pick="picked"
           @pick-entry="pick"
         />
@@ -400,66 +495,102 @@ function leave() {
           :locale="lang"
           :can-edit="auth.canEdit"
           :initial-brief="describedAs?.brief"
-          @back="startView = 'cards'"
+          @back="stepBack"
           @pick="picked"
         />
       </motion.div>
-      <motion.div v-else-if="step === 'start'" key="start" class="h-full overflow-y-auto" v-bind="STEP_MOTION">
-        <div :class="STEP_BODY">
-          <div>
-            <h2 class="text-lg font-semibold">{{ t('scaffold.start.title') }}</h2>
-            <p class="kn-measure text-muted-foreground mt-1 text-sm leading-relaxed">{{ t('scaffold.start.body') }}</p>
-          </div>
+      <motion.div v-else-if="step === 'start'" key="start" class="h-full min-h-0" v-bind="STEP_MOTION">
+        <!-- Shape's spine: the ways in down a 24rem rail, the picked blueprint
+             filling the rest. Stacked, there is no preview and the step scrolls. -->
+        <div class="grid h-full min-h-0 content-start overflow-y-auto lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] lg:content-stretch lg:overflow-hidden">
+          <section class="flex flex-col lg:min-h-0 lg:border-r">
+            <div class="space-y-2 px-4 pt-5 pb-2 lg:px-6">
+              <h2 class="text-lg font-semibold text-balance">{{ t('scaffold.start.title') }}</h2>
+              <p class="kn-measure text-muted-foreground text-sm leading-relaxed">{{ t('scaffold.start.body') }}</p>
+              <p v-if="!auth.canEdit" class="kn-callout-warning rounded-lg px-3 py-2 text-xs">{{ t('scaffold.start.readOnly') }}</p>
+            </div>
 
-          <p v-if="!auth.canEdit" class="kn-callout-warning rounded-lg px-3 py-2 text-xs">{{ t('scaffold.start.readOnly') }}</p>
+            <div class="pb-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+              <div v-if="loadError" class="mx-4 mt-3 rounded-xl border p-4 text-sm lg:mx-6" role="alert">
+                <p>{{ t('scaffold.start.loadFailed') }}</p>
+                <p class="text-muted-foreground mt-1 text-xs">{{ loadError }}</p>
+                <Button size="sm" variant="outline" class="mt-3" @click="loadBlueprints">{{ t('common.retry') }}</Button>
+              </div>
+              <div v-else-if="!blueprints" class="space-y-1.5 px-4 pt-3 lg:px-6" aria-busy="true">
+                <Skeleton v-for="i in 6" :key="i" class="h-16 w-full rounded-lg" />
+              </div>
+              <section v-for="group in startGroups" v-else :key="group.key" :aria-labelledby="`kn-sc-${group.key}`">
+                <h3 :id="`kn-sc-${group.key}`" class="kn-sc-group">{{ group.label }}</h3>
+                <ul>
+                  <li v-for="card in group.cards" :key="card.key">
+                    <button
+                      type="button"
+                      class="kn-sc-row"
+                      :disabled="!auth.canEdit && (!card.entry || !wide)"
+                      :aria-pressed="wide && card.entry ? previewCard?.key === card.key : undefined"
+                      @click="choose(card)"
+                      @dblclick="card.entry && auth.canEdit && pick(card.entry)"
+                    >
+                      <span class="bg-muted text-muted-foreground grid size-8 shrink-0 place-items-center rounded-lg text-base" aria-hidden="true">
+                        <template v-if="typeof card.icon === 'string'">{{ card.icon }}</template>
+                        <component :is="card.icon" v-else class="size-4" />
+                      </span>
+                      <span class="min-w-0 flex-1">
+                        <span class="flex min-w-0 items-baseline gap-2">
+                          <span class="min-w-0 truncate text-sm font-medium">{{ card.name }}</span>
+                          <span class="text-muted-foreground ml-auto shrink-0 text-caption tabular-nums">{{ card.meta }}</span>
+                        </span>
+                        <span class="text-muted-foreground mt-0.5 line-clamp-3 text-ui leading-snug lg:line-clamp-2">{{ card.description }}</span>
+                      </span>
+                      <!-- A panel opens in place; a blueprint (narrow) goes straight to Shape. -->
+                      <ChevronRight v-if="!card.entry" class="text-muted-foreground mt-2 size-4 shrink-0" aria-hidden="true" />
+                    </button>
+                  </li>
+                </ul>
+              </section>
+            </div>
+          </section>
 
-          <div v-if="loadError" class="rounded-xl border p-4 text-sm" role="alert">
-            <p>{{ t('scaffold.start.loadFailed') }}</p>
-            <p class="text-muted-foreground mt-1 text-xs">{{ loadError }}</p>
-            <Button size="sm" variant="outline" class="mt-3" @click="loadBlueprints">{{ t('common.retry') }}</Button>
-          </div>
-          <div v-else-if="!blueprints" class="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true">
-            <Skeleton v-for="i in 6" :key="i" class="h-32 rounded-xl" />
-          </div>
-          <!-- One card shape for every source: header, two lines of what it is
-               for, then its top-level sections pinned to the foot, so a row of
-               cards reads as a row of the same thing. -->
-          <div v-else class="grid auto-rows-fr grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-            <Motion
-              as="button"
-              v-for="(card, i) in cards"
-              :key="card.key"
-              type="button"
-              class="kn-sc-card"
-              :disabled="!auth.canEdit"
-              :initial="{ opacity: 0, y: 8 }"
-              :animate="{ opacity: 1, y: 0 }"
-              :transition="{ duration: 0.24, delay: i * 0.035, ease: EASE }"
-              :while-hover="auth.canEdit ? { y: -2 } : undefined"
-              :while-press="auth.canEdit ? { scale: 0.99 } : undefined"
-              @click="choose(card)"
-            >
-              <span class="flex items-center gap-2.5">
-                <span class="bg-muted text-muted-foreground grid size-8 shrink-0 place-items-center rounded-lg text-base" aria-hidden="true">
-                  <template v-if="typeof card.icon === 'string'">{{ card.icon }}</template>
-                  <component :is="card.icon" v-else class="size-4" />
-                </span>
-                <span class="min-w-0 flex-1">
-                  <span class="block truncate text-sm font-medium">{{ card.name }}</span>
-                  <span class="text-muted-foreground block text-caption tabular-nums">{{ card.meta }}</span>
-                </span>
-              </span>
-              <span class="text-muted-foreground mt-2 line-clamp-2 text-ui leading-snug">{{ card.description }}</span>
-              <span v-if="card.chips.length" class="kn-sc-chips mt-auto flex min-w-0 gap-1 overflow-hidden pt-2.5">
-                <span
-                  v-for="chip in card.chips"
-                  :key="chip"
-                  class="bg-muted text-muted-foreground shrink-0 truncate rounded px-1.5 py-px text-caption"
-                >{{ chip }}</span>
-                <span v-if="card.more" class="text-muted-foreground shrink-0 text-caption">+{{ card.more }}</span>
-              </span>
-            </Motion>
-          </div>
+          <!-- Preview: the whole blueprint before it is taken. Wide screens only. -->
+          <section class="hidden min-h-0 overflow-y-auto px-4 py-5 lg:block lg:px-6" aria-live="polite">
+            <div v-if="!blueprints && !loadError" class="space-y-4" aria-busy="true">
+              <Skeleton class="h-14 w-full max-w-xl rounded-lg" />
+              <div class="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-x-6 gap-y-5">
+                <Skeleton v-for="i in 6" :key="i" class="h-28 rounded-lg" />
+              </div>
+            </div>
+            <AnimatePresence mode="wait" :initial="false">
+              <motion.article
+                v-if="previewCard?.entry"
+                :key="previewCard.key"
+                :initial="{ opacity: 0 }"
+                :animate="{ opacity: 1 }"
+                :exit="{ opacity: 0 }"
+                :transition="{ duration: 0.12 }"
+              >
+                <header class="flex flex-wrap items-start gap-3 pb-5">
+                  <span class="bg-muted text-muted-foreground grid size-10 shrink-0 place-items-center rounded-lg text-xl" aria-hidden="true">
+                    <template v-if="typeof previewCard.icon === 'string'">{{ previewCard.icon }}</template>
+                    <component :is="previewCard.icon" v-else class="size-5" />
+                  </span>
+                  <div class="min-w-0 flex-1 basis-40">
+                    <h3 class="text-base font-semibold text-balance">{{ previewCard.name }}</h3>
+                    <p class="text-muted-foreground mt-0.5 text-caption tabular-nums">{{ previewFacts.join(' · ') }}</p>
+                  </div>
+                  <Button size="sm" class="gap-1.5" :disabled="!auth.canEdit" @click="pick(previewCard.entry)">
+                    {{ t('scaffold.start.use') }} <ArrowRight class="size-4" />
+                  </Button>
+                  <!-- Its own line, so a narrow pane never squeezes it beside the button. -->
+                  <p v-if="previewCard.description" class="kn-measure text-muted-foreground basis-full text-sm leading-relaxed">
+                    {{ previewCard.description }}
+                  </p>
+                </header>
+                <!-- Each section's own rule separates it from the header: no second line. -->
+                <BlueprintSectionMap v-if="previewCard.entry.blueprint.tree.length" :tree="previewCard.entry.blueprint.tree" :locale="lang" />
+                <p v-else class="kn-measure text-muted-foreground pt-4 text-sm leading-relaxed">{{ t('scaffold.start.blankPreview') }}</p>
+              </motion.article>
+            </AnimatePresence>
+          </section>
         </div>
       </motion.div>
 
@@ -533,9 +664,11 @@ function leave() {
       </motion.div>
 
       <!-- 4 · Create ------------------------------------------------------ -->
-      <motion.div v-else key="create" class="h-full overflow-y-auto" v-bind="STEP_MOTION">
-        <form class="mx-auto grid w-full max-w-4xl gap-8 px-4 py-6 lg:grid-cols-[minmax(0,1fr)_17rem] lg:px-6" @submit.prevent="create">
-          <div class="min-w-0 space-y-5">
+      <motion.div v-else key="create" class="h-full min-h-0" v-bind="STEP_MOTION">
+        <!-- The same spine: what Create will make down the rail, the form beside it. -->
+        <div class="grid h-full min-h-0 content-start overflow-y-auto lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] lg:content-stretch lg:overflow-hidden">
+        <form class="min-w-0 px-4 py-6 lg:order-last lg:min-h-0 lg:overflow-y-auto lg:px-6" @submit.prevent="create">
+          <div class="max-w-2xl space-y-5">
             <div>
               <h2 class="text-lg font-semibold">{{ t('scaffold.create.title') }}</h2>
               <p class="kn-measure text-muted-foreground mt-1 text-sm leading-relaxed">{{ t('scaffold.create.body') }}</p>
@@ -616,9 +749,10 @@ function leave() {
 
             <p v-if="createError" role="alert" class="text-destructive text-sm">{{ createError }}</p>
           </div>
+        </form>
 
           <!-- What Create will make, read before it is pressed. -->
-          <aside class="h-fit rounded-xl border p-4">
+          <aside class="border-t px-4 py-6 lg:order-first lg:min-h-0 lg:overflow-y-auto lg:border-t-0 lg:border-r lg:px-6">
             <div class="flex items-center gap-3">
               <ProjectAvatar
                 project-id="new"
@@ -640,14 +774,18 @@ function leave() {
             <p v-if="!auth.canAdminWorkspace && conventions.styleguide" class="text-muted-foreground mt-3 text-caption leading-snug">
               {{ t('scaffold.conventions.styleguideSkipped') }}
             </p>
+            <section v-if="pages" class="mt-5 border-t pt-4" :aria-label="t('scaffold.shape.outline')">
+              <h3 class="text-muted-foreground mb-2 text-xs font-medium">{{ t('scaffold.shape.outline') }}</h3>
+              <BlueprintTreePreview :tree="tree" :locale="lang" />
+            </section>
           </aside>
-        </form>
+        </div>
       </motion.div>
       </AnimatePresence>
     </div>
 
     <footer class="flex shrink-0 items-center gap-2 border-t px-4 py-3 lg:px-6">
-      <Button v-if="step !== 'start'" variant="ghost" size="sm" class="gap-1.5" :disabled="creating" @click="send({ type: 'BACK' })">
+      <Button v-if="step !== 'start'" variant="ghost" size="sm" class="gap-1.5" :disabled="creating" @click="stepBack">
         <ArrowLeft class="size-4" /> {{ t('common.back') }}
       </Button>
       <Button v-if="resumed && step !== 'start'" variant="ghost" size="sm" class="text-muted-foreground" :disabled="creating" @click="send({ type: 'RESTART' })">
@@ -689,38 +827,46 @@ function leave() {
 </template>
 
 <style scoped>
-.kn-sc-card {
-  /* A grid item's min-width is its content's: the chip row would push it wide. */
-  min-width: 0;
+.kn-sc-group {
+  padding: 1rem 1rem 0.375rem;
+  font-size: var(--text-caption, 0.75rem);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+.kn-sc-row {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: flex-start;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: var(--card);
-  padding: 0.875rem;
+  width: 100%;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.625rem 1rem;
   text-align: left;
-  transition: border-color 160ms ease-out;
+  transition: background-color 120ms ease-out;
 }
-button.kn-sc-card:hover:not(:disabled) {
-  border-color: color-mix(in oklab, var(--primary) 40%, var(--border));
+/* The rows reach the rail's edges; their content keeps the header's gutter. */
+@media (min-width: 64rem) {
+  .kn-sc-group,
+  .kn-sc-row {
+    padding-inline: 1.5rem;
+  }
 }
-button.kn-sc-card:focus-visible {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+.kn-sc-row:hover:not(:disabled) {
+  background: var(--accent);
 }
-button.kn-sc-card:disabled {
+.kn-sc-row[aria-pressed='true'] {
+  background: color-mix(in oklab, var(--primary) 8%, transparent);
+}
+.kn-sc-row:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.kn-sc-row:disabled {
   opacity: 0.55;
-}
-.kn-sc-chips {
-  /* Sections past the card's edge fade out rather than being cut mid-word. */
-  mask-image: linear-gradient(to right, #000 82%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .kn-sc-card {
+  .kn-sc-row {
     transition-duration: 0.01ms;
   }
 }

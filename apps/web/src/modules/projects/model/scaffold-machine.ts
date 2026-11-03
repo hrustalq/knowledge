@@ -8,6 +8,10 @@
  * straight to Create and Back from there returns to Start. The blueprint in
  * context is the edited copy; nothing is written until Create, which the page
  * runs (`POST /v1/projects/scaffold`), not the machine.
+ *
+ * The page mirrors the step into `?step=` so the browser's Back/Forward walk
+ * the steps. `GOTO` is how a history entry lands; it refuses a step the
+ * context cannot stand on, and the page then rewrites the URL to where it is.
  */
 import { assign, setup, type Snapshot } from 'xstate'
 import type { Blueprint, BlueprintGlossaryTerm, Locale } from '@knowledge/contracts'
@@ -46,6 +50,8 @@ export type ScaffoldEvent =
   | { type: 'NEXT' }
   | { type: 'BACK' }
   | { type: 'RESTART' }
+  /** Browser Back/Forward: land on a step the context can stand on, else stay put. */
+  | { type: 'GOTO'; step: ScaffoldStep }
 
 export const SCAFFOLD_STEPS = ['start', 'shape', 'conventions', 'create'] as const
 export type ScaffoldStep = (typeof SCAFFOLD_STEPS)[number]
@@ -71,6 +77,13 @@ export const scaffoldMachine = setup({
   on: {
     SET: { actions: assign(({ context, event }) => ({ ...context, ...event.patch })) },
     RESTART: { target: '.start', actions: assign(({ context }) => ({ ...emptyContext(), name: context.name })) },
+    // Shape and Conventions need pages to stand on; Create needs a blueprint (Blank has an empty tree).
+    GOTO: [
+      { guard: ({ event }) => event.step === 'start', target: '.start' },
+      { guard: ({ context, event }) => event.step === 'shape' && !!context.blueprint?.tree.length, target: '.shape' },
+      { guard: ({ context, event }) => event.step === 'conventions' && !!context.blueprint?.tree.length, target: '.conventions' },
+      { guard: ({ context, event }) => event.step === 'create' && !!context.blueprint, target: '.create' },
+    ],
   },
   states: {
     start: {

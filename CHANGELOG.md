@@ -17,6 +17,15 @@ in the pull request that introduces them — see
 
 ### Added
 
+- **Describe it interviews you before it drafts** (#731). After the description, the assistant asks short rounds of
+  questions about what the description leaves open: who reads the project, what recurs, what a word means. Each
+  question arrives with a suggested answer already picked, so Enter accepts a whole round, and every question also
+  takes an answer in your own words. It looks up what the workspace already holds instead of asking you, and stops
+  when nothing is left open, after five rounds at most. The side pane shows the outline and the terms taking shape
+  as you answer. **Draft now** ends the interview at any point; pressed before the first round, it drafts from the
+  description alone, as before. **Change** on an answered round reopens it and drops the rounds after it. A reload
+  reopens the same round, and Back from Shape shows the finished interview. Terms the interview settled arrive in
+  Conventions ready to keep.
 - **`POST /v1/blueprints/generate` can interview before it drafts** (#731). Send `rounds` (the interview so far,
   `[]` to start) and the reply is either `status: "asking"`, with the next round of up to four questions (each with
   a recommended option), the outline so far (titles only) and glossary terms read off the person's words, or

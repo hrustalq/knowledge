@@ -29,6 +29,8 @@ import type { AssistantFlowAnswer, AssistantPrompt, AssistantPromptField } from 
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import type { FlowStep } from '@/entities/assistant/model/flow-steps'
+import { blankValues, submitOnEnter, type PromptValues } from '@/entities/assistant/model/prompt-values'
+import PromptFields from '@/entities/assistant/components/PromptFields.vue'
 
 const { t } = useI18n()
 
@@ -51,39 +53,14 @@ const emit = defineEmits<{
 
 const form = computed(() => (props.prompt.kind === 'form' ? props.prompt : null))
 
-// One bag of answers keyed by field name: a string for choice/text, an array
-// for checklist. Kept untyped-ish on purpose — the field list is model-authored
-// and the template narrows per field type anyway. The recommended option starts
-// selected, so confirming the suggestion is one Enter.
-function blank(suggest = true): Record<string, string | string[]> {
-  return Object.fromEntries(
-    (form.value?.fields ?? []).map((f) => {
-      if (f.type === 'text') return [f.name, '']
-      const picks = suggest ? f.options.filter((o) => o.recommended).map((o) => o.value) : []
-      return [f.name, f.type === 'checklist' ? picks : (picks[0] ?? '')]
-    }),
-  )
-}
-const values = ref(blank())
+const blank = (suggest = true) => blankValues(form.value?.fields ?? [], suggest)
+const values = ref<PromptValues>(blank())
 const other = ref('')
 const submitted = ref(false)
 /** Reopened with "Change": live again although a newer question is open. */
 const changing = ref(false)
 const live = computed(() => props.active || changing.value)
 const rootEl = ref<HTMLElement | null>(null)
-
-function toggle(field: AssistantPromptField, value: string) {
-  const current = values.value[field.name]
-  if (!Array.isArray(current)) return
-  const at = current.indexOf(value)
-  if (at >= 0) current.splice(at, 1)
-  else current.push(value)
-}
-
-function isChecked(field: AssistantPromptField, value: string): boolean {
-  const current = values.value[field.name]
-  return Array.isArray(current) ? current.includes(value) : current === value
-}
 
 /** A required field is answered when it has something in it. */
 const complete = computed(() => {
@@ -185,12 +162,12 @@ function seed(answer: AssistantFlowAnswer) {
   const known = (x: string) => field.type === 'text' || field.options.some((o) => o.value === x)
   if (field.type === 'checklist') {
     const picked = Array.isArray(v) ? v : []
-    values.value[field.name] = picked.filter(known)
+    values.value = { ...values.value, [field.name]: picked.filter(known) }
     other.value = picked.filter((x) => !known(x)).join(', ')
   } else if (typeof v === 'string' && known(v)) {
-    values.value[field.name] = v
+    values.value = { ...values.value, [field.name]: v }
   } else {
-    values.value[field.name] = ''
+    values.value = { ...values.value, [field.name]: '' }
     other.value = typeof v === 'string' ? v : ''
   }
 }
@@ -272,12 +249,7 @@ function submit() {
   emit('answer', answer, structured)
 }
 
-/** Enter answers from a radio or checkbox too, which have no implicit submit; a button or a multi-line box keeps its own Enter. */
-function onEnter(e: KeyboardEvent) {
-  if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLButtonElement || e.isComposing) return
-  e.preventDefault()
-  submit()
-}
+const onEnter = (e: KeyboardEvent) => submitOnEnter(e, submit)
 
 /**
  * A flow's question takes focus when it arrives, on the selected option, so a
@@ -373,99 +345,8 @@ function cancelChange() {
     <form v-else class="space-y-3.5" @submit.prevent="submit" @keydown.enter="onEnter">
       <p class="text-sm leading-relaxed font-medium">{{ prompt.question }}</p>
 
-      <div v-for="field in prompt.fields" :key="field.name" class="space-y-1.5">
-        <!-- A flow question's text is often its label; saying it twice is noise. -->
-        <p v-if="field.label !== prompt.question" class="text-xs font-medium text-muted-foreground">
-          {{ field.label }}
-          <span v-if="field.required" class="text-primary" :aria-label="t('common.required')">*</span>
-        </p>
-
-        <!-- Radios: exactly one. Native radios sharing a name already move with the arrow keys. -->
-        <div
-          v-if="field.type === 'choice'"
-          class="space-y-1"
-          role="radiogroup"
-          :aria-label="field.label"
-          :aria-required="field.required || undefined"
-        >
-          <label
-            v-for="opt in field.options"
-            :key="opt.value"
-            class="flex cursor-pointer items-start gap-2.5 rounded-lg border bg-background px-3 py-2 transition-colors has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring"
-            :class="
-              isChecked(field, opt.value)
-                ? 'border-primary bg-primary/[0.07] ring-1 ring-primary/30'
-                : 'hover:bg-accent'
-            "
-          >
-            <input
-              type="radio"
-              class="mt-0.5 size-3.5 shrink-0 accent-[var(--primary)] outline-none"
-              :name="field.name"
-              :value="opt.value"
-              :checked="isChecked(field, opt.value)"
-              :disabled="!live"
-              @change="values[field.name] = opt.value"
-            />
-            <span class="min-w-0 flex-1 leading-snug">
-              <span class="block text-ui">{{ opt.label }}</span>
-              <span v-if="opt.recommended || opt.description" class="mt-0.5 flex flex-wrap items-baseline gap-x-1.5">
-                <span v-if="opt.recommended" class="text-xs font-medium text-primary">{{ t('chat.suggested') }}</span>
-                <span v-if="opt.description" class="text-caption text-muted-foreground">{{ opt.description }}</span>
-              </span>
-            </span>
-          </label>
-        </div>
-
-        <!-- Checkboxes: any number. -->
-        <div v-else-if="field.type === 'checklist'" class="space-y-1" role="group" :aria-label="field.label">
-          <label
-            v-for="opt in field.options"
-            :key="opt.value"
-            class="flex cursor-pointer items-start gap-2.5 rounded-lg border bg-background px-3 py-2 transition-colors has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring"
-            :class="
-              isChecked(field, opt.value)
-                ? 'border-primary bg-primary/[0.07] ring-1 ring-primary/30'
-                : 'hover:bg-accent'
-            "
-          >
-            <input
-              type="checkbox"
-              class="mt-0.5 size-3.5 shrink-0 accent-[var(--primary)] outline-none"
-              :value="opt.value"
-              :checked="isChecked(field, opt.value)"
-              :disabled="!live"
-              @change="toggle(field, opt.value)"
-            />
-            <span class="min-w-0 flex-1 leading-snug">
-              <span class="block text-ui">{{ opt.label }}</span>
-              <span v-if="opt.recommended || opt.description" class="mt-0.5 flex flex-wrap items-baseline gap-x-1.5">
-                <span v-if="opt.recommended" class="text-xs font-medium text-primary">{{ t('chat.suggested') }}</span>
-                <span v-if="opt.description" class="text-caption text-muted-foreground">{{ opt.description }}</span>
-              </span>
-            </span>
-          </label>
-        </div>
-
-        <!-- Free text. -->
-        <textarea
-          v-else-if="field.multiline"
-          v-model="values[field.name] as string"
-          :placeholder="field.placeholder"
-          :disabled="!live"
-          :aria-label="field.label"
-          rows="3"
-          class="w-full resize-y rounded-lg border bg-background px-3 py-2 text-ui outline-none transition-colors focus:border-ring focus:ring-3 focus:ring-ring"
-        />
-        <Input
-          v-else
-          v-model="values[field.name] as string"
-          :placeholder="field.placeholder"
-          :disabled="!live"
-          :aria-label="field.label"
-          class="h-9 text-ui"
-        />
-      </div>
+      <!-- A flow question's text is often its label; saying it twice is noise. -->
+      <PromptFields v-model:values="values" :fields="prompt.fields" :disabled="!live" :question="prompt.question" />
 
       <!-- The escape hatch: the offered options are the assistant's guess at
            the answer space, and it is allowed to be wrong. -->

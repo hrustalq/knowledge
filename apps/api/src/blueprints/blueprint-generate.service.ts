@@ -24,6 +24,16 @@ import { readRound, readTerms, transcriptOf } from './interview-round.js';
 /** The read tools Describe it may use. Intersected with the agent's own list, never widened by it. */
 const GENERATE_TOOLS: ReadonlySet<string> = new Set(['list_document_tree', 'search_knowledge']);
 
+/**
+ * What makes a glossary term, both calls: `domain-modeling`'s GLOSSARY-FORMAT
+ * rules (mattpocock-skills 1.3.1), within `readTerms`' cap of 15.
+ */
+const GLOSSARY_RULES =
+  'terms are at most 15 words this project uses in its own sense, read off the person\'s description and ' +
+  'answers: one term per concept, the best of the words they use for it, defined in one or two sentences by ' +
+  'what it is, not what it does or how it is built. Leave out general technical words, however often they ' +
+  'come up.';
+
 const GENERATE_CONTRACT =
   'Draft the outline of a new documentation project from the person\'s description. You may look at how this ' +
   'workspace already organises its pages (list_document_tree) and search what it already covers ' +
@@ -39,24 +49,45 @@ const GENERATE_CONTRACT =
   ', "template"?: ref, "guidance"?: string, "collection"?: {"pattern"?: string, "template"?: ref}, ' +
   '"children"?: [node]}. name is a short name for the project; description one sentence. guidance says in one ' +
   'or two sentences what belongs on that page. Give at most 10 styleguide rules. Add "glossary": [{"term": string, ' +
-  '"definition": string}] with at most 15 terms the description or the person\'s answers define, in their words; ' +
-  '[] when none. Fold every decision the answers settled into the guidance of the page it shapes.';
+  '"definition": string}], [] when none, where ' +
+  GLOSSARY_RULES +
+  ' Fold every decision the answers settled into the guidance of the page it shapes, and offer a decision-records ' +
+  'collection only when one of those decisions is hard to reverse, surprising without its context, and the ' +
+  'result of a real trade-off.';
 
-/** One interview round (#731): ask what the brief left open, or say there is nothing left. */
+/**
+ * One interview round (#731): ask what the brief left open, or say there is
+ * nothing left. The method is Matt Pocock's `grilling` skill (a design tree
+ * worked in rounds over its frontier, one recommended answer per question,
+ * facts looked up rather than asked) and the questioning half of
+ * `domain-modeling` (sharpen fuzzy terms, probe boundaries with scenarios,
+ * check what the person says against what the workspace holds), from
+ * mattpocock-skills 1.3.1, adapted to a project outline. Their writing halves
+ * stay out: nothing is written before Create (#731 Q7), and the round cap and
+ * the shape of a question are the server's (`readRound`), not this prompt's.
+ */
 const INTERVIEW_CONTRACT =
-  'Before drafting the outline of a new documentation project, interview the person about what their description ' +
-  'leaves open. Ask only for decisions they must make: who reads the project, what it covers and leaves out, which ' +
-  'kinds of pages recur, how it relates to what the workspace already holds. Look facts up yourself with the tools ' +
-  'instead of asking for them. Ask every question you can ask now, at most 4: never one whose answer depends on ' +
-  'another question still open, never one the description or an earlier answer settled. Each question is a ' +
-  '"choice" (one option) or a "checklist" (several) with 2–6 options; mark exactly one option recommended, the one ' +
-  'you would pick, and say why in its description. Word the label so accepting the recommended option is the ' +
-  'natural answer. The person can always answer in their own words instead. When nothing is left open, respond ' +
-  'ONLY with {"done": true}. Otherwise respond ONLY with a json object {"questions": [{"type": "choice"|"checklist", ' +
+  'Before drafting the outline of a new documentation project, interview the person about their description until ' +
+  'you both understand the project the same way. Map it as a design tree: every decision about the project (who ' +
+  'reads it, what it covers and what it leaves to other projects, which kinds of pages recur, how it sits beside ' +
+  'what the workspace already holds, what its key words mean) branches into the decisions that hang off it. Work ' +
+  'the tree in rounds. The frontier is every decision whose prerequisites are already settled: ask the whole ' +
+  'frontier in this round, at most 4 questions. A question whose answer depends on another question still open ' +
+  'in this round belongs to a later round; never ask one the description or an earlier answer settled. Finding ' +
+  'facts is your job, never the person\'s: look up what the workspace already holds with the tools instead of ' +
+  'asking. The decisions are theirs. Sharpen their language as you go: when a word in the description is vague, ' +
+  'overloaded, or used differently by the workspace\'s pages, ask which they mean and offer the precise term as ' +
+  'the recommended option; when the boundary between two concepts is fuzzy, put a concrete scenario to them that ' +
+  'forces it. Each question is a "choice" (one option) or a "checklist" (several) with 2–6 options; mark exactly ' +
+  'one option recommended, the one you would pick, and say why in its description. Word the label so accepting ' +
+  'the recommended option is the natural answer. The person can always answer in their own words instead. You ' +
+  'are done when the frontier is empty: every branch visited, nothing silently assumed. Then respond ONLY with ' +
+  '{"done": true}. Otherwise respond ONLY with a json object {"questions": [{"type": "choice"|"checklist", ' +
   '"name": string, "label": string, "options": [{"value": string, "label": string, "description"?: string, ' +
   '"recommended"?: boolean}]}], "outline": [node], "terms": [{"term": string, "definition": string}]} where node is ' +
   '{"title": string, "collection"?: {"pattern"?: string}, "children"?: [node]}: the outline as it stands now, ' +
-  'titles only, at most 3 levels; terms are at most 15 words the person\'s own text defines.';
+  'titles only, at most 3 levels; ' +
+  GLOSSARY_RULES;
 
 /**
  * Describe it (#716, phase 5): the `scaffolder` drafts a whole blueprint from

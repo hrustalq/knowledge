@@ -494,9 +494,11 @@ function leave() {
           :entries="blueprints ?? []"
           :locale="lang"
           :can-edit="auth.canEdit"
+          :initial="context.interview"
           :initial-brief="describedAs?.brief"
           @back="stepBack"
           @pick="picked"
+          @update="(interview) => send({ type: 'SET', patch: { interview } })"
         />
       </motion.div>
       <motion.div v-else-if="step === 'start'" key="start" class="h-full min-h-0" v-bind="STEP_MOTION">

@@ -7671,7 +7671,11 @@
       "describe": "Describe it",
       "describeBody": "Tell the assistant what the project is about and it drafts a structure for you to edit.",
       "describeMeta": "Drafted by the assistant",
-      "deriveMeta": "Any project you can open"
+      "deriveMeta": "Any project you can open",
+      "blueprints": "Blueprints",
+      "otherWays": "Other ways to start",
+      "use": "Use this blueprint",
+      "blankPreview": "No pages to lay out: you name the project next, and pages are added as they are written."
     },
     "shape": {
       "outline": "Page outline",

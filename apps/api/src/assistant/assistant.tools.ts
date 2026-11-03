@@ -16,7 +16,6 @@ import type {
   AssistantChatMode,
   AssistantPrompt,
   AssistantPromptField,
-  AssistantPromptOption,
   DocumentCategory,
   FlowKey,
 } from '@knowledge/contracts';
@@ -44,6 +43,7 @@ import {
   WEB_TOOLS,
 } from './assistant-tool-types.js';
 import type { AssistantToolContext, AssistantToolResult } from './assistant-tool-types.js';
+import { readPromptFields } from './prompt-fields.js';
 
 /** Tools that mutate the workspace — require 'editor', not just 'viewer'. Exported so
  * AssistantService can also filter them out of the tool list when mode = 'ask'.
@@ -69,7 +69,6 @@ const UI_COMPONENTS = new Set(['graph', 'activity', 'search']);
 // not about what the model could technically emit.
 const MAX_PROMPT_FIELDS = 4;
 const MAX_PROMPT_OPTIONS = 8;
-const PROMPT_FIELD_TYPES = new Set(['choice', 'checklist', 'text']);
 
 /**
  * Tasks behind a question flow (#425): with an argument missing they end the
@@ -806,54 +805,8 @@ export class AssistantToolsService {
     const question = String(args.question ?? '').trim().slice(0, 500);
     if (!question) return this.fail('question is required');
 
-    const raw = Array.isArray(args.fields) ? args.fields.slice(0, MAX_PROMPT_FIELDS) : [];
-    const fields: AssistantPromptField[] = [];
-    for (const entry of raw) {
-      if (typeof entry !== 'object' || entry === null) continue;
-      const f = entry as Record<string, unknown>;
-      const type = String(f.type ?? '');
-      const name = String(f.name ?? '').trim().slice(0, 60);
-      const label = String(f.label ?? '').trim().slice(0, 200);
-      if (!PROMPT_FIELD_TYPES.has(type) || !name || !label) continue;
-      const required = f.required === true;
-
-      if (type === 'text') {
-        fields.push({
-          type: 'text',
-          name,
-          label,
-          required,
-          ...(f.placeholder ? { placeholder: String(f.placeholder).slice(0, 120) } : {}),
-          ...(f.multiline === true ? { multiline: true } : {}),
-        });
-        continue;
-      }
-
-      const options: AssistantPromptOption[] = [];
-      for (const opt of Array.isArray(f.options) ? f.options.slice(0, MAX_PROMPT_OPTIONS) : []) {
-        if (typeof opt !== 'object' || opt === null) continue;
-        const o = opt as Record<string, unknown>;
-        const value = String(o.value ?? '').trim().slice(0, 120);
-        const optLabel = String(o.label ?? '').trim().slice(0, 200);
-        if (!value || !optLabel) continue;
-        options.push({
-          value,
-          label: optLabel,
-          ...(o.description ? { description: String(o.description).slice(0, 240) } : {}),
-          ...(o.recommended === true ? { recommended: true } : {}),
-        });
-      }
-      // One suggestion per field: a second "recommended" would leave the
-      // pre-selection to whichever the pane drew first.
-      for (const extra of options.filter((o) => o.recommended).slice(1)) delete extra.recommended;
-      // A picker with nothing to pick is worse than no picker: it strands the
-      // user on a form they cannot complete.
-      if (options.length === 0) {
-        return this.fail(`Field "${name}" is a ${type} but has no usable options — give each option a value and a label`);
-      }
-      fields.push({ type: type as 'choice' | 'checklist', name, label, options, required });
-    }
-
+    const { fields, problems } = readPromptFields(args.fields, { fields: MAX_PROMPT_FIELDS, options: MAX_PROMPT_OPTIONS });
+    if (problems.length) return this.fail(problems[0]!);
     if (fields.length === 0) return this.fail('fields must contain at least one valid choice, checklist or text field');
 
     const prompt: AssistantPrompt = {

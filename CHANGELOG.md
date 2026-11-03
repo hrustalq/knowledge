@@ -13,6 +13,27 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.45.0] — 2026-11-03
+
+### Added
+
+- **Describe it interviews you before it drafts** (#731). After the description, the assistant asks short rounds of
+  questions about what the description leaves open: who reads the project, what recurs, what a word means. Each
+  question arrives with a suggested answer already picked, so Enter accepts a whole round, and every question also
+  takes an answer in your own words. It looks up what the workspace already holds instead of asking you, and stops
+  when nothing is left open, after five rounds at most. The side pane shows the outline and the terms taking shape
+  as you answer. **Draft now** ends the interview at any point; pressed before the first round, it drafts from the
+  description alone, as before. **Change** on an answered round reopens it and drops the rounds after it. A reload
+  reopens the same round, and Back from Shape shows the finished interview. Terms the interview settled arrive in
+  Conventions ready to keep.
+- **`POST /v1/blueprints/generate` can interview before it drafts** (#731). Send `rounds` (the interview so far,
+  `[]` to start) and the reply is either `status: "asking"`, with the next round of up to four questions (each with
+  a recommended option), the outline so far (titles only) and glossary terms read off the person's words, or
+  `status: "done"` with the blueprint. `draft: true`, a fifth answered round, or the scaffolder running out of
+  questions ends the interview with a draft. Each asking round is billed as `blueprint-interview`. Without `rounds`
+  the route drafts at once as before; its reply now also carries `status: "done"` and a `glossary` of terms the
+  brief defines.
+
 ## [0.44.1] — 2026-11-03
 
 ### Changed
@@ -5967,7 +5988,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.44.1...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.45.0...HEAD
+[0.45.0]: https://github.com/hrustalq/knowledge/compare/v0.44.1...v0.45.0
 [0.44.1]: https://github.com/hrustalq/knowledge/compare/v0.44.0...v0.44.1
 [0.44.0]: https://github.com/hrustalq/knowledge/compare/v0.43.0...v0.44.0
 [0.43.0]: https://github.com/hrustalq/knowledge/compare/v0.42.0...v0.43.0

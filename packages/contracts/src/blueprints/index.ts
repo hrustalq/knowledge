@@ -1,7 +1,7 @@
 import type { Locale } from '@knowledge/contracts/core';
 import type { DocumentCategory } from '@knowledge/contracts/documents';
 import type { TemplateRef } from '@knowledge/contracts/templates';
-import type { StyleRule } from '@knowledge/contracts/ai';
+import type { AssistantPromptField, StyleRule } from '@knowledge/contracts/ai';
 import type { ProjectSummary } from '@knowledge/contracts/identity';
 
 // ---------------------------------------------------------------------------
@@ -166,14 +166,37 @@ export interface DeriveBlueprintResponse {
 
 // --- POST /v1/blueprints/generate -----------------------------------------------------
 
+/** Rounds after which the interview drafts whatever the model says (#731). Enforced by the server, not the prompt. */
+export const BLUEPRINT_INTERVIEW_MAX_ROUNDS = 5;
+/** Questions in one round. */
+export const BLUEPRINT_INTERVIEW_MAX_QUESTIONS = 4;
+/** Options on one question. */
+export const BLUEPRINT_INTERVIEW_MAX_OPTIONS = 6;
+
+/** A question's answer: an option value, the ticked values, the person's own words, or `null` when skipped. */
+export type BlueprintInterviewAnswer = string | string[] | null;
+
 /**
- * A blueprint the `scaffolder` drafted from a person's description (Describe
- * it): tree, page guidance and styleguide, already through the one schema.
- * Nothing is written; the wizard takes it to Shape.
+ * One round of the Describe it interview (#731): the questions the scaffolder
+ * asked and, once answered, the person's answers keyed by question `name`.
+ * The client sends every round back on each call; there is no interview table.
  */
-export interface GenerateBlueprintResponse {
-  blueprint: Blueprint;
+export interface BlueprintInterviewRound {
+  questions: AssistantPromptField[];
+  answers?: Record<string, BlueprintInterviewAnswer>;
 }
+
+/**
+ * Describe it's reply (#716, #731). `done`: the blueprint the `scaffolder`
+ * drafted (tree, guidance, styleguide, through the one schema) and the glossary
+ * terms it read off the person's words, offered ticked. `asking`: one more
+ * round of questions, with the outline so far (titles only) and the candidate
+ * terms. Without an `interview` in the request the reply is always `done`.
+ * Nothing is written either way; the wizard takes a `done` to Shape.
+ */
+export type GenerateBlueprintResponse =
+  | { status: 'done'; blueprint: Blueprint; glossary: BlueprintGlossaryTerm[] }
+  | { status: 'asking'; round: BlueprintInterviewRound; outline: BlueprintNode[]; terms: BlueprintGlossaryTerm[] };
 
 // --- POST /v1/projects/scaffold (the body is ScaffoldProjectDto) ------------------
 

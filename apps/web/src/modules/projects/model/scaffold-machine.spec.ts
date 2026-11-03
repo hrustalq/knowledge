@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createActor } from 'xstate'
 import type { Blueprint } from '@knowledge/contracts'
 import { scaffoldMachine } from './scaffold-machine'
+import { freshInterview } from './interview'
 
 const laidOut: Blueprint = { name: { en: 'Two' }, tree: [{ title: { en: 'A' } }, { title: { en: 'B' } }] }
 const blank: Blueprint = { name: { en: 'Blank' }, tree: [] }
@@ -46,5 +47,25 @@ describe('scaffoldMachine GOTO (browser Back/Forward)', () => {
     actor.send({ type: 'RESTART' })
     actor.send({ type: 'GOTO', step: 'shape' })
     expect(actor.getSnapshot().value).toBe('start')
+  })
+})
+
+describe('scaffoldMachine interview (#731)', () => {
+  const interview = { ...freshInterview('Billing docs for partners'), rounds: [{ questions: [] }] }
+
+  it('keeps the interview across the draft and Back, so Describe it reopens it', () => {
+    const actor = running()
+    actor.send({ type: 'SET', patch: { interview } })
+    actor.send({ type: 'PICK', blueprint: laidOut, origin: { kind: 'described', brief: interview.brief } })
+    actor.send({ type: 'BACK' })
+    expect(actor.getSnapshot().value).toBe('start')
+    expect(actor.getSnapshot().context.interview).toEqual(interview)
+  })
+
+  it('drops it on Start over', () => {
+    const actor = running()
+    actor.send({ type: 'SET', patch: { interview } })
+    actor.send({ type: 'RESTART' })
+    expect(actor.getSnapshot().context.interview).toBeNull()
   })
 })

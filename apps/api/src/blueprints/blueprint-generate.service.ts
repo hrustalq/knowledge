@@ -1,5 +1,12 @@
 import { BadRequestException, Injectable, UnprocessableEntityException } from '@nestjs/common';
-import { DOCUMENT_CATEGORIES, blueprintText, type Blueprint, type GenerateBlueprintResponse } from '@knowledge/contracts';
+import {
+  BLUEPRINT_INTERVIEW_MAX_ROUNDS,
+  DOCUMENT_CATEGORIES,
+  blueprintText,
+  type Blueprint,
+  type BlueprintInterviewRound,
+  type GenerateBlueprintResponse,
+} from '@knowledge/contracts';
 import type { Principal } from '../auth/principal.js';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { AiUsageService } from '../ai/ai-usage.service.js';
@@ -12,9 +19,20 @@ import { TemplatesService } from '../templates/templates.service.js';
 import { titleLocale } from './derive-rules.js';
 import { keyed, outlineOf, readDraftedTree, readStyleguide } from './drafted-blueprint.js';
 import { parseBlueprint } from './blueprint.schema.js';
+import { readRound, readTerms, transcriptOf } from './interview-round.js';
 
 /** The read tools Describe it may use. Intersected with the agent's own list, never widened by it. */
 const GENERATE_TOOLS: ReadonlySet<string> = new Set(['list_document_tree', 'search_knowledge']);
+
+/**
+ * What makes a glossary term, both calls: `domain-modeling`'s GLOSSARY-FORMAT
+ * rules (mattpocock-skills 1.3.1), within `readTerms`' cap of 15.
+ */
+const GLOSSARY_RULES =
+  'terms are at most 15 words this project uses in its own sense, read off the person\'s description and ' +
+  'answers: one term per concept, the best of the words they use for it, defined in one or two sentences by ' +
+  'what it is, not what it does or how it is built. Leave out general technical words, however often they ' +
+  'come up.';
 
 const GENERATE_CONTRACT =
   'Draft the outline of a new documentation project from the person\'s description. You may look at how this ' +
@@ -30,7 +48,46 @@ const GENERATE_CONTRACT =
   DOCUMENT_CATEGORIES.map((c) => `"${c}"`).join('|') +
   ', "template"?: ref, "guidance"?: string, "collection"?: {"pattern"?: string, "template"?: ref}, ' +
   '"children"?: [node]}. name is a short name for the project; description one sentence. guidance says in one ' +
-  'or two sentences what belongs on that page. Give at most 10 styleguide rules.';
+  'or two sentences what belongs on that page. Give at most 10 styleguide rules. Add "glossary": [{"term": string, ' +
+  '"definition": string}], [] when none, where ' +
+  GLOSSARY_RULES +
+  ' Fold every decision the answers settled into the guidance of the page it shapes, and offer a decision-records ' +
+  'collection only when one of those decisions is hard to reverse, surprising without its context, and the ' +
+  'result of a real trade-off.';
+
+/**
+ * One interview round (#731): ask what the brief left open, or say there is
+ * nothing left. The method is Matt Pocock's `grilling` skill (a design tree
+ * worked in rounds over its frontier, one recommended answer per question,
+ * facts looked up rather than asked) and the questioning half of
+ * `domain-modeling` (sharpen fuzzy terms, probe boundaries with scenarios,
+ * check what the person says against what the workspace holds), from
+ * mattpocock-skills 1.3.1, adapted to a project outline. Their writing halves
+ * stay out: nothing is written before Create (#731 Q7), and the round cap and
+ * the shape of a question are the server's (`readRound`), not this prompt's.
+ */
+const INTERVIEW_CONTRACT =
+  'Before drafting the outline of a new documentation project, interview the person about their description until ' +
+  'you both understand the project the same way. Map it as a design tree: every decision about the project (who ' +
+  'reads it, what it covers and what it leaves to other projects, which kinds of pages recur, how it sits beside ' +
+  'what the workspace already holds, what its key words mean) branches into the decisions that hang off it. Work ' +
+  'the tree in rounds. The frontier is every decision whose prerequisites are already settled: ask the whole ' +
+  'frontier in this round, at most 4 questions. A question whose answer depends on another question still open ' +
+  'in this round belongs to a later round; never ask one the description or an earlier answer settled. Finding ' +
+  'facts is your job, never the person\'s: look up what the workspace already holds with the tools instead of ' +
+  'asking. The decisions are theirs. Sharpen their language as you go: when a word in the description is vague, ' +
+  'overloaded, or used differently by the workspace\'s pages, ask which they mean and offer the precise term as ' +
+  'the recommended option; when the boundary between two concepts is fuzzy, put a concrete scenario to them that ' +
+  'forces it. Each question is a "choice" (one option) or a "checklist" (several) with 2–6 options; mark exactly ' +
+  'one option recommended, the one you would pick, and say why in its description. Word the label so accepting ' +
+  'the recommended option is the natural answer. The person can always answer in their own words instead. You ' +
+  'are done when the frontier is empty: every branch visited, nothing silently assumed. Then respond ONLY with ' +
+  '{"done": true}. Otherwise respond ONLY with a json object {"questions": [{"type": "choice"|"checklist", ' +
+  '"name": string, "label": string, "options": [{"value": string, "label": string, "description"?: string, ' +
+  '"recommended"?: boolean}]}], "outline": [node], "terms": [{"term": string, "definition": string}]} where node is ' +
+  '{"title": string, "collection"?: {"pattern"?: string}, "children"?: [node]}: the outline as it stands now, ' +
+  'titles only, at most 3 levels; ' +
+  GLOSSARY_RULES;
 
 /**
  * Describe it (#716, phase 5): the `scaffolder` drafts a whole blueprint from
@@ -49,7 +106,18 @@ export class BlueprintGenerateService {
     private readonly templates: TemplatesService,
   ) {}
 
-  async generate(workspaceId: string, brief: string, start: Blueprint | null, principal: Principal): Promise<GenerateBlueprintResponse> {
+  /**
+   * Without `interview`, one draft (phase 5). With it (#731), one round: the
+   * scaffolder asks again, or — on `draft`, at the round cap, or when it says
+   * nothing is left open — drafts from the brief and every answer so far.
+   */
+  async generate(
+    workspaceId: string,
+    brief: string,
+    start: Blueprint | null,
+    principal: Principal,
+    interview?: { rounds: BlueprintInterviewRound[]; draft: boolean },
+  ): Promise<GenerateBlueprintResponse> {
     const agent = await this.agents.resolve(workspaceId, 'scaffolder');
     if (!agent.enabled) throw new BadRequestException(t('error.ai.agentDisabled', { key: agent.name }));
     await this.aiUsage.assertWithinBudget(workspaceId, principal.userId);
@@ -63,25 +131,39 @@ export class BlueprintGenerateService {
     const startText = start
       ? `\n\nAdapt this starting outline to the description:\n${wrapUntrusted(outlineOf(start.tree).lines.join('\n'), 'blueprint-generate', 'template')}`
       : '';
+    const rounds = interview?.rounds ?? [];
+    // The client sends the questions back too, so the whole transcript is the person's side: untrusted.
+    const answersText = rounds.length
+      ? `\n\nYour questions so far and the person's answers:\n${wrapUntrusted(transcriptOf(rounds), 'blueprint-generate', 'brief')}`
+      : '';
     // The language rides in the system message beside the contract: a mention in the user turn alone lost
     // to an English contract and English tool results, and the text landed under the wrong locale key.
     const language = lang === 'ru' ? 'Russian' : 'English';
+    // `draft` or the round cap always drafts, whatever the model would say; its own "done" is decided after its call.
+    const asking = !!interview && !interview.draft && rounds.length < BLUEPRINT_INTERVIEW_MAX_ROUNDS;
+    const contract = asking ? INTERVIEW_CONTRACT : GENERATE_CONTRACT;
     const messages = [
       {
         role: 'system' as const,
-        content: `${agent.instructions}\n\n${GENERATE_CONTRACT}\n\nWrite name, description, every title, guidance and rule in ${language}, whatever language the workspace's pages are in. Keep template refs and title-pattern placeholders as they are.`,
+        content: `${agent.instructions}\n\n${contract}\n\nWrite ${asking ? 'every question, option, title and term' : 'name, description, every title, guidance and rule'} in ${language}, whatever language the workspace's pages are in. Keep template refs and title-pattern placeholders as they are.`,
       },
       {
         role: 'user' as const,
         content:
           `Answer in ${language}.\n\nTemplates (ref — name (category)):\n${catalogue || '(none)'}` +
-          `\n\nThe description:\n${wrapUntrusted(brief, 'blueprint-generate', 'brief')}${startText}` +
+          `\n\nThe description:\n${wrapUntrusted(brief, 'blueprint-generate', 'brief')}${startText}${answersText}` +
+          (asking ? `\n\nThis is round ${rounds.length + 1} of at most ${BLUEPRINT_INTERVIEW_MAX_ROUNDS}.` : '') +
           // Asked in the language itself, last: it is what the model reads right before it answers.
-          (lang === 'ru' ? '\n\nПиши все названия, описания, подсказки и правила по-русски.' : ''),
+          (lang === 'ru' ? (asking ? '\n\nЗадавай вопросы и пиши варианты по-русски.' : '\n\nПиши все названия, описания, подсказки и правила по-русски.') : ''),
       },
     ];
 
-    const call = { config: agent.config, userId: principal.userId, operation: 'blueprint-generate' as const, locale: principal.locale };
+    const call = {
+      config: agent.config,
+      userId: principal.userId,
+      operation: asking ? ('blueprint-interview' as const) : ('blueprint-generate' as const),
+      locale: principal.locale,
+    };
     const allowed = new Set(agent.tools.filter((name) => GENERATE_TOOLS.has(name)));
     const tools = this.readTools.definitions().filter((d) => allowed.has(d.function.name));
     const raw =
@@ -102,6 +184,12 @@ export class BlueprintGenerateService {
           ).content;
 
     const parsed = safeJson(raw) ?? {};
+    if (asking) {
+      const round = readRound(parsed.questions);
+      // "done", or nothing askable: draft now from everything so far, in a second call.
+      if (parsed.done === true || !round.questions.length) return this.generate(workspaceId, brief, start, principal, { rounds, draft: true });
+      return { status: 'asking', round, outline: readDraftedTree(parsed.outline, new Set()), terms: readTerms(parsed.terms) };
+    }
     const tree = readDraftedTree(parsed.tree, refs);
     if (!tree.length) throw new UnprocessableEntityException({ statusCode: 422, message: t('error.blueprint.generateEmpty') });
 
@@ -111,6 +199,8 @@ export class BlueprintGenerateService {
     // A starting blueprint's own conventions (templates, glossary) stay; a drafted styleguide replaces its one.
     const conventions = { ...start?.conventions, ...(styleguide ? { styleguide } : {}) };
     return {
+      status: 'done',
+      glossary: readTerms(parsed.glossary),
       blueprint: parseBlueprint({
         name: keyed(name || (start ? blueprintText(start.name, lang) : '') || brief.trim().split('\n')[0]!.slice(0, 120)),
         ...(description ? { description: keyed(description) } : {}),

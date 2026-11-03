@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { BlueprintEntry, DeriveBlueprintResponse, GenerateBlueprintResponse, ListBlueprintsResponse } from '@knowledge/contracts';
+import type { BlueprintEntry, BlueprintInterviewRound, DeriveBlueprintResponse, GenerateBlueprintResponse, ListBlueprintsResponse } from '@knowledge/contracts';
 import { Access, CurrentPrincipal, Feature } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { Returns } from '../common/returns.decorator.js';
@@ -66,10 +66,15 @@ export class BlueprintsController {
     description:
       'Writes nothing. The scaffolder may list the workspace tree and search it, each call under the caller\'s ' +
       'access, and may adapt an optional starting blueprint. Its answer passes the same schema scaffold uses; ' +
-      'unknown template refs and malformed pages are dropped. 422 when nothing usable came back.',
+      'unknown template refs and malformed pages are dropped. 422 when nothing usable came back. With `rounds` ' +
+      '(#731) it interviews first: `status: asking` carries the next round of questions, the outline so far and ' +
+      'candidate glossary terms; `draft`, the round cap or the model running out of questions ends it with `done`.',
   })
   generate(@Body() dto: GenerateBlueprintDto, @CurrentPrincipal() principal: Principal): Promise<GenerateBlueprintResponse> {
-    return this.generator.generate(dto.workspaceId, dto.brief, dto.blueprint ? parseBlueprint(dto.blueprint) : null, principal);
+    const start = dto.blueprint ? parseBlueprint(dto.blueprint) : null;
+    // The DTO cannot name the contracts type; every question is re-read by `readRound` before the model sees it.
+    const interview = dto.rounds ? { rounds: dto.rounds as unknown as BlueprintInterviewRound[], draft: dto.draft === true } : undefined;
+    return this.generator.generate(dto.workspaceId, dto.brief, start, principal, interview);
   }
 
   @Post()

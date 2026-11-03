@@ -966,6 +966,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/blueprints/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Draft a blueprint from a description (Describe it): the scaffolder, with read-only tree and search
+         * @description Writes nothing. The scaffolder may list the workspace tree and search it, each call under the caller's access, and may adapt an optional starting blueprint. Its answer passes the same schema scaffold uses; unknown template refs and malformed pages are dropped. 422 when nothing usable came back.
+         */
+        post: operations["BlueprintsController_generate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/blueprints/{id}": {
         parameters: {
             query?: never;
@@ -8008,6 +8028,19 @@ export interface components {
              */
             projectId: string;
         };
+        GenerateBlueprintDto: {
+            /**
+             * Format: uuid
+             * @description The workspace the new project is for; the model call is billed here.
+             */
+            workspaceId: string;
+            /** @description What the project is for, in the person's words. */
+            brief: string;
+            /** @description A `Blueprint` (@knowledge/contracts), validated server-side by the same schema scaffold uses. A starting outline the scaffolder adapts. */
+            blueprint?: {
+                [key: string]: unknown;
+            };
+        };
         CreateBlueprintDto: {
             /** Format: uuid */
             workspaceId: string;
@@ -11124,7 +11157,7 @@ export interface components {
             createdAt: string;
         };
         /** @enum {string} */
-        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "source-recipe" | "source-judge" | "blueprint-derive";
+        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "source-recipe" | "source-judge" | "blueprint-derive" | "blueprint-generate";
         AiUsageResponse: {
             from: string;
             to: string;
@@ -13359,6 +13392,9 @@ export interface components {
             suite: components["schemas"]["ApiTestSuiteResponse"] | null;
             runId: string | null;
             existing: boolean;
+        };
+        GenerateBlueprintResponse: {
+            blueprint: components["schemas"]["Blueprint"];
         };
         GetAssistantThreadResponse: {
             thread: components["schemas"]["AssistantThreadSummary"];
@@ -19451,6 +19487,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DeriveBlueprintResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    BlueprintsController_generate: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerateBlueprintDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerateBlueprintResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

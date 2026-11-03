@@ -7666,11 +7666,11 @@
       "loadFailed": "The blueprints could not be loaded.",
       "pages": "{count} page | {count} pages",
       "noPages": "No pages",
-      "soon": "Coming soon",
       "derive": "From a project",
       "deriveBody": "Reuse the structure of a project you can already see: titles and headings only, never page text.",
       "describe": "Describe it",
       "describeBody": "Tell the assistant what the project is about and it drafts a structure for you to edit.",
+      "describeMeta": "Drafted by the assistant",
       "deriveMeta": "Any project you can open"
     },
     "shape": {
@@ -7768,12 +7768,39 @@
       "otherWorkspace": "another workspace",
       "reading": "Reading structure…",
       "failed": "The structure could not be read.",
-      "empty": "It has no published pages to copy: drafts are skipped."
+      "empty": "It has no published pages to copy: drafts are skipped.",
+      "pick": "Pick a project to see the outline it gives before you use it.",
+      "use": "Use this outline",
+      "termsOffered": "{count} glossary term offered | {count} glossary terms offered"
+    },
+    "describe": {
+      "title": "Describe the project",
+      "body": "Say what the project is for, who reads it and what it has to keep track of. The assistant drafts an outline you can change page by page.",
+      "label": "What is this project about?",
+      "placeholder": "For example: documentation for our billing service — how invoices are issued, the API partners call, the decisions behind it and the incidents we learned from.",
+      "startFrom": "Start from",
+      "nothing": "Nothing",
+      "hint": "The assistant may look at how this workspace’s pages are organised and what they cover, as far as you can see them. Nothing is created until the last step.",
+      "submit": "Draft outline",
+      "drafting": "Drafting an outline… this can take up to a minute.",
+      "shortcut": "⌘/Ctrl + Enter to draft",
+      "failed": "The outline could not be drafted.",
+      "nothingMeta": "Your description alone",
+      "adapts": "Outline it adapts",
+      "tipsTitle": "What helps the draft",
+      "tips": {
+        "covers": "What the project covers, and what it leaves to other projects.",
+        "readers": "Who reads it: engineers, support, partners, newcomers.",
+        "grows": "What grows over time — decisions, incidents, releases, sessions. These become numbered collections.",
+        "exists": "Pages that already exist elsewhere in the workspace, so the outline links to them rather than repeating them."
+      }
     },
     "provenance": {
       "from": "Read from “{name}”.",
       "drafted": "The assistant drafted the styleguide and page guidance; check them before creating.",
-      "rulesOnly": "Outline and headings come from rules only; the assistant did not draft anything."
+      "rulesOnly": "Outline and headings come from rules only; the assistant did not draft anything.",
+      "described": "Drafted from your description.",
+      "describedNote": "The assistant proposed the pages, notes and styleguide here; change anything that does not fit before creating."
     }
   },
   "blueprints": {

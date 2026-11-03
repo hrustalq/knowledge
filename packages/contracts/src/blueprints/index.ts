@@ -164,6 +164,17 @@ export interface DeriveBlueprintResponse {
   drafted: boolean;
 }
 
+// --- POST /v1/blueprints/generate -----------------------------------------------------
+
+/**
+ * A blueprint the `scaffolder` drafted from a person's description (Describe
+ * it): tree, page guidance and styleguide, already through the one schema.
+ * Nothing is written; the wizard takes it to Shape.
+ */
+export interface GenerateBlueprintResponse {
+  blueprint: Blueprint;
+}
+
 // --- POST /v1/projects/scaffold (the body is ScaffoldProjectDto) ------------------
 
 export interface ScaffoldProjectResponse {

@@ -1,7 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
-  STYLE_RULE_SEVERITIES,
-  STYLE_RULE_TEXT_MAX,
   type BlueprintGlossaryTerm,
   type BlueprintNode,
   type BlueprintTemplate,
@@ -23,12 +21,22 @@ import { PermissionService } from '../permissions/permission.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { parseBlueprint } from './blueprint.schema.js';
 import { deriveTree, headingsOf, titleLocale, type SourcePage } from './derive-rules.js';
+import { applyGuidance, outlineOf, readStyleguide } from './drafted-blueprint.js';
 
 const DEPTH = 3;
 /** Object-storage reads one derive may make: BLUEPRINT_MAX_PAGES plus slack for folded leaves. */
 const HEADING_READS = 300;
-const RULES_MAX = 10;
-const GUIDANCE_MAX = 500;
+
+/** Derive's half of the scaffolder's instructions: what it reads and the one shape it answers in. */
+const DERIVE_CONTRACT =
+  'You are given the outline of a project the team already has: its pages as numbered nodes, each with a ' +
+  'title, a category and the headings it uses. From it, infer the conventions the team writes by — how pages ' +
+  'are structured, named and kept — so a new project on a different subject can follow them. Respond ONLY ' +
+  'with a json object {"styleguide": {"description": string, "rules": [{"text": string, "severity": ' +
+  '"error"|"warning"|"info"}]}, "guidance": {"<node id>": string}}. description says in one sentence what the ' +
+  'styleguide is for. Give at most 10 rules. guidance gives, for the nodes where it helps, one or two sentences ' +
+  'on what belongs on that page — generic enough to hold for a new project on a different subject. Use only ' +
+  'node ids from the outline.';
 
 /**
  * A blueprint read off an existing project (#716), for a new project in
@@ -155,20 +163,7 @@ export class BlueprintDeriveService {
     const agent = await this.agents.resolve(workspaceId, 'scaffolder');
     if (!agent.enabled || !agent.config.enabled) return null;
 
-    const ids = new Map<string, BlueprintNode>();
-    const lines: string[] = [];
-    const outline = (nodes: BlueprintNode[], depth: number) => {
-      for (const node of nodes) {
-        const id = `n${ids.size + 1}`;
-        ids.set(id, node);
-        const title = Object.values(node.title)[0] ?? '';
-        const shape = node.templateRef ?? Object.values(node.body ?? {})[0]?.replace(/\n\n/g, '; ') ?? '';
-        const rule = node.collection ? ` [collection${node.collection.childTitlePattern ? `: ${Object.values(node.collection.childTitlePattern)[0]}…` : ''}]` : '';
-        lines.push(`${'  '.repeat(depth)}${id}. ${title}${node.category ? ` (${node.category})` : ''}${rule}${shape ? ` — ${shape}` : ''}`);
-        outline(node.children ?? [], depth + 1);
-      }
-    };
-    outline(tree, 0);
+    const { ids, lines } = outlineOf(tree);
     const lang: Locale = lines.filter((l) => titleLocale(l) === 'ru').length * 2 > lines.length ? 'ru' : 'en';
 
     try {
@@ -176,7 +171,7 @@ export class BlueprintDeriveService {
       const raw = await this.client.chat(
         { config: agent.config, userId: principal.userId, operation: 'blueprint-derive', locale: principal.locale },
         [
-          { role: 'system', content: agent.instructions },
+          { role: 'system', content: `${agent.instructions}\n\n${DERIVE_CONTRACT}` },
           {
             role: 'user',
             content: `Write in ${lang === 'ru' ? 'Russian' : 'English'}.\n\nThe project's outline:\n${wrapUntrusted(lines.join('\n'), 'blueprint-derive', 'page')}`,
@@ -185,23 +180,8 @@ export class BlueprintDeriveService {
         { json: true },
       );
       const parsed = safeJson(raw) ?? {};
-      const guidance = (parsed.guidance ?? {}) as Record<string, unknown>;
-      for (const [id, text] of Object.entries(guidance)) {
-        const node = ids.get(id);
-        if (node && typeof text === 'string' && text.trim()) node.guidance = { [lang]: text.trim().slice(0, GUIDANCE_MAX) };
-      }
-      const sg = (parsed.styleguide ?? {}) as { description?: unknown; rules?: unknown };
-      const rules: StyleRule[] = (Array.isArray(sg.rules) ? sg.rules : [])
-        .filter((r): r is { text: string; severity?: unknown } => typeof r?.text === 'string' && r.text.trim() !== '')
-        .slice(0, RULES_MAX)
-        .map((r, i) => ({
-          id: `rule-${i + 1}`,
-          text: r.text.trim().slice(0, STYLE_RULE_TEXT_MAX),
-          severity: (STYLE_RULE_SEVERITIES as readonly unknown[]).includes(r.severity) ? (r.severity as StyleRule['severity']) : 'warning',
-          enabled: true,
-        }));
-      const description = typeof sg.description === 'string' ? sg.description.trim().slice(0, 2_000) : '';
-      return { styleguide: rules.length ? { ...(description ? { description } : {}), rules } : null };
+      applyGuidance(parsed.guidance, ids, lang);
+      return { styleguide: readStyleguide(parsed.styleguide) };
     } catch (e) {
       this.logger.warn(`blueprint derive: scaffolder call failed, rules only (${(e as Error).message})`);
       return null;

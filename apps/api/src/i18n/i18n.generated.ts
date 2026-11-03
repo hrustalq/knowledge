@@ -1231,6 +1231,7 @@ export type I18nTranslations = {
             "limitReached": string;
             "alreadyCustomized": string;
             "contentRequired": string;
+            "generateEmpty": string;
         };
         "share": {
             "notFound": string;

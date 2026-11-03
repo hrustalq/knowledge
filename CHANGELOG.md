@@ -76,6 +76,17 @@ in the pull request that introduces them — see
   built-in for the workspace. The new *Settings → Blueprints* page lists built-in and saved blueprints with their
   page tree and conventions. There, *Open in wizard* starts a project from one, a built-in can be hidden or reset,
   and a saved blueprint can be switched off or deleted. Saved blueprints appear under *Start* for every editor.
+- **Describe a project and let the assistant draft its outline** (#716, phase 5 of 7). *Describe it* on the
+  wizard's Start step is live. Say what the project is for, and optionally pick a built-in or saved blueprint to
+  start from; the *Scaffolder* drafts a page tree with numbered collections, a line of guidance per page and a
+  styleguide, which then open in Shape marked as drafted from your description. While drafting it may look at how
+  the workspace's pages are organised and search what they cover, only as far as you can see them. It uses only
+  templates the workspace offers, drops pages it got wrong instead of failing the draft, and nothing is created until
+  *Create*. The card is hidden, and `POST /v1/blueprints/generate` answers 404, when the workspace has the assistant
+  switched off. The model call is billed to the workspace as `blueprint-generate`.
+- ***From a project* previews before it copies** (#716). Picking a project now shows the outline it gives (pages,
+  collections, styleguide rules, glossary terms on offer) beside the list; *Use this outline* takes it to Shape.
+  Both start panels use the full width of the wizard.
 - **A *Research question* page template** (`builtin:research-question`): Question, Options, Criteria, Findings,
   Decision, Open questions.
 

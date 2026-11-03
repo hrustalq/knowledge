@@ -535,7 +535,8 @@
     "notFound": "No blueprint \"{key}\" in this workspace",
     "limitReached": "A workspace can hold at most {max} blueprints",
     "alreadyCustomized": "This built-in blueprint is already customised in this workspace",
-    "contentRequired": "A saved blueprint needs its content"
+    "contentRequired": "A saved blueprint needs its content",
+    "generateEmpty": "The assistant returned no usable outline. Try describing the project in more detail."
   },
   "share": {
     "notFound": "This link does not exist, has expired or was revoked",

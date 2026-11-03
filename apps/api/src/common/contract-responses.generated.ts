@@ -142,6 +142,7 @@ import type {
   FlagFindingOutdatedResponse,
   ForgotPasswordResponse,
   GenerateApiTestSuiteResponse,
+  GenerateBlueprintResponse,
   GetAssistantThreadResponse,
   GetStyleguideResponse,
   GithubBranchesResponse,
@@ -493,6 +494,7 @@ export interface ContractResponses {
   FlagFindingOutdatedResponse: FlagFindingOutdatedResponse;
   ForgotPasswordResponse: ForgotPasswordResponse;
   GenerateApiTestSuiteResponse: GenerateApiTestSuiteResponse;
+  GenerateBlueprintResponse: GenerateBlueprintResponse;
   GetAssistantThreadResponse: GetAssistantThreadResponse;
   GetStyleguideResponse: GetStyleguideResponse;
   GithubBranchesResponse: GithubBranchesResponse;

@@ -4441,6 +4441,16 @@
       "platformAdmin": false
     },
     {
+      "method": "POST",
+      "path": "/v1/blueprints/generate",
+      "tag": "projects",
+      "summary": "Draft a blueprint from a description (Describe it): the scaffolder, with read-only tree and search",
+      "role": "editor",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "GET",
       "path": "/v1/projects",
       "tag": "projects",

@@ -16,6 +16,8 @@ import { BlueprintsService } from '../blueprints/blueprints.service.js';
 import { BlueprintDeriveService } from '../blueprints/blueprint-derive.service.js';
 import { AgentCoreModule } from '../agents/agent-core.module.js';
 import { AssistantClientModule } from '../assistant/assistant-client.module.js';
+import { AssistantReadToolsModule } from '../assistant/assistant-read-tools.module.js';
+import { BlueprintGenerateService } from '../blueprints/blueprint-generate.service.js';
 
 /**
  * Workspace > Project > Document — the organizational layer above pages.
@@ -39,12 +41,13 @@ import { AssistantClientModule } from '../assistant/assistant-client.module.js';
     DocumentsCoreModule,
     TemplatesCoreModule,
     AiCoreModule,
-    // Derive's one scaffolder call (#716, phase 4); both are controller-free.
+    // The scaffolder's calls (#716): derive's one, and Describe it's read-only tool loop. All controller-free.
     AgentCoreModule,
     AssistantClientModule,
+    AssistantReadToolsModule,
   ],
   controllers: [ProjectsController, BlueprintsController],
-  providers: [ProjectOverviewService, ProjectCascadeService, ProjectScaffoldService, BlueprintsService, BlueprintDeriveService],
+  providers: [ProjectOverviewService, ProjectCascadeService, ProjectScaffoldService, BlueprintsService, BlueprintDeriveService, BlueprintGenerateService],
   // The cascade is exported because connector revert reuses it to undo a page
   // this product otherwise has no way to delete (docs/features/26).
   exports: [ProjectsCoreModule, ProjectCascadeService],

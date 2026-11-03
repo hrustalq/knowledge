@@ -100,7 +100,7 @@ function addTerm() {
 </script>
 
 <template>
-  <div class="mx-auto max-w-3xl space-y-8 px-4 py-6 lg:py-10">
+  <div class="mx-auto w-full max-w-4xl space-y-8 px-4 py-6 lg:px-6">
     <div>
       <h2 class="text-lg font-semibold">{{ t('scaffold.conventions.title') }}</h2>
       <p class="kn-measure text-muted-foreground mt-1 text-sm leading-relaxed">{{ t('scaffold.conventions.body') }}</p>

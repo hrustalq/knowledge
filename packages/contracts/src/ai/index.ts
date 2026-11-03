@@ -1223,7 +1223,9 @@ export type AiUsageOperation =
   /** The `sentinel` judging a page that links a `web` source against what its new version changed (#674, phase 5b). One row per page. */
   | 'source-judge'
   /** The `scaffolder` drafting a derived blueprint's styleguide and page guidance (#716). One row per derive. */
-  | 'blueprint-derive';
+  | 'blueprint-derive'
+  /** The `scaffolder` drafting a whole blueprint from a person's description, with read tools (#716, Describe it). One row per model round. */
+  | 'blueprint-generate';
 
 /** One row of the per-user (or per-model) usage breakdown. */
 export interface AiUsageBucket {

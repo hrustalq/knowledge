@@ -16,12 +16,15 @@ import type { NodePath } from './blueprint-tree'
 
 /**
  * Where the edited blueprint came from: a listed blueprint (so Save can update
- * it, or override the built-in) or a project it was derived from (so Shape can
- * say whether the model drafted any of it, and Conventions can offer its terms).
+ * it, or override the built-in), a project it was derived from (so Shape can
+ * say whether the model drafted any of it, and Conventions can offer its
+ * terms), or a description the scaffolder drafted it from (so Shape says so,
+ * and Describe it reopens with the same words).
  */
 export type ScaffoldOrigin =
   | { kind: 'blueprint'; key: string; builtIn: boolean; id: string | null }
   | { kind: 'project'; projectName: string; drafted: boolean; glossary: BlueprintGlossaryTerm[] }
+  | { kind: 'described'; brief: string }
 
 export interface ScaffoldContext {
   blueprint: Blueprint | null

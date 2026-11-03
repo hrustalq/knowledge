@@ -44,6 +44,7 @@ import type {
   AssistantReviewResponse,
   AssistantSuggestResponse,
   AuthSessionResponse,
+  BlueprintEntry,
   BranchAccessResponse,
   BulkRejectCapturesResponse,
   CaptureInfo,
@@ -105,6 +106,7 @@ import type {
   DeleteMergeRequestCommentResponse,
   DeleteProjectResponse,
   DeleteWorkspaceResponse,
+  DeriveBlueprintResponse,
   DismissAgentFindingResponse,
   DocumentAncestorsResponse,
   DocumentBacklinksResponse,
@@ -140,6 +142,7 @@ import type {
   FlagFindingOutdatedResponse,
   ForgotPasswordResponse,
   GenerateApiTestSuiteResponse,
+  GenerateBlueprintResponse,
   GetAssistantThreadResponse,
   GetStyleguideResponse,
   GithubBranchesResponse,
@@ -184,6 +187,7 @@ import type {
   ListAssistantThreadsResponse,
   ListAttachmentsResponse,
   ListAuditLogsResponse,
+  ListBlueprintsResponse,
   ListBranchesResponse,
   ListCapturesResponse,
   ListCollabDraftsResponse,
@@ -288,6 +292,7 @@ import type {
   RotateAgentTriggerSecretResponse,
   RotateApiKeyResponse,
   SavedFilter,
+  ScaffoldProjectResponse,
   ScimSettingsView,
   ScimTokenCreated,
   SearchApiOperationsResponse,
@@ -391,6 +396,7 @@ export interface ContractResponses {
   AssistantReviewResponse: AssistantReviewResponse;
   AssistantSuggestResponse: AssistantSuggestResponse;
   AuthSessionResponse: AuthSessionResponse;
+  BlueprintEntry: BlueprintEntry;
   BranchAccessResponse: BranchAccessResponse;
   BulkRejectCapturesResponse: BulkRejectCapturesResponse;
   CaptureInfo: CaptureInfo;
@@ -452,6 +458,7 @@ export interface ContractResponses {
   DeleteMergeRequestCommentResponse: DeleteMergeRequestCommentResponse;
   DeleteProjectResponse: DeleteProjectResponse;
   DeleteWorkspaceResponse: DeleteWorkspaceResponse;
+  DeriveBlueprintResponse: DeriveBlueprintResponse;
   DismissAgentFindingResponse: DismissAgentFindingResponse;
   DocumentAncestorsResponse: DocumentAncestorsResponse;
   DocumentBacklinksResponse: DocumentBacklinksResponse;
@@ -487,6 +494,7 @@ export interface ContractResponses {
   FlagFindingOutdatedResponse: FlagFindingOutdatedResponse;
   ForgotPasswordResponse: ForgotPasswordResponse;
   GenerateApiTestSuiteResponse: GenerateApiTestSuiteResponse;
+  GenerateBlueprintResponse: GenerateBlueprintResponse;
   GetAssistantThreadResponse: GetAssistantThreadResponse;
   GetStyleguideResponse: GetStyleguideResponse;
   GithubBranchesResponse: GithubBranchesResponse;
@@ -531,6 +539,7 @@ export interface ContractResponses {
   ListAssistantThreadsResponse: ListAssistantThreadsResponse;
   ListAttachmentsResponse: ListAttachmentsResponse;
   ListAuditLogsResponse: ListAuditLogsResponse;
+  ListBlueprintsResponse: ListBlueprintsResponse;
   ListBranchesResponse: ListBranchesResponse;
   ListCapturesResponse: ListCapturesResponse;
   ListCollabDraftsResponse: ListCollabDraftsResponse;
@@ -635,6 +644,7 @@ export interface ContractResponses {
   RotateAgentTriggerSecretResponse: RotateAgentTriggerSecretResponse;
   RotateApiKeyResponse: RotateApiKeyResponse;
   SavedFilter: SavedFilter;
+  ScaffoldProjectResponse: ScaffoldProjectResponse;
   ScimSettingsView: ScimSettingsView;
   ScimTokenCreated: ScimTokenCreated;
   SearchApiOperationsResponse: SearchApiOperationsResponse;

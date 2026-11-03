@@ -15,13 +15,11 @@ import type { ListProjectsResponse, ProjectSummary } from '@knowledge/contracts'
 import { api, fetchApi } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
 import { errorMessage } from '@/shared/api/errors'
-import type { ScopeCreated } from '@/modules/projects/model/scopes'
 import { useAuthStore } from '@/stores/auth'
 import { useProjectsStore } from '@/stores/projects'
 import { Autocomplete, type AutocompleteOption } from '@/shared/ui/autocomplete'
 import { Button } from '@/shared/ui/button'
 import { Skeleton } from '@/shared/ui/skeleton'
-import SwitcherCreateDialog from '@/modules/projects/components/SwitcherCreateDialog.vue'
 
 const { t } = useI18n()
 
@@ -93,16 +91,6 @@ watch(picked, (ids) => {
   void router.push(`/settings/projects/${id}`)
 })
 
-// Creating is the same flow as everywhere else — the shared dialog, with its
-// loader, its inline errors and its skippable follow-up step. This rail only
-// decides where to land afterwards: on the new project's own settings, since
-// that is the page the user is already standing on.
-const creating = ref<'workspace' | 'project' | null>(null)
-
-async function onCreated(created: ScopeCreated) {
-  await reload()
-  void router.push(`/settings/projects/${created.id}`)
-}
 </script>
 
 <template>
@@ -166,14 +154,11 @@ async function onCreated(created: ScopeCreated) {
 
       <!-- Create sits at the foot of the rail, below its own divider. -->
       <div v-if="auth.canEdit" class="mt-auto shrink-0 border-t p-2">
-        <Button
-          variant="outline"
-          size="sm"
-          class="w-full justify-start gap-2"
-          @click="creating = 'project'"
-        >
-          <Plus class="size-4" />
-          {{ t('project.new') }}
+        <Button variant="outline" size="sm" class="w-full justify-start gap-2" as-child>
+          <RouterLink to="/projects/new">
+            <Plus class="size-4" />
+            {{ t('project.new') }}
+          </RouterLink>
         </Button>
       </div>
     </div>
@@ -183,7 +168,5 @@ async function onCreated(created: ScopeCreated) {
     <div data-kn-pane="3" class="flex min-h-0 min-w-0 flex-1 flex-col px-4 py-6 lg:px-8">
       <RouterView @changed="reload" />
     </div>
-
-    <SwitcherCreateDialog :kind="creating" @update:kind="creating = $event" @created="onCreated" />
   </div>
 </template>

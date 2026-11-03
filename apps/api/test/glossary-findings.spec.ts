@@ -179,6 +179,7 @@ describe('Add to glossary', () => {
     const res = await svc.addTerm(WS, 'run-1', 0, { userId: 'u2' } as never, { definition: 'Edited.' });
     expect(glossary.create).toHaveBeenCalledWith(
       { workspaceId: WS, projectId: P2, term: 'Merge base', definition: 'Edited.', aliases: ['base'], source: 'ai' },
+      expect.objectContaining({ workspaceId: WS }),
       'u2',
     );
     expect(res).toEqual({ termId: 'term-new', term: 'Merge base', projectId: P2 });

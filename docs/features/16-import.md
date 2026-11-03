@@ -50,6 +50,7 @@ no parser for.
 | `docx` | `mammoth` → HTML → `turndown` | Word's own *styles* map to semantics, so a "Heading 2" is `##` and not a bold paragraph. Images are lifted out (never inlined as data URIs — that would bloat every revision and defeat dedupe). Glyph bullets (`• item`, common in round-tripped files) are turned back into lists. mammoth's own warnings are surfaced verbatim. |
 | `pptx` | `fflate` + slide XML | One `##` per slide, bullets nested by real outline level, pictures resolved through each slide's rels, speaker notes kept as quotes. |
 | `html` | `turndown` | `head`/`title`/nav/footer/script/style removed. Remote images stay remote, and are reported. |
+| `xlsx` | `fflate` streaming unzip + exceljs `WorksheetReader` | One `##` per visible sheet, in tab order, each table built by the CSV parser's `markdownTable` (so the same 2000-row cap and wide-table warning apply per sheet). Cells carry their displayed value: a formula's cached result (its text when none is cached, counted in a warning), dates as `YYYY-MM-DD`, rich text as plain text, hyperlinks as markdown links, errors such as `#REF!` as text; a merged range keeps its value in the top-left cell. Empty sheets are skipped, hidden ones skipped with a warning. Each sheet is inflated chunk by chunk as its rows parse — past the cap rows are counted, never kept — but the shared-strings table is held whole. exceljs's `WorkbookReader` is not used: its temp-file path for sheets that precede `sharedStrings.xml` intermittently loses every string. Charts, images, pivot tables and cell comments are counted per sheet from the relationship files and reported; formatting is never carried. `.xls`, `.xlsm` and `.ods` are not read. |
 | `tabular` | ~40 lines, quote-aware | CSV/TSV → a GFM table. |
 | `structured` | `js-yaml` | Small objects become one `##` per top-level key; anything large or array-shaped stays one fenced block. |
 | `plaintext` | — | Markdown passes through untouched (frontmatter kept, so relations still index). Plain text gets hard wraps rejoined. |
@@ -134,6 +135,6 @@ IMPORT_OCR_MAX_PAGES=20
 
 ## Not in scope
 
-Batch multi-file import; an MCP `knowledge_import` tool; EPUB/RTF/XLSX; PDF
+Batch multi-file import; an MCP `knowledge_import` tool; EPUB/RTF/XLS/ODS; PDF
 embedded-image extraction (reported as a warning); re-parsing an existing page
 with a better parser later.

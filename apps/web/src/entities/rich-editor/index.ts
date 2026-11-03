@@ -3,6 +3,7 @@ export { ANCHOR_ATTR, type AnchorAuthor, anchorFromDomSelection, anchorFromRange
 export { default as ImportStepper } from './components/ImportStepper.vue'
 export { default as ParseProgress } from './components/ParseProgress.vue'
 export { default as RichEditor } from './components/RichEditor.vue'
+export { linesAt } from './components/extensions/source-lines'
 export { docToMarkdown } from './model/editor-streams'
 export { loadCollab } from './model/lazy'
 export { type CollabHandle, type CollabPeer, type CollabStatus } from './model/use-collab'

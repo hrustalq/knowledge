@@ -4289,6 +4289,72 @@
         ]
       }
     },
+    "/v1/projects/scaffold": {
+      "post": {
+        "operationId": "ProjectsController_scaffold",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScaffoldProjectDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScaffoldProjectResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create a project from a blueprint: pages, styleguide, templates and glossary in one go",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
     "/v1/projects/{id}": {
       "get": {
         "operationId": "ProjectsController_get",
@@ -4716,6 +4782,408 @@
           }
         },
         "summary": "What deleting this project would relocate (pass ?target= for glossary conflicts)",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/v1/blueprints": {
+      "get": {
+        "description": "Hidden built-ins and switched-off saved blueprints only with `includeDisabled`.",
+        "operationId": "BlueprintsController_list",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "includeDisabled",
+            "required": false,
+            "in": "query",
+            "description": "Include hidden built-ins and switched-off saved blueprints (the settings view). Off by default.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListBlueprintsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Blueprints a project can be scaffolded from: built-ins with overrides applied, then saved ones",
+        "tags": [
+          "projects"
+        ]
+      },
+      "post": {
+        "operationId": "BlueprintsController_create",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBlueprintDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlueprintEntry"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Save a blueprint, or customise or hide a built-in (`builtInKey`)",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/v1/blueprints/derive": {
+      "post": {
+        "description": "The source project may be in any workspace the caller belongs to and is read under their access there. Glossary terms are offered only from the same workspace. With `assistant` on, the scaffolder drafts a styleguide and page guidance; otherwise, or when that call fails, `drafted` is false.",
+        "operationId": "BlueprintsController_derive",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeriveBlueprintDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeriveBlueprintResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Read a blueprint off an existing project: titles and headings only, never page text",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/v1/blueprints/generate": {
+      "post": {
+        "description": "Writes nothing. The scaffolder may list the workspace tree and search it, each call under the caller's access, and may adapt an optional starting blueprint. Its answer passes the same schema scaffold uses; unknown template refs and malformed pages are dropped. 422 when nothing usable came back.",
+        "operationId": "BlueprintsController_generate",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateBlueprintDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateBlueprintResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Draft a blueprint from a description (Describe it): the scaffolder, with read-only tree and search",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/v1/blueprints/{id}": {
+      "patch": {
+        "operationId": "BlueprintsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBlueprintDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlueprintEntry"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Change a saved blueprint or an override; a changed blueprint appends a version",
+        "tags": [
+          "projects"
+        ]
+      },
+      "delete": {
+        "operationId": "BlueprintsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete a saved blueprint, or reset a built-in by deleting its override",
         "tags": [
           "projects"
         ]
@@ -6842,6 +7310,15 @@
             "required": false,
             "in": "query",
             "description": "What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lines",
+            "required": false,
+            "in": "query",
+            "description": "JSON only: `40-52` or `40` — just those 1-based lines of `markdown`, with startLine/endLine/totalLines and the passage `reference` to cite (#708). Out of range is a 400.",
             "schema": {
               "type": "string"
             }
@@ -40194,7 +40671,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.42.0",
+    "version": "0.43.0",
     "contact": {}
   },
   "tags": [],
@@ -41012,6 +41489,61 @@
           "name"
         ]
       },
+      "ScaffoldProjectDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "description": "The new project. Required unless parentId is given."
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "locale": {
+            "type": "string",
+            "enum": [
+              "en",
+              "ru"
+            ],
+            "description": "The language titles and skeletons are written in"
+          },
+          "blueprintKey": {
+            "type": "string",
+            "description": "A built-in blueprint (discovery, code-product, service-docs, blank) or a saved one's id, as `GET /v1/blueprints` lists it. Exactly one of blueprintKey and blueprint."
+          },
+          "blueprint": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "An inline `Blueprint` (@knowledge/contracts), validated server-side. Exactly one of blueprintKey and blueprint."
+          },
+          "parentId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Scaffold under this page of its existing project; conventions are not written"
+          },
+          "restricted": {
+            "type": "boolean",
+            "description": "Restrict the new project before its first page is written; the creator is granted manage. Ignored with parentId."
+          },
+          "avatarEmoji": {
+            "type": "string",
+            "description": "The new project's emoji face. Ignored with parentId."
+          },
+          "avatarColor": {
+            "type": "string",
+            "description": "Hex colour behind the emoji, e.g. `#3b82f6`."
+          }
+        },
+        "required": [
+          "workspaceId",
+          "locale"
+        ]
+      },
       "UpdateProjectDto": {
         "type": "object",
         "properties": {
@@ -41029,6 +41561,94 @@
           "avatarColor": {
             "type": "string",
             "nullable": true
+          }
+        }
+      },
+      "DeriveBlueprintDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The workspace the new project is for; the model call is billed here."
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The project to read, in any workspace the caller belongs to."
+          }
+        },
+        "required": [
+          "workspaceId",
+          "projectId"
+        ]
+      },
+      "GenerateBlueprintDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The workspace the new project is for; the model call is billed here."
+          },
+          "brief": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 4000,
+            "description": "What the project is for, in the person's words."
+          },
+          "blueprint": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "A `Blueprint` (@knowledge/contracts), validated server-side by the same schema scaffold uses. A starting outline the scaffolder adapts."
+          }
+        },
+        "required": [
+          "workspaceId",
+          "brief"
+        ]
+      },
+      "CreateBlueprintDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "builtInKey": {
+            "type": "string",
+            "enum": [
+              "discovery",
+              "code-product",
+              "service-docs",
+              "blank"
+            ],
+            "description": "Override this built-in instead of adding a blueprint."
+          },
+          "blueprint": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "A `Blueprint` (@knowledge/contracts), validated server-side by the same schema scaffold uses."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "False hides it from the Start step. Defaults to true."
+          }
+        },
+        "required": [
+          "workspaceId"
+        ]
+      },
+      "UpdateBlueprintDto": {
+        "type": "object",
+        "properties": {
+          "blueprint": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "A `Blueprint` (@knowledge/contracts), validated server-side by the same schema scaffold uses. A change appends a version."
+          },
+          "enabled": {
+            "type": "boolean"
           }
         }
       },
@@ -41418,6 +42038,16 @@
             "type": "number",
             "nullable": true,
             "description": "Review interval in days; null inherits, 0 never expires"
+          },
+          "childTemplateRef": {
+            "type": "string",
+            "nullable": true,
+            "description": "Child template: a template uuid or builtin:<key>; null clears it"
+          },
+          "childTitlePattern": {
+            "type": "string",
+            "nullable": true,
+            "description": "Child title pattern ({{n:W}}, {{date}}); blank or null clears it"
           }
         }
       },
@@ -45770,6 +46400,10 @@
             "type": "string",
             "format": "uuid",
             "description": "Fills `{{parent}}`"
+          },
+          "skeleton": {
+            "type": "boolean",
+            "description": "Leave declared placeholders as {{name}} instead of requiring them: a collection child page skeleton (#716)"
           }
         },
         "required": [
@@ -45804,7 +46438,8 @@
               "test-plan",
               "test-case",
               "test-data",
-              "bug-report"
+              "bug-report",
+              "research-question"
             ],
             "description": "Override this built-in for the workspace (`admin`): with `source` to customise it, with `enabled: false` to hide it"
           },
@@ -50315,7 +50950,9 @@
           "transcription",
           "memo",
           "source-recipe",
-          "source-judge"
+          "source-judge",
+          "blueprint-derive",
+          "blueprint-generate"
         ]
       },
       "AiUsageResponse": {
@@ -53692,6 +54329,195 @@
         "type": "string",
         "nullable": true
       },
+      "Blueprint": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "$ref": "#/components/schemas/BlueprintText"
+          },
+          "description": {
+            "$ref": "#/components/schemas/BlueprintText"
+          },
+          "icon": {
+            "type": "string"
+          },
+          "tree": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BlueprintNode"
+            }
+          },
+          "conventions": {
+            "$ref": "#/components/schemas/BlueprintConventions"
+          }
+        },
+        "required": [
+          "name",
+          "tree"
+        ]
+      },
+      "BlueprintCollection": {
+        "type": "object",
+        "properties": {
+          "childTemplateRef": {
+            "$ref": "#/components/schemas/TemplateRef"
+          },
+          "childTitlePattern": {
+            "$ref": "#/components/schemas/BlueprintText"
+          }
+        }
+      },
+      "BlueprintConventions": {
+        "type": "object",
+        "properties": {
+          "styleguide": {
+            "type": "object",
+            "properties": {
+              "description": {
+                "type": "string"
+              },
+              "rules": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/StyleRule"
+                }
+              }
+            },
+            "required": [
+              "rules"
+            ]
+          },
+          "templates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BlueprintTemplate"
+            }
+          },
+          "glossary": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BlueprintGlossaryTerm"
+            }
+          }
+        }
+      },
+      "BlueprintEntry": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "builtIn": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string",
+            "nullable": true
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "number"
+          },
+          "blueprint": {
+            "$ref": "#/components/schemas/Blueprint"
+          }
+        },
+        "required": [
+          "key",
+          "builtIn",
+          "id",
+          "enabled",
+          "version",
+          "blueprint"
+        ]
+      },
+      "BlueprintGlossaryTerm": {
+        "type": "object",
+        "properties": {
+          "term": {
+            "type": "string"
+          },
+          "definition": {
+            "type": "string"
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "term",
+          "definition"
+        ]
+      },
+      "BlueprintNode": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "$ref": "#/components/schemas/BlueprintText"
+          },
+          "category": {
+            "$ref": "#/components/schemas/DocumentCategory"
+          },
+          "templateRef": {
+            "$ref": "#/components/schemas/TemplateRef"
+          },
+          "body": {
+            "$ref": "#/components/schemas/BlueprintText"
+          },
+          "guidance": {
+            "$ref": "#/components/schemas/BlueprintText"
+          },
+          "collection": {
+            "$ref": "#/components/schemas/BlueprintCollection"
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BlueprintNode"
+            }
+          }
+        },
+        "required": [
+          "title"
+        ]
+      },
+      "BlueprintTemplate": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "icon": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "source"
+        ]
+      },
+      "BlueprintText": {
+        "type": "object",
+        "properties": {
+          "en": {
+            "type": "string"
+          },
+          "ru": {
+            "type": "string"
+          }
+        }
+      },
       "BranchAccessResponse": {
         "type": "object",
         "properties": {
@@ -53778,7 +54604,8 @@
           "test-plan",
           "test-case",
           "test-data",
-          "bug-report"
+          "bug-report",
+          "research-question"
         ]
       },
       "BulkRejectCapturesResponse": {
@@ -57386,6 +58213,28 @@
           "counts"
         ]
       },
+      "DeriveBlueprintResponse": {
+        "type": "object",
+        "properties": {
+          "blueprint": {
+            "$ref": "#/components/schemas/Blueprint"
+          },
+          "glossary": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BlueprintGlossaryTerm"
+            }
+          },
+          "drafted": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "blueprint",
+          "glossary",
+          "drafted"
+        ]
+      },
       "DiffHunk": {
         "type": "object",
         "properties": {
@@ -57613,6 +58462,18 @@
           },
           "resolvedAsOf": {
             "$ref": "#/components/schemas/ResolvedAsOf"
+          },
+          "startLine": {
+            "type": "number"
+          },
+          "endLine": {
+            "type": "number"
+          },
+          "totalLines": {
+            "type": "number"
+          },
+          "reference": {
+            "type": "string"
           }
         },
         "required": [
@@ -58124,6 +58985,14 @@
             "type": "number",
             "nullable": true
           },
+          "childTemplateRef": {
+            "type": "string",
+            "nullable": true
+          },
+          "childTitlePattern": {
+            "type": "string",
+            "nullable": true
+          },
           "restricted": {
             "type": "boolean"
           },
@@ -58350,6 +59219,14 @@
           },
           "templateVersion": {
             "type": "number",
+            "nullable": true
+          },
+          "childTemplateRef": {
+            "type": "string",
+            "nullable": true
+          },
+          "childTitlePattern": {
+            "type": "string",
             "nullable": true
           },
           "restricted": {
@@ -59775,6 +60652,17 @@
           "existing"
         ]
       },
+      "GenerateBlueprintResponse": {
+        "type": "object",
+        "properties": {
+          "blueprint": {
+            "$ref": "#/components/schemas/Blueprint"
+          }
+        },
+        "required": [
+          "blueprint"
+        ]
+      },
       "GetAssistantThreadResponse": {
         "type": "object",
         "properties": {
@@ -60914,6 +61802,7 @@
           "docx",
           "pptx",
           "html",
+          "xlsx",
           "tabular",
           "structured",
           "plaintext",
@@ -62333,6 +63222,20 @@
           "workspaceId",
           "entries",
           "nextCursor"
+        ]
+      },
+      "ListBlueprintsResponse": {
+        "type": "object",
+        "properties": {
+          "blueprints": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BlueprintEntry"
+            }
+          }
+        },
+        "required": [
+          "blueprints"
         ]
       },
       "ListBranchesResponse": {
@@ -67961,6 +68864,21 @@
         },
         "required": [
           "chips"
+        ]
+      },
+      "ScaffoldProjectResponse": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "$ref": "#/components/schemas/ProjectSummary"
+          },
+          "pageCount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "project",
+          "pageCount"
         ]
       },
       "ScimDefaultRole": {

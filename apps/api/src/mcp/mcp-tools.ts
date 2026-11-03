@@ -92,6 +92,8 @@ export const WRITE_TOOLS: ReadonlySet<string> = new Set([
   'knowledge_run_test_suite',
   // Resolves or dismisses a contradiction between pages (#81).
   'knowledge_resolve_conflict',
+  // Creates a project with its conventions and every page of a blueprint (#716).
+  'knowledge_scaffold_project',
 ]);
 
 /**

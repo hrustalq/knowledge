@@ -838,6 +838,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/projects/scaffold": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a project from a blueprint: pages, styleguide, templates and glossary in one go */
+        post: operations["ProjectsController_scaffold"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/projects/{id}": {
         parameters: {
             query?: never;
@@ -906,6 +923,85 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/v1/blueprints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Blueprints a project can be scaffolded from: built-ins with overrides applied, then saved ones
+         * @description Hidden built-ins and switched-off saved blueprints only with `includeDisabled`.
+         */
+        get: operations["BlueprintsController_list"];
+        put?: never;
+        /** Save a blueprint, or customise or hide a built-in (`builtInKey`) */
+        post: operations["BlueprintsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/blueprints/derive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read a blueprint off an existing project: titles and headings only, never page text
+         * @description The source project may be in any workspace the caller belongs to and is read under their access there. Glossary terms are offered only from the same workspace. With `assistant` on, the scaffolder drafts a styleguide and page guidance; otherwise, or when that call fails, `drafted` is false.
+         */
+        post: operations["BlueprintsController_derive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/blueprints/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Draft a blueprint from a description (Describe it): the scaffolder, with read-only tree and search
+         * @description Writes nothing. The scaffolder may list the workspace tree and search it, each call under the caller's access, and may adapt an optional starting blueprint. Its answer passes the same schema scaffold uses; unknown template refs and malformed pages are dropped. 422 when nothing usable came back.
+         */
+        post: operations["BlueprintsController_generate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/blueprints/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a saved blueprint, or reset a built-in by deleting its override */
+        delete: operations["BlueprintsController_remove"];
+        options?: never;
+        head?: never;
+        /** Change a saved blueprint or an override; a changed blueprint appends a version */
+        patch: operations["BlueprintsController_update"];
         trace?: never;
     };
     "/v1/groups": {
@@ -7885,11 +7981,87 @@ export interface components {
             name: string;
             description?: string | null;
         };
+        ScaffoldProjectDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /** @description The new project. Required unless parentId is given. */
+            name?: string;
+            description?: string | null;
+            /**
+             * @description The language titles and skeletons are written in
+             * @enum {string}
+             */
+            locale: "en" | "ru";
+            /** @description A built-in blueprint (discovery, code-product, service-docs, blank) or a saved one's id, as `GET /v1/blueprints` lists it. Exactly one of blueprintKey and blueprint. */
+            blueprintKey?: string;
+            /** @description An inline `Blueprint` (@knowledge/contracts), validated server-side. Exactly one of blueprintKey and blueprint. */
+            blueprint?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Format: uuid
+             * @description Scaffold under this page of its existing project; conventions are not written
+             */
+            parentId?: string;
+            /** @description Restrict the new project before its first page is written; the creator is granted manage. Ignored with parentId. */
+            restricted?: boolean;
+            /** @description The new project's emoji face. Ignored with parentId. */
+            avatarEmoji?: string;
+            /** @description Hex colour behind the emoji, e.g. `#3b82f6`. */
+            avatarColor?: string;
+        };
         UpdateProjectDto: {
             name?: string;
             description?: string | null;
             avatarEmoji?: string | null;
             avatarColor?: string | null;
+        };
+        DeriveBlueprintDto: {
+            /**
+             * Format: uuid
+             * @description The workspace the new project is for; the model call is billed here.
+             */
+            workspaceId: string;
+            /**
+             * Format: uuid
+             * @description The project to read, in any workspace the caller belongs to.
+             */
+            projectId: string;
+        };
+        GenerateBlueprintDto: {
+            /**
+             * Format: uuid
+             * @description The workspace the new project is for; the model call is billed here.
+             */
+            workspaceId: string;
+            /** @description What the project is for, in the person's words. */
+            brief: string;
+            /** @description A `Blueprint` (@knowledge/contracts), validated server-side by the same schema scaffold uses. A starting outline the scaffolder adapts. */
+            blueprint?: {
+                [key: string]: unknown;
+            };
+        };
+        CreateBlueprintDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /**
+             * @description Override this built-in instead of adding a blueprint.
+             * @enum {string}
+             */
+            builtInKey?: "discovery" | "code-product" | "service-docs" | "blank";
+            /** @description A `Blueprint` (@knowledge/contracts), validated server-side by the same schema scaffold uses. */
+            blueprint?: {
+                [key: string]: unknown;
+            };
+            /** @description False hides it from the Start step. Defaults to true. */
+            enabled?: boolean;
+        };
+        UpdateBlueprintDto: {
+            /** @description A `Blueprint` (@knowledge/contracts), validated server-side by the same schema scaffold uses. A change appends a version. */
+            blueprint?: {
+                [key: string]: unknown;
+            };
+            enabled?: boolean;
         };
         CreateUserGroupDto: {
             workspaceId: string;
@@ -8030,6 +8202,10 @@ export interface components {
             ownerId?: string | null;
             /** @description Review interval in days; null inherits, 0 never expires */
             reviewIntervalDays?: number | null;
+            /** @description Child template: a template uuid or builtin:<key>; null clears it */
+            childTemplateRef?: string | null;
+            /** @description Child title pattern ({{n:W}}, {{date}}); blank or null clears it */
+            childTitlePattern?: string | null;
         };
         MoveDocumentDto: {
             /** Format: uuid */
@@ -9638,6 +9814,8 @@ export interface components {
              * @description Fills `{{parent}}`
              */
             parentId?: string;
+            /** @description Leave declared placeholders as {{name}} instead of requiring them: a collection child page skeleton (#716) */
+            skeleton?: boolean;
         };
         CreateTemplateDto: {
             /** Format: uuid */
@@ -9651,7 +9829,7 @@ export interface components {
              * @description Override this built-in for the workspace (`admin`): with `source` to customise it, with `enabled: false` to hide it
              * @enum {string}
              */
-            builtInKey?: "adr" | "rfc" | "runbook" | "postmortem" | "api-spec" | "use-case" | "entity" | "component" | "test-plan" | "test-case" | "test-data" | "bug-report";
+            builtInKey?: "adr" | "rfc" | "runbook" | "postmortem" | "api-spec" | "use-case" | "entity" | "component" | "test-plan" | "test-case" | "test-data" | "bug-report" | "research-question";
             /** @description Required for a custom template; a built-in override inherits the built-in name */
             name?: string;
             description?: string | null;
@@ -10979,7 +11157,7 @@ export interface components {
             createdAt: string;
         };
         /** @enum {string} */
-        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "source-recipe" | "source-judge";
+        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "source-recipe" | "source-judge" | "blueprint-derive" | "blueprint-generate";
         AiUsageResponse: {
             from: string;
             to: string;
@@ -11762,6 +11940,57 @@ export interface components {
         /** @enum {string} */
         AuthorableRelationType: "DESCRIBES" | "DEPENDS_ON" | "IMPLEMENTS" | "RELATED_TO" | "OWNED_BY" | "SUPERSEDES" | "CONTRADICTS";
         AvatarUrl: string | null;
+        Blueprint: {
+            name: components["schemas"]["BlueprintText"];
+            description?: components["schemas"]["BlueprintText"];
+            icon?: string;
+            tree: components["schemas"]["BlueprintNode"][];
+            conventions?: components["schemas"]["BlueprintConventions"];
+        };
+        BlueprintCollection: {
+            childTemplateRef?: components["schemas"]["TemplateRef"];
+            childTitlePattern?: components["schemas"]["BlueprintText"];
+        };
+        BlueprintConventions: {
+            styleguide?: {
+                description?: string;
+                rules: components["schemas"]["StyleRule"][];
+            };
+            templates?: components["schemas"]["BlueprintTemplate"][];
+            glossary?: components["schemas"]["BlueprintGlossaryTerm"][];
+        };
+        BlueprintEntry: {
+            key: string;
+            builtIn: boolean;
+            id: string | null;
+            enabled: boolean;
+            version: number;
+            blueprint: components["schemas"]["Blueprint"];
+        };
+        BlueprintGlossaryTerm: {
+            term: string;
+            definition: string;
+            aliases?: string[];
+        };
+        BlueprintNode: {
+            title: components["schemas"]["BlueprintText"];
+            category?: components["schemas"]["DocumentCategory"];
+            templateRef?: components["schemas"]["TemplateRef"];
+            body?: components["schemas"]["BlueprintText"];
+            guidance?: components["schemas"]["BlueprintText"];
+            collection?: components["schemas"]["BlueprintCollection"];
+            children?: components["schemas"]["BlueprintNode"][];
+        };
+        BlueprintTemplate: {
+            name: string;
+            source: string;
+            description?: string;
+            icon?: string;
+        };
+        BlueprintText: {
+            en?: string;
+            ru?: string;
+        };
         BranchAccessResponse: {
             branchId: string;
             restricted: boolean;
@@ -11780,7 +12009,7 @@ export interface components {
             createdAt: string;
         };
         /** @enum {string} */
-        BuiltInTemplateKey: "adr" | "rfc" | "runbook" | "postmortem" | "api-spec" | "use-case" | "entity" | "component" | "test-plan" | "test-case" | "test-data" | "bug-report";
+        BuiltInTemplateKey: "adr" | "rfc" | "runbook" | "postmortem" | "api-spec" | "use-case" | "entity" | "component" | "test-plan" | "test-case" | "test-data" | "bug-report" | "research-question";
         BulkRejectCapturesResponse: {
             rejected: number;
             closed: number;
@@ -12611,6 +12840,11 @@ export interface components {
             deletedAt: string;
             counts: components["schemas"]["WorkspaceDeletionCounts"];
         };
+        DeriveBlueprintResponse: {
+            blueprint: components["schemas"]["Blueprint"];
+            glossary: components["schemas"]["BlueprintGlossaryTerm"][];
+            drafted: boolean;
+        };
         DiffHunk: {
             oldStart: number;
             oldLines: number;
@@ -12667,6 +12901,10 @@ export interface components {
             } | null;
             markdown: string;
             resolvedAsOf?: components["schemas"]["ResolvedAsOf"];
+            startLine?: number;
+            endLine?: number;
+            totalLines?: number;
+            reference?: string;
         };
         DocumentDetailResponse: {
             document: components["schemas"]["DocumentSummary"];
@@ -12778,6 +13016,8 @@ export interface components {
             archivedBy?: string | null;
             templateRef?: string | null;
             templateVersion?: number | null;
+            childTemplateRef?: string | null;
+            childTitlePattern?: string | null;
             restricted?: boolean;
             draftOwnerId?: string | null;
             hidden?: boolean;
@@ -12830,6 +13070,8 @@ export interface components {
             archivedBy?: string | null;
             templateRef?: string | null;
             templateVersion?: number | null;
+            childTemplateRef?: string | null;
+            childTitlePattern?: string | null;
             restricted?: boolean;
             draftOwnerId?: string | null;
             hidden?: boolean;
@@ -13151,6 +13393,9 @@ export interface components {
             runId: string | null;
             existing: boolean;
         };
+        GenerateBlueprintResponse: {
+            blueprint: components["schemas"]["Blueprint"];
+        };
         GetAssistantThreadResponse: {
             thread: components["schemas"]["AssistantThreadSummary"];
             messages: components["schemas"]["AssistantMessageInfo"][];
@@ -13412,7 +13657,7 @@ export interface components {
             needsOcr?: boolean;
         };
         /** @enum {string} */
-        ImportParserId: "pdf" | "docx" | "pptx" | "html" | "tabular" | "structured" | "plaintext" | "ocr";
+        ImportParserId: "pdf" | "docx" | "pptx" | "html" | "xlsx" | "tabular" | "structured" | "plaintext" | "ocr";
         /** @enum {string} */
         ImportStatus: "awaiting-upload" | "queued" | "running" | "parsed" | "failed" | "submitted";
         IngestionJobInfo: {
@@ -13731,6 +13976,9 @@ export interface components {
             workspaceId: string;
             entries: components["schemas"]["AuditLogEntry"][];
             nextCursor: string | null;
+        };
+        ListBlueprintsResponse: {
+            blueprints: components["schemas"]["BlueprintEntry"][];
         };
         ListBranchesResponse: {
             branches: components["schemas"]["BranchInfo"][];
@@ -15027,6 +15275,10 @@ export interface components {
             status?: components["schemas"]["MergeRequestStatus"] | "all";
             search?: string;
             chips: components["schemas"]["SavedFilterChip"][];
+        };
+        ScaffoldProjectResponse: {
+            project: components["schemas"]["ProjectSummary"];
+            pageCount: number;
         };
         /** @enum {string} */
         ScimDefaultRole: "none" | "guest" | "viewer" | "editor" | "admin";
@@ -18815,6 +19067,50 @@ export interface operations {
             };
         };
     };
+    ProjectsController_scaffold: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScaffoldProjectDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScaffoldProjectResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     ProjectsController_get: {
         parameters: {
             query?: never;
@@ -19059,6 +19355,268 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectDeletionPreview"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    BlueprintsController_list: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description Include hidden built-ins and switched-off saved blueprints (the settings view). Off by default. */
+                includeDisabled?: boolean;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListBlueprintsResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    BlueprintsController_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateBlueprintDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlueprintEntry"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    BlueprintsController_derive: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeriveBlueprintDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeriveBlueprintResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    BlueprintsController_generate: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerateBlueprintDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerateBlueprintResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    BlueprintsController_remove: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    BlueprintsController_update: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateBlueprintDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlueprintEntry"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
@@ -20356,6 +20914,8 @@ export interface operations {
                 asOf?: string;
                 /** @description What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now. */
                 knownAt?: string;
+                /** @description JSON only: `40-52` or `40` — just those 1-based lines of `markdown`, with startLine/endLine/totalLines and the passage `reference` to cite (#708). Out of range is a 400. */
+                lines?: string;
             };
             header?: {
                 /** @description text/markdown (ranked above application/json) answers with the same body as GET :id/markdown (issue #68) */

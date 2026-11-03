@@ -4,7 +4,7 @@
  * `parseHTML` rules turn it into the document. One parser means a page can
  * never look one way when read and another way when opened for editing.
  */
-import { Marked, type Token, type Tokens, type TokensList } from 'marked';
+import { Marked, Renderer, type Token, type Tokens, type TokensList } from 'marked';
 import { slugifyPath } from '@knowledge/contracts/publishing';
 import { pageTitleHref, type PageRefResolver } from '@knowledge/contracts';
 import { asEmbedLayout, canonicalEmbedUrl, canonicalizeEmbedUrl, parseEmbedUrl, type EmbedItem, type EmbedLayout } from '@knowledge/contracts/embeds';
@@ -35,6 +35,12 @@ export interface RenderOptions {
    * "someone opened the page" into a content change nobody asked for.
    */
   resolvePage?: PageRefResolver;
+  /**
+   * Stamp `data-lines="a-b"` on every block (#708): its 1-based line span in
+   * the stored body, `lineOffset` being the lines held out before `md` (a
+   * page's own `# Title`). Read surfaces only, so an editor's HTML is unchanged.
+   */
+  lineOffset?: number;
 }
 
 /** `> [!NOTE]` on the blockquote's first line, GitHub alert syntax. */
@@ -69,10 +75,10 @@ marked.use({
         const layout = Object.entries(diagramLayoutAttrs(diagramLayoutFromInfo(token.lang ?? '')))
           .map(([name, value]) => ` ${name}="${escapeHtml(value)}"`)
           .join('');
-        return `<div ${lang === 'mermaid' ? KN.mermaid : KN.drawing}="1"${layout}><pre>${escapeHtml(token.text)}</pre></div>`;
+        return withLines(token, `<div ${lang === 'mermaid' ? KN.mermaid : KN.drawing}="1"${layout}><pre>${escapeHtml(token.text)}</pre></div>`);
       }
       const cls = lang ? ` class="language-${escapeHtml(lang)}"` : '';
-      return `<pre><code${cls}>${escapeHtml(token.text)}</code></pre>`;
+      return withLines(token, `<pre><code${cls}>${escapeHtml(token.text)}</code></pre>`);
     },
 
     /** GitHub alert blockquotes become panels; plain ones stay blockquotes. */
@@ -80,9 +86,9 @@ marked.use({
       const inner = this.parser.parse(token.tokens);
       const panel = panelOf(token);
       if (panel) {
-        return `<div ${KN.panel}="${panel.kind}">${stripAlertMarker(inner)}</div>`;
+        return withLines(token, `<div ${KN.panel}="${panel.kind}">${stripAlertMarker(inner)}</div>`);
       }
-      return `<blockquote>${inner}</blockquote>`;
+      return withLines(token, `<blockquote>${inner}</blockquote>`);
     },
 
     /**
@@ -92,21 +98,35 @@ marked.use({
      */
     list(token: Tokens.List): string {
       const items = token.items.map((item) => this.listitem(item)).join('');
-      if (token.items.some((i) => i.task)) return `<ul data-type="taskList">${items}</ul>`;
+      if (token.items.some((i) => i.task)) return withLines(token, `<ul data-type="taskList">${items}</ul>`);
       if (token.ordered) {
         const start = token.start && token.start !== 1 ? ` start="${token.start}"` : '';
-        return `<ol${start}>${items}</ol>`;
+        return withLines(token, `<ol${start}>${items}</ol>`);
       }
-      return `<ul>${items}</ul>`;
+      return withLines(token, `<ul>${items}</ul>`);
     },
 
     listitem(token: Tokens.ListItem): string {
-      if (!token.task) return `<li>${this.parser.parse(token.tokens)}</li>`;
+      if (!token.task) return withLines(token, `<li>${this.parser.parse(token.tokens)}</li>`);
       // marked injects a checkbox token into the item; drop it and carry the
       // state on the <li> where TipTap's TaskItem expects it.
       const tokens = token.tokens.filter((t) => t.type !== 'checkbox');
       const body = this.parser.parse(tokens) || '<p></p>';
-      return `<li data-type="taskItem" data-checked="${token.checked ? 'true' : 'false'}">${body}</li>`;
+      return withLines(token, `<li data-type="taskItem" data-checked="${token.checked ? 'true' : 'false'}">${body}</li>`);
+    },
+
+    // The default spellings, plus the line span when one is stamped (#708).
+    paragraph(token: Tokens.Paragraph): string {
+      return withLines(token, Renderer.prototype.paragraph.call(this, token));
+    },
+    heading(token: Tokens.Heading): string {
+      return withLines(token, Renderer.prototype.heading.call(this, token));
+    },
+    table(token: Tokens.Table): string {
+      return withLines(token, Renderer.prototype.table.call(this, token));
+    },
+    html(token: Tokens.HTML | Tokens.Tag): string {
+      return withLines(token, Renderer.prototype.html.call(this, token));
     },
 
     /** Internal document links become mention chips. */
@@ -213,7 +233,12 @@ marked.use({
 export function markdownToHtml(md: string, options: RenderOptions = {}): string {
   resolvePage = options.resolvePage ?? null;
   try {
-    return marked.parse(md ?? '', { async: false }) as string;
+    if (options.lineOffset === undefined) return marked.parse(md ?? '', { async: false }) as string;
+    const tokens = marked.lexer(md ?? '');
+    walkLines(tokens, options.lineOffset + 1, (token, start, end) => {
+      (token as Lined)[LINES] = `${start}-${end}`;
+    });
+    return marked.parser(tokens);
   } finally {
     resolvePage = null;
   }
@@ -237,6 +262,102 @@ export function markdownLinks(md: string): Tokens.Link[] {
     if (token.type === 'link') links.push(token as Tokens.Link);
   });
   return links;
+}
+
+/* ------------------------------------------------------------ passage links */
+
+/** A block's lines in a stored body, 1-based and inclusive (#708). */
+export interface LineSpan {
+  start: number;
+  end: number;
+}
+
+const LINES = 'knLines';
+type Lined = Token & { [LINES]?: string };
+
+const newlines = (text: string) => text.split('\n').length - 1;
+
+/** `html` with `data-lines` on its first tag, when the walk stamped the token. */
+function withLines(token: Token, html: string): string {
+  const lines = (token as Lined)[LINES];
+  return lines ? html.replace(/^(\s*<[a-zA-Z][\w-]*)/, `$1 data-lines="${lines}"`) : html;
+}
+
+/**
+ * Every block's line span, from the lexer's own `raw` text: top-level tokens'
+ * raws concatenate to the body, and a nested token's (a list item's, a quote's
+ * children) keep their newlines when the lexer strips indent or `> `. A
+ * `<details>` split by blank lines into several html tokens spans to its close.
+ */
+function walkLines(tokens: Token[], first: number, visit: (token: Token, start: number, end: number) => void): void {
+  let line = first;
+  const open: Array<{ token: Token; start: number }> = [];
+  for (const token of tokens) {
+    const raw = token.raw ?? '';
+    const start = line;
+    const end = start + newlines(raw.replace(/\s+$/, ''));
+    line += newlines(raw);
+    if (token.type === 'space') continue;
+    if (token.type === 'html') {
+      const opens = (raw.match(/<details\b/gi) ?? []).length - (raw.match(/<\/details>/gi) ?? []).length;
+      for (let i = 0; i < opens; i++) open.push({ token, start });
+      for (let i = 0; i > opens && open.length; i--) {
+        const at = open.pop()!;
+        visit(at.token, at.start, end);
+      }
+      if (opens !== 0) continue;
+    }
+    visit(token, start, end);
+    if (token.type === 'list') {
+      let at = start;
+      for (const item of (token as Tokens.List).items) {
+        visit(item, at, at + newlines(item.raw.replace(/\s+$/, '')));
+        walkLines(item.tokens.filter((t) => t.type === 'list'), at + newlines(textBeforeList(item)), visit);
+        at += newlines(item.raw);
+      }
+    } else if (token.type === 'blockquote') {
+      walkLines((token as Tokens.Blockquote).tokens, start, visit);
+    }
+  }
+  // An unclosed <details> runs to the end, as the browser renders it.
+  for (const at of open) visit(at.token, at.start, Math.max(at.start, line - 1));
+}
+
+/** The item's text before its first nested list: that list starts this many lines down. */
+function textBeforeList(item: Tokens.ListItem): string {
+  let text = '';
+  for (const t of item.tokens) {
+    if (t.type === 'list') break;
+    text += t.raw;
+  }
+  return text;
+}
+
+/**
+ * Each block of a body with its line span (#708) — paragraphs, headings, list
+ * items, tables, code, quotes and panels, `<details>`. The one mapping behind
+ * `markdownToHtml`'s `lineOffset`, so the reader's `data-lines` and this agree.
+ */
+export function blockLineSpans(md: string): Array<LineSpan & { type: string }> {
+  const out: Array<LineSpan & { type: string }> = [];
+  walkLines(marked.lexer(md ?? ''), 1, (token, start, end) => out.push({ type: token.type, start, end }));
+  return out.sort((a, b) => a.start - b.start || b.end - a.end);
+}
+
+const PAGE_REF_FRAGMENT = /^#?L(\d+)(?:-L(\d+))?$/;
+
+/** `#L40-L52` / `#L7` → its span, or null for any other fragment (a heading's id). */
+export function parsePageRef(fragment: string): LineSpan | null {
+  const match = PAGE_REF_FRAGMENT.exec(fragment ?? '');
+  if (!match) return null;
+  const start = Number(match[1]);
+  const end = match[2] === undefined ? start : Number(match[2]);
+  return start >= 1 && end >= start ? { start, end } : null;
+}
+
+/** The fragment for a span, without the `#`: `L7` or `L40-L52`. */
+export function formatPageRef(span: LineSpan): string {
+  return span.end > span.start ? `L${span.start}-L${span.end}` : `L${span.start}`;
 }
 
 /* ------------------------------------------------------------------ embeds */
@@ -416,6 +537,7 @@ export const SANITIZE_CONFIG: { ADD_TAGS: string[]; ADD_ATTR: string[] } = {
     'data-kn-path',
     'data-kn-api-section',
     'data-kn-op',
+    'data-lines',
     'data-type',
     'data-checked',
     'data-align',

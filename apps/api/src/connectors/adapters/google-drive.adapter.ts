@@ -32,6 +32,7 @@ const GROUPS_SCOPE = 'https://www.googleapis.com/auth/admin.directory.group.memb
 const FOLDER = 'application/vnd.google-apps.folder';
 const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 const PPTX = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 const PAGE_SIZE = 200;
 /** Past this a file is skipped and reported rather than downloaded into the worker's memory. */
@@ -52,13 +53,13 @@ const EDIT_ROLES = new Set(['owner', 'organizer', 'fileOrganizer', 'writer']);
 
 /**
  * Google-native files have no bytes of their own; each is exported to a format
- * a feature-16 parser already reads. Sheets go out as CSV, which Drive limits
- * to the first sheet — said on the page rather than discovered later.
+ * a feature-16 parser already reads. Sheets go out as xlsx, so every tab
+ * arrives (#707) — a CSV export is the first sheet only.
  */
-const EXPORTS: Record<string, { mimeType: string; ext: string; firstSheetOnly?: boolean }> = {
+const EXPORTS: Record<string, { mimeType: string; ext: string }> = {
   'application/vnd.google-apps.document': { mimeType: DOCX, ext: '.docx' },
   'application/vnd.google-apps.presentation': { mimeType: PPTX, ext: '.pptx' },
-  'application/vnd.google-apps.spreadsheet': { mimeType: 'text/csv', ext: '.csv', firstSheetOnly: true },
+  'application/vnd.google-apps.spreadsheet': { mimeType: XLSX, ext: '.xlsx' },
 };
 
 export interface DriveFile {
@@ -92,7 +93,7 @@ interface DriveRoot {
 
 export type FilePlan =
   | { kind: 'folder' }
-  | { kind: 'export'; filename: string; contentType: string; exportType: string; firstSheetOnly: boolean }
+  | { kind: 'export'; filename: string; contentType: string; exportType: string }
   | { kind: 'download'; filename: string; contentType: string }
   | { kind: 'skip'; reason: 'unsupported' | 'oversize' };
 
@@ -112,7 +113,6 @@ export function planFile(file: Pick<DriveFile, 'name' | 'mimeType' | 'size'>): F
       filename: `${file.name}${exported.ext}`,
       contentType: exported.mimeType,
       exportType: exported.mimeType,
-      firstSheetOnly: exported.firstSheetOnly === true,
     };
   }
   const format = importFormatFor(file.name, file.mimeType);
@@ -363,7 +363,6 @@ export class GoogleDriveAdapter implements ConnectorAdapter {
     ).trim();
     const warnings = parsed.warnings.filter((w) => w !== imagesAttached);
     if (images > 0) warnings.push(t('connector.warning.googleDrive.imagesDropped', { count: images }));
-    if (plan.kind === 'export' && plan.firstSheetOnly) warnings.push(t('connector.warning.googleDrive.firstSheetOnly'));
 
     return { ref: out, title, markdown: stripLeadingTitle(markdown, title), frontmatter, warnings };
   }

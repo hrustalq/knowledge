@@ -147,7 +147,10 @@ per-IP `PublicRateLimitGuard` as shares, `Cache-Control: no-store`):
   trimmed tree can no longer answer is settled server-side over every visible
   row: `page.prev` / `page.next` walk the whole reading order, and
   `page.links` says where each page the body links to lives (the reader's
-  only source for rewriting `/documents/<id>` links). The ETag also covers
+  only source for rewriting page links). It reads the body with the same
+  `extractPageLinks` the reader's rule lives beside (#705), so an absolute app
+  URL counts, and title references resolve among the visible rows and come
+  back with `ref`, the title as written. The ETag also covers
   the ids of every row the viewer may see, because `links` is resolved after
   it: two viewers whose trimmed answers match but who see different pages
   must not share a cached render.

@@ -88,7 +88,9 @@
     "ownerNotMember": "The owner must be a member of this workspace",
     "foreignIds": "{count} of the given pages belong to another workspace",
     "sourceBacked": "“{title}” follows its source and cannot be edited here. Pause the source and restore a revision instead",
-    "sourceVerify": "“{title}” follows its source: it reads as verified while the sync is healthy, so it takes no stamp"
+    "sourceVerify": "“{title}” follows its source: it reads as verified while the sync is healthy, so it takes no stamp",
+    "linesInvalid": "“{lines}” is not a line span — use 40-52 or 40",
+    "linesOutOfRange": "Lines {start}–{end} are outside this page's {total} lines"
   },
   "branch": {
     "notFound": "Branch {name} not found on document {documentId}",
@@ -526,6 +528,15 @@
       "invalidPlaceholder": "Placeholder \"{detail}\" is not valid: use letters, digits, - and _, a known kind, a unique name, and none of title, date, author, project or parent",
       "invalidRelation": "Relation {detail} is not one the graph accepts: check its type, and that every placeholder in its target is declared"
     }
+  },
+  "blueprint": {
+    "invalid": "The blueprint is not valid: {detail}",
+    "oneSource": "Pass either a blueprint key or a blueprint",
+    "notFound": "No blueprint \"{key}\" in this workspace",
+    "limitReached": "A workspace can hold at most {max} blueprints",
+    "alreadyCustomized": "This built-in blueprint is already customised in this workspace",
+    "contentRequired": "A saved blueprint needs its content",
+    "generateEmpty": "The assistant returned no usable outline. Try describing the project in more detail."
   },
   "share": {
     "notFound": "This link does not exist, has expired or was revoked",

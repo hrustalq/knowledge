@@ -33,6 +33,7 @@ function doc(id: string) {
     lastActivityAt: new Date(),
     archivedAt: null,
     branches: [{ name: 'main', headRevisionId: 'head' }],
+    revisions: [],
   };
 }
 
@@ -146,6 +147,7 @@ describe('StaleSweeper.repairFulltext (#173)', () => {
     restrictedBy: ['r1'],
     defaultBranch: 'main',
     branches: [{ name: 'main', headRevisionId: 'head' }],
+    revisions: [],
   };
 
   function sweeper(fulltext: Record<string, unknown>) {

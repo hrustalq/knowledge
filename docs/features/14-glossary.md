@@ -45,8 +45,8 @@ author wrote; the glossary decides on each render which of them are
 vocabulary. That is what makes a definition editable in one place — fix the
 entry and every page follows on its next render — and what makes retiring a
 term a one-row change instead of a mass edit. It also means the linker can be
-conservative for free: it skips code, headings, existing links and review
-annotations, and links at most the first three occurrences of a term per page,
+conservative for free: it skips code, headings, table header cells, existing
+links and review annotations, and links at most the first three occurrences of a term per page,
 because a page where every instance of a word is a link is unreadable.
 
 **Word boundaries are spelled out, not `\b`.** The terms most in need of
@@ -79,6 +79,12 @@ decorations over document positions, exactly as `comment-anchors.ts` draws
 commented passages and for exactly the same reason. The invariant is unchanged
 and is what makes the move safe: a decoration is not content, so still nothing
 is written to the page.
+
+A table header cell is skipped for the reason a heading is: "Category" at the
+top of a column names a field, it does not use the word (#703). The skip is
+checked while descending, because a cell's text sits in a paragraph inside the
+cell, so the text node's own parent is never the header. Body cells link like
+prose.
 
 **An ambiguous spelling links to nothing.** Two entries can claim one word — a
 headword here, an alias there. The old matcher kept whichever it saw first,
@@ -128,13 +134,19 @@ findings carry the same project, and **Add to glossary** on a finding
 there with `source: 'ai'` without a second model call
 ([53](53-doc-quality.md)).
 
-**The roster is one lazily-loaded pinia store, and it follows the project
-switcher.** Every rendered page wants it, so it must not become a request per
-page; it is small, changes rarely, and is fetched on the first render that
-asks. `rescope()` is called from the projects store next to the documents
-store's — showing project A's definitions under project B's pages would be
-worse than showing none. A failed load degrades to no links rather than to a
-failed page: the prose is already on screen by then.
+**The roster is one lazily-loaded pinia store, and the page picks its terms,
+not the project switcher.** Every rendered page wants it, so it must not become
+a request per page; it is small, changes rarely, and is fetched once for the
+whole workspace on the first render that asks. Which of those terms apply is
+the page's call: `pageTerms` keeps only the terms whose `projectId` is the
+page's own, so a page reached from search, a link or a merge request in another
+project gets its own vocabulary whatever the switcher shows, and a page whose
+project is not known links nothing. The roster used to follow the switcher,
+and since opening a page does not switch the project, a page could be drawn
+with another project's definitions, or every project's when none was active
+(#702) — showing project A's definitions under project B's pages is worse than
+showing none. A failed load degrades to no links rather than to a failed page:
+the prose is already on screen by then.
 
 ## Shape
 
@@ -153,6 +165,13 @@ failed page: the prose is already on screen by then.
 - **Auth** — `WorkspaceSource` gains `'glossary-term'`; the ACL for
   `/:id` routes comes from the term's own row, so an editor of workspace A
   cannot rewrite the definitions workspace B's pages render.
+  The defining page's title is page data, so it is resolved under the
+  caller's `AccessScope` (#712): a page they may not open reads
+  `documentTitle: null`, while `documentId` stays, so the link lands on the
+  page's request-access refusal, which names no title. Setting `documentId`
+  (create/update), or suggesting from a page, needs view on that page and is
+  refused like the page routes: 403 `{ canRequestAccess, resourceType,
+  resourceId }`.
 - **API** — `GET /v1/glossary?workspaceId=&projectId=` (`viewer` — every
   reader needs the roster; an absent `projectId` spans the workspace, the same
   convention as `GET /v1/documents`), `POST` / `PATCH /:id` / `DELETE /:id`

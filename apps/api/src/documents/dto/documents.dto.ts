@@ -243,6 +243,23 @@ export class UpdateDocumentDto {
   @Min(0, { message: vmsg('min') })
   @Max(3650, { message: vmsg('max') })
   reviewIntervalDays?: number | null;
+
+  /**
+   * A collection's rule (#716): the template a new child page starts from.
+   * Must resolve in the page's workspace; `null` clears it.
+   */
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'Child template: a template uuid or builtin:<key>; null clears it' })
+  @ValidateIf((o: UpdateDocumentDto) => o.childTemplateRef !== undefined && o.childTemplateRef !== null)
+  @IsString()
+  @MaxLength(200)
+  childTemplateRef?: string | null;
+
+  /** How a new child is titled: `ADR {{n:4}}: `, `{{n:2}} — `, `{{date}} session`. Blank or `null` clears it. */
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'Child title pattern ({{n:W}}, {{date}}); blank or null clears it' })
+  @ValidateIf((o: UpdateDocumentDto) => o.childTitlePattern !== undefined && o.childTitlePattern !== null)
+  @IsString()
+  @MaxLength(100)
+  childTitlePattern?: string | null;
 }
 
 /**

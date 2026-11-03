@@ -1,6 +1,8 @@
 import {
+  IsBoolean,
   IsIn,
   IsInt,
+  IsObject,
   IsOptional,
   IsString,
   IsNotEmpty,
@@ -13,7 +15,13 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { PROJECT_DELETION_MODES, type ProjectDeletionMode } from '@knowledge/contracts';
+import {
+  BUILT_IN_BLUEPRINT_KEYS,
+  PROJECT_DELETION_MODES,
+  SUPPORTED_LOCALES,
+  type Locale,
+  type ProjectDeletionMode,
+} from '@knowledge/contracts';
 import { vmsg } from '../common/validation.js';
 
 export class ListProjectsQueryDto {
@@ -62,6 +70,74 @@ export class CreateProjectDto {
   @IsString()
   @MaxLength(2000, { message: vmsg('maxLength') })
   description?: string | null;
+}
+
+/** `POST /v1/projects/scaffold` (#716). The blueprint itself is parsed by `parseBlueprint`, not here. */
+export class ScaffoldProjectDto {
+  // Field name must stay `workspaceId`: @Access('editor', 'body') resolves it.
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiPropertyOptional({ description: 'The new project. Required unless parentId is given.' })
+  @ValidateIf((o: ScaffoldProjectDto) => !o.parentId)
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(120, { message: vmsg('maxLength') })
+  name?: string;
+
+  @ApiPropertyOptional({ type: String, nullable: true })
+  @IsOptional()
+  @ValidateIf((o: ScaffoldProjectDto) => o.description !== null)
+  @IsString()
+  @MaxLength(2000, { message: vmsg('maxLength') })
+  description?: string | null;
+
+  @ApiProperty({ enum: SUPPORTED_LOCALES, description: 'The language titles and skeletons are written in' })
+  @IsIn(SUPPORTED_LOCALES, { message: vmsg('isIn') })
+  locale!: Locale;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: `A built-in blueprint (${BUILT_IN_BLUEPRINT_KEYS.join(', ')}) or a saved one's id, as \`GET /v1/blueprints\` lists it. Exactly one of blueprintKey and blueprint.`,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  blueprintKey?: string;
+
+  @ApiPropertyOptional({
+    type: 'object',
+    additionalProperties: true,
+    description: 'An inline `Blueprint` (@knowledge/contracts), validated server-side. Exactly one of blueprintKey and blueprint.',
+  })
+  @IsOptional()
+  @IsObject()
+  blueprint?: Record<string, unknown>;
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'Scaffold under this page of its existing project; conventions are not written' })
+  @IsOptional()
+  @IsUUID()
+  parentId?: string;
+
+  @ApiPropertyOptional({
+    type: Boolean,
+    description: 'Restrict the new project before its first page is written; the creator is granted manage. Ignored with parentId.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  restricted?: boolean;
+
+  @ApiPropertyOptional({ type: String, description: "The new project's emoji face. Ignored with parentId." })
+  @IsOptional()
+  @IsString()
+  @MaxLength(16, { message: vmsg('maxLength') })
+  avatarEmoji?: string;
+
+  @ApiPropertyOptional({ type: String, description: 'Hex colour behind the emoji, e.g. `#3b82f6`.' })
+  @IsOptional()
+  @Matches(/^#[0-9a-fA-F]{6}$/, { message: vmsg('hexColor') })
+  avatarColor?: string;
 }
 
 export class UpdateProjectDto {

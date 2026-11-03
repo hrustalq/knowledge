@@ -4392,6 +4392,66 @@
     },
     {
       "method": "GET",
+      "path": "/v1/blueprints",
+      "tag": "projects",
+      "summary": "Blueprints a project can be scaffolded from: built-ins with overrides applied, then saved ones",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/blueprints",
+      "tag": "projects",
+      "summary": "Save a blueprint, or customise or hide a built-in (`builtInKey`)",
+      "role": "admin",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/blueprints/{id}",
+      "tag": "projects",
+      "summary": "Delete a saved blueprint, or reset a built-in by deleting its override",
+      "role": "admin",
+      "source": "blueprint",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/blueprints/{id}",
+      "tag": "projects",
+      "summary": "Change a saved blueprint or an override; a changed blueprint appends a version",
+      "role": "admin",
+      "source": "blueprint",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/blueprints/derive",
+      "tag": "projects",
+      "summary": "Read a blueprint off an existing project: titles and headings only, never page text",
+      "role": "editor",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/blueprints/generate",
+      "tag": "projects",
+      "summary": "Draft a blueprint from a description (Describe it): the scaffolder, with read-only tree and search",
+      "role": "editor",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/projects",
       "tag": "projects",
       "summary": "List projects in a workspace (searchable; cursor-paginated when limit is given)",
@@ -4467,6 +4527,16 @@
       "summary": "Project overview: counts, contributors, recent pages",
       "role": "viewer",
       "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/scaffold",
+      "tag": "projects",
+      "summary": "Create a project from a blueprint: pages, styleguide, templates and glossary in one go",
+      "role": "editor",
+      "source": "body",
       "public": false,
       "platformAdmin": false
     },
@@ -6176,7 +6246,7 @@
     },
     {
       "name": "knowledge_get_document_content",
-      "description": "The full markdown (and parsed frontmatter) of a document at its default-branch head or a given revision. Read this before writing a revision: a revision replaces the whole page. `markdown` is the body without its frontmatter block; posting it back as-is keeps the frontmatter.",
+      "description": "The full markdown (and parsed frontmatter) of a document at its default-branch head or a given revision. Read this before writing a revision: a revision replaces the whole page. `markdown` is the body without its frontmatter block; posting it back as-is keeps the frontmatter. Pass `lines` ({ start, end }, 1-based, inclusive, counting that `markdown`) for just those lines: the answer adds startLine, endLine, totalLines and `reference`, a link to exactly that passage pinned to the revision — cite a passage with it (a reader opens it highlighted, re-found on a newer head). Out of range is an error.",
       "inputs": [
         {
           "name": "documentId",
@@ -6184,6 +6254,10 @@
         },
         {
           "name": "revisionId",
+          "optional": true
+        },
+        {
+          "name": "lines",
           "optional": true
         }
       ]
@@ -6587,6 +6661,16 @@
         {
           "name": "limit",
           "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_list_blueprints",
+      "description": "List the blueprints a new project can start from: the built-ins (discovery, code-product, service-docs, blank) with this workspace's overrides applied, then its saved ones. An entry's key is what knowledge_scaffold_project takes as blueprintKey. Its blueprint is the page tree (titles per locale, a template or guidance per page, numbered collections) and the conventions a scaffold writes (styleguide, templates, glossary).",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
         }
       ]
     },
@@ -7041,6 +7125,44 @@
         {
           "name": "environment",
           "optional": false
+        }
+      ]
+    },
+    {
+      "name": "knowledge_scaffold_project",
+      "description": "Create a project from a blueprint in one transaction: the project, its conventions (styleguide, templates, glossary) and every page of its tree, published at once. Pages nobody has written yet stay out of search until their first real edit. Pass exactly one of blueprintKey (from knowledge_list_blueprints) or blueprint (inline JSON of the same shape as an entry's blueprint, validated server-side). A blueprint with a styleguide needs a workspace admin. With parentId the tree is added under that page of its existing project and no conventions are written. Returns the project and how many pages were created.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "name",
+          "optional": true
+        },
+        {
+          "name": "description",
+          "optional": true
+        },
+        {
+          "name": "locale",
+          "optional": false
+        },
+        {
+          "name": "blueprintKey",
+          "optional": true
+        },
+        {
+          "name": "blueprint",
+          "optional": true
+        },
+        {
+          "name": "parentId",
+          "optional": true
+        },
+        {
+          "name": "restricted",
+          "optional": true
         }
       ]
     },

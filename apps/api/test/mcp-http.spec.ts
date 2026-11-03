@@ -349,9 +349,19 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
     })),
   };
   const flows = new FlowsService(flowPrisma as never, deps.permissions as never, search as never, deps.captures as never, { setReviewers: vi.fn() } as never, health as never);
-  const mcp = new McpService(...([...Object.values(deps), flows] as ConstructorParameters<typeof McpService>));
+  // After flows: fixtures, testSuites, testRuns, embeds and memos (unused here), then the blueprint pair (#716).
+  const blueprints = { list: vi.fn(async () => ({ blueprints: [] })) };
+  const scaffolds = {
+    resolve: vi.fn(async (dto: { blueprint?: unknown }) => (dto.blueprint ?? { name: { en: 'Blank' }, tree: [] }) as never),
+    scaffold: vi.fn(async () => ({ project: { projectId: 'p-1' }, pageCount: 3 })),
+  };
+  const mcp = new McpService(
+    ...([...Object.values(deps), flows, ...Array(5).fill({}), blueprints, scaffolds] as ConstructorParameters<typeof McpService>),
+  );
   return {
     mcp,
+    blueprints,
+    scaffolds,
     health,
     search,
     documents,
@@ -443,6 +453,34 @@ describe('McpService over a principal', () => {
     expect(svc.search.search).toHaveBeenCalledWith(expect.objectContaining({ limit: 8 }), expect.anything(), expect.anything());
     const body = JSON.parse((res.content as { text: string }[])[0]!.text) as { results: { chunkId: string }[] };
     expect(body.results.map((r) => r.chunkId)).toEqual(['a1', 'b1']);
+  });
+
+  it('scaffolds a project as the REST route does: editor, admin for a styleguide (#716)', async () => {
+    const principal = keyPrincipal({ id: 'k', scope: 'write', workspaceId: null });
+    const args = { workspaceId: WS_A, name: 'Payments', locale: 'en', blueprintKey: 'discovery' };
+
+    const editor = service(accessWith('editor'));
+    const writer = await connect(editor.mcp, principal);
+    const res = await writer.callTool({ name: 'knowledge_scaffold_project', arguments: args });
+    expect(res.isError).toBeFalsy();
+    expect(editor.scaffolds.resolve).toHaveBeenCalledWith(expect.objectContaining({ blueprintKey: 'discovery' }));
+    expect(editor.scaffolds.scaffold).toHaveBeenCalledWith(expect.objectContaining(args), expect.anything(), principal);
+
+    const styled = { workspaceId: WS_A, name: 'Payments', locale: 'en', blueprint: { name: { en: 'X' }, tree: [], conventions: { styleguide: { rules: [] } } } };
+    const refused = await writer.callTool({ name: 'knowledge_scaffold_project', arguments: styled });
+    expect(refused.isError).toBe(true);
+    expect(editor.scaffolds.scaffold).toHaveBeenCalledTimes(1);
+    const admin = service(accessWith('admin'));
+    const allowed = await (await connect(admin.mcp, principal)).callTool({ name: 'knowledge_scaffold_project', arguments: styled });
+    expect(allowed.isError).toBeFalsy();
+
+    const viewer = service(accessWith('viewer'));
+    const denied = await (await connect(viewer.mcp, principal)).callTool({ name: 'knowledge_scaffold_project', arguments: args });
+    expect(denied.isError).toBe(true);
+    expect(viewer.scaffolds.resolve).not.toHaveBeenCalled();
+    const listed = await (await connect(viewer.mcp, principal)).callTool({ name: 'knowledge_list_blueprints', arguments: { workspaceId: WS_A } });
+    expect(listed.isError).toBeFalsy();
+    expect(viewer.blueprints.list).toHaveBeenCalledWith(WS_A);
   });
 
   it('drafts a component as its caller, and refuses a viewer (#236)', async () => {

@@ -13,6 +13,127 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.44.0] — 2026-11-03
+
+### Added
+
+- **Excel workbooks (.xlsx) can be imported** (#707). Each visible sheet becomes a `##` section holding a table of
+  its displayed values: formula results, dates as `YYYY-MM-DD`, hyperlinks as links. Empty sheets are skipped;
+  hidden sheets, formulas with no saved result, and the charts, images, pivot tables and comments that do not
+  carry over are listed in the import's warnings. Each sheet keeps its first 2000 rows, as a CSV does. `.xls`,
+  `.xlsm` and `.ods` are still refused.
+- **Link to a paragraph, list item, table or code block, not just a page** (#708). Hover a block and use the
+  link control beside the comment one, or select text and choose *Copy link*. The link names lines of the page at
+  the revision you were reading (`?revision=…#L40-L52`). Opening it scrolls to and highlights the passage. If the
+  page has changed since, the passage is found again where it now sits, or the page says it is gone and links to
+  the version that was linked. Agents get the same: `knowledge_get_document_content` and
+  `GET /v1/documents/:id/content` take `lines` and return just those lines with a `reference` to cite.
+- **A project can be created whole from a blueprint** (#716, phase 1 of 7: API only, the wizard comes next).
+  `POST /v1/projects/scaffold` creates the project, its page tree and its conventions (a project styleguide,
+  project templates, glossary terms) in one go: if any part fails, nothing is created. Three built-ins ship in
+  English and Russian: *Discovery-first* (numbered research chapters and a decision summary), *Code product*
+  (product, domain, discovery sessions, architecture, numbered ADRs, gotchas) and *Service documentation*
+  (overview, information model, API, processes, UI/UX, integrations, testing, role model, FAQ); *Blank* creates an
+  empty project. Scaffolded pages are visible to the workspace from the start. Until someone edits a page, it stays
+  out of search, Ask, `llms.txt` and the knowledge-health counts, so empty skeletons never answer a question. The
+  tree still shows them. A blueprint carrying a styleguide needs a workspace admin, as editing a styleguide does.
+- **New projects start in a wizard at `/projects/new`** (#716, phase 2 of 7). *New project* in the sidebar
+  and the projects roster opens a full-page flow: pick a start (*Blank*, *Discovery-first*, *Code product*,
+  *Service documentation*), edit the page outline (rename, add, remove, reorder by drag or Alt+arrows, nest, turn a
+  page into a numbered collection with its own template), seed a styleguide (workspace admins) and glossary
+  terms, then name the project, choose the skeleton language (English or Russian), an emoji and whether it is
+  restricted. *Create* makes the project and every page in one go, then opens it. The edits survive a reload. A
+  restricted project is restricted before its first page is written, so its pages are never visible
+  workspace-wide. `GET /v1/blueprints` lists the built-ins for any workspace member, and
+  `POST /v1/projects/scaffold` takes `restricted`, `avatarEmoji` and `avatarColor`.
+- **Any page can be a numbered collection** (#716, phase 3 of 7). Under *Page settings → Collection*, pick the
+  template new child pages start from and a title pattern (`ADR {{n:4}}: `, `{{n:2}} — `, `{{date}} session`);
+  the field previews the next title. *New page* on that page's row in the tree then opens with the next number
+  already typed (`ADR 0020: `) and the template laid in. Its placeholders stay as `{{name}}` for you to fill, as
+  in a scaffolded page, instead of the template asking for them first. Numbers count archived children too, so one
+  is never handed out twice; gaps are kept. Collections from a blueprint work this way from the start. The rule is
+  saved on its own, not with Publish. `PATCH /v1/documents/:id` takes `childTemplateRef` and `childTitlePattern`
+  (a template that does not resolve in the workspace is a 404), and `POST /v1/templates/render` takes
+  `skeleton: true`.
+- **Blueprints can be saved, customised and read off an existing project** (#716, phase 4a of 7: API only, the
+  wizard and settings tab come next). `POST /v1/blueprints/derive` turns a project you can see, in any of your
+  workspaces, into a blueprint: its tree three levels deep, its pages' headings as their skeletons, numbered pages
+  (`ADR 0007: …`, `01 — …`) or three or more same-shaped pages folded into a collection rule instead of copied, and
+  its templates. Page text never leaves the source, and a page you cannot open contributes nothing, not even its
+  title. Glossary terms are offered only when the project is in the same workspace. When the workspace runs the
+  assistant, the new *Scaffolder* agent drafts a styleguide and a line of guidance per page; otherwise, or if that
+  call fails, the result is the rules alone (`drafted: false`). Workspace admins can save blueprints, customise or
+  hide a built-in, and reset or delete them (`POST`, `PATCH`, `DELETE /v1/blueprints`); `GET /v1/blueprints` lists
+  saved ones after the built-ins, and `POST /v1/projects/scaffold` takes a saved blueprint's id as `blueprintKey`.
+- **Start a project from one you already have, and keep blueprints for the workspace** (#716, phase 4b of 7).
+  In the wizard, *From a project* lists the projects you can open in every workspace you belong to. Picking one
+  copies its structure into the outline: page titles, section headings, numbered collections and templates, never
+  page text. Shape then says where the outline came from and whether the assistant drafted the styleguide and
+  guidance or the outline is rules only. Glossary terms from a same-workspace project arrive in Conventions as an
+  unticked checklist. With no project anywhere, the picker shows what the built-ins look like instead. Workspace
+  admins get *Save as blueprint* in the Shape step and *Save structure as blueprint* in a project's settings. A
+  blueprint opened from a saved one can be updated in place, and one opened from a built-in can replace that
+  built-in for the workspace. The new *Settings → Blueprints* page lists built-in and saved blueprints with their
+  page tree and conventions. There, *Open in wizard* starts a project from one, a built-in can be hidden or reset,
+  and a saved blueprint can be switched off or deleted. Saved blueprints appear under *Start* for every editor.
+- **Describe a project and let the assistant draft its outline** (#716, phase 5 of 7). *Describe it* on the
+  wizard's Start step is live. Say what the project is for, and optionally pick a built-in or saved blueprint to
+  start from; the *Scaffolder* drafts a page tree with numbered collections, a line of guidance per page and a
+  styleguide, which then open in Shape marked as drafted from your description. While drafting it may look at how
+  the workspace's pages are organised and search what they cover, only as far as you can see them. It uses only
+  templates the workspace offers, drops pages it got wrong instead of failing the draft, and nothing is created until
+  *Create*. The card is hidden, and `POST /v1/blueprints/generate` answers 404, when the workspace has the assistant
+  switched off. The model call is billed to the workspace as `blueprint-generate`.
+- ***From a project* previews before it copies** (#716). Picking a project now shows the outline it gives (pages,
+  collections, styleguide rules, glossary terms on offer) beside the list; *Use this outline* takes it to Shape.
+  Both start panels use the full width of the wizard.
+- **Agents can start a project from a blueprint** (#716, phase 6 of 7). Two MCP tools:
+  `knowledge_list_blueprints` lists the built-in and saved blueprints with their page trees and conventions, and
+  `knowledge_scaffold_project` creates the project from a blueprint key or inline blueprint JSON. It produces the
+  same project the wizard's *Create* does. It needs an editor, or an admin when the blueprint carries a styleguide,
+  and it is not offered to read-only keys. The generated `SKILL.md` describes the flow. Deriving a blueprint from a
+  project and drafting one from a description remain wizard-only.
+- **A *Research question* page template** (`builtin:research-question`): Question, Options, Criteria, Findings,
+  Decision, Open questions.
+
+### Changed
+
+- **Creating a project no longer offers an "invite people" step**, and the quick create dialog makes only
+  workspaces now. After a new workspace, its first project can still be a quick blank one, or *Start from a
+  blueprint instead* switches into the new workspace and opens the wizard.
+- **Google Sheets synced through the Google Drive connector arrive with every tab** (#707). They were exported as
+  CSV, which kept only the first sheet; they are now exported as `.xlsx` and imported one section per tab. The
+  "only the first sheet was imported" warning is gone. Existing Sheet pages change on their next sync.
+
+### Fixed
+
+- **The glossary no longer names pages a reader may not open** (#712). Settings → Glossary and
+  `GET /v1/glossary` showed the title of a term's defining page to every workspace viewer, including people the
+  page is restricted from. That title now reads as empty for them. Choosing a defining page, or suggesting terms
+  from a page, now requires being able to open that page, and a refusal gives no title. Terms and definitions
+  themselves are unchanged.
+- **Table column labels are no longer glossary links** (#703). A header cell such as "Category" or "Status" was
+  drawn as a link to the glossary entry of the same spelling. Header cells are now skipped like headings; the
+  same word in a body cell still links.
+- **Pages are decorated only with their own project's glossary** (#702). A page opened from search, a link or a
+  merge request in another project was decorated with the terms of whichever project the switcher showed, or of
+  every project when none was active. A page now links only terms defined in its own project.
+- **Page links on share links and published sites stay on the share or site** (#705). A link written as a full
+  app URL (`https://…/documents/<id>`) sent readers into the app, behind its login, even when the target was part
+  of the same share or site; a link with `?branch=` lost its target; and title references (`[text](Page Title)`)
+  showed as brackets or as a relative link that 404'd. Every spelling now opens the page's public URL when the
+  reader may see it there, and keeps only its text otherwise. No link in a public page leads into the app.
+
+### Operations
+
+- Migration `20261231100000_project_blueprints` adds two new tables (`project_blueprints`,
+  `project_blueprint_versions`). The previous image never reads them, so a code rollback is safe.
+- Migration `20261230100000_scaffold_origin` adds three nullable columns (`document_revisions.origin`,
+  `documents.child_template_ref`, `documents.child_title_pattern`), with no backfill. The previous image runs
+  against it unchanged, so a code rollback is safe.
+- The public reader reads `WEB_BASE_URL` (already set for the web container) to unlink any other link on the
+  app's own origin. Without it, page links still resolve; other absolute app URLs are left as written.
+
 ## [0.43.0] — 2026-11-01
 
 ### Added
@@ -5834,7 +5955,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.43.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.44.0...HEAD
+[0.44.0]: https://github.com/hrustalq/knowledge/compare/v0.43.0...v0.44.0
 [0.43.0]: https://github.com/hrustalq/knowledge/compare/v0.42.0...v0.43.0
 [0.42.0]: https://github.com/hrustalq/knowledge/compare/v0.41.1...v0.42.0
 [0.41.1]: https://github.com/hrustalq/knowledge/compare/v0.41.0...v0.41.1

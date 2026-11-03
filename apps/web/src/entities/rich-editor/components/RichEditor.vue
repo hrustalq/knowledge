@@ -84,6 +84,7 @@ import {
 import { ListIndentKeymap } from './extensions/list-indent'
 import { CommentAnchors, type CommentAnchor } from './extensions/comment-anchors'
 import { GlossaryTerms } from './extensions/glossary-terms'
+import { SourceLines } from './extensions/source-lines'
 import { AiSuggestions, pendingSuggestions, withoutSuggestions } from './extensions/ai-suggestions'
 import { useAttachments } from '../model/use-attachments'
 import type { CollabHandle } from '../model/use-collab'
@@ -187,6 +188,12 @@ const props = withDefaults(
      * without offering the menu.
      */
     resolvePage?: PageRefResolver
+    /**
+     * Lines of the stored body held out before `modelValue` (a page's own
+     * `# Title`), so each block carries its line span for passage links (#708).
+     * Read surfaces only: a reader links lines of what is stored.
+     */
+    lineOffset?: number
     /**
      * Vocabulary to link (docs/features/14). Read surfaces only — while a page
      * is being written, a definition link under every third word fights the
@@ -709,7 +716,7 @@ function emitMarkdown(markdown: string) {
  */
 function toHtml(markdown: string): string {
   if (props.editable) return markdownToHtml(markdown)
-  return markdownToHtml(markdown, { resolvePage: props.resolvePage })
+  return markdownToHtml(markdown, { resolvePage: props.resolvePage, lineOffset: props.lineOffset })
 }
 
 /**
@@ -766,6 +773,7 @@ onMounted(() => {
       // The extension builds aria-labels, so it needs this app's translator.
       CommentAnchors.configure({ t }),
       GlossaryTerms,
+      SourceLines,
       // Its accept/discard bar builds labels, so it needs the translator too.
       AiSuggestions.configure({ t, shared: props.collab?.suggestions ?? null }),
     ],

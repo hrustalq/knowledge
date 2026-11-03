@@ -18,6 +18,7 @@ import type {
   ProjectGitResponse,
   ProjectOverviewResponse,
   ProjectSummary,
+  ScaffoldProjectResponse,
 } from '@knowledge/contracts';
 import { ConfigService } from '@nestjs/config';
 import { Access, CurrentPrincipal, Feature } from '../auth/access.decorator.js';
@@ -28,8 +29,10 @@ import {
   DeleteProjectQueryDto,
   DeletionPreviewQueryDto,
   ListProjectsQueryDto,
+  ScaffoldProjectDto,
   UpdateProjectDto,
 } from './projects.dto.js';
+import { ProjectScaffoldService } from './project-scaffold.service.js';
 import { ProjectsService } from './projects.service.js';
 import { AccessService } from '../auth/access.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
@@ -49,6 +52,7 @@ export class ProjectsController {
     private readonly projects: ProjectsService,
     private readonly overviewService: ProjectOverviewService,
     private readonly cascadeService: ProjectCascadeService,
+    private readonly scaffolder: ProjectScaffoldService,
     private readonly permissions: PermissionService,
     private readonly access: AccessService,
     private readonly config: ConfigService<Env, true>,
@@ -76,6 +80,24 @@ export class ProjectsController {
     @CurrentPrincipal() principal: Principal,
   ): Promise<CreateProjectResponse> {
     return this.projects.create(dto, principal?.userId);
+  }
+
+  /**
+   * A project from a blueprint (#716): the project, its conventions and every
+   * page in one transaction. Declared before `:id` (a literal segment).
+   *
+   * A styleguide is trusted prompt text that only an admin may write
+   * (`PUT /v1/ai/styleguides`), so a blueprint carrying one needs an admin
+   * here too; templates and glossary terms are editor-level, as their routes are.
+   */
+  @Post('scaffold')
+  @Returns('ScaffoldProjectResponse')
+  @Access('editor', 'body')
+  @ApiOperation({ summary: 'Create a project from a blueprint: pages, styleguide, templates and glossary in one go' })
+  async scaffold(@Body() dto: ScaffoldProjectDto, @CurrentPrincipal() principal: Principal): Promise<ScaffoldProjectResponse> {
+    const blueprint = await this.scaffolder.resolve(dto);
+    if (blueprint.conventions?.styleguide && !dto.parentId) await this.access.requireRole(principal, dto.workspaceId, 'admin');
+    return this.scaffolder.scaffold(dto, blueprint, principal);
   }
 
   @Get(':id')

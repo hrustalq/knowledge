@@ -33,6 +33,7 @@ export type WorkspaceSource =
   | 'workflow-definition' // :id path param is a workflow definition id (docs/features/17)
   | 'workflow-run' // :id path param is a workflow run id (docs/features/17)
   | 'template' // :id path param is a page template id (issue #69)
+  | 'blueprint' // :id path param is a project blueprint row id (#716)
   | 'share-link' // :id path param is a share link id (docs/features/43)
   | 'site' // :id path param is a published site id (docs/features/44)
   | 'site-version' // :id path param is a site version id (resolved through its site; docs/features/44)

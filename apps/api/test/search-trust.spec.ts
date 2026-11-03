@@ -34,6 +34,7 @@ type Row = {
   lastActivityAt: Date;
   archivedAt: Date | null;
   branches: { name: string; headRevisionId: string | null }[];
+  revisions: { id: string; origin: string | null }[];
 };
 
 function row(id: string, over: Partial<Row> = {}): Row {
@@ -51,6 +52,7 @@ function row(id: string, over: Partial<Row> = {}): Row {
     lastActivityAt: new Date(NOW - day),
     archivedAt: null,
     branches: [{ name: 'main', headRevisionId: 'head' }],
+    revisions: [],
     ...over,
   };
 }
@@ -163,6 +165,17 @@ describe('SearchService trust re-rank', () => {
     expect(res.results.map((r) => r.documentId)).toEqual(['inactive', 'verified']);
     expect(res.results[0]!.trust).toMatchObject({ status: 'unverified', inactive: true });
     expect(res.results[0]!.score).toBeCloseTo(0.7 * TRUST_WEIGHTS.inactive, 4);
+  });
+
+  it('never returns a scaffold stub, and returns it once a real revision is its head (#716)', async () => {
+    const stub = row('stub', { revisions: [{ id: 'head', origin: 'scaffold' }] });
+    const { svc } = build([plain, stub], [hit('stub', 0.9), hit('plain', 0.5)]);
+    const res = await svc.search({ workspaceId: WS, query: 'q', mode: 'semantic' }, ADMIN);
+    expect(res.results.map((r) => r.documentId)).toEqual(['plain']);
+
+    const edited = row('stub', { revisions: [{ id: 'scaffolded', origin: 'scaffold' }] });
+    const after = await build([plain, edited], [hit('stub', 0.9), hit('plain', 0.5)]).svc.search({ workspaceId: WS, query: 'q', mode: 'semantic' }, ADMIN);
+    expect(after.results.map((r) => r.documentId)).toEqual(['stub', 'plain']);
   });
 
   it('includeArchived keeps archived pages and verificationStates narrows the hit set', async () => {

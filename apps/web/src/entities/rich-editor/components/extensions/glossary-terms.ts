@@ -27,9 +27,13 @@ import { GLOSSARY_AT_ATTR, GLOSSARY_ATTR, buildMatcher, glossaryHref, linkCap, s
  * the same exclusions in the document's own vocabulary. Headings are titles,
  * not sentences — a definition link in one competes with the heading's job of
  * being scannable — and code is a literal, where a word that merely looks like
- * a term is not one.
+ * a term is not one. A table header cell is a column label: "Category" names a
+ * field, it does not use the word (#703).
+ *
+ * Checked on the way down, not against a text node's parent: a header cell's
+ * text sits in a paragraph inside the cell.
  */
-const SKIP_NODES = new Set(['heading', 'codeBlock', 'knMermaid', 'knDrawing', 'knFile', 'knToc'])
+const SKIP_NODES = new Set(['heading', 'tableHeader', 'codeBlock', 'knMermaid', 'knDrawing', 'knFile', 'knToc'])
 
 /** Marks that already claim the text: a link, or inline code. */
 const SKIP_MARKS = new Set(['link', 'code'])
@@ -115,12 +119,11 @@ export const GlossaryTerms = Extension.create<Record<string, never>, GlossaryTer
          */
         const used = new Map<string, number>()
 
-        state.doc.descendants((node, pos, parent) => {
+        state.doc.descendants((node, pos) => {
           if (!node.isText) {
             // Atoms hold no prose to link; anything else, keep descending.
-            return !node.isAtom
+            return !node.isAtom && !SKIP_NODES.has(node.type.name)
           }
-          if (parent && SKIP_NODES.has(parent.type.name)) return false
           if (node.marks.some((mark) => SKIP_MARKS.has(mark.type.name))) return false
 
           const text = node.text ?? ''

@@ -2,6 +2,13 @@ packages:
   - apps/*
   - packages/*
 
+# exceljs's fast-csv declares @types/node@14 as a runtime dependency; left alone
+# it becomes the hoisted @types/node every buildless package typechecks against
+# (no `import.meta.dirname` in 14). Pin it to the version the apps use.
+overrides:
+  '@fast-csv/format>@types/node': ^24.0.0
+  '@fast-csv/parse>@types/node': ^24.0.0
+
 onlyBuiltDependencies:
   - '@prisma/client'
   - '@prisma/engines'

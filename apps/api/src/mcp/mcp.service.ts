@@ -48,6 +48,9 @@ import { AccessRequestsService } from '../permissions/access-requests.service.js
 import { HistoryService } from '../documents/history.service.js';
 import { IngestionAdminService } from '../ingestion/ingestion-admin.service.js';
 import { ProjectsService } from '../projects/projects.service.js';
+import { ProjectScaffoldService } from '../projects/project-scaffold.service.js';
+import type { ScaffoldProjectDto } from '../projects/projects.dto.js';
+import { BlueprintsService } from '../blueprints/blueprints.service.js';
 import { ConnectorProducer } from '../connectors/connector.producer.js';
 import { ConnectorsService, toRunInfo } from '../connectors/connectors.service.js';
 import { ConnectorWorkItemsService } from '../connectors/connector-work-items.service.js';
@@ -82,7 +85,7 @@ import { parseEmbedUrl } from '@knowledge/contracts';
 import { registerDraftTools, type McpDraftTools } from './draft-tools.js';
 import { CaptureService } from '../captures/capture.service.js';
 import { MAX_USAGE_LIMIT } from '../components/component-match.js';
-import { COMPONENT_DRAFT_MAX_PATHS } from '@knowledge/contracts';
+import { COMPONENT_DRAFT_MAX_PATHS, SUPPORTED_LOCALES } from '@knowledge/contracts';
 import { ComponentUsagesService } from '../components/component-usages.service.js';
 import { ApiSpecDiffService } from '../api-specs/api-spec-diff.service.js';
 import { ApiSpecReadService } from '../api-specs/api-spec-read.service.js';
@@ -120,12 +123,13 @@ import {
   RELEASE_TAG_NAME_PATTERN,
   type MemberCapability,
 } from '@knowledge/contracts';
+import { contentLines } from '../documents/content-lines.js';
 
 /**
  * Bumped by hand at every release, with swagger.ts (docs/versioning.md#known-drift).
  * Named because the connection page and the skill report it too.
  */
-export const MCP_SERVER_VERSION = '0.43.0';
+export const MCP_SERVER_VERSION = '0.44.0';
 
 /**
  * MCP tools (plan.md §9). Tool names use underscores (MCP tool names must
@@ -161,6 +165,8 @@ export const MCP_SERVER_VERSION = '0.43.0';
  *   knowledge_get_historical_context → knowledge.get_historical_context (Phase 5)
  *   knowledge_ingest            → knowledge.ingest            (Phase 5)
  *   knowledge_list_projects     → knowledge.list_projects     (projects layer)
+ *   knowledge_list_blueprints   → what a new project can start from (#716)
+ *   knowledge_scaffold_project  → a project + conventions + pages from a blueprint (#716)
  *   knowledge_get_workspace_graph → knowledge.get_workspace_graph
  *   knowledge_list_workflows    → knowledge.list_workflows    (workflows, feature 17)
  *   knowledge_start_workflow    → knowledge.start_workflow
@@ -280,6 +286,8 @@ export class McpService {
     private readonly testRuns: ApiTestRunsService,
     private readonly embeds: EmbedsService,
     private readonly memos: MemosService,
+    private readonly blueprints: BlueprintsService,
+    private readonly scaffolds: ProjectScaffoldService,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -700,6 +708,56 @@ export class McpService {
       },
       async ({ workspaceId }) => {
         return this.json(await this.projects.list({ workspaceId }, await guard.pages(workspaceId)));
+      },
+    );
+
+    server.registerTool(
+      'knowledge_list_blueprints',
+      {
+        description:
+          'List the blueprints a new project can start from: the built-ins (discovery, code-product, service-docs, blank) ' +
+          'with this workspace\'s overrides applied, then its saved ones. An entry\'s key is what knowledge_scaffold_project takes as ' +
+          'blueprintKey. Its blueprint is the page tree (titles per locale, a template or guidance per page, numbered ' +
+          'collections) and the conventions a scaffold writes (styleguide, templates, glossary).',
+        inputSchema: { workspaceId: z.string().uuid() },
+      },
+      async ({ workspaceId }) => {
+        await guard.ws(workspaceId, 'viewer');
+        return this.json(await this.blueprints.list(workspaceId));
+      },
+    );
+
+    server.registerTool(
+      'knowledge_scaffold_project',
+      {
+        description:
+          'Create a project from a blueprint in one transaction: the project, its conventions (styleguide, templates, ' +
+          'glossary) and every page of its tree, published at once. Pages nobody has written yet stay out of search ' +
+          'until their first real edit. Pass exactly one of blueprintKey (from knowledge_list_blueprints) or blueprint ' +
+          '(inline JSON of the same shape as an entry\'s blueprint, validated server-side). A blueprint with a styleguide ' +
+          'needs a workspace admin. With parentId the tree is added under that page of its existing project and no ' +
+          'conventions are written. Returns the project and how many pages were created.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          name: z.string().trim().min(1).max(120).optional().describe('The new project. Required unless parentId is given'),
+          description: z.string().max(2000).optional(),
+          locale: z.enum(SUPPORTED_LOCALES).describe('The language page titles and skeletons are written in'),
+          blueprintKey: z.string().max(100).optional().describe('A key from knowledge_list_blueprints'),
+          blueprint: z.record(z.string(), z.unknown()).optional().describe('An inline blueprint: { name, description?, tree, conventions? }'),
+          parentId: z.string().uuid().optional().describe('Add the tree under this page instead of creating a project'),
+          restricted: z
+            .boolean()
+            .optional()
+            .describe('Restrict the new project to people granted access before its first page is written; you get manage'),
+        },
+      },
+      async (args) => {
+        await guard.ws(args.workspaceId, 'editor');
+        if (!args.name && !args.parentId) throw new Error('Pass name for a new project, or parentId to add under a page.');
+        const blueprint = await this.scaffolds.resolve(args);
+        // The REST route's rule: a styleguide is admin-only trusted prompt text.
+        if (blueprint.conventions?.styleguide && !args.parentId) await guard.ws(args.workspaceId, 'admin');
+        return this.json(await this.scaffolds.scaffold(args as ScaffoldProjectDto, blueprint, principal));
       },
     );
 
@@ -1583,18 +1641,21 @@ export class McpService {
       {
         description:
           'The full markdown (and parsed frontmatter) of a document at its default-branch head or a given revision. Read this before writing a revision: a revision replaces the whole page. ' +
-          '`markdown` is the body without its frontmatter block; posting it back as-is keeps the frontmatter.',
+          '`markdown` is the body without its frontmatter block; posting it back as-is keeps the frontmatter. ' +
+          'Pass `lines` ({ start, end }, 1-based, inclusive, counting that `markdown`) for just those lines: the answer adds startLine, endLine, totalLines and `reference`, ' +
+          'a link to exactly that passage pinned to the revision — cite a passage with it (a reader opens it highlighted, re-found on a newer head). Out of range is an error.',
         inputSchema: {
           documentId: z.string().uuid(),
           revisionId: z.string().uuid().optional(),
+          lines: z.object({ start: z.number().int().min(1), end: z.number().int().min(1) }).optional(),
         },
       },
-      async ({ documentId, revisionId }) => {
+      async ({ documentId, revisionId, lines }) => {
         await guard.doc(documentId, 'viewer');
         if (revisionId) await guard.branches(documentId, { revisionIds: [revisionId] }, 'viewer');
         const content = await this.documents.getContent(documentId, revisionId);
         void this.analytics.view(caller, documentId, content.revisionId);
-        return this.json(content);
+        return this.json(lines ? contentLines(content, lines, this.webUrl()) : content);
       },
     );
 

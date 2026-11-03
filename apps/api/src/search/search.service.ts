@@ -14,6 +14,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import type { DocumentAclFilter } from '../common/document-acl.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
+import { isScaffoldStub, SCAFFOLD_ORIGIN } from '../common/scaffold-stub.js';
 import { GraphService, type ChunkHit } from '../graph/graph.service.js';
 import { EMBEDDING_PROVIDER, type EmbeddingProvider } from '../embedding/embedding.provider.js';
 import { FULLTEXT_PROVIDER, type FulltextHit, type FulltextProvider } from '../fulltext/fulltext.provider.js';
@@ -188,8 +189,14 @@ export class SearchService {
       const pool = [...vectorHits, ...textHits];
       if (pool.length === 0) return;
       const docs = await this.loadDocs([...new Set(pool.map((h) => h.documentId))], scope);
-      docById = new Map(docs.map((d) => [d.id, d]));
-      trustOf = await this.trustOf(docs, settings.inactiveAfterDays);
+      // #716: a scaffold stub has no chunks to match, so this only keeps one
+      // out should a stub ever be indexed — search and Ask never show a skeleton.
+      const pages = docs.filter((d) => {
+        const head = d.branches.find((b) => b.name === d.defaultBranch)?.headRevisionId;
+        return !isScaffoldStub(d.revisions.find((r) => r.id === head));
+      });
+      docById = new Map(pages.map((d) => [d.id, d]));
+      trustOf = await this.trustOf(pages, settings.inactiveAfterDays);
       aclFiltered = new Set(pool.filter((h) => !docById.has(h.documentId)).map((h) => h.chunkId)).size;
     };
     // Archived pages drop first, whatever the switch says: they are put away,
@@ -450,6 +457,8 @@ export class SearchService {
         lastActivityAt: true,
         archivedAt: true,
         branches: { select: { name: true, headRevisionId: true } },
+        // At most one row: only a scaffold writes an origin, and only revision 1.
+        revisions: { where: { origin: SCAFFOLD_ORIGIN }, select: { id: true, origin: true } },
       },
     });
   }

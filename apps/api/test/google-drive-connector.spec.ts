@@ -266,6 +266,13 @@ describe('Google Drive adapter', () => {
       kind: 'export',
       filename: 'Deck.pptx',
     });
+    // xlsx, not CSV: a CSV export is the first tab only (#707).
+    expect(planFile({ name: 'Budget', mimeType: 'application/vnd.google-apps.spreadsheet' })).toEqual({
+      kind: 'export',
+      filename: 'Budget.xlsx',
+      contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      exportType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
     expect(planFile({ name: 'spec.pdf', mimeType: 'application/pdf', size: '10' })).toMatchObject({ kind: 'download' });
     // A Drive name need not carry its extension; the parser routes by it.
     expect(planFile({ name: 'notes', mimeType: 'text/markdown', size: '1' })).toMatchObject({ filename: 'notes.md' });

@@ -498,6 +498,15 @@ export interface DocumentContentResponse {
   markdown: string;
   /** Present when the revision was picked by `asOf` (#81). */
   resolvedAsOf?: ResolvedAsOf;
+  /**
+   * Present with `lines` (#708): `markdown` is then only lines startLine–endLine
+   * (1-based, of the body without frontmatter) out of `totalLines`, and
+   * `reference` is the passage link to cite — pinned to `revisionId`.
+   */
+  startLine?: number;
+  endLine?: number;
+  totalLines?: number;
+  reference?: string;
 }
 
 

@@ -55,3 +55,17 @@ _Avoid_: referencing page, backlink, child page
 **Extraction recipe** («Рецепт извлечения»):
 The per-source description of where a source's content is and how to turn it into a page; when the source's shape changes, a person reviews a new recipe.
 _Avoid_: parser, script, scraper
+
+## Starting a project
+
+**Blueprint** («Шаблон структуры»):
+A reusable description of a project: a page tree (titles, categories, template or heading skeleton, guidance) plus the conventions it starts with — styleguide, project templates, glossary seed terms. Built-in, saved for a workspace, derived from an existing project, or drafted from a description. Scaffolding copies it; nothing stays linked to it.
+_Avoid_: template (that is one page), project template, scaffold, preset
+
+**Collection** («Коллекция»):
+A page whose future children follow a rule: a child template and a numbered title pattern (`ADR {{n:4}}: `, `{{n:2}} — `), so "New page" under it starts as the next item. Any page can be one; it is not a page kind.
+_Avoid_: folder, list, series, section
+
+**Scaffold stub** («Незаполненная страница»):
+A page whose head is still the revision the scaffold wrote. It is in the tree for people to fill in, but kept out of search, Ask, llms.txt and the health counts until its first real edit.
+_Avoid_: draft (that is a private page or branch), template (in the ru UI «заготовка» already means a page template), placeholder page

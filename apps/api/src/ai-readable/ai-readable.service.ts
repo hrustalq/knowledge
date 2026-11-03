@@ -9,6 +9,7 @@ import { t } from '../i18n/t.js';
 import { type AiReadableScope, isReadableRevisionStatus, listedProjectsWhere, readableDocumentsWhere } from './ai-readable-scope.js';
 import { AI_READABLE_FORMAT_VERSION, etagFor, renderPageMarkdown } from './render.js';
 import { etagMatches } from '../common/http-cache.js';
+import { isScaffoldStub } from '../common/scaffold-stub.js';
 import {
   type IndexPage,
   type OrderedPage,
@@ -166,9 +167,12 @@ export class AiReadableService {
     if (headOf.size === 0) return [];
     const heads = await this.prisma.documentRevision.findMany({
       where: { id: { in: [...headOf.values()] } },
-      select: { id: true, status: true, s3Key: true },
+      select: { id: true, status: true, s3Key: true, origin: true },
     });
-    const readable = new Map(heads.filter((r) => isReadableRevisionStatus(r.status)).map((r) => [r.id, r]));
+    // A scaffold stub (#716) is a skeleton, not content an agent should read.
+    const readable = new Map(
+      heads.filter((r) => isReadableRevisionStatus(r.status) && !isScaffoldStub(r)).map((r) => [r.id, r]),
+    );
     const out: IndexPage[] = [];
     for (const d of docs) {
       const rev = readable.get(headOf.get(d.id) ?? '');

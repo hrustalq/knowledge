@@ -29,6 +29,7 @@ import { DocumentsService } from '../documents/documents.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { visibilitySql, visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
 import { listedSql } from '../common/listed-page.js';
+import { scaffoldStubSql } from '../common/scaffold-stub.js';
 import { quietPageSql, readSignalsColumnsSql, readSignalsJoinSql } from '../analytics/read-signals.js';
 import type { Env } from '../config/env.js';
 import { t } from '../i18n/t.js';
@@ -300,6 +301,9 @@ export class KnowledgeHealthService {
          -- page that is still only a merge request (#73).
          AND ${listedSql('d')}
          AND ${visibilitySql(access, 'd')}
+         -- Nor a scaffold stub (#716): a skeleton nobody has written yet is
+         -- not a page to verify, own or count.
+         AND NOT ${scaffoldStubSql('d')}
     `;
   }
 

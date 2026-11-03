@@ -297,6 +297,8 @@ export type I18nTranslations = {
         "secretaryDesc": string;
         "interpreter": string;
         "interpreterDesc": string;
+        "scaffolder": string;
+        "scaffolderDesc": string;
         "testerRun": {
             "noOperation": string;
             "summary": string;
@@ -619,7 +621,6 @@ export type I18nTranslations = {
                 "skipped": string;
                 "oversizeName": string;
                 "imagesDropped": string;
-                "firstSheetOnly": string;
             };
             "sourceNoArticle": string;
             "crawlConfirmFirst": string;
@@ -781,6 +782,8 @@ export type I18nTranslations = {
             "foreignIds": string;
             "sourceBacked": string;
             "sourceVerify": string;
+            "linesInvalid": string;
+            "linesOutOfRange": string;
         };
         "branch": {
             "notFound": string;
@@ -1220,6 +1223,15 @@ export type I18nTranslations = {
                 "invalidPlaceholder": string;
                 "invalidRelation": string;
             };
+        };
+        "blueprint": {
+            "invalid": string;
+            "oneSource": string;
+            "notFound": string;
+            "limitReached": string;
+            "alreadyCustomized": string;
+            "contentRequired": string;
+            "generateEmpty": string;
         };
         "share": {
             "notFound": string;
@@ -1687,6 +1699,8 @@ export type I18nTranslations = {
             "rebuilding-structure": string;
             "formatting": string;
             "parsing": string;
+            "reading-workbook": string;
+            "reading-sheet": string;
         };
         "warning": {
             "passthrough": string;
@@ -1725,6 +1739,40 @@ export type I18nTranslations = {
             "singleCodeBlock": string;
             "rowsTruncated": string;
             "wideTable": string;
+            "inSheet": string;
+            "hiddenSheets": {
+                "one": string;
+                "other": string;
+                "few": string;
+                "many": string;
+            };
+            "formulasWithoutValue": {
+                "one": string;
+                "other": string;
+                "few": string;
+                "many": string;
+            };
+            "lostCharts": {
+                "one": string;
+                "other": string;
+                "few": string;
+                "many": string;
+            };
+            "lostImages": {
+                "one": string;
+                "other": string;
+                "few": string;
+                "many": string;
+            };
+            "lostPivots": {
+                "one": string;
+                "other": string;
+                "few": string;
+                "many": string;
+            };
+            "lostComments": string;
+            "sheetFormattingDropped": string;
+            "emptyWorkbook": string;
         };
     };
     "knowledgeIssue": {
@@ -1907,6 +1955,7 @@ export type I18nTranslations = {
         "savedFilter": string;
         "sourcePolicy": string;
         "template": string;
+        "blueprint": string;
         "shareLink": string;
         "site": string;
         "siteVersion": string;

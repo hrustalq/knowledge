@@ -66,6 +66,10 @@ _Avoid_: template (that is one page), project template, scaffold, preset
 A page whose future children follow a rule: a child template and a numbered title pattern (`ADR {{n:4}}: `, `{{n:2}} — `), so "New page" under it starts as the next item. Any page can be one; it is not a page kind.
 _Avoid_: folder, list, series, section
 
+**Interview** («Интервью»):
+Describe it's rounds of questions before a blueprint is drafted. The assistant asks what the description leaves open, a few questions at a time, each with a suggested answer, and looks facts up itself. It writes nothing; the answers shape the draft.
+_Avoid_: flow (that is a code-defined question sequence that writes), wizard, questionnaire, Q&A
+
 **Scaffold stub** («Незаполненная страница»):
 A page whose head is still the revision the scaffold wrote. It is in the tree for people to fill in, but kept out of search, Ask, llms.txt and the health counts until its first real edit.
 _Avoid_: draft (that is a private page or branch), template (in the ru UI «заготовка» already means a page template), placeholder page

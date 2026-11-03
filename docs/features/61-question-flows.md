@@ -180,7 +180,13 @@ question `validate` refuses it, and the question is asked again.
 - **Chat bots never start a flow.** Telegram and Time keep
   [feature 47](47-chat-bots.md)'s "no pane tools" rule.
 - **No model-authored wizards.** The model may ask ad hoc with `ask_user`; a
-  flow's questions are code.
+  flow's questions are code. The scaffold interview
+  ([73](73-project-scaffolding.md#the-interview)) is not an exception, because it
+  is not a flow. Its model-written rounds only feed the next prompt and write
+  nothing, so there is no permission or write for code to pin down. A flow's
+  answers drive a write under someone's permissions, which is why a flow stays
+  code. The interview shares the controls (`PromptFields`) and the field reader
+  (`readPromptFields`), not the flow machinery.
 - **No stateful MCP HTTP session**, so HTTP clients are never elicited.
   Revisit only if a client proves unable to run the `needs_input` loop.
 - **Option lists are capped, not paged**: 20 projects, 6 pages, 20 reviewers.

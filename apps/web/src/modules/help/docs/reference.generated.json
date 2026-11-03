@@ -6665,6 +6665,16 @@
       ]
     },
     {
+      "name": "knowledge_list_blueprints",
+      "description": "List the blueprints a new project can start from: the built-ins (discovery, code-product, service-docs, blank) with this workspace's overrides applied, then its saved ones. An entry's key is what knowledge_scaffold_project takes as blueprintKey. Its blueprint is the page tree (titles per locale, a template or guidance per page, numbered collections) and the conventions a scaffold writes (styleguide, templates, glossary).",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        }
+      ]
+    },
+    {
       "name": "knowledge_list_branches",
       "description": "s branches (#636): each with the pages it changed that you can open, who wrote it last and when, \" + s: the same name on any page of the project is one branch, and one merge request carries all of it.",
       "inputs": [
@@ -7115,6 +7125,44 @@
         {
           "name": "environment",
           "optional": false
+        }
+      ]
+    },
+    {
+      "name": "knowledge_scaffold_project",
+      "description": "Create a project from a blueprint in one transaction: the project, its conventions (styleguide, templates, glossary) and every page of its tree, published at once. Pages nobody has written yet stay out of search until their first real edit. Pass exactly one of blueprintKey (from knowledge_list_blueprints) or blueprint (inline JSON of the same shape as an entry's blueprint, validated server-side). A blueprint with a styleguide needs a workspace admin. With parentId the tree is added under that page of its existing project and no conventions are written. Returns the project and how many pages were created.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "name",
+          "optional": true
+        },
+        {
+          "name": "description",
+          "optional": true
+        },
+        {
+          "name": "locale",
+          "optional": false
+        },
+        {
+          "name": "blueprintKey",
+          "optional": true
+        },
+        {
+          "name": "blueprint",
+          "optional": true
+        },
+        {
+          "name": "parentId",
+          "optional": true
+        },
+        {
+          "name": "restricted",
+          "optional": true
         }
       ]
     },

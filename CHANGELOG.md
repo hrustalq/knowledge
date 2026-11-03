@@ -87,6 +87,12 @@ in the pull request that introduces them — see
 - ***From a project* previews before it copies** (#716). Picking a project now shows the outline it gives (pages,
   collections, styleguide rules, glossary terms on offer) beside the list; *Use this outline* takes it to Shape.
   Both start panels use the full width of the wizard.
+- **Agents can start a project from a blueprint** (#716, phase 6 of 7). Two MCP tools:
+  `knowledge_list_blueprints` lists the built-in and saved blueprints with their page trees and conventions, and
+  `knowledge_scaffold_project` creates the project from a blueprint key or inline blueprint JSON. It produces the
+  same project the wizard's *Create* does. It needs an editor, or an admin when the blueprint carries a styleguide,
+  and it is not offered to read-only keys. The generated `SKILL.md` describes the flow. Deriving a blueprint from a
+  project and drafting one from a description remain wizard-only.
 - **A *Research question* page template** (`builtin:research-question`): Question, Options, Criteria, Findings,
   Decision, Open questions.
 

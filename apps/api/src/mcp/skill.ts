@@ -184,6 +184,16 @@ placeholders it expects. Pass \`templateRef\` and \`values\` to ${toolRef('knowl
 the server fills the skeleton in, with \`content\` (the skeleton, written out) yours is published and the template is
 recorded as the page's origin. Either way the template's tags and relations link the page into the graph.
 
+### Start a project from a blueprint
+
+A new project need not start empty. ${toolRef('knowledge_list_blueprints')} lists what it can start from: the built-ins
+(\`discovery\` for a business-first project, \`code-product\`, \`service-docs\`, \`blank\`) and the workspace's own, each
+with its page tree and conventions. ${toolRef('knowledge_scaffold_project')} with a \`name\`, a \`locale\` and that
+\`blueprintKey\` creates the project, its styleguide, templates and glossary, and every page, in one go. Or pass
+\`blueprint\` instead, inline JSON of the same shape, when no listed one fits. A blueprint with a styleguide needs a
+workspace admin. Unwritten pages stay out of search until someone edits them, so fill in the ones the user cares about.
+With \`parentId\` the tree goes under an existing page instead, and no conventions are written.
+
 ### Change an existing page — always through a merge request
 
 1. ${toolRef('knowledge_get_document_content')} — the whole current markdown. Note \`revisionId\`: it is your base.

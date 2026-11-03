@@ -29,6 +29,7 @@ import { api, isApiRequestError } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
 import { useAuthStore } from '@/stores/auth'
 import { useProjectsStore } from '@/stores/projects'
+import { useFeaturesStore } from '@/stores/features'
 import { useTemplatesStore } from '@/entities/template'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
@@ -38,6 +39,7 @@ import BlueprintOutline from '@/modules/projects/components/BlueprintOutline.vue
 import BlueprintNodeEditor from '@/modules/projects/components/BlueprintNodeEditor.vue'
 import BlueprintConventions from '@/modules/projects/components/BlueprintConventions.vue'
 import ProjectBlueprintPicker from '@/modules/projects/components/ProjectBlueprintPicker.vue'
+import BlueprintDescribePanel from '@/modules/projects/components/BlueprintDescribePanel.vue'
 import SaveBlueprintDialog from '@/modules/projects/components/SaveBlueprintDialog.vue'
 import ProjectAvatar from '@/modules/projects/components/ProjectAvatar.vue'
 import { EMOJI_CHOICES } from '@/modules/projects/model/avatar'
@@ -61,6 +63,7 @@ const router = useRouter()
 const auth = useAuthStore()
 const projects = useProjectsStore()
 const templatesStore = useTemplatesStore()
+const features = useFeaturesStore()
 
 /* ------------------------------------------------------------------ machine */
 
@@ -104,6 +107,13 @@ const stepIndex = computed(() => SCAFFOLD_STEPS.indexOf(step.value))
 
 const lang = computed<Locale>(() => context.value.locale ?? (SUPPORTED_LOCALES.includes(uiLocale.value as Locale) ? (uiLocale.value as Locale) : 'en'))
 
+/**
+ * Every centred step body (the Start cards, Conventions, Create): one
+ * width, and the header's and footer's gutters, so the content's left edge does
+ * not jump as the steps change.
+ */
+const STEP_BODY = 'mx-auto flex w-full max-w-4xl flex-col gap-4 px-4 py-6 lg:px-6'
+
 /* ------------------------------------------------------------------- motion */
 
 /** The house curve (the workflow wizard's step-in), and one step's entrance and exit. */
@@ -142,7 +152,6 @@ interface StartCard {
   description: string
   chips: string[]
   more: number
-  soon: boolean
   entry?: BlueprintEntry
 }
 
@@ -159,7 +168,6 @@ const cards = computed<StartCard[]>(() => [
       description: blueprintText(entry.blueprint.description, lang.value),
       chips: tree.slice(0, CHIPS).map((n) => blueprintText(n.title, lang.value)),
       more: Math.max(0, tree.length - CHIPS),
-      soon: false,
       entry,
     }
   }),
@@ -171,27 +179,29 @@ const cards = computed<StartCard[]>(() => [
     description: t('scaffold.start.deriveBody'),
     chips: [],
     more: 0,
-    soon: false,
   },
-  // The source still to come (phase 5), drawn so the flow's shape is honest.
-  {
-    key: 'describe',
-    icon: MessagesSquare,
-    name: t('scaffold.start.describe'),
-    meta: t('scaffold.start.soon'),
-    description: t('scaffold.start.describeBody'),
-    chips: [],
-    more: 0,
-    soon: true,
-  },
+  // The scaffolder drafts it: no assistant, no card (the route 404s too).
+  ...(features.isOn('assistant')
+    ? [
+        {
+          key: 'describe',
+          icon: MessagesSquare,
+          name: t('scaffold.start.describe'),
+          meta: t('scaffold.start.describeMeta'),
+          description: t('scaffold.start.describeBody'),
+          chips: [],
+          more: 0,
+        },
+      ]
+    : []),
 ])
 
-/** Start shows the cards, or the From a project picker in their place. */
-const startView = ref<'cards' | 'derive'>('cards')
+/** Start shows the cards, or the From a project / Describe it panel in their place. */
+const startView = ref<'cards' | 'derive' | 'describe'>('cards')
 
 function choose(card: StartCard) {
   if (card.entry) pick(card.entry)
-  else if (card.key === 'derive') startView.value = 'derive'
+  else if (card.key === 'derive' || card.key === 'describe') startView.value = card.key
 }
 
 function pick(entry: BlueprintEntry) {
@@ -208,14 +218,15 @@ function picked(next: Blueprint, from: ScaffoldOrigin) {
 
 const origin = computed(() => context.value.origin ?? null)
 const derivedFrom = computed(() => (origin.value?.kind === 'project' ? origin.value : null))
+const describedAs = computed(() => (origin.value?.kind === 'described' ? origin.value : null))
 
 /* ---------------------------------------------------------- save as blueprint */
 
 const saveOpen = ref(false)
 function onSaved(entry: BlueprintEntry) {
-  // Saving again now updates that row — unless the outline came from a project,
-  // whose provenance and offered terms the later steps still need.
-  if (origin.value?.kind !== 'project') {
+  // Saving again now updates that row — unless the outline came from a project
+  // or a description, whose provenance (and offered terms) the later steps still need.
+  if (origin.value?.kind === 'blueprint' || !origin.value) {
     send({ type: 'SET', patch: { origin: { kind: 'blueprint', key: entry.key, builtIn: entry.builtIn, id: entry.id } } })
   }
   void loadBlueprints()
@@ -372,7 +383,8 @@ function leave() {
     <div class="min-h-0 flex-1 overflow-hidden">
       <AnimatePresence mode="wait" :initial="false">
       <!-- 1 · Start ------------------------------------------------------- -->
-      <motion.div v-if="step === 'start' && startView === 'derive'" key="start-derive" class="h-full overflow-y-auto" v-bind="STEP_MOTION">
+      <!-- The two panels are split panes like Shape: full bleed, each pane scrolls itself. -->
+      <motion.div v-if="step === 'start' && startView === 'derive'" key="start-derive" class="h-full min-h-0" v-bind="STEP_MOTION">
         <ProjectBlueprintPicker
           :built-ins="blueprints ?? []"
           :locale="lang"
@@ -382,8 +394,18 @@ function leave() {
           @pick-entry="pick"
         />
       </motion.div>
+      <motion.div v-else-if="step === 'start' && startView === 'describe'" key="start-describe" class="h-full min-h-0" v-bind="STEP_MOTION">
+        <BlueprintDescribePanel
+          :entries="blueprints ?? []"
+          :locale="lang"
+          :can-edit="auth.canEdit"
+          :initial-brief="describedAs?.brief"
+          @back="startView = 'cards'"
+          @pick="picked"
+        />
+      </motion.div>
       <motion.div v-else-if="step === 'start'" key="start" class="h-full overflow-y-auto" v-bind="STEP_MOTION">
-        <div class="mx-auto flex max-w-4xl flex-col gap-5 px-4 py-8 lg:py-10">
+        <div :class="STEP_BODY">
           <div>
             <h2 class="text-lg font-semibold">{{ t('scaffold.start.title') }}</h2>
             <p class="kn-measure text-muted-foreground mt-1 text-sm leading-relaxed">{{ t('scaffold.start.body') }}</p>
@@ -404,20 +426,18 @@ function leave() {
                cards reads as a row of the same thing. -->
           <div v-else class="grid auto-rows-fr grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
             <Motion
-              :as="card.soon ? 'div' : 'button'"
+              as="button"
               v-for="(card, i) in cards"
               :key="card.key"
-              :type="card.soon ? undefined : 'button'"
+              type="button"
               class="kn-sc-card"
-              :class="card.soon && 'kn-sc-card--soon'"
-              :aria-disabled="card.soon || undefined"
-              :disabled="!card.soon && !auth.canEdit"
+              :disabled="!auth.canEdit"
               :initial="{ opacity: 0, y: 8 }"
               :animate="{ opacity: 1, y: 0 }"
               :transition="{ duration: 0.24, delay: i * 0.035, ease: EASE }"
-              :while-hover="card.soon || !auth.canEdit ? undefined : { y: -2 }"
-              :while-press="card.soon || !auth.canEdit ? undefined : { scale: 0.99 }"
-              @click="!card.soon && choose(card)"
+              :while-hover="auth.canEdit ? { y: -2 } : undefined"
+              :while-press="auth.canEdit ? { scale: 0.99 } : undefined"
+              @click="choose(card)"
             >
               <span class="flex items-center gap-2.5">
                 <span class="bg-muted text-muted-foreground grid size-8 shrink-0 place-items-center rounded-lg text-base" aria-hidden="true">
@@ -448,14 +468,18 @@ function leave() {
         <!-- Where the outline came from, said plainly: a rules-only read is never
              dressed up as an AI draft. -->
         <p
-          v-if="derivedFrom"
+          v-if="derivedFrom || describedAs"
           class="text-muted-foreground flex shrink-0 items-start gap-2 border-b px-4 py-2 text-xs leading-snug lg:px-6"
           role="status"
         >
-          <component :is="derivedFrom.drafted ? Sparkles : ListTree" class="mt-px size-3.5 shrink-0" aria-hidden="true" />
-          <span>
+          <component :is="describedAs || derivedFrom?.drafted ? Sparkles : ListTree" class="mt-px size-3.5 shrink-0" aria-hidden="true" />
+          <span v-if="derivedFrom">
             <span class="text-foreground font-medium">{{ t('scaffold.provenance.from', { name: derivedFrom.projectName }) }}</span>
             {{ derivedFrom.drafted ? t('scaffold.provenance.drafted') : t('scaffold.provenance.rulesOnly') }}
+          </span>
+          <span v-else>
+            <span class="text-foreground font-medium">{{ t('scaffold.provenance.described') }}</span>
+            {{ t('scaffold.provenance.describedNote') }}
           </span>
         </p>
       <div class="grid min-h-0 flex-1 grid-rows-[minmax(14rem,40%)_minmax(0,1fr)] lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] lg:grid-rows-1">
@@ -510,7 +534,7 @@ function leave() {
 
       <!-- 4 · Create ------------------------------------------------------ -->
       <motion.div v-else key="create" class="h-full overflow-y-auto" v-bind="STEP_MOTION">
-        <form class="mx-auto grid max-w-4xl gap-8 px-4 py-6 lg:grid-cols-[minmax(0,1fr)_17rem] lg:py-10" @submit.prevent="create">
+        <form class="mx-auto grid w-full max-w-4xl gap-8 px-4 py-6 lg:grid-cols-[minmax(0,1fr)_17rem] lg:px-6" @submit.prevent="create">
           <div class="min-w-0 space-y-5">
             <div>
               <h2 class="text-lg font-semibold">{{ t('scaffold.create.title') }}</h2>
@@ -687,17 +711,12 @@ button.kn-sc-card:focus-visible {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
 }
-button.kn-sc-card:disabled,
-.kn-sc-card--soon {
+button.kn-sc-card:disabled {
   opacity: 0.55;
 }
 .kn-sc-chips {
   /* Sections past the card's edge fade out rather than being cut mid-word. */
   mask-image: linear-gradient(to right, #000 82%, transparent);
-}
-.kn-sc-card--soon {
-  border-style: dashed;
-  background: transparent;
 }
 
 @media (prefers-reduced-motion: reduce) {

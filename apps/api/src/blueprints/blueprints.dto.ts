@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsBoolean, IsIn, IsObject, IsOptional, IsUUID } from 'class-validator';
+import { IsBoolean, IsIn, IsObject, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 import { BUILT_IN_BLUEPRINT_KEYS } from '@knowledge/contracts';
 import { vmsg } from '../common/validation.js';
 
@@ -68,4 +68,22 @@ export class DeriveBlueprintDto {
   @ApiProperty({ format: 'uuid', description: 'The project to read, in any workspace the caller belongs to.' })
   @IsUUID()
   projectId!: string;
+}
+
+/** `POST /v1/blueprints/generate` (Describe it). */
+export class GenerateBlueprintDto {
+  @ApiProperty({ format: 'uuid', description: 'The workspace the new project is for; the model call is billed here.' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiProperty({ minLength: 10, maxLength: 4000, description: 'What the project is for, in the person\'s words.' })
+  @IsString()
+  @MinLength(10, { message: vmsg('minLength') })
+  @MaxLength(4000, { message: vmsg('maxLength') })
+  brief!: string;
+
+  @ApiPropertyOptional({ ...BLUEPRINT_BODY, description: `${BLUEPRINT_BODY.description} A starting outline the scaffolder adapts.` })
+  @IsOptional()
+  @IsObject()
+  blueprint?: Record<string, unknown>;
 }

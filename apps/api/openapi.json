@@ -4993,6 +4993,73 @@
         ]
       }
     },
+    "/v1/blueprints/generate": {
+      "post": {
+        "description": "Writes nothing. The scaffolder may list the workspace tree and search it, each call under the caller's access, and may adapt an optional starting blueprint. Its answer passes the same schema scaffold uses; unknown template refs and malformed pages are dropped. 422 when nothing usable came back.",
+        "operationId": "BlueprintsController_generate",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateBlueprintDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateBlueprintResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Draft a blueprint from a description (Describe it): the scaffolder, with read-only tree and search",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
     "/v1/blueprints/{id}": {
       "patch": {
         "operationId": "BlueprintsController_update",
@@ -41516,6 +41583,31 @@
           "projectId"
         ]
       },
+      "GenerateBlueprintDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The workspace the new project is for; the model call is billed here."
+          },
+          "brief": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 4000,
+            "description": "What the project is for, in the person's words."
+          },
+          "blueprint": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "A `Blueprint` (@knowledge/contracts), validated server-side by the same schema scaffold uses. A starting outline the scaffolder adapts."
+          }
+        },
+        "required": [
+          "workspaceId",
+          "brief"
+        ]
+      },
       "CreateBlueprintDto": {
         "type": "object",
         "properties": {
@@ -50859,7 +50951,8 @@
           "memo",
           "source-recipe",
           "source-judge",
-          "blueprint-derive"
+          "blueprint-derive",
+          "blueprint-generate"
         ]
       },
       "AiUsageResponse": {
@@ -60557,6 +60650,17 @@
           "suite",
           "runId",
           "existing"
+        ]
+      },
+      "GenerateBlueprintResponse": {
+        "type": "object",
+        "properties": {
+          "blueprint": {
+            "$ref": "#/components/schemas/Blueprint"
+          }
+        },
+        "required": [
+          "blueprint"
         ]
       },
       "GetAssistantThreadResponse": {

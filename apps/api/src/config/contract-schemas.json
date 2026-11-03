@@ -2665,7 +2665,8 @@
       "memo",
       "source-recipe",
       "source-judge",
-      "blueprint-derive"
+      "blueprint-derive",
+      "blueprint-generate"
     ]
   },
   "AiUsageResponse": {
@@ -12363,6 +12364,17 @@
       "suite",
       "runId",
       "existing"
+    ]
+  },
+  "GenerateBlueprintResponse": {
+    "type": "object",
+    "properties": {
+      "blueprint": {
+        "$ref": "#/components/schemas/Blueprint"
+      }
+    },
+    "required": [
+      "blueprint"
     ]
   },
   "GetAssistantThreadResponse": {

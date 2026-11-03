@@ -1,13 +1,15 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { BlueprintEntry, DeriveBlueprintResponse, ListBlueprintsResponse } from '@knowledge/contracts';
-import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
+import type { BlueprintEntry, DeriveBlueprintResponse, GenerateBlueprintResponse, ListBlueprintsResponse } from '@knowledge/contracts';
+import { Access, CurrentPrincipal, Feature } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { Returns } from '../common/returns.decorator.js';
 import { ParseUuidPipe } from '../common/validation.js';
 import { BlueprintDeriveService } from './blueprint-derive.service.js';
+import { BlueprintGenerateService } from './blueprint-generate.service.js';
+import { parseBlueprint } from './blueprint.schema.js';
 import { BlueprintsService } from './blueprints.service.js';
-import { CreateBlueprintDto, DeriveBlueprintDto, ListBlueprintsQueryDto, UpdateBlueprintDto } from './blueprints.dto.js';
+import { CreateBlueprintDto, DeriveBlueprintDto, GenerateBlueprintDto, ListBlueprintsQueryDto, UpdateBlueprintDto } from './blueprints.dto.js';
 
 /**
  * The blueprints a project can start from (#716): built-ins (code, both
@@ -25,6 +27,7 @@ export class BlueprintsController {
   constructor(
     private readonly blueprints: BlueprintsService,
     private readonly deriver: BlueprintDeriveService,
+    private readonly generator: BlueprintGenerateService,
   ) {}
 
   // Literal segments before `:id` — Nest matches in declaration order.
@@ -52,6 +55,21 @@ export class BlueprintsController {
   })
   derive(@Body() dto: DeriveBlueprintDto, @CurrentPrincipal() principal: Principal): Promise<DeriveBlueprintResponse> {
     return this.deriver.derive(dto.workspaceId, dto.projectId, principal);
+  }
+
+  @Post('generate')
+  @Feature('assistant')
+  @Returns('GenerateBlueprintResponse')
+  @Access('editor', 'body')
+  @ApiOperation({
+    summary: 'Draft a blueprint from a description (Describe it): the scaffolder, with read-only tree and search',
+    description:
+      'Writes nothing. The scaffolder may list the workspace tree and search it, each call under the caller\'s ' +
+      'access, and may adapt an optional starting blueprint. Its answer passes the same schema scaffold uses; ' +
+      'unknown template refs and malformed pages are dropped. 422 when nothing usable came back.',
+  })
+  generate(@Body() dto: GenerateBlueprintDto, @CurrentPrincipal() principal: Principal): Promise<GenerateBlueprintResponse> {
+    return this.generator.generate(dto.workspaceId, dto.brief, dto.blueprint ? parseBlueprint(dto.blueprint) : null, principal);
   }
 
   @Post()

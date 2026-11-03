@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * A blueprint's page tree, read-only (#716): the settings pane, the save
- * dialog and the empty "From a project" gallery. Indent is depth; a collection
+ * dialog, the empty "From a project" gallery and the Start preview's section map. Indent is depth; a collection
  * shows its title pattern, and its initial items their numbered titles — the
  * same titles the scaffold will write (`itemTitles`).
  */
@@ -11,7 +11,18 @@ import { Layers } from 'lucide-vue-next'
 import { blueprintText, type BlueprintNode, type Locale } from '@knowledge/contracts'
 import { itemTitles } from '@/modules/projects/model/blueprint-tree'
 
-const props = withDefaults(defineProps<{ tree: BlueprintNode[]; locale: Locale; max?: number }>(), { max: Infinity })
+const props = withDefaults(
+  defineProps<{
+    tree: BlueprintNode[]
+    locale: Locale
+    max?: number
+    /** The node `tree` hangs under, when it is a subtree: a collection's initial items take their numbered titles from it. */
+    parent?: BlueprintNode | null
+    /** A subtree's rows are pages under a section: drawn as nested, without the extra indent. */
+    nested?: boolean
+  }>(),
+  { max: Infinity, parent: null, nested: false },
+)
 
 const { t } = useI18n()
 
@@ -39,7 +50,7 @@ const rows = computed<Row[]>(() => {
       walk(node.children ?? [], depth + 1, node, `${key}.`)
     })
   }
-  walk(props.tree, 0, null, '')
+  walk(props.tree, props.nested ? 1 : 0, props.parent, '')
   return out
 })
 const shown = computed(() => rows.value.slice(0, props.max))
@@ -52,7 +63,7 @@ const shown = computed(() => rows.value.slice(0, props.max))
       v-for="row in shown"
       :key="row.key"
       class="flex min-w-0 items-baseline gap-2 py-0.5"
-      :style="{ paddingInlineStart: `${row.depth * 1.125}rem` }"
+      :style="{ paddingInlineStart: `${(row.depth - (nested ? 1 : 0)) * 1.125}rem` }"
     >
       <span class="min-w-0 truncate" :class="row.depth ? 'text-muted-foreground' : 'font-medium'">{{ row.title }}</span>
       <span v-if="row.isCollection" class="text-muted-foreground inline-flex shrink-0 items-center gap-1 text-caption" :title="t('scaffold.shape.collectionChip')">

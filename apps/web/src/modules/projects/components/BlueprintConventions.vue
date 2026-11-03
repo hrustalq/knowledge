@@ -100,11 +100,15 @@ function addTerm() {
 </script>
 
 <template>
-  <div class="mx-auto w-full max-w-4xl space-y-8 px-4 py-6 lg:px-6">
+  <!-- At the header's gutter like every step, and two columns once a wide
+       screen has room: the styleguide and the glossary are read side by side. -->
+  <div class="w-full space-y-8 px-4 py-6 lg:px-6">
     <div>
       <h2 class="text-lg font-semibold">{{ t('scaffold.conventions.title') }}</h2>
       <p class="kn-measure text-muted-foreground mt-1 text-sm leading-relaxed">{{ t('scaffold.conventions.body') }}</p>
     </div>
+
+    <div class="grid items-start gap-x-10 gap-y-8 xl:grid-cols-2">
 
     <!-- Styleguide -->
     <section class="space-y-3" aria-labelledby="kn-scaffold-sg">
@@ -225,5 +229,6 @@ function addTerm() {
         </li>
       </ul>
     </section>
+    </div>
   </div>
 </template>

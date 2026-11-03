@@ -158,9 +158,25 @@ is written until Create.
 
 **Start → Shape → Conventions → Create.**
 
-- **Start** offers Blank, the listed blueprints (built-ins, then saved), From a
-  project and Describe it. Blank has nothing to shape and goes straight to
-  Create; Back from there returns to Start.
+Each step is a history entry (`?step=start|from-project|describe|shape|conventions|create`),
+so the browser's Back and Forward walk the wizard. A move the wizard makes
+pushes an entry. An entry the browser lands on is sent to the machine as
+`GOTO`, which refuses a step the context cannot stand on (Shape before a pick,
+or after Start over), and the page then rewrites the URL to where it is. The
+footer's Back is the browser's Back whenever a wizard entry sits behind it.
+Every entry carries the wizard's first position in `history.state`, across a
+reload too, so Cancel unwinds them all in one `router.go`.
+
+From 64rem up, Start, Shape and Create share one spine: a 24rem rail on the
+left, the thing it describes filling the rest, at the header's gutters.
+
+- **Start** offers the blueprints with pages (built-ins, then saved), then
+  Blank, From a project and Describe it. On a wide screen a click previews the
+  blueprint beside the list (`BlueprintSectionMap.vue`: top-level sections as
+  columns with their guidance and pages), and **Use this blueprint** or a
+  double-click takes it. Narrower, there is no preview and a tap takes it at
+  once. Blank has nothing to shape and goes straight to Create; Back from there
+  returns to Start.
 - **Shape** edits the tree (`BlueprintOutline.vue`, `BlueprintNodeEditor.vue`):
   rename, add, delete, drag to reorder, mark a node as a collection with a child
   template and title pattern, and type its initial items. The pane previews the
@@ -170,9 +186,10 @@ is written until Create.
   from, saves a new one, or replaces a built-in with an override. The wizard is
   the only blueprint editor.
 - **Conventions** (`BlueprintConventions.vue`): styleguide rules, the template
-  list and the glossary checklist. Terms offered by derive start unticked.
+  list and the glossary checklist, in two columns on an xl screen. Terms offered by derive start unticked.
 - **Create**: name, description, avatar emoji, restricted, and the skeleton
-  language (en/ru, default the UI locale). It calls
+  language (en/ru, default the UI locale), beside a rail with what it will make
+  and the full outline. It calls
   `POST /v1/projects/scaffold` with the edited blueprint inline.
 
 The two Start panels that fetch, **From a project**

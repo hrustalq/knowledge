@@ -13,6 +13,18 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.44.1] — 2026-11-03
+
+### Changed
+
+- **The new-project wizard uses a wide screen, and the browser's Back and Forward move between its steps** (#727).
+  On Start, from 1024 px up, the blueprints are listed on the left and the selected one is previewed beside them:
+  its full description, what it sets up, and its sections laid out across the width with their notes and pages.
+  *Use this blueprint* or a double-click takes it; on a phone a tap still takes it at once. Create shows what it
+  will make, with the full outline, beside the form. Conventions puts the styleguide and the glossary side by side.
+  Every step has its own URL, so Back returns to the previous step instead of leaving the wizard, a reload keeps
+  the step, and Cancel returns to the page you opened the wizard from.
+
 ## [0.44.0] — 2026-11-03
 
 ### Added
@@ -5955,7 +5967,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.44.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.44.1...HEAD
+[0.44.1]: https://github.com/hrustalq/knowledge/compare/v0.44.0...v0.44.1
 [0.44.0]: https://github.com/hrustalq/knowledge/compare/v0.43.0...v0.44.0
 [0.43.0]: https://github.com/hrustalq/knowledge/compare/v0.42.0...v0.43.0
 [0.42.0]: https://github.com/hrustalq/knowledge/compare/v0.41.1...v0.42.0

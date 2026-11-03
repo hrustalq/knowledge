@@ -49,7 +49,8 @@ import { BlueprintGenerateService } from '../blueprints/blueprint-generate.servi
   controllers: [ProjectsController, BlueprintsController],
   providers: [ProjectOverviewService, ProjectCascadeService, ProjectScaffoldService, BlueprintsService, BlueprintDeriveService, BlueprintGenerateService],
   // The cascade is exported because connector revert reuses it to undo a page
-  // this product otherwise has no way to delete (docs/features/26).
-  exports: [ProjectsCoreModule, ProjectCascadeService],
+  // this product otherwise has no way to delete (docs/features/26). Blueprints
+  // and scaffold back knowledge_list_blueprints / knowledge_scaffold_project (#716).
+  exports: [ProjectsCoreModule, ProjectCascadeService, BlueprintsService, ProjectScaffoldService],
 })
 export class ProjectsModule {}

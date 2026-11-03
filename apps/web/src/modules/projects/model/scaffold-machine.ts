@@ -17,6 +17,7 @@ import { assign, setup, type Snapshot } from 'xstate'
 import type { Blueprint, BlueprintGlossaryTerm, Locale } from '@knowledge/contracts'
 import { storedJson } from '@/shared/utils/stored-json'
 import type { NodePath } from './blueprint-tree'
+import type { DescribeInterview } from './interview'
 
 /**
  * Where the edited blueprint came from: a listed blueprint (so Save can update
@@ -42,6 +43,13 @@ export interface ScaffoldContext {
   locale: Locale | null
   avatarEmoji: string | null
   restricted: boolean
+  /**
+   * Describe it's interview so far (#731), set after every reply: a reload
+   * mid-interview reopens the same round, and Back from Shape the finished one.
+   * Kept apart from `origin` so a blueprint picked another way is never
+   * labelled described. Absent in snapshots saved before #731.
+   */
+  interview?: DescribeInterview | null
 }
 
 export type ScaffoldEvent =
@@ -65,6 +73,7 @@ export const emptyContext = (): ScaffoldContext => ({
   locale: null,
   avatarEmoji: null,
   restricted: false,
+  interview: null,
 })
 
 export const scaffoldMachine = setup({

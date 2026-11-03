@@ -11,7 +11,7 @@ export const SCAFFOLD_ORIGIN = 'scaffold';
  * people find it to fill in. The first real revision ends it with no code of
  * its own: the head moves to a revision with no origin.
  *
- * Two spellings, pinned against each other in `test/scaffold-stub.spec.ts`:
+ * Two spellings, pinned against each other in `test/scaffold.spec.ts`:
  * this one over a head already in hand, `scaffoldStubSql` over `documents`.
  */
 export function isScaffoldStub(head: { origin: string | null } | null | undefined): boolean {

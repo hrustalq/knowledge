@@ -22,6 +22,8 @@ one transaction.
 | 4a | [#720] | Saved blueprints (`project_blueprints` + versions), derive from a project (API) |
 | 4b | [#721] | From a project in the wizard, Save as blueprint, `/settings/blueprints` |
 | 5 | [#722] | Describe it: the `scaffolder` agent drafts a blueprint from a brief |
+| 5b | [#732] | Describe it interviews before it drafts (API, [#731]) |
+| 5c | [#734] | The interview in the wizard; prompts on the `grilling` method |
 | 6 | [#723] | MCP: `knowledge_list_blueprints`, `knowledge_scaffold_project` |
 
 [#717]: https://github.com/hrustalq/knowledge/pull/717
@@ -31,6 +33,9 @@ one transaction.
 [#721]: https://github.com/hrustalq/knowledge/pull/721
 [#722]: https://github.com/hrustalq/knowledge/pull/722
 [#723]: https://github.com/hrustalq/knowledge/pull/723
+[#731]: https://github.com/hrustalq/knowledge/issues/731
+[#732]: https://github.com/hrustalq/knowledge/pull/732
+[#734]: https://github.com/hrustalq/knowledge/pull/734
 
 The vocabulary (blueprint, collection, scaffold stub) is in
 [`GLOSSARY.md`](../../GLOSSARY.md#starting-a-project).
@@ -58,6 +63,42 @@ Taken with the user before building (2026-11-02):
 - **New projects only in v1.** The service takes a `parentId` for adding a
   blueprint under an existing page; the wizard does not offer it.
 - **MCP gets list and scaffold.** Derive and generate are not tools.
+
+The interview ([#731]), taken with the user grill-style (2026-11-03):
+
+- **It replaces Describe it's one shot**, in the same card and panel. **Draft
+  now** stops it at any point; before the first round it is the old one-shot
+  draft.
+- **Rounds, not single questions.** A round is every question the scaffolder
+  can ask now, 1–4, each `choice` or `checklist` with a recommended option
+  pre-selected, and an answer in the person's own words always allowed.
+- **The model writes the questions.** [61](61-question-flows.md)'s "no
+  model-authored wizards" holds for flows, whose answers drive writes under
+  someone's permissions. Interview answers only feed the next prompt and write
+  nothing. A server reader caps the shape, and questions and answers go back
+  into the model wrapped untrusted.
+- **Stateless.** Every call carries the brief and every round; there is no
+  table. The wizard keeps the interview in its own `interview` context field,
+  not on `origin`, so a blueprint picked another way is never labelled
+  described.
+- **The model decides when it is done**; Draft now and a server cap of 5 rounds
+  override it, in the reader, not the prompt.
+- **Facts are looked up, decisions are asked.** The read tools stay on in every
+  round.
+- **Output is the outline plus glossary terms**, which arrive in Conventions.
+  Settled decisions go into node guidance, never into page bodies; no ADR pages
+  at scaffold time.
+- **`POST /v1/blueprints/generate` is extended**, not joined by a second route.
+  An asking round returns a titles-only outline; guidance, templates and the
+  styleguide come only with `done`.
+- **Usage:** `blueprint-interview` per asking round, `blueprint-generate` for
+  the draft, `assertWithinBudget` on every call.
+- **MCP is unchanged.**
+- Amended while building: a spent budget returns the budget error (the draft
+  call is refused too) and the wizard keeps the answers for a retry; a question
+  has *at most* one recommended option, so none is ever fabricated.
+- Asked for during phase 2: the prompts follow Matt Pocock's `grilling` and
+  `domain-modeling` skills rather than a home-grown paraphrase.
 
 ## Blueprints
 
@@ -282,6 +323,67 @@ contract (`DERIVE_CONTRACT`, `GENERATE_CONTRACT`).
   under the wrong locale. Then `parseBlueprint`. Nothing usable is a 422
   `error.blueprint.generateEmpty`. Usage is `blueprint-generate`.
 
+### The interview
+
+With `rounds` in the body (`[]` to start), the call is one interview step:
+
+| Request | Reply |
+| --- | --- |
+| no `rounds` | one draft: `{ status: 'done', blueprint, glossary }` |
+| `rounds`, `draft: true`, or 5 answered rounds | a draft from the brief and every answer |
+| `rounds` otherwise | one asking call (`INTERVIEW_CONTRACT`, usage `blueprint-interview`) |
+
+An asking call that gets `{"done": true}` or no usable question drafts at once
+(a second call, so there is one draft path). Otherwise the reply is
+`{ status: 'asking', round, outline, terms }`.
+
+- **The reader** (`interview-round.ts`, pure, pinned in `blueprints.spec.ts`):
+  `readRound` runs the model's questions through `readPromptFields`, shared
+  with `ask_user`. That allows at most 4 questions, at most 6 options and at most
+  one recommended option, and drops malformed fields. `readTerms` takes at most
+  15 terms, deduped by spelling. `transcriptOf` re-reads the questions the client
+  sends back through the same reader and writes each answer as its option
+  labels, a skipped one as `(skipped)`; the result is wrapped untrusted.
+- **Answers** are keyed by question `name`: an option value, an array of
+  values, free text, or `null`. A value not on offer is the person's own words.
+- **The prompt** is Matt Pocock's `grilling` method, applied to a project
+  outline:
+  - Map the project as a design tree.
+  - Ask the whole frontier of decisions whose prerequisites are settled. A
+    question that depends on one still open waits for a later round.
+  - Look facts up with the tools rather than asking for them.
+  - Word each label so accepting the recommendation is the natural answer.
+  - Finish when the frontier is empty.
+
+  From `domain-modeling` it takes the questioning half:
+  - Sharpen a vague or overloaded word, or one the workspace's pages use
+    differently, by offering the precise term.
+  - Force a fuzzy boundary with a concrete scenario.
+  - Glossary terms (`GLOSSARY_RULES`, both contracts) are project-specific, one
+    per concept, and defined by what they are.
+  - The draft offers a decision-records collection only when a settled decision
+    is hard to reverse, surprising without its context and the result of a real
+    trade-off.
+
+**In the wizard** (`BlueprintDescribePanel.vue`, the pure half in
+`model/interview.ts`):
+- The brief becomes a quoted block with **Change**.
+- Answered rounds collapse to one line per question.
+- The open round renders in its place through `PromptFields`
+  (`entities/assistant`, the same controls as the chat's `ask_user` form). The
+  suggestion is pre-selected and focused, so a round of suggestions is one
+  Enter, and each choice or checklist question has an own-words box. A choice
+  with no suggestion holds Continue until it is answered.
+- **Change** on round *k* reopens it and strikes rounds after it through as
+  *Dropped* until it is re-sent.
+- The side pane swaps the Start-from list for the outline and terms so far,
+  with **Draft now** (**Draft again** after a draft) at its foot.
+- An asking call stores the brief and answers in the wizard's `interview`
+  field before it goes out, so a reload while it runs offers **Continue** rather
+  than losing them.
+- On `done`, `withTerms` merges the glossary into the blueprint's conventions,
+  case-folded, with an existing term winning.
+
 ## Create
 
 `POST /v1/projects/scaffold` (`ProjectsController.scaffold`, editor,
@@ -405,7 +507,7 @@ from a blueprint*, in the write flows only. Derive and generate are not tools.
 | --- | --- | --- |
 | `GET /v1/blueprints?workspaceId&includeDisabled` | viewer | Built-ins with overrides applied, then saved ones |
 | `POST /v1/blueprints/derive` `{ workspaceId, projectId }` | editor on the target, sight of the source | A blueprint read off a project; `glossary`, `drafted` |
-| `POST /v1/blueprints/generate` `{ workspaceId, brief, blueprint? }` | editor, `assistant` on | A blueprint the scaffolder drafted |
+| `POST /v1/blueprints/generate` `{ workspaceId, brief, blueprint?, rounds?, draft? }` | editor, `assistant` on | A blueprint the scaffolder drafted (`done`), or the next interview round (`asking`) |
 | `POST /v1/blueprints` | admin | Save a blueprint, or override or hide a built-in (`builtInKey`) |
 | `PATCH /v1/blueprints/:id` | admin | Change content (appends a version) or `enabled` |
 | `DELETE /v1/blueprints/:id` | admin | Delete a saved blueprint, or reset a built-in |
@@ -426,4 +528,10 @@ from a blueprint*, in the write flows only. Derive and generate are not tools.
 - **A scaffold is a copy.** A later change to a blueprint does not reach the
   projects made from it.
 - **Not exercised live:** the glossary offer from derive, and a derive with
-  `drafted: true` (the local provider returned 402 in phase 4a).
+  `drafted: true` (the local provider returned 402 in phase 4a). The interview
+  ran one real round (gen-api, ru, on the pre-`grilling` prompt: 4 questions,
+  one of them dependent on another in the same round). The rest of the wizard
+  was checked on mocked replies.
+- **An asking outline's collection pattern is passed through as written.** The
+  model once put a template ref (`builtin:adr`) there; the side pane shows it
+  as written.

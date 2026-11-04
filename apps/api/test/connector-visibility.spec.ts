@@ -210,4 +210,12 @@ describe('staged run items', () => {
     expect((open as { warnings: unknown[] }).warnings).toHaveLength(2);
     expect(await withVisibleWarnings(prisma as never, scope(), [null])).toEqual([null]);
   });
+
+  it('refuses acting on such an item (#783)', async () => {
+    const { svc, refusal } = service([item({})]);
+    await expect(svc.updateItem('r1', 'i1', { title: 'x' }, scope())).rejects.toBe(refusal);
+    await expect(svc.sendItemEvent('r1', 'i1', 'APPROVE', false, scope())).rejects.toBe(refusal);
+    await expect(svc.requireReadable('r1', 'i1', scope())).rejects.toBe(refusal);
+    await expect(svc.sendRunEvent('r1', 'APPROVE_ALL', scope())).rejects.toBe(refusal);
+  });
 });

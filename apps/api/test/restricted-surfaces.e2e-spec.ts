@@ -151,6 +151,14 @@ describe('restricted surfaces (e2e)', () => {
     const runAsAlice = await http().get(`/v1/connectors/runs/${run.id}`).set(as(people.alice)).expect(ok(200));
     expect(runAsAlice.body.run.warnings).toHaveLength(1);
 
+    // Acting on it is refused like reading it, and the item stays staged (#783).
+    const base = `/v1/connectors/runs/${run.id}`;
+    await http().post(`${base}/items/${item.id}/events`).set(as(people.bob)).send({ type: 'APPROVE' }).expect(refused);
+    await http().patch(`${base}/items/${item.id}`).set(as(people.bob)).send({ title: 'Mine' }).expect(refused);
+    await http().post(`${base}/items/${item.id}/ai`).set(as(people.bob)).send({ op: 'cleanup' }).expect(refused);
+    await http().post(`${base}/events`).set(as(people.bob)).send({ type: 'APPROVE_ALL' }).expect(refused);
+    expect((await prisma.connectorRunItem.findUniqueOrThrow({ where: { id: item.id } })).status).toBe('staged');
+
     const asAlice = await http().get(`/v1/connectors/runs/${run.id}/items/${item.id}`).set(as(people.alice)).expect(ok(200));
     expect(asAlice.body.localHead).toContain('First text.');
   });

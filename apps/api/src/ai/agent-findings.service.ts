@@ -510,6 +510,7 @@ export class AgentFindingsService {
               ...(draft.template ? { template: { ...draft.template, provenanceOnly: true } } : {}),
             },
             principal.userId,
+            { headless: true },
           );
           const mergeRequestId = await openDraftMergeRequest(this, {
             documentId: created.documentId,

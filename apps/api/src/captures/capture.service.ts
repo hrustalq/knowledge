@@ -664,6 +664,7 @@ export class CaptureService {
           ...(category ? { category } : {}),
         },
         principal.userId,
+        { headless: true },
       );
       await openDraftMergeRequest(deps, {
         documentId: created.documentId,

@@ -533,6 +533,7 @@ export class GitPushService {
             const res = await this.documents.createDocument(
               { workspaceId, projectId, title: ch.isNew.title, kind: ch.isNew.kind, parentId: doc(ch.parentDocumentId) ?? undefined, visibility: 'workspace' },
               userId,
+              { headless: true },
             );
             documentId = res.documentId;
             docs.set(ch.documentId, documentId);

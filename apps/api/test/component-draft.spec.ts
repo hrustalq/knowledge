@@ -374,6 +374,7 @@ describe('publishing the draft', () => {
         template: { ref: 'builtin:component', version: 1, provenanceOnly: true },
       },
       'u',
+      { headless: true },
     );
     // No inline content: the page has no head until the merge request merges.
     expect((documents.createDocument.mock.calls[0] as unknown[])[0]).not.toHaveProperty('content');

@@ -51,6 +51,9 @@ in the pull request that introduces them — see
   act. Rows already written stay as they are.
 - **A vote on a low-confidence answer stays** (#754). The thumb vanished on reload and pressing it again removed
   nothing, on the answers people most often downvote. Such votes already cast now read as votes, and can be retracted.
+- **A conflict found again shows each page's own passage** (#757). When a page's edit reopened a conflict from the other
+  side, one side could show the wrong page's quote, the other page's passage was lost, and the next edit to either page
+  closed it as superseded even if the passage had not changed.
 
 ### Operations
 

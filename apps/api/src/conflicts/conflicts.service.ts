@@ -75,8 +75,10 @@ export class ConflictsService {
         ${input.explanation}, ${input.confidence}, ${input.agentRunId}::uuid, ${input.findingIndex})
       ON CONFLICT (workspace_id, fingerprint) DO UPDATE SET
         status = 'open',
-        a_revision_id = EXCLUDED.a_revision_id, a_chunk_id = EXCLUDED.a_chunk_id, a_quote = EXCLUDED.a_quote,
-        b_revision_id = EXCLUDED.b_revision_id, b_chunk_id = EXCLUDED.b_chunk_id,
+        -- Every side column: the fingerprint is order-free, and a re-detection from the
+        -- other page arrives with its sides swapped (#757).
+        a_document_id = EXCLUDED.a_document_id, a_revision_id = EXCLUDED.a_revision_id, a_chunk_id = EXCLUDED.a_chunk_id, a_quote = EXCLUDED.a_quote,
+        b_document_id = EXCLUDED.b_document_id, b_revision_id = EXCLUDED.b_revision_id, b_chunk_id = EXCLUDED.b_chunk_id, b_quote = EXCLUDED.b_quote,
         code_ref = EXCLUDED.code_ref,
         explanation = EXCLUDED.explanation, confidence = EXCLUDED.confidence,
         agent_run_id = EXCLUDED.agent_run_id, finding_index = EXCLUDED.finding_index,

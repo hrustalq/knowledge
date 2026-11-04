@@ -247,3 +247,24 @@ describe('prefilterPairs (#530)', () => {
     expect(r.kept).not.toContain('b');
   });
 });
+
+describe('ConflictsService.record (#757)', () => {
+  it('rewrites every side column when a conflict comes back, since its sides can arrive swapped', async () => {
+    const queryRaw = vi.fn(async () => [{ id: 'c1', status: 'open' }]);
+    const svc = new ConflictsService({ $queryRaw: queryRaw } as never, { publish: vi.fn(async () => undefined) } as never);
+    const side = (doc: string) => ({ documentId: doc, revisionId: `rev-${doc}`, chunkId: `chunk-${doc}`, quote: `quote ${doc}` });
+    const record = (a: string, b: string) =>
+      svc.record({ workspaceId: 'w', kind: 'contradiction', a: side(a), b: side(b), explanation: 'e', confidence: 1, agentRunId: null, findingIndex: null });
+
+    await record('p1', 'p2');
+    await record('p2', 'p1');
+
+    const [first, second] = queryRaw.mock.calls as unknown as Array<[TemplateStringsArray, ...unknown[]]>;
+    const update = first[0].join('?').split('DO UPDATE SET')[1]!;
+    for (const column of ['document_id', 'revision_id', 'chunk_id', 'quote']) {
+      for (const side of ['a', 'b']) expect(update).toContain(`${side}_${column} = EXCLUDED.${side}_${column}`);
+    }
+    // The same identity from either page, which is why the row is met again.
+    expect(first[3]).toBe(second[3]);
+  });
+});

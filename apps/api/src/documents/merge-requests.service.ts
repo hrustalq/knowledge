@@ -1434,11 +1434,21 @@ export class MergeRequestsService {
    * A project's branches as `scope` sees them (#636): each with the pages it
    * wrote that `scope` may open, on page branches it may read (#474), newest
    * first. The default branch is every page's, so it is left out, and so is a
-   * branch with nothing left in view.
+   * branch with nothing left in view. `filter` narrows it for a caller that
+   * cannot hold them all (#743): nothing ever deletes a branch.
    */
-  async projectBranches(projectId: string, scope: AccessScope): Promise<ListProjectBranchesResponse> {
+  async projectBranches(
+    projectId: string,
+    scope: AccessScope,
+    filter: { name?: string; openOnly?: boolean } = {},
+  ): Promise<ListProjectBranchesResponse> {
     const rows = await this.prisma.documentBranch.findMany({
-      where: { projectBranch: { projectId }, document: { AND: [visibilityWhere(scope)] }, ...WROTE },
+      where: {
+        projectBranch: { projectId },
+        document: { AND: [visibilityWhere(scope)] },
+        ...WROTE,
+        ...(filter.name ? { name: { contains: filter.name, mode: 'insensitive' as const } } : {}),
+      },
       select: {
         id: true,
         name: true,
@@ -1490,7 +1500,8 @@ export class MergeRequestsService {
       if (mr && !entry.openMergeRequest) entry.openMergeRequest = { mergeRequestId: mr.id, title: mr.title, isDraft: mr.isDraft };
       byBranch.set(key, entry);
     }
-    return { projectId, branches: [...byBranch.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)) };
+    const branches = [...byBranch.values()].filter((b) => !filter.openOnly || b.openMergeRequest);
+    return { projectId, branches: branches.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)) };
   }
 
   /** 400 unless every id reads the document's workspace — a member, and not a guest (#76). */

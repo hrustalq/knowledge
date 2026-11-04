@@ -278,7 +278,8 @@ export function registerCaptureTools(server: McpServer, deps: CaptureToolDeps): 
     {
       description:
         'Captures in a workspace, newest first, with where each went: state (staged | proposed | duplicate | rejected | ' +
-        'failed | merged | closed), outcome, merge request and the pages it was compared with. mine=true for your own.',
+        'failed | merged | closed), outcome, merge request and the pages it was compared with. mine=true for your own. ' +
+        'Leaves out what each capture says unless includePayload is true.',
       inputSchema: {
         workspaceId: z.string().uuid(),
         status: z.enum(CAPTURE_STATUSES).optional().describe('Stored status; merged/closed read from the merge request'),
@@ -287,13 +288,14 @@ export function registerCaptureTools(server: McpServer, deps: CaptureToolDeps): 
         mine: z.boolean().optional(),
         cursor: z.string().uuid().optional(),
         limit: z.number().int().min(1).max(100).optional(),
+        includePayload: z.boolean().optional().describe('Also return each capture\'s full text. Ask for few: they are long.'),
       },
     },
-    async ({ workspaceId, status, kind, projectId, mine, cursor, limit }) => {
+    async ({ workspaceId, status, kind, projectId, mine, cursor, limit, includePayload }) => {
       await guard.ws(workspaceId, 'viewer');
       const scope = await guard.scope(workspaceId);
-      return run(() =>
-        captures.list(
+      return run(async () => {
+        const listed = await captures.list(
           {
             workspaceId,
             ...(status ? { status } : {}),
@@ -304,8 +306,11 @@ export function registerCaptureTools(server: McpServer, deps: CaptureToolDeps): 
             ...(limit ? { limit } : {}),
           },
           scope,
-        ),
-      );
+        );
+        if (includePayload) return listed;
+        // #743: thirty full payloads run past what a client will hand its model.
+        return { ...listed, captures: listed.captures.map(({ payload: _payload, ...summary }) => summary) };
+      });
     },
   );
 }

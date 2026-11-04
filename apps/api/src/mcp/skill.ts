@@ -219,7 +219,7 @@ If a write is rejected with a conflict, the branch moved under you: re-read the 
 and retry. Never retry blindly with a stale \`baseRevisionId\`.
 
 A branch belongs to its project, not to one page: the same branch name on several pages is one branch, and its merge
-request carries every page it changed. ${toolRef('knowledge_list_branches')} lists a project's branches with their pages;
+request carries every page it changed. ${toolRef('knowledge_list_branches')} lists a project's branches with their pages, a page at a time (\`name\` finds one, \`openOnly\` keeps those with an open merge request);
 ${toolRef('knowledge_create_merge_request')} with \`projectId\` and \`sourceBranch\` opens one merge request for all of them.
 
 ### Review merge requests

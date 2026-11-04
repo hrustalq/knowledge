@@ -84,6 +84,8 @@ in the pull request that introduces them — see
 - **A push from a shallow clone lands** (#779). `git push` after `git clone --depth 1` failed with a 500.
 - **A parent archived alone no longer blocks pushes** (#780). Archiving a page without its children made every later
   push to the project fail, whatever it touched.
+- **A push no longer names a merge request on a page the pusher cannot open** (#781). The remote printed its title and
+  link. It now says only that the merge request was updated.
 
 ### Operations
 

@@ -1617,6 +1617,7 @@ export type I18nTranslations = {
                 "cannotRepresent": string;
                 "rejected": string;
                 "mrCreated": string;
+                "mrUpdatedUnnamed": string;
                 "mrUpdated": string;
                 "mrMerged": string;
                 "noMergeRequest": string;

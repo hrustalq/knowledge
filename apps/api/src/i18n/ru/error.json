@@ -923,6 +923,7 @@
       "cannotRepresent": "{branch}: это дерево не раскладывается на страницы, поэтому вернулось бы не таким, каким вы его отправили. Каталог страницы перемещается вместе с её файлом: git mv old.md new.md && git mv old new",
       "rejected": "{path}: {reason}",
       "mrCreated": "Merge request «{title}»:\n  {url}",
+      "mrUpdatedUnnamed": "Открытый merge request этой ветки обновлён.",
       "mrUpdated": "Merge request «{title}» обновлён:\n  {url}",
       "mrMerged": "Merge request «{title}» влит:\n  {url}",
       "noMergeRequest": "Ни один merge request не содержит эти коммиты. Добавьте -o merge_request.create к следующей отправке в '{branch}' или откройте его в веб-интерфейсе.",

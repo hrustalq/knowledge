@@ -584,6 +584,26 @@ describe('git remote (e2e, #636)', () => {
     expect(await gitFails(['push', 'origin', 'HEAD:side-orphan'], dir)).toMatch(/needs a page/);
   });
 
+  it('names an open merge request only to someone who can open its page', async () => {
+    const admin = await clone(people.admin.key, 'admin-title');
+    await git(['checkout', '-q', '-b', 'title-both'], admin);
+    edit(admin, `${slugs.secret}.md`, (x) => `${x}\nSecret again.\n`);
+    edit(admin, `${slugs.open}.md`, (x) => `${x}\nOpen again.\n`);
+    await git(['commit', '-qam', `Payroll change ${nonce}`], admin);
+    const mrId = mrIdIn(await gitAll(['push', '-o', 'merge_request.create', '-o', `merge_request.title=Payroll change ${nonce}`, 'origin', 'HEAD:title-both'], admin))!;
+    await prisma.mergeRequest.update({ where: { id: mrId }, data: { documentId: ids.secret } });
+
+    const bob = await clone(people.bob.key, 'bob-title');
+    await git(['fetch', '-q', 'origin', 'title-both'], bob);
+    await git(['checkout', '-q', '-b', 'title-both', 'FETCH_HEAD'], bob);
+    edit(bob, `${slugs.open}.md`, (x) => `${x}\nBob's line.\n`);
+    await git(['commit', '-qam', 'From Bob'], bob);
+    const out = await gitAll(['push', 'origin', 'HEAD:title-both'], bob);
+    expect(out).not.toContain('Payroll change');
+    expect(out).not.toContain(mrId);
+    await http().post(`/v1/merge-requests/${mrId}/close`).set(as(people.admin.key)).expect(ok(201));
+  });
+
   it('opens a merge request over MCP by project and branch name, and lists the branch', async () => {
     const mcp = (name: string, args: Record<string, unknown>) =>
       http()

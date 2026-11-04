@@ -9,7 +9,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { AccessService } from '../auth/access.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
-import { visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
+import { canSee, visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { CompareService } from '../documents/compare.service.js';
 import { MergeRequestsService } from '../documents/merge-requests.service.js';
@@ -661,9 +661,9 @@ export class GitPushService {
     const projectBranchId = await this.commits.projectBranch(projectId, branch);
     const open = await this.prisma.mergeRequest.findFirst({
       where: { status: 'open', sourceBranch: { projectBranchId } },
-      select: { id: true, title: true },
+      select: { id: true, title: true, document: { select: { projectId: true, path: true, restrictedBy: true } } },
     });
-    let mr = open;
+    let mr: { id: string; title: string } | null = open;
     if (!mr && (opt('create') || created.length)) {
       // Opened from a page this push gave a revision of its own, else any page it changed.
       const changed = planned.flatMap((p) => p.changes);
@@ -680,6 +680,8 @@ export class GitPushService {
     }
     if (!mr) return this.noMergeRequest(projectBranchId, branch, scope);
     if (created.length) await this.prisma.document.updateMany({ where: { id: { in: created } }, data: { pendingMergeRequestId: mr.id } });
+    // A merge request's title is its page's business: one on a page the pusher cannot open goes unnamed.
+    if (open && !canSee(scope, open.document)) return [t('error.git.push.mrUpdatedUnnamed')];
     return [t(open ? 'error.git.push.mrUpdated' : 'error.git.push.mrCreated', { title: mr.title, url: this.mrUrl(mr.id) })];
   }
 

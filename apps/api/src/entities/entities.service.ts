@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { normalizeEntityKey } from '@knowledge/contracts';
 import type {
   EntityNeighborsResponse,
   EntityRef,
@@ -7,6 +8,7 @@ import type {
   ListEntitiesResponse,
   TraceRelationResponse,
 } from '@knowledge/contracts';
+import { EntityAliasService } from '../graph/entity-alias.service.js';
 import { GraphService, type WorkspaceRelationGraph } from '../graph/graph.service.js';
 import type { TemporalPoint } from '../graph/temporal.js';
 import { bfs, buildAdjacency, docIdOf, docNode, isDocNode, shortestPath } from '../graph/graph-walk.js';
@@ -24,7 +26,18 @@ export class EntitiesService {
   constructor(
     private readonly graph: GraphService,
     private readonly permissions: PermissionService,
+    private readonly aliases: EntityAliasService,
   ) {}
+
+  /**
+   * The key a caller's spelling names (#756). Keys are folded and alias-resolved
+   * on write, so a read has to do the same. An alias declared after pages used it
+   * can still have its own vertex, which is then the one that answers.
+   */
+  private async keyIn(g: WorkspaceRelationGraph, scope: AccessScope, raw: string): Promise<string> {
+    const resolved = await this.aliases.resolve(scope.workspaceId, raw);
+    return g.entities[resolved] ? resolved : normalizeEntityKey(raw);
+  }
 
   /**
    * The workspace graph as the caller may see it (#76): edges from pages they
@@ -93,12 +106,13 @@ export class EntitiesService {
   /** Depth-limited neighborhood of an entity (plan.md §9 knowledge.find_relations). */
   async neighbors(
     scope: AccessScope,
-    entityKey: string,
+    rawKey: string,
     depth = 1,
     relationTypes?: string[],
     at?: TemporalPoint,
   ): Promise<EntityNeighborsResponse> {
     const g = await this.graphFor(scope, at);
+    const entityKey = await this.keyIn(g, scope, rawKey);
     const entity = this.entityRef(g, entityKey);
     const adj = buildAdjacency(g.edges, relationTypes);
 
@@ -133,12 +147,13 @@ export class EntitiesService {
    */
   async impactAnalysis(
     scope: AccessScope,
-    entityKey: string,
+    rawKey: string,
     direction: 'dependents' | 'dependencies' = 'dependents',
     maxDepth = 3,
     at?: TemporalPoint,
   ): Promise<ImpactAnalysisResponse> {
     const g = await this.graphFor(scope, at);
+    const entityKey = await this.keyIn(g, scope, rawKey);
     const entity = this.entityRef(g, entityKey);
     const adj = buildAdjacency(g.edges);
 
@@ -174,12 +189,14 @@ export class EntitiesService {
   /** Shortest relation path between two entities (plan.md §9 knowledge.trace_relation). */
   async trace(
     scope: AccessScope,
-    fromKey: string,
-    toKey: string,
+    rawFrom: string,
+    rawTo: string,
     maxDepth = 4,
     at?: TemporalPoint,
   ): Promise<TraceRelationResponse> {
     const g = await this.graphFor(scope, at);
+    const fromKey = await this.keyIn(g, scope, rawFrom);
+    const toKey = await this.keyIn(g, scope, rawTo);
     this.entityRef(g, fromKey);
     this.entityRef(g, toKey);
     const adj = buildAdjacency(g.edges);

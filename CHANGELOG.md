@@ -43,6 +43,9 @@ in the pull request that introduces them — see
   page's own refusal, and the subscription list leaves out the title of anything the caller cannot open. Muting still works.
 - **A guest with a page grant can read their notifications** (#777). They were notified but got 403 from the inbox, so
   they could never read, count or clear what was sent to them.
+- **Entity reads accept any spelling of a key** (#756). `Service:Billing`, or a declared alias such as `сервис:биллинг`,
+  answered not found although `service:billing` exists, over REST and MCP alike. Neighbours, impact analysis and trace
+  now fold and resolve the key as a write does, and answer with the canonical one.
 
 ## [0.45.1] — 2026-11-04
 

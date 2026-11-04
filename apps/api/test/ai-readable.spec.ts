@@ -71,6 +71,31 @@ describe('scope predicate', () => {
   });
 });
 
+describe('streamFull', () => {
+  it('writes a spec that opens with --- whole, and strips a page\'s frontmatter (#763)', async () => {
+    const yaml = '---\nopenapi: 3.0.0\n';
+    const storage = { getObjectText: vi.fn(async (key: string) => (key === 'spec' ? yaml : '---\ntags: [x]\n---\nPage body\n')) };
+    const svc = new AiReadableService({} as never, {} as never, { get: () => undefined } as never, storage as never);
+    const page = { title: 'T', category: 'other', parentId: null, position: 0, projectId: 'p', headRevisionId: 'r', depth: 0 };
+    let out = '';
+    await svc.streamFull(
+      {
+        etag: 'e',
+        header: '',
+        narrower: [],
+        pages: [
+          { ...page, id: 'a', s3Key: 'spec', kind: 'openapi' },
+          { ...page, id: 'b', s3Key: 'page', kind: 'page' },
+        ],
+      },
+      { write: (chunk) => (out += chunk) },
+    );
+    expect(out).toContain('openapi: 3.0.0');
+    expect(out).toContain('Page body');
+    expect(out).not.toContain('tags: [x]');
+  });
+});
+
 describe('renderPageMarkdown', () => {
   it('defaults to "# title" + body with no YAML block', () => {
     const out = renderPageMarkdown({ title: 'Billing', body: '\nSome text.\n', frontmatter: { tags: ['x'] } }, META, {

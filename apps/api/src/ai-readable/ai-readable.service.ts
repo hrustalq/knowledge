@@ -4,7 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { DocumentsService } from '../documents/documents.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
-import { parseMarkdown } from '../common/frontmatter.js';
+import { readPageSource } from '../common/frontmatter.js';
 import { t } from '../i18n/t.js';
 import { type AiReadableScope, isReadableRevisionStatus, listedProjectsWhere, readableDocumentsWhere } from './ai-readable-scope.js';
 import { AI_READABLE_FORMAT_VERSION, etagFor, renderPageMarkdown } from './render.js';
@@ -152,6 +152,7 @@ export class AiReadableService {
         id: true,
         title: true,
         category: true,
+        kind: true,
         parentId: true,
         position: true,
         projectId: true,
@@ -186,6 +187,7 @@ export class AiReadableService {
         projectId: d.projectId,
         headRevisionId: rev.id,
         s3Key: rev.s3Key,
+        kind: d.kind,
       });
     }
     return out;
@@ -275,7 +277,7 @@ export class AiReadableService {
       const batch = pages.slice(i, i + window);
       const bodies = await Promise.all(
         batch.map((p) =>
-          this.readBody(p.s3Key).catch((e: unknown) => {
+          this.readBody(p.s3Key, p.kind).catch((e: unknown) => {
             this.logger.warn(`llms-full: page ${p.id} unavailable: ${(e as Error).message}`);
             return null;
           }),
@@ -339,9 +341,9 @@ export class AiReadableService {
     );
   }
 
-  private async readBody(s3Key: string): Promise<string> {
+  private async readBody(s3Key: string, kind: string): Promise<string> {
     if (!this.storage) throw new Error('storage unavailable');
-    return parseMarkdown(await this.storage.getObjectText(s3Key)).body;
+    return readPageSource(await this.storage.getObjectText(s3Key), kind).content;
   }
 
   private links(pages: IndexPage[]) {

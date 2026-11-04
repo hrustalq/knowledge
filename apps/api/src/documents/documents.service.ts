@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import matter from 'gray-matter';
 import * as Y from 'yjs';
+import { readPageSource } from '../common/frontmatter.js';
 import type {
   BranchInfo,
   FactExtractor,
@@ -1291,14 +1291,12 @@ export class DocumentsService {
     // A finalized revision's bytes never change (contentRevision refuses a draft).
     const family = READ_CACHE_FAMILIES.content;
     const raw = await this.cache.wrap(workspaceId, family.key(revision.id), () => this.storage.getObjectText(revision.s3Key), family.ttlMs);
-    // A spec (#78) or fixture (#483) is returned verbatim: it has no
-    // frontmatter, and YAML may well open with a `---` marker gray-matter would eat.
-    const parsed = isStructuredKind(kind) ? { data: {}, content: raw } : matter(raw);
+    const parsed = readPageSource(raw, kind);
     return {
       documentId: revision.documentId,
       revisionId: revision.id,
       contentType: revision.contentType,
-      frontmatter: Object.keys(parsed.data ?? {}).length > 0 ? (parsed.data as Record<string, unknown>) : null,
+      frontmatter: Object.keys(parsed.data).length > 0 ? parsed.data : null,
       markdown: parsed.content,
     };
   }

@@ -1,4 +1,5 @@
 import matter from 'gray-matter';
+import { isStructuredKind } from '@knowledge/contracts';
 
 /**
  * Reading and rewriting a markdown page's frontmatter.
@@ -35,6 +36,17 @@ export function parseMarkdown(raw: string): ParsedMarkdown {
     data: (parsed.data ?? {}) as Record<string, unknown>,
     body: parsed.content,
   };
+}
+
+/**
+ * A stored page's source, split as its kind reads it. A spec (#78) or fixture
+ * (#483) has no frontmatter, and YAML may well open with a `---` marker
+ * gray-matter would eat, leaving an empty body.
+ */
+export function readPageSource(raw: string, kind: string | null | undefined): { data: Record<string, unknown>; content: string } {
+  if (isStructuredKind(kind)) return { data: {}, content: raw };
+  const parsed = matter(raw);
+  return { data: (parsed.data ?? {}) as Record<string, unknown>, content: parsed.content };
 }
 
 /**

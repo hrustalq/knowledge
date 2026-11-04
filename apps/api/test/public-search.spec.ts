@@ -282,7 +282,7 @@ describe('SiteSearchTextService', () => {
         updateMany: vi.fn((args: unknown) => ({ op: 'update', args })),
       },
       documentRevision: {
-        findMany: vi.fn(async ({ where }: { where: { id: { in: string[] } } }) => where.id.in.map((id) => ({ id, s3Key: `k/${id}` }))),
+        findMany: vi.fn(async ({ where }: { where: { id: { in: string[] } } }) => where.id.in.map((id) => ({ id, s3Key: `k/${id}`, document: { kind: 'page' } }))),
       },
       $executeRaw: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({ op: 'index', sql: strings.join('?'), values })),
       $queryRaw: vi.fn(),

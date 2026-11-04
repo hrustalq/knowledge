@@ -288,6 +288,7 @@ export class PublicSiteFilesService {
         projectId: '',
         headRevisionId: r.revisionId,
         s3Key: '',
+        kind: '',
       })),
     ).map((p) => ({ ...byId.get(p.id)!, depth: p.depth }));
   }

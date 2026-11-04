@@ -518,6 +518,30 @@ describe('ExportBuildService', () => {
     expect(h.events.publish).not.toHaveBeenCalled();
   });
 
+  it('exports a spec that opens with --- whole, for a member and through a share link (#763)', async () => {
+    const yaml = '---\nopenapi: 3.0.0\ninfo:\n  title: Billing\n';
+    for (const shareLinkId of [null, 'share-1']) {
+      const h = buildHarness({ row: { shareLinkId } });
+      h.scope.documents.mockResolvedValue([
+        { id: 'a', parentId: null, title: 'Spec', position: 0, category: 'reference', kind: 'openapi' },
+        { id: 'b', parentId: 'a', title: 'Install', position: 0, category: 'guide', kind: 'page' },
+      ] as never);
+      h.storage.getObjectText.mockImplementation(async (key: string) => (key === 'src-a' ? yaml : 'Install body\n'));
+      await h.svc.build('job-1');
+      const zip = unzipSync(h.written[0].bytes);
+      const name = Object.keys(zip).find((k) => k.endsWith('pages/spec.md'))!;
+      expect(strFromU8(zip[name])).toBe(yaml);
+    }
+    const pdf = buildHarness({ row: { format: 'pdf' }, gotenberg: true });
+    pdf.scope.documents.mockResolvedValue([
+      { id: 'a', parentId: null, title: 'Spec', position: 0, category: 'reference', kind: 'openapi' },
+    ] as never);
+    pdf.storage.getObjectText.mockImplementation(async () => yaml);
+    await pdf.svc.build('job-1');
+    const request = pdf.renderer.render.mock.calls[0][0] as { pages: { markdown: string }[] };
+    expect(request.pages[0].markdown).toBe(yaml);
+  });
+
   it('never rebuilds an export that already finished', async () => {
     const h = buildHarness({ row: { status: 'completed' } });
     await h.svc.build('job-1');

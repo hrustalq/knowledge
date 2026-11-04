@@ -1,6 +1,6 @@
 import { Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import matter from 'gray-matter';
+import { readPageSource } from '../common/frontmatter.js';
 import type { SiteSearchTag } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
@@ -70,7 +70,7 @@ export class SiteSearchTextService implements OnApplicationBootstrap {
     if (!missing.length) return out;
     const revisions = await this.prisma.documentRevision.findMany({
       where: { id: { in: missing } },
-      select: { id: true, s3Key: true },
+      select: { id: true, s3Key: true, document: { select: { kind: true } } },
     });
     for (let i = 0; i < revisions.length; i += READ_CONCURRENCY) {
       const batch = revisions.slice(i, i + READ_CONCURRENCY);
@@ -78,7 +78,7 @@ export class SiteSearchTextService implements OnApplicationBootstrap {
         batch.map((r) =>
           this.storage.getObjectText(r.s3Key).then(
             (raw) => {
-              const { content, data } = matter(raw);
+              const { content, data } = readPageSource(raw, r.document.kind);
               return { ...searchTextOf(content), tags: searchTagsOf(data) };
             },
             (e: unknown) => {

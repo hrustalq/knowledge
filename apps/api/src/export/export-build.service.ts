@@ -2,7 +2,7 @@ import { EmbedsService } from '../embeds/embeds.service.js';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { ExportJob } from '@prisma/client';
-import matter from 'gray-matter';
+import { readPageSource } from '../common/frontmatter.js';
 import { PANEL_TYPES, type PanelType } from '@knowledge/editor-schema/nodes';
 import type { ExportErrorCode, ExportFormat, ExportRenderRequest, ExportScope, ExportStage, Locale } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
@@ -227,7 +227,7 @@ export class ExportBuildService {
       : true;
     const embedded = snapshots ? await this.embeds.exportSnapshots(plan.pages.map((p) => p.revisionId)) : [];
     const bodies = await mapLimit(plan.pages, READ_CONCURRENCY, (p, i) =>
-      this.embeds.publicMarkdown(matter(sources[i]).content, p.revisionId, snapshots),
+      this.embeds.publicMarkdown(readPageSource(sources[i], docOf.get(p.documentId)?.kind).content, p.revisionId, snapshots),
     );
     const pages = plan.pages.map((p, i): PackagedPage => {
       const source = sources[i];
@@ -242,7 +242,7 @@ export class ExportBuildService {
         revisionId: p.revisionId,
         branch: revisions.get(p.documentId)!.branch,
         // A share link's archive carries what its reader may see; a member's keeps the source.
-        source: row.shareLinkId ? source.replace(matter(source).content, bodies[i]) : source,
+        source: row.shareLinkId ? source.replace(readPageSource(source, docOf.get(p.documentId)?.kind).content, bodies[i]) : source,
         markdown: bodies[i],
       };
     });

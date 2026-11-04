@@ -22,6 +22,8 @@ in the pull request that introduces them — see
 - **A template with invalid frontmatter is refused every time** (#775). Pressing Save again after the error stored the
   broken source as a new version. A version already stored that way now reads with its source as the body, so someone
   can correct it.
+- **An API spec whose YAML opens with `---` keeps its text** (#763). Such a page exported blank in every format, had an
+  empty body in `llms-full.txt` and was missing from a published site's search.
 
 ## [0.45.1] — 2026-11-04
 

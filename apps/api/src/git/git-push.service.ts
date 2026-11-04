@@ -67,7 +67,8 @@ interface Command {
 /** A receive-pack request: commands, push options, the pack. */
 function parsePush(body: Buffer): { commands: Command[]; options: string[]; pack: Buffer; sideband: boolean } {
   const { lines, end } = readPkts(body, 0);
-  const [first = '', ...more] = lines;
+  // A shallow clone names its boundary commits ahead of the commands. This side holds their whole history, so they change nothing.
+  const [first = '', ...more] = lines.filter((line) => !line.startsWith('shallow '));
   const [head, caps = ''] = first.split('\0');
   const commands = [head, ...more].filter(Boolean).map((line) => {
     const [oldSha, newSha, ref] = line.split(' ');

@@ -81,6 +81,7 @@ in the pull request that introduces them — see
   published, so anonymous readers kept getting the page, its markdown, search hits and Ask answers until the next build,
   and frozen versions kept it for good. Within 30 seconds such a page and its children now leave every version of every
   site, whichever way the restriction arrived. Lifting it brings them back.
+- **A push from a shallow clone lands** (#779). `git push` after `git clone --depth 1` failed with a 500.
 
 ### Operations
 

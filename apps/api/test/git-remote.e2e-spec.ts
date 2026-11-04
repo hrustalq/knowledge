@@ -548,6 +548,17 @@ describe('git remote (e2e, #636)', () => {
     await http().post(`/v1/merge-requests/${mrId}/close`).set(as(people.admin.key)).expect(ok(201));
   });
 
+  it('pushes from a shallow clone', async () => {
+    const dir = join(work, 'alice-shallow');
+    await run('git', ['clone', '-q', '--depth', '1', repo(people.alice.key), dir], { env: env() });
+    expect(await git(['rev-parse', '--is-shallow-repository'], dir)).toBe('true');
+    edit(dir, `${slugs.open}.md`, (x) => `${x}\nFrom a shallow clone.\n`);
+    await git(['commit', '-qam', 'Shallow'], dir);
+    const pushed = await git(['rev-parse', 'HEAD'], dir);
+    await gitAll(['push', 'origin', 'HEAD:main'], dir);
+    expect((await git(['ls-remote', repo(people.alice.read), 'refs/heads/main'])).split('\t')[0]).toBe(pushed);
+  });
+
   it('opens a merge request over MCP by project and branch name, and lists the branch', async () => {
     const mcp = (name: string, args: Record<string, unknown>) =>
       http()

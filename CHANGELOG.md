@@ -91,6 +91,9 @@ in the pull request that introduces them — see
 - **Published sites leave out empty scaffold pages** (#782). A scaffolded project's skeletons reached anonymous readers,
   and their placeholder text reached site search. One with a real page under it stays in the nav, with no search text. A
   live version changes at its next build, and a frozen one keeps what it was built with.
+- **An editor can no longer act on a staged item for a page they cannot open** (#783). Approving, retrying, editing or
+  cleaning one up is now refused like reading it, and so is Approve all while a run holds such an item. Someone with
+  access to the page, or an admin, approves it.
 
 ### Operations
 

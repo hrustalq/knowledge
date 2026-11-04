@@ -169,8 +169,9 @@ export class ConnectorsController {
     @Param('runId', ParseUUIDPipe) runId: string,
     @Param('itemId', ParseUUIDPipe) itemId: string,
     @Body() dto: UpdateConnectorRunItemDto,
+    @CurrentPrincipal() principal: Principal,
   ): Promise<{ item: ConnectorRunItemInfo }> {
-    return { item: await this.items.updateItem(runId, itemId, dto) };
+    return { item: await this.items.updateItem(runId, itemId, dto, await this.scopeOfRun(runId, principal)) };
   }
 
   @Post('runs/:runId/items/:itemId/ai')
@@ -182,6 +183,7 @@ export class ConnectorsController {
     @Body() dto: ConnectorItemAiDto,
     @CurrentPrincipal() principal: Principal,
   ): Promise<{ item: ConnectorRunItemInfo }> {
+    await this.items.requireReadable(runId, itemId, await this.scopeOfRun(runId, principal));
     return { item: await this.ai.run(runId, itemId, dto.op, principal) };
   }
 
@@ -193,8 +195,12 @@ export class ConnectorsController {
     @Param('runId', ParseUUIDPipe) runId: string,
     @Param('itemId', ParseUUIDPipe) itemId: string,
     @Body() dto: ConnectorItemEventDto,
+    @CurrentPrincipal() principal: Principal,
   ): Promise<ConnectorItemEventResponse> {
-    return this.items.sendItemEvent(runId, itemId, dto.type, dto.subtree ?? false);
+    const scope = await this.scopeOfRun(runId, principal);
+    const { items, run } = await this.items.sendItemEvent(runId, itemId, dto.type, dto.subtree ?? false, scope);
+    const [visible] = await this.connectors.visibleRuns(scope, [run]);
+    return { items, run: visible };
   }
 
   @Post('runs/:runId/events')
@@ -204,8 +210,11 @@ export class ConnectorsController {
   async runEvent(
     @Param('runId', ParseUUIDPipe) runId: string,
     @Body() dto: ConnectorRunEventDto,
+    @CurrentPrincipal() principal: Principal,
   ): Promise<ConnectorRunEventResponse> {
-    return { run: await this.items.sendRunEvent(runId, dto.type) };
+    const scope = await this.scopeOfRun(runId, principal);
+    const [run] = await this.connectors.visibleRuns(scope, [await this.items.sendRunEvent(runId, dto.type, scope)]);
+    return { run };
   }
 
   @Get(':id')

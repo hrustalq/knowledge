@@ -156,7 +156,7 @@ describe('#658 write pairs commit together', () => {
       const svc = stub(new WorkflowsService(prisma, { record: vi.fn() } as never, _, _, _, _), {
         requireRun: async () => run,
       });
-      await expect(svc.sendRunEvent('run1', 'CANCEL')).rejects.toThrow('boom');
+      await expect(svc.sendRunEvent('run1', 'CANCEL', { bypass: true } as never)).rejects.toThrow('boom');
       expect(committed).toEqual([]);
     });
 
@@ -240,13 +240,13 @@ describe('#658 write pairs commit together', () => {
     });
 
     it('APPROVE_ALL: no approved items under a run still awaiting review', async () => {
-      const { prisma, committed } = fakePrisma({ 'connectorRunItem.updateMany': { count: 3 }, 'connectorRun.update': boom });
+      const { prisma, committed } = fakePrisma({ 'connectorRunItem.updateMany': { count: 3 }, 'connectorRunItem.findMany': [], 'connectorRun.update': boom });
       const producer = { enqueueRetry: vi.fn(), enqueueTask: vi.fn() };
       const svc = stub(new ConnectorItemsService(prisma, {} as never, {} as never, producer as never, {} as never, {} as never), {
         requireRun: async () => ({ id: 'run1', status: 'awaiting-review', mode: 'review', phase: null, discovered: 3, applied: 0 }),
         awaitingCount: async () => 3,
       });
-      await expect(svc.sendRunEvent('run1', 'APPROVE_ALL')).rejects.toThrow('boom');
+      await expect(svc.sendRunEvent('run1', 'APPROVE_ALL', { bypass: true } as never)).rejects.toThrow('boom');
       expect(committed).toEqual([]);
       expect(producer.enqueueRetry).not.toHaveBeenCalled();
     });

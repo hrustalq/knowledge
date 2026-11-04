@@ -73,11 +73,7 @@ export class ConnectorItemsService {
    */
   async getItem(runId: string, itemId: string, scope: AccessScope) {
     const item = await this.requireItem(runId, itemId);
-    if ((await hiddenRunItems(this.prisma, scope, [item])).size > 0) {
-      // The standard page refusal, which names no title; a page-less item has nothing to request access to.
-      if (item.documentId) await this.permissions.requireLevel(scope, { type: 'document', id: item.documentId }, 'view');
-      throw new NotFoundException(t('error.connector.itemNotFound'));
-    }
+    await this.assertReadable(item, scope);
     const markdown = item.stagedKey ? await this.readObject(item.stagedKey) : '';
     const incomingRaw = item.incomingKey ? await this.readObject(item.incomingKey) : null;
     const incoming = incomingRaw !== null && incomingRaw !== markdown ? incomingRaw : null;
@@ -104,14 +100,28 @@ export class ConnectorItemsService {
     return { item: info, markdown, incoming, localHead };
   }
 
+  /** The standard page refusal, which names no title; a page-less item has nothing to request access to. */
+  private async assertReadable(item: ConnectorRunItem, scope: AccessScope): Promise<void> {
+    if ((await hiddenRunItems(this.prisma, scope, [item])).size === 0) return;
+    if (item.documentId) await this.permissions.requireLevel(scope, { type: 'document', id: item.documentId }, 'view');
+    throw new NotFoundException(t('error.connector.itemNotFound'));
+  }
+
+  /** For a route that acts on one item: acting on a page you cannot open is refused like reading it (#783). */
+  async requireReadable(runId: string, itemId: string, scope: AccessScope): Promise<void> {
+    await this.assertReadable(await this.requireItem(runId, itemId), scope);
+  }
+
   // --- edit ---
 
   async updateItem(
     runId: string,
     itemId: string,
     patch: { title?: string; markdown?: string },
+    scope: AccessScope,
   ): Promise<ConnectorRunItemInfo> {
     const item = await this.requireItem(runId, itemId);
+    await this.assertReadable(item, scope);
     // Editing what has already been written would be a lie: the page is the
     // thing to edit at that point, and it has its own editor.
     if (item.status !== 'staged' && item.status !== 'failed') {
@@ -143,9 +153,14 @@ export class ConnectorItemsService {
     itemId: string,
     type: ConnectorItemEventType,
     subtree: boolean,
+    scope: AccessScope,
   ): Promise<{ items: ConnectorRunItemInfo[]; run: ConnectorRunInfo }> {
     const root = await this.requireItem(runId, itemId);
-    const targets = subtree ? await this.subtreeOf(runId, root) : [root];
+    await this.assertReadable(root, scope);
+    // A subtree event passes over what the caller cannot open, as it does what cannot take the event.
+    const tree = subtree ? await this.subtreeOf(runId, root) : [root];
+    const hidden = await hiddenRunItems(this.prisma, scope, tree);
+    const targets = tree.filter((i) => !hidden.has(i.id));
 
     // Filling is the one event the API does not perform: it needs the adapter,
     // and a branch can be hundreds of pages. The rows are left exactly as they
@@ -308,8 +323,15 @@ export class ConnectorItemsService {
 
   // --- run events ---
 
-  async sendRunEvent(runId: string, type: ConnectorRunEventType): Promise<ConnectorRunInfo> {
+  async sendRunEvent(runId: string, type: ConnectorRunEventType, scope: AccessScope): Promise<ConnectorRunInfo> {
     const run = await this.requireRun(runId);
+    // Approve all writes every staged page, so it is refused while one is a page the caller cannot open (#783).
+    if (type === 'APPROVE_ALL') {
+      const staged = await this.prisma.connectorRunItem.findMany({ where: { runId, status: 'staged' } });
+      const hidden = await hiddenRunItems(this.prisma, scope, staged);
+      const first = staged.find((i) => hidden.has(i.id));
+      if (first) await this.assertReadable(first, scope);
+    }
     const awaiting = await this.awaitingCount(runId);
     const legal = allowedRunEvents({
       status: run.status as never,

@@ -41,6 +41,8 @@ in the pull request that introduces them — see
 - **Watching a restricted page no longer reveals its title** (#773). A member refused on a page could read its title by
   subscribing to it, and someone who watched it before it was restricted kept seeing its renames. Watching now takes the
   page's own refusal, and the subscription list leaves out the title of anything the caller cannot open. Muting still works.
+- **A guest with a page grant can read their notifications** (#777). They were notified but got 403 from the inbox, so
+  they could never read, count or clear what was sent to them.
 
 ## [0.45.1] — 2026-11-04
 

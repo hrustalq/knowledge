@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { ACCESS_META } from '../src/auth/access.decorator.js';
 import { NotificationsController } from '../src/notifications/notifications.controller.js';
 import { NotificationsService } from '../src/notifications/notifications.service.js';
 
@@ -194,5 +195,17 @@ describe('subscriptions under page restrictions (#773)', () => {
     const dto = { workspaceId: WS, subjectType: 'document', subjectId: PAGE } as const;
     await expect(controller.setSubscription({ ...dto, state: 'watching' } as never, {} as never)).rejects.toBe(refusal);
     await expect(controller.setSubscription({ ...dto, state: 'muted' } as never, {} as never)).resolves.toBeDefined();
+  });
+});
+
+describe('the inbox routes (#777)', () => {
+  const spec = (name: keyof NotificationsController) =>
+    Reflect.getMetadata(ACCESS_META, NotificationsController.prototype[name]) as { guests?: true };
+
+  it('admit a guest, who is written notifications; subscriptions and preferences do not', () => {
+    for (const route of ['list', 'unreadCount', 'markRead'] as const) expect(spec(route).guests).toBe(true);
+    for (const route of ['listSubscriptions', 'setSubscription', 'preferences', 'updatePreferences'] as const) {
+      expect(spec(route).guests).toBeUndefined();
+    }
   });
 });

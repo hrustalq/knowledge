@@ -30,6 +30,10 @@ import { Returns } from '../common/returns.decorator.js';
  * every read and write is scoped to `principal.userId` inside the service.
  * That is the `SavedFiltersService` stance: the guard knows workspaces, rows
  * are owned, and an inbox is nobody else's business.
+ *
+ * A guest with a grant is written notifications, so the inbox routes admit
+ * guests (#777): each reads only the caller's own rows. Subscriptions and
+ * preferences stay member routes.
  */
 @ApiTags('notifications')
 @Controller('v1/notifications')
@@ -43,7 +47,7 @@ export class NotificationsController {
 
   @Get('unread-count')
   @Returns('NotificationUnreadCountResponse')
-  @Access('viewer', 'query')
+  @Access('viewer', 'query', { guests: true })
   @ApiOperation({
     summary: "Unread totals for the caller, overall and per category — the bell's badge",
   })
@@ -135,7 +139,7 @@ export class NotificationsController {
   @Post('read')
   @Returns('MarkNotificationsReadResponse')
   @HttpCode(200)
-  @Access('viewer', 'body')
+  @Access('viewer', 'body', { guests: true })
   @ApiOperation({
     summary:
       'Mark rows read — `ids` for a set, `all` for the workspace, optionally narrowed to one category (400 when neither is given)',
@@ -153,7 +157,7 @@ export class NotificationsController {
 
   @Get()
   @Returns('ListNotificationsResponse')
-  @Access('viewer', 'query')
+  @Access('viewer', 'query', { guests: true })
   @ApiOperation({
     summary: "The caller's inbox, newest first. Coalesced rows carry metadata.count (docs/features/22)",
   })

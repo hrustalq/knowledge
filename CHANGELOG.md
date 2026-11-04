@@ -28,6 +28,8 @@ in the pull request that introduces them — see
   do, came out altered in the archive.
 - **A webhook honours a connector's review mode** (#764). A connector set to `review` or `step` wrote pages without
   review whenever a webhook fired. Webhook runs now stage their items and wait, like a manual run.
+- **A webhook naming one page syncs only that page** (#765). On a connector with a page tree it also listed the whole
+  source, staged every other page and warned about orphans that did not exist.
 
 ## [0.45.1] — 2026-11-04
 

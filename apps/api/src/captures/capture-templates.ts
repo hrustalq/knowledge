@@ -19,7 +19,21 @@ import type {
  * model from here (anything that later does wraps it untrusted).
  */
 
-/** `capture.heading.*`, resolved by the caller in the writer's language. */
+/**
+ * What language page text is in, by its letters (#739): nothing stores a
+ * project's language. A share rather than a majority, so the code and product
+ * names in a Russian page do not make it English. Null with no letters to read.
+ *
+ * ponytail: two locales and a letter count, a stored content language if a third locale arrives.
+ */
+export function textLocale(text: string): 'en' | 'ru' | null {
+  const cyrillic = text.match(/\p{Script=Cyrillic}/gu)?.length ?? 0;
+  const latin = text.match(/\p{Script=Latin}/gu)?.length ?? 0;
+  if (cyrillic + latin === 0) return null;
+  return cyrillic / (cyrillic + latin) >= 0.3 ? 'ru' : 'en';
+}
+
+/** `capture.heading.*`, resolved by the caller in the language of the text around them. */
 export interface CaptureHeadings {
   context: string;
   decision: string;

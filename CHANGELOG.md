@@ -86,6 +86,8 @@ in the pull request that introduces them — see
   push to the project fail, whatever it touched.
 - **A push no longer names a merge request on a page the pusher cannot open** (#781). The remote printed its title and
   link. It now says only that the merge request was updated.
+- **A run's warnings no longer name a page the reader cannot open** (#767). They carried the item's title and error on the
+  run, its connector and the MCP tool. Such a warning is now left out for that reader.
 
 ### Operations
 

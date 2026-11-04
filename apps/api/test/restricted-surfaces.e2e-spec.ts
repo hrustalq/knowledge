@@ -124,7 +124,16 @@ describe('restricted surfaces (e2e)', () => {
       data: { workspaceId: WORKSPACE, projectId, kind: 'markdown', name: `Surfaces ${nonce}`, config: {}, createdBy: people.admin.id },
     });
     const run = await prisma.connectorRun.create({
-      data: { connectorId: connector.id, workspaceId: WORKSPACE, direction: 'pull', trigger: 'manual', status: 'awaiting-review', mode: 'review', locale: 'en' },
+      data: {
+        connectorId: connector.id,
+        workspaceId: WORKSPACE,
+        direction: 'pull',
+        trigger: 'manual',
+        status: 'awaiting-review',
+        mode: 'review',
+        locale: 'en',
+        warnings: [{ externalId: 'docs/payroll.md', title: SECRET_TITLE, message: `${SECRET_TITLE} failed` }],
+      },
     });
     const item = await prisma.connectorRunItem.create({
       data: { runId: run.id, externalId: 'docs/payroll.md', title: SECRET_TITLE, depth: 0, position: 0, status: 'staged', action: 'update', documentId: secretId },
@@ -133,6 +142,14 @@ describe('restricted surfaces (e2e)', () => {
     const list = await http().get(`/v1/connectors/runs/${run.id}/items`).set(as(people.bob)).expect(ok(200));
     expect(JSON.stringify(list.body)).not.toMatch(new RegExp(`${SECRET_TITLE}|payroll`));
     expect(list.body.items).toHaveLength(1);
+    for (const path of [`/v1/connectors/runs/${run.id}`, `/v1/connectors/${connector.id}/runs`, `/v1/connectors/${connector.id}`]) {
+      const asBob = await http().get(path).set(as(people.bob)).expect(ok(200));
+      expect(JSON.stringify(asBob.body)).not.toContain(SECRET_TITLE);
+    }
+    const connectors = await http().get('/v1/connectors').query({ workspaceId: WORKSPACE }).set(as(people.bob)).expect(ok(200));
+    expect(JSON.stringify(connectors.body)).not.toContain(SECRET_TITLE);
+    const runAsAlice = await http().get(`/v1/connectors/runs/${run.id}`).set(as(people.alice)).expect(ok(200));
+    expect(runAsAlice.body.run.warnings).toHaveLength(1);
 
     const asAlice = await http().get(`/v1/connectors/runs/${run.id}/items/${item.id}`).set(as(people.alice)).expect(ok(200));
     expect(asAlice.body.localHead).toContain('First text.');

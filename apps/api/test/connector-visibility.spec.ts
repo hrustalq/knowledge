@@ -4,6 +4,7 @@ import { AccessService } from '../src/auth/access.service.js';
 import { NotFoundException } from '@nestjs/common';
 import { ConnectorsService } from '../src/connectors/connectors.service.js';
 import { ConnectorItemsService } from '../src/connectors/connector-items.service.js';
+import { withVisibleWarnings } from '../src/connectors/run-visibility.js';
 import type { Principal } from '../src/auth/principal.js';
 import { noAuthPolicy } from './auth-policy-fakes.js';
 
@@ -190,5 +191,23 @@ describe('staged run items', () => {
     expect((await svc.getItem('r1', 'i1', scope({ role: 'editor' }))).markdown).toBe('staged text');
     const open = service([item({ documentId: null, action: 'create' })]);
     expect((await open.svc.getItem('r1', 'i1', scope())).markdown).toBe('staged text');
+  });
+
+  it('leaves out a warning naming such an item, and keeps the rest (#767)', async () => {
+    const prisma = {
+      document: { findMany: vi.fn(async () => [page]) },
+      connectorRunItem: { findMany: vi.fn(async () => [{ id: 'i1', runId: 'r1', externalId: 'docs/secret-plan.md', documentId: 'p1', acl: null }]) },
+    };
+    const warnings = [
+      { externalId: 'docs/secret-plan.md', title: 'Secret plan', message: 'Secret plan failed' },
+      { externalId: null, title: null, message: 'Stopped after 10 items' },
+    ];
+    const run = { id: 'r1', warnings } as never;
+    const [hidden] = await withVisibleWarnings(prisma as never, scope(), [run]);
+    expect(JSON.stringify(hidden)).not.toMatch(/secret/i);
+    expect((hidden as { warnings: unknown[] }).warnings).toHaveLength(1);
+    const [open] = await withVisibleWarnings(prisma as never, scope({ denied: new Set() }), [run]);
+    expect((open as { warnings: unknown[] }).warnings).toHaveLength(2);
+    expect(await withVisibleWarnings(prisma as never, scope(), [null])).toEqual([null]);
   });
 });

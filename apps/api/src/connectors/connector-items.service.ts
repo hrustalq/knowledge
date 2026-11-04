@@ -12,11 +12,10 @@ import {
   type ConnectorRunItemStatus,
   type ConnectorSyncMode,
 } from '@knowledge/contracts';
-import { ROLE_ORDER } from '../auth/principal.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 import { t } from '../i18n/t.js';
-import { canSee, type AccessScope } from '../permissions/access-scope.js';
+import type { AccessScope } from '../permissions/access-scope.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ProjectCascadeService } from '../projects/project-cascade.service.js';
@@ -27,6 +26,7 @@ import type { ItemDraft } from './connector-staging.service.js';
 import { sourceConnectorOf } from '../documents/source-backed.js';
 import { sha256, stagedObject } from './connector-markdown.js';
 import { MAX_WARNINGS, toRunInfo } from './connectors.service.js';
+import { hiddenRunItems } from './run-visibility.js';
 
 /**
  * Everything a person does to a staged import (docs/features/26).
@@ -53,30 +53,6 @@ export class ConnectorItemsService {
 
   // --- reads ---
 
-  /**
-   * The items `scope` may not read (#767): a page's item follows the page. One
-   * with no page yet follows the ACL staged on it, which is only applied when the
-   * page is written: that text is for whoever can approve it, not every viewer.
-   */
-  private async hiddenItems(scope: AccessScope, rows: ConnectorRunItem[]): Promise<Set<string>> {
-    if (scope.bypass) return new Set();
-    const ids = [...new Set(rows.flatMap((r) => (r.documentId ? [r.documentId] : [])))];
-    const pages = await this.prisma.document.findMany({
-      where: { id: { in: ids } },
-      select: { id: true, projectId: true, path: true, restrictedBy: true },
-    });
-    const pageOf = new Map(pages.map((p) => [p.id, p]));
-    const approves = scope.role !== null && ROLE_ORDER[scope.role] >= ROLE_ORDER.editor;
-    return new Set(
-      rows
-        .filter((r) => {
-          const page = r.documentId ? pageOf.get(r.documentId) : undefined;
-          return page ? !canSee(scope, page) : r.acl !== null && !approves;
-        })
-        .map((r) => r.id),
-    );
-  }
-
   async listItems(runId: string, scope: AccessScope): Promise<{ items: ConnectorRunItemInfo[]; truncated: boolean }> {
     const run = await this.requireRun(runId);
     const rows = await this.prisma.connectorRunItem.findMany({
@@ -84,7 +60,7 @@ export class ConnectorItemsService {
       orderBy: [{ depth: 'asc' }, { position: 'asc' }],
     });
     const warned = readWarnings(run).some((w) => w.externalId === null && /max/i.test(w.message));
-    const hidden = await this.hiddenItems(scope, rows);
+    const hidden = await hiddenRunItems(this.prisma, scope, rows);
     return { items: rows.map((r) => (hidden.has(r.id) ? toHiddenItemInfo(r) : toItemInfo(r))), truncated: warned };
   }
 
@@ -97,7 +73,7 @@ export class ConnectorItemsService {
    */
   async getItem(runId: string, itemId: string, scope: AccessScope) {
     const item = await this.requireItem(runId, itemId);
-    if ((await this.hiddenItems(scope, [item])).size > 0) {
+    if ((await hiddenRunItems(this.prisma, scope, [item])).size > 0) {
       // The standard page refusal, which names no title; a page-less item has nothing to request access to.
       if (item.documentId) await this.permissions.requireLevel(scope, { type: 'document', id: item.documentId }, 'view');
       throw new NotFoundException(t('error.connector.itemNotFound'));

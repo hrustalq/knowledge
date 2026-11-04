@@ -811,7 +811,8 @@ export class McpService {
       },
       async ({ runId }) => {
         await guard.connectorRun(runId, 'viewer');
-        return this.json(await this.connectors.getRun(runId));
+        const run = await this.prisma.connectorRun.findUnique({ where: { id: runId }, select: { workspaceId: true } });
+        return this.json(await this.connectors.getRun(runId, await guard.scope(run!.workspaceId)));
       },
     );
 

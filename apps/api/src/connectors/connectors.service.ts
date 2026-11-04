@@ -34,6 +34,7 @@ import { t } from '../i18n/t.js';
 import { canSeeProject, type AccessScope } from '../permissions/access-scope.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ProjectsService } from '../projects/projects.service.js';
+import { withVisibleWarnings } from './run-visibility.js';
 import { ConnectorRegistry } from './adapters/connector.registry.js';
 import { releaseMirroredAccess } from './connector-acl-release.js';
 import { bindConnection } from './connection-binding.js';
@@ -121,7 +122,9 @@ export class ConnectorsService {
       include: { project: { select: { id: true, restricted: true } } },
       orderBy: { createdAt: 'asc' },
     });
-    return Promise.all(rows.filter((row) => canSeeProject(scope, row.project)).map((row) => this.toSummary(row)));
+    const summaries = await Promise.all(rows.filter((row) => canSeeProject(scope, row.project)).map((row) => this.toSummary(row)));
+    const lastRuns = await withVisibleWarnings(this.prisma, scope, summaries.map((c) => c.lastRun));
+    return summaries.map((c, i) => ({ ...c, lastRun: lastRuns[i] }));
   }
 
   async get(connectorId: string): Promise<ConnectorSummary> {
@@ -599,10 +602,15 @@ export class ConnectorsService {
     return { runs: page.map(toRunInfo), nextCursor: rows.length > limit ? page[page.length - 1].id : null };
   }
 
-  async getRun(runId: string): Promise<ConnectorRunInfo> {
+  async getRun(runId: string, scope: AccessScope): Promise<ConnectorRunInfo> {
     const row = await this.prisma.connectorRun.findUnique({ where: { id: runId } });
     if (!row) throw new NotFoundException(t('error.connector.runNotFound', { id: runId }));
-    return toRunInfo(row);
+    return (await this.visibleRuns(scope, [toRunInfo(row)]))[0];
+  }
+
+  /** Runs as `scope` may read them (#767). */
+  visibleRuns<T extends ConnectorRunInfo | null>(scope: AccessScope, runs: T[]): Promise<T[]> {
+    return withVisibleWarnings(this.prisma, scope, runs);
   }
 
   // --- internals ---

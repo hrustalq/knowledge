@@ -923,7 +923,9 @@
       "rejected": "{path}: {reason}",
       "mrCreated": "Merge request «{title}»:\n  {url}",
       "mrUpdated": "Merge request «{title}» обновлён:\n  {url}",
-      "mrMerged": "Merge request «{title}» влит:\n  {url}"
+      "mrMerged": "Merge request «{title}» влит:\n  {url}",
+      "noMergeRequest": "Ни один merge request не содержит эти коммиты. Добавьте -o merge_request.create к следующей отправке в '{branch}' или откройте его в веб-интерфейсе.",
+      "branchMerged": "Merge request «{title}» из '{branch}' уже влит, поэтому эти коммиты в него не вошли:\n  {url}\nДобавьте -o merge_request.create к следующей отправке в '{branch}' или откройте новый в веб-интерфейсе."
     },
     "tooLarge": "Отправка больше, чем принимает этот репозиторий (256 МБ). Отправляйте меньше коммитов за раз."
   },

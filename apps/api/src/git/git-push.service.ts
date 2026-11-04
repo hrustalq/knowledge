@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { AccessService } from '../auth/access.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
+import { visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { CompareService } from '../documents/compare.service.js';
 import { MergeRequestsService } from '../documents/merge-requests.service.js';
@@ -263,7 +264,7 @@ export class GitPushService {
     return this.prisma.withTransaction(
       async () => {
         const ids = await write();
-        return this.openMergeRequest(projectId, branch, planned, ids.created, options, principal.userId);
+        return this.openMergeRequest(projectId, branch, planned, ids.created, options, principal.userId, scope);
       },
       { timeout: 60_000, maxWait: 10_000 },
     );
@@ -625,7 +626,9 @@ export class GitPushService {
   /**
    * After a push to a branch: the open merge request it updates, or one it
    * opens — on `-o merge_request.create`, or as a draft whenever the push
-   * created a page, so a head-less page always has its merge request.
+   * created a page, so a head-less page always has its merge request. With
+   * neither, the push is accepted and the pusher is told no merge request
+   * carries it (#737).
    */
   private async openMergeRequest(
     projectId: string,
@@ -634,6 +637,7 @@ export class GitPushService {
     created: string[],
     options: string[],
     userId: string,
+    scope: AccessScope,
   ): Promise<string[]> {
     const opt = (k: string) => options.find((o) => o === `merge_request.${k}` || o.startsWith(`merge_request.${k}=`));
     const val = (k: string) => opt(k)?.split('=').slice(1).join('=') || undefined;
@@ -651,15 +655,31 @@ export class GitPushService {
         select: { documentId: true, revisions: { where: { status: { not: 'draft' } }, select: { id: true }, take: 1 } },
       });
       const anchor = rows.find((r) => r.revisions.length)?.documentId ?? rows.find((r) => changed.some((ch) => ch.documentId === r.documentId))?.documentId ?? rows[0]?.documentId;
-      if (!anchor) return [];
+      if (!anchor) return this.noMergeRequest(projectBranchId, branch, scope);
       const title = val('title') ?? planned.at(-1)!.subject ?? branch;
       const res = await this.mergeRequests.create(anchor, { sourceBranch: branch, targetBranch: val('target'), title: title || branch, description: val('description') }, userId);
       mr = { id: res.mergeRequest.mergeRequestId, title: res.mergeRequest.title };
       if (opt('draft') || !opt('create')) await this.prisma.mergeRequest.update({ where: { id: mr.id }, data: { isDraft: true } });
     }
-    if (!mr) return [];
+    if (!mr) return this.noMergeRequest(projectBranchId, branch, scope);
     if (created.length) await this.prisma.document.updateMany({ where: { id: { in: created } }, data: { pendingMergeRequestId: mr.id } });
     return [t(open ? 'error.git.push.mrUpdated' : 'error.git.push.mrCreated', { title: mr.title, url: this.mrUrl(mr.id) })];
+  }
+
+  /**
+   * What a pusher hears when their commits reach no merge request. Commits made
+   * just after a merge strand this way unless the remote says so. A merge
+   * request on a page the pusher cannot open goes unnamed: its title is the page's.
+   */
+  private async noMergeRequest(projectBranchId: string, branch: string, scope: AccessScope): Promise<string[]> {
+    const latest = await this.prisma.mergeRequest.findFirst({
+      where: { sourceBranch: { projectBranchId }, document: { AND: [visibilityWhere(scope)] } },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, title: true, status: true },
+    });
+    return latest?.status === 'merged'
+      ? [t('error.git.push.branchMerged', { title: latest.title, url: this.mrUrl(latest.id), branch })]
+      : [t('error.git.push.noMergeRequest', { branch })];
   }
 
   private mrUrl(id: string): string {

@@ -294,6 +294,23 @@ describe('git remote (e2e, #636)', () => {
     expect(readFileSync(join(dir, `${guide.slug}.md`), 'utf8')).toContain('One, pushed.');
     expect(await git(['log', '-1', '--format=%s'], dir)).toBe("Merge branch 'fix-terms' into 'main'");
     await git(['fsck', '--strict'], dir);
+
+    // #737: a commit pushed after the merge is accepted, and the remote says no merge request carries it.
+    const after = await clone(people.alice.key, 'alice-after');
+    await git(['checkout', '-q', 'fix-terms'], after);
+    edit(after, `${guide.slug}.md`, (x) => x.replace('Two.', 'Two, too late.'));
+    await git(['commit', '-qam', 'After the merge'], after);
+    const late = await gitAll(['push', 'origin', 'HEAD:fix-terms'], after);
+    expect(late).toMatch(/Fix terms" from 'fix-terms' is already merged/);
+    expect(late).toContain(`/merge-requests/${mrId}`);
+    expect(await git(['ls-remote', repo(people.alice.read), 'refs/heads/fix-terms'])).toContain(await git(['rev-parse', 'HEAD'], after));
+    // Its next push can open a new one.
+    edit(after, `${guide.slug}.md`, (x) => x.replace('Three.', 'Three, too late.'));
+    await git(['commit', '-qam', 'Still after the merge'], after);
+    const reopened = mrIdIn(await gitAll(['push', '-o', 'merge_request.create', '-o', 'merge_request.title=Late fix', 'origin', 'HEAD:fix-terms'], after));
+    expect(reopened).toBeTruthy();
+    expect(reopened).not.toBe(mrId);
+    await http().post(`/v1/merge-requests/${reopened}/close`).set(as(people.alice.key)).expect(ok(201));
   });
 
   it('pushes straight to an unprotected default branch, and refuses a read key, a stale push, a force push and a protected branch, in en and ru', async () => {

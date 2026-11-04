@@ -978,6 +978,7 @@ export class DocumentsService {
     this.prisma.onCommit(() =>
       this.activity.record({
         workspaceId: document.workspaceId,
+        actor: ownerId,
         action: 'branch.created',
         documentId,
         subjectId: branch.id,
@@ -1195,6 +1196,7 @@ export class DocumentsService {
     });
     await this.activity.record({
       workspaceId: document.workspaceId,
+      actor,
       action: 'relations.curated',
       documentId,
       metadata: { title: document.title, type: fact.type, targetKey: fact.target.key },
@@ -1214,6 +1216,7 @@ export class DocumentsService {
     await this.graph.deleteRelations(document.workspaceId, documentId, type, targetKey, extractor, actor);
     await this.activity.record({
       workspaceId: document.workspaceId,
+      actor,
       action: 'relations.deleted',
       documentId,
       metadata: { title: document.title, type, targetKey, ...(extractor ? { extractor } : {}) },

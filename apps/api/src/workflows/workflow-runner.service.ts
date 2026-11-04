@@ -4,6 +4,7 @@ import type { WorkflowGraph, WorkflowRunStatus, WorkflowStep } from '@knowledge/
 import { applyRunEvent, stepById } from '@knowledge/workflow';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ActivityService } from '../activity/activity.service.js';
+import { SYSTEM_ACTOR } from '../activity/actor.js';
 import { WorkflowProducer } from './workflow.producer.js';
 import { t } from '../i18n/t.js';
 import type { StepItem } from './workflow.executors.js';
@@ -222,6 +223,7 @@ export class WorkflowRunnerService {
     if (applied.status === 'completed' || applied.status === 'failed' || applied.status === 'awaiting-review') {
       void this.activity.record({
         workspaceId: run.workspaceId,
+        actor: SYSTEM_ACTOR,
         action:
           applied.status === 'awaiting-review'
             ? 'workflow-node.awaiting-review'

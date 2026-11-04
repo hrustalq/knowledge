@@ -46,6 +46,9 @@ in the pull request that introduces them — see
 - **Entity reads accept any spelling of a key** (#756). `Service:Billing`, or a declared alias such as `сервис:биллинг`,
   answered not found although `service:billing` exists, over REST and MCP alike. Neighbours, impact analysis and trace
   now fold and resolve the key as a write does, and answer with the canonical one.
+- **The activity feed names who created a branch, curated a relation, changed an attachment or submitted an import**
+  (#755). Those rows credited nobody, under any `AUTH_MODE`, and the person who acted could be notified of their own
+  act. Rows already written stay as they are.
 
 ## [0.45.1] — 2026-11-04
 

@@ -329,6 +329,7 @@ export class ImportService {
     this.prisma.onCommit(async () => {
       await this.activity.record({
         workspaceId: row.workspaceId,
+        actor: userId,
         action: 'import.submitted',
         documentId: created.documentId,
         subjectId: created.documentId,

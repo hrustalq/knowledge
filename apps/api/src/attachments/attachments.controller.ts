@@ -63,8 +63,9 @@ export class AttachmentsController {
   complete(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('attachmentId', ParseUUIDPipe) attachmentId: string,
+    @CurrentPrincipal() principal: Principal,
   ): Promise<CompleteAttachmentResponse> {
-    return this.attachments.complete(id, attachmentId);
+    return this.attachments.complete(id, attachmentId, principal.userId);
   }
 
   @Get(':attachmentId/content')
@@ -86,7 +87,8 @@ export class AttachmentsController {
   remove(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('attachmentId', ParseUUIDPipe) attachmentId: string,
+    @CurrentPrincipal() principal: Principal,
   ): Promise<{ deleted: true }> {
-    return this.attachments.remove(id, attachmentId);
+    return this.attachments.remove(id, attachmentId, principal.userId);
   }
 }

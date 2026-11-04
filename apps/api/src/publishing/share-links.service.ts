@@ -228,7 +228,7 @@ export class ShareLinksService {
   private record(row: ShareLink, action: string, actorId?: string, extra: Record<string, unknown> = {}): void {
     void this.activity.record({
       workspaceId: row.workspaceId,
-      ...(actorId ? { actor: actorId } : {}),
+      actor: actorId,
       action,
       documentId: row.documentId,
       subjectId: row.documentId,

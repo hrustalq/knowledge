@@ -13,6 +13,14 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Fixed
+
+- **A captured section no longer links to the page it sits on** (#740). A decision captured onto a page that also
+  named that page as related listed it under its own related pages. The other related pages keep their order, and a
+  section with none left has no related heading.
+
 ## [0.45.0] — 2026-11-03
 
 ### Added

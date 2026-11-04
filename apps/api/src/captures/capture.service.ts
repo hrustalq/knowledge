@@ -610,7 +610,7 @@ export class CaptureService {
     }
     const lang = principal.locale;
     const h = this.headings(lang, row.title);
-    const input = await this.bodyInput(kind, payload);
+    const input = await this.bodyInput(kind, payload, decision.targetDocumentId);
     const session = row.session as unknown as CaptureSession;
     const origin = row.origin as unknown as CaptureOrigin | null;
     const entry = capturedEntry(row.id, kind, session, row.createdAt);
@@ -820,11 +820,12 @@ export class CaptureService {
     return parent?.id ?? null;
   }
 
-  private async bodyInput(kind: CaptureKind, payload: StoredPayload): Promise<CaptureBodyInput> {
+  /** `amending`: the page this body lands on, which is not related to itself. */
+  private async bodyInput(kind: CaptureKind, payload: StoredPayload, amending: string | null): Promise<CaptureBodyInput> {
     switch (kind) {
       case 'decision': {
         const p = payload as DecisionCapturePayload;
-        return { kind, payload: p, related: await this.linkedPages(p.relatedDocumentIds ?? []) };
+        return { kind, payload: p, related: await this.linkedPages((p.relatedDocumentIds ?? []).filter((id) => id !== amending)) };
       }
       case 'answer': {
         const p = payload as AnswerCapturePayload;

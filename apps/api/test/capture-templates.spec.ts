@@ -8,6 +8,7 @@ import {
   describeOrigin,
   describeSession,
   renderCaptureBody,
+  textLocale,
   withCapturedEntry,
   withOriginSource,
   type CaptureHeadings,
@@ -15,8 +16,8 @@ import {
 import { composeFrontmatter, parseMarkdown } from '../src/common/frontmatter.js';
 
 /**
- * Page text from a capture (issue #73): a fixed template per kind, in the
- * writer's language, appended to an existing page without disturbing its
+ * Page text from a capture (issue #73): a fixed template per kind, in the page's
+ * language (#739), appended to an existing page without disturbing its
  * frontmatter, and carrying where it came from — never what the session said.
  */
 
@@ -43,6 +44,17 @@ const decision = {
 describe('capture catalogues', () => {
   it('say the same things in en and ru', () => {
     expect(keysOf(ru).sort()).toEqual(keysOf(en).sort());
+  });
+});
+
+describe('textLocale', () => {
+  it('reads the language from the letters, tolerating code and names in a Russian page', () => {
+    expect(textLocale('How search works.')).toBe('en');
+    expect(textLocale('Как работает поиск.')).toBe('ru');
+    expect(textLocale('Сервис `SearchService` вызывает `graph.searchChunks` для запроса.')).toBe('ru');
+    expect(textLocale('The term «поиск» appears once in this long English sentence about search.')).toBe('en');
+    expect(textLocale('')).toBeNull();
+    expect(textLocale('1 + 2 = 3')).toBeNull();
   });
 });
 

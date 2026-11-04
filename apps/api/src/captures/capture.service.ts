@@ -74,6 +74,7 @@ import {
   describeOrigin,
   describeSession,
   renderCaptureBody,
+  textLocale,
   withCapturedEntry,
   withOriginSource,
   type CaptureBodyInput,
@@ -608,8 +609,9 @@ export class CaptureService {
         similar: similar as unknown as Prisma.InputJsonValue,
       });
     }
+    // The merge request speaks to its reviewer; the page keeps its own language (#739).
     const lang = principal.locale;
-    const h = this.headings(lang, row.title);
+    const captured = textLocale(`${row.title}\n${mainText(kind, payload)}`) ?? lang;
     const input = await this.bodyInput(kind, payload);
     const session = row.session as unknown as CaptureSession;
     const origin = row.origin as unknown as CaptureOrigin | null;
@@ -622,6 +624,7 @@ export class CaptureService {
     if (decision.outcome === 'amend-page') {
       const target = decision.targetDocumentId;
       const content = await this.documents.getContent(target);
+      const h = this.headings(textLocale(content.markdown) ?? captured, row.title);
       const top = similar.find((s) => s.documentId === target);
       // A section never links to the page it sits on (#740).
       const own = input.kind === 'decision' ? { ...input, related: input.related.filter((p) => p.documentId !== target) } : input;
@@ -656,6 +659,7 @@ export class CaptureService {
     const parentId = await this.parentFor(settings.parentDocumentId, row.projectId);
     const category = CATEGORY_BY_KIND[kind];
     const description = this.describe(session, origin, similar, lang, t('capture.mergeRequest.newPage', undefined, lang));
+    const h = this.headings(captured, row.title);
     await this.prisma.withTransaction(async () => {
       const created = await this.documents.createDocument(
         {

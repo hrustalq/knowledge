@@ -45,7 +45,7 @@ const reported: SearchPool = {
 
 describe('the page defining a term (#742)', () => {
   it('reaches the top 3 for the reported query', () => {
-    expect(rankPool(reported, KNOBS).slice(0, 3)).toContain('glossary');
+    expect(rankPool(reported, KNOBS).slice(0, 3)).toEqual(['glossary', 'watchdog', 'mention']);
   });
 
   it('is not pushed under verified pages with no vector evidence, even with no definition to find', () => {

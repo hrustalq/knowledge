@@ -17,6 +17,7 @@ import {
   UpdateNotificationPreferencesDto,
 } from './notifications.dto.js';
 import { NotificationsService } from './notifications.service.js';
+import { PermissionService } from '../permissions/permission.service.js';
 import { Returns } from '../common/returns.decorator.js';
 
 /**
@@ -33,7 +34,10 @@ import { Returns } from '../common/returns.decorator.js';
 @ApiTags('notifications')
 @Controller('v1/notifications')
 export class NotificationsController {
-  constructor(private readonly notifications: NotificationsService) {}
+  constructor(
+    private readonly notifications: NotificationsService,
+    private readonly permissions: PermissionService,
+  ) {}
 
   // Literal segments before any parameterised route — house style.
 
@@ -63,7 +67,7 @@ export class NotificationsController {
   @ApiQuery({ name: 'subjectId', required: false })
   @ApiQuery({ name: 'limit', required: false, description: 'Page size, 1-200. Defaults to 50.' })
   @ApiQuery({ name: 'cursor', required: false, description: "Previous page's nextCursor." })
-  listSubscriptions(
+  async listSubscriptions(
     @Query('workspaceId') workspaceId: string,
     @CurrentPrincipal() principal: Principal,
     @Query('subjectType') subjectType?: NotificationSubjectType,
@@ -71,7 +75,7 @@ export class NotificationsController {
     @Query('limit') limit?: string,
     @Query('cursor') cursor?: string,
   ): Promise<ListNotificationSubscriptionsResponse> {
-    return this.notifications.listSubscriptions(workspaceId, principal.userId, {
+    return this.notifications.listSubscriptions(await this.permissions.scopeFor(principal, workspaceId), {
       subjectType: subjectType || undefined,
       subjectId: subjectId || undefined,
       limit: limit ? Number(limit) : undefined,
@@ -86,17 +90,17 @@ export class NotificationsController {
     summary:
       "Watch, mute or forget one subject. 'muted' is stored so involvement cannot re-subscribe you; 'default' removes the row (400 when the subject belongs to another workspace)",
   })
-  setSubscription(
+  async setSubscription(
     @Body() dto: SetNotificationSubscriptionDto,
     @CurrentPrincipal() principal: Principal,
   ): Promise<ListNotificationSubscriptionsResponse> {
-    return this.notifications.setSubscription(
-      dto.workspaceId,
-      principal.userId,
-      dto.subjectType,
-      dto.subjectId,
-      dto.state,
-    );
+    const scope = await this.permissions.scopeFor(principal, dto.workspaceId);
+    // Watching is what tells you a page's title on every edit, so it takes the page's own refusal (#773).
+    if (dto.state === 'watching') {
+      const resource = await this.notifications.subjectResource(dto.workspaceId, dto.subjectType, dto.subjectId);
+      await this.permissions.requireLevel(scope, resource, 'view');
+    }
+    return this.notifications.setSubscription(scope, dto.subjectType, dto.subjectId, dto.state);
   }
 
   @Get('preferences')

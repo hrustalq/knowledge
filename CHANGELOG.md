@@ -38,6 +38,9 @@ in the pull request that introduces them — see
   only by those who can approve it.
 - **A memo whose worker died no longer spins forever** (#776). A deploy during transcription stranded it, and the only
   way out was deleting it. After 30 minutes without progress it now fails and can be retried.
+- **Watching a restricted page no longer reveals its title** (#773). A member refused on a page could read its title by
+  subscribing to it, and someone who watched it before it was restricted kept seeing its renames. Watching now takes the
+  page's own refusal, and the subscription list leaves out the title of anything the caller cannot open. Muting still works.
 
 ## [0.45.1] — 2026-11-04
 

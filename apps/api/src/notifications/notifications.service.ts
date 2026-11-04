@@ -24,6 +24,7 @@ import { isDevActor } from '../activity/actor.js';
 import { parseUserMentions } from '../documents/mentions.js';
 import { t } from '../i18n/t.js';
 import { WORKSPACE_READER } from '../auth/principal.js';
+import { canSee, canSeeProject, type AccessScope } from '../permissions/access-scope.js';
 import { whoCanOpen, type AccessResource } from '../permissions/acl-read.js';
 
 /** A row the fan-out wrote, so the caller can push it to exactly one person. */
@@ -623,13 +624,33 @@ export class NotificationsService {
     await this.ensureSubscription(workspaceId, userId, subjectType, subjectId, 'participant');
   }
 
-  async setSubscription(
+  /**
+   * The node a subject's access is decided on, for the controller to check
+   * before someone starts watching it (#773): a merge request is its page.
+   */
+  async subjectResource(
     workspaceId: string,
-    userId: string,
+    subjectType: NotificationSubjectType,
+    subjectId: string,
+  ): Promise<AccessResource> {
+    await this.assertSubjectInWorkspace(workspaceId, subjectType, subjectId);
+    if (subjectType === 'project') return { type: 'project', id: subjectId };
+    if (subjectType === 'document') return { type: 'document', id: subjectId };
+    const mergeRequest = await this.prisma.mergeRequest.findUniqueOrThrow({
+      where: { id: subjectId },
+      select: { documentId: true },
+    });
+    return { type: 'document', id: mergeRequest.documentId };
+  }
+
+  /** Muting or forgetting a subject the caller can no longer open still works; only the answer's title is withheld. */
+  async setSubscription(
+    scope: AccessScope,
     subjectType: NotificationSubjectType,
     subjectId: string,
     state: SubscriptionState,
   ): Promise<ListNotificationSubscriptionsResponse> {
+    const { workspaceId, userId } = scope;
     await this.assertSubjectInWorkspace(workspaceId, subjectType, subjectId);
 
     if (state === 'default') {
@@ -646,7 +667,7 @@ export class NotificationsService {
         create: { ...data, reason: 'manual' },
       });
     }
-    return this.listSubscriptions(workspaceId, userId, { subjectType, subjectId });
+    return this.listSubscriptions(scope, { subjectType, subjectId });
   }
 
   /**
@@ -662,8 +683,7 @@ export class NotificationsService {
    * filtered to one subject to answer "what is this button's state now".
    */
   async listSubscriptions(
-    workspaceId: string,
-    userId: string,
+    scope: AccessScope,
     filter: {
       subjectType?: NotificationSubjectType;
       subjectId?: string;
@@ -671,6 +691,7 @@ export class NotificationsService {
       cursor?: string;
     } = {},
   ): Promise<ListNotificationSubscriptionsResponse> {
+    const { workspaceId, userId } = scope;
     const limit = Math.min(Math.max(filter.limit ?? 50, 1), 200);
     const rows = await this.prisma.notificationSubscription.findMany({
       where: {
@@ -685,7 +706,7 @@ export class NotificationsService {
     });
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
-    const titles = await this.titlesOf(page);
+    const titles = await this.titlesOf(page, scope);
     const subscriptions: NotificationSubscriptionEntry[] = page.map((r) => ({
       id: r.id,
       subjectType: r.subjectType as NotificationSubjectType,
@@ -713,10 +734,13 @@ export class NotificationsService {
    * would cost more than it saves.
    *
    * A subject that no longer exists is simply absent, and the caller renders
-   * the id — the honest thing to show for something that is gone.
+   * the id — the honest thing to show for something that is gone. So is one the
+   * caller cannot open now (#773): a page restricted after they started watching
+   * must not keep telling them its renames.
    */
   private async titlesOf(
     rows: { subjectType: string; subjectId: string }[],
+    scope: AccessScope,
   ): Promise<Map<string, string>> {
     const idsFor = (type: NotificationSubjectType): string[] => [
       ...new Set(rows.filter((r) => r.subjectType === type).map((r) => r.subjectId)),
@@ -729,27 +753,27 @@ export class NotificationsService {
       documentIds.length
         ? this.prisma.document.findMany({
             where: { id: { in: documentIds } },
-            select: { id: true, title: true },
+            select: { id: true, title: true, projectId: true, path: true, restrictedBy: true },
           })
         : [],
       mergeRequestIds.length
         ? this.prisma.mergeRequest.findMany({
             where: { id: { in: mergeRequestIds } },
-            select: { id: true, title: true },
+            select: { id: true, title: true, document: { select: { projectId: true, path: true, restrictedBy: true } } },
           })
         : [],
       projectIds.length
         ? this.prisma.project.findMany({
             where: { id: { in: projectIds } },
-            select: { id: true, name: true },
+            select: { id: true, name: true, restricted: true },
           })
         : [],
     ]);
 
     const titles = new Map<string, string>();
-    for (const d of documents) titles.set(d.id, d.title);
-    for (const m of mergeRequests) titles.set(m.id, m.title);
-    for (const p of projects) titles.set(p.id, p.name);
+    for (const d of documents) if (canSee(scope, d)) titles.set(d.id, d.title);
+    for (const m of mergeRequests) if (canSee(scope, m.document)) titles.set(m.id, m.title);
+    for (const p of projects) if (canSeeProject(scope, p)) titles.set(p.id, p.name);
     return titles;
   }
 

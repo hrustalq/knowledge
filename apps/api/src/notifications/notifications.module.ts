@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { NotificationsCoreModule } from './notifications-core.module.js';
 import { NotificationsController } from './notifications.controller.js';
+import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 
 /**
  * API side: the inbox endpoints on top of NotificationsCoreModule.
@@ -11,7 +12,7 @@ import { NotificationsController } from './notifications.controller.js';
  * ActivityModule / GlossaryModule shape).
  */
 @Module({
-  imports: [NotificationsCoreModule],
+  imports: [NotificationsCoreModule, PermissionsCoreModule],
   controllers: [NotificationsController],
   exports: [NotificationsCoreModule],
 })

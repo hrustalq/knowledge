@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { NotificationsController } from '../src/notifications/notifications.controller.js';
 import { NotificationsService } from '../src/notifications/notifications.service.js';
 
 /**
@@ -135,5 +136,63 @@ describe('mentions under page restrictions', () => {
     expect(result.deliveries.map((d) => d.userId)).toEqual([ALICE]);
     // ACTOR is no member of the workspace: a stranger's id earns no answer.
     expect(result.mentionedWithoutAccess.sort()).toEqual([BOB, DAN].sort());
+  });
+});
+
+describe('subscriptions under page restrictions (#773)', () => {
+  const scope = (denied: string[]) =>
+    ({ workspaceId: WS, userId: DAN, role: 'editor', bypass: false, guest: false, readOnly: false, groupIds: new Set(), denied: new Set(denied), granted: new Set() }) as never;
+  const row = (subjectType: string, subjectId: string) => ({ id: subjectId, subjectType, subjectId, muted: false, reason: 'manual', createdAt: new Date(0) });
+  const MR = '99999999-9999-4999-8999-999999999999';
+  const OTHER = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+
+  function service() {
+    const restricted = { projectId: PROJECT, path: `/${PAGE}/`, restrictedBy: [PAGE] };
+    const prisma = {
+      notificationSubscription: {
+        findMany: vi.fn(async () => [row('document', PAGE), row('merge-request', MR), row('project', OTHER)]),
+        upsert: vi.fn(async () => ({})),
+      },
+      document: { findUnique: vi.fn(async () => ({ workspaceId: WS })), findMany: vi.fn(async () => [{ id: PAGE, title: 'Secret page', ...restricted }]) },
+      mergeRequest: {
+        findMany: vi.fn(async () => [{ id: MR, title: 'Secret change', document: restricted }]),
+        findUnique: vi.fn(async () => ({ document: { workspaceId: WS } })),
+        findUniqueOrThrow: vi.fn(async () => ({ documentId: PAGE })),
+      },
+      project: { findMany: vi.fn(async () => [{ id: OTHER, name: 'Secret project', restricted: true }]) },
+    };
+    return { prisma, svc: new NotificationsService(prisma as never) };
+  }
+
+  it('names a subject only while the caller can open it', async () => {
+    const { svc } = service();
+    const hidden = await svc.listSubscriptions(scope([PAGE, OTHER]));
+    expect(hidden.subscriptions.map((s) => s.title)).toEqual([null, null, null]);
+    expect(hidden.subscriptions.map((s) => s.subjectId)).toEqual([PAGE, MR, OTHER]);
+    const open = await svc.listSubscriptions(scope([]));
+    expect(open.subscriptions.map((s) => s.title)).toEqual(['Secret page', 'Secret change', 'Secret project']);
+  });
+
+  it('still mutes a hidden subject, answering with no title', async () => {
+    const { svc, prisma } = service();
+    const out = await svc.setSubscription(scope([PAGE, OTHER]), 'document', PAGE, 'muted');
+    expect(prisma.notificationSubscription.upsert).toHaveBeenCalled();
+    expect(JSON.stringify(out)).not.toMatch(/Secret/);
+  });
+
+  it('resolves a merge request to its page, the node the refusal is decided on', async () => {
+    const { svc } = service();
+    expect(await svc.subjectResource(WS, 'merge-request', MR)).toEqual({ type: 'document', id: PAGE });
+    expect(await svc.subjectResource(WS, 'document', PAGE)).toEqual({ type: 'document', id: PAGE });
+  });
+
+  it('refuses to start watching what the caller cannot open, and lets them mute it (controller)', async () => {
+    const { svc } = service();
+    const refusal = new Error('refused');
+    const permissions = { scopeFor: vi.fn(async () => scope([PAGE])), requireLevel: vi.fn(async () => { throw refusal; }) };
+    const controller = new NotificationsController(svc, permissions as never);
+    const dto = { workspaceId: WS, subjectType: 'document', subjectId: PAGE } as const;
+    await expect(controller.setSubscription({ ...dto, state: 'watching' } as never, {} as never)).rejects.toBe(refusal);
+    await expect(controller.setSubscription({ ...dto, state: 'muted' } as never, {} as never)).resolves.toBeDefined();
   });
 });

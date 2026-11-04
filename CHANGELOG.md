@@ -30,6 +30,8 @@ in the pull request that introduces them — see
   review whenever a webhook fired. Webhook runs now stage their items and wait, like a manual run.
 - **A webhook naming one page syncs only that page** (#765). On a connector with a page tree it also listed the whole
   source, staged every other page and warned about orphans that did not exist.
+- **A web source's retry stops when its page is archived or gone** (#766). A retry left pending after that queued a new
+  run with no delay after every run, forever, which could make Sync now answer 409.
 
 ## [0.45.1] — 2026-11-04
 

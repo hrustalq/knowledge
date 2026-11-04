@@ -113,12 +113,17 @@ describe('WebAdapter', () => {
 describe('WebSourcesService.fetchFailed', () => {
   function harness(link: Record<string, unknown>) {
     const state = { ...link };
+    const page = { archivedAt: null as Date | null };
     const calls = { archived: [] as string[], flagged: [] as string[], alerts: [] as string[] };
     const prisma = {
       connectorLink: {
         update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => Object.assign(state, data)),
+        findMany: vi.fn(async () => (state.retryAt ? [{ externalId: URL_MD, retryAt: state.retryAt, documentId: 'd1' }] : [])),
       },
-      document: { findUnique: vi.fn(async () => ({ title: 'Guide', archivedAt: null })) },
+      document: {
+        findUnique: vi.fn(async () => ({ title: 'Guide', archivedAt: page.archivedAt })),
+        findMany: vi.fn(async () => (page.archivedAt ? [] : [{ id: 'd1' }])),
+      },
       pageLink: { findMany: vi.fn(async () => [{ sourceDocumentId: 'dep1' }, { sourceDocumentId: 'dep2' }]) },
     };
     const verification = {
@@ -135,21 +140,24 @@ describe('WebSourcesService.fetchFailed', () => {
     // Held on the first unsupported body, already held after (phase 2).
     let held = false;
     const recipes = { unsupported: vi.fn(async () => !held && (held = true)) };
+    const connectors = { createRun: vi.fn(async () => ({ id: 'run2' })) };
+    const producer = { enqueue: vi.fn(async () => undefined) };
     const service = new WebSourcesService(
       prisma as never,
       {} as never,
-      {} as never,
+      connectors as never,
       {} as never,
       {} as never,
       verification as never,
       notifications as never,
       events as never,
-      {} as never,
+      producer as never,
       recipes as never,
     );
     const row = { id: 'c1', workspaceId: 'w1', createdBy: 'owner', config: { url: URL_MD } };
     const fail = (err: unknown) => service.fetchFailed(row as never, { id: 'l1', documentId: 'd1', ...state } as never, err);
-    return { state, calls, fail };
+    const link_ = () => ({ id: 'l1', documentId: 'd1', ...state }) as never;
+    return { state, calls, fail, page, service, row, connectors, link: link_ };
   }
   const base = { failures: 0, goneCount: 0, retryAttempt: 0, retryAt: null };
 
@@ -191,6 +199,33 @@ describe('WebSourcesService.fetchFailed', () => {
     const { calls, fail } = harness({ ...base, failures: 2 });
     await fail(new ConnectorRequestError(400, URL_MD, ''));
     expect(calls.alerts).toEqual(['failing']);
+  });
+
+  it('a 503 then an archive queues no further retry, and clears the pending one (#766)', async () => {
+    const { state, fail, page, service, row, connectors, link } = harness(base);
+    await fail(new ConnectorRequestError(503, URL_MD, ''));
+    expect(state.retryAt).toBeInstanceOf(Date);
+    await service.afterRun(row as never, {} as never);
+    expect(connectors.createRun).toHaveBeenCalledTimes(1);
+
+    page.archivedAt = new Date();
+    await service.afterRun(row as never, {} as never);
+    expect(connectors.createRun).toHaveBeenCalledTimes(1);
+    await service.cancelRetry(link());
+    expect(state).toMatchObject({ retryAttempt: 0, retryAt: null });
+  });
+
+  it('a 503 then three 404s archives with no retry left, and queues nothing (#766)', async () => {
+    const { state, calls, fail, service, row, connectors } = harness(base);
+    await fail(new ConnectorRequestError(503, URL_MD, ''));
+    const gone = new ConnectorRequestError(404, URL_MD, '');
+    for (let i = 0; i < 3; i += 1) {
+      await fail(gone);
+      expect(state).toMatchObject({ retryAttempt: 0, retryAt: null });
+      await service.afterRun(row as never, {} as never);
+    }
+    expect(calls.archived).toEqual(['d1']);
+    expect(connectors.createRun).not.toHaveBeenCalled();
   });
 
   it('holds an unsupported body for recipe review instead of failing, alerting once', async () => {

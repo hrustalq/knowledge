@@ -93,6 +93,7 @@ export class ConnectorStagingService {
     const web = row.kind === 'web' ? link : null;
     // A source-backed page that was deleted or archived is not re-created or written (#674).
     if (web && !(await this.prisma.document.findFirst({ where: { id: web.documentId, archivedAt: null }, select: { id: true } }))) {
+      await this.webSources.cancelRetry(web);
       return this.markUnchanged(item, web);
     }
     // Read before either skip (#76): who may open a page can change upstream

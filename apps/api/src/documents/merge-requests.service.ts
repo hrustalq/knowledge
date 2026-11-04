@@ -887,8 +887,17 @@ export class MergeRequestsService {
     if (flipped.count === 0) {
       throw new ConflictException(t('error.mergeRequest.concurrentChange', { id: mr.id }));
     }
+    // A page landed on its default branch is listed whichever request landed it:
+    // it can still name an earlier one that was closed (#771).
+    const target = mr.targetBranch.name;
     await this.prisma.document.updateMany({
-      where: { id: { in: documentIds }, pendingMergeRequestId: mr.id },
+      where: {
+        id: { in: documentIds },
+        OR: [
+          { pendingMergeRequestId: mr.id },
+          { pendingMergeRequestId: { not: null }, defaultBranch: target, branches: { some: { name: target, headRevisionId: { not: null } } } },
+        ],
+      },
       data: { pendingMergeRequestId: null },
     });
   }

@@ -460,6 +460,29 @@ describe('git remote (e2e, #636)', () => {
     await git(['checkout', '-q', 'main'], dir);
   });
 
+  it('a page behind a closed merge request stays hidden, and is listed once a later one lands it (#771)', async () => {
+    const dir = join(work, 'alice-w');
+    await git(['checkout', '-q', '-b', 'second-try'], dir);
+    writeFileSync(join(dir, 'second-try.md'), '# Second try\n\nWritten once.\n');
+    await git(['add', '.'], dir);
+    await git(['commit', '-qm', 'Add it'], dir);
+    const first = mrIdIn(await gitAll(['push', 'origin', 'HEAD:second-try'], dir))!;
+    const created = await prisma.document.findFirstOrThrow({ where: { projectId, title: 'Second try' } });
+    await http().post(`/v1/merge-requests/${first}/close`).set(as(people.alice.key)).expect(ok(201));
+    expect((await prisma.document.findUniqueOrThrow({ where: { id: created.id } })).pendingMergeRequestId).toBe(first);
+
+    edit(dir, 'second-try.md', (x) => x.replace('Written once.', 'Written twice.'));
+    await git(['commit', '-qam', 'Again'], dir);
+    const second = mrIdIn(await gitAll(['push', '-o', 'merge_request.create', 'origin', 'HEAD:second-try'], dir))!;
+    expect(second).not.toBe(first);
+    expect((await approveAndMerge(second)).status).toBe(201);
+    expect((await prisma.document.findUniqueOrThrow({ where: { id: created.id } })).pendingMergeRequestId).toBeNull();
+    const listed = await http().get('/v1/documents').query({ workspaceId: WORKSPACE, projectId }).set(as(people.alice.key)).expect(ok(200));
+    expect(JSON.stringify(listed.body)).toContain(created.id);
+    await git(['checkout', '-q', 'main'], dir);
+    await git(['pull', '-q', '--ff-only', 'origin', 'main'], dir);
+  });
+
   it('opens a merge request over MCP by project and branch name, and lists the branch', async () => {
     const mcp = (name: string, args: Record<string, unknown>) =>
       http()

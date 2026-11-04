@@ -69,12 +69,17 @@ in the pull request that introduces them — see
   may open. A thread is now visible only to its asker, and to anyone else it reads as not found.
 - **A push that adds a page and then edits it lands** (#768). Adding a page and fixing it in a later commit before
   pushing failed with a 404 and nothing landed.
+- **A page behind a closed merge request appears once a later one lands it** (#771). It stayed out of every list, search
+  and tree for good, with its content on the default branch. A page whose only merge request was closed stays hidden.
 
 ### Operations
 
 - Migration `20261231120000_answer_signal_no_message` (#754) splits each answer signal holding a vote into a signal and a
   vote, and clears the message id on every signal. It survives a code rollback: the previous image reads these rows as it
   always did, with no schema change.
+- Migration `20261231130000_unhide_pages_landed_past_closed_mr` (#771) lists pages stuck behind a closed merge request
+  that have a default-branch head. It runs against the previous image, which reads the column the same way. A rollback
+  does not hide them again.
 
 ## [0.45.1] — 2026-11-04
 

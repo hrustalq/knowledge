@@ -7,6 +7,12 @@ import { findSecret } from '../src/common/secret-scan.js';
 import { parseMarkdown } from '../src/common/frontmatter.js';
 import type { Principal } from '../src/auth/principal.js';
 
+// i18n is not booted here, so `t` returns the key. Marking Russian lets a case see which language was asked for.
+vi.mock('../src/i18n/t.js', async (actual) => {
+  const real = await actual<typeof import('../src/i18n/t.js')>();
+  return { ...real, t: (key: string, args?: Record<string, unknown>, lang?: string) => (lang === 'ru' ? `ru:${key}` : real.t(key, args, lang as never)) };
+});
+
 /**
  * Agent-session captures (issue #73, phase 2). Pinned: a novel capture opens a
  * merge request with provenance `captured` and publishes nothing; the same
@@ -218,6 +224,7 @@ describe('a novel capture', () => {
     expect(h.documents.createDocument).toHaveBeenCalledWith(
       { workspaceId: WS, projectId: PROJECT, title: 'Fuse vector and BM25 with RRF', category: 'architecture' },
       'u-1',
+      { headless: true },
     );
     expect(h.documents.createBranch).toHaveBeenCalledWith('doc-new', { name: expect.stringMatching(/^capture\/cap-0000/) });
     expect(h.mergeRequests.create).toHaveBeenCalledWith('doc-new', expect.any(Object), 'u-1', {
@@ -281,12 +288,72 @@ describe('against what already exists', () => {
     expect(page.data).toMatchObject({ tags: ['search'], captured: [expect.objectContaining({ kind: 'decision' })] });
   });
 
+  it('does not list the amended page among its own related pages, and keeps the others in order (#740)', async () => {
+    const h = harness({ similar: [{ documentId: PAGE, title: 'Search', score: 0.86 }] });
+    const [a, b] = ['aaaaaaaa-0000-4000-8000-000000000001', 'bbbbbbbb-0000-4000-8000-000000000002'];
+    await h.svc.capture(decision({ relatedDocumentIds: [b, PAGE, a] }), principal());
+
+    const [page] = h.written();
+    expect(page.body).not.toContain(`/documents/${PAGE}`);
+    expect(page.body.indexOf(`/documents/${b}`)).toBeGreaterThan(-1);
+    expect(page.body.indexOf(`/documents/${b}`)).toBeLessThan(page.body.indexOf(`/documents/${a}`));
+  });
+
+  it('drops the related section when the amended page was the only one (#740)', async () => {
+    const h = harness({ similar: [{ documentId: PAGE, title: 'Search', score: 0.86 }] });
+    await h.svc.capture(decision({ relatedDocumentIds: [PAGE] }), principal());
+    expect(h.written()[0].body).not.toContain('capture.heading.related');
+  });
+
   it('starts a page of its own when the close page is one its writer cannot edit', async () => {
     const h = harness({ similar: [{ documentId: PAGE, title: 'Search', score: 0.86 }] });
     (h.svc as unknown as { permissions: { requireResource: ReturnType<typeof vi.fn> } }).permissions.requireResource.mockRejectedValue(
       new Error('no edit'),
     );
     expect((await h.svc.capture(decision(), principal())).outcome).toBe('new-page');
+  });
+
+  describe("the page's language, not the writer's (#739)", () => {
+    const ruWriter = (): Principal => ({ ...principal(), locale: 'ru' });
+    const close = [{ documentId: PAGE, title: 'Search', score: 0.86 }];
+
+    it('heads a Russian writer\'s section on an English page in English, and still speaks Russian to the reviewer', async () => {
+      const h = harness({ similar: close });
+      await h.svc.capture(decision(), ruWriter());
+      const body = h.written()[0].body;
+      expect(body).toContain('## capture.heading.captured');
+      expect(body).toContain('### capture.heading.context');
+      expect(body).not.toContain('ru:');
+      expect(h.mergeRequests.create).toHaveBeenCalledWith(PAGE, expect.objectContaining({ title: expect.stringContaining('ru:capture.mergeRequest.title') }), 'u-1', expect.anything());
+    });
+
+    it('heads a Russian writer\'s section on a Russian page in Russian', async () => {
+      const h = harness({ similar: close, getContent: async () => ({ markdown: '# Поиск\n\nКак работает поиск.\n', frontmatter: {} }) });
+      await h.svc.capture(decision(), ruWriter());
+      expect(h.written()[0].body).toContain('### ru:capture.heading.context');
+    });
+
+    it('heads an English writer\'s section on a Russian page in Russian', async () => {
+      const h = harness({ similar: close, getContent: async () => ({ markdown: 'Как работает поиск.\n', frontmatter: {} }) });
+      await h.svc.capture(decision(), principal());
+      expect(h.written()[0].body).toContain('## ru:capture.heading.captured');
+    });
+
+    it('heads a new page in the language the capture is written in', async () => {
+      const en = harness();
+      await en.svc.capture(decision(), ruWriter());
+      expect(en.written()[0].body).toContain('## capture.heading.context');
+
+      const ru = harness();
+      await ru.svc.capture(decision({ title: 'Объединять выдачу через RRF', context: 'Оценки несравнимы.', decision: 'Берём RRF.' }), principal());
+      expect(ru.written()[0].body).toContain('## ru:capture.heading.context');
+    });
+
+    it('falls back to the capture, then the writer, on a page with no letters', async () => {
+      const h = harness({ similar: close, getContent: async () => ({ markdown: '', frontmatter: {} }) });
+      await h.svc.capture(decision(), ruWriter());
+      expect(h.written()[0].body).toContain('### capture.heading.context');
+    });
   });
 
   it('proposes nothing when a page above the duplicate threshold already says it under that title', async () => {

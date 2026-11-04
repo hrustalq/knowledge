@@ -362,6 +362,21 @@ have their fused score multiplied by `trustWeight(status, inactive)`
 inactive ×0.9), re-sorted, and only then cut to `k`. Multiplicative so the same
 factor serves RRF, cosine-only and max-normalized BM25 scores.
 
+A boost above 1 is for near-ties (#742). RRF packs a leg's first ten ranks into
+14% of each other, so ×1.15 used to lift a verified page over a far stronger
+match on an edited one. A hit gets it only with a cosine within
+`TRUST_BOOST_COSINE_SHARE` (0.95) of the best hit's, and a text-only hit gets it
+only when no vector leg ran. A weight below 1 always applies.
+
+A question asking what a term is ("what is a Source?", «что такое источник?»)
+also multiplies the chunk defining that term by `DEFINITION_BOOST` (2):
+`definitionMatcher` takes a section headed with the term, or a line opening with
+it in bold or before a dash. A long glossary chunk tends to rank badly in BM25
+next to short chunks that merely say the word, and two-leg hits score about twice
+one leg's first place, so no trust setting could lift it alone. This is not a
+trust effect, so `trustRanking: false` keeps it. `rerankScorer` is the one
+function that applies all of this, for `SearchService` and for `rankPool` alike.
+
 The fusion constant, the relevance floor and the weights are per-workspace
 knobs (#305, #401): `rrfK`, `minCosine`, `minCosineShare` and `trustWeights`
 on `knowledge_health_settings`, sparse over `SEARCH_RRF_K` (60),

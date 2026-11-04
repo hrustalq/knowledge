@@ -219,7 +219,7 @@ If a write is rejected with a conflict, the branch moved under you: re-read the 
 and retry. Never retry blindly with a stale \`baseRevisionId\`.
 
 A branch belongs to its project, not to one page: the same branch name on several pages is one branch, and its merge
-request carries every page it changed. ${toolRef('knowledge_list_branches')} lists a project's branches with their pages;
+request carries every page it changed. ${toolRef('knowledge_list_branches')} lists a project's branches with their pages, a page at a time (\`name\` finds one, \`openOnly\` keeps those with an open merge request);
 ${toolRef('knowledge_create_merge_request')} with \`projectId\` and \`sourceBranch\` opens one merge request for all of them.
 
 ### Review merge requests
@@ -272,7 +272,8 @@ ${
         canWrite
           ? `
 - \`git push -o merge_request.create -o merge_request.title="…" origin HEAD:<branch>\` writes one revision per changed
-  page and opens a merge request carrying all of them; the remote prints its link. Pushing the branch again updates it.
+  page and opens a merge request carrying all of them; the remote prints its link. Pushing the branch again updates it while it is open. Once it has merged, a further push
+  reaches no merge request, and the remote says so: push again with \`-o merge_request.create\` to open a new one.
 - A new file is a new page, \`git mv\` moves or renames one, \`git rm\` archives one. Each lands when the merge request
   merges; a new file pushed to a branch opens a draft merge request by itself.
 - History is append-only: a force push is refused. On "fetch first", \`git pull\`, resolve, and push again. That is also

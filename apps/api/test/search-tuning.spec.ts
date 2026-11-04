@@ -75,6 +75,7 @@ function replay(query: string, expected: 'a' | 'b', a: number, b: number): Repla
   const hit = (documentId: string, score: number) => ({ documentId, chunkId: documentId, revisionId: 'r', text: '', headingPath: [], score });
   const page = (status: SourceVerificationState) => ({ status, inactive: false, archived: false });
   const pool: SearchPool = {
+    query,
     vectorHits: [hit('a', a), hit('b', b)].sort((x, y) => y.score - x.score),
     textHits: [],
     communities: [],
@@ -91,24 +92,25 @@ function replay(query: string, expected: 'a' | 'b', a: number, b: number): Repla
 }
 
 describe('tuneSearch', () => {
-  // Train: `a` should win, but the verified boost (0.5 × 1.15 > 0.56) puts `b`
-  // first — a `verified` weight under 1.12 fixes it, and 1.10 is the nearest.
-  const train = queries(false, 3).map((q) => replay(q, 'a', 0.56, 0.5));
+  // Train: `a` should win, but `b` is close enough to earn the verified boost
+  // (#742) and 0.5 × 1.15 > 0.52 puts it first. A `verified` weight under 1.04
+  // fixes it, and 1.00 is the nearest on the grid.
+  const train = queries(false, 3).map((q) => replay(q, 'a', 0.52, 0.5));
 
   it('proposes the smallest move that fixes the train split when the holdout agrees', () => {
-    const holdout = queries(true, 2).map((q) => replay(q, 'a', 0.56, 0.5));
+    const holdout = queries(true, 2).map((q) => replay(q, 'a', 0.52, 0.5));
     const t = tuneSearch([...train, ...holdout], [], CURRENT, 10);
     expect(t.proposal).not.toBeNull();
-    expect(t.proposal!.trustWeights.verified).toBeCloseTo(1.1);
+    expect(t.proposal!.trustWeights.verified).toBeCloseTo(1);
     expect(t.proposal!.rrfK).toBe(SEARCH_RRF_K);
     expect(t.feedback.holdout.candidate.mrr).toBeGreaterThan(t.feedback.holdout.current.mrr);
   });
 
   it('proposes nothing when the holdout regresses', () => {
-    // Holdout: `b` should win and only does while verified > 1.14.
-    const holdout = queries(true, 2).map((q) => replay(q, 'b', 0.57, 0.5));
+    // Holdout: the same scores, but `b` should win, and only does while the boost stands.
+    const holdout = queries(true, 2).map((q) => replay(q, 'b', 0.52, 0.5));
     const t = tuneSearch([...train, ...holdout], [], CURRENT, 10);
-    expect(t.candidate.trustWeights.verified).toBeLessThan(1.12);
+    expect(t.candidate.trustWeights.verified).toBeLessThan(1.04);
     expect(t.proposal).toBeNull();
     expect(t.reason).toMatch(/holdout MRR/);
   });
@@ -124,6 +126,7 @@ describe('tuneSearch', () => {
       (query): Replay => ({
         case: { workspaceId: 'ws', query, expectedDocumentIds: ['a'], rejectedDocumentIds: [] } as unknown as FeedbackBacktestCase,
         pool: {
+          query,
           vectorHits: [hit('c', 0.9), hit('b', 0.5)],
           textHits: [hit('a', 9), hit('b', 8)],
           fetchK: 20,

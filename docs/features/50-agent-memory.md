@@ -150,8 +150,12 @@ called anywhere on the path.
    `{ captureId, status, outcome, mergeRequestId?, webUrl, similar[] }`.
 
 The page text comes from a fixed template per kind (`capture-templates.ts`),
-headed in the writer's language. Workspaces have no locale, so the language is
-`principal.locale`. New pages get a category per kind: decision →
+headed in the language of the text around it, whatever the writer's UI language
+is (#739). Workspaces and projects store no language, so `textLocale` reads it:
+from the page being amended, else from the capture's own title and text, else
+`principal.locale` when neither has letters. The merge request's title and
+description are for its reviewer and stay in `principal.locale`. New pages get
+a category per kind: decision →
 architecture, gotcha and how-to → guide, convention → process, answer →
 reference. Every captured revision appends to a `captured:` frontmatter list
 `{ id, kind, client, sessionId, repo, commit, at }`, which records where the

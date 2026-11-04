@@ -129,7 +129,7 @@ import { contentLines } from '../documents/content-lines.js';
  * Bumped by hand at every release, with swagger.ts (docs/versioning.md#known-drift).
  * Named because the connection page and the skill report it too.
  */
-export const MCP_SERVER_VERSION = '0.45.0';
+export const MCP_SERVER_VERSION = '0.45.1';
 
 /**
  * MCP tools (plan.md §9). Tool names use underscores (MCP tool names must
@@ -1948,14 +1948,23 @@ export class McpService {
         description:
           "List a project's branches (#636): each with the pages it changed that you can open, who wrote it last and when, " +
           'and its open merge request. The default branch is left out. A branch is the project\'s: the same name on any page ' +
-          'of the project is one branch, and one merge request carries all of it.',
-        inputSchema: { projectId: z.string().uuid() },
+          'of the project is one branch, and one merge request carries all of it. Newest first and paginated, because merged ' +
+          'branches stay: pass name to find one (a new page\'s id after a push), openOnly for those with an open merge request.',
+        inputSchema: {
+          projectId: z.string().uuid(),
+          name: z.string().min(1).optional().describe('Case-insensitive branch name substring'),
+          openOnly: z.boolean().optional().describe('Only branches with an open merge request'),
+          cursor: z.string().regex(/^\d+$/).optional().describe('nextCursor from the previous page'),
+          limit: z.number().int().min(1).max(100).optional().describe('Default 25'),
+        },
       },
-      async ({ projectId }) => {
+      async ({ projectId, name, openOnly, cursor, limit = 25 }) => {
         await guard.project(projectId, 'viewer');
-        return this.json(
-          await this.mergeRequests.projectBranches(projectId, await guard.scope(await this.access.workspaceOfProject(projectId))),
-        );
+        const scope = await guard.scope(await this.access.workspaceOfProject(projectId));
+        const { branches } = await this.mergeRequests.projectBranches(projectId, scope, { name, openOnly });
+        const from = Number(cursor ?? 0);
+        const end = from + limit;
+        return this.json({ projectId, branches: branches.slice(from, end), nextCursor: end < branches.length ? String(end) : null });
       },
     );
 

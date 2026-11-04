@@ -777,7 +777,8 @@ export const CURATION_DOCUMENT_ACTIONS: ReadonlySet<string> = new Set([
  * BM25 scores alike. The numbers are guesses to be tuned with `make backtest`;
  * they are exported constants so tuning them needs no migration. A verified
  * page must not beat a clearly more relevant unverified one, which bounds the
- * top factor near 1.
+ * top factor near 1, and `TRUST_BOOST_COSINE_SHARE` withholds it from a clearly
+ * weaker match (#742).
  */
 export type TrustWeights = Readonly<Record<SourceVerificationState | 'inactive', number>>;
 

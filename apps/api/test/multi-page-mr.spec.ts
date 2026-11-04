@@ -27,7 +27,7 @@ const branch = (documentId: string, name: string, head: string | null, extra: Re
 const P = (two: string, five = 'five') => `one\n${two}\nthree\nfour\n${five}\n`;
 const BODIES: Record<string, string> = { 'a-src': 'a\n', 'a-main': 'a\n', 'b-old': P('two'), 'b-main': P('TWO') };
 
-function fixture(over: { mergeBaseOfB?: string; denyB?: boolean; bSource?: string } = {}) {
+function fixture(over: { mergeBaseOfB?: string; denyB?: boolean; bSource?: string; staging?: boolean } = {}) {
   const bodies = { ...BODIES, 'b-src': over.bSource ?? P('two', 'FIVE') };
   const source = [branch(A, 'fix', 'a-src'), branch(B, 'fix', 'b-src')];
   const target = [branch(A, 'main', 'a-main'), branch(B, 'main', 'b-main')];
@@ -50,14 +50,22 @@ function fixture(over: { mergeBaseOfB?: string; denyB?: boolean; bSource?: strin
     },
     documentRevision: {
       findUniqueOrThrow: vi.fn(async ({ where }: { where: { id: string } }) => ({ s3Key: where.id, contentType: 'text/markdown' })),
+      deleteMany: vi.fn(async () => ({ count: 0 })),
     },
+    revisionParent: { create: vi.fn(async () => ({})), deleteMany: vi.fn(async () => ({ count: 0 })) },
+    // `staging` stops a merge once its drafts are staged, where the transaction would open.
+    withTransaction: vi.fn(async () => {
+      throw new Error('staged');
+    }),
     document: {
       findUniqueOrThrow: vi.fn(async () => ({ workspaceId: WS, projectId: PROJECT })),
       findMany: vi.fn(async () => {
+        if (over.staging) return [];
         throw new Error('past the gates');
       }),
     },
   };
+  const documents = { createRevision: vi.fn(async () => ({ revisionId: 'staged' })) };
   const compare = {
     findMergeBase: vi.fn(async (doc: string) => (doc === A ? 'a-main' : (over.mergeBaseOfB ?? 'b-main'))),
   };
@@ -71,8 +79,8 @@ function fixture(over: { mergeBaseOfB?: string; denyB?: boolean; bSource?: strin
   const lint = { gate: vi.fn(async () => ({ blocked: false })) };
   const service = new MergeRequestsService(
     prisma as never,
-    { getObjectText: async (key: string) => bodies[key] } as never,
-    {} as never, // documents
+    { getObjectText: async (key: string) => bodies[key], putObjectText: async () => undefined } as never,
+    documents as never,
     compare as never,
     {} as never, // activity
     {} as never, // access
@@ -84,7 +92,7 @@ function fixture(over: { mergeBaseOfB?: string; denyB?: boolean; bSource?: strin
     {} as never, // entities
     lint as never,
   );
-  return { service, permissions };
+  return { service, permissions, documents };
 }
 
 describe('multi-page merge requests', () => {
@@ -134,6 +142,20 @@ describe('multi-page merge requests', () => {
     expect(await refusal([{ documentId: B, targetHeadRevisionId: 'b-main', content: '<<<<<<< main\nx\n=======\ny\n>>>>>>> fix\n' }])).toMatchObject({
       message: 'error.mergeRequest.markersLeft',
     });
+  });
+
+  it('stages a merge as the person merging, on every page, so provenance names them (#738)', async () => {
+    const f = fixture({ staging: true, mergeBaseOfB: 'b-old' });
+    await expect(f.service.merge(MR, 'squash', USER)).rejects.toThrow('staged');
+    expect(f.documents.createRevision).toHaveBeenCalledTimes(2);
+    for (const call of f.documents.createRevision.mock.calls as unknown[][]) expect(call[3]).toBe('dddddddd-dddd-4ddd-8ddd-dddddddddddd');
+  });
+
+  it('stages a branch update as the person updating it (#738)', async () => {
+    const f = fixture({ mergeBaseOfB: 'b-old' });
+    await expect(f.service.updateBranch(MR, {}, USER)).rejects.toThrow('staged');
+    const [call] = f.documents.createRevision.mock.calls as unknown[][];
+    expect(call[3]).toBe('dddddddd-dddd-4ddd-8ddd-dddddddddddd');
   });
 
   it('needs edit on every page, not only the one the guard checked', async () => {

@@ -404,6 +404,54 @@ async function connect(mcp: McpService, principal: Principal, extras: McpExtras 
   return client;
 }
 
+describe('list tools that fit a tool result (#743)', () => {
+  const body = (res: unknown) => JSON.parse((res as { content: { text: string }[] }).content[0].text);
+  const reader = () => keyPrincipal({ id: 'k', scope: 'read', workspaceId: null });
+  const branches = Array.from({ length: 80 }, (_, i) => ({ projectBranchId: `pb-${i}`, name: `b-${i}`, pages: [], updatedAt: 'x', updatedBy: 'u', openMergeRequest: null }));
+
+  function listing() {
+    const access = accessWith('viewer');
+    Object.assign(access, { workspaceOfProject: async () => WS_A });
+    const built = service(access);
+    const projectBranches = vi.fn(async () => ({ projectId: 'p', branches }));
+    Object.assign(built.mcp as unknown as { mergeRequests: object }, { mergeRequests: { projectBranches } });
+    return { ...built, projectBranches };
+  }
+  const list = (client: Client, args: object) =>
+    client.callTool({ name: 'knowledge_list_branches', arguments: { projectId: '22222222-2222-4222-8222-222222222222', ...args } });
+
+  it('pages branches: 25 by default, and the cursor walks the rest without a repeat', async () => {
+    const { mcp } = listing();
+    const client = await connect(mcp, reader());
+    const first = body(await list(client, {}));
+    expect(first.branches).toHaveLength(25);
+    expect(first.nextCursor).toBe('25');
+    const second = body(await list(client, { cursor: first.nextCursor, limit: 60 }));
+    expect(second.branches).toHaveLength(55);
+    expect(second.branches[0].name).toBe('b-25');
+    expect(second.nextCursor).toBeNull();
+  });
+
+  it('hands the name and open-only filters to the service', async () => {
+    const { mcp, projectBranches } = listing();
+    await list(await connect(mcp, reader()), { name: 'capture/', openOnly: true });
+    expect(projectBranches).toHaveBeenCalledWith(expect.any(String), expect.anything(), { name: 'capture/', openOnly: true });
+  });
+
+  it('leaves full payloads out of a capture list unless asked', async () => {
+    const { mcp, captures } = service(accessWith('viewer'));
+    const row = { captureId: 'c-1', title: 'T', state: 'proposed', payload: { decision: 'x'.repeat(4_000) } };
+    captures.list.mockResolvedValue({ captures: Array.from({ length: 30 }, () => row), nextCursor: null } as never);
+    const client = await connect(mcp, reader());
+    const call = (args: object) => client.callTool({ name: 'knowledge_list_captures', arguments: { workspaceId: WS_A, ...args } });
+
+    const summary = body(await call({}));
+    expect(summary.captures).toHaveLength(30);
+    expect(summary.captures[0]).toEqual({ captureId: 'c-1', title: 'T', state: 'proposed' });
+    expect(body(await call({ includePayload: true })).captures[0].payload).toEqual(row.payload);
+  });
+});
+
 describe('McpService over a principal', () => {
   it('names only tools that exist in WRITE_TOOLS and CAPTURE_TOOLS', () => {
     const { mcp } = service(accessWith('admin'));

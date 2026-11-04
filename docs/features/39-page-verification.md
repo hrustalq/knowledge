@@ -178,7 +178,9 @@ activity clock and the archive mark along with the title, derives each hit's
 status, and then:
 
 1. drops archived pages (unless `filters.includeArchived`);
-2. multiplies the fused score by `trustWeight(status, inactive)`;
+2. multiplies the fused score by `trustWeight(status, inactive)`, withholding a
+   boost above 1 from a hit whose cosine is under 95% of the best hit's, so a
+   verified page cannot outrank a clearly stronger match (#742);
 3. re-sorts, and only then cuts to `k`.
 
 The weights are exported constants (`TRUST_WEIGHTS`), guesses to be tuned with

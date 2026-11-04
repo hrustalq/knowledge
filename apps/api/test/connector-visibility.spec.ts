@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { PermissionService } from '../src/permissions/permission.service.js';
 import { AccessService } from '../src/auth/access.service.js';
+import { NotFoundException } from '@nestjs/common';
 import { ConnectorsService } from '../src/connectors/connectors.service.js';
+import { ConnectorItemsService } from '../src/connectors/connector-items.service.js';
 import type { Principal } from '../src/auth/principal.js';
 import { noAuthPolicy } from './auth-policy-fakes.js';
 
@@ -118,5 +120,75 @@ describe('connector visibility (#555)', () => {
     const { service, prisma } = permissionsAs('viewer', false);
     await service.requireConnectorVisible({ ...bob, mode: 'dev' }, { connectorId: 'c2' });
     expect(prisma.connector.findUnique).not.toHaveBeenCalled();
+  });
+});
+
+/** #767: a run item is read under the page it writes, not just the connector's project. */
+describe('staged run items', () => {
+  const page = { id: 'p1', projectId: 'pa', path: '/p1/', restrictedBy: ['p1'] };
+  const item = (over: Record<string, unknown>) => ({
+    id: 'i1',
+    runId: 'r1',
+    title: 'Secret plan',
+    externalId: 'docs/secret-plan.md',
+    externalUrl: 'https://x.test/secret-plan',
+    documentId: 'p1',
+    stagedKey: 'staged',
+    incomingKey: null,
+    action: 'update',
+    status: 'staged',
+    acl: null,
+    draft: null,
+    error: null,
+    updatedAt: new Date(0),
+    ...over,
+  });
+  const scope = (over: Record<string, unknown> = {}) =>
+    ({ userId: 'u', role: 'viewer', bypass: false, guest: false, readOnly: false, groupIds: new Set(), workspaceId: WS, denied: new Set(['p1']), granted: new Set(), ...over }) as never;
+
+  function service(rows: ReturnType<typeof item>[]) {
+    const prisma = {
+      document: { findMany: vi.fn(async () => [page]), findUnique: vi.fn(async () => null) },
+      connectorRun: { findUnique: vi.fn(async () => ({ id: 'r1', warnings: null })) },
+      connectorRunItem: { findMany: vi.fn(async () => rows), findUnique: vi.fn(async () => rows[0]) },
+    };
+    const refusal = new Error('refused');
+    const permissions = { requireLevel: vi.fn(async () => { throw refusal; }) };
+    const documents = { getContent: vi.fn(async () => ({ markdown: 'current text' })) };
+    const storage = { getObjectText: vi.fn(async () => 'staged text') };
+    const svc = new ConnectorItemsService(prisma as never, documents as never, storage as never, {} as never, {} as never, {} as never, permissions as never);
+    return { svc, documents, storage, permissions, refusal };
+  }
+
+  it('refuses a page the caller cannot open, reading no text', async () => {
+    const { svc, documents, storage, refusal } = service([item({})]);
+    await expect(svc.getItem('r1', 'i1', scope())).rejects.toBe(refusal);
+    expect(documents.getContent).not.toHaveBeenCalled();
+    expect(storage.getObjectText).not.toHaveBeenCalled();
+  });
+
+  it('lists such an item with nothing of the page in it', async () => {
+    const { svc } = service([item({})]);
+    const { items } = await svc.listItems('r1', scope());
+    expect(JSON.stringify(items)).not.toMatch(/secret/i);
+    expect(items[0]).toMatchObject({ id: 'i1', status: 'staged', documentId: null });
+  });
+
+  it('shows the page to someone who can open it, and to an admin', async () => {
+    for (const who of [scope({ denied: new Set() }), scope({ bypass: true })]) {
+      const { svc } = service([item({})]);
+      expect((await svc.getItem('r1', 'i1', who)).markdown).toBe('staged text');
+      expect((await svc.listItems('r1', who)).items[0]).toMatchObject({ title: 'Secret plan', documentId: 'p1' });
+    }
+  });
+
+  it('keeps a new page with a mirrored ACL from a viewer, not from who can approve it', async () => {
+    const newPage = item({ documentId: null, action: 'create', acl: { kind: 'audience' } });
+    const { svc } = service([newPage]);
+    await expect(svc.getItem('r1', 'i1', scope())).rejects.toBeInstanceOf(NotFoundException);
+    expect((await svc.listItems('r1', scope())).items[0].title).not.toMatch(/secret/i);
+    expect((await svc.getItem('r1', 'i1', scope({ role: 'editor' }))).markdown).toBe('staged text');
+    const open = service([item({ documentId: null, action: 'create' })]);
+    expect((await open.svc.getItem('r1', 'i1', scope())).markdown).toBe('staged text');
   });
 });

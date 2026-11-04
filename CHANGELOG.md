@@ -32,6 +32,10 @@ in the pull request that introduces them — see
   source, staged every other page and warned about orphans that did not exist.
 - **A web source's retry stops when its page is archived or gone** (#766). A retry left pending after that queued a new
   run with no delay after every run, forever, which could make Sync now answer 409.
+- **A staged sync item no longer shows a restricted page to someone who cannot open it** (#767). A viewer of the
+  connector's project could read the page's text, staged and current, by opening the run item. Such an item now refuses
+  like the page does, and a run's tree lists it as "Restricted page". A new page whose source restricts it is readable
+  only by those who can approve it.
 
 ## [0.45.1] — 2026-11-04
 

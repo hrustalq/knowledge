@@ -629,6 +629,7 @@ export type I18nTranslations = {
         "pushVersionMessage": string;
         "syncRevisionMessage": string;
         "stoppedAtMax": string;
+        "restrictedItem": string;
         "revertRevisionMessage": string;
         "wiki": {
             "section": {

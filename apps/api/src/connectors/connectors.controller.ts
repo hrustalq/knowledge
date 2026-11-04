@@ -137,9 +137,16 @@ export class ConnectorsController {
   @Returns('ListConnectorRunItemsResponse')
   @Access('viewer', 'connector-run')
   @ApiOperation({ summary: 'The tree of items this run found — flat rows joined by parentItemId' })
-  async listItems(@Param('runId', ParseUUIDPipe) runId: string): Promise<ListConnectorRunItemsResponse> {
-    const { items, truncated } = await this.items.listItems(runId);
+  async listItems(
+    @Param('runId', ParseUUIDPipe) runId: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<ListConnectorRunItemsResponse> {
+    const { items, truncated } = await this.items.listItems(runId, await this.scopeOfRun(runId, principal));
     return { runId, items, truncated };
+  }
+
+  private async scopeOfRun(runId: string, principal: Principal) {
+    return this.permissions.scopeFor(principal, (await this.items.requireRun(runId)).workspaceId);
   }
 
   @Get('runs/:runId/items/:itemId')
@@ -149,8 +156,9 @@ export class ConnectorsController {
   async getItem(
     @Param('runId', ParseUUIDPipe) runId: string,
     @Param('itemId', ParseUUIDPipe) itemId: string,
+    @CurrentPrincipal() principal: Principal,
   ): Promise<ConnectorRunItemResponse> {
-    return this.items.getItem(runId, itemId);
+    return this.items.getItem(runId, itemId, await this.scopeOfRun(runId, principal));
   }
 
   @Patch('runs/:runId/items/:itemId')

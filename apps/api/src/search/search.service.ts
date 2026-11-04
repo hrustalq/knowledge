@@ -28,7 +28,7 @@ import { AnalyticsRecorder, type AnalyticsCaller } from '../analytics/analytics.
 import { CommunitiesService } from '../communities/communities.service.js';
 import { layerParents } from '../graph/layers.js';
 import type { SearchDto } from './search.dto.js';
-import { communityPrior, firstPerPage, floorTextHits, floorVectorHits, fuseHits, type PriorCommunity, type SearchPool } from './ranking.js';
+import { communityPrior, firstPerPage, floorTextHits, floorVectorHits, fuseHits, rerankScorer, type PriorCommunity, type SearchPool } from './ranking.js';
 import { flatFollow, layeredFollow, walkRelated } from './expansion.js';
 import { snippetPartsOf } from './snippet.js';
 import { sourceSyncOf } from '../documents/source-backed.js';
@@ -296,12 +296,13 @@ export class SearchService {
 
     // The multiplicative weight, a re-sort, and only then the cut to k — the
     // weight is the point of the over-fetch above.
+    const scoreOf = rerankScorer(hits, dto.query);
     const weighted = hits.map((h) => {
       const trust = trustOf.get(h.documentId);
       const weight = trustOn && trust ? trustWeight(trust.status, trust.inactive, settings.trustWeights) : 1;
-      return { hit: h, documentId: h.documentId, score: h.score * weight * (prior.get(h.documentId) ?? 1), trust };
+      return { hit: h, documentId: h.documentId, score: scoreOf(h, weight, prior.get(h.documentId) ?? 1), trust };
     });
-    if (trustOn || prior.size > 0) weighted.sort((a, b) => b.score - a.score);
+    weighted.sort((a, b) => b.score - a.score);
 
     // By page, each page's best chunk after the re-sort, then the cut.
     const ranked = byPage ? firstPerPage(weighted) : weighted;
@@ -324,6 +325,7 @@ export class SearchService {
       // Every page either leg named, not only the fused head: another rrfK
       // fuses a different head.
       observe({
+        query: dto.query,
         vectorHits,
         textHits,
         fetchK,

@@ -281,6 +281,23 @@ describe('against what already exists', () => {
     expect(page.data).toMatchObject({ tags: ['search'], captured: [expect.objectContaining({ kind: 'decision' })] });
   });
 
+  it('does not list the amended page among its own related pages, and keeps the others in order (#740)', async () => {
+    const h = harness({ similar: [{ documentId: PAGE, title: 'Search', score: 0.86 }] });
+    const [a, b] = ['aaaaaaaa-0000-4000-8000-000000000001', 'bbbbbbbb-0000-4000-8000-000000000002'];
+    await h.svc.capture(decision({ relatedDocumentIds: [b, PAGE, a] }), principal());
+
+    const [page] = h.written();
+    expect(page.body).not.toContain(`/documents/${PAGE}`);
+    expect(page.body.indexOf(`/documents/${b}`)).toBeGreaterThan(-1);
+    expect(page.body.indexOf(`/documents/${b}`)).toBeLessThan(page.body.indexOf(`/documents/${a}`));
+  });
+
+  it('drops the related section when the amended page was the only one (#740)', async () => {
+    const h = harness({ similar: [{ documentId: PAGE, title: 'Search', score: 0.86 }] });
+    await h.svc.capture(decision({ relatedDocumentIds: [PAGE] }), principal());
+    expect(h.written()[0].body).not.toContain('capture.heading.related');
+  });
+
   it('starts a page of its own when the close page is one its writer cannot edit', async () => {
     const h = harness({ similar: [{ documentId: PAGE, title: 'Search', score: 0.86 }] });
     (h.svc as unknown as { permissions: { requireResource: ReturnType<typeof vi.fn> } }).permissions.requireResource.mockRejectedValue(

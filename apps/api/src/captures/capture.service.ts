@@ -610,7 +610,7 @@ export class CaptureService {
     }
     const lang = principal.locale;
     const h = this.headings(lang, row.title);
-    const input = await this.bodyInput(kind, payload, decision.targetDocumentId);
+    const input = await this.bodyInput(kind, payload);
     const session = row.session as unknown as CaptureSession;
     const origin = row.origin as unknown as CaptureOrigin | null;
     const entry = capturedEntry(row.id, kind, session, row.createdAt);
@@ -623,6 +623,8 @@ export class CaptureService {
       const target = decision.targetDocumentId;
       const content = await this.documents.getContent(target);
       const top = similar.find((s) => s.documentId === target);
+      // A section never links to the page it sits on (#740).
+      const own = input.kind === 'decision' ? { ...input, related: input.related.filter((p) => p.documentId !== target) } : input;
       const description = this.describe(session, origin, similar, lang, t('capture.mergeRequest.amends', { page: top?.title ?? '', score: top?.score ?? '' }, lang));
       await openDraftMergeRequest(deps, {
         documentId: target,
@@ -630,7 +632,7 @@ export class CaptureService {
         title,
         description,
         markdown: composeFrontmatter(
-          appendCaptureSection(content.markdown, renderCaptureBody(input, h, 3), h),
+          appendCaptureSection(content.markdown, renderCaptureBody(own, h, 3), h),
           withOriginSource(withCapturedEntry(content.frontmatter ?? {}, entry), origin),
         ),
         userId: principal.userId,
@@ -820,12 +822,11 @@ export class CaptureService {
     return parent?.id ?? null;
   }
 
-  /** `amending`: the page this body lands on, which is not related to itself. */
-  private async bodyInput(kind: CaptureKind, payload: StoredPayload, amending: string | null): Promise<CaptureBodyInput> {
+  private async bodyInput(kind: CaptureKind, payload: StoredPayload): Promise<CaptureBodyInput> {
     switch (kind) {
       case 'decision': {
         const p = payload as DecisionCapturePayload;
-        return { kind, payload: p, related: await this.linkedPages((p.relatedDocumentIds ?? []).filter((id) => id !== amending)) };
+        return { kind, payload: p, related: await this.linkedPages(p.relatedDocumentIds ?? []) };
       }
       case 'answer': {
         const p = payload as AnswerCapturePayload;

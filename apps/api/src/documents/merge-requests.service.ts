@@ -790,7 +790,7 @@ export class MergeRequestsService {
       for (const p of pages) {
         // Second parent = source head → a true merge node in the revision DAG (plan.md §4).
         const second = strategy === 'merge-commit' ? { id: p.source.headRevisionId, order: p.target.headRevisionId ? 2 : 1 } : null;
-        const revisionId = await this.stage(drafts, p.documentId, p.target.name, message, bodies.get(p.documentId)!, second);
+        const revisionId = await this.stage(drafts, p.documentId, p.target.name, message, bodies.get(p.documentId)!, second, principal?.userId);
         staged.push({ documentId: p.documentId, revisionId, targetBranchId: p.target.id, targetHeadId: p.target.headRevisionId });
       }
 
@@ -1233,7 +1233,7 @@ export class MergeRequestsService {
       const staged: { page: MrPage; revisionId: string }[] = [];
       for (const p of pages) {
         const second = { id: p.target.headRevisionId!, order: 2 };
-        staged.push({ page: p, revisionId: await this.stage(drafts, p.documentId, p.source.name, message, bodies.get(p.documentId)!, second) });
+        staged.push({ page: p, revisionId: await this.stage(drafts, p.documentId, p.source.name, message, bodies.get(p.documentId)!, second, principal?.userId) });
       }
       await this.prisma.withTransaction(
         async () => {
@@ -1320,7 +1320,8 @@ export class MergeRequestsService {
   /**
    * A draft revision on `branch` with `body`: createRevision parents it on the
    * branch head (order 1), and a merge adds `second`, the head merged in. Its
-   * id goes into `drafts` first, so a failure halfway is cleaned up too.
+   * id goes into `drafts` first, so a failure halfway is cleaned up too. The
+   * merger is its author: provenance reports a page's head revision (#738).
    */
   private async stage(
     drafts: string[],
@@ -1329,8 +1330,9 @@ export class MergeRequestsService {
     message: string,
     body: Body,
     second: { id: string; order: number } | null,
+    authorId: string | undefined,
   ): Promise<string> {
-    const { revisionId } = await this.documents.createRevision(documentId, { branch, message, contentType: body.contentType });
+    const { revisionId } = await this.documents.createRevision(documentId, { branch, message, contentType: body.contentType }, undefined, authorId);
     drafts.push(revisionId);
     if (second) await this.prisma.revisionParent.create({ data: { revisionId, parentRevisionId: second.id, parentOrder: second.order } });
     const row = await this.prisma.documentRevision.findUniqueOrThrow({ where: { id: revisionId }, select: { s3Key: true } });

@@ -77,6 +77,10 @@ in the pull request that introduces them — see
 - **A merge by push needs edit on the merge request's own page** (#770). Someone who could only view that page could
   merge the request, and if they could not see it at all, the request read as merged while its change on that page was
   dropped.
+- **Restricting a published page takes it off its sites** (#760). Restricting a page or project changed nothing already
+  published, so anonymous readers kept getting the page, its markdown, search hits and Ask answers until the next build,
+  and frozen versions kept it for good. Within 30 seconds such a page and its children now leave every version of every
+  site, whichever way the restriction arrived. Lifting it brings them back.
 
 ### Operations
 

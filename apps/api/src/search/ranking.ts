@@ -127,11 +127,68 @@ export function fuseHits<T extends Pick<ChunkHit, 'chunkId' | 'score'>>(
 }
 
 /**
+ * #742: a trust boost is for near-ties. RRF squeezes a leg's first ten ranks
+ * into 14% of each other, so ×1.15 used to lift a verified page over a far
+ * stronger match on an edited one. Past this share of the best cosine, or with
+ * no vector evidence at all, a page keeps its rank and gets no boost. A demotion
+ * always applies: an outdated page is outdated however well it matches.
+ */
+export const TRUST_BOOST_COSINE_SHARE = 0.95;
+
+/**
+ * #742: what the chunk defining the term asked about is multiplied by: one
+ * leg's first place then reaches what first place in both legs scores, because
+ * a definition is often too long a chunk for BM25 to rank it.
+ */
+export const DEFINITION_BOOST = 2;
+
+const DEFINITION_QUESTION = /^(?:what(?:'s|\s+is|\s+are|\s+does)|define|meaning\s+of|что\s+такое|что\s+значит|что\s+означает|кто\s+так(?:ой|ая|ие))\s+(.+)$/iu;
+
+/**
+ * For "what is a Source in Watchdog?": does a chunk define "source"? Null for
+ * any other kind of question. The term may be followed by more words, so each
+ * leading run of words is tried. A definition is a section headed with the term,
+ * or a line opening with it in bold or before a dash. `Source: https://…` is not:
+ * that is a citation.
+ *
+ * ponytail: plain patterns, en + ru, no table rows; a stored definition index if these miss real glossaries.
+ */
+export function definitionMatcher(query: string): ((hit: Pick<ChunkHit, 'text' | 'headingPath'>) => boolean) | null {
+  const tail = DEFINITION_QUESTION.exec(query.trim().replace(/[\s?!.]+$/u, ''))?.[1];
+  if (!tail) return null;
+  const words = tail.toLowerCase().replace(/^(?:a|an|the)\s+/, '').split(/\s+/).slice(0, 5);
+  const terms = words.flatMap((_, i) => {
+    const term = words.slice(0, words.length - i).join(' ');
+    return term.endsWith('s') ? [term, term.slice(0, -1)] : [term];
+  });
+  const names = terms.map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  const line = new RegExp(`^\\s*(?:[-*]\\s+)?(?:(?:\\*\\*|__)(?:${names})(?::(?:\\*\\*|__)|(?:\\*\\*|__)\\s*(?:[:—–-]|$))|(?:${names})\\s+[—–]\\s)`, 'imu');
+  return (hit) => terms.includes(hit.headingPath.at(-1)?.toLowerCase() ?? '') || line.test(hit.text);
+}
+
+/**
+ * The score a fused hit ranks by: its state's weight, its community prior and
+ * the definition boost. One function, so the search and the replay cannot differ.
+ */
+export function rerankScorer<T extends Pick<ChunkHit, 'score' | 'text' | 'headingPath'> & { vectorScore?: number }>(
+  hits: readonly T[],
+  query: string,
+): (hit: T, trust: number, prior: number) => number {
+  const bestCosine = hits.reduce((best, h) => Math.max(best, h.vectorScore ?? 0), 0);
+  const defines = definitionMatcher(query);
+  return (hit, trust, prior) => {
+    const unearned = trust > 1 && bestCosine > 0 && (hit.vectorScore ?? 0) < TRUST_BOOST_COSINE_SHARE * bestCosine;
+    return hit.score * (unearned ? 1 : trust) * prior * (defines?.(hit) ? DEFINITION_BOOST : 1);
+  };
+}
+
+/**
  * What one unfiltered search retrieved before anything a knob decides: both
  * legs at `fetchK`, and the state of every page either leg named. The tuner
  * records it once per query and re-ranks it for every candidate knob setting.
  */
 export interface SearchPool {
+  query: string;
   vectorHits: ChunkHit[];
   textHits: ChunkHit[];
   fetchK: number;
@@ -153,11 +210,13 @@ export function rankPool(pool: SearchPool, knobs: SearchKnobs): string[] {
   // Before the floors, as in the service (#526): a floor measures against a hit the search can return.
   const admits = (h: ChunkHit) => pool.pages.get(h.documentId)?.archived === false;
   const vector = floorVectorHits(pool.vectorHits.filter(admits), knobs);
-  const weighted = fuseHits(vector, floorTextHits(pool.textHits.filter(admits)), pool.fetchK, knobs.rrfK).map((h) => {
+  const fused = fuseHits(vector, floorTextHits(pool.textHits.filter(admits)), pool.fetchK, knobs.rrfK);
+  const scoreOf = rerankScorer(fused, pool.query);
+  const weighted = fused.map((h) => {
     const page = pool.pages.get(h.documentId)!;
     const weight = pool.trustOn ? trustWeight(page.status, page.inactive, knobs.trustWeights) : 1;
-    return { documentId: h.documentId, score: h.score * weight * (prior.get(h.documentId) ?? 1) };
+    return { documentId: h.documentId, score: scoreOf(h, weight, prior.get(h.documentId) ?? 1) };
   });
-  if (pool.trustOn || prior.size > 0) weighted.sort((a, b) => b.score - a.score);
+  weighted.sort((a, b) => b.score - a.score);
   return weighted.slice(0, pool.k).map((w) => w.documentId);
 }

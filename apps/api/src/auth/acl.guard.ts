@@ -140,6 +140,10 @@ export class AclGuard implements CanActivate {
         await this.permissions.requireConnectorVisible(principal, { connectorId: req.params.id });
       } else if (spec.source === 'connector-run') {
         await this.permissions.requireConnectorVisible(principal, { runId: req.params.runId });
+      } else if (spec.source === 'assistant-thread') {
+        await this.access.requireOwnThread(principal, { threadId: req.params.id });
+      } else if (spec.source === 'assistant-message') {
+        await this.access.requireOwnThread(principal, { messageId: req.params.id });
       }
     }
     // After the membership check, so a 404 here tells only a member that the section is off.

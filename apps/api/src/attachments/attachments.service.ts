@@ -119,7 +119,7 @@ export class AttachmentsService {
    * client, and a missing object keeps the row `pending` rather than producing
    * an embed that renders as a broken image forever.
    */
-  async complete(documentId: string, attachmentId: string): Promise<CompleteAttachmentResponse> {
+  async complete(documentId: string, attachmentId: string, actor: string): Promise<CompleteAttachmentResponse> {
     const row = await this.require(documentId, attachmentId);
     const head = await this.storage.headObject(row.s3Key);
     if (!head) throw new BadRequestException(t('error.attachment.uploadMissing'));
@@ -136,6 +136,7 @@ export class AttachmentsService {
     });
     void this.activity.record({
       workspaceId: row.workspaceId,
+      actor,
       action: 'attachment.created',
       documentId: row.documentId,
       subjectId: row.documentId,
@@ -162,12 +163,13 @@ export class AttachmentsService {
     });
   }
 
-  async remove(documentId: string, attachmentId: string): Promise<{ deleted: true }> {
+  async remove(documentId: string, attachmentId: string, actor: string): Promise<{ deleted: true }> {
     const row = await this.require(documentId, attachmentId);
     await this.storage.deleteObject(row.s3Key);
     await this.prisma.attachment.delete({ where: { id: row.id } });
     void this.activity.record({
       workspaceId: row.workspaceId,
+      actor,
       action: 'attachment.deleted',
       documentId: row.documentId,
       subjectId: row.documentId,

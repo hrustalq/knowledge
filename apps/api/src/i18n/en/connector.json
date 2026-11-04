@@ -72,6 +72,7 @@
   },
   "pushVersionMessage": "Updated from the knowledge base",
   "syncRevisionMessage": "Synced from a connector",
+  "restrictedItem": "Restricted page",
   "stoppedAtMax": "Stopped after {max} items (CONNECTOR_SYNC_MAX_ITEMS).",
   "revertRevisionMessage": "Reverted a connector import",
   "wiki": {

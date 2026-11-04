@@ -124,6 +124,9 @@ and `ai-readable/ai-readable-scope.ts` is the one place that implements it.
 - Anything public that builds on this (published sites, share links) must treat
   a page with a non-empty `restricted_by` as unpublishable. Both already do.
 
+An archived page ([39](39-page-verification.md)) leaves the listings too, and its
+absence changes their ETag. Its `.md` stays readable by id.
+
 ## Where it lives
 
 | Piece                                             | File                                                               |

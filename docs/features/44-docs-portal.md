@@ -469,6 +469,22 @@ of the render cache: those renders are one reader's, and caching them would
 only evict the anonymous render everyone shares. It forwards `kn_site_*`
 cookies to the API beside `kn_share_*`, and never `kn_token`.
 
+## Restricted after publishing
+
+A build refuses restricted pages, but public routes read only snapshot rows, so
+restricting a page later has to reach the rows it already wrote (#760). Every write
+to `documents.restricted_by` bumps `acl_version`, and `AclRestampSweeper` picks that
+up within `ACL_RESTAMP_TICK_MS` (30 s by default) on every path: a page or project
+switch, a move under a restricted parent, or a connector's mirrored ACL. It restamps
+each site that publishes the page, before the search stores, so a store being down
+cannot hold it back.
+
+The stamp is `withheld`, set from `restricted_by` by `SiteAudienceStamper`. Like
+every stamp it covers **frozen versions too**, and `siteViewerCanSee` refuses it for
+everyone, so the page and its descendants leave the tree, `.md`, `llms.txt`, search
+and Ask. It does not turn on **Sign in**, since signing in cannot show it. Lifting the
+restriction restamps it back, so a frozen version gets its page back with no build.
+
 ## Ask (phase 3)
 
 A site can answer questions from its own pages: an **Ask** button beside
@@ -622,9 +638,10 @@ destination may have its own). Deleting pages removes their snapshot rows
   build. There is no redirect history.
 - A verified domain stays verified; one whose owner changes stays with the
   site that proved it until an admin removes it.
-- Everything a viewer can read can be published by an admin. When page-level
-  permissions land, builds must refuse restricted pages, and `members` must
-  mean "may read this page", not "has a role in the workspace".
+- Everything a viewer can read can be published by an admin. A build refuses
+  restricted pages, and `members` still means a role in the workspace, not "may
+  read this page". A page restricted after it was published is stamped `withheld`,
+  which no reader passes (see "Restricted after publishing").
 - Visitor sign-in is a customer-signed JWT only; there is no OIDC for
   visitors. A visitor's claims are read once, at sign-in: a plan that changes
   takes effect at the next sign-in.

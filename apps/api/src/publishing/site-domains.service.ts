@@ -211,7 +211,7 @@ export class SiteDomainsService {
   private record(site: PublishedSite, action: string, actorId?: string, extra: Record<string, unknown> = {}): void {
     void this.activity.record({
       workspaceId: site.workspaceId,
-      ...(actorId ? { actor: actorId } : {}),
+      actor: actorId,
       action,
       projectId: site.projectId,
       subjectId: site.id,

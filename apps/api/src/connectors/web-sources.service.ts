@@ -89,6 +89,12 @@ export class WebSourcesService {
     });
   }
 
+  /** The page is archived or gone: `afterRun` would requeue a retry already due with no delay, forever (#766). */
+  async cancelRetry(link: ConnectorLink): Promise<void> {
+    if (link.retryAttempt === 0 && !link.retryAt) return;
+    await this.prisma.connectorLink.update({ where: { id: link.id }, data: { retryAttempt: 0, retryAt: null } });
+  }
+
   /**
    * A fetched version through the page's extraction recipe (phase 2): the
    * markdown to write, or null when its checks failed and it is held — the
@@ -136,7 +142,7 @@ export class WebSourcesService {
     }
     if (isGone(err)) {
       const goneCount = link.goneCount + 1;
-      await this.prisma.connectorLink.update({ where: { id: link.id }, data: { goneCount } });
+      await this.prisma.connectorLink.update({ where: { id: link.id }, data: { goneCount, retryAttempt: 0, retryAt: null } });
       if (goneCount < SOURCE_FAILURE_LIMIT) return false;
       await this.archiveGone(row, link);
       return true;
@@ -229,10 +235,18 @@ export class WebSourcesService {
       if (goneCount >= SOURCE_FAILURE_LIMIT) await this.archiveGone(row, link);
     }
 
-    const due = await this.prisma.connectorLink.findMany({
+    const waiting = await this.prisma.connectorLink.findMany({
       where: { connectorId: row.id, retryAt: { not: null } },
-      select: { externalId: true, retryAt: true },
+      select: { externalId: true, retryAt: true, documentId: true },
     });
+    if (waiting.length === 0) return;
+    // A page archived while its retry waited has nothing to retry, whatever the row still says.
+    const live = await this.prisma.document.findMany({
+      where: { id: { in: waiting.map((l) => l.documentId) }, archivedAt: null },
+      select: { id: true },
+    });
+    const liveIds = new Set(live.map((d) => d.id));
+    const due = waiting.filter((l) => liveIds.has(l.documentId));
     if (due.length === 0) return;
     const at = Math.min(...due.map((l) => l.retryAt!.getTime()));
     try {
@@ -293,6 +307,7 @@ export class WebSourcesService {
    * to it is flagged `outdated` with the reason "source removed".
    */
   private async archiveGone(row: Connector, link: ConnectorLink): Promise<void> {
+    await this.cancelRetry(link);
     const actorId = row.createdBy ?? AUTHOR_ID_STUB;
     const document = await this.prisma.document.findUnique({ where: { id: link.documentId }, select: { title: true, archivedAt: true } });
     if (!document || document.archivedAt) return;

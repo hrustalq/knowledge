@@ -1175,8 +1175,9 @@ model AnswerFeedback {
   createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  // One vote per person per message. NULL message_id rows (ask, mcp) are
-  // exempt — SQL unique treats NULLs as distinct — and dedupe differently.
+  // One vote per person per message. NULL message_id rows (ask, mcp, every
+  // implicit signal) are exempt — SQL unique treats NULLs as distinct — and
+  // dedupe differently.
   @@unique([messageId, createdBy])
   @@index([workspaceId, createdAt])
   @@index([workspaceId, kind, createdAt])

@@ -6,7 +6,8 @@ import { hasRealPath } from '../documents/documents.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { LISTED_PAGE } from '../common/listed-page.js';
 import { SiteAudienceStamper } from './site-audience.stamper.js';
-import { planSiteBuild, resolveRevision, type PlanDocument, type ResolvedRevision } from './site-build.plan.js';
+import { bareStubs, planSiteBuild, resolveRevision, type PlanDocument, type ResolvedRevision } from './site-build.plan.js';
+import { isScaffoldStub } from '../common/scaffold-stub.js';
 import { SiteSearchTextService } from './site-search-text.service.js';
 
 /**
@@ -56,8 +57,16 @@ export class SiteBuildService {
         documents.map((d) => d.id),
         version.sourceBranch,
       );
+      const resolved = [...revisions.values()].flatMap((r) => (r.revisionId ? [r.revisionId] : []));
+      const stubRevisions = new Set(
+        (await this.prisma.documentRevision.findMany({ where: { id: { in: resolved } }, select: { id: true, origin: true } }))
+          .filter(isScaffoldStub)
+          .map((r) => r.id),
+      );
+      const stubs = new Set(documents.filter((d) => stubRevisions.has(revisions.get(d.id)?.revisionId ?? '')).map((d) => d.id));
+      const bare = bareStubs(documents, stubs);
       const plan = planSiteBuild({
-        documents,
+        documents: documents.filter((d) => !bare.has(d.id)),
         revisions,
         rootDocumentId: site.rootDocumentId,
         reservedTopSegments: new Set(site.versions.map((v) => v.slug)),
@@ -75,7 +84,8 @@ export class SiteBuildService {
         this.prisma.siteVersionPage.deleteMany({ where: { versionId } }),
         this.prisma.siteVersionPage.createMany({
           data: plan.pages.map((p) => {
-            const text = texts.get(p.revisionId);
+            // A stub kept over a real page holds its place in the nav; its skeleton is not search text.
+            const text = stubRevisions.has(p.revisionId) ? undefined : texts.get(p.revisionId);
             return {
               versionId,
               ...p,

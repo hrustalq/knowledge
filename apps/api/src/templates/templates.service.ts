@@ -35,8 +35,9 @@ import {
 // t.ts's currentLocale honours `withLocale`, so a worker or MCP render answers
 // in the language its caller pinned rather than the default.
 import { currentLocale, t } from '../i18n/t.js';
+import { canSeeProject, visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
 import { BUILT_IN_TEMPLATES, type BuiltInTemplate } from './built-in/index.js';
-import { parseTemplateSource, TemplateSourceError, type ParsedTemplateSource } from './template-source.js';
+import { parseStoredTemplateSource, parseTemplateSource, TemplateSourceError, type ParsedTemplateSource } from './template-source.js';
 import { TEMPLATE_MAX_VALUE_CHARS, TEMPLATES_MAX_PER_WORKSPACE } from './templates.constants.js';
 
 /** A template pinned to one version, parsed — what rendering and provenance need. */
@@ -274,10 +275,11 @@ export class TemplatesService {
   /**
    * Fill a template in: the title pattern, the body and the inherited
    * frontmatter. No write. `user`/`page` values are resolved inside the
-   * workspace here, so an id from another tenant renders as a missing value
-   * rather than leaking a name.
+   * workspace and under `scope` here, so an id from another tenant, or a page or
+   * project the caller cannot open (#774), renders as a missing value rather
+   * than leaking a name.
    */
-  async render(input: RenderTemplateInput, author?: { id: string; name?: string }): Promise<RenderTemplateResponse> {
+  async render(input: RenderTemplateInput, scope: AccessScope, author?: { id: string; name?: string }): Promise<RenderTemplateResponse> {
     const template = await this.resolve(input.workspaceId, input.ref, input.version);
     if (template.row?.archivedAt) throw new ConflictException(t('error.template.archived', { name: template.name }));
     const { meta } = template.parsed;
@@ -287,11 +289,11 @@ export class TemplatesService {
       meta.placeholders.filter((p) => p.kind === kind).map((p) => values[p.name]).filter((v): v is string => !!v);
     const [users, pages, project, parent, authorName] = await Promise.all([
       this.memberLabels(input.workspaceId, ids('user')),
-      this.pageLabels(input.workspaceId, ids('page')),
+      this.pageLabels(input.workspaceId, ids('page'), scope),
       input.projectId ? this.projects.requireProjectInWorkspace(input.projectId, input.workspaceId) : null,
       input.parentId
         ? this.prisma.document.findFirst({
-            where: { id: input.parentId, workspaceId: input.workspaceId },
+            where: { id: input.parentId, workspaceId: input.workspaceId, AND: [visibilityWhere(scope)] },
             select: { title: true },
           })
         : null,
@@ -320,7 +322,7 @@ export class TemplatesService {
       locale: currentLocale(),
       title: input.title?.trim() || template.name,
       author: authorName ?? '',
-      project: project?.name ?? '',
+      project: project && canSeeProject(scope, project) ? project.name : '',
       parent: parent?.title ?? '',
       labels,
     };
@@ -631,7 +633,6 @@ export class TemplatesService {
   ): ResolvedTemplate {
     // Re-parsed rather than read from `meta`: the stored source is the truth,
     // and a version written before a parser fix should render with the fix.
-    // Parsing cannot fail — it was validated on write.
     return {
       ref,
       workspaceId: row.workspaceId,
@@ -639,7 +640,7 @@ export class TemplatesService {
       version: stored.version,
       name,
       source: stored.source,
-      parsed: parseTemplateSource(stored.source),
+      parsed: parseStoredTemplateSource(stored.source),
       row,
     };
   }
@@ -671,11 +672,11 @@ export class TemplatesService {
     return Object.fromEntries(members.map((m) => [m.userId, m.user.displayName || m.user.email]));
   }
 
-  private async pageLabels(workspaceId: string, ids: string[]): Promise<Record<string, string>> {
+  private async pageLabels(workspaceId: string, ids: string[], scope: AccessScope): Promise<Record<string, string>> {
     const valid = ids.filter((id) => parseTemplateRef(id)?.kind === 'custom');
     if (valid.length === 0) return {};
     const pages = await this.prisma.document.findMany({
-      where: { workspaceId, id: { in: valid } },
+      where: { workspaceId, id: { in: valid }, AND: [visibilityWhere(scope)] },
       select: { id: true, title: true },
     });
     return Object.fromEntries(pages.map((p) => [p.id, p.title]));

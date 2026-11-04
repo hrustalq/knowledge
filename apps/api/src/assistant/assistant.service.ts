@@ -965,7 +965,6 @@ export class AssistantService {
       sources: settled.sources,
       confidence: settled.confidence,
       threadId: thread.id,
-      messageId: assistantMessage.id,
       principal,
       providerId: turn.agent.config.providerId,
       model: turn.agent.config.model,

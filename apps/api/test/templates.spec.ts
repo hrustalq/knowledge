@@ -14,7 +14,8 @@ import {
   renderTemplateTitle,
   type TemplateMeta,
 } from '@knowledge/contracts';
-import { parseTemplateSource, TemplateSourceError } from '../src/templates/template-source.js';
+import { systemScope } from '../src/permissions/access-scope.js';
+import { parseStoredTemplateSource, parseTemplateSource, TemplateSourceError } from '../src/templates/template-source.js';
 import { BUILT_IN_TEMPLATES } from '../src/templates/built-in/index.js';
 import { TemplatesService } from '../src/templates/templates.service.js';
 import { TemplatesController } from '../src/templates/templates.controller.js';
@@ -45,6 +46,7 @@ const WS = '11111111-1111-4111-8111-111111111111';
 const WS_B = '22222222-2222-4222-8222-222222222222';
 const PROJECT = '33333333-3333-4333-8333-333333333333';
 const USER = '44444444-4444-4444-8444-444444444444';
+const ALL = systemScope(WS);
 const PAGE = '55555555-5555-4555-8555-555555555555';
 
 const meta: TemplateMeta = {
@@ -138,6 +140,15 @@ describe('template sources', () => {
     const source = BUILT_IN_TEMPLATES.adr.text.en.source;
     expect(parseTemplateSource(source).meta.titlePattern).toBe('ADR-{{number}}: {{title}}');
     expect(parseTemplateSource(source).meta.titlePattern).toBe('ADR-{{number}}: {{title}}');
+  });
+
+  it('refuses invalid frontmatter every time, while a stored version of it still reads (#775)', () => {
+    const source = '---\ncategory: [oops\n---\n# Body\n';
+    for (const _ of [1, 2]) {
+      expect(() => parseTemplateSource(source)).toThrowError(TemplateSourceError);
+      expect(parseStoredTemplateSource(source)).toMatchObject({ body: source, tags: [], relations: [] });
+    }
+    expect(() => parseStoredTemplateSource('---\ntemplate: 1\n---\n')).toThrowError(TemplateSourceError);
   });
 
   // The QA templates (#482) join the graph at creation: the operation lands as
@@ -395,7 +406,7 @@ function makeService() {
     }),
   };
   const service = new TemplatesService(prisma as never, activity as never, projects as never);
-  return { service, prisma, activity };
+  return { service, prisma, activity, projects };
 }
 
 const CUSTOM = `---
@@ -494,7 +505,7 @@ describe('TemplatesService', () => {
     await service.setArchived(created.id!, true);
     expect((await service.list({ workspaceId: WS })).templates.map((t) => t.id)).not.toContain(created.id);
     await expect(service.resolve(WS, created.id!)).resolves.toMatchObject({ version: 1 });
-    await expect(service.render({ workspaceId: WS, ref: created.id!, values: { component: 'x' } })).rejects.toThrow(
+    await expect(service.render({ workspaceId: WS, ref: created.id!, values: { component: 'x' } }, ALL)).rejects.toThrow(
       /archived/,
     );
     await expect(service.remove(created.id!)).rejects.toThrow(/notDeletable/);
@@ -517,6 +528,7 @@ describe('TemplatesService', () => {
         values: { number: '0042', component: 'Service:Billing', deciders: 'Platform' },
         projectId: PROJECT,
       },
+      ALL,
       { id: USER, name: 'Ada' },
     );
     expect(rendered).toMatchObject({
@@ -534,22 +546,44 @@ describe('TemplatesService', () => {
 
   it('a missing required value is a 400 naming it; an id outside the workspace counts as missing', async () => {
     const { service } = makeService();
-    const err = await service.render({ workspaceId: WS, ref: 'builtin:adr', title: 'x' }).catch((e) => e);
+    const err = await service.render({ workspaceId: WS, ref: 'builtin:adr', title: 'x' }, ALL).catch((e) => e);
     expect(err).toBeInstanceOf(BadRequestException);
     expect(err.getResponse()).toMatchObject({ missing: ['number'] });
 
     const source = '---\ntemplate:\n  placeholders: [{ name: who, kind: user, required: true }]\n---\n{{who}}';
     const created = await service.create({ workspaceId: WS, name: 'Who', source });
     const foreign = '99999999-9999-4999-8999-999999999999';
-    const err2 = await service.render({ workspaceId: WS, ref: created.id!, values: { who: foreign } }).catch((e) => e);
+    const err2 = await service.render({ workspaceId: WS, ref: created.id!, values: { who: foreign } }, ALL).catch((e) => e);
     expect(err2.getResponse()).toMatchObject({ missing: ['who'] });
-    const ok = await service.render({ workspaceId: WS, ref: created.id!, values: { who: USER } });
+    const ok = await service.render({ workspaceId: WS, ref: created.id!, values: { who: USER } }, ALL);
     expect(ok.body).toBe(`<span data-kn-user="${USER}">@Ada</span>`);
+  });
+
+  it('renders a page or project the caller cannot open as if it were not given (#774)', async () => {
+    const { service, prisma, projects } = makeService();
+    const secret = '55555555-5555-4555-8555-555555555555';
+    // What the visibility clause does in PG: a page it names as denied is no row.
+    const hidden = (where: { AND?: unknown }) => JSON.stringify(where.AND ?? null).includes(secret);
+    const document = prisma.document as Record<string, unknown>;
+    document.findFirst = async ({ where }: { where: { AND?: unknown } }) => (hidden(where) ? null : { title: 'Secret parent' });
+    document.findMany = async ({ where }: { where: { AND?: unknown; id: { in: string[] } } }) =>
+      hidden(where) ? [] : where.id.in.map((id) => ({ id, title: 'Secret page' }));
+    projects.requireProjectInWorkspace.mockResolvedValue({ id: PROJECT, name: 'Secret project', restricted: true } as never);
+    const source = '---\ntemplate:\n  placeholders: [{ name: linked, kind: page }]\n---\n[{{project}}] [{{parent}}] [{{linked}}]';
+    const created = await service.create({ workspaceId: WS, name: 'Links', source });
+    const input = { workspaceId: WS, ref: created.id!, projectId: PROJECT, parentId: secret, values: { linked: secret } };
+
+    const refused = await service.render(input, { ...systemScope(WS), bypass: false, denied: new Set([secret, PROJECT]) });
+    expect(JSON.stringify(refused)).not.toContain('Secret');
+
+    const open = await service.render(input, ALL);
+    expect(open.body).toContain('[Secret project] [Secret parent]');
+    expect(open.body).toContain('Secret page');
   });
 
   it('a skeleton render (#716) leaves declared placeholders literal instead of requiring them', async () => {
     const { service } = makeService();
-    const rendered = await service.render({ workspaceId: WS, ref: 'builtin:adr', title: 'ADR 0001: Queue', skeleton: true });
+    const rendered = await service.render({ workspaceId: WS, ref: 'builtin:adr', title: 'ADR 0001: Queue', skeleton: true }, ALL);
     expect(rendered.body).toContain('# ADR 0001: Queue');
     expect(rendered.body).toContain('{{deciders}}');
     expect(rendered.templateRef).toBe('builtin:adr');
@@ -621,7 +655,8 @@ describe('template access', () => {
 describe('creating a page from a template', () => {
   function documents(templates: Record<string, unknown>) {
     const stub = {} as never;
-    return new DocumentsService(stub, stub, stub, stub, stub, stub, stub, stub, stub, templates as never) as unknown as {
+    const permissions = { scopeForUser: vi.fn(async () => ALL) };
+    return new DocumentsService(stub, stub, stub, stub, stub, stub, stub, stub, stub, templates as never, permissions as never) as unknown as {
       applyTemplate(dto: Record<string, unknown>, authorId: string): Promise<{ dto: Record<string, unknown>; template: unknown }>;
     };
   }
@@ -641,6 +676,7 @@ describe('creating a page from a template', () => {
     );
     expect(render).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceId: WS, ref: 'builtin:adr', title: 'Use Postgres', values: { number: '1' } }),
+      ALL,
       { id: USER },
     );
     expect(dto).toMatchObject({

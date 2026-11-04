@@ -158,11 +158,12 @@ describe('multi-page merge requests', () => {
     expect(call[3]).toBe('dddddddd-dddd-4ddd-8ddd-dddddddddddd');
   });
 
-  it('needs edit on every page, not only the one the guard checked', async () => {
+  it('needs edit on every page it spans', async () => {
     const f = fixture({ denyB: true });
     await expect(f.service.merge(MR, 'merge-commit', USER)).rejects.toBeInstanceOf(ForbiddenException);
     expect(f.permissions.requireLevel).toHaveBeenCalledWith(expect.anything(), { type: 'document', id: B }, 'edit');
-    expect(f.permissions.requireLevel).not.toHaveBeenCalledWith(expect.anything(), { type: 'document', id: A }, 'edit');
+    // The merge request's own page too: a merge by push has no route guard (#770).
+    expect(f.permissions.requireLevel).toHaveBeenCalledWith(expect.anything(), { type: 'document', id: A }, 'edit');
   });
 
   it('passes every gate with both pages fast-forward', async () => {

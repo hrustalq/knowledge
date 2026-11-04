@@ -8,6 +8,7 @@ import type {
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
+import { PermissionService } from '../permissions/permission.service.js';
 import { KnowledgeIssuesService } from './knowledge-issues.service.js';
 import { CloseKnowledgeIssueDto, ListKnowledgeIssuesQueryDto, ReportKnowledgeIssueDto } from './knowledge-issues.dto.js';
 import { Returns } from '../common/returns.decorator.js';
@@ -18,12 +19,16 @@ import { Returns } from '../common/returns.decorator.js';
  * Filing is `viewer`: anyone who may read a page may say it is wrong, and a
  * read-only API key is admitted for the same reason the vote routes admit it.
  * Closing is `editor`, resolved through the issue's own row so a cross-tenant
- * id 403s before the handler runs.
+ * id 403s before the handler runs. All three follow the page too (#758): this
+ * guard knows only the workspace, and the service checks the page.
  */
 @ApiTags('knowledge-issues')
 @Controller('v1/knowledge-issues')
 export class KnowledgeIssuesController {
-  constructor(private readonly issues: KnowledgeIssuesService) {}
+  constructor(
+    private readonly issues: KnowledgeIssuesService,
+    private readonly permissions: PermissionService,
+  ) {}
 
   @Post()
   @Returns('ReportKnowledgeIssueResponse')
@@ -44,8 +49,12 @@ export class KnowledgeIssuesController {
   @Returns('ListKnowledgeIssuesResponse')
   @Access('viewer', 'query')
   @ApiOperation({ summary: 'List reports in a workspace, newest first; narrow by page or status' })
-  async list(@Query() query: ListKnowledgeIssuesQueryDto): Promise<ListKnowledgeIssuesResponse> {
-    return this.issues.list(query.workspaceId, { documentId: query.documentId, status: query.status });
+  async list(
+    @Query() query: ListKnowledgeIssuesQueryDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<ListKnowledgeIssuesResponse> {
+    const scope = await this.permissions.scopeFor(principal, query.workspaceId);
+    return this.issues.list(scope, { documentId: query.documentId, status: query.status });
   }
 
   @Patch(':id')

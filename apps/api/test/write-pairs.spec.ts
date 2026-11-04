@@ -1,3 +1,4 @@
+import { WIKI_AUTO_REGENERATE_CONFIG_KEY, WIKI_CONFIG_KEY } from '@knowledge/contracts';
 import { describe, expect, it, vi } from 'vitest';
 import { BadRequestException } from '@nestjs/common';
 import { MergeRequestsService } from '../src/documents/merge-requests.service.js';
@@ -279,6 +280,28 @@ describe('#658 write pairs commit together', () => {
       const svc = new ConnectorsService(prisma, config({}), _, _, _, _);
       const created = await svc.queueWebhookRefs({ id: 'c1', workspaceId: WS, enabled: true, locale: 'en' } as never, ['b']);
       expect(created).toMatchObject({ id: 'run2', scope: ['b'] });
+    });
+
+    it('all three run creators freeze the connector\'s review mode (#764)', async () => {
+      const { prisma } = fakePrisma({
+        'connectorRun.findFirst': null,
+        'connectorRun.create': ({ data }: { data: { mode: string } }) => data,
+      });
+      const svc = new ConnectorsService(prisma, config({}), _, _, _, _);
+      Object.assign(svc, { adapterFor: () => ({ capabilities: { pull: true } }), assertKindEnabled: () => undefined });
+      const row = {
+        id: 'c1',
+        workspaceId: WS,
+        enabled: true,
+        locale: 'en',
+        syncMode: 'review',
+        direction: 'pull',
+        kind: 'codebase',
+        config: { [WIKI_CONFIG_KEY]: 'on', [WIKI_AUTO_REGENERATE_CONFIG_KEY]: 'on-push', branch: 'main' },
+      };
+      expect(await svc.queueWebhookRefs(row as never, ['b'])).toMatchObject({ mode: 'review' });
+      expect(await svc.createRun(row as never, 'pull', 'manual', {})).toMatchObject({ mode: 'review' });
+      expect(await svc.queueRepoPush(row as never, { branch: 'main' })).toMatchObject({ mode: 'review' });
     });
   });
 

@@ -5,6 +5,7 @@ import request from 'supertest';
 import type { ExportManifest, PublishingSettingsOverride } from '@knowledge/contracts';
 import { ExportWorkerModule } from '../src/export/export-worker.module.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
+import { SiteAudienceStamper } from '../src/publishing/site-audience.stamper.js';
 import { createE2eApp } from './e2e-app.js';
 
 /**
@@ -148,6 +149,81 @@ describe('publishing (e2e)', () => {
     } finally {
       await prisma.publishedSite.delete({ where: { id: site.id } });
       await prisma.project.delete({ where: { id: project.id } });
+    }
+  });
+
+  it('restricting a published page withholds it from every version, and lifting it brings it back (#760)', async () => {
+    const project = await prisma.project.create({ data: { workspaceId: WORKSPACE, name: `Sundew ${nonce} withheld` } });
+    const site = await prisma.publishedSite.create({
+      data: { workspaceId: WORKSPACE, projectId: project.id, slug: `sundew-w-${nonce}`, status: 'live', createdBy: randomUUID() },
+    });
+    try {
+      const published = await createPage(project.id, `Sundew ${nonce} published`, `Sundew ${nonce} text.\n`);
+      const under = await createPage(project.id, `Sundew ${nonce} under`, `Sundew ${nonce} under.\n`, published);
+      const open = await createPage(project.id, `Sundew ${nonce} open`, `Sundew ${nonce} open.\n`);
+      const live = await prisma.siteVersion.create({
+        data: { siteId: site.id, name: 'Latest', slug: 'latest', kind: 'live', status: 'built', builtAt: new Date(), createdBy: site.createdBy },
+      });
+      const frozen = await prisma.siteVersion.create({
+        data: { siteId: site.id, name: 'v1', slug: 'v1', kind: 'frozen', status: 'built', builtAt: new Date(), createdBy: site.createdBy },
+      });
+      await prisma.publishedSite.update({ where: { id: site.id }, data: { defaultVersionId: live.id } });
+      const heads = await prisma.documentBranch.findMany({ where: { documentId: { in: [published, under, open] } } });
+      const row = (versionId: string, documentId: string, parentId: string | null, depth: number, slugPath: string) => ({
+        versionId,
+        documentId,
+        revisionId: heads.find((h) => h.documentId === documentId)!.headRevisionId!,
+        parentId,
+        position: 0,
+        depth,
+        slugPath,
+        title: `Sundew ${slugPath}`,
+        searchBody: `How the sundew ${nonce} traps insects.`,
+      });
+      for (const v of [live.id, frozen.id]) {
+        await prisma.siteVersionPage.createMany({
+          data: [row(v, published, null, 0, 'published'), row(v, under, published, 1, 'published/under'), row(v, open, null, 0, 'open')],
+        });
+      }
+      await prisma.$executeRaw`
+        UPDATE site_version_pages SET search_vector = setweight(to_tsvector('russian', search_body), 'C') WHERE version_id IN (${live.id}::uuid, ${frozen.id}::uuid)`;
+
+      const read = async (version: string) => {
+        const q = version === 'latest' ? '' : `&version=${version}`;
+        const prefix = version === 'latest' ? '' : `/${version}`;
+        const resolved = await http().get(`/v1/public/sites/resolve?slug=sundew-w-${nonce}&path=${prefix}/published`).expect(200);
+        const hits = await http().get(`/v1/public/sites/${site.id}/search?q=sundew ${nonce}${q}`).expect(200);
+        return {
+          page: resolved.body.page?.documentId ?? null,
+          tree: (resolved.body.tree as { documentId: string }[]).map((n) => n.documentId).sort(),
+          search: (hits.body.results as { documentId: string }[]).map((r) => r.documentId).sort(),
+          signIn: resolved.body.site.restricted,
+        };
+      };
+      const whole = [open, published].sort();
+      const everything = [open, published, under].sort();
+      expect(await read('latest')).toMatchObject({ page: published, search: everything });
+
+      // What the worker's AclRestampSweeper does on its next tick.
+      const sweep = () => app.get(SiteAudienceStamper).restampPublishing(published, new Set());
+      await http().put(`/v1/documents/${published}/access`).send({ restricted: true, grants: [] }).expect(200);
+      await sweep();
+      for (const version of ['latest', 'v1']) {
+        const withheld = await read(version);
+        expect(withheld).toMatchObject({ page: null, tree: [open], search: [open] });
+        expect(withheld.signIn).toBeFalsy();
+      }
+
+      await http().put(`/v1/documents/${published}/access`).send({ restricted: false, grants: [] }).expect(200);
+      await sweep();
+      for (const version of ['latest', 'v1']) {
+        const back = await read(version);
+        expect(back.page).toBe(published);
+        expect(back.tree).toEqual(expect.arrayContaining(whole));
+        expect(back.search).toEqual(everything);
+      }
+    } finally {
+      await prisma.publishedSite.delete({ where: { id: site.id } });
     }
   });
 

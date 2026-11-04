@@ -123,8 +123,9 @@ export class ConnectorsController {
   @Returns('ConnectorRunResponse')
   @Access('viewer', 'connector-run')
   @ApiOperation({ summary: 'One sync run — the poll target' })
-  async run(@Param('runId', ParseUUIDPipe) runId: string): Promise<ConnectorRunResponse> {
-    return { run: await this.items.runInfo(runId) };
+  async run(@Param('runId', ParseUUIDPipe) runId: string, @CurrentPrincipal() principal: Principal): Promise<ConnectorRunResponse> {
+    const [run] = await this.connectors.visibleRuns(await this.scopeOfRun(runId, principal), [await this.items.runInfo(runId)]);
+    return { run };
   }
 
   // --- staged items (docs/features/26) ---
@@ -137,9 +138,16 @@ export class ConnectorsController {
   @Returns('ListConnectorRunItemsResponse')
   @Access('viewer', 'connector-run')
   @ApiOperation({ summary: 'The tree of items this run found — flat rows joined by parentItemId' })
-  async listItems(@Param('runId', ParseUUIDPipe) runId: string): Promise<ListConnectorRunItemsResponse> {
-    const { items, truncated } = await this.items.listItems(runId);
+  async listItems(
+    @Param('runId', ParseUUIDPipe) runId: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<ListConnectorRunItemsResponse> {
+    const { items, truncated } = await this.items.listItems(runId, await this.scopeOfRun(runId, principal));
     return { runId, items, truncated };
+  }
+
+  private async scopeOfRun(runId: string, principal: Principal) {
+    return this.permissions.scopeFor(principal, (await this.items.requireRun(runId)).workspaceId);
   }
 
   @Get('runs/:runId/items/:itemId')
@@ -149,8 +157,9 @@ export class ConnectorsController {
   async getItem(
     @Param('runId', ParseUUIDPipe) runId: string,
     @Param('itemId', ParseUUIDPipe) itemId: string,
+    @CurrentPrincipal() principal: Principal,
   ): Promise<ConnectorRunItemResponse> {
-    return this.items.getItem(runId, itemId);
+    return this.items.getItem(runId, itemId, await this.scopeOfRun(runId, principal));
   }
 
   @Patch('runs/:runId/items/:itemId')
@@ -203,8 +212,11 @@ export class ConnectorsController {
   @Returns('ConnectorResponse')
   @Access('viewer', 'connector')
   @ApiOperation({ summary: 'Read one connector' })
-  async get(@Param('id', ParseUUIDPipe) id: string): Promise<ConnectorResponse> {
-    return { connector: await this.connectors.get(id) };
+  async get(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<ConnectorResponse> {
+    const connector = await this.connectors.get(id);
+    const scope = await this.permissions.scopeFor(principal, connector.workspaceId);
+    const [lastRun] = await this.connectors.visibleRuns(scope, [connector.lastRun]);
+    return { connector: { ...connector, lastRun } };
   }
 
   /**
@@ -362,8 +374,11 @@ export class ConnectorsController {
   async runs(
     @Param('id', ParseUUIDPipe) id: string,
     @Query() query: ConnectorPageQueryDto,
+    @CurrentPrincipal() principal: Principal,
   ): Promise<ListConnectorRunsResponse> {
-    return { connectorId: id, ...(await this.connectors.listRuns(id, query)) };
+    const page = await this.connectors.listRuns(id, query);
+    const scope = await this.permissions.scopeFor(principal, (await this.connectors.require(id)).workspaceId);
+    return { connectorId: id, ...page, runs: await this.connectors.visibleRuns(scope, page.runs) };
   }
 
   @Get(':id/links')

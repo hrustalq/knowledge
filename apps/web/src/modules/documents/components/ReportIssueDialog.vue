@@ -87,11 +87,17 @@ async function submit() {
     })
     open.value = false
     emit('reported', res)
-    toast.success(
-      res.deduplicated
-        ? t('knowledgeIssue.toast.deduplicated', { n: res.issue.reportCount })
-        : t(`knowledgeIssue.toast.${res.issue.status}`),
-    )
+    if (res.suggestionIgnored) {
+      toast.warning(t('knowledgeIssue.toast.suggestionIgnored'))
+    } else {
+      // A folded report's correction can still open the merge request, and that is the news.
+      const openedDraft = res.issue.status === 'proposed' && !!suggestion.value.trim()
+      toast.success(
+        res.deduplicated && !openedDraft
+          ? t('knowledgeIssue.toast.deduplicated', { n: res.issue.reportCount })
+          : t(`knowledgeIssue.toast.${res.issue.status}`),
+      )
+    }
   } catch (e) {
     error.value = errorMessage(e, t)
   } finally {

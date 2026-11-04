@@ -5,6 +5,7 @@ import type { ExportJob } from '@prisma/client';
 import type { ExportManifest } from '@knowledge/contracts';
 import { ExportService, exportFilename } from '../src/export/export.service.js';
 import { ExportScopeService } from '../src/export/export-scope.service.js';
+import { replaceSourceBody } from '../src/common/frontmatter.js';
 import { ExportBuildService } from '../src/export/export-build.service.js';
 import { ExportSweeper } from '../src/export/export.sweeper.js';
 import {
@@ -516,6 +517,41 @@ describe('ExportBuildService', () => {
     expect(h.row().status).toBe('completed');
     expect(h.scope.documents).toHaveBeenCalledWith(expect.objectContaining({ requester: { shareLinkId: 'share-1' } }));
     expect(h.events.publish).not.toHaveBeenCalled();
+  });
+
+  it('exports a spec that opens with --- whole, for a member and through a share link (#763)', async () => {
+    const yaml = '---\nopenapi: 3.0.0\ninfo:\n  title: Billing\n';
+    for (const shareLinkId of [null, 'share-1']) {
+      const h = buildHarness({ row: { shareLinkId } });
+      h.scope.documents.mockResolvedValue([
+        { id: 'a', parentId: null, title: 'Spec', position: 0, category: 'reference', kind: 'openapi' },
+        { id: 'b', parentId: 'a', title: 'Install', position: 0, category: 'guide', kind: 'page' },
+      ] as never);
+      h.storage.getObjectText.mockImplementation(async (key: string) => (key === 'src-a' ? yaml : 'Install body\n'));
+      await h.svc.build('job-1');
+      const zip = unzipSync(h.written[0].bytes);
+      const name = Object.keys(zip).find((k) => k.endsWith('pages/spec.md'))!;
+      expect(strFromU8(zip[name])).toBe(yaml);
+    }
+    const pdf = buildHarness({ row: { format: 'pdf' }, gotenberg: true });
+    pdf.scope.documents.mockResolvedValue([
+      { id: 'a', parentId: null, title: 'Spec', position: 0, category: 'reference', kind: 'openapi' },
+    ] as never);
+    pdf.storage.getObjectText.mockImplementation(async () => yaml);
+    await pdf.svc.build('job-1');
+    const request = pdf.renderer.render.mock.calls[0][0] as { pages: { markdown: string }[] };
+    expect(request.pages[0].markdown).toBe(yaml);
+  });
+
+  it('keeps dollar patterns in a share link archive, and a body repeated in the frontmatter (#762)', async () => {
+    const body = "run `echo $$` and $& or $` and $' end\n";
+    const h = buildHarness({ row: { shareLinkId: 'share-1' } });
+    h.storage.getObjectText.mockImplementation(async (key: string) => (key === 'src-a' ? `---\ntitle: Guide\n---\n${body}` : 'Guide\n'));
+    await h.svc.build('job-1');
+    const zip = unzipSync(h.written[0].bytes);
+    const source = (suffix: string) => strFromU8(zip[Object.keys(zip).find((k) => k.endsWith(suffix))!]);
+    expect(source('pages/guide.md')).toBe(`---\ntitle: Guide\n---\n${body}`);
+    expect(replaceSourceBody('---\ntitle: x\n---\nx', 'x', '$&')).toBe('---\ntitle: x\n---\n$&');
   });
 
   it('never rebuilds an export that already finished', async () => {

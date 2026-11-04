@@ -661,8 +661,12 @@ export interface ProjectSiteResponse {
 // on the row alone and a frozen version follows the rules of today.
 // ---------------------------------------------------------------------------
 
-/** Who a snapshot row is shown to. `public` is the absence of any rule above it. */
-export const SITE_AUDIENCES = ['public', 'visitors', 'members'] as const;
+/**
+ * Who a snapshot row is shown to. `public` is the absence of any rule above it.
+ * `withheld` is no rule at all: the page was restricted after it was published,
+ * so no site reader may have it, whatever its rules say (#760).
+ */
+export const SITE_AUDIENCES = ['public', 'visitors', 'members', 'withheld'] as const;
 export type SiteAudience = (typeof SITE_AUDIENCES)[number];
 
 /** What a rule may ask for. `public` is not a rule: removing the rules is. */
@@ -758,7 +762,7 @@ export interface SiteAudienceStamp {
   claims: SiteAudienceClaims | null;
 }
 
-const AUDIENCE_RANK: Record<SiteAudience, number> = { public: 0, visitors: 1, members: 2 };
+const AUDIENCE_RANK: Record<SiteAudience, number> = { public: 0, visitors: 1, members: 2, withheld: 3 };
 
 /**
  * Fold the rules met on a page's path (`documents.path` ids, top first,
@@ -779,6 +783,7 @@ export function foldSiteAudience(pathIds: readonly string[], rules: ReadonlyMap<
 
 /** May this viewer read a row with this stamp? */
 export function siteViewerCanSee(stamp: { audience: string; audienceClaims?: unknown }, viewer: SiteViewer): boolean {
+  if (stamp.audience === 'withheld') return false;
   if (stamp.audience === 'public') return true;
   if (viewer.kind === 'member') return true;
   if (stamp.audience === 'visitors' && viewer.kind === 'visitor') {

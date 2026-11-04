@@ -34,6 +34,7 @@ export interface ShareLinkReader {
 
 export interface ScopeDocument extends PlanDocument {
   category: string;
+  kind: string;
 }
 
 /** The revision a page exports, and the branch it came from. */
@@ -62,7 +63,7 @@ export class ExportScopeService {
    * `/ab/`), or every page of a project.
    */
   async documents(input: ExportScopeInput): Promise<ScopeDocument[]> {
-    const select = { id: true, parentId: true, title: true, position: true, category: true } as const;
+    const select = { id: true, parentId: true, title: true, position: true, category: true, kind: true } as const;
     const visible = await this.visibleTo(input);
     if (input.scope === 'project') {
       // A share link names a page; it never reaches a whole project.
@@ -79,7 +80,7 @@ export class ExportScopeService {
     });
     if (!root || root.workspaceId !== input.workspaceId || root.archivedAt) return [];
     if (input.scope === 'page' || !hasRealPath(root.path)) {
-      return [{ id: root.id, parentId: root.parentId, title: root.title, position: root.position, category: root.category }];
+      return [{ id: root.id, parentId: root.parentId, title: root.title, position: root.position, category: root.category, kind: root.kind }];
     }
     return this.prisma.document.findMany({
       where: { workspaceId: input.workspaceId, archivedAt: null, ...LISTED_PAGE, path: { startsWith: root.path }, AND: [visible] },

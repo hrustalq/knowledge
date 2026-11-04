@@ -1,4 +1,5 @@
 import matter from 'gray-matter';
+import { isStructuredKind } from '@knowledge/contracts';
 
 /**
  * Reading and rewriting a markdown page's frontmatter.
@@ -29,11 +30,33 @@ export interface ParsedMarkdown {
 }
 
 export function parseMarkdown(raw: string): ParsedMarkdown {
-  const parsed = matter(raw);
+  // Options bypass gray-matter's cache, which answers a repeat of a source that threw with its unparsed text (#775).
+  const parsed = matter(raw, {});
   return {
     data: (parsed.data ?? {}) as Record<string, unknown>,
     body: parsed.content,
   };
+}
+
+/**
+ * A stored page's source, split as its kind reads it. A spec (#78) or fixture
+ * (#483) has no frontmatter, and YAML may well open with a `---` marker
+ * gray-matter would eat, leaving an empty body.
+ */
+export function readPageSource(raw: string, kind: string | null | undefined): { data: Record<string, unknown>; content: string } {
+  if (isStructuredKind(kind)) return { data: {}, content: raw };
+  const parsed = matter(raw);
+  return { data: (parsed.data ?? {}) as Record<string, unknown>, content: parsed.content };
+}
+
+/**
+ * `source` with its body swapped, every byte before the body kept. gray-matter's
+ * `content` is always a suffix of its input, and slicing is what makes this exact:
+ * `String.replace` reads `$$` and `$&` in the new body as patterns, and would hit
+ * the first occurrence of the old one, which may be inside the frontmatter (#762).
+ */
+export function replaceSourceBody(source: string, oldBody: string, newBody: string): string {
+  return source.slice(0, source.length - oldBody.length) + newBody;
 }
 
 /**

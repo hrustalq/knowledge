@@ -207,7 +207,7 @@ describe('implicit signals', () => {
     expect(signalKindFor(confidence('none'))).toBe('no-answer');
   });
 
-  it('writes exactly one row for a weak turn, pointing at its message', async () => {
+  it('writes exactly one row for a weak turn, off the message key votes use (#754)', async () => {
     const prisma = prismaWith(thread);
     service(prisma).recordSignal({
       workspaceId: WS,
@@ -217,7 +217,6 @@ describe('implicit signals', () => {
       sources: [],
       confidence: confidence('low'),
       threadId: THREAD,
-      messageId: REPLY,
       principal: alice,
     });
     await new Promise((r) => setTimeout(r, 0));
@@ -226,12 +225,52 @@ describe('implicit signals', () => {
       data: expect.objectContaining({
         kind: 'low-confidence',
         surface: 'editor-assistant',
-        messageId: REPLY,
         threadId: THREAD,
         query: 'q',
         confidence: confidence('low'),
       }),
     });
+  });
+
+  it('leaves a vote on a weak answer readable and retractable, and the signal standing (#754)', async () => {
+    // A table with the real unique key, which the mocks above do not have.
+    const rows: Array<Record<string, unknown>> = [];
+    const prisma = prismaWith(thread);
+    prisma.answerFeedback.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => {
+      const row = { id: `f-${rows.length}`, messageId: null, ...data };
+      rows.push(row);
+      return row as never;
+    });
+    prisma.answerFeedback.upsert.mockImplementation(
+      async ({ where, create, update }: { where: { messageId_createdBy: { messageId: string; createdBy: string } }; create: Record<string, unknown>; update?: Record<string, unknown> }) => {
+        const key = where.messageId_createdBy;
+        const hit = rows.find((r) => r.messageId === key.messageId && r.createdBy === key.createdBy);
+        if (hit) return Object.assign(hit, update) as never;
+        const row = { id: `f-${rows.length}`, createdAt: new Date(0), ...create };
+        rows.push(row);
+        return row as never;
+      },
+    );
+    const matching = (where: Record<string, unknown>) =>
+      rows.filter((r) => r.createdBy === where.createdBy && r.kind === where.kind && (typeof where.messageId === 'string' ? r.messageId === where.messageId : (where.messageId as { in: unknown[] }).in.includes(r.messageId)));
+    prisma.answerFeedback.findMany.mockImplementation(async ({ where }: { where: Record<string, unknown> }) => matching(where) as never);
+    prisma.answerFeedback.deleteMany.mockImplementation(async ({ where }: { where: Record<string, unknown> }) => {
+      const hits = matching(where);
+      for (const hit of hits) rows.splice(rows.indexOf(hit), 1);
+      return { count: hits.length };
+    });
+
+    const svc = service(prisma);
+    svc.recordSignal({ workspaceId: WS, surface: 'assistant', query: 'q', answer: 'a', sources: [], confidence: confidence('low'), threadId: THREAD, principal: alice });
+    await new Promise((r) => setTimeout(r, 0));
+    await svc.vote(REPLY, alice, { rating: 'down', reason: 'outdated' });
+
+    expect((await svc.ownVotes([REPLY], 'u-alice')).get(REPLY)).toMatchObject({ rating: 'down', reason: 'outdated' });
+    expect(rows.map((r) => r.kind).sort()).toEqual(['low-confidence', 'vote']);
+
+    expect(await svc.retract(REPLY, alice)).toEqual({ removed: true });
+    expect((await svc.ownVotes([REPLY], 'u-alice')).size).toBe(0);
+    expect(rows.map((r) => r.kind)).toEqual(['low-confidence']);
   });
 
   it('never throws into the turn when the insert fails', async () => {

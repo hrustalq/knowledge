@@ -6676,11 +6676,27 @@
     },
     {
       "name": "knowledge_list_branches",
-      "description": "s branches (#636): each with the pages it changed that you can open, who wrote it last and when, \" + s: the same name on any page of the project is one branch, and one merge request carries all of it.",
+      "description": "s branches (#636): each with the pages it changed that you can open, who wrote it last and when, \" + s: the same name on any page of the project is one branch, and one merge request carries all of it. Newest first and paginated, because merged branches stay: pass name to find one (a new page's id after a push), openOnly for those with an open merge request.",
       "inputs": [
         {
           "name": "projectId",
           "optional": false
+        },
+        {
+          "name": "name",
+          "optional": true
+        },
+        {
+          "name": "openOnly",
+          "optional": true
+        },
+        {
+          "name": "cursor",
+          "optional": true
+        },
+        {
+          "name": "limit",
+          "optional": true
         }
       ]
     },

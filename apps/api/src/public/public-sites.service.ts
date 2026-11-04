@@ -204,7 +204,8 @@ export class PublicSitesService {
       this.sessions.viewer(site, cookieHeader),
     ]);
     const rows = visibleRows(all, viewer);
-    const restricted = all.some((r) => r.audience !== 'public');
+    // Whether signing in could show more; nothing shows a withheld page.
+    const restricted = all.some((r) => r.audience !== 'public' && r.audience !== 'withheld');
     const page = this.pickPage(rows, slugPath, query.from);
 
     // The nav's first render (issue #204): the top level and the children of

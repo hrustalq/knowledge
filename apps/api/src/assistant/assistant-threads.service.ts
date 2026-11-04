@@ -64,6 +64,7 @@ export class AssistantThreadsService {
    */
   async listThreads(
     workspaceId: string,
+    createdBy: string,
     opts: { search?: string; limit?: number; cursor?: string } = {},
   ): Promise<ListAssistantThreadsResponse> {
     const take = Math.min(Math.max(opts.limit ?? DEFAULT_THREAD_PAGE, 1), MAX_THREAD_PAGE);
@@ -72,6 +73,8 @@ export class AssistantThreadsService {
     const rows = await this.prisma.assistantThread.findMany({
       where: {
         workspaceId,
+        // A person's own threads (#772): their answers can quote pages nobody else may open.
+        createdBy,
         ...(before && !Number.isNaN(before.getTime()) ? { updatedAt: { lt: before } } : {}),
         // A chat is findable by what was said in it, not only by its title —
         // most threads never get renamed, so title-only search finds nothing.

@@ -26,6 +26,8 @@ in the pull request that introduces them — see
   empty body in `llms-full.txt` and was missing from a published site's search.
 - **A share link's zip keeps a page's text exact** (#762). A page containing `$$` or `$&`, as shell and regex examples
   do, came out altered in the archive.
+- **A webhook honours a connector's review mode** (#764). A connector set to `review` or `step` wrote pages without
+  review whenever a webhook fired. Webhook runs now stage their items and wait, like a manual run.
 
 ## [0.45.1] — 2026-11-04
 

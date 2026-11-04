@@ -506,6 +506,8 @@ export class ConnectorsService {
         direction: 'pull',
         trigger: 'webhook',
         status: 'queued',
+        // Frozen like any other run's: a webhook must not write past a `review` connector.
+        mode: row.syncMode,
         scope: [...new Set(externalIds)] as Prisma.InputJsonValue,
         locale: row.locale,
       },

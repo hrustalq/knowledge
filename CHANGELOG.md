@@ -64,6 +64,9 @@ in the pull request that introduces them — see
 - **Rendering a template no longer reveals a restricted page's title** (#774). A viewer refused on a page could read its
   title, or a restricted project's name, by rendering a template with `{{parent}}` or a page placeholder pointing at it.
   Such a value now renders as if it had not been given.
+- **Assistant chat threads are private to the person who asked** (#772). Any workspace viewer could list and search
+  everyone's threads, read them, rename them, rewind them or delete them, including answers quoting pages only the asker
+  may open. A thread is now visible only to its asker, and to anyone else it reads as not found.
 
 ### Operations
 

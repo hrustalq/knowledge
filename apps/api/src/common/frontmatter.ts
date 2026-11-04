@@ -29,7 +29,8 @@ export interface ParsedMarkdown {
 }
 
 export function parseMarkdown(raw: string): ParsedMarkdown {
-  const parsed = matter(raw);
+  // Options bypass gray-matter's cache, which answers a repeat of a source that threw with its unparsed text (#775).
+  const parsed = matter(raw, {});
   return {
     data: (parsed.data ?? {}) as Record<string, unknown>,
     body: parsed.content,

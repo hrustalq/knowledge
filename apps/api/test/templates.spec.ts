@@ -14,7 +14,7 @@ import {
   renderTemplateTitle,
   type TemplateMeta,
 } from '@knowledge/contracts';
-import { parseTemplateSource, TemplateSourceError } from '../src/templates/template-source.js';
+import { parseStoredTemplateSource, parseTemplateSource, TemplateSourceError } from '../src/templates/template-source.js';
 import { BUILT_IN_TEMPLATES } from '../src/templates/built-in/index.js';
 import { TemplatesService } from '../src/templates/templates.service.js';
 import { TemplatesController } from '../src/templates/templates.controller.js';
@@ -138,6 +138,15 @@ describe('template sources', () => {
     const source = BUILT_IN_TEMPLATES.adr.text.en.source;
     expect(parseTemplateSource(source).meta.titlePattern).toBe('ADR-{{number}}: {{title}}');
     expect(parseTemplateSource(source).meta.titlePattern).toBe('ADR-{{number}}: {{title}}');
+  });
+
+  it('refuses invalid frontmatter every time, while a stored version of it still reads (#775)', () => {
+    const source = '---\ncategory: [oops\n---\n# Body\n';
+    for (const _ of [1, 2]) {
+      expect(() => parseTemplateSource(source)).toThrowError(TemplateSourceError);
+      expect(parseStoredTemplateSource(source)).toMatchObject({ body: source, tags: [], relations: [] });
+    }
+    expect(() => parseStoredTemplateSource('---\ntemplate: 1\n---\n')).toThrowError(TemplateSourceError);
   });
 
   // The QA templates (#482) join the graph at creation: the operation lands as

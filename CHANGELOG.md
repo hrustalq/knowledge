@@ -19,6 +19,9 @@ in the pull request that introduces them — see
 
 - **`llms.txt` and `llms-full.txt` leave out archived pages** (#761). An archived page kept its title in the index and
   its full body in the dump, where agents read it as current. Its `.md` still reads by id.
+- **A template with invalid frontmatter is refused every time** (#775). Pressing Save again after the error stored the
+  broken source as a new version. A version already stored that way now reads with its source as the body, so someone
+  can correct it.
 
 ## [0.45.1] — 2026-11-04
 

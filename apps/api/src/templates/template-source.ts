@@ -142,9 +142,10 @@ function readRelations(data: Record<string, unknown>, meta: TemplateMeta): Templ
 /**
  * Parse and validate a template source. Throws `TemplateSourceError`.
  *
- * gray-matter caches parses by input string and hands back the cached object,
- * so the frontmatter is cloned before the reserved key is deleted from it —
- * otherwise the second parse of the same built-in would find no `template:`.
+ * Passing options is what turns off gray-matter's parse cache: it stores a file
+ * under its text before parsing, so without them a second parse of a source that
+ * threw returns that unparsed file, and the same save succeeds on the second try
+ * (#775). The cached object was also shared, and the reserved key is deleted below.
  */
 export function parseTemplateSource(source: string): ParsedTemplateSource {
   if (source.length > TEMPLATE_MAX_SOURCE_CHARS) {
@@ -152,11 +153,11 @@ export function parseTemplateSource(source: string): ParsedTemplateSource {
   }
   let parsed: matter.GrayMatterFile<string>;
   try {
-    parsed = matter(source);
+    parsed = matter(source, {});
   } catch (e) {
     throw new TemplateSourceError('invalidFrontmatter', (e as Error).message.split('\n')[0]);
   }
-  const data = structuredClone((parsed.data ?? {}) as Record<string, unknown>);
+  const data = (parsed.data ?? {}) as Record<string, unknown>;
   const meta = readMeta(data[RESERVED_KEY]);
   delete data[RESERVED_KEY];
   return {
@@ -166,4 +167,18 @@ export function parseTemplateSource(source: string): ParsedTemplateSource {
     tags: readFrontmatterTags(data),
     relations: readRelations(data, meta),
   };
+}
+
+/**
+ * A stored version, which reads even if its frontmatter does not parse: #775 let
+ * such versions through, and one must not take down every read of its template.
+ * The source shows as the body, so a person can see it and save a corrected version.
+ */
+export function parseStoredTemplateSource(source: string): ParsedTemplateSource {
+  try {
+    return parseTemplateSource(source);
+  } catch (e) {
+    if (!(e instanceof TemplateSourceError) || e.code !== 'invalidFrontmatter') throw e;
+    return { meta: readMeta(undefined), data: {}, body: source, tags: [], relations: [] };
+  }
 }

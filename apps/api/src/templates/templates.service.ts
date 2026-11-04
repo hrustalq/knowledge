@@ -36,7 +36,7 @@ import {
 // in the language its caller pinned rather than the default.
 import { currentLocale, t } from '../i18n/t.js';
 import { BUILT_IN_TEMPLATES, type BuiltInTemplate } from './built-in/index.js';
-import { parseTemplateSource, TemplateSourceError, type ParsedTemplateSource } from './template-source.js';
+import { parseStoredTemplateSource, parseTemplateSource, TemplateSourceError, type ParsedTemplateSource } from './template-source.js';
 import { TEMPLATE_MAX_VALUE_CHARS, TEMPLATES_MAX_PER_WORKSPACE } from './templates.constants.js';
 
 /** A template pinned to one version, parsed — what rendering and provenance need. */
@@ -631,7 +631,6 @@ export class TemplatesService {
   ): ResolvedTemplate {
     // Re-parsed rather than read from `meta`: the stored source is the truth,
     // and a version written before a parser fix should render with the fix.
-    // Parsing cannot fail — it was validated on write.
     return {
       ref,
       workspaceId: row.workspaceId,
@@ -639,7 +638,7 @@ export class TemplatesService {
       version: stored.version,
       name,
       source: stored.source,
-      parsed: parseTemplateSource(stored.source),
+      parsed: parseStoredTemplateSource(stored.source),
       row,
     };
   }

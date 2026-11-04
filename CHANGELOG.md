@@ -49,6 +49,14 @@ in the pull request that introduces them — see
 - **The activity feed names who created a branch, curated a relation, changed an attachment or submitted an import**
   (#755). Those rows credited nobody, under any `AUTH_MODE`, and the person who acted could be notified of their own
   act. Rows already written stay as they are.
+- **A vote on a low-confidence answer stays** (#754). The thumb vanished on reload and pressing it again removed
+  nothing, on the answers people most often downvote. Such votes already cast now read as votes, and can be retracted.
+
+### Operations
+
+- Migration `20261231120000_answer_signal_no_message` (#754) splits each answer signal holding a vote into a signal and a
+  vote, and clears the message id on every signal. It survives a code rollback: the previous image reads these rows as it
+  always did, with no schema change.
 
 ## [0.45.1] — 2026-11-04
 

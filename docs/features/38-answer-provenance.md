@@ -158,8 +158,9 @@ defaulted throughout — no backfill, and the previous image runs against it:
   paths), a confidence of `low` writes a `low-confidence` row and `none` a
   `no-answer` row, with the question, the answer excerpt, the cited pages and
   the confidence snapshot. Fire-and-forget like `ActivityService.record`: the
-  write can never fail the turn, and the message id makes it at most one row
-  per turn. A good answer nobody rated writes nothing.
+  write can never fail the turn. A signal holds its thread but no message id,
+  because `(message_id, created_by)` is the vote's key and a signal on it would
+  swallow the asker's vote. A good answer nobody rated writes nothing.
 
 ### Why
 

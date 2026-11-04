@@ -47,7 +47,6 @@ export interface AnswerSignalInput {
   sources: readonly AssistantSource[];
   confidence: AnswerConfidence | null;
   threadId?: string;
-  messageId?: string;
   principal: Principal;
   /** The turn's config: the harness knows exactly which model it just ran. */
   providerId?: string | null;
@@ -151,7 +150,8 @@ export class AnswerFeedbackService {
         ...model,
         ...fields,
       },
-      update: fields,
+      // `kind`: a signal an image from before #754 keyed on this message, in the deploy window.
+      update: { ...fields, kind: 'vote' },
     });
     return toInfo(row);
   }
@@ -252,7 +252,8 @@ export class AnswerFeedbackService {
    * The harness's own verdict on a weak turn: `none` confidence is a
    * `no-answer`, `low` is a `low-confidence`, anything better writes nothing.
    * Fire-and-forget like `ActivityService.record` — a write here never throws
-   * into the turn, and the message id makes it at most one row per turn.
+   * into the turn. It holds no message id: `(message_id, created_by)` is the
+   * vote's key, and a signal on it would swallow the asker's vote (#754).
    */
   recordSignal(input: AnswerSignalInput): void {
     const kind = signalKindFor(input.confidence);
@@ -266,7 +267,6 @@ export class AnswerFeedbackService {
           query: input.query.slice(0, QUERY_MAX_CHARS),
           answerExcerpt: input.answer.slice(0, EXCERPT_MAX_CHARS) || null,
           threadId: input.threadId ?? null,
-          messageId: input.messageId ?? null,
           citedDocumentIds: citedIds(input.sources) as object,
           confidence: (input.confidence as unknown as Prisma.InputJsonValue) ?? Prisma.DbNull,
           providerId: input.providerId ?? null,

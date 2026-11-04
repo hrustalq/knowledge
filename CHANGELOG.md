@@ -95,8 +95,16 @@ in the pull request that introduces them — see
   cleaning one up is now refused like reading it, and so is Approve all while a run holds such an item. Someone with
   access to the page, or an admin, approves it.
 
+### Security
+
+- **Outbound requests are checked more strictly, and a credential stays on its origin.** Upgrade promptly.
+- **Avatar uploads are held to the allowed image types.** Upgrade promptly. The reverse proxy's `Caddyfile` changed too, so it
+  has to be deployed with this release.
+
 ### Operations
 
+- `Caddyfile` changed. A deploy installs the new file but does not restart Caddy, so run
+  `docker compose -f docker-compose.prod.yml up -d --force-recreate caddy` on the box after it finishes.
 - Migration `20261231120000_answer_signal_no_message` (#754) splits each answer signal holding a vote into a signal and a
   vote, and clears the message id on every signal. It survives a code rollback: the previous image reads these rows as it
   always did, with no schema change.

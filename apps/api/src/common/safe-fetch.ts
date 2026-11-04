@@ -1,5 +1,6 @@
-import { Agent, fetch as undiciFetch, type RequestInit as UndiciRequestInit } from 'undici';
+import { Agent, buildConnector, fetch as undiciFetch, type RequestInit as UndiciRequestInit } from 'undici';
 import { lookup as dnsLookup, type LookupAddress, type LookupOptions } from 'node:dns';
+import { isIP } from 'node:net';
 import { isPrivateAddress } from './safe-url.js';
 
 /**
@@ -26,6 +27,10 @@ import { isPrivateAddress } from './safe-url.js';
  * validation would fail against it. Fixing that needs `servername` control,
  * which needs a dispatcher anyway. Same dependency, worse behaviour.
  *
+ * A host that is already an address never reaches a lookup, so the connector
+ * checks that case itself. Together they see every socket this opens, including
+ * each hop of a redirect.
+ *
  * `assertSafeExternalUrl` stays where it is and keeps its job: telling an admin
  * typing into a settings form that the URL is wrong, in words, immediately.
  * This is the runtime half, and it is the one that is load-bearing.
@@ -38,7 +43,15 @@ import { isPrivateAddress } from './safe-url.js';
 let guarded: Agent | undefined;
 
 function guardedAgent(): Agent {
-  guarded ??= new Agent({ connect: { lookup: guardedLookup } });
+  if (guarded) return guarded;
+  const connect = buildConnector({ lookup: guardedLookup } as buildConnector.BuildOptions);
+  guarded = new Agent({
+    connect: (options, callback) => {
+      const host = options.hostname.replace(/^\[|\]$/g, '');
+      if (isIP(host) && isPrivateAddress(host)) return callback(blocked(host, host), null);
+      return connect(options, callback);
+    },
+  });
   return guarded;
 }
 
@@ -118,14 +131,49 @@ function blocked(hostname: string, address: string): NodeJS.ErrnoException {
  * WHATWG shape, from the same implementation the global one is built on — cast
  * once here so no call site has to know which of the two it is holding.
  */
-export function safeFetch(
+export async function safeFetch(
   input: string | URL,
   init: RequestInit = {},
   allowPrivate = false,
 ): Promise<Response> {
-  const options = init as UndiciRequestInit;
-  return undiciFetch(
-    input,
-    allowPrivate ? options : { ...options, dispatcher: guardedAgent() },
-  ) as unknown as Promise<Response>;
+  const send = (url: string | URL, request: RequestInit) => {
+    const options = request as UndiciRequestInit;
+    return undiciFetch(url, allowPrivate ? options : { ...options, dispatcher: guardedAgent() }) as unknown as Promise<Response>;
+  };
+  if (init.redirect === 'manual' || init.redirect === 'error') return send(input, init);
+
+  let url = new URL(input);
+  let request: RequestInit = { ...init, redirect: 'manual' };
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
+    const res = await send(url, request);
+    const location = res.headers.get('location');
+    if (!REDIRECT_STATUSES.has(res.status) || !location) return res;
+    await res.body?.cancel();
+    const next = new URL(location, url);
+    if (next.origin !== url.origin) request = { ...request, headers: withoutCredentials(request.headers) };
+    if (res.status === 303 || ((res.status === 301 || res.status === 302) && request.method === 'POST')) {
+      request = { ...request, method: 'GET', body: undefined };
+    }
+    url = next;
+  }
+  throw new Error(`too many redirects from ${String(input)}`);
+}
+
+const MAX_REDIRECTS = 10;
+const REDIRECT_STATUSES: ReadonlySet<number> = new Set([301, 302, 303, 307, 308]);
+const SAFE_ACROSS_ORIGINS = ['accept', 'accept-language', 'user-agent', 'content-type'];
+
+/**
+ * What may follow a request to another origin. Followed by hand because undici
+ * strips only `authorization`, `cookie` and `host`, and a source's credential can
+ * be a custom header. An allowlist, so a header added later stays home by default.
+ */
+function withoutCredentials(headers: RequestInit['headers']): Headers {
+  const kept = new Headers();
+  const given = new Headers(headers);
+  for (const name of SAFE_ACROSS_ORIGINS) {
+    const value = given.get(name);
+    if (value !== null) kept.set(name, value);
+  }
+  return kept;
 }

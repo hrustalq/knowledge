@@ -526,6 +526,28 @@ describe('git remote (e2e, #636)', () => {
     expect(await open()).toBe('merged');
   });
 
+  it('a merge by push needs edit on the merge request\'s own page too (#770)', async () => {
+    const admin = await clone(people.admin.key, 'admin-anchor');
+    await git(['checkout', '-q', '-b', 'anchor-both'], admin);
+    edit(admin, `${slugs.secret}.md`, (x) => `${x}\nSecret change.\n`);
+    edit(admin, `${slugs.open}.md`, (x) => `${x}\nOpen change.\n`);
+    await git(['commit', '-qam', 'Both pages'], admin);
+    const mrId = mrIdIn(await gitAll(['push', '-o', 'merge_request.create', 'origin', 'HEAD:anchor-both'], admin))!;
+    // The anchor is the page Bob cannot open.
+    await prisma.mergeRequest.update({ where: { id: mrId }, data: { documentId: ids.secret } });
+    await http().post(`/v1/merge-requests/${mrId}/approve`).set(as(people.alice.key)).expect(ok(201));
+
+    const bob = await clone(people.bob.key, 'bob-anchor');
+    await git(['fetch', '-q', 'origin', 'anchor-both'], bob);
+    await git(['merge', '-q', '--no-ff', '--no-edit', 'FETCH_HEAD'], bob);
+    const refused = await gitFails(['push', 'origin', 'HEAD:main'], bob);
+    expect(refused).toMatch(/restricted/i);
+    expect(refused).not.toContain('Payroll');
+    const mr = await prisma.mergeRequest.findUniqueOrThrow({ where: { id: mrId } });
+    expect(mr.status).toBe('open');
+    await http().post(`/v1/merge-requests/${mrId}/close`).set(as(people.admin.key)).expect(ok(201));
+  });
+
   it('opens a merge request over MCP by project and branch name, and lists the branch', async () => {
     const mcp = (name: string, args: Record<string, unknown>) =>
       http()

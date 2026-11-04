@@ -74,6 +74,9 @@ in the pull request that introduces them — see
 - **A merge by push cannot carry other pages past their checks** (#769). Pushing a merge together with a commit to a
   protected page, or a new page, landed them with no admin and no merge request. Such a push is now refused and nothing
   lands.
+- **A merge by push needs edit on the merge request's own page** (#770). Someone who could only view that page could
+  merge the request, and if they could not see it at all, the request read as merged while its change on that page was
+  dropped.
 
 ### Operations
 

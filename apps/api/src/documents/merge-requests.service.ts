@@ -969,13 +969,14 @@ export class MergeRequestsService {
     const { pages, places, projectId, workspaceId } = await this.spanOf(mr);
     if (pages.length === 0 && places.length === 0) throw new BadRequestException(t('error.mergeRequest.nothingToMerge'));
     this.assertTargetsExist(pages, mr.targetBranch.name);
-    // The guard held the caller to edit on the page the merge request was
-    // opened from; a merge writes every page it spans (#636), and every page
-    // its tree moves, so each must allow it too. The guard's refusal, never a title.
+    // A merge writes every page it spans (#636), and every page its tree moves,
+    // so each must allow it. The merge request's own page too: a route's guard
+    // checks that one, but a merge by push has no route (#770). The guard's
+    // refusal, never a title.
     if (principal && principal.mode !== 'dev') {
       const scope = await this.permissions.scopeFor(principal, workspaceId);
-      for (const id of new Set([...pages.map((p) => p.documentId), ...places.map((p) => p.documentId)])) {
-        if (id !== mr.documentId) await this.permissions.requireLevel(scope, { type: 'document', id }, 'edit');
+      for (const id of new Set([mr.documentId, ...pages.map((p) => p.documentId), ...places.map((p) => p.documentId)])) {
+        await this.permissions.requireLevel(scope, { type: 'document', id }, 'edit');
       }
     }
     // A protected target branch on any page requires workspace admin. Skipped

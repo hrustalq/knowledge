@@ -128,15 +128,16 @@ export class AssistantController {
   @Returns('ListAssistantThreadsResponse')
   @Access('viewer', 'query')
   @ApiOperation({
-    summary: 'List chat pane threads for a workspace, most recently active first (search + keyset pagination)',
+    summary: "List the caller's own chat pane threads in a workspace, most recently active first (search + keyset pagination)",
   })
-  listThreads(@Query() query: ListAssistantThreadsQueryDto): Promise<ListAssistantThreadsResponse> {
-    return this.threads.listThreads(query.workspaceId, query);
+  listThreads(@Query() query: ListAssistantThreadsQueryDto, @CurrentPrincipal() principal: Principal): Promise<ListAssistantThreadsResponse> {
+    return this.threads.listThreads(query.workspaceId, principal.userId, query);
   }
 
   // The routes below resolve their workspace from the thread id itself, so a
   // caller cannot pair a thread from one tenant with a workspaceId they happen
-  // to be a member of and have the ACL pass.
+  // to be a member of and have the ACL pass. The guard also holds them to the
+  // thread's own asker, and anyone else gets a 404 (#772).
 
   @Get('threads/:id')
   @Feature('assistant')

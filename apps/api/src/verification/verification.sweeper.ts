@@ -1,6 +1,6 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import matter from 'gray-matter';
+import { readPageSource } from '../common/frontmatter.js';
 import { ActivityService } from '../activity/activity.service.js';
 import { SYSTEM_ACTOR } from '../activity/actor.js';
 import type { Env } from '../config/env.js';
@@ -182,10 +182,11 @@ export class VerificationSweeper implements OnModuleInit, OnModuleDestroy {
    * value.
    */
   async fillBodyChars(): Promise<number> {
-    const rows = await this.prisma.$queryRaw<Array<{ id: string; s3_key: string }>>`
-      SELECT r.id, r.s3_key
+    const rows = await this.prisma.$queryRaw<Array<{ id: string; s3_key: string; kind: string }>>`
+      SELECT r.id, r.s3_key, d.kind
         FROM document_revisions r
         JOIN document_branches b ON b.head_revision_id = r.id
+        JOIN documents d ON d.id = r.document_id
        WHERE r.body_chars IS NULL
          AND r.status IN ('indexed', 'failed')
        ORDER BY r.finalized_at ASC NULLS LAST
@@ -195,7 +196,7 @@ export class VerificationSweeper implements OnModuleInit, OnModuleDestroy {
     for (const row of rows.filter((r) => !this.unreadable.has(r.id)).slice(0, BODY_CHARS_BATCH)) {
       try {
         const raw = await this.storage.getObjectText(row.s3_key);
-        const bodyChars = matter(raw).content.trim().length;
+        const bodyChars = readPageSource(raw, row.kind).content.trim().length;
         await this.prisma.documentRevision.updateMany({ where: { id: row.id, bodyChars: null }, data: { bodyChars } });
         filled += 1;
       } catch (error) {

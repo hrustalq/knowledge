@@ -4,6 +4,7 @@ import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { GraphService } from '../graph/graph.service.js';
 import { FULLTEXT_PROVIDER, type FulltextProvider } from '../fulltext/fulltext.provider.js';
+import { SiteAudienceStamper } from '../publishing/site-audience.stamper.js';
 
 /**
  * Copies a page's restrictions onto its search-store stamps (#76).
@@ -18,6 +19,10 @@ import { FULLTEXT_PROVIDER, type FulltextProvider } from '../fulltext/fulltext.p
  * the prefilter OpenSearch falls back to past `ACL_DENY_LIST_MAX`. A lagging
  * stamp can cost recall for one tick; it cannot show a page.
  *
+ * Published sites are the exception (#760): their public routes read only
+ * their snapshot rows, so a lagging stamp does show a page until this tick. Those
+ * rows go first, and a failure in either store cannot hold them back.
+ *
  * Worker-only, a fixed tick with back-pressure — there is no cron here.
  */
 @Injectable()
@@ -31,6 +36,7 @@ export class AclRestampSweeper implements OnModuleInit, OnModuleDestroy {
     private readonly graph: GraphService,
     @Inject(FULLTEXT_PROVIDER) private readonly fulltext: FulltextProvider,
     private readonly config: ConfigService<Env, true>,
+    private readonly siteAudiences: SiteAudienceStamper,
   ) {}
 
   onModuleInit() {
@@ -55,8 +61,11 @@ export class AclRestampSweeper implements OnModuleInit, OnModuleDestroy {
          WHERE "acl_stamped_version" < "acl_version"
          ORDER BY "acl_version" - "acl_stamped_version" DESC
          LIMIT ${batch}`;
+      // Once a tick per site: one restamp reads every page's restriction as it stands now.
+      const sites = new Set<string>();
       for (const doc of due) {
         try {
+          await this.siteAudiences.restampPublishing(doc.id, sites);
           await this.graph.restampDocument(doc.workspace_id, doc.id, doc.restricted_by);
           if (this.fulltext.enabled) await this.fulltext.restamp(doc.workspace_id, doc.id, doc.restricted_by);
           // Guarded on the version stamped: a change that landed meanwhile

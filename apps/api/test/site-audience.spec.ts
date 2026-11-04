@@ -279,6 +279,49 @@ describe('SiteAudienceStamper.restamp', () => {
   });
 });
 
+describe('a page restricted after it was published (#760)', () => {
+  const member = { kind: 'member' } as never;
+  const anonymous = { kind: 'anonymous' } as never;
+
+  it('is shown to nobody, a member or a signed-in visitor included', () => {
+    for (const viewer of [member, anonymous, { kind: 'visitor', claims: {} } as never]) {
+      expect(siteViewerCanSee({ audience: 'withheld' }, viewer)).toBe(false);
+    }
+    expect(siteViewerCanSee({ audience: 'public' }, anonymous)).toBe(true);
+  });
+
+  it('restamps every version withheld, and back when the restriction is lifted', async () => {
+    let restrictedBy = ['a'];
+    const prisma = {
+      siteVersion: { findMany: vi.fn(async () => [{ id: 'v1' }, { id: 'v-frozen' }]) },
+      siteVersionPage: { findMany: vi.fn(async () => [{ documentId: 'a' }, { documentId: 'b' }]), updateMany: vi.fn((op: object) => op) },
+      siteAudienceRule: { findMany: vi.fn(async () => []) },
+      document: {
+        findMany: vi.fn(async () => [
+          { id: 'a', path: '/a/', restrictedBy },
+          { id: 'b', path: '/a/b/', restrictedBy },
+        ]),
+      },
+      publishedSite: { findMany: vi.fn(async () => [{ id: SITE }]) },
+      $transaction: vi.fn(async (ops: unknown[]) => ops),
+    };
+    const stamper = new SiteAudienceStamper(prisma as never);
+    const done = new Set<string>();
+    await stamper.restampPublishing('a', done);
+    await stamper.restampPublishing('b', done);
+    // One restamp a tick, however many of the site's pages changed.
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    const stamped = prisma.$transaction.mock.calls[0][0] as Array<{ where: { versionId: { in: string[] }; documentId: { in: string[] } }; data: { audience: string } }>;
+    expect(stamped).toHaveLength(1);
+    expect(stamped[0]).toMatchObject({ data: { audience: 'withheld' }, where: { versionId: { in: ['v1', 'v-frozen'] }, documentId: { in: ['a', 'b'] } } });
+
+    restrictedBy = [];
+    await stamper.restampPublishing('a', new Set());
+    const lifted = prisma.$transaction.mock.calls[1][0] as Array<{ data: { audience: string } }>;
+    expect(lifted[0].data.audience).toBe('public');
+  });
+});
+
 describe('SiteAudiencesService', () => {
   function manager(opts: { key?: boolean; doc?: Record<string, unknown> | null } = {}) {
     const site = { id: SITE, workspaceId: WS, projectId: 'p1', rootDocumentId: null as string | null, visitorSecretCipher: null, visitorSecretSetAt: null };

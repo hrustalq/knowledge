@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { lookup } from 'node:dns/promises';
-import { isIP } from 'node:net';
+import { BlockList, isIP } from 'node:net';
 import { t } from '../i18n/t.js';
 
 /**
@@ -60,21 +60,36 @@ export async function assertSafeExternalUrl(
   }
 }
 
+/**
+ * Everything that is not the public internet. `BlockList` compares parsed
+ * addresses, so no spelling of one can slip past, and it checks an IPv4-mapped
+ * IPv6 address against the IPv4 rules. Forms that embed an IPv4 address some
+ * other way (NAT64, the deprecated `::a.b.c.d`) are refused whole.
+ */
+const PRIVATE_ADDRESSES = new BlockList();
+for (const [network, prefix] of [
+  ['0.0.0.0', 8],
+  ['10.0.0.0', 8],
+  ['100.64.0.0', 10], // carrier-grade NAT
+  ['127.0.0.0', 8],
+  ['169.254.0.0', 16], // link-local, incl. cloud metadata
+  ['172.16.0.0', 12],
+  ['192.168.0.0', 16],
+] as const) {
+  PRIVATE_ADDRESSES.addSubnet(network, prefix, 'ipv4');
+}
+for (const [network, prefix] of [
+  ['::', 96], // unspecified, loopback and IPv4-compatible
+  ['64:ff9b::', 96], // NAT64
+  ['fc00::', 7], // unique local
+  ['fe80::', 10], // link-local
+  ['fec0::', 10], // site-local
+] as const) {
+  PRIVATE_ADDRESSES.addSubnet(network, prefix, 'ipv6');
+}
+
 export function isPrivateAddress(address: string): boolean {
-  if (isIP(address) === 6) {
-    const v6 = address.toLowerCase();
-    if (v6 === '::1' || v6 === '::') return true;
-    if (v6.startsWith('fe80') || v6.startsWith('fc') || v6.startsWith('fd')) return true;
-    // IPv4-mapped (::ffff:10.0.0.1) — fall through to the v4 checks.
-    const mapped = v6.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-    if (!mapped) return false;
-    address = mapped[1];
-  }
-  const [a, b] = address.split('.').map(Number);
-  if (a === 10 || a === 127 || a === 0) return true;
-  if (a === 172 && b >= 16 && b <= 31) return true;
-  if (a === 192 && b === 168) return true;
-  if (a === 169 && b === 254) return true; // link-local, incl. cloud metadata
-  if (a === 100 && b >= 64 && b <= 127) return true; // carrier-grade NAT
-  return false;
+  const family = isIP(address);
+  if (family === 0) return false;
+  return PRIVATE_ADDRESSES.check(address, family === 6 ? 'ipv6' : 'ipv4');
 }

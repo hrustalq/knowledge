@@ -15,8 +15,11 @@ import { EventsPublisher } from '../events/events.publisher.js';
 
 export interface ActivityRecordInput {
   workspaceId: string;
-  /** users.id, or the synthetic dev actor when omitted. */
-  actor?: string;
+  /**
+   * users.id, `SYSTEM_ACTOR`, or undefined for the synthetic dev actor (AUTH_MODE=none only).
+   * Required so a new call site must name who acted (#755).
+   */
+  actor: string | undefined;
   /** e.g. 'document.created', 'revision.finalized', 'merge-request.merged'. */
   action: string;
   documentId?: string;

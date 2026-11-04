@@ -441,6 +441,169 @@ describe('git remote (e2e, #636)', () => {
     await git(['fsck', '--strict'], dir);
   });
 
+  it('lands a push that adds a page and edits it in a later commit (#768)', async () => {
+    const dir = join(work, 'alice-w');
+    await git(['checkout', '-q', '-b', 'two-step'], dir);
+    writeFileSync(join(dir, 'two-step.md'), '# Two step\n\nFirst draft.\n');
+    await git(['add', '.'], dir);
+    await git(['commit', '-qm', 'Add a page'], dir);
+    edit(dir, 'two-step.md', (x) => x.replace('First draft.', 'Second draft.'));
+    await git(['commit', '-qam', 'Fix it before pushing'], dir);
+    const pushed = await git(['rev-parse', 'HEAD'], dir);
+    const mrId = mrIdIn(await gitAll(['push', 'origin', 'HEAD:two-step'], dir))!;
+    expect(mrId).toBeTruthy();
+    const created = await prisma.document.findFirstOrThrow({ where: { projectId, title: 'Two step' } });
+    expect(await prisma.documentRevision.count({ where: { documentId: created.id, status: { not: 'draft' } } })).toBe(2);
+    // A fresh clone serves back exactly what was pushed.
+    expect((await git(['ls-remote', repo(people.alice.read), 'refs/heads/two-step'])).split('\t')[0]).toBe(pushed);
+    await http().post(`/v1/merge-requests/${mrId}/close`).set(as(people.alice.key)).expect(ok(201));
+    await git(['checkout', '-q', 'main'], dir);
+  });
+
+  it('a page behind a closed merge request stays hidden, and is listed once a later one lands it (#771)', async () => {
+    const dir = join(work, 'alice-w');
+    await git(['checkout', '-q', '-b', 'second-try'], dir);
+    writeFileSync(join(dir, 'second-try.md'), '# Second try\n\nWritten once.\n');
+    await git(['add', '.'], dir);
+    await git(['commit', '-qm', 'Add it'], dir);
+    const first = mrIdIn(await gitAll(['push', 'origin', 'HEAD:second-try'], dir))!;
+    const created = await prisma.document.findFirstOrThrow({ where: { projectId, title: 'Second try' } });
+    await http().post(`/v1/merge-requests/${first}/close`).set(as(people.alice.key)).expect(ok(201));
+    expect((await prisma.document.findUniqueOrThrow({ where: { id: created.id } })).pendingMergeRequestId).toBe(first);
+
+    edit(dir, 'second-try.md', (x) => x.replace('Written once.', 'Written twice.'));
+    await git(['commit', '-qam', 'Again'], dir);
+    const second = mrIdIn(await gitAll(['push', '-o', 'merge_request.create', 'origin', 'HEAD:second-try'], dir))!;
+    expect(second).not.toBe(first);
+    expect((await approveAndMerge(second)).status).toBe(201);
+    expect((await prisma.document.findUniqueOrThrow({ where: { id: created.id } })).pendingMergeRequestId).toBeNull();
+    const listed = await http().get('/v1/documents').query({ workspaceId: WORKSPACE, projectId }).set(as(people.alice.key)).expect(ok(200));
+    expect(JSON.stringify(listed.body)).toContain(created.id);
+    await git(['checkout', '-q', 'main'], dir);
+    await git(['pull', '-q', '--ff-only', 'origin', 'main'], dir);
+  });
+
+  it('a merge by push carrying anything else passes the checks a direct push would (#769)', async () => {
+    const dir = join(work, 'alice-w');
+    const guidePath = `${slugs.open}/${guide.slug}.md`;
+    await git(['checkout', '-q', '-b', 'extra-src'], dir);
+    edit(dir, `${slugs.open}.md`, (x) => `${x}\nFrom the branch.\n`);
+    await git(['commit', '-qam', 'Source side'], dir);
+    const mrId = mrIdIn(await gitAll(['push', '-o', 'merge_request.create', 'origin', 'HEAD:extra-src'], dir))!;
+    await http().post(`/v1/merge-requests/${mrId}/approve`).set(as(people.admin.key)).expect(ok(201));
+    const open = async () => (await http().get(`/v1/merge-requests/${mrId}`).set(as(people.admin.key)).expect(ok(200))).body.mergeRequest.status;
+    const main = () => git(['ls-remote', repo(people.admin.read), 'refs/heads/main']);
+    const before = await main();
+
+    // A second, protected page, committed beside the merge.
+    await git(['checkout', '-q', 'main'], dir);
+    edit(dir, guidePath, (x) => `${x}\nSneaked in.\n`);
+    await git(['commit', '-qam', 'Sneak'], dir);
+    await git(['merge', '-q', '--no-ff', '--no-edit', 'extra-src'], dir);
+    await prisma.documentBranch.updateMany({ where: { documentId: guide.id, name: 'main' }, data: { protected: true } });
+    try {
+      expect(await gitFails(['push', 'origin', 'HEAD:main'], dir)).toMatch(/'main' is protected/);
+    } finally {
+      await prisma.documentBranch.updateMany({ where: { documentId: guide.id, name: 'main' }, data: { protected: false } });
+    }
+    expect(await open()).toBe('open');
+    expect(await main()).toBe(before);
+
+    // A brand new page, committed beside the merge.
+    await git(['reset', '-q', '--hard', 'origin/main'], dir);
+    writeFileSync(join(dir, 'sneaked-page.md'), '# Sneaked\n');
+    await git(['add', '.'], dir);
+    await git(['commit', '-qm', 'Sneak a page'], dir);
+    await git(['merge', '-q', '--no-ff', '--no-edit', 'extra-src'], dir);
+    expect(await gitFails(['push', 'origin', 'HEAD:main'], dir)).toMatch(/sneaked-page\.md/);
+    expect(await open()).toBe('open');
+    expect(await main()).toBe(before);
+
+    // Only the merge request's own change still lands.
+    await git(['reset', '-q', '--hard', 'origin/main'], dir);
+    await git(['merge', '-q', '--no-ff', '--no-edit', 'extra-src'], dir);
+    expect(await gitAll(['push', 'origin', 'HEAD:main'], dir)).toMatch(/Merged merge request/);
+    expect(await open()).toBe('merged');
+  });
+
+  it('a merge by push needs edit on the merge request\'s own page too (#770)', async () => {
+    const admin = await clone(people.admin.key, 'admin-anchor');
+    await git(['checkout', '-q', '-b', 'anchor-both'], admin);
+    edit(admin, `${slugs.secret}.md`, (x) => `${x}\nSecret change.\n`);
+    edit(admin, `${slugs.open}.md`, (x) => `${x}\nOpen change.\n`);
+    await git(['commit', '-qam', 'Both pages'], admin);
+    const mrId = mrIdIn(await gitAll(['push', '-o', 'merge_request.create', 'origin', 'HEAD:anchor-both'], admin))!;
+    // The anchor is the page Bob cannot open.
+    await prisma.mergeRequest.update({ where: { id: mrId }, data: { documentId: ids.secret } });
+    await http().post(`/v1/merge-requests/${mrId}/approve`).set(as(people.alice.key)).expect(ok(201));
+
+    const bob = await clone(people.bob.key, 'bob-anchor');
+    await git(['fetch', '-q', 'origin', 'anchor-both'], bob);
+    await git(['merge', '-q', '--no-ff', '--no-edit', 'FETCH_HEAD'], bob);
+    const refused = await gitFails(['push', 'origin', 'HEAD:main'], bob);
+    expect(refused).toMatch(/restricted/i);
+    expect(refused).not.toContain('Payroll');
+    const mr = await prisma.mergeRequest.findUniqueOrThrow({ where: { id: mrId } });
+    expect(mr.status).toBe('open');
+    await http().post(`/v1/merge-requests/${mrId}/close`).set(as(people.admin.key)).expect(ok(201));
+  });
+
+  it('pushes from a shallow clone', async () => {
+    const dir = join(work, 'alice-shallow');
+    await run('git', ['clone', '-q', '--depth', '1', repo(people.alice.key), dir], { env: env() });
+    expect(await git(['rev-parse', '--is-shallow-repository'], dir)).toBe('true');
+    edit(dir, `${slugs.open}.md`, (x) => `${x}\nFrom a shallow clone.\n`);
+    await git(['commit', '-qam', 'Shallow'], dir);
+    const pushed = await git(['rev-parse', 'HEAD'], dir);
+    await gitAll(['push', 'origin', 'HEAD:main'], dir);
+    expect((await git(['ls-remote', repo(people.alice.read), 'refs/heads/main'])).split('\t')[0]).toBe(pushed);
+  });
+
+  it('a page whose parent was archived alone does not block a push of anything else', async () => {
+    const parent = await page(`Archived parent ${nonce}`, `# Archived parent ${nonce}\n`);
+    const child = await page(`Kept child ${nonce}`, `# Kept child ${nonce}\n\nStays.\n`, parent.id);
+    await http().post(`/v1/documents/${parent.id}/archive`).set(as(people.admin.key)).send({ includeDescendants: false }).expect(ok(201));
+    const dir = await clone(people.alice.key, 'alice-orphan');
+    const childPath = `${parent.slug}/${child.slug}.md`;
+    expect(existsSync(join(dir, childPath))).toBe(true);
+
+    edit(dir, `${slugs.open}.md`, (x) => `${x}\nBeside an orphan.\n`);
+    await git(['commit', '-qam', 'Beside it'], dir);
+    await gitAll(['push', 'origin', 'HEAD:main'], dir);
+
+    edit(dir, childPath, (x) => x.replace('Stays.', 'Stays, edited.'));
+    await git(['commit', '-qam', 'The child itself'], dir);
+    await gitAll(['push', 'origin', 'HEAD:main'], dir);
+    expect(await prisma.documentRevision.count({ where: { documentId: child.id, message: 'The child itself', status: { not: 'draft' } } })).toBe(1);
+    expect((await prisma.document.findUniqueOrThrow({ where: { id: child.id } })).parentId).toBe(parent.id);
+
+    // A new file there still has no page for its directory.
+    writeFileSync(join(dir, parent.slug, 'new-under.md'), '# New\n');
+    await git(['add', '.'], dir);
+    await git(['commit', '-qm', 'New under it'], dir);
+    expect(await gitFails(['push', 'origin', 'HEAD:side-orphan'], dir)).toMatch(/needs a page/);
+  });
+
+  it('names an open merge request only to someone who can open its page', async () => {
+    const admin = await clone(people.admin.key, 'admin-title');
+    await git(['checkout', '-q', '-b', 'title-both'], admin);
+    edit(admin, `${slugs.secret}.md`, (x) => `${x}\nSecret again.\n`);
+    edit(admin, `${slugs.open}.md`, (x) => `${x}\nOpen again.\n`);
+    await git(['commit', '-qam', `Payroll change ${nonce}`], admin);
+    const mrId = mrIdIn(await gitAll(['push', '-o', 'merge_request.create', '-o', `merge_request.title=Payroll change ${nonce}`, 'origin', 'HEAD:title-both'], admin))!;
+    await prisma.mergeRequest.update({ where: { id: mrId }, data: { documentId: ids.secret } });
+
+    const bob = await clone(people.bob.key, 'bob-title');
+    await git(['fetch', '-q', 'origin', 'title-both'], bob);
+    await git(['checkout', '-q', '-b', 'title-both', 'FETCH_HEAD'], bob);
+    edit(bob, `${slugs.open}.md`, (x) => `${x}\nBob's line.\n`);
+    await git(['commit', '-qam', 'From Bob'], bob);
+    const out = await gitAll(['push', 'origin', 'HEAD:title-both'], bob);
+    expect(out).not.toContain('Payroll change');
+    expect(out).not.toContain(mrId);
+    await http().post(`/v1/merge-requests/${mrId}/close`).set(as(people.admin.key)).expect(ok(201));
+  });
+
   it('opens a merge request over MCP by project and branch name, and lists the branch', async () => {
     const mcp = (name: string, args: Record<string, unknown>) =>
       http()

@@ -129,7 +129,7 @@ import { contentLines } from '../documents/content-lines.js';
  * Bumped by hand at every release, with swagger.ts (docs/versioning.md#known-drift).
  * Named because the connection page and the skill report it too.
  */
-export const MCP_SERVER_VERSION = '0.45.1';
+export const MCP_SERVER_VERSION = '0.45.2';
 
 /**
  * MCP tools (plan.md §9). Tool names use underscores (MCP tool names must
@@ -503,6 +503,7 @@ export class McpService {
           status: res.issue.status,
           deduplicated: res.deduplicated,
           reportCount: res.issue.reportCount,
+          ...(res.suggestionIgnored ? { suggestionIgnored: true } : {}),
           ...(res.issue.mergeRequestId ? { mergeRequestId: res.issue.mergeRequestId } : {}),
           ...(res.issue.agentRunId ? { agentRunId: res.issue.agentRunId } : {}),
         });
@@ -810,7 +811,8 @@ export class McpService {
       },
       async ({ runId }) => {
         await guard.connectorRun(runId, 'viewer');
-        return this.json(await this.connectors.getRun(runId));
+        const run = await this.prisma.connectorRun.findUnique({ where: { id: runId }, select: { workspaceId: true } });
+        return this.json(await this.connectors.getRun(runId, await guard.scope(run!.workspaceId)));
       },
     );
 

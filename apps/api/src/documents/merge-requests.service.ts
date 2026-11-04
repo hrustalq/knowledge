@@ -887,8 +887,17 @@ export class MergeRequestsService {
     if (flipped.count === 0) {
       throw new ConflictException(t('error.mergeRequest.concurrentChange', { id: mr.id }));
     }
+    // A page landed on its default branch is listed whichever request landed it:
+    // it can still name an earlier one that was closed (#771).
+    const target = mr.targetBranch.name;
     await this.prisma.document.updateMany({
-      where: { id: { in: documentIds }, pendingMergeRequestId: mr.id },
+      where: {
+        id: { in: documentIds },
+        OR: [
+          { pendingMergeRequestId: mr.id },
+          { pendingMergeRequestId: { not: null }, defaultBranch: target, branches: { some: { name: target, headRevisionId: { not: null } } } },
+        ],
+      },
       data: { pendingMergeRequestId: null },
     });
   }
@@ -957,22 +966,17 @@ export class MergeRequestsService {
         approvals,
       });
     }
-    const pages = await this.changedPages(mr.sourceBranch, mr.targetBranch.name);
-    const { projectId, workspaceId, defaultBranch } = await this.prisma.document.findUniqueOrThrow({
-      where: { id: mr.documentId },
-      select: { projectId: true, workspaceId: true, defaultBranch: true },
-    });
-    // ponytail: a branch's tree lands only on the default branch; a merge into another branch carries content alone.
-    const places = mr.targetBranch.name === defaultBranch ? await this.treePlaces(projectId, mr.sourceBranch.name, defaultBranch) : [];
+    const { pages, places, projectId, workspaceId } = await this.spanOf(mr);
     if (pages.length === 0 && places.length === 0) throw new BadRequestException(t('error.mergeRequest.nothingToMerge'));
     this.assertTargetsExist(pages, mr.targetBranch.name);
-    // The guard held the caller to edit on the page the merge request was
-    // opened from; a merge writes every page it spans (#636), and every page
-    // its tree moves, so each must allow it too. The guard's refusal, never a title.
+    // A merge writes every page it spans (#636), and every page its tree moves,
+    // so each must allow it. The merge request's own page too: a route's guard
+    // checks that one, but a merge by push has no route (#770). The guard's
+    // refusal, never a title.
     if (principal && principal.mode !== 'dev') {
       const scope = await this.permissions.scopeFor(principal, workspaceId);
-      for (const id of new Set([...pages.map((p) => p.documentId), ...places.map((p) => p.documentId)])) {
-        if (id !== mr.documentId) await this.permissions.requireLevel(scope, { type: 'document', id }, 'edit');
+      for (const id of new Set([mr.documentId, ...pages.map((p) => p.documentId), ...places.map((p) => p.documentId)])) {
+        await this.permissions.requireLevel(scope, { type: 'document', id }, 'edit');
       }
     }
     // A protected target branch on any page requires workspace admin. Skipped
@@ -1002,6 +1006,24 @@ export class MergeRequestsService {
     }
 
     return { pages, places, projectId, workspaceId };
+  }
+
+  /** The pages and tree changes merging this request would land. */
+  private async spanOf(mr: MrWithBranches) {
+    const pages = await this.changedPages(mr.sourceBranch, mr.targetBranch.name);
+    const { projectId, workspaceId, defaultBranch } = await this.prisma.document.findUniqueOrThrow({
+      where: { id: mr.documentId },
+      select: { projectId: true, workspaceId: true, defaultBranch: true },
+    });
+    // ponytail: a branch's tree lands only on the default branch; a merge into another branch carries content alone.
+    const places = mr.targetBranch.name === defaultBranch ? await this.treePlaces(projectId, mr.sourceBranch.name, defaultBranch) : [];
+    return { pages, places, projectId, workspaceId };
+  }
+
+  /** The ids of the pages this request spans, for a merge by push to tell them from anything else it carries (#769). */
+  async spannedPages(mergeRequestId: string): Promise<Set<string>> {
+    const { pages, places } = await this.spanOf(await this.getMrOrThrow(mergeRequestId));
+    return new Set([...pages.map((p) => p.documentId), ...places.map((p) => p.documentId)]);
   }
 
   /** Breaking API changes (#78), last because it parses two specs per spec page. */

@@ -1834,7 +1834,8 @@ export class AgentExecutor {
       throw new Error(t('agent.component.noModel'));
     }
     await report({ stage: 'snapshot', progress: 0.1 });
-    const snapshot = await this.snapshots.open(input.connectorId, await this.runScope(run, principal));
+    const scope = await this.runScope(run, principal);
+    const snapshot = await this.snapshots.open(input.connectorId, scope);
     // Settled at enqueue against the request, not the archive: the API cannot
     // afford a download per press, and the head may have moved since anyway.
     const missing = component.paths.filter((path) => !snapshot.files.has(path));
@@ -1855,6 +1856,7 @@ export class AgentExecutor {
           ...(component.projectId ? { projectId: component.projectId } : {}),
           ...(component.parentId ? { parentId: component.parentId } : {}),
         },
+        scope,
         { id: run.createdBy },
       ),
       this.guidance(run, agent),

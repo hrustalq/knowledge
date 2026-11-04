@@ -10,6 +10,7 @@ import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { Access, CurrentPrincipal, ReadKeyOk } from '../auth/access.decorator.js';
 import { AccessService } from '../auth/access.service.js';
 import type { Principal } from '../auth/principal.js';
+import { PermissionService } from '../permissions/permission.service.js';
 import { TemplatesService } from './templates.service.js';
 import {
   BuiltInTemplateQueryDto,
@@ -40,6 +41,7 @@ export class TemplatesController {
   constructor(
     private readonly templates: TemplatesService,
     private readonly access: AccessService,
+    private readonly permissions: PermissionService,
   ) {}
 
   // Literal segments before `:id` — Nest matches in declaration order.
@@ -75,8 +77,9 @@ export class TemplatesController {
       'Substitutes system and declared placeholders and returns the title, body and frontmatter a page would ' +
       'start from. Undeclared and escaped `{{…}}` stay literal. 400 `details.missing` when a required value is absent.',
   })
-  render(@Body() dto: RenderTemplateDto, @CurrentPrincipal() principal: Principal): Promise<RenderTemplateResponse> {
-    return this.templates.render(dto, { id: principal.userId, name: principal.displayName });
+  async render(@Body() dto: RenderTemplateDto, @CurrentPrincipal() principal: Principal): Promise<RenderTemplateResponse> {
+    const scope = await this.permissions.scopeFor(principal, dto.workspaceId);
+    return this.templates.render(dto, scope, { id: principal.userId, name: principal.displayName });
   }
 
   @Post()

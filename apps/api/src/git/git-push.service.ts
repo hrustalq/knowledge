@@ -9,7 +9,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { AccessService } from '../auth/access.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
-import { visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
+import { canSee, visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { CompareService } from '../documents/compare.service.js';
 import { MergeRequestsService } from '../documents/merge-requests.service.js';
@@ -67,7 +67,8 @@ interface Command {
 /** A receive-pack request: commands, push options, the pack. */
 function parsePush(body: Buffer): { commands: Command[]; options: string[]; pack: Buffer; sideband: boolean } {
   const { lines, end } = readPkts(body, 0);
-  const [first = '', ...more] = lines;
+  // A shallow clone names its boundary commits ahead of the commands. This side holds their whole history, so they change nothing.
+  const [first = '', ...more] = lines.filter((line) => !line.startsWith('shallow '));
   const [head, caps = ''] = first.split('\0');
   const commands = [head, ...more].filter(Boolean).map((line) => {
     const [oldSha, newSha, ref] = line.split(' ');
@@ -245,7 +246,11 @@ export class GitPushService {
     const write = () => this.write(workspaceId, projectId, branch, head, planned, principal.userId, isDefault);
     if (isDefault) {
       const mr = await this.mergedBy(projectId, branch, planned.at(-1)!);
+      const changes = planned.flatMap((p) => p.changes);
       if (mr) {
+        // What the push carries beside the merge request passes the checks a direct push would (#769).
+        const spanned = await this.mergeRequests.spannedPages(mr.id);
+        await this.assertMayGoDirect(changes.filter((ch) => !spanned.has(ch.documentId)), branch);
         const merged = await this.mergeRequests
           .mergeByPush(mr.id, principal, async () => {
             const ids = await write();
@@ -254,10 +259,7 @@ export class GitPushService {
           .catch((e: unknown) => this.gateRefusal(e));
         return [t('error.git.push.mrMerged', { title: merged.title, url: this.mrUrl(merged.mergeRequestId) })];
       }
-      if (created.length) throw new PushRefused('new page', t('error.git.push.newOnDefault', { path: created[0].path, branch }));
-      const pages = [...new Set(planned.flatMap((p) => p.changes.map((ch) => ch.documentId)))];
-      const guarded = await this.prisma.documentBranch.count({ where: { documentId: { in: pages }, name: branch, protected: true } });
-      if (guarded) throw new PushRefused('protected', t('error.git.push.protected', { branch }));
+      await this.assertMayGoDirect(changes, branch);
       await this.prisma.withTransaction(write, { timeout: 60_000, maxWait: 10_000 });
       return [];
     }
@@ -389,11 +391,15 @@ export class GitPushService {
       index.set(l.path, { documentId: l.doc ?? randomUUID(), revisionId, parentDocumentId: null, slug: nameOf(l.path), ext: l.ext, blob: l.blob });
     }
     const stems = new Map([...index].map(([p, e]) => [stemOf(p), e.documentId]));
+    const stemsBefore = new Set([...before.keys()].map(stemOf));
     const names = new Map<string, string>();
     // Replacing an existing key while iterating a Map visits each entry once.
     for (const [path, e] of index) {
       const dir = dirOf(path);
-      if (dir !== null && !stems.has(dir)) throw new PushRefused('no parent page', t('error.git.push.noParentPage', { path, dir }));
+      // A page whose parent was archived alone keeps its path, under a directory with no page: it was
+      // already so before this commit, and must not block a push of anything else. It stays under that parent.
+      const orphan = dir !== null && !stems.has(dir) && before.has(path) && !stemsBefore.has(dir);
+      if (dir !== null && !stems.has(dir) && !orphan) throw new PushRefused('no parent page', t('error.git.push.noParentPage', { path, dir }));
       const name = nameOf(path);
       if (!name || FORBIDDEN.test(name) || RESERVED.test(name) || name.startsWith('.')) {
         throw new PushRefused('bad file name', t('error.git.push.badName', { path, name }));
@@ -402,7 +408,7 @@ export class GitPushService {
       if (names.has(folded) && names.get(folded) !== e.documentId) throw new PushRefused('name taken', t('error.git.push.nameTaken', { path }));
       names.set(folded, e.documentId);
       // Entries are the parent's objects: copy before changing one.
-      index.set(path, { ...e, parentDocumentId: dir === null ? null : stems.get(dir)! });
+      index.set(path, { ...e, parentDocumentId: orphan ? before.get(path)!.parentDocumentId : dir === null ? null : stems.get(dir)! });
     }
 
     const byDoc = new Map([...before.values()].map((e) => [e.documentId, e]));
@@ -463,6 +469,15 @@ export class GitPushService {
   /** Null when the blob carries exactly the canonical id line, which is what a revision without one is served with. */
   private idLineOf(documentId: string, bytes: Buffer, s: { body: Buffer; idLine: IdLine }, ext: PageExt): IdLine | null {
     return withIdLine(documentId, s.body, ext).equals(bytes) ? null : s.idLine;
+  }
+
+  /** No new pages on the default branch, and no write to a protected one, without a merge request. */
+  private async assertMayGoDirect(changes: Planned[], branch: string): Promise<void> {
+    const fresh = changes.find((ch) => ch.isNew);
+    if (fresh) throw new PushRefused('new page', t('error.git.push.newOnDefault', { path: fresh.path, branch }));
+    const pages = [...new Set(changes.map((ch) => ch.documentId))];
+    const guarded = await this.prisma.documentBranch.count({ where: { documentId: { in: pages }, name: branch, protected: true } });
+    if (guarded) throw new PushRefused('protected', t('error.git.push.protected', { branch }));
   }
 
   /** The pusher may edit every page the push changes, and the parent of every page it creates. */
@@ -529,7 +544,8 @@ export class GitPushService {
         const changes: CommitChange[] = [];
         // Parents before children, so a new page's parent exists when it is created.
         for (const ch of [...p.changes].sort((a, b) => a.path.split('/').length - b.path.split('/').length)) {
-          let documentId = ch.documentId;
+          // A later commit editing a page this push created still names it by its tentative id (#768).
+          let documentId = doc(ch.documentId)!;
           if (ch.isNew) {
             const res = await this.documents.createDocument(
               { workspaceId, projectId, title: ch.isNew.title, kind: ch.isNew.kind, parentId: doc(ch.parentDocumentId) ?? undefined, visibility: 'workspace' },
@@ -645,9 +661,9 @@ export class GitPushService {
     const projectBranchId = await this.commits.projectBranch(projectId, branch);
     const open = await this.prisma.mergeRequest.findFirst({
       where: { status: 'open', sourceBranch: { projectBranchId } },
-      select: { id: true, title: true },
+      select: { id: true, title: true, document: { select: { projectId: true, path: true, restrictedBy: true } } },
     });
-    let mr = open;
+    let mr: { id: string; title: string } | null = open;
     if (!mr && (opt('create') || created.length)) {
       // Opened from a page this push gave a revision of its own, else any page it changed.
       const changed = planned.flatMap((p) => p.changes);
@@ -664,6 +680,8 @@ export class GitPushService {
     }
     if (!mr) return this.noMergeRequest(projectBranchId, branch, scope);
     if (created.length) await this.prisma.document.updateMany({ where: { id: { in: created } }, data: { pendingMergeRequestId: mr.id } });
+    // A merge request's title is its page's business: one on a page the pusher cannot open goes unnamed.
+    if (open && !canSee(scope, open.document)) return [t('error.git.push.mrUpdatedUnnamed')];
     return [t(open ? 'error.git.push.mrUpdated' : 'error.git.push.mrCreated', { title: mr.title, url: this.mrUrl(mr.id) })];
   }
 

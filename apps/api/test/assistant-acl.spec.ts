@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AssistantReadToolsService } from '../src/assistant/assistant-read-tools.service.js';
 import { AssistantToolsService } from '../src/assistant/assistant.tools.js';
+import { NotFoundException } from '@nestjs/common';
+import { AssistantThreadsService } from '../src/assistant/assistant-threads.service.js';
+import { AccessService } from '../src/auth/access.service.js';
+import { AclGuard } from '../src/auth/acl.guard.js';
 import { DEV_PRINCIPAL } from '../src/auth/principal.js';
 import type { AccessScope } from '../src/permissions/access-scope.js';
 
@@ -112,5 +116,60 @@ describe('assistant write tools', () => {
     expect(res.ok).toBe(false);
     expect(res.content).toContain('not found in this workspace');
     expect(res.content).not.toContain('Salaries');
+  });
+});
+
+/** #772: a chat thread is its asker's, on every route that takes one and in the list. */
+describe('a chat thread belongs to its asker', () => {
+  const ALICE = '33333333-3333-4333-8333-333333333333';
+  const session = (userId: string) => ({ userId, mode: 'session', isAdmin: false }) as never;
+  const THREAD = '44444444-4444-4444-8444-444444444444';
+  const MESSAGE = '55555555-5555-4555-8555-555555555555';
+
+  function access() {
+    const prisma = {
+      assistantThread: { findUnique: vi.fn(async ({ where }: { where: { id: string } }) => (where.id === THREAD ? { createdBy: ALICE } : null)) },
+      assistantMessage: { findUnique: vi.fn(async ({ where }: { where: { id: string } }) => (where.id === MESSAGE ? { thread: { createdBy: ALICE } } : null)) },
+    };
+    return new AccessService(prisma as never, {} as never);
+  }
+
+  it('lets the asker through', async () => {
+    await expect(access().requireOwnThread(session(ALICE), { threadId: THREAD })).resolves.toBeUndefined();
+    await expect(access().requireOwnThread(session(ALICE), { messageId: MESSAGE })).resolves.toBeUndefined();
+  });
+
+  it('reads as not found to anyone else, a platform admin included', async () => {
+    const admin = { userId: 'u-admin', mode: 'session', isAdmin: true } as never;
+    for (const who of [session('u-bob'), admin]) {
+      await expect(access().requireOwnThread(who, { threadId: THREAD })).rejects.toBeInstanceOf(NotFoundException);
+      await expect(access().requireOwnThread(who, { messageId: MESSAGE })).rejects.toBeInstanceOf(NotFoundException);
+    }
+  });
+
+  it('keeps working as the dev principal', async () => {
+    await expect(access().requireOwnThread(DEV_PRINCIPAL, { threadId: THREAD })).resolves.toBeUndefined();
+  });
+
+  it('the guard holds both sources to it', async () => {
+    const requireOwnThread = vi.fn(async () => undefined);
+    const guardAccess = { workspaceOfAssistantThread: async () => WS, workspaceOfAssistantMessage: async () => WS, requireRole: async () => undefined, requireOwnThread };
+    const reflectorFor = (source: string) => ({ getAllAndOverride: () => false, get: () => ({ role: 'viewer', source, operator: false }) });
+    const run = (source: string, id: string) =>
+      new AclGuard(reflectorFor(source) as never, guardAccess as never, {} as never).canActivate({
+        getHandler: () => undefined,
+        getClass: () => undefined,
+        switchToHttp: () => ({ getRequest: () => ({ principal: session(ALICE), method: 'GET', params: { id }, query: {}, body: {} }) }),
+      } as never);
+    await run('assistant-thread', THREAD);
+    await run('assistant-message', MESSAGE);
+    expect(requireOwnThread.mock.calls.map((c: unknown[]) => c[1])).toEqual([{ threadId: THREAD }, { messageId: MESSAGE }]);
+  });
+
+  it('lists only the caller\'s threads', async () => {
+    const findMany = vi.fn(async () => []);
+    const threads = new AssistantThreadsService({ assistantThread: { findMany } } as never, {} as never, {} as never);
+    await threads.listThreads(WS, ALICE);
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ workspaceId: WS, createdBy: ALICE }) }));
   });
 });

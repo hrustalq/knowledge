@@ -22,6 +22,11 @@ switch, `none` by default, zero new hard dependencies:
   chat, JSON mode, error mapping, and the bounded tool-calling loop),
   `AssistantToolsService` (tool definitions + session-authorized execution),
   `AssistantService`, `AssistantController`.
+- **Threads are personal** (#772). A person lists, reads and changes only their
+  own chat threads, and to anyone else a thread or one of its messages is a 404,
+  admins included. A turn runs under its asker's scope, so its answers can quote
+  pages nobody else may open. `AclGuard` enforces this for the `assistant-thread`
+  and `assistant-message` sources through `AccessService.requireOwnThread`.
 - **API** (all `viewer` role, workspace from body):
   - `POST /v1/assistant/review` — `{ workspaceId, title, markdown }` →
     `{ enabled, issues: [{ severity, message, section? }], summary }`.

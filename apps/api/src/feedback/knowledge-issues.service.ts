@@ -26,9 +26,10 @@ import { DocumentsService } from '../documents/documents.service.js';
 import { MergeRequestsService } from '../documents/merge-requests.service.js';
 import { openDraftMergeRequest } from '../documents/draft-merge-request.js';
 import { composeFrontmatter } from '../common/frontmatter.js';
-import { AccessService } from '../auth/access.service.js';
 import type { Principal } from '../auth/principal.js';
 import { DEV_PRINCIPAL } from '../auth/principal.js';
+import type { AccessScope } from '../permissions/access-scope.js';
+import { PermissionService } from '../permissions/permission.service.js';
 import { ActivityService } from '../activity/activity.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { EventsPublisher } from '../events/events.publisher.js';
@@ -87,7 +88,7 @@ export class KnowledgeIssuesService {
     readonly storage: StorageService,
     readonly documents: DocumentsService,
     readonly mergeRequests: MergeRequestsService,
-    private readonly access: AccessService,
+    private readonly permissions: PermissionService,
     private readonly activity: ActivityService,
     private readonly notifications: NotificationsService,
     private readonly events: EventsPublisher,
@@ -114,16 +115,18 @@ export class KnowledgeIssuesService {
     if (!document || document.workspaceId !== input.workspaceId) {
       throw new NotFoundException(t('error.document.notFound', { id: input.documentId }));
     }
+    // The answer names the page and any open issue's detail (#758), so it takes the page's own refusal.
+    await this.permissions.requireResource(principal, document.workspaceId, { type: 'document', id: document.id }, 'viewer', false);
     await this.assertUnderDailyLimit(principal);
 
     const detail = input.detail.trim().slice(0, KNOWLEDGE_ISSUE_DETAIL_MAX_CHARS);
     const evidence = normalizeEvidence(input.evidence ?? []);
     const suggestion = input.suggestedMarkdown?.trim().slice(0, KNOWLEDGE_ISSUE_SUGGESTION_MAX_CHARS) || null;
 
-    const folded = await this.foldInto(document.id, input.kind, evidence);
-    if (folded) {
-      return { issue: toInfo(folded, document.title), deduplicated: true };
-    }
+    // What the second reporter wrote, kept as evidence (#759).
+    const foldedEvidence = normalizeEvidence([{ note: detail }, ...evidence]);
+    const folded = await this.foldInto(document.id, input.kind, foldedEvidence);
+    if (folded) return this.foldedResponse(folded, document, suggestion, principal);
     const created = await this.insertGuarded({
       workspaceId: document.workspaceId,
       documentId: document.id,
@@ -140,8 +143,8 @@ export class KnowledgeIssuesService {
       // Lost the race to another report of the same page and kind: fold into
       // the row that won. A second miss here is the duplicate the read side
       // tolerates, so one retry is all that is honest to try.
-      const again = await this.foldInto(document.id, input.kind, evidence);
-      if (again) return { issue: toInfo(again, document.title), deduplicated: true };
+      const again = await this.foldInto(document.id, input.kind, foldedEvidence);
+      if (again) return this.foldedResponse(again, document, suggestion, principal);
       throw new HttpException({ statusCode: 409, message: t('error.knowledgeIssue.raced') }, HttpStatus.CONFLICT);
     }
 
@@ -160,6 +163,30 @@ export class KnowledgeIssuesService {
   }
 
   /**
+   * A report that folded in. Its corrected body opens a merge request when the
+   * issue has none and an editor sent it; otherwise the reporter is told it was
+   * not used, because two corrected bodies cannot both be the page (#759).
+   */
+  private async foldedResponse(
+    issue: KnowledgeIssue,
+    document: { id: string; workspaceId: string; title: string },
+    suggestion: string | null,
+    principal: Principal,
+  ): Promise<ReportKnowledgeIssueResponse> {
+    if (!suggestion) return { issue: toInfo(issue, document.title), deduplicated: true };
+    const proposed =
+      !issue.mergeRequestId && (await this.canEdit(principal, document))
+        ? await this.proposeSuggestion(issue, document, suggestion, principal).catch((error: unknown) => {
+            this.logger.warn(`Draft from report ${issue.id} not opened: ${(error as Error).message}`);
+            return null;
+          })
+        : null;
+    return proposed
+      ? { issue: toInfo(proposed, document.title), deduplicated: true }
+      : { issue: toInfo(issue, document.title), deduplicated: true, suggestionIgnored: true };
+  }
+
+  /**
    * Where the report goes. A corrected body from an editor becomes a merge
    * request now; anything else is handed to the sentinel when it can take it,
    * and stays open for a person when it cannot. Every branch is a guarded
@@ -172,7 +199,7 @@ export class KnowledgeIssuesService {
     suggestion: string | null,
     principal: Principal,
   ): Promise<KnowledgeIssue> {
-    if (suggestion && (await this.canEdit(principal, document.workspaceId))) {
+    if (suggestion && (await this.canEdit(principal, document))) {
       const proposed = await this.proposeSuggestion(issue, document, suggestion, principal).catch((error: unknown) => {
         this.logger.warn(`Draft from report ${issue.id} not opened: ${(error as Error).message}`);
         return null;
@@ -219,8 +246,9 @@ export class KnowledgeIssuesService {
       markdown: composeFrontmatter(suggestion, current?.frontmatter ?? {}),
       userId: principal.userId,
       onCreated: async (id) => {
+        // `checking`: a report folded in while the sentinel is out. Its verdict is then dropped, as settleCheck guards on `checking`.
         const moved = await this.prisma.knowledgeIssue.updateMany({
-          where: { id: issue.id, status: 'open' },
+          where: { id: issue.id, status: { in: ['open', 'checking'] } },
           data: { status: 'proposed', mergeRequestId: id },
         });
         if (moved.count !== 1) throw new Error(`issue ${issue.id} is no longer open`);
@@ -276,14 +304,22 @@ export class KnowledgeIssuesService {
     return run.id;
   }
 
-  /** Issues of a workspace, newest first; narrowed to one page or one status. */
-  async list(workspaceId: string, filter: { documentId?: string; status?: KnowledgeIssueStatus }): Promise<ListKnowledgeIssuesResponse> {
+  /**
+   * Issues of a workspace the caller can open the page of, newest first; narrowed
+   * to one page or one status. Pages asked of first, so a caller's window of
+   * `LIST_LIMIT` is not eaten by rows they would then lose (#758).
+   */
+  async list(scope: AccessScope, filter: { documentId?: string; status?: KnowledgeIssueStatus }): Promise<ListKnowledgeIssuesResponse> {
+    const { workspaceId } = scope;
+    const where = {
+      workspaceId,
+      ...(filter.documentId ? { documentId: filter.documentId } : {}),
+      ...(filter.status ? { status: filter.status } : {}),
+    };
+    const pages = await this.prisma.knowledgeIssue.findMany({ where, distinct: ['documentId'], select: { documentId: true } });
+    const visible = await this.permissions.visibleDocumentIds(scope, pages.map((p) => p.documentId));
     const rows = await this.prisma.knowledgeIssue.findMany({
-      where: {
-        workspaceId,
-        ...(filter.documentId ? { documentId: filter.documentId } : {}),
-        ...(filter.status ? { status: filter.status } : {}),
-      },
+      where: { ...where, documentId: { in: [...visible] } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: LIST_LIMIT,
     });
@@ -295,6 +331,7 @@ export class KnowledgeIssuesService {
   async close(issueId: string, status: 'resolved' | 'dismissed', principal: Principal): Promise<KnowledgeIssueInfo> {
     const issue = await this.prisma.knowledgeIssue.findUnique({ where: { id: issueId } });
     if (!issue) throw new NotFoundException(t('error.knowledgeIssue.notFound', { id: issueId }));
+    await this.permissions.requireResource(principal, issue.workspaceId, { type: 'document', id: issue.documentId }, 'editor', false);
     const row = await this.prisma.knowledgeIssue.update({
       where: { id: issueId },
       data: { status, resolvedBy: principal.userId, resolvedAt: new Date() },
@@ -357,9 +394,10 @@ export class KnowledgeIssuesService {
 
   // ---- internals ------------------------------------------------------------
 
-  private async canEdit(principal: Principal, workspaceId: string): Promise<boolean> {
+  /** The guard's own check for an `editor` route on this page: the workspace role and the page level. */
+  private async canEdit(principal: Principal, document: { id: string; workspaceId: string }): Promise<boolean> {
     try {
-      await this.access.requireRole(principal, workspaceId, 'editor');
+      await this.permissions.requireResource(principal, document.workspaceId, { type: 'document', id: document.id }, 'editor', false);
       return true;
     } catch {
       return false;

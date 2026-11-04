@@ -15170,6 +15170,7 @@ export interface components {
         ReportKnowledgeIssueResponse: {
             issue: components["schemas"]["KnowledgeIssueInfo"];
             deduplicated: boolean;
+            suggestionIgnored?: boolean;
         };
         /** @enum {string} */
         RequestableAccessLevel: "view" | "edit";

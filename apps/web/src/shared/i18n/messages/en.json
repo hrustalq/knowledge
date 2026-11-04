@@ -3246,6 +3246,7 @@
       "checking": "Reported. The sentinel is checking it against the page.",
       "proposed": "Reported, and a draft merge request with your correction is open.",
       "deduplicated": "Already reported — yours was added to the open report ({n} so far).",
+      "suggestionIgnored": "Already reported — yours was added, but your corrected text wasn't used. This report already has a merge request, or you can't edit this page.",
       "resolved": "Report resolved.",
       "dismissed": "Report dismissed."
     }

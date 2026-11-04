@@ -13,6 +13,105 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.45.2] — 2026-11-05
+
+### Fixed
+
+- **`llms.txt` and `llms-full.txt` leave out archived pages** (#761). An archived page kept its title in the index and
+  its full body in the dump, where agents read it as current. Its `.md` still reads by id.
+- **A template with invalid frontmatter is refused every time** (#775). Pressing Save again after the error stored the
+  broken source as a new version. A version already stored that way now reads with its source as the body, so someone
+  can correct it.
+- **An API spec whose YAML opens with `---` keeps its text** (#763). Such a page exported blank in every format, had an
+  empty body in `llms-full.txt` and was missing from a published site's search.
+- **A share link's zip keeps a page's text exact** (#762). A page containing `$$` or `$&`, as shell and regex examples
+  do, came out altered in the archive.
+- **A webhook honours a connector's review mode** (#764). A connector set to `review` or `step` wrote pages without
+  review whenever a webhook fired. Webhook runs now stage their items and wait, like a manual run.
+- **A webhook naming one page syncs only that page** (#765). On a connector with a page tree it also listed the whole
+  source, staged every other page and warned about orphans that did not exist.
+- **A web source's retry stops when its page is archived or gone** (#766). A retry left pending after that queued a new
+  run with no delay after every run, forever, which could make Sync now answer 409.
+- **A staged sync item no longer shows a restricted page to someone who cannot open it** (#767). A viewer of the
+  connector's project could read the page's text, staged and current, by opening the run item. Such an item now refuses
+  like the page does, and a run's tree lists it as "Restricted page". A new page whose source restricts it is readable
+  only by those who can approve it.
+- **A memo whose worker died no longer spins forever** (#776). A deploy during transcription stranded it, and the only
+  way out was deleting it. After 30 minutes without progress it now fails and can be retried.
+- **Watching a restricted page no longer reveals its title** (#773). A member refused on a page could read its title by
+  subscribing to it, and someone who watched it before it was restricted kept seeing its renames. Watching now takes the
+  page's own refusal, and the subscription list leaves out the title of anything the caller cannot open. Muting still works.
+- **A guest with a page grant can read their notifications** (#777). They were notified but got 403 from the inbox, so
+  they could never read, count or clear what was sent to them.
+- **Entity reads accept any spelling of a key** (#756). `Service:Billing`, or a declared alias such as `сервис:биллинг`,
+  answered not found although `service:billing` exists, over REST and MCP alike. Neighbours, impact analysis and trace
+  now fold and resolve the key as a write does, and answer with the canonical one.
+- **The activity feed names who created a branch, curated a relation, changed an attachment or submitted an import**
+  (#755). Those rows credited nobody, under any `AUTH_MODE`, and the person who acted could be notified of their own
+  act. Rows already written stay as they are.
+- **A vote on a low-confidence answer stays** (#754). The thumb vanished on reload and pressing it again removed
+  nothing, on the answers people most often downvote. Such votes already cast now read as votes, and can be retracted.
+- **A conflict found again shows each page's own passage** (#757). When a page's edit reopened a conflict from the other
+  side, one side could show the wrong page's quote, the other page's passage was lost, and the next edit to either page
+  closed it as superseded even if the passage had not changed.
+- **Reports on a restricted page stay with those who can open it** (#758). Any workspace member could list them, with
+  their detail and quotes, report on such a page to learn its title, or close its reports, and a workspace editor could
+  open a merge request on a page they cannot edit. These routes now refuse the way the page does.
+- **A second report on a page keeps what its reporter wrote** (#759). A report on a page and kind that already had an
+  open issue lost its description and corrected body without saying so. The description is now kept on the issue. A
+  corrected body from someone who can edit the page opens a merge request if the issue has none, and otherwise the
+  reporter is told it was not used.
+- **Rendering a template no longer reveals a restricted page's title** (#774). A viewer refused on a page could read its
+  title, or a restricted project's name, by rendering a template with `{{parent}}` or a page placeholder pointing at it.
+  Such a value now renders as if it had not been given.
+- **Assistant chat threads are private to the person who asked** (#772). Any workspace viewer could list and search
+  everyone's threads, read them, rename them, rewind them or delete them, including answers quoting pages only the asker
+  may open. A thread is now visible only to its asker, and to anyone else it reads as not found.
+- **A push that adds a page and then edits it lands** (#768). Adding a page and fixing it in a later commit before
+  pushing failed with a 404 and nothing landed.
+- **A page behind a closed merge request appears once a later one lands it** (#771). It stayed out of every list, search
+  and tree for good, with its content on the default branch. A page whose only merge request was closed stays hidden.
+- **A merge by push cannot carry other pages past their checks** (#769). Pushing a merge together with a commit to a
+  protected page, or a new page, landed them with no admin and no merge request. Such a push is now refused and nothing
+  lands.
+- **A merge by push needs edit on the merge request's own page** (#770). Someone who could only view that page could
+  merge the request, and if they could not see it at all, the request read as merged while its change on that page was
+  dropped.
+- **Restricting a published page takes it off its sites** (#760). Restricting a page or project changed nothing already
+  published, so anonymous readers kept getting the page, its markdown, search hits and Ask answers until the next build,
+  and frozen versions kept it for good. Within 30 seconds such a page and its children now leave every version of every
+  site, whichever way the restriction arrived. Lifting it brings them back.
+- **A push from a shallow clone lands** (#779). `git push` after `git clone --depth 1` failed with a 500.
+- **A parent archived alone no longer blocks pushes** (#780). Archiving a page without its children made every later
+  push to the project fail, whatever it touched.
+- **A push no longer names a merge request on a page the pusher cannot open** (#781). The remote printed its title and
+  link. It now says only that the merge request was updated.
+- **A run's warnings no longer name a page the reader cannot open** (#767). They carried the item's title and error on the
+  run, its connector and the MCP tool. Such a warning is now left out for that reader.
+- **Published sites leave out empty scaffold pages** (#782). A scaffolded project's skeletons reached anonymous readers,
+  and their placeholder text reached site search. One with a real page under it stays in the nav, with no search text. A
+  live version changes at its next build, and a frozen one keeps what it was built with.
+- **An editor can no longer act on a staged item for a page they cannot open** (#783). Approving, retrying, editing or
+  cleaning one up is now refused like reading it, and so is Approve all while a run holds such an item. Someone with
+  access to the page, or an admin, approves it.
+
+### Security
+
+- **Outbound requests are checked more strictly, and a credential stays on its origin.** Upgrade promptly.
+- **Avatar uploads are held to the allowed image types.** Upgrade promptly. The reverse proxy's `Caddyfile` changed too, so it
+  has to be deployed with this release.
+
+### Operations
+
+- `Caddyfile` changed. A deploy installs the new file but does not restart Caddy, so run
+  `docker compose -f docker-compose.prod.yml up -d --force-recreate caddy` on the box after it finishes.
+- Migration `20261231120000_answer_signal_no_message` (#754) splits each answer signal holding a vote into a signal and a
+  vote, and clears the message id on every signal. It survives a code rollback: the previous image reads these rows as it
+  always did, with no schema change.
+- Migration `20261231130000_unhide_pages_landed_past_closed_mr` (#771) lists pages stuck behind a closed merge request
+  that have a default-branch head. It runs against the previous image, which reads the column the same way. A rollback
+  does not hide them again.
+
 ## [0.45.1] — 2026-11-04
 
 ### Changed
@@ -6023,7 +6122,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.45.1...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.45.2...HEAD
+[0.45.2]: https://github.com/hrustalq/knowledge/compare/v0.45.1...v0.45.2
 [0.45.1]: https://github.com/hrustalq/knowledge/compare/v0.45.0...v0.45.1
 [0.45.0]: https://github.com/hrustalq/knowledge/compare/v0.44.1...v0.45.0
 [0.44.1]: https://github.com/hrustalq/knowledge/compare/v0.44.0...v0.44.1

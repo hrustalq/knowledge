@@ -211,6 +211,27 @@ export class AccessService {
     return message.thread.workspaceId;
   }
 
+  /**
+   * A chat thread and its messages are their asker's (#772). The turn ran under
+   * that person's scope, so its answers can quote pages nobody else may open.
+   * Anyone else gets the same 404 as a thread that does not exist.
+   */
+  async requireOwnThread(principal: Principal, ref: { threadId: string } | { messageId: string }): Promise<void> {
+    if (principal.mode === 'dev') return;
+    const owner =
+      'threadId' in ref
+        ? await this.prisma.assistantThread.findUnique({ where: { id: ref.threadId }, select: { createdBy: true } })
+        : await this.prisma.assistantMessage
+            .findUnique({ where: { id: ref.messageId }, select: { thread: { select: { createdBy: true } } } })
+            .then((message) => message?.thread ?? null);
+    if (owner?.createdBy === principal.userId) return;
+    throw new NotFoundException(
+      'threadId' in ref
+        ? t('error.assistant.threadNotFound', { id: ref.threadId })
+        : t('error.assistant.messageNotFoundById', { id: ref.messageId }),
+    );
+  }
+
   /** A report's workspace is its own column; resolved from `:id` for the same reason as a message's (docs/features/38, phase 3). */
   async workspaceOfKnowledgeIssue(issueId: string): Promise<string> {
     const issue = await this.prisma.knowledgeIssue.findUnique({

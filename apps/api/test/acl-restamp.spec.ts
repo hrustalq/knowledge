@@ -28,11 +28,21 @@ function build(opts: { fulltextFails?: string; versionMoved?: string } = {}) {
     }),
   };
   const config = { get: vi.fn((key: string) => ({ ACL_RESTAMP_BATCH: 200, ACL_RESTAMP_TICK_MS: 30_000 })[key]) };
-  const sweeper = new AclRestampSweeper(prisma as never, graph as never, fulltext as never, config as never);
-  return { sweeper, prisma, graph, fulltext };
+  const siteAudiences = { restampPublishing: vi.fn(async () => undefined) };
+  const sweeper = new AclRestampSweeper(prisma as never, graph as never, fulltext as never, config as never, siteAudiences as never);
+  return { sweeper, prisma, graph, fulltext, siteAudiences };
 }
 
 describe('AclRestampSweeper', () => {
+  it('reaches published sites first, so a search store being down cannot hold them back (#760)', async () => {
+    const { sweeper, siteAudiences } = build({ fulltextFails: 'doc-1' });
+    await sweeper.sweep();
+    expect(siteAudiences.restampPublishing.mock.calls.map((c: unknown[]) => c[0])).toEqual(['doc-1', 'doc-2']);
+    // One set across the tick, so a site with many changed pages restamps once.
+    const [first, second] = siteAudiences.restampPublishing.mock.calls as unknown as [unknown, Set<string>][];
+    expect(first[1]).toBe(second[1]);
+  });
+
   it('rewrites both stores and records the stamped version, guarded on it', async () => {
     // No embedding provider is even injected: a restamp cannot re-embed.
     const { sweeper, prisma, graph, fulltext } = build();

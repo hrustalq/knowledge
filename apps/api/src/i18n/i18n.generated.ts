@@ -628,6 +628,7 @@ export type I18nTranslations = {
         };
         "pushVersionMessage": string;
         "syncRevisionMessage": string;
+        "restrictedItem": string;
         "stoppedAtMax": string;
         "revertRevisionMessage": string;
         "wiki": {
@@ -909,6 +910,7 @@ export type I18nTranslations = {
             "uploadMissing": string;
             "alreadyUploaded": string;
             "audioGone": string;
+            "interrupted": string;
             "transcriptionFailed": string;
             "speechServerDown": string;
             "speechServerRefused": string;
@@ -1615,8 +1617,11 @@ export type I18nTranslations = {
                 "cannotRepresent": string;
                 "rejected": string;
                 "mrCreated": string;
+                "mrUpdatedUnnamed": string;
                 "mrUpdated": string;
                 "mrMerged": string;
+                "noMergeRequest": string;
+                "branchMerged": string;
             };
             "tooLarge": string;
         };

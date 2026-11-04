@@ -15,6 +15,8 @@ import {
 import { DocumentsService } from '../documents/documents.service.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 import { t } from '../i18n/t.js';
+import type { AccessScope } from '../permissions/access-scope.js';
+import { PermissionService } from '../permissions/permission.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ProjectCascadeService } from '../projects/project-cascade.service.js';
 import { StorageService } from '../storage/storage.service.js';
@@ -24,6 +26,7 @@ import type { ItemDraft } from './connector-staging.service.js';
 import { sourceConnectorOf } from '../documents/source-backed.js';
 import { sha256, stagedObject } from './connector-markdown.js';
 import { MAX_WARNINGS, toRunInfo } from './connectors.service.js';
+import { hiddenRunItems } from './run-visibility.js';
 
 /**
  * Everything a person does to a staged import (docs/features/26).
@@ -45,18 +48,20 @@ export class ConnectorItemsService {
     // reimplementing the delete ordering.
     private readonly cascade: ProjectCascadeService,
     private readonly events: EventsPublisher,
+    private readonly permissions: PermissionService,
   ) {}
 
   // --- reads ---
 
-  async listItems(runId: string): Promise<{ items: ConnectorRunItemInfo[]; truncated: boolean }> {
+  async listItems(runId: string, scope: AccessScope): Promise<{ items: ConnectorRunItemInfo[]; truncated: boolean }> {
     const run = await this.requireRun(runId);
     const rows = await this.prisma.connectorRunItem.findMany({
       where: { runId },
       orderBy: [{ depth: 'asc' }, { position: 'asc' }],
     });
     const warned = readWarnings(run).some((w) => w.externalId === null && /max/i.test(w.message));
-    return { items: rows.map(toItemInfo), truncated: warned };
+    const hidden = await hiddenRunItems(this.prisma, scope, rows);
+    return { items: rows.map((r) => (hidden.has(r.id) ? toHiddenItemInfo(r) : toItemInfo(r))), truncated: warned };
   }
 
   /**
@@ -66,8 +71,9 @@ export class ConnectorItemsService {
    * unchanged copy beside an identical one is noise, and its presence is the
    * signal that something (a person or a model) altered the conversion.
    */
-  async getItem(runId: string, itemId: string) {
+  async getItem(runId: string, itemId: string, scope: AccessScope) {
     const item = await this.requireItem(runId, itemId);
+    await this.assertReadable(item, scope);
     const markdown = item.stagedKey ? await this.readObject(item.stagedKey) : '';
     const incomingRaw = item.incomingKey ? await this.readObject(item.incomingKey) : null;
     const incoming = incomingRaw !== null && incomingRaw !== markdown ? incomingRaw : null;
@@ -94,14 +100,28 @@ export class ConnectorItemsService {
     return { item: info, markdown, incoming, localHead };
   }
 
+  /** The standard page refusal, which names no title; a page-less item has nothing to request access to. */
+  private async assertReadable(item: ConnectorRunItem, scope: AccessScope): Promise<void> {
+    if ((await hiddenRunItems(this.prisma, scope, [item])).size === 0) return;
+    if (item.documentId) await this.permissions.requireLevel(scope, { type: 'document', id: item.documentId }, 'view');
+    throw new NotFoundException(t('error.connector.itemNotFound'));
+  }
+
+  /** For a route that acts on one item: acting on a page you cannot open is refused like reading it (#783). */
+  async requireReadable(runId: string, itemId: string, scope: AccessScope): Promise<void> {
+    await this.assertReadable(await this.requireItem(runId, itemId), scope);
+  }
+
   // --- edit ---
 
   async updateItem(
     runId: string,
     itemId: string,
     patch: { title?: string; markdown?: string },
+    scope: AccessScope,
   ): Promise<ConnectorRunItemInfo> {
     const item = await this.requireItem(runId, itemId);
+    await this.assertReadable(item, scope);
     // Editing what has already been written would be a lie: the page is the
     // thing to edit at that point, and it has its own editor.
     if (item.status !== 'staged' && item.status !== 'failed') {
@@ -133,9 +153,14 @@ export class ConnectorItemsService {
     itemId: string,
     type: ConnectorItemEventType,
     subtree: boolean,
+    scope: AccessScope,
   ): Promise<{ items: ConnectorRunItemInfo[]; run: ConnectorRunInfo }> {
     const root = await this.requireItem(runId, itemId);
-    const targets = subtree ? await this.subtreeOf(runId, root) : [root];
+    await this.assertReadable(root, scope);
+    // A subtree event passes over what the caller cannot open, as it does what cannot take the event.
+    const tree = subtree ? await this.subtreeOf(runId, root) : [root];
+    const hidden = await hiddenRunItems(this.prisma, scope, tree);
+    const targets = tree.filter((i) => !hidden.has(i.id));
 
     // Filling is the one event the API does not perform: it needs the adapter,
     // and a branch can be hundreds of pages. The rows are left exactly as they
@@ -298,8 +323,15 @@ export class ConnectorItemsService {
 
   // --- run events ---
 
-  async sendRunEvent(runId: string, type: ConnectorRunEventType): Promise<ConnectorRunInfo> {
+  async sendRunEvent(runId: string, type: ConnectorRunEventType, scope: AccessScope): Promise<ConnectorRunInfo> {
     const run = await this.requireRun(runId);
+    // Approve all writes every staged page, so it is refused while one is a page the caller cannot open (#783).
+    if (type === 'APPROVE_ALL') {
+      const staged = await this.prisma.connectorRunItem.findMany({ where: { runId, status: 'staged' } });
+      const hidden = await hiddenRunItems(this.prisma, scope, staged);
+      const first = staged.find((i) => hidden.has(i.id));
+      if (first) await this.assertReadable(first, scope);
+    }
     const awaiting = await this.awaitingCount(runId);
     const legal = allowedRunEvents({
       status: run.status as never,
@@ -514,6 +546,23 @@ export function toItemInfo(row: ConnectorRunItem): ConnectorRunItemInfo {
     documentId: row.documentId,
     error: row.error,
     updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+/** A row of a run's tree for someone who may not read the page: its place and status, nothing of the page. */
+function toHiddenItemInfo(row: ConnectorRunItem): ConnectorRunItemInfo {
+  return {
+    ...toItemInfo(row),
+    externalId: row.id,
+    externalUrl: null,
+    externalVersion: null,
+    title: t('connector.restrictedItem'),
+    warnings: [],
+    aiOp: null,
+    edited: false,
+    specKind: null,
+    documentId: null,
+    error: null,
   };
 }
 

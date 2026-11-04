@@ -72,6 +72,7 @@
   },
   "pushVersionMessage": "Обновлено из базы знаний",
   "syncRevisionMessage": "Синхронизировано из коннектора",
+  "restrictedItem": "Страница с ограниченным доступом",
   "stoppedAtMax": "Остановлено после {max} элементов (CONNECTOR_SYNC_MAX_ITEMS).",
   "revertRevisionMessage": "Импорт из коннектора отменён",
   "wiki": {

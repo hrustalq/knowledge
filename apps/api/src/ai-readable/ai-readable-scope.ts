@@ -51,6 +51,8 @@ export function readableDocumentsWhere(scope: AiReadableScope): Prisma.DocumentW
     where.restrictedBy = { isEmpty: true };
     // A page still behind its first merge request is not listed (#73).
     where.pendingMergeRequestId = LISTED_PAGE.pendingMergeRequestId;
+    // An archived page leaves the listings; it stays readable by id (docs/features/39).
+    where.archivedAt = null;
   }
   return where;
 }

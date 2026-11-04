@@ -368,7 +368,8 @@ export class ConnectorDiscoveryService {
     }
     const discovered = await this.prisma.connectorRunItem.count({ where: { runId: run.id } });
     await this.saveFrontier(run.id, [], discovered);
-    return { done: true, discovered, truncated: false };
+    // The scope is the point of the run: nothing past it is nested, or listed as an orphan.
+    return { done: true, discovered, truncated: false, incremental: true };
   }
 
   /** An adapter with no `children()`: the pre-feature flat enumeration. */

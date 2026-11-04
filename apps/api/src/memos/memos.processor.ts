@@ -91,6 +91,8 @@ export class MemosProcessor extends WorkerHost {
         const part = await this.stt.transcribe(chunk.path, chunk.offset, chunk.duration);
         cost = cost === null || part.cost === undefined ? null : cost + part.cost;
         chunks.push(part);
+        // Progress, so the sweeper tells a long recording from a dead worker (#776).
+        await this.prisma.memo.update({ where: { id: memoId }, data: { updatedAt: new Date() } });
       }
       const { segments, language } = stitchTranscript(chunks);
       await this.prisma.memo.update({

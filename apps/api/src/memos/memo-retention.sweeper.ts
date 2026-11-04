@@ -1,6 +1,8 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.js';
+import { asLocale } from '../i18n/locale.js';
+import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { MemosProducer } from './memos.producer.js';
@@ -11,6 +13,11 @@ const BATCH = 50;
 const PENDING_TTL_MS = 24 * 60 * 60_000;
 /** An `uploaded` or resumed `transcribed` memo this long untouched has probably lost its job (#657). */
 const STALE_QUEUED_MS = 10 * 60_000;
+/**
+ * A `transcribing` memo this long without progress lost its worker (#776): the
+ * processor touches the row per chunk, and one chunk's request times out at 5 minutes.
+ */
+const STALE_TRANSCRIBING_MS = 30 * 60_000;
 
 /**
  * Memos' retention (#551, docs/features/68), a due check inside a fixed tick
@@ -90,6 +97,20 @@ export class MemoRetentionSweeper implements OnModuleInit, OnModuleDestroy {
       for (const memo of abandoned) {
         if (memo.audioKey) await this.storage.purgeObjectVersions(memo.audioKey);
         await this.prisma.memo.deleteMany({ where: { id: memo.id, status: 'pending' } });
+      }
+      // Failed rather than re-claimed: Retry already does that, and a chunk that killed a worker may do so again.
+      const before = new Date(now.getTime() - STALE_TRANSCRIBING_MS);
+      const interrupted = await this.prisma.memo.findMany({
+        where: { status: 'transcribing', updatedAt: { lt: before } },
+        select: { id: true, locale: true },
+        take: BATCH,
+      });
+      for (const memo of interrupted) {
+        this.logger.warn(`Memo ${memo.id} lost its worker while transcribing`);
+        await this.prisma.memo.updateMany({
+          where: { id: memo.id, status: 'transcribing', updatedAt: { lt: before } },
+          data: { status: 'failed', stage: 'transcribing', error: t('error.memo.interrupted', undefined, asLocale(memo.locale)) },
+        });
       }
     } catch (error) {
       this.logger.warn(`Memo retention sweep failed (non-fatal): ${(error as Error).message}`);

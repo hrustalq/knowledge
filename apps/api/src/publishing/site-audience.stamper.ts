@@ -43,7 +43,9 @@ export class SiteAudienceStamper {
     );
   }
 
-  stampFor(documentId: string, path: string | null | undefined, rules: SiteAudienceRules): SiteAudienceStamp {
+  /** A page restricted since it was published is withheld from every reader, frozen versions included (#760). */
+  stampFor(documentId: string, path: string | null | undefined, rules: SiteAudienceRules, restrictedBy: readonly string[] = []): SiteAudienceStamp {
+    if (restrictedBy.length > 0) return { audience: 'withheld', claims: null };
     return foldSiteAudience(pathIds(documentId, path), rules);
   }
 
@@ -55,7 +57,8 @@ export class SiteAudienceStamper {
   /**
    * Restamp a site's snapshot rows from its rules as they are now: every
    * version, or one. Rows are grouped by stamp, one statement per group, in
-   * one transaction — a site has few distinct stamps however many pages.
+   * one transaction — a site has few distinct stamps however many pages. Lifting
+   * a restriction lands here too, so a frozen version gets its page back.
    */
   async restamp(siteId: string, versionId?: string): Promise<void> {
     const versionIds = versionId
@@ -73,12 +76,12 @@ export class SiteAudienceStamper {
 
     const [rules, docs] = await Promise.all([
       this.rules(siteId),
-      this.prisma.document.findMany({ where: { id: { in: documentIds } }, select: { id: true, path: true } }),
+      this.prisma.document.findMany({ where: { id: { in: documentIds } }, select: { id: true, path: true, restrictedBy: true } }),
     ]);
-    const pathOf = new Map(docs.map((d) => [d.id, d.path]));
+    const docOf = new Map(docs.map((d) => [d.id, d]));
     const groups = new Map<string, { stamp: SiteAudienceStamp; ids: string[] }>();
     for (const id of documentIds) {
-      const stamp = this.stampFor(id, pathOf.get(id), rules);
+      const stamp = this.stampFor(id, docOf.get(id)?.path, rules, docOf.get(id)?.restrictedBy);
       const key = JSON.stringify(stamp);
       const group = groups.get(key) ?? { stamp, ids: [] };
       group.ids.push(id);
@@ -92,5 +95,22 @@ export class SiteAudienceStamper {
         }),
       ),
     );
+  }
+
+  /**
+   * Restamp every site that publishes this page, once each across `done`. A
+   * page's restriction changed: the ACL sweeper is the one place every path to
+   * `restricted_by` passes through, connector mirroring and project switches included.
+   */
+  async restampPublishing(documentId: string, done: Set<string>): Promise<void> {
+    const sites = await this.prisma.publishedSite.findMany({
+      where: { versions: { some: { pages: { some: { documentId } } } } },
+      select: { id: true },
+    });
+    for (const { id } of sites) {
+      if (done.has(id)) continue;
+      await this.restamp(id);
+      done.add(id);
+    }
   }
 }

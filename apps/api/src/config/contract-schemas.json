@@ -20108,6 +20108,9 @@
       },
       "deduplicated": {
         "type": "boolean"
+      },
+      "suggestionIgnored": {
+        "type": "boolean"
       }
     },
     "required": [

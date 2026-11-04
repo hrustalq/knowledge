@@ -13,6 +13,13 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Fixed
+
+- **`llms.txt` and `llms-full.txt` leave out archived pages** (#761). An archived page kept its title in the index and
+  its full body in the dump, where agents read it as current. Its `.md` still reads by id.
+
 ## [0.45.1] — 2026-11-04
 
 ### Changed

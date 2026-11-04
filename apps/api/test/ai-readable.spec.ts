@@ -55,15 +55,18 @@ describe('scope predicate', () => {
       workspaceId: 'w',
       restrictedBy: { isEmpty: true },
       pendingMergeRequestId: null,
+      archivedAt: null,
     });
     expect(readableDocumentsWhere({ workspaceId: 'w', projectId: 'p' })).toEqual({
       workspaceId: 'w',
       projectId: 'p',
       restrictedBy: { isEmpty: true },
       pendingMergeRequestId: null,
+      archivedAt: null,
     });
     expect(readableDocumentsWhere({ workspaceId: 'w', documentId: 'd' })).not.toHaveProperty('restrictedBy');
     expect(readableDocumentsWhere({ workspaceId: 'w', documentId: 'd' })).not.toHaveProperty('pendingMergeRequestId');
+    expect(readableDocumentsWhere({ workspaceId: 'w', documentId: 'd' })).not.toHaveProperty('archivedAt');
     expect(listedProjectsWhere('w')).toEqual({ workspaceId: 'w', restricted: false });
   });
 });

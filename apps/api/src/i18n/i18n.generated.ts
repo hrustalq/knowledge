@@ -911,6 +911,7 @@ export type I18nTranslations = {
             "alreadyUploaded": string;
             "audioGone": string;
             "transcriptionFailed": string;
+            "interrupted": string;
             "speechServerDown": string;
             "speechServerRefused": string;
             "analysisFailed": string;

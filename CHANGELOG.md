@@ -36,6 +36,8 @@ in the pull request that introduces them — see
   connector's project could read the page's text, staged and current, by opening the run item. Such an item now refuses
   like the page does, and a run's tree lists it as "Restricted page". A new page whose source restricts it is readable
   only by those who can approve it.
+- **A memo whose worker died no longer spins forever** (#776). A deploy during transcription stranded it, and the only
+  way out was deleting it. After 30 minutes without progress it now fails and can be retried.
 
 ## [0.45.1] — 2026-11-04
 

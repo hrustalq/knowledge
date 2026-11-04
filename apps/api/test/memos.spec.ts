@@ -166,6 +166,7 @@ describe('MemoRetentionSweeper', () => {
               : [{ id: 'd1', audioKey: 'k/d1' }],
         ),
         update: vi.fn(async () => ({})),
+        updateMany: vi.fn(async () => ({ count: 1 })),
         deleteMany: vi.fn(async () => ({ count: 1 })),
       },
     }
@@ -174,6 +175,19 @@ describe('MemoRetentionSweeper', () => {
     const config = { get: () => days }
     return { prisma, purged, producer, run: new MemoRetentionSweeper(prisma as never, storage as never, producer as never, config as never) }
   }
+
+  it('fails a transcribing memo that made no progress, leaving a recent one to its worker (#776)', async () => {
+    const { prisma, run } = sweeper(30)
+    const now = new Date('2026-12-01T00:00:00Z')
+    await run.sweep(now)
+    const asked = prisma.memo.findMany.mock.calls.map((c) => (c[0] as { where: { status: unknown; updatedAt?: { lt: Date } } }).where)
+    const stale = asked.find((w) => w.status === 'transcribing')!
+    expect(stale.updatedAt!.lt.getTime()).toBe(now.getTime() - 30 * 60_000)
+    const write = prisma.memo.updateMany.mock.calls[0]![0] as { where: Record<string, unknown>; data: Record<string, unknown> }
+    // Guarded on the same cut-off, so a worker that reported in since the read is left alone.
+    expect(write.where).toMatchObject({ status: 'transcribing', updatedAt: { lt: stale.updatedAt!.lt } })
+    expect(write.data).toMatchObject({ status: 'failed', stage: 'transcribing' })
+  })
 
   it('purges every version of settled audio past retention, keeps the transcript, and drops stale reservations', async () => {
     const { prisma, purged, run } = sweeper(30)

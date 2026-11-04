@@ -13,6 +13,41 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Changed
+
+- **`knowledge_list_branches` and `knowledge_list_captures` fit a tool result** (#743). Merged branches are never
+  deleted, so 80 of them came to 65k characters, and 30 captures with their full text to 111k, past what a client hands
+  its model. `knowledge_list_branches` now takes `name` and `openOnly` and returns 25 at a time with `nextCursor`
+  (`limit` up to 100). `knowledge_list_captures` leaves out each capture's text unless `includePayload` is true. An
+  agent that read the whole list now has to follow `nextCursor`. The REST routes are unchanged.
+
+### Fixed
+
+- **A search asking what a term is finds the page defining it** (#742). A glossary entry tied for the strongest match
+  could rank 11th of 12, under pages that only mention the word. The chunk defining the term asked about now counts
+  double, in English and Russian. A verified page's boost now only breaks near-ties: it no longer lifts a page over a
+  clearly stronger match, which also stops keeping a page up to date from costing it its place.
+- **Pages whose head came from a merge name who merged them** (#738). Search hits and citations reported the nil user
+  and no name for those pages. Existing pages are corrected by a migration, from the commit that wrote them.
+- **A push that reaches no merge request says so** (#737). Commits pushed just after a branch merged were accepted in
+  silence and stranded there. The remote now says no merge request carries them and how to open one, naming the merged
+  one if there is one.
+- **Captured sections are headed in the page's language, not the writer's** (#739). A writer with a Russian UI capturing
+  into English docs committed Russian headings into the page, and synced repositories inherited the mix. The merge
+  request's title and description still use the writer's language, and so does its commit message.
+- **A captured section no longer links to the page it sits on** (#740).
+- **A page written on a branch keeps no empty draft on its default branch** (#741). A git push, a capture or a proposed
+  page left a never-finalized first revision in the page's history. Existing ones stay until someone decides to remove
+  them; they do no harm.
+
+### Operations
+
+- **Migration `20261231110000_merge_revision_authors`** (#738) sets `author_id` on nil-author revisions from the author
+  of the project commit that wrote them. It survives a code rollback: it changes only nil-author rows, and the previous
+  image reads the column the same way.
+
 ## [0.45.0] — 2026-11-03
 
 ### Added

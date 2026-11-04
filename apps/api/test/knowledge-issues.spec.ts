@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { HttpException, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, HttpException, NotFoundException } from '@nestjs/common';
 import type { AgentFinding } from '@knowledge/contracts';
 import { KnowledgeIssuesService, normalizeEvidence, toInfo } from '../src/feedback/knowledge-issues.service.js';
 import { ReportPublishSweeper } from '../src/feedback/report-publish.sweeper.js';
@@ -59,7 +59,7 @@ interface Row {
  * statements: the fold-in UPDATE and the NOT EXISTS insert. Everything else
  * is a spy.
  */
-function world(opts: { filed?: number; sentinel?: { enabled: boolean; config: boolean }; pending?: number } = {}) {
+function world(opts: { filed?: number; sentinel?: { enabled: boolean; config: boolean }; pending?: number; hiddenFrom?: string } = {}) {
   const issues: Row[] = [];
   const runs: Array<{ id: string; input: unknown; createdBy: string; trigger: string }> = [];
   const open = (r: Row) => ['open', 'checking', 'proposed'].includes(r.status);
@@ -150,6 +150,14 @@ function world(opts: { filed?: number; sentinel?: { enabled: boolean; config: bo
     }),
     principalFor: vi.fn(async (userId: string) => (userId === editor.userId ? editor : viewer)),
   };
+  // `hiddenFrom` holds no grant on the page; an editor's level on it is otherwise edit.
+  const permissions = {
+    requireResource: vi.fn(async (p: Principal, _ws: string, _resource: unknown, role: string) => {
+      if (p.userId === opts.hiddenFrom) throw new ForbiddenException({ statusCode: 403, canRequestAccess: true });
+      if (role === 'editor' && p.userId !== editor.userId) throw new Error('roleRequired');
+    }),
+    visibleDocumentIds: vi.fn(async (scope: { userId: string }, ids: string[]) => new Set(scope.userId === opts.hiddenFrom ? [] : ids)),
+  };
   const activity = { record: vi.fn(async () => undefined) };
   const notifications = { notify: vi.fn(async () => []) };
   const events = { announce: vi.fn(async () => undefined) };
@@ -167,7 +175,7 @@ function world(opts: { filed?: number; sentinel?: { enabled: boolean; config: bo
     {} as never,
     documents as never,
     {} as never,
-    access as never,
+    permissions as never,
     activity as never,
     notifications as never,
     events as never,
@@ -266,11 +274,49 @@ describe('KnowledgeIssuesService.report — routing', () => {
     expect(w.issues).toHaveLength(0);
   });
 
+  it('a member refused on the page gets the refusal, which names no title, and files nothing (#758)', async () => {
+    const w = world({ hiddenFrom: viewer.userId });
+    const err = await w.service.report(report(), viewer).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ForbiddenException);
+    expect(JSON.stringify((err as ForbiddenException).getResponse())).not.toContain('Billing');
+    expect(w.issues).toHaveLength(0);
+  });
+
   it('a page from another workspace reads as not found', async () => {
     const w = world();
     await expect(w.service.report(report({ workspaceId: '22222222-2222-4222-8222-222222222222' }), viewer)).rejects.toThrow(
       NotFoundException,
     );
+  });
+});
+
+describe('reports under page restrictions (#758)', () => {
+  const asScope = (p: Principal) => ({ workspaceId: WS, userId: p.userId }) as never;
+
+  it('lists only reports on pages the caller can open', async () => {
+    const w = world({ hiddenFrom: viewer.userId });
+    await w.service.report(report(), editor);
+    w.prisma.knowledgeIssue.findMany.mockImplementation((async (args: { distinct?: string[]; where: { documentId?: { in: string[] } } }) => {
+      if (args.distinct) return w.issues.map((r) => ({ documentId: r.documentId }));
+      return w.issues.filter((r) => args.where.documentId?.in.includes(r.documentId));
+    }) as never);
+    expect((await w.service.list(asScope(viewer), {})).issues).toEqual([]);
+    expect((await w.service.list(asScope(editor), {})).issues).toHaveLength(1);
+  });
+
+  it('refuses closing a report on a page the caller cannot edit', async () => {
+    const w = world({ hiddenFrom: viewer.userId });
+    const { issue } = await w.service.report(report(), editor);
+    await expect(w.service.close(issue.id, 'dismissed', viewer)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(w.issues[0]!.status).not.toBe('dismissed');
+  });
+
+  it('a workspace editor without edit on the page opens no merge request; the report goes to the sentinel', async () => {
+    const w = world();
+    const suggestedMarkdown = `# Billing\n\n${'Corrected text. '.repeat(20)}`;
+    const res = await w.service.report(report({ suggestedMarkdown }), viewer);
+    expect(res.issue.mergeRequestId).toBeNull();
+    expect(w.documents.getContent).not.toHaveBeenCalled();
   });
 });
 

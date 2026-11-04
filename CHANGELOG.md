@@ -54,6 +54,9 @@ in the pull request that introduces them — see
 - **A conflict found again shows each page's own passage** (#757). When a page's edit reopened a conflict from the other
   side, one side could show the wrong page's quote, the other page's passage was lost, and the next edit to either page
   closed it as superseded even if the passage had not changed.
+- **Reports on a restricted page stay with those who can open it** (#758). Any workspace member could list them, with
+  their detail and quotes, report on such a page to learn its title, or close its reports, and a workspace editor could
+  open a merge request on a page they cannot edit. These routes now refuse the way the page does.
 
 ### Operations
 

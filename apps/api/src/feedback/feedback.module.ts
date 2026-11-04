@@ -4,6 +4,7 @@ import { AuthCoreModule } from '../auth/auth-core.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { FeedbackCoreModule } from './feedback-core.module.js';
 import { KnowledgeIssuesModule } from './knowledge-issues.module.js';
+import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { AnswerFeedbackController } from './answer-feedback.controller.js';
 import { AnswerFeedbackAdminController } from './answer-feedback-admin.controller.js';
 import { KnowledgeIssuesController } from './knowledge-issues.controller.js';
@@ -22,7 +23,7 @@ import { ReportPublishSweeper } from './report-publish.sweeper.js';
  * per-finding claim (the `DriftModule` precedent).
  */
 @Module({
-  imports: [PrismaModule, AuthCoreModule, AiModule, FeedbackCoreModule, KnowledgeIssuesModule],
+  imports: [PrismaModule, AuthCoreModule, AiModule, FeedbackCoreModule, KnowledgeIssuesModule, PermissionsCoreModule],
   controllers: [AnswerFeedbackController, AnswerFeedbackAdminController, KnowledgeIssuesController],
   providers: [ReportPublishSweeper],
   exports: [FeedbackCoreModule, KnowledgeIssuesModule],

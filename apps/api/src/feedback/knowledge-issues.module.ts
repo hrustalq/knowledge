@@ -8,6 +8,7 @@ import { NotificationsCoreModule } from '../notifications/notifications-core.mod
 import { EventsModule } from '../events/events.module.js';
 import { AgentCoreModule } from '../agents/agent-core.module.js';
 import { AgentQueueModule } from '../agents/agent-queue.module.js';
+import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { KnowledgeIssuesService } from './knowledge-issues.service.js';
 
 /**
@@ -31,6 +32,7 @@ import { KnowledgeIssuesService } from './knowledge-issues.service.js';
     EventsModule,
     AgentCoreModule,
     AgentQueueModule,
+    PermissionsCoreModule,
   ],
   providers: [KnowledgeIssuesService],
   exports: [KnowledgeIssuesService],

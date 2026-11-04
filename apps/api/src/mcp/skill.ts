@@ -272,7 +272,8 @@ ${
         canWrite
           ? `
 - \`git push -o merge_request.create -o merge_request.title="…" origin HEAD:<branch>\` writes one revision per changed
-  page and opens a merge request carrying all of them; the remote prints its link. Pushing the branch again updates it.
+  page and opens a merge request carrying all of them; the remote prints its link. Pushing the branch again updates it while it is open. Once it has merged, a further push
+  reaches no merge request, and the remote says so: push again with \`-o merge_request.create\` to open a new one.
 - A new file is a new page, \`git mv\` moves or renames one, \`git rm\` archives one. Each lands when the merge request
   merges; a new file pushed to a branch opens a draft merge request by itself.
 - History is append-only: a force push is refused. On "fetch first", \`git pull\`, resolve, and push again. That is also

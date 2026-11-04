@@ -654,6 +654,11 @@ header bytes. Where the build differs from the plan above:
   the default branch (decided 2026-10-30), as if `-o merge_request.create -o
   merge_request.draft` had been passed, so every head-less page has its merge
   request. A new file pushed to the default branch is refused (finding 3).
+- **A push that reaches no merge request says so** (#737). It is accepted, as
+  any push to a branch is, and a `remote:` line says no merge request carries
+  the commits and how to open one. If the branch's latest merge request is
+  merged, the line names it: commits made just after a merge used to strand on
+  the branch with nothing to say they had.
 - **A merge commit records the other side** on every page it brings in. A page
   the merge changed gets the other side's revision as its second parent. A page
   whose body this side kept gets a merge node with that body, unless the other

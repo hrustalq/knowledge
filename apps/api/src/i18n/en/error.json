@@ -921,7 +921,9 @@
       "rejected": "{path}: {reason}",
       "mrCreated": "View merge request \"{title}\":\n  {url}",
       "mrUpdated": "Updated merge request \"{title}\":\n  {url}",
-      "mrMerged": "Merged merge request \"{title}\":\n  {url}"
+      "mrMerged": "Merged merge request \"{title}\":\n  {url}",
+      "noMergeRequest": "No merge request carries these commits. Add -o merge_request.create to your next push to '{branch}', or open one on the web.",
+      "branchMerged": "Merge request \"{title}\" from '{branch}' is already merged, so it does not carry these commits:\n  {url}\nAdd -o merge_request.create to your next push to '{branch}', or open a new one on the web."
     },
     "tooLarge": "The push is larger than this remote accepts (256 MB). Push fewer commits at a time."
   },

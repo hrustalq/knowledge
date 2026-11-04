@@ -391,11 +391,15 @@ export class GitPushService {
       index.set(l.path, { documentId: l.doc ?? randomUUID(), revisionId, parentDocumentId: null, slug: nameOf(l.path), ext: l.ext, blob: l.blob });
     }
     const stems = new Map([...index].map(([p, e]) => [stemOf(p), e.documentId]));
+    const stemsBefore = new Set([...before.keys()].map(stemOf));
     const names = new Map<string, string>();
     // Replacing an existing key while iterating a Map visits each entry once.
     for (const [path, e] of index) {
       const dir = dirOf(path);
-      if (dir !== null && !stems.has(dir)) throw new PushRefused('no parent page', t('error.git.push.noParentPage', { path, dir }));
+      // A page whose parent was archived alone keeps its path, under a directory with no page: it was
+      // already so before this commit, and must not block a push of anything else. It stays under that parent.
+      const orphan = dir !== null && !stems.has(dir) && before.has(path) && !stemsBefore.has(dir);
+      if (dir !== null && !stems.has(dir) && !orphan) throw new PushRefused('no parent page', t('error.git.push.noParentPage', { path, dir }));
       const name = nameOf(path);
       if (!name || FORBIDDEN.test(name) || RESERVED.test(name) || name.startsWith('.')) {
         throw new PushRefused('bad file name', t('error.git.push.badName', { path, name }));
@@ -404,7 +408,7 @@ export class GitPushService {
       if (names.has(folded) && names.get(folded) !== e.documentId) throw new PushRefused('name taken', t('error.git.push.nameTaken', { path }));
       names.set(folded, e.documentId);
       // Entries are the parent's objects: copy before changing one.
-      index.set(path, { ...e, parentDocumentId: dir === null ? null : stems.get(dir)! });
+      index.set(path, { ...e, parentDocumentId: orphan ? before.get(path)!.parentDocumentId : dir === null ? null : stems.get(dir)! });
     }
 
     const byDoc = new Map([...before.values()].map((e) => [e.documentId, e]));

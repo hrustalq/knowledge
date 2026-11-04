@@ -82,6 +82,8 @@ in the pull request that introduces them — see
   and frozen versions kept it for good. Within 30 seconds such a page and its children now leave every version of every
   site, whichever way the restriction arrived. Lifting it brings them back.
 - **A push from a shallow clone lands** (#779). `git push` after `git clone --depth 1` failed with a 500.
+- **A parent archived alone no longer blocks pushes** (#780). Archiving a page without its children made every later
+  push to the project fail, whatever it touched.
 
 ### Operations
 

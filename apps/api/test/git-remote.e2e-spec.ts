@@ -559,6 +559,31 @@ describe('git remote (e2e, #636)', () => {
     expect((await git(['ls-remote', repo(people.alice.read), 'refs/heads/main'])).split('\t')[0]).toBe(pushed);
   });
 
+  it('a page whose parent was archived alone does not block a push of anything else', async () => {
+    const parent = await page(`Archived parent ${nonce}`, `# Archived parent ${nonce}\n`);
+    const child = await page(`Kept child ${nonce}`, `# Kept child ${nonce}\n\nStays.\n`, parent.id);
+    await http().post(`/v1/documents/${parent.id}/archive`).set(as(people.admin.key)).send({ includeDescendants: false }).expect(ok(201));
+    const dir = await clone(people.alice.key, 'alice-orphan');
+    const childPath = `${parent.slug}/${child.slug}.md`;
+    expect(existsSync(join(dir, childPath))).toBe(true);
+
+    edit(dir, `${slugs.open}.md`, (x) => `${x}\nBeside an orphan.\n`);
+    await git(['commit', '-qam', 'Beside it'], dir);
+    await gitAll(['push', 'origin', 'HEAD:main'], dir);
+
+    edit(dir, childPath, (x) => x.replace('Stays.', 'Stays, edited.'));
+    await git(['commit', '-qam', 'The child itself'], dir);
+    await gitAll(['push', 'origin', 'HEAD:main'], dir);
+    expect(await prisma.documentRevision.count({ where: { documentId: child.id, message: 'The child itself', status: { not: 'draft' } } })).toBe(1);
+    expect((await prisma.document.findUniqueOrThrow({ where: { id: child.id } })).parentId).toBe(parent.id);
+
+    // A new file there still has no page for its directory.
+    writeFileSync(join(dir, parent.slug, 'new-under.md'), '# New\n');
+    await git(['add', '.'], dir);
+    await git(['commit', '-qm', 'New under it'], dir);
+    expect(await gitFails(['push', 'origin', 'HEAD:side-orphan'], dir)).toMatch(/needs a page/);
+  });
+
   it('opens a merge request over MCP by project and branch name, and lists the branch', async () => {
     const mcp = (name: string, args: Record<string, unknown>) =>
       http()

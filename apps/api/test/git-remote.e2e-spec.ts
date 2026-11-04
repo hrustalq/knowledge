@@ -483,6 +483,49 @@ describe('git remote (e2e, #636)', () => {
     await git(['pull', '-q', '--ff-only', 'origin', 'main'], dir);
   });
 
+  it('a merge by push carrying anything else passes the checks a direct push would (#769)', async () => {
+    const dir = join(work, 'alice-w');
+    const guidePath = `${slugs.open}/${guide.slug}.md`;
+    await git(['checkout', '-q', '-b', 'extra-src'], dir);
+    edit(dir, `${slugs.open}.md`, (x) => `${x}\nFrom the branch.\n`);
+    await git(['commit', '-qam', 'Source side'], dir);
+    const mrId = mrIdIn(await gitAll(['push', '-o', 'merge_request.create', 'origin', 'HEAD:extra-src'], dir))!;
+    await http().post(`/v1/merge-requests/${mrId}/approve`).set(as(people.admin.key)).expect(ok(201));
+    const open = async () => (await http().get(`/v1/merge-requests/${mrId}`).set(as(people.admin.key)).expect(ok(200))).body.mergeRequest.status;
+    const main = () => git(['ls-remote', repo(people.admin.read), 'refs/heads/main']);
+    const before = await main();
+
+    // A second, protected page, committed beside the merge.
+    await git(['checkout', '-q', 'main'], dir);
+    edit(dir, guidePath, (x) => `${x}\nSneaked in.\n`);
+    await git(['commit', '-qam', 'Sneak'], dir);
+    await git(['merge', '-q', '--no-ff', '--no-edit', 'extra-src'], dir);
+    await prisma.documentBranch.updateMany({ where: { documentId: guide.id, name: 'main' }, data: { protected: true } });
+    try {
+      expect(await gitFails(['push', 'origin', 'HEAD:main'], dir)).toMatch(/'main' is protected/);
+    } finally {
+      await prisma.documentBranch.updateMany({ where: { documentId: guide.id, name: 'main' }, data: { protected: false } });
+    }
+    expect(await open()).toBe('open');
+    expect(await main()).toBe(before);
+
+    // A brand new page, committed beside the merge.
+    await git(['reset', '-q', '--hard', 'origin/main'], dir);
+    writeFileSync(join(dir, 'sneaked-page.md'), '# Sneaked\n');
+    await git(['add', '.'], dir);
+    await git(['commit', '-qm', 'Sneak a page'], dir);
+    await git(['merge', '-q', '--no-ff', '--no-edit', 'extra-src'], dir);
+    expect(await gitFails(['push', 'origin', 'HEAD:main'], dir)).toMatch(/sneaked-page\.md/);
+    expect(await open()).toBe('open');
+    expect(await main()).toBe(before);
+
+    // Only the merge request's own change still lands.
+    await git(['reset', '-q', '--hard', 'origin/main'], dir);
+    await git(['merge', '-q', '--no-ff', '--no-edit', 'extra-src'], dir);
+    expect(await gitAll(['push', 'origin', 'HEAD:main'], dir)).toMatch(/Merged merge request/);
+    expect(await open()).toBe('merged');
+  });
+
   it('opens a merge request over MCP by project and branch name, and lists the branch', async () => {
     const mcp = (name: string, args: Record<string, unknown>) =>
       http()

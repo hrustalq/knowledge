@@ -245,7 +245,11 @@ export class GitPushService {
     const write = () => this.write(workspaceId, projectId, branch, head, planned, principal.userId, isDefault);
     if (isDefault) {
       const mr = await this.mergedBy(projectId, branch, planned.at(-1)!);
+      const changes = planned.flatMap((p) => p.changes);
       if (mr) {
+        // What the push carries beside the merge request passes the checks a direct push would (#769).
+        const spanned = await this.mergeRequests.spannedPages(mr.id);
+        await this.assertMayGoDirect(changes.filter((ch) => !spanned.has(ch.documentId)), branch);
         const merged = await this.mergeRequests
           .mergeByPush(mr.id, principal, async () => {
             const ids = await write();
@@ -254,10 +258,7 @@ export class GitPushService {
           .catch((e: unknown) => this.gateRefusal(e));
         return [t('error.git.push.mrMerged', { title: merged.title, url: this.mrUrl(merged.mergeRequestId) })];
       }
-      if (created.length) throw new PushRefused('new page', t('error.git.push.newOnDefault', { path: created[0].path, branch }));
-      const pages = [...new Set(planned.flatMap((p) => p.changes.map((ch) => ch.documentId)))];
-      const guarded = await this.prisma.documentBranch.count({ where: { documentId: { in: pages }, name: branch, protected: true } });
-      if (guarded) throw new PushRefused('protected', t('error.git.push.protected', { branch }));
+      await this.assertMayGoDirect(changes, branch);
       await this.prisma.withTransaction(write, { timeout: 60_000, maxWait: 10_000 });
       return [];
     }
@@ -463,6 +464,15 @@ export class GitPushService {
   /** Null when the blob carries exactly the canonical id line, which is what a revision without one is served with. */
   private idLineOf(documentId: string, bytes: Buffer, s: { body: Buffer; idLine: IdLine }, ext: PageExt): IdLine | null {
     return withIdLine(documentId, s.body, ext).equals(bytes) ? null : s.idLine;
+  }
+
+  /** No new pages on the default branch, and no write to a protected one, without a merge request. */
+  private async assertMayGoDirect(changes: Planned[], branch: string): Promise<void> {
+    const fresh = changes.find((ch) => ch.isNew);
+    if (fresh) throw new PushRefused('new page', t('error.git.push.newOnDefault', { path: fresh.path, branch }));
+    const pages = [...new Set(changes.map((ch) => ch.documentId))];
+    const guarded = await this.prisma.documentBranch.count({ where: { documentId: { in: pages }, name: branch, protected: true } });
+    if (guarded) throw new PushRefused('protected', t('error.git.push.protected', { branch }));
   }
 
   /** The pusher may edit every page the push changes, and the parent of every page it creates. */

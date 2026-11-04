@@ -966,13 +966,7 @@ export class MergeRequestsService {
         approvals,
       });
     }
-    const pages = await this.changedPages(mr.sourceBranch, mr.targetBranch.name);
-    const { projectId, workspaceId, defaultBranch } = await this.prisma.document.findUniqueOrThrow({
-      where: { id: mr.documentId },
-      select: { projectId: true, workspaceId: true, defaultBranch: true },
-    });
-    // ponytail: a branch's tree lands only on the default branch; a merge into another branch carries content alone.
-    const places = mr.targetBranch.name === defaultBranch ? await this.treePlaces(projectId, mr.sourceBranch.name, defaultBranch) : [];
+    const { pages, places, projectId, workspaceId } = await this.spanOf(mr);
     if (pages.length === 0 && places.length === 0) throw new BadRequestException(t('error.mergeRequest.nothingToMerge'));
     this.assertTargetsExist(pages, mr.targetBranch.name);
     // The guard held the caller to edit on the page the merge request was
@@ -1011,6 +1005,24 @@ export class MergeRequestsService {
     }
 
     return { pages, places, projectId, workspaceId };
+  }
+
+  /** The pages and tree changes merging this request would land. */
+  private async spanOf(mr: MrWithBranches) {
+    const pages = await this.changedPages(mr.sourceBranch, mr.targetBranch.name);
+    const { projectId, workspaceId, defaultBranch } = await this.prisma.document.findUniqueOrThrow({
+      where: { id: mr.documentId },
+      select: { projectId: true, workspaceId: true, defaultBranch: true },
+    });
+    // ponytail: a branch's tree lands only on the default branch; a merge into another branch carries content alone.
+    const places = mr.targetBranch.name === defaultBranch ? await this.treePlaces(projectId, mr.sourceBranch.name, defaultBranch) : [];
+    return { pages, places, projectId, workspaceId };
+  }
+
+  /** The ids of the pages this request spans, for a merge by push to tell them from anything else it carries (#769). */
+  async spannedPages(mergeRequestId: string): Promise<Set<string>> {
+    const { pages, places } = await this.spanOf(await this.getMrOrThrow(mergeRequestId));
+    return new Set([...pages.map((p) => p.documentId), ...places.map((p) => p.documentId)]);
   }
 
   /** Breaking API changes (#78), last because it parses two specs per spec page. */

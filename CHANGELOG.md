@@ -71,6 +71,9 @@ in the pull request that introduces them — see
   pushing failed with a 404 and nothing landed.
 - **A page behind a closed merge request appears once a later one lands it** (#771). It stayed out of every list, search
   and tree for good, with its content on the default branch. A page whose only merge request was closed stays hidden.
+- **A merge by push cannot carry other pages past their checks** (#769). Pushing a merge together with a commit to a
+  protected page, or a new page, landed them with no admin and no merge request. Such a push is now refused and nothing
+  lands.
 
 ### Operations
 

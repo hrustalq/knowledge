@@ -63,7 +63,7 @@ export class AvatarsService {
     ownerId: string,
     dto: CreateAvatarUploadRequest,
   ): Promise<CreateAvatarUploadResponse> {
-    if (!AVATAR_CONTENT_TYPES.includes(dto.contentType as AvatarContentType)) {
+    if (!isAvatarType(dto.contentType)) {
       throw new BadRequestException(
         t('error.avatar.unsupportedType', { types: AVATAR_CONTENT_TYPES.join(', ') }),
       );
@@ -74,7 +74,7 @@ export class AvatarsService {
 
     const uploadId = randomUUID();
     const key = this.storage.avatarObjectKey(kind, ownerId, uploadId, dto.filename);
-    const url = await this.storage.presignPut(key, dto.contentType);
+    const url = await this.storage.presignPut(key, dto.contentType, 900, { bindContentType: true });
     return {
       uploadId,
       upload: {
@@ -94,8 +94,8 @@ export class AvatarsService {
    * succeeded. Taking the client's word for it is how a row ends up pointing at
    * an object that does not exist.
    *
-   * The size is re-checked against what actually arrived, because the number in
-   * step 1 was a claim by the caller and this one is a fact.
+   * The size and type are re-checked against what actually arrived, because the
+   * values in step 1 were claims by the caller and these are facts.
    */
   async complete(
     kind: AvatarOwner,
@@ -109,6 +109,10 @@ export class AvatarsService {
     if (head.contentLength > AVATAR_MAX_BYTES) {
       await this.storage.deleteObject(key).catch(() => undefined);
       throw new PayloadTooLargeException(t('error.avatar.tooLarge', { limit: AVATAR_MAX_BYTES }));
+    }
+    if (!isAvatarType(head.contentType)) {
+      await this.storage.deleteObject(key).catch(() => undefined);
+      throw new BadRequestException(t('error.avatar.unsupportedType', { types: AVATAR_CONTENT_TYPES.join(', ') }));
     }
 
     const previous = await this.swapKey(kind, ownerId, key);
@@ -135,18 +139,18 @@ export class AvatarsService {
   /**
    * Where the browser should actually fetch the picture from.
    *
-   * `inline`, and with the stored content type — the same rule attachments
-   * apply: disposition and type are decided here rather than inherited from the
-   * object's own metadata, so an upload can never talk the browser into
-   * treating it as something executable.
+   * `inline` only for a type on the allowlist: the stored type is the object's
+   * own metadata, so an object carrying any other is no picture, and reads as
+   * having none. That covers objects stored before `complete` checked.
    */
   async presignedGet(kind: AvatarOwner, ownerId: string): Promise<string> {
     const key = await this.keyOf(kind, ownerId);
     if (!key) throw new NotFoundException(t('error.avatar.none'));
     const head = await this.storage.headObject(key);
+    if (!isAvatarType(head?.contentType)) throw new NotFoundException(t('error.avatar.none'));
     return this.storage.presignGet(key, {
       filename: 'avatar',
-      contentType: head?.contentType ?? 'application/octet-stream',
+      contentType: head.contentType,
       disposition: 'inline',
       // Longer than the default: a face is fetched on every screen that lists
       // people, and a URL that expires inside a session sends them all back.
@@ -242,4 +246,8 @@ export class AvatarsService {
     });
     return projectAvatarUrl(row);
   }
+}
+
+function isAvatarType(type: string | null | undefined): type is AvatarContentType {
+  return AVATAR_CONTENT_TYPES.includes(type as AvatarContentType);
 }

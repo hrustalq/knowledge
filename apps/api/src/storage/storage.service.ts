@@ -131,9 +131,13 @@ export class StorageService {
     return `workspaces/${workspaceId}/documents/${documentId}/revisions/${revisionId}/${filename}`;
   }
 
-  async presignPut(objectKey: string, contentType: string, expiresInSeconds = 900): Promise<string> {
+  async presignPut(objectKey: string, contentType: string, expiresInSeconds = 900, opts: { bindContentType?: boolean } = {}): Promise<string> {
     const cmd = new PutObjectCommand({ Bucket: this.bucket, Key: objectKey, ContentType: contentType });
-    return getSignedUrl(this.presigner, cmd, { expiresIn: expiresInSeconds });
+    return getSignedUrl(this.presigner, cmd, {
+      expiresIn: expiresInSeconds,
+      // The presigner leaves the type out of the signature unless told, and a PUT can then store any type it likes.
+      ...(opts.bindContentType ? { signableHeaders: new Set(['content-type']) } : {}),
+    });
   }
 
   /**

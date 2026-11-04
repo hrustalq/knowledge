@@ -76,7 +76,12 @@
 	# Neither request header can say it: the Worker reaches Funnel as the
 	# *.ts.net name, and Funnel overwrites the X-Forwarded-Host the Worker sets
 	# with that same name. So the host is configuration, not a header.
+	#
+	# These objects are uploads served on the app's own origin: a browser must
+	# never sniff one into HTML, and nothing here may run a script.
 	handle /{$S3_BUCKET:knowledge}/* {
+		header X-Content-Type-Options nosniff
+		header Content-Security-Policy "script-src 'none'"
 		reverse_proxy minio:9000 {
 			header_up Host {$S3_PUBLIC_HOST}
 		}

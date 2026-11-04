@@ -378,6 +378,8 @@ export class DocumentsService {
         projectId: dto.projectId,
         parentId: dto.parentId,
       },
+      // The rendered body is handed straight back to its author.
+      await this.permissions.scopeForUser(authorId, dto.workspaceId),
       { id: authorId },
     );
     return {

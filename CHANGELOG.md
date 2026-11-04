@@ -61,6 +61,9 @@ in the pull request that introduces them — see
   open issue lost its description and corrected body without saying so. The description is now kept on the issue. A
   corrected body from someone who can edit the page opens a merge request if the issue has none, and otherwise the
   reporter is told it was not used.
+- **Rendering a template no longer reveals a restricted page's title** (#774). A viewer refused on a page could read its
+  title, or a restricted project's name, by rendering a template with `{{parent}}` or a page placeholder pointing at it.
+  Such a value now renders as if it had not been given.
 
 ### Operations
 

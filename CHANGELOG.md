@@ -24,6 +24,8 @@ in the pull request that introduces them — see
   can correct it.
 - **An API spec whose YAML opens with `---` keeps its text** (#763). Such a page exported blank in every format, had an
   empty body in `llms-full.txt` and was missing from a published site's search.
+- **A share link's zip keeps a page's text exact** (#762). A page containing `$$` or `$&`, as shell and regex examples
+  do, came out altered in the archive.
 
 ## [0.45.1] — 2026-11-04
 

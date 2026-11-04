@@ -5,6 +5,7 @@ import type { ExportJob } from '@prisma/client';
 import type { ExportManifest } from '@knowledge/contracts';
 import { ExportService, exportFilename } from '../src/export/export.service.js';
 import { ExportScopeService } from '../src/export/export-scope.service.js';
+import { replaceSourceBody } from '../src/common/frontmatter.js';
 import { ExportBuildService } from '../src/export/export-build.service.js';
 import { ExportSweeper } from '../src/export/export.sweeper.js';
 import {
@@ -540,6 +541,17 @@ describe('ExportBuildService', () => {
     await pdf.svc.build('job-1');
     const request = pdf.renderer.render.mock.calls[0][0] as { pages: { markdown: string }[] };
     expect(request.pages[0].markdown).toBe(yaml);
+  });
+
+  it('keeps dollar patterns in a share link archive, and a body repeated in the frontmatter (#762)', async () => {
+    const body = "run `echo $$` and $& or $` and $' end\n";
+    const h = buildHarness({ row: { shareLinkId: 'share-1' } });
+    h.storage.getObjectText.mockImplementation(async (key: string) => (key === 'src-a' ? `---\ntitle: Guide\n---\n${body}` : 'Guide\n'));
+    await h.svc.build('job-1');
+    const zip = unzipSync(h.written[0].bytes);
+    const source = (suffix: string) => strFromU8(zip[Object.keys(zip).find((k) => k.endsWith(suffix))!]);
+    expect(source('pages/guide.md')).toBe(`---\ntitle: Guide\n---\n${body}`);
+    expect(replaceSourceBody('---\ntitle: x\n---\nx', 'x', '$&')).toBe('---\ntitle: x\n---\n$&');
   });
 
   it('never rebuilds an export that already finished', async () => {

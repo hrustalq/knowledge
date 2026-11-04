@@ -50,6 +50,16 @@ export function readPageSource(raw: string, kind: string | null | undefined): { 
 }
 
 /**
+ * `source` with its body swapped, every byte before the body kept. gray-matter's
+ * `content` is always a suffix of its input, and slicing is what makes this exact:
+ * `String.replace` reads `$$` and `$&` in the new body as patterns, and would hit
+ * the first occurrence of the old one, which may be inside the frontmatter (#762).
+ */
+export function replaceSourceBody(source: string, oldBody: string, newBody: string): string {
+  return source.slice(0, source.length - oldBody.length) + newBody;
+}
+
+/**
  * Merge `patch` into the page's frontmatter, preserving every key it does not
  * name — which is the whole point: a caller that edits `relations:` must not
  * disturb `source:`, `glossary:` or anything else a page carries.

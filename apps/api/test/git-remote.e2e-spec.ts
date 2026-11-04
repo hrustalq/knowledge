@@ -430,6 +430,8 @@ describe('git remote (e2e, #636)', () => {
     expect(await prisma.document.findUniqueOrThrow({ where: { id: guide.id } })).toMatchObject({ parentId: ids.open });
     expect((await prisma.document.findUniqueOrThrow({ where: { id: stale.id } })).archivedAt).not.toBeNull();
     expect((await prisma.document.findUniqueOrThrow({ where: { id: fresh.id } })).pendingMergeRequestId).toBeNull();
+    // #741: its history is what was written, with no never-finalized draft left on main.
+    expect(await prisma.documentRevision.count({ where: { documentId: fresh.id, status: 'draft' } })).toBe(0);
 
     await git(['checkout', '-q', 'main'], dir);
     await git(['pull', '-q', '--ff-only', 'origin', 'main'], dir);

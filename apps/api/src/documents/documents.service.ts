@@ -144,7 +144,18 @@ export class DocumentsService {
     private readonly commits: ProjectCommitsService,
   ) {}
 
-  async createDocument(input: CreateDocumentDto, authorId: string = AUTHOR_ID_STUB): Promise<CreateDocumentResponse> {
+  async createDocument(input: CreateDocumentDto, authorId?: string): Promise<CreateDocumentResponse>;
+  /**
+   * `headless`: the page's first content lands on a branch (a push, a capture,
+   * a proposed page), so it gets no first draft on its default branch: nothing
+   * would ever finalize that draft, and it would sit in the page's history (#741).
+   */
+  async createDocument(input: CreateDocumentDto, authorId: string, opts: { headless: true }): Promise<Pick<CreateDocumentResponse, 'documentId'>>;
+  async createDocument(
+    input: CreateDocumentDto,
+    authorId: string = AUTHOR_ID_STUB,
+    opts: { headless?: true } = {},
+  ): Promise<CreateDocumentResponse | Pick<CreateDocumentResponse, 'documentId'>> {
     // Workspace > Project > Document: a project id from another tenant must
     // never silently re-parent the page.
     await this.projects.requireProjectInWorkspace(input.projectId, input.workspaceId);
@@ -247,6 +258,7 @@ export class DocumentsService {
           projectBranchId: await this.commits.projectBranch(document.projectId, 'main'),
         },
       });
+      if (opts.headless) return { document, revision: null };
       const revision = await this.prisma.documentRevision.create({
         data: {
           documentId: document.id,
@@ -293,7 +305,7 @@ export class DocumentsService {
     }
 
     let status: RevisionStatus = 'draft';
-    if (dto.content) {
+    if (revision && dto.content) {
       await this.storage.putObjectText(revision.s3Key, dto.content.text, contentType);
       const finalized = await this.finalizeRevision(document.id, revision.id);
       status = finalized.status;
@@ -327,7 +339,7 @@ export class DocumentsService {
       'author',
     );
 
-    return { documentId: document.id, revisionId: revision.id, branch: 'main', status };
+    return revision ? { documentId: document.id, revisionId: revision.id, branch: 'main', status } : { documentId: document.id };
   }
 
   /**

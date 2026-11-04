@@ -224,6 +224,7 @@ describe('a novel capture', () => {
     expect(h.documents.createDocument).toHaveBeenCalledWith(
       { workspaceId: WS, projectId: PROJECT, title: 'Fuse vector and BM25 with RRF', category: 'architecture' },
       'u-1',
+      { headless: true },
     );
     expect(h.documents.createBranch).toHaveBeenCalledWith('doc-new', { name: expect.stringMatching(/^capture\/cap-0000/) });
     expect(h.mergeRequests.create).toHaveBeenCalledWith('doc-new', expect.any(Object), 'u-1', {

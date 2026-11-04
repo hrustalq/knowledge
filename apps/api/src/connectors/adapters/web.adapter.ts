@@ -169,8 +169,11 @@ export class WebAdapter implements ConnectorAdapter {
         continue;
       }
       for (const loc of sitemapLocs(xml)) {
-        if (/\.xml$/i.test(new URL(loc, origin).pathname)) pending.push(loc);
-        else pages.push(foldUrl(loc) ?? '');
+        const at = new URL(loc, origin);
+        // A sitemap names any URL it likes; the source's credential goes only to the source's origin.
+        if (/\.xml$/i.test(at.pathname)) {
+          if (at.origin === origin) pending.push(at.href);
+        } else pages.push(foldUrl(loc) ?? '');
       }
     }
     return pages.filter(Boolean);

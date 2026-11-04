@@ -95,6 +95,10 @@ in the pull request that introduces them — see
   cleaning one up is now refused like reading it, and so is Approve all while a run holds such an item. Someone with
   access to the page, or an admin, approves it.
 
+### Security
+
+- **Outbound requests are checked more strictly, and a credential stays on its origin.** Upgrade promptly.
+
 ### Operations
 
 - Migration `20261231120000_answer_signal_no_message` (#754) splits each answer signal holding a vote into a signal and a

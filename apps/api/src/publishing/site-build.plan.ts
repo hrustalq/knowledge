@@ -158,3 +158,22 @@ export function planSiteBuild(input: PlanInput): SitePlan {
   for (const top of children.get(null) ?? []) visit(top, null);
   return { pages, warnings };
 }
+
+/**
+ * The scaffold stubs with nothing real under them (#782): a skeleton is not
+ * knowledge, and a public site has no use for one. A stub over a real page stays,
+ * as the place that page hangs from, so filling in a child keeps its URL and nav.
+ */
+export function bareStubs(documents: ReadonlyArray<{ id: string; parentId: string | null }>, stubs: ReadonlySet<string>): Set<string> {
+  const parentOf = new Map(documents.map((d) => [d.id, d.parentId]));
+  const bare = new Set(stubs);
+  for (const { id } of documents) {
+    if (stubs.has(id)) continue;
+    const seen = new Set<string>();
+    for (let up = parentOf.get(id) ?? null; up && !seen.has(up); up = parentOf.get(up) ?? null) {
+      seen.add(up);
+      bare.delete(up);
+    }
+  }
+  return bare;
+}

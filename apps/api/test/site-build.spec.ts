@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import 'reflect-metadata';
-import { planSiteBuild, resolveRevision, type PlanDocument, type ResolvedRevision } from '../src/publishing/site-build.plan.js';
+import { planSiteBuild, resolveRevision, type PlanDocument, type ResolvedRevision, bareStubs } from '../src/publishing/site-build.plan.js';
 import { SiteBuildService } from '../src/publishing/site-build.service.js';
 import { SiteRebuildTrigger } from '../src/publishing/site-rebuild.trigger.js';
 
@@ -209,6 +209,25 @@ function stamper() {
     restamp: vi.fn(async () => undefined),
   };
 }
+
+describe('bareStubs (#782)', () => {
+  const docs = [
+    { id: 'lone', parentId: null },
+    { id: 'lone-child', parentId: 'lone' },
+    { id: 'over-real', parentId: null },
+    { id: 'mid', parentId: 'over-real' },
+    { id: 'real', parentId: 'mid' },
+    { id: 'filled', parentId: null },
+  ];
+
+  it('drops a stub with only stubs under it, and keeps every ancestor of a real page', () => {
+    expect([...bareStubs(docs, new Set(['lone', 'lone-child', 'over-real', 'mid']))].sort()).toEqual(['lone', 'lone-child']);
+  });
+
+  it('survives a parent cycle', () => {
+    expect(bareStubs([{ id: 'a', parentId: 'b' }, { id: 'b', parentId: 'a' }], new Set(['a']))).toEqual(new Set());
+  });
+});
 
 describe('SiteBuildService', () => {
   it('reads the named branch where a page has it and its default branch where it does not', async () => {

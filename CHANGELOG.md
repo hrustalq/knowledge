@@ -88,6 +88,9 @@ in the pull request that introduces them — see
   link. It now says only that the merge request was updated.
 - **A run's warnings no longer name a page the reader cannot open** (#767). They carried the item's title and error on the
   run, its connector and the MCP tool. Such a warning is now left out for that reader.
+- **Published sites leave out empty scaffold pages** (#782). A scaffolded project's skeletons reached anonymous readers,
+  and their placeholder text reached site search. One with a real page under it stays in the nav, with no search text. A
+  live version changes at its next build, and a frozen one keeps what it was built with.
 
 ### Operations
 

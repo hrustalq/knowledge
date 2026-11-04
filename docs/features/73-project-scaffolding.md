@@ -455,6 +455,7 @@ Where they apply:
 | llms.txt / llms-full.txt | `AiReadableService` skips stub heads ([37](37-ai-readable-output.md)) |
 | Knowledge health | The health CTE excludes stubs: nothing to verify, own or count ([40](40-knowledge-health.md)) |
 | Usage analytics | The dead-page list skips them: quiet by design, not dead ([58](58-usage-analytics.md)) |
+| Published sites | A build leaves out a stub with nothing real under it. One over a real page stays as its parent in the nav, with no search text ([44](44-docs-portal.md)) |
 
 A stub stays in the tree and the page lists, which is where people find it to
 fill in. The first real revision ends it with no code of its own: the head moves

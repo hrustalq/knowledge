@@ -67,6 +67,8 @@ in the pull request that introduces them — see
 - **Assistant chat threads are private to the person who asked** (#772). Any workspace viewer could list and search
   everyone's threads, read them, rename them, rewind them or delete them, including answers quoting pages only the asker
   may open. A thread is now visible only to its asker, and to anyone else it reads as not found.
+- **A push that adds a page and then edits it lands** (#768). Adding a page and fixing it in a later commit before
+  pushing failed with a 404 and nothing landed.
 
 ### Operations
 

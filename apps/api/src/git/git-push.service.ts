@@ -529,7 +529,8 @@ export class GitPushService {
         const changes: CommitChange[] = [];
         // Parents before children, so a new page's parent exists when it is created.
         for (const ch of [...p.changes].sort((a, b) => a.path.split('/').length - b.path.split('/').length)) {
-          let documentId = ch.documentId;
+          // A later commit editing a page this push created still names it by its tentative id (#768).
+          let documentId = doc(ch.documentId)!;
           if (ch.isNew) {
             const res = await this.documents.createDocument(
               { workspaceId, projectId, title: ch.isNew.title, kind: ch.isNew.kind, parentId: doc(ch.parentDocumentId) ?? undefined, visibility: 'workspace' },

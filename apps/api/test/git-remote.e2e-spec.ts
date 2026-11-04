@@ -441,6 +441,25 @@ describe('git remote (e2e, #636)', () => {
     await git(['fsck', '--strict'], dir);
   });
 
+  it('lands a push that adds a page and edits it in a later commit (#768)', async () => {
+    const dir = join(work, 'alice-w');
+    await git(['checkout', '-q', '-b', 'two-step'], dir);
+    writeFileSync(join(dir, 'two-step.md'), '# Two step\n\nFirst draft.\n');
+    await git(['add', '.'], dir);
+    await git(['commit', '-qm', 'Add a page'], dir);
+    edit(dir, 'two-step.md', (x) => x.replace('First draft.', 'Second draft.'));
+    await git(['commit', '-qam', 'Fix it before pushing'], dir);
+    const pushed = await git(['rev-parse', 'HEAD'], dir);
+    const mrId = mrIdIn(await gitAll(['push', 'origin', 'HEAD:two-step'], dir))!;
+    expect(mrId).toBeTruthy();
+    const created = await prisma.document.findFirstOrThrow({ where: { projectId, title: 'Two step' } });
+    expect(await prisma.documentRevision.count({ where: { documentId: created.id, status: { not: 'draft' } } })).toBe(2);
+    // A fresh clone serves back exactly what was pushed.
+    expect((await git(['ls-remote', repo(people.alice.read), 'refs/heads/two-step'])).split('\t')[0]).toBe(pushed);
+    await http().post(`/v1/merge-requests/${mrId}/close`).set(as(people.alice.key)).expect(ok(201));
+    await git(['checkout', '-q', 'main'], dir);
+  });
+
   it('opens a merge request over MCP by project and branch name, and lists the branch', async () => {
     const mcp = (name: string, args: Record<string, unknown>) =>
       http()

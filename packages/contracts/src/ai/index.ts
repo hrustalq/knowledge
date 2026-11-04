@@ -336,6 +336,8 @@ export interface ReportKnowledgeIssueResponse {
   issue: KnowledgeIssueInfo;
   /** True when the report folded into an issue that was already open for the page and kind. */
   deduplicated: boolean;
+  /** Set when a folded report's corrected body opened no merge request: the reporter cannot edit the page, or the issue has one. */
+  suggestionIgnored?: boolean;
 }
 
 // GET /v1/knowledge-issues?workspaceId=&documentId=&status=

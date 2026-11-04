@@ -57,6 +57,10 @@ in the pull request that introduces them — see
 - **Reports on a restricted page stay with those who can open it** (#758). Any workspace member could list them, with
   their detail and quotes, report on such a page to learn its title, or close its reports, and a workspace editor could
   open a merge request on a page they cannot edit. These routes now refuse the way the page does.
+- **A second report on a page keeps what its reporter wrote** (#759). A report on a page and kind that already had an
+  open issue lost its description and corrected body without saying so. The description is now kept on the issue. A
+  corrected body from someone who can edit the page opens a merge request if the issue has none, and otherwise the
+  reporter is told it was not used.
 
 ### Operations
 

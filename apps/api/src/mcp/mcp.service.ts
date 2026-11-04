@@ -503,6 +503,7 @@ export class McpService {
           status: res.issue.status,
           deduplicated: res.deduplicated,
           reportCount: res.issue.reportCount,
+          ...(res.suggestionIgnored ? { suggestionIgnored: true } : {}),
           ...(res.issue.mergeRequestId ? { mergeRequestId: res.issue.mergeRequestId } : {}),
           ...(res.issue.agentRunId ? { agentRunId: res.issue.agentRunId } : {}),
         });

@@ -40671,7 +40671,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.44.1",
+    "version": "0.45.1",
     "contact": {}
   },
   "tags": [],
@@ -68406,6 +68406,9 @@
             "$ref": "#/components/schemas/KnowledgeIssueInfo"
           },
           "deduplicated": {
+            "type": "boolean"
+          },
+          "suggestionIgnored": {
             "type": "boolean"
           }
         },

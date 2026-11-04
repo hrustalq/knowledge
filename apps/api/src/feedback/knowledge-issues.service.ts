@@ -123,10 +123,10 @@ export class KnowledgeIssuesService {
     const evidence = normalizeEvidence(input.evidence ?? []);
     const suggestion = input.suggestedMarkdown?.trim().slice(0, KNOWLEDGE_ISSUE_SUGGESTION_MAX_CHARS) || null;
 
-    const folded = await this.foldInto(document.id, input.kind, evidence);
-    if (folded) {
-      return { issue: toInfo(folded, document.title), deduplicated: true };
-    }
+    // What the second reporter wrote, kept as evidence (#759).
+    const foldedEvidence = normalizeEvidence([{ note: detail }, ...evidence]);
+    const folded = await this.foldInto(document.id, input.kind, foldedEvidence);
+    if (folded) return this.foldedResponse(folded, document, suggestion, principal);
     const created = await this.insertGuarded({
       workspaceId: document.workspaceId,
       documentId: document.id,
@@ -143,8 +143,8 @@ export class KnowledgeIssuesService {
       // Lost the race to another report of the same page and kind: fold into
       // the row that won. A second miss here is the duplicate the read side
       // tolerates, so one retry is all that is honest to try.
-      const again = await this.foldInto(document.id, input.kind, evidence);
-      if (again) return { issue: toInfo(again, document.title), deduplicated: true };
+      const again = await this.foldInto(document.id, input.kind, foldedEvidence);
+      if (again) return this.foldedResponse(again, document, suggestion, principal);
       throw new HttpException({ statusCode: 409, message: t('error.knowledgeIssue.raced') }, HttpStatus.CONFLICT);
     }
 
@@ -160,6 +160,30 @@ export class KnowledgeIssuesService {
 
     const routed = await this.route(created, document, suggestion, principal);
     return { issue: toInfo(routed, document.title), deduplicated: false };
+  }
+
+  /**
+   * A report that folded in. Its corrected body opens a merge request when the
+   * issue has none and an editor sent it; otherwise the reporter is told it was
+   * not used, because two corrected bodies cannot both be the page (#759).
+   */
+  private async foldedResponse(
+    issue: KnowledgeIssue,
+    document: { id: string; workspaceId: string; title: string },
+    suggestion: string | null,
+    principal: Principal,
+  ): Promise<ReportKnowledgeIssueResponse> {
+    if (!suggestion) return { issue: toInfo(issue, document.title), deduplicated: true };
+    const proposed =
+      !issue.mergeRequestId && (await this.canEdit(principal, document))
+        ? await this.proposeSuggestion(issue, document, suggestion, principal).catch((error: unknown) => {
+            this.logger.warn(`Draft from report ${issue.id} not opened: ${(error as Error).message}`);
+            return null;
+          })
+        : null;
+    return proposed
+      ? { issue: toInfo(proposed, document.title), deduplicated: true }
+      : { issue: toInfo(issue, document.title), deduplicated: true, suggestionIgnored: true };
   }
 
   /**
@@ -222,8 +246,9 @@ export class KnowledgeIssuesService {
       markdown: composeFrontmatter(suggestion, current?.frontmatter ?? {}),
       userId: principal.userId,
       onCreated: async (id) => {
+        // `checking`: a report folded in while the sentinel is out. Its verdict is then dropped, as settleCheck guards on `checking`.
         const moved = await this.prisma.knowledgeIssue.updateMany({
-          where: { id: issue.id, status: 'open' },
+          where: { id: issue.id, status: { in: ['open', 'checking'] } },
           data: { status: 'proposed', mergeRequestId: id },
         });
         if (moved.count !== 1) throw new Error(`issue ${issue.id} is no longer open`);

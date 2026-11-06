@@ -58,8 +58,8 @@ export class DecisionClient {
 
   /**
    * The workspace's decision route, or null: off for the deployment
-   * (DECISION_PROVIDER=none), no profile routed to `decision`, or a profile
-   * that is not gen-api. Never the inline config — that is the chat model,
+   * (DECISION_PROVIDER=none), no model routed to `decision`, or a model of a
+   * provider that is not gen-api. Never the inline config — that is the chat model,
    * and a decision route is something an admin turns on.
    */
   async routeFor(workspaceId: string): Promise<DecisionRoute | null> {
@@ -68,7 +68,7 @@ export class DecisionClient {
       this.aiConfig.resolveFor(workspaceId, 'decision'),
       this.aiConfig.decisionSettings(workspaceId),
     ]);
-    if (!config.providerId || config.provider !== 'gen-api' || !config.apiKey) return null;
+    if (!config.modelId || config.provider !== 'gen-api' || !config.apiKey) return null;
     const thresholds = {
       arbiter: settings.thresholds.arbiter.effective,
       citation: settings.thresholds.citation.effective,

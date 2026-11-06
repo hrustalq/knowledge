@@ -20,6 +20,7 @@ import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AgentRegistryService, type ResolvedAgent } from '../agents/agent-registry.service.js';
 import { AiPluginsService } from './ai-plugins.service.js';
+import { AiModelsService } from './ai-models.service.js';
 import { AiUsageService } from './ai-usage.service.js';
 import { AgentProducer } from '../agents/agent.producer.js';
 import { RUNNABLE_AGENTS } from '../agents/agent.executor.js';
@@ -44,7 +45,7 @@ const OVERRIDABLE = [
   'instructions',
   'tools',
   'skillIds',
-  'providerId',
+  'modelId',
   'temperature',
   'maxToolCalls',
   'timeoutMs',
@@ -65,6 +66,7 @@ export class AiAgentsService {
     private readonly prisma: PrismaService,
     private readonly registry: AgentRegistryService,
     private readonly plugins: AiPluginsService,
+    private readonly models: AiModelsService,
   ) {}
 
   async list(workspaceId: string): Promise<AiAgentSummary[]> {
@@ -109,7 +111,7 @@ export class AiAgentsService {
     const existing = await this.prisma.aiAgent.findUnique({ where: { workspaceId_key: { workspaceId, key } } });
     if (!isBuiltIn && !existing) throw new NotFoundException(t('error.ai.agentNotFound', { key }));
 
-    await this.validate(workspaceId, dto.tools ?? undefined, dto.skillIds ?? undefined, dto.providerId ?? undefined);
+    await this.validate(workspaceId, dto.tools ?? undefined, dto.skillIds ?? undefined, dto.modelId ?? undefined);
 
     const data = {
       ...(dto.name === undefined ? {} : { name: dto.name }),
@@ -117,7 +119,7 @@ export class AiAgentsService {
       ...(dto.instructions === undefined ? {} : { instructions: dto.instructions }),
       ...(dto.tools === undefined ? {} : { tools: dto.tools ?? undefined }),
       ...(dto.skillIds === undefined ? {} : { skillIds: dto.skillIds ?? undefined }),
-      ...(dto.providerId === undefined ? {} : { providerId: dto.providerId }),
+      ...(dto.modelId === undefined ? {} : { modelId: dto.modelId }),
       ...(dto.temperature === undefined ? {} : { temperature: dto.temperature }),
       ...(dto.maxToolCalls === undefined ? {} : { maxToolCalls: dto.maxToolCalls }),
       ...(dto.timeoutMs === undefined ? {} : { timeoutMs: dto.timeoutMs }),
@@ -195,7 +197,7 @@ export class AiAgentsService {
     const clash = await this.prisma.aiAgent.findUnique({ where: { workspaceId_key: { workspaceId, key } } });
     if (clash) throw new BadRequestException(t('error.ai.agentNameTaken', { key }));
 
-    await this.validate(workspaceId, dto.tools, dto.skillIds, dto.providerId ?? undefined);
+    await this.validate(workspaceId, dto.tools, dto.skillIds, dto.modelId ?? undefined);
     await this.prisma.aiAgent.create({
       data: {
         workspaceId,
@@ -206,7 +208,7 @@ export class AiAgentsService {
         instructions: dto.instructions,
         tools: dto.tools ?? [],
         skillIds: dto.skillIds ?? [],
-        providerId: dto.providerId ?? null,
+        modelId: dto.modelId ?? null,
         createdBy: userId ?? null,
       },
     });
@@ -267,7 +269,7 @@ export class AiAgentsService {
     workspaceId: string,
     tools?: string[],
     skillIds?: string[],
-    providerId?: string | null,
+    modelId?: string | null,
   ): Promise<void> {
     if (tools?.length) {
       const pluginTools = await this.plugins.toolsFor(workspaceId);
@@ -282,12 +284,7 @@ export class AiAgentsService {
       const found = await this.prisma.aiSkill.count({ where: { workspaceId, kind: 'skill', id: { in: skillIds } } });
       if (found !== new Set(skillIds).size) throw new BadRequestException(t('error.ai.agentUnknownSkill'));
     }
-    if (providerId) {
-      const provider = await this.prisma.aiProvider.findUnique({ where: { id: providerId } });
-      if (!provider || provider.workspaceId !== workspaceId) {
-        throw new BadRequestException(t('error.ai.agentUnknownProvider'));
-      }
-    }
+    if (modelId) await this.models.assertInWorkspace(workspaceId, [modelId]);
   }
 }
 
@@ -301,7 +298,8 @@ function toSummary(agent: ResolvedAgent, row: AiAgent | null): AiAgentSummary {
     instructions: agent.instructions,
     tools: agent.tools,
     skillIds: agent.skillIds,
-    providerId: agent.config.providerId,
+    modelId: row?.modelId ?? null,
+    model: agent.config.model,
     providerName: agent.config.providerName,
     temperature: agent.config.temperature,
     maxToolCalls: agent.config.maxToolCalls,

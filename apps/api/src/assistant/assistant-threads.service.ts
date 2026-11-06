@@ -108,25 +108,26 @@ export class AssistantThreadsService {
 
   async updateThread(
     threadId: string,
-    patch: { title?: string | null; providerId?: string | null },
+    patch: { title?: string | null; modelId?: string | null },
   ): Promise<UpdateAssistantThreadResponse> {
     const current = await this.getThreadOrThrow(threadId);
     // A pin from another tenant would route this workspace's turns — and its
-    // tokens — through a provider its admins never configured.
-    if (patch.providerId) {
-      const provider = await this.prisma.aiProvider.findUnique({
-        where: { id: patch.providerId },
-        select: { workspaceId: true, enabled: true },
+    // tokens — through a provider its admins never configured. Only what the
+    // picker offers can be pinned: an "In chat" model of a provider that is on.
+    if (patch.modelId) {
+      const model = await this.prisma.aiModel.findFirst({
+        where: { id: patch.modelId, workspaceId: current.workspaceId, inChat: true },
+        select: { provider: { select: { enabled: true } } },
       });
-      if (!provider || provider.workspaceId !== current.workspaceId || !provider.enabled) {
-        throw new NotFoundException(t('error.ai.providerUnavailable', { id: patch.providerId }));
+      if (!model || model.provider?.enabled === false) {
+        throw new NotFoundException(t('error.ai.modelUnavailable', { id: patch.modelId }));
       }
     }
     const thread = await this.prisma.assistantThread.update({
       where: { id: threadId },
       data: {
         ...(patch.title !== undefined ? { title: patch.title?.trim() || null } : {}),
-        ...(patch.providerId !== undefined ? { providerId: patch.providerId } : {}),
+        ...(patch.modelId !== undefined ? { modelId: patch.modelId } : {}),
         // A rename is metadata, not activity: keep the roster ordered by when
         // the conversation last moved, not by when someone tidied its label.
         updatedAt: undefined,
@@ -295,7 +296,7 @@ export class AssistantThreadsService {
       workspaceId: t.workspaceId,
       documentId: t.documentId,
       title: t.title,
-      providerId: t.providerId,
+      modelId: t.modelId,
       createdBy: t.createdBy,
       createdAt: t.createdAt.toISOString(),
       updatedAt: t.updatedAt.toISOString(),

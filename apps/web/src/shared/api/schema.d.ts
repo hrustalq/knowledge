@@ -3038,23 +3038,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/ai/providers/choices": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Names and models a member may pick for their chat thread — no endpoints or credentials */
-        get: operations["AiController_listProviderChoices"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/ai/providers/{id}": {
         parameters: {
             query?: never;
@@ -3065,12 +3048,82 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Delete a profile, clearing every route and thread pinned to it */
+        /** Delete a provider and its models, clearing every route, agent and thread pinned to them */
         delete: operations["AiController_deleteProvider"];
         options?: never;
         head?: never;
         /** Update a profile. Omit apiKey to keep the stored credential; null clears it. */
         patch: operations["AiController_updateProvider"];
+        trace?: never;
+    };
+    "/v1/ai/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every model of every provider, including those of a provider that is off */
+        get: operations["AiController_listModels"];
+        put?: never;
+        /** Add models to a provider by code name. One it already has is skipped. */
+        post: operations["AiController_addModels"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ai/models/choices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The models a member may pick for their chat thread: code and provider name, no endpoints or credentials */
+        get: operations["AiController_listModelChoices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ai/models/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask a provider what it serves. Adds nothing, and reports the upstream error verbatim. */
+        post: operations["AiController_discoverModels"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ai/models/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a model, clearing every route, agent and thread pinned to it */
+        delete: operations["AiController_deleteModel"];
+        options?: never;
+        head?: never;
+        /** Update a model: whether it is offered in chat, its prices, its capabilities */
+        patch: operations["AiController_updateModel"];
         trace?: never;
     };
     "/v1/ai/skills": {
@@ -8683,7 +8736,7 @@ export interface components {
              * Format: uuid
              * @description Provider profile to run this thread on; null returns it to the workspace default
              */
-            providerId?: string | null;
+            modelId?: string | null;
         };
         ChatAttachmentDto: {
             filename: string;
@@ -8802,24 +8855,24 @@ export interface components {
             captureParentDocumentId?: string | null;
             /**
              * Format: uuid
-             * @description Provider profile serving chat and agent turns
+             * @description Model serving chat and agent turns
              */
-            chatProviderId?: string | null;
+            chatModelId?: string | null;
             /**
              * Format: uuid
-             * @description Provider profile serving draft review and suggestions
+             * @description Model serving draft review and suggestions
              */
-            reviewProviderId?: string | null;
+            reviewModelId?: string | null;
             /**
              * Format: uuid
-             * @description Provider profile serving the worker's relation extraction
+             * @description Model serving the worker's relation extraction
              */
-            extractionProviderId?: string | null;
+            extractionModelId?: string | null;
             /**
              * Format: uuid
-             * @description gen-api profile serving the decision pre-filters (#530). Null turns them off.
+             * @description Model of a gen-api provider serving the decision pre-filters (#530). Null turns them off.
              */
-            decisionProviderId?: string | null;
+            decisionModelId?: string | null;
             /** @description Decision probability at or above which the arbiter lets an item through (#530). Null inherits the code default (0.2). */
             decisionArbiterThreshold?: number | null;
             /** @description Decision probability at or above which the citation check lets an item through (#530). Null inherits the code default (0.5). */
@@ -8832,7 +8885,7 @@ export interface components {
             workspaceId: string;
             /**
              * Format: uuid
-             * @description Test one profile instead of whatever chat is routed at
+             * @description Test one provider instead of whatever chat is routed at
              */
             providerId?: string;
             /** @description Test the default config itself, even while chat is routed at a profile */
@@ -8847,13 +8900,56 @@ export interface components {
             provider: "openai-compatible" | "deepseek" | "gen-api";
             /** @example https://api.deepseek.com */
             baseUrl?: string | null;
-            /** @example deepseek-chat */
-            model: string;
             /** @description Write-only credential; null clears it */
             apiKey?: string | null;
             temperature?: number | null;
             maxToolCalls?: number | null;
             timeoutMs?: number | null;
+            /** @description Default: true. */
+            enabled?: boolean;
+        };
+        UpdateAiProviderDto: {
+            name?: string;
+            /** @enum {string} */
+            provider?: "openai-compatible" | "deepseek" | "gen-api";
+            baseUrl?: string | null;
+            /** @description Write-only; omit to keep, null to clear */
+            apiKey?: string | null;
+            temperature?: number | null;
+            maxToolCalls?: number | null;
+            timeoutMs?: number | null;
+            enabled?: boolean;
+        };
+        DiscoverAiModelsDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /**
+             * Format: uuid
+             * @description The provider to ask. Absent asks the default config.
+             */
+            providerId?: string;
+        };
+        AddAiModelsDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /**
+             * Format: uuid
+             * @description The provider serving them. Null is the default config.
+             */
+            providerId?: string | null;
+            /**
+             * @description Code names, as the provider's API knows them. One it already has is skipped.
+             * @example [
+             *       "deepseek-chat"
+             *     ]
+             */
+            codes: string[];
+            /** @enum {string} */
+            source: "fetched" | "manual";
+        };
+        UpdateAiModelDto: {
+            /** @description Whether members may pick it for a thread */
+            inChat?: boolean;
             /** @description Per 1M prompt tokens, in priceCurrency */
             pricePromptPerMTok?: number | null;
             /** @description Per 1M completion tokens, in priceCurrency */
@@ -8861,36 +8957,10 @@ export interface components {
             /** @description Per 1M prompt tokens served from the cache; null charges them at the prompt price */
             priceCachedPerMTok?: number | null;
             /**
-             * @description The currency of these prices; null means USD when a price is set, else the list price currency
+             * @description The currency of these prices; null with a price set means USD
              * @enum {string|null}
              */
             priceCurrency?: "USD" | "RUB" | null;
-            /** @description Default: true. */
-            enabled?: boolean;
-            /** @description What this model can do, overriding the built-in model table. Null returns to the table (docs/features/20). */
-            capabilities?: ("tools" | "vision" | "json")[] | null;
-        };
-        UpdateAiProviderDto: {
-            name?: string;
-            /** @enum {string} */
-            provider?: "openai-compatible" | "deepseek" | "gen-api";
-            baseUrl?: string | null;
-            model?: string;
-            /** @description Write-only; omit to keep, null to clear */
-            apiKey?: string | null;
-            temperature?: number | null;
-            maxToolCalls?: number | null;
-            timeoutMs?: number | null;
-            pricePromptPerMTok?: number | null;
-            priceCompletionPerMTok?: number | null;
-            /** @description Per 1M prompt tokens served from the cache; null charges them at the prompt price */
-            priceCachedPerMTok?: number | null;
-            /**
-             * @description The currency of these prices; null means USD when a price is set, else the list price currency
-             * @enum {string|null}
-             */
-            priceCurrency?: "USD" | "RUB" | null;
-            enabled?: boolean;
             /** @description What this model can do, overriding the built-in model table. Null returns to the table (docs/features/20). */
             capabilities?: ("tools" | "vision" | "json")[] | null;
         };
@@ -9112,7 +9182,7 @@ export interface components {
             tools?: string[];
             skillIds?: string[];
             /** Format: uuid */
-            providerId?: string | null;
+            modelId?: string | null;
         };
         UpdateAiAgentDto: {
             /** Format: uuid */
@@ -9128,9 +9198,9 @@ export interface components {
             skillIds?: string[] | null;
             /**
              * Format: uuid
-             * @description Provider profile. Null follows the workspace route.
+             * @description The model it runs on. Null follows the workspace route.
              */
-            providerId?: string | null;
+            modelId?: string | null;
             temperature?: number | null;
             maxToolCalls?: number | null;
             timeoutMs?: number | null;
@@ -10964,7 +11034,8 @@ export interface components {
             instructions: string;
             tools: string[];
             skillIds: string[];
-            providerId: string | null;
+            modelId: string | null;
+            model: string;
             providerName: string | null;
             temperature: number;
             maxToolCalls: number;
@@ -11002,6 +11073,29 @@ export interface components {
             model: string;
             latencyMs: number;
             error?: string;
+        };
+        AiModelChoice: {
+            id: string;
+            code: string;
+            providerName: string | null;
+        };
+        /** @enum {string} */
+        AiModelSource: "fetched" | "manual";
+        AiModelSummary: {
+            pricePromptPerMTok?: number | null;
+            priceCompletionPerMTok?: number | null;
+            priceCachedPerMTok?: number | null;
+            priceCurrency?: components["schemas"]["CostCurrency"] | null;
+            id: string;
+            workspaceId: string;
+            providerId: string | null;
+            providerName: string | null;
+            code: string;
+            source: components["schemas"]["AiModelSource"];
+            inChat: boolean;
+            available: boolean;
+            kind: components["schemas"]["AiProvider"];
+            capabilities: components["schemas"]["AgentCapability"][] | null;
         };
         AiMyUsageResponse: {
             budget: components["schemas"]["AiBudgetInfo"];
@@ -11049,11 +11143,6 @@ export interface components {
         AiPluginTransport: "streamable-http" | "sse";
         /** @enum {string} */
         AiProvider: "none" | "openai-compatible" | "deepseek" | "gen-api";
-        AiProviderChoice: {
-            id: string;
-            name: string;
-            model: string;
-        };
         /** @enum {string} */
         AiProviderKind: "openai-compatible" | "deepseek" | "gen-api";
         /** @enum {string} */
@@ -11064,23 +11153,17 @@ export interface components {
             name: string;
             provider: components["schemas"]["AiProviderKind"];
             baseUrl: string | null;
-            model: string;
             hasApiKey: boolean;
             apiKeyHint: string | null;
             temperature: number | null;
             maxToolCalls: number | null;
             timeoutMs: number | null;
-            pricePromptPerMTok: number | null;
-            priceCompletionPerMTok: number | null;
-            priceCachedPerMTok: number | null;
-            priceCurrency: components["schemas"]["CostCurrency"] | null;
             enabled: boolean;
             status: components["schemas"]["AiProviderStatus"];
             lastError: string | null;
             lastCheckedAt: string | null;
             createdAt: string;
             updatedAt: string;
-            capabilities: components["schemas"]["AgentCapability"][] | null;
         };
         /** @enum {string} */
         AiPurpose: "chat" | "review" | "extraction" | "decision";
@@ -11907,7 +11990,7 @@ export interface components {
             workspaceId: string;
             documentId: string | null;
             title: string | null;
-            providerId: string | null;
+            modelId: string | null;
             createdBy: string;
             createdAt: string;
             updatedAt: string;
@@ -12905,6 +12988,11 @@ export interface components {
             old?: number;
             new?: number;
             text: string;
+        };
+        DiscoverAiModelsResponse: {
+            ok: boolean;
+            codes: string[];
+            error?: string;
         };
         DismissAgentFindingResponse: {
             dismissedAt: string;
@@ -13978,12 +14066,15 @@ export interface components {
             };
             users: components["schemas"]["AiBudgetInfo"][];
         };
+        ListAiModelChoicesResponse: {
+            models: components["schemas"]["AiModelChoice"][];
+            defaultModel: string | null;
+        };
+        ListAiModelsResponse: {
+            models: components["schemas"]["AiModelSummary"][];
+        };
         ListAiPluginsResponse: {
             plugins: components["schemas"]["AiPluginSummary"][];
-        };
-        ListAiProviderChoicesResponse: {
-            providers: components["schemas"]["AiProviderChoice"][];
-            defaultProviderId: string | null;
         };
         ListAiProvidersResponse: {
             providers: components["schemas"]["AiProviderSummary"][];
@@ -16206,6 +16297,7 @@ export interface components {
             };
             tools?: string[];
             skillIds?: string[];
+            modelId?: string | null;
             providerId?: string | null;
             filters?: components["schemas"]["WorkflowStepFilters"];
         };
@@ -26499,48 +26591,6 @@ export interface operations {
             };
         };
     };
-    AiController_listProviderChoices: {
-        parameters: {
-            query: {
-                workspaceId: string;
-            };
-            header?: {
-                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
-                "Accept-Language"?: "en" | "ru";
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ListAiProviderChoicesResponse"];
-                };
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-        };
-    };
     AiController_deleteProvider: {
         parameters: {
             query?: never;
@@ -26605,6 +26655,264 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AiProviderSummary"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_listModels: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListAiModelsResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_addModels: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddAiModelsDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListAiModelsResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_listModelChoices: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListAiModelChoicesResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_discoverModels: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscoverAiModelsDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoverAiModelsResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_deleteModel: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_updateModel: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAiModelDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiModelSummary"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

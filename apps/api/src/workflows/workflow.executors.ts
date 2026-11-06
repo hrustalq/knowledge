@@ -76,7 +76,7 @@ export type StepResult =
  * executable content arriving from the database.
  *
  * Provider resolution follows feature 12 exactly — `resolveFor(workspaceId,
- * purpose, step.providerId)` — so a workflow honours the workspace's routing,
+ * purpose, step.modelId)` — so a workflow honours the workspace's routing,
  * its budget and its usage log without knowing anything about them.
  */
 @Injectable()
@@ -183,12 +183,12 @@ export class WorkflowExecutors {
     // an explicit `step.prompt.system` still wins, because a workflow author
     // writing a prompt for one step means that step and not the roster.
     //
-    // The step's own providerId still pins the model; absent one, the agent's
+    // The step's own model pin still wins; absent one, the agent's
     // routing bucket decides. That moved `ai.draft` from the 'chat' route to
     // 'review' — the bucket feature 12 describes as background generation, and
     // the one the editor's Suggest already used. A workspace that wants the old
     // model back pins it on the step or on the drafter agent.
-    const planner = await this.agents.resolve(run.workspaceId, 'planner', step.providerId ?? undefined);
+    const planner = await this.agents.resolve(run.workspaceId, 'planner', step.modelId ?? step.providerId);
     const config = planner.config;
     if (!planner.enabled || !config.enabled) throw new Error(t('error.assistant.providerDisabled'));
 
@@ -249,7 +249,7 @@ export class WorkflowExecutors {
     run: WorkflowRun,
     principal: Principal,
   ): Promise<StepResult> {
-    const drafter = await this.agents.resolve(run.workspaceId, 'drafter', step.providerId ?? undefined);
+    const drafter = await this.agents.resolve(run.workspaceId, 'drafter', step.modelId ?? step.providerId);
     const config = drafter.config;
     if (!drafter.enabled || !config.enabled) throw new Error(t('error.assistant.providerDisabled'));
 

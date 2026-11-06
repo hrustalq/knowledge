@@ -40,7 +40,10 @@ import type {
   GetStyleguideResponse,
   StyleguideSummary,
   ListAiPluginsResponse,
-  ListAiProviderChoicesResponse,
+  DiscoverAiModelsResponse,
+  ListAiModelChoicesResponse,
+  ListAiModelsResponse,
+  AiModelSummary,
   ListAiProvidersResponse,
   CheckSourcePolicyResponse,
   ListAiSkillsResponse,
@@ -58,6 +61,7 @@ import { ActivityService } from '../activity/activity.service.js';
 import { AccessService } from '../auth/access.service.js';
 import { AiPluginsService } from './ai-plugins.service.js';
 import { AiProvidersService } from './ai-providers.service.js';
+import { AiModelsService, toModelSummary } from './ai-models.service.js';
 import { AiConfigService } from './ai-config.service.js';
 import { AiSettingsService } from './ai-settings.service.js';
 import { AiSkillsService } from './ai-skills.service.js';
@@ -76,7 +80,10 @@ import {
   CheckSourcePolicyDto,
   CreateSourcePolicyDto,
   UpdateSourcePolicyDto,
+  AddAiModelsDto,
   CreateAiProviderDto,
+  DiscoverAiModelsDto,
+  UpdateAiModelDto,
   CreateAiSkillDto,
   TestAiConnectionDto,
   UpdateAiPluginDto,
@@ -120,6 +127,7 @@ export class AiController {
     private readonly tiebreak: AgentTiebreakService,
     private readonly plugins: AiPluginsService,
     private readonly providers: AiProvidersService,
+    private readonly models: AiModelsService,
     private readonly aiConfig: AiConfigService,
     private readonly sourcePolicies: SourcePolicyService,
     private readonly activity: ActivityService,
@@ -196,26 +204,6 @@ export class AiController {
     return { providers: await this.providers.list(workspaceId) };
   }
 
-  @Get('providers/choices')
-  @Returns('ListAiProviderChoicesResponse')
-  @Access('viewer', 'query')
-  @ApiQuery({ name: 'workspaceId', required: true })
-  @ApiOperation({
-    summary: 'Names and models a member may pick for their chat thread — no endpoints or credentials',
-  })
-  async listProviderChoices(
-    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
-  ): Promise<ListAiProviderChoicesResponse> {
-    const [rows, settings] = await Promise.all([
-      this.providers.enabledProviders(workspaceId),
-      this.settings.get(workspaceId).catch(() => null),
-    ]);
-    return {
-      providers: rows.map((p) => ({ id: p.id, name: p.name, model: p.model })),
-      defaultProviderId: settings?.routing.chat ?? null,
-    };
-  }
-
   @Post('providers')
   @Returns('AiProviderSummary')
   @Access('admin', 'body')
@@ -231,7 +219,7 @@ export class AiController {
       actor: principal?.userId,
       action: 'ai.provider.created',
       subjectId: provider.id,
-      metadata: { name: provider.name, model: provider.model },
+      metadata: { name: provider.name },
     });
     return provider;
   }
@@ -259,7 +247,7 @@ export class AiController {
 
   @Delete('providers/:id')
   @Access('admin', 'ai-provider')
-  @ApiOperation({ summary: 'Delete a profile, clearing every route and thread pinned to it' })
+  @ApiOperation({ summary: 'Delete a provider and its models, clearing every route, agent and thread pinned to them' })
   async deleteProvider(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentPrincipal() principal: Principal,
@@ -273,6 +261,92 @@ export class AiController {
       action: 'ai.provider.deleted',
       subjectId: id,
       metadata: { name: provider.name },
+    });
+    return { ok: true };
+  }
+
+  // ---- Models ---------------------------------------------------------------
+
+  @Get('models')
+  @Returns('ListAiModelsResponse')
+  @Access('admin', 'query')
+  @ApiQuery({ name: 'workspaceId', required: true })
+  @ApiOperation({ summary: 'Every model of every provider, including those of a provider that is off' })
+  async listModels(@Query('workspaceId', ParseUUIDPipe) workspaceId: string): Promise<ListAiModelsResponse> {
+    const { provider } = await this.aiConfig.resolve(workspaceId);
+    return { models: (await this.models.roster(workspaceId)).map((row) => toModelSummary(row, provider)) };
+  }
+
+  @Get('models/choices')
+  @Returns('ListAiModelChoicesResponse')
+  @Access('viewer', 'query')
+  @ApiQuery({ name: 'workspaceId', required: true })
+  @ApiOperation({ summary: 'The models a member may pick for their chat thread: code and provider name, no endpoints or credentials' })
+  async listModelChoices(@Query('workspaceId', ParseUUIDPipe) workspaceId: string): Promise<ListAiModelChoicesResponse> {
+    const [rows, chat] = await Promise.all([this.aiConfig.availableModels(workspaceId), this.aiConfig.resolveFor(workspaceId, 'chat')]);
+    return {
+      models: rows.filter((row) => row.inChat).map((row) => ({ id: row.id, code: row.code, providerName: row.provider?.name ?? null })),
+      defaultModel: chat.enabled ? chat.model : null,
+    };
+  }
+
+  @Post('models/discover')
+  @Returns('DiscoverAiModelsResponse')
+  @Access('admin', 'body')
+  @ApiOperation({ summary: 'Ask a provider what it serves. Adds nothing, and reports the upstream error verbatim.' })
+  discoverModels(@Body() dto: DiscoverAiModelsDto): Promise<DiscoverAiModelsResponse> {
+    return this.settings.discoverModels(dto.workspaceId, dto.providerId);
+  }
+
+  @Post('models')
+  @Returns('ListAiModelsResponse')
+  @Access('admin', 'body')
+  @ApiOperation({ summary: 'Add models to a provider by code name. One it already has is skipped.' })
+  async addModels(@Body() dto: AddAiModelsDto, @CurrentPrincipal() principal: Principal): Promise<ListAiModelsResponse> {
+    const providerId = dto.providerId ?? null;
+    await this.models.add(dto.workspaceId, providerId, dto.codes, dto.source, principal?.userId);
+    await this.activity.record({
+      workspaceId: dto.workspaceId,
+      actor: principal?.userId,
+      action: 'ai.provider.updated',
+      subjectId: providerId ?? undefined,
+      metadata: { modelsAdded: dto.codes.length },
+    });
+    return this.listModels(dto.workspaceId);
+  }
+
+  @Patch('models/:id')
+  @Returns('AiModelSummary')
+  @Access('admin', 'ai-model')
+  @ApiOperation({ summary: 'Update a model: whether it is offered in chat, its prices, its capabilities' })
+  async updateModel(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateAiModelDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<AiModelSummary> {
+    const row = await this.models.update(id, dto);
+    const { provider } = await this.aiConfig.resolve(row.workspaceId);
+    await this.activity.record({
+      workspaceId: row.workspaceId,
+      actor: principal?.userId,
+      action: 'ai.provider.updated',
+      subjectId: row.providerId ?? undefined,
+      metadata: { model: row.code, fields: Object.keys(dto) },
+    });
+    return toModelSummary(row, provider);
+  }
+
+  @Delete('models/:id')
+  @Access('admin', 'ai-model')
+  @ApiOperation({ summary: 'Remove a model, clearing every route, agent and thread pinned to it' })
+  async deleteModel(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<{ ok: true }> {
+    const removed = await this.models.remove(id);
+    await this.activity.record({
+      workspaceId: removed.workspaceId,
+      actor: principal?.userId,
+      action: 'ai.provider.updated',
+      subjectId: removed.providerId ?? undefined,
+      metadata: { modelRemoved: removed.code },
     });
     return { ok: true };
   }

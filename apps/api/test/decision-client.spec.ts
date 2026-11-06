@@ -23,6 +23,7 @@ const base = {
   apiKey: 'k',
   timeoutMs: 5_000,
   providerId: 'p1',
+  modelId: 'm1',
   pricePromptPerMTok: null,
   priceCompletionPerMTok: null,
 } as unknown as DecisionRoute['config'];
@@ -46,13 +47,13 @@ const question = { instructions: 'q?', criteria: { true: 'yes', false: 'no' } };
 afterEach(() => vi.unstubAllGlobals());
 
 describe('DecisionClient.routeFor', () => {
-  it('is null when the deployment is off, nothing is routed, or the profile is not gen-api', async () => {
+  it('is null when the deployment is off, nothing is routed, or the provider is not gen-api', async () => {
     expect(await client({ env: 'none' }).decision.routeFor('ws')).toBeNull();
-    expect(await client({ config: { providerId: null } }).decision.routeFor('ws')).toBeNull();
+    expect(await client({ config: { modelId: null } }).decision.routeFor('ws')).toBeNull();
     expect(await client({ config: { provider: 'deepseek' } }).decision.routeFor('ws')).toBeNull();
   });
 
-  it('pins the default model, and drops the prices, when the profile names no Jev release', async () => {
+  it('pins the default model, and drops the prices, when the routed model is no Jev release', async () => {
     const route = await client({ config: { model: 'gpt-4-1', pricePromptPerMTok: 2 } }).decision.routeFor('ws');
     expect(route?.config.model).toBe(DECISION_DEFAULT_MODEL);
     expect(route?.config.pricePromptPerMTok).toBeNull();

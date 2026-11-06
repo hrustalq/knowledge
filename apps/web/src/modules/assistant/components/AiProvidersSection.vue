@@ -14,7 +14,7 @@ import { useI18n } from 'vue-i18n'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 import { Plus } from 'lucide-vue-next'
-import type { AiSettingsResponse, ListAiProvidersResponse } from '@knowledge/contracts'
+import type { AiSettingsResponse, ListAiModelsResponse, ListAiProvidersResponse } from '@knowledge/contracts'
 import { api } from '@/shared/api/client'
 import { errorMessage } from '@/shared/api/errors'
 import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
@@ -27,6 +27,7 @@ import AiSettingsSection from './AiSettingsSection.vue'
 import AiDecisionRoute from './AiDecisionRoute.vue'
 import AiProviderRowItem from './AiProviderRow.vue'
 import AiProviderDialog from './AiProviderDialog.vue'
+import AiModelOptions from './AiModelOptions.vue'
 
 const { t } = useI18n()
 
@@ -36,9 +37,12 @@ const workspaceId = getWorkspaceId()
 const queryClient = useQueryClient()
 const query = useQuery(apiQueryOptions('/v1/ai/providers', { query: { workspaceId } }))
 const providers = computed(() => (query.data.value as ListAiProvidersResponse | undefined)?.providers ?? [])
+const modelsQuery = useQuery(apiQueryOptions('/v1/ai/models', { query: { workspaceId } }))
+const models = computed(() => (modelsQuery.data.value as ListAiModelsResponse | undefined)?.models ?? [])
 
-const invalidates = () => [['/v1/ai/providers'], ['/v1/ai/settings'], ['/v1/ai/providers/choices']]
+const invalidates = () => [['/v1/ai/providers'], ['/v1/ai/settings'], ['/v1/ai/models'], ['/v1/ai/models/choices']]
 const deleteProvider = useApiMutation('delete', '/v1/ai/providers/{id}', { invalidates })
+const updateProvider = useApiMutation('patch', '/v1/ai/providers/{id}', { invalidates })
 const saveSettings = useApiMutation('patch', '/v1/ai/settings', { invalidates })
 
 /**
@@ -49,7 +53,7 @@ const saveSettings = useApiMutation('patch', '/v1/ai/settings', { invalidates })
 const defaultCheck = ref<{ status: 'ok' | 'error'; error: string | null } | null>(null)
 
 const rows = computed<ProviderRow[]>(() =>
-  buildProviderRows(props.settings, providers.value).map((row) =>
+  buildProviderRows(props.settings, providers.value, models.value).map((row) =>
     row.isDefault && defaultCheck.value ? { ...row, status: defaultCheck.value.status, error: defaultCheck.value.error } : row,
   ),
 )
@@ -94,13 +98,21 @@ async function test(row: ProviderRow) {
   }
 }
 
+async function toggle(row: ProviderRow, enabled: boolean) {
+  try {
+    await updateProvider.mutateAsync({ path: { id: row.id }, body: { enabled } })
+  } catch (e) {
+    toast.error(errorMessage(e, t))
+  }
+}
+
 async function remove(row: ProviderRow) {
   const name = row.name ?? ''
-  // Removing clears the routes that point at it, and that work silently moves
-  // to the default, so the people who routed it should hear so first.
+  // Removing clears the routes that point at its models, and that work silently
+  // moves to the default, so the people who routed it should hear so first.
   const ok = await confirm({
     title: t('ai.removeNamed', { name }),
-    description: row.serves.length ? t('ai.providerRow.removeRoutedDesc') : t('ai.providerRow.removeDesc'),
+    description: row.models.some((m) => m.serves.length) ? t('ai.providerRow.removeRoutedDesc') : t('ai.providerRow.removeDesc'),
     action: t('common.remove'),
     destructive: true,
   })
@@ -115,9 +127,9 @@ async function remove(row: ProviderRow) {
 
 // --- routing --------------------------------------------------------------
 const PURPOSES = [
-  { key: 'chat', field: 'chatProviderId' },
-  { key: 'review', field: 'reviewProviderId' },
-  { key: 'extraction', field: 'extractionProviderId' },
+  { key: 'chat', field: 'chatModelId' },
+  { key: 'review', field: 'reviewModelId' },
+  { key: 'extraction', field: 'extractionModelId' },
 ] as const
 
 /**
@@ -148,6 +160,7 @@ async function route(field: string, value: string) {
         @edit="edit(row)"
         @test="test(row)"
         @remove="remove(row)"
+        @toggle="toggle(row, $event)"
       />
       <li v-if="query.isPending.value" class="px-3 py-3" aria-hidden="true">
         <Skeleton class="h-4 w-48" />
@@ -170,7 +183,7 @@ async function route(field: string, value: string) {
   </AiSettingsSection>
 
   <!-- Routing only means anything once there is something to route to. -->
-  <AiSettingsSection v-if="providers.length" :title="t('ai.routing')" :description="t('ai.routingDesc')">
+  <AiSettingsSection v-if="models.length" :title="t('ai.routing')" :description="t('ai.routingDesc')">
     <div class="space-y-3">
       <label v-for="p in PURPOSES" :key="p.key" class="flex flex-wrap items-center justify-between gap-2">
         <span class="text-sm">
@@ -185,9 +198,7 @@ async function route(field: string, value: string) {
           <SelectTrigger class="w-64 max-w-full"><SelectValue :placeholder="t('ai.default')" /></SelectTrigger>
           <SelectContent>
             <SelectItem :value="UNROUTED">{{ t('ai.routeToDefault', { name: defaultRowName }) }}</SelectItem>
-            <SelectItem v-for="opt in providers.filter((x) => x.enabled)" :key="opt.id" :value="opt.id">
-              {{ opt.name }}
-            </SelectItem>
+            <AiModelOptions :models="models" :selected="settings.routing[p.key]" />
           </SelectContent>
         </Select>
       </label>
@@ -197,7 +208,7 @@ async function route(field: string, value: string) {
       :can-manage="canManage"
       :routed="settings.routing.decision"
       :decision="settings.decision"
-      :providers="providers"
+      :models="models"
     />
   </AiSettingsSection>
 </template>

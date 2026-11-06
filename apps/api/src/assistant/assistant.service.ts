@@ -359,11 +359,11 @@ export class AssistantService {
     principal: Principal,
     operation: AiCallContext['operation'],
     threadId?: string,
-    /** Profile the member pinned to this thread, if any. */
-    pinnedProviderId?: string | null,
+    /** Model the member pinned to this thread, if any. */
+    pinnedModelId?: string | null,
   ): Promise<AiCallContext | null> {
     const purpose = operation === 'review' || operation === 'suggest' ? 'review' : 'chat';
-    const config = await this.aiConfig.resolveFor(workspaceId, purpose, pinnedProviderId);
+    const config = await this.aiConfig.resolveFor(workspaceId, purpose, pinnedModelId);
     if (!config.enabled) return null;
     await this.aiUsage.assertWithinBudget(workspaceId, principal.userId);
     return { config, userId: principal.userId, operation, threadId, locale: principal.locale };
@@ -384,10 +384,10 @@ export class AssistantService {
     agentKey: string,
     operation: AiCallContext['operation'],
     threadId?: string,
-    /** Profile the member pinned to this thread — outranks the agent's own. */
-    pinnedProviderId?: string | null,
+    /** Model the member pinned to this thread — outranks the agent's own. */
+    pinnedModelId?: string | null,
   ): Promise<{ agent: ResolvedAgent; call: AiCallContext } | null> {
-    const agent = await this.agents.resolve(workspaceId, agentKey, pinnedProviderId);
+    const agent = await this.agents.resolve(workspaceId, agentKey, pinnedModelId);
     if (!agent.enabled || !agent.config.enabled) return null;
     await this.aiUsage.assertWithinBudget(workspaceId, principal.userId);
     return {
@@ -1226,10 +1226,11 @@ export class AssistantService {
     mode: AssistantChatMode,
   ): Promise<ResolvedAgent> {
     const fallbackKey = mode === 'agent' ? 'author' : 'researcher';
+    const pin = await this.aiConfig.chatPin(thread.workspaceId, thread.modelId);
 
     if (dto.agentKey && dto.agentKey !== 'auto') {
       const picked = await this.agents
-        .resolve(thread.workspaceId, dto.agentKey, thread.providerId)
+        .resolve(thread.workspaceId, dto.agentKey, pin)
         .catch(() => null);
       // A stale or unusable pick is ignored rather than refused: the turn still
       // deserves an answer, and the fallback is the mode's own default.
@@ -1242,12 +1243,12 @@ export class AssistantService {
         this.tiebreak,
       );
       const chosen = await this.agents
-        .resolve(thread.workspaceId, decision.agentKey, thread.providerId)
+        .resolve(thread.workspaceId, decision.agentKey, pin)
         .catch(() => null);
       if (chosen && conversational(chosen, mode)) return chosen;
     }
 
-    return this.agents.resolve(thread.workspaceId, fallbackKey, thread.providerId);
+    return this.agents.resolve(thread.workspaceId, fallbackKey, pin);
   }
 
   /**

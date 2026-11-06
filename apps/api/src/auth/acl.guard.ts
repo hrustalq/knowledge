@@ -219,6 +219,8 @@ export class AclGuard implements CanActivate {
         return this.access.workspaceOfAiPlugin(uuid(req.params?.id, 'plugin'));
       case 'ai-provider':
         return this.access.workspaceOfAiProvider(uuid(req.params?.id, 'provider'));
+      case 'ai-model':
+        return this.access.workspaceOfAiModel(uuid(req.params?.id, 'model'));
       case 'agent-trigger':
         return this.access.workspaceOfAgentTrigger(uuid(req.params?.id, 'agentTrigger'));
       case 'agent-learning':

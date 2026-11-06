@@ -2106,7 +2106,11 @@
     "openIssues": "{n} open report | {n} open reports",
     "usages": "{n} usage site | {n} usage sites",
     "branches": "No branches | {n} branch | {n} branches",
-    "backlinks": "{n} page | {n} pages"
+    "backlinks": "{n} page | {n} pages",
+    "models": "{n} model | {n} models",
+    "modelsHidden": "Off: its model is hidden from every picker, and pins at it resume when it is back on. | Off: its {n} models are hidden from every picker, and pins at them resume when it is back on.",
+    "modelsAdded": "Added {n} model | Added {n} models",
+    "addModels": "Add {n} model | Add {n} models"
   },
   "chat": {
     "needsAgentMode": "This needs Agent mode",
@@ -2300,7 +2304,6 @@
       "name": "Name",
       "instructions": "Instructions (system prompt)",
       "tools": "Tools",
-      "provider": "Model",
       "followRoute": "Follow the workspace route",
       "dialogHint": "Fields you leave alone keep inheriting the shipped default, so a future release can still improve them.",
       "reset": "Reset to default",
@@ -2338,7 +2341,8 @@
       "lastRunAt": "Last run {when}",
       "neverRun": "Has not run yet",
       "deleteTitle": "Delete {name}?",
-      "deleteBody": "The agent, its instructions and its schedule are deleted. Runs it already made stay in Runs. This cannot be undone."
+      "deleteBody": "The agent, its instructions and its schedule are deleted. Runs it already made stay in Runs. This cannot be undone.",
+      "model": "Model"
     },
     "triggers": {
       "title": "Triggers",
@@ -2531,7 +2535,6 @@
     },
     "providerNone": "None — assistant disabled",
     "overridden": "· overridden",
-    "providerDefault": "provider default",
     "unlimited": "unlimited",
     "keep": "Keep",
     "noSecretKey": "Keys can't be stored until SETTINGS_ENCRYPTION_KEY is set on the server. Until then, set ASSISTANT_API_KEY in the environment.",
@@ -2553,7 +2556,7 @@
     "disabled": "disabled",
     "test": "Test",
     "removeNamed": "Remove {name}",
-    "providerDialogDesc": "A named endpoint and model. Give it a name you will recognise in the routing list and the usage breakdown.",
+    "providerDialogDesc": "A named endpoint and key. Give it a name you will recognise in the usage breakdown; you add its models on its row.",
     "noEncryptionKey": "SETTINGS_ENCRYPTION_KEY is not set on the server",
     "leaveEmptyToKeep": "Leave empty to keep it.",
     "enabledOfTotal": "{enabled} of {total} enabled",
@@ -2967,7 +2970,7 @@
       "off": "Off",
       "unavailable": "Off for this deployment: DECISION_PROVIDER is none.",
       "notAppliedNamed": "Routed to {name}, not applied: DECISION_PROVIDER is none for this deployment.",
-      "noGenApi": "Add a GenAPI profile to route decisions: Jev is reached only through gen-api.",
+      "noGenApi": "Add a model of a GenAPI provider to route decisions: Jev is reached only through gen-api.",
       "dataPath": "Decisions send page passages and masked chat threads to gen-api, which keeps request content and forwards it to TypeSafe in the US.",
       "thresholds": "Thresholds, tuned on {model}",
       "thresholdsHint": "An item at or above its threshold goes on to the model; below it, the arbiter skips the pair, harvest replies with nothing to keep and a cited sentence is marked unsupported. Leave a field empty to use the default shown.",
@@ -2979,8 +2982,8 @@
       "invalid": "A number from 0 to 1",
       "saved": "Decision thresholds saved"
     },
-    "providersDesc": "Everything this workspace can call. The default handles any work not routed elsewhere; add another provider to run different work on different models.",
-    "routingDesc": "Which provider each kind of work runs on. A thread or an agent can still pin its own.",
+    "providersDesc": "Everything this workspace can call. The default handles any work not routed elsewhere; add a provider, then the models it serves.",
+    "routingDesc": "Which model each kind of work runs on. A thread or an agent can still pin its own.",
     "routeToDefault": "Default — {name}",
     "providerRow": {
       "none": "No provider",
@@ -2990,8 +2993,6 @@
       "keyEnvironment": "key from environment",
       "keyDefault": "default's key",
       "keyMissing": "no key",
-      "notRouted": "No work routed here yet",
-      "noFallback": "All work is routed elsewhere",
       "price": "{prompt} in · {completion} out per 1M tokens",
       "priceList": "list price",
       "priceCached": "{price} cached",
@@ -3002,8 +3003,8 @@
       "statusUnknown": "Not checked yet",
       "statusOff": "Off",
       "editNamed": "Edit {name}",
-      "removeDesc": "Its name, model and key are deleted.",
-      "removeRoutedDesc": "Its name, model and key are deleted, and the work routed to it moves to the default provider."
+      "removeDesc": "Its name, key and models are deleted.",
+      "removeRoutedDesc": "Its name, key and models are deleted, and the work routed to them moves to the default provider."
     },
     "providerDialog": {
       "defaultTitle": "Edit default provider",
@@ -3022,6 +3023,25 @@
       "reset": "Use environment values",
       "resetTitle": "Use the environment values?",
       "resetDesc": "This workspace's provider, model, base URL, key and price are deleted, and the server's ASSISTANT_* values apply again."
+    },
+    "models": {
+      "none": "No models yet: nothing can run on this provider",
+      "inChat": "In chat",
+      "fetch": "Fetch models",
+      "addByCode": "Add a model by its code name",
+      "codePlaceholder": "Model code name",
+      "codeOff": "{code} (provider off)",
+      "editDesc": "What it costs. Empty uses the list price where there is one.",
+      "saved": "Model saved",
+      "removeDesc": "Anything pinned to it moves back to its workspace route.",
+      "fetchTitle": "Models from {name}",
+      "fetchDesc": "What this provider says it serves. Only the ones you tick join this workspace.",
+      "fetchRefused": "This provider did not return a model list. Add its models by code name instead.",
+      "fetchFailed": "The request failed.",
+      "fetchEmpty": "This provider listed no models. Add its models by code name instead.",
+      "filter": "Filter models",
+      "filterEmpty": "No model matches.",
+      "tickShown": "Tick all shown"
     }
   },
   "search": {

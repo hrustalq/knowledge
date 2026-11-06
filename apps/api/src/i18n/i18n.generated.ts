@@ -928,7 +928,10 @@ export type I18nTranslations = {
             "pluginNameTaken": string;
             "providerNotFound": string;
             "providerNameTaken": string;
-            "providerUnavailable": string;
+            "modelNotFound": string;
+            "modelUnavailable": string;
+            "modelUnknown": string;
+            "providerNoModels": string;
             "encryptionKeyMissing": string;
             "captureParentNotInWorkspace": string;
             "captureThresholdOrder": string;
@@ -952,7 +955,6 @@ export type I18nTranslations = {
             "agentIsBuiltInDelete": string;
             "agentUnknownTools": string;
             "agentUnknownSkill": string;
-            "agentUnknownProvider": string;
             "agentDisabled": string;
             "agentNotBackground": string;
             "agentRunNotFound": string;

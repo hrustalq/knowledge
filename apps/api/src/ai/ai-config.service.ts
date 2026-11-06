@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { effectiveModelPrice, PROVIDER_DEFAULTS } from '@knowledge/contracts';
+import { effectiveModelPrice, PROVIDER_DEFAULTS, type CostAmount, type CostCurrency } from '@knowledge/contracts';
 import type {
   AiPurpose,
   AiSettingsSourceMap,
@@ -41,6 +41,8 @@ export interface ResolvedAiConfig {
   agentModeEnabled: boolean;
   pricePromptPerMTok: number | null;
   priceCompletionPerMTok: number | null;
+  priceCachedPerMTok: number | null;
+  priceCurrency: CostCurrency | null;
   /**
    * How much of the open web this workspace may reach (docs/features/25).
    * Clamped by the env ceiling, never inherited from it.
@@ -143,6 +145,8 @@ export class AiConfigService {
       externalAiActions,
       pricePromptPerMTok: row?.pricePromptPerMTok ? Number(row.pricePromptPerMTok) : null,
       priceCompletionPerMTok: row?.priceCompletionPerMTok ? Number(row.priceCompletionPerMTok) : null,
+      priceCachedPerMTok: row?.priceCachedPerMTok ? Number(row.priceCachedPerMTok) : null,
+      priceCurrency: (row?.priceCurrency as CostCurrency | null | undefined) ?? null,
       providerId: null,
       providerName: null,
       sources: {
@@ -236,6 +240,8 @@ export class AiConfigService {
       timeoutMs: row.timeoutMs ?? base.timeoutMs,
       pricePromptPerMTok: row.pricePromptPerMTok ? Number(row.pricePromptPerMTok) : null,
       priceCompletionPerMTok: row.priceCompletionPerMTok ? Number(row.priceCompletionPerMTok) : null,
+      priceCachedPerMTok: row.priceCachedPerMTok ? Number(row.priceCachedPerMTok) : null,
+      priceCurrency: row.priceCurrency as CostCurrency | null,
       providerId: row.id,
       providerName: row.name,
     };
@@ -260,10 +266,15 @@ export class AiConfigService {
    * price is known for the model, so the UI can show "—" rather than a
    * confident $0.00 for a self-hosted or unlisted model.
    */
-  estimateCostMicros(config: ResolvedAiConfig, promptTokens: number, completionTokens: number): number | null {
-    const price = effectiveModelPrice(config.model, config.pricePromptPerMTok, config.priceCompletionPerMTok);
+  estimateCost(config: ResolvedAiConfig, promptTokens: number, completionTokens: number, cachedPromptTokens = 0): CostAmount | null {
+    const price = effectiveModelPrice(config.model, config);
     if (!price) return null;
-    const usd = (promptTokens / 1_000_000) * price.prompt + (completionTokens / 1_000_000) * price.completion;
-    return Math.round(usd * 1_000_000);
+    // `promptTokens` includes the cached ones, as every provider reports it.
+    const cached = Math.min(cachedPromptTokens, promptTokens);
+    const amount =
+      ((promptTokens - cached) / 1_000_000) * price.prompt +
+      (cached / 1_000_000) * (price.cachedPrompt ?? price.prompt) +
+      (completionTokens / 1_000_000) * price.completion;
+    return { micros: Math.round(amount * 1_000_000), currency: price.currency };
   }
 }

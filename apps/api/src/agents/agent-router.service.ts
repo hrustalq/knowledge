@@ -158,11 +158,11 @@ export class AgentRouterService {
     });
     if (capable.length === 0) return null;
     // Price is optional metadata, so a profile that declares none sorts last
-    // rather than winning by default.
-    const priced = capable
-      .map((p) => ({ id: p.id, price: p.pricePromptPerMTok === null ? Infinity : Number(p.pricePromptPerMTok) }))
-      .sort((a, b) => a.price - b.price);
-    return priced[0].id;
+    // rather than winning by default. 1000 ₽ is not dearer than $2 and no rate is
+    // kept to say otherwise, so another currency sorts after USD, cheapest first.
+    const rank = (p: (typeof capable)[number]) => (p.pricePromptPerMTok === null ? 2 : (p.priceCurrency ?? 'USD') === 'USD' ? 0 : 1);
+    const price = (p: (typeof capable)[number]) => (p.pricePromptPerMTok === null ? 0 : Number(p.pricePromptPerMTok));
+    return [...capable].sort((a, b) => rank(a) - rank(b) || price(a) - price(b))[0].id;
   }
 
   private decide(

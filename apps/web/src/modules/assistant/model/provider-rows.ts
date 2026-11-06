@@ -90,7 +90,8 @@ export function buildProviderRows(settings: AiSettingsResponse, providers: AiPro
     sources.model === 'env' &&
     sources.apiKey === 'env' &&
     settings.pricePromptPerMTok === null &&
-    settings.priceCompletionPerMTok === null
+    settings.priceCompletionPerMTok === null &&
+    settings.priceCachedPerMTok === null
 
   const defaultRow: ProviderRow = {
     id: DEFAULT_ROW_ID,
@@ -104,7 +105,7 @@ export function buildProviderRows(settings: AiSettingsResponse, providers: AiPro
       : sources.apiKey === 'db'
         ? { source: 'stored', hint: settings.apiKeyHint }
         : { source: 'environment' },
-    price: effectiveModelPrice(settings.model, settings.pricePromptPerMTok, settings.priceCompletionPerMTok),
+    price: effectiveModelPrice(settings.model, settings),
     serves: serves.get(DEFAULT_ROW_ID) ?? [],
     enabled: settings.provider !== 'none',
     fromEnvironment,
@@ -124,7 +125,7 @@ export function buildProviderRows(settings: AiSettingsResponse, providers: AiPro
         model: p.model,
         host: providerHost(p.baseUrl, p.provider),
         key: p.hasApiKey ? { source: 'stored', hint: p.apiKeyHint } : { source: 'default' },
-        price: effectiveModelPrice(p.model, p.pricePromptPerMTok, p.priceCompletionPerMTok),
+        price: effectiveModelPrice(p.model, p),
         serves: serves.get(p.id) ?? [],
         enabled: p.enabled,
         fromEnvironment: false,

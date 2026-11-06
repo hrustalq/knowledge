@@ -8761,10 +8761,17 @@ export interface components {
             qualityAuditDays?: number | null;
             /** @description Allow Agent mode (write tools) in the chat for this workspace */
             agentModeEnabled?: boolean;
-            /** @description USD per 1M prompt tokens (cost estimate) */
+            /** @description Per 1M prompt tokens, in priceCurrency (cost estimate) */
             pricePromptPerMTok?: number | null;
-            /** @description USD per 1M completion tokens (cost estimate) */
+            /** @description Per 1M completion tokens, in priceCurrency (cost estimate) */
             priceCompletionPerMTok?: number | null;
+            /** @description Per 1M prompt tokens served from the cache; null charges them at the prompt price */
+            priceCachedPerMTok?: number | null;
+            /**
+             * @description The currency of these prices; null means USD when a price is set, else the list price currency
+             * @enum {string|null}
+             */
+            priceCurrency?: "USD" | "RUB" | null;
             /** @description Monthly workspace token budget; null = unlimited */
             workspaceMonthlyTokenBudget?: number | null;
             /** @description Default per-user monthly budget; null = unlimited */
@@ -8847,10 +8854,17 @@ export interface components {
             temperature?: number | null;
             maxToolCalls?: number | null;
             timeoutMs?: number | null;
-            /** @description USD per 1M prompt tokens */
+            /** @description Per 1M prompt tokens, in priceCurrency */
             pricePromptPerMTok?: number | null;
-            /** @description USD per 1M completion tokens */
+            /** @description Per 1M completion tokens, in priceCurrency */
             priceCompletionPerMTok?: number | null;
+            /** @description Per 1M prompt tokens served from the cache; null charges them at the prompt price */
+            priceCachedPerMTok?: number | null;
+            /**
+             * @description The currency of these prices; null means USD when a price is set, else the list price currency
+             * @enum {string|null}
+             */
+            priceCurrency?: "USD" | "RUB" | null;
             /** @description Default: true. */
             enabled?: boolean;
             /** @description What this model can do, overriding the built-in model table. Null returns to the table (docs/features/20). */
@@ -8869,6 +8883,13 @@ export interface components {
             timeoutMs?: number | null;
             pricePromptPerMTok?: number | null;
             priceCompletionPerMTok?: number | null;
+            /** @description Per 1M prompt tokens served from the cache; null charges them at the prompt price */
+            priceCachedPerMTok?: number | null;
+            /**
+             * @description The currency of these prices; null means USD when a price is set, else the list price currency
+             * @enum {string|null}
+             */
+            priceCurrency?: "USD" | "RUB" | null;
             enabled?: boolean;
             /** @description What this model can do, overriding the built-in model table. Null returns to the table (docs/features/20). */
             capabilities?: ("tools" | "vision" | "json")[] | null;
@@ -10986,7 +11007,7 @@ export interface components {
             budget: components["schemas"]["AiBudgetInfo"];
             calls: number;
             totalTokens: number;
-            costUsdMicros: number | null;
+            costs: components["schemas"]["CostAmount"][];
         };
         AiPageActionsResponse: {
             externalAiActions: boolean;
@@ -11051,6 +11072,8 @@ export interface components {
             timeoutMs: number | null;
             pricePromptPerMTok: number | null;
             priceCompletionPerMTok: number | null;
+            priceCachedPerMTok: number | null;
+            priceCurrency: components["schemas"]["CostCurrency"] | null;
             enabled: boolean;
             status: components["schemas"]["AiProviderStatus"];
             lastError: string | null;
@@ -11082,6 +11105,8 @@ export interface components {
             agentModeEnabled: boolean;
             pricePromptPerMTok: number | null;
             priceCompletionPerMTok: number | null;
+            priceCachedPerMTok: number | null;
+            priceCurrency: components["schemas"]["CostCurrency"] | null;
             workspaceMonthlyTokenBudget: number | null;
             defaultUserMonthlyTokenBudget: number | null;
             enforceBudget: boolean;
@@ -11139,7 +11164,7 @@ export interface components {
             promptTokens: number;
             completionTokens: number;
             totalTokens: number;
-            costUsdMicros: number | null;
+            costs: components["schemas"]["CostAmount"][];
             errors: number;
         };
         AiUsageLogEntry: {
@@ -11154,7 +11179,8 @@ export interface components {
             completionTokens: number;
             totalTokens: number;
             estimated: boolean;
-            costUsdMicros: number | null;
+            costMicros: number | null;
+            costCurrency: components["schemas"]["CostCurrency"];
             durationMs: number;
             ok: boolean;
             errorCode: string | null;
@@ -11176,7 +11202,7 @@ export interface components {
                 promptTokens: number;
                 completionTokens: number;
                 totalTokens: number;
-                costUsdMicros: number | null;
+                costs: components["schemas"]["CostAmount"][];
                 unpricedCalls: number;
                 errors: number;
             };
@@ -11187,7 +11213,7 @@ export interface components {
             date: string;
             totalTokens: number;
             calls: number;
-            costUsdMicros: number | null;
+            costs: components["schemas"]["CostAmount"][];
         };
         AnalyticsAgentsResponse: {
             workspaceId: string;
@@ -12693,6 +12719,12 @@ export interface components {
         };
         /** @enum {string} */
         ConnectorWorkItemState: "open" | "closed" | "merged" | "draft";
+        CostAmount: {
+            micros: number;
+            currency: components["schemas"]["CostCurrency"];
+        };
+        /** @enum {string} */
+        CostCurrency: "USD" | "RUB";
         /** @enum {string} */
         CoverageRecommendation: "create-page" | "update-page" | "run-archaeologist";
         CreateApiKeyResponse: {

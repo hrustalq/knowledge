@@ -15,6 +15,14 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Breaking
+
+- **Usage responses report cost per currency.** `HTTP` `GET /v1/ai/usage` and `GET /v1/ai/usage/me` replace
+  `costUsdMicros` with `costs: [{ micros, currency }]` on totals, buckets and series, and `GET /v1/ai/usage/logs` replaces it
+  with `costMicros` and `costCurrency` (#793).
+  **Migration:** read `costs`, with one entry per currency and an empty list when nothing was priced. Do not add entries
+  of different currencies together.
+
 ### Changed
 
 - **Settings → AI → Configuration lists every provider in one place** (#792). "Default provider" and "Providers" are one
@@ -40,6 +48,25 @@ in the pull request that introduces them — see
   and shows the list, and a function a later ArcadeDB adds is refused by default. A returned row holding another
   workspace's id at any depth is dropped. A string value with a word before a parenthesis, such as `'billing (prod)'`, is
   also refused, because strings are not parsed. Use a `LIKE` pattern with `%` before the parenthesis instead.
+- **Transcription costs on Usage are no longer rubles shown as dollars** (#793). 1 ₽ of speech-to-text read as $1. gen-stt
+  reports rubles, so those rows now say ₽, and rows already stored are relabelled by the migration.
+- **Usage never adds rubles and dollars together** (#793). Totals and each row show one figure per currency, side by side.
+- **GenAPI chat costs are what GenAPI charged** (#793). Its proxy reports a cost in rubles on each call and Usage now stores
+  it, where it used to estimate from USD list prices. A call that reports none is estimated from GenAPI's ruble price list.
+  Older GenAPI rows keep their USD estimate.
+- **Cached prompt tokens cost less on Usage** (#793). They were charged at the full rate, which overstated the cost whenever
+  a provider's cache was hit. Token counts and budgets are unchanged.
+- **A provider's price can be in rubles, and can have a cached rate** (#793). The provider dialog has a currency and a cached
+  prompt price, and an existing price stays in USD.
+- **List prices were re-checked on 2026-11-07, and `deepseek-chat` and `deepseek-reasoner` were removed** (#793). DeepSeek no
+  longer lists them, so a provider on either shows no cost until it has its own price. `gpt-4-1` and Jev are now priced in
+  rubles, as GenAPI lists them.
+
+### Operations
+
+- **Migration `20270101100000_usage_cost_currency` is additive and survives a rollback** (#793). It adds columns with safe
+  defaults and relabels stored gen-stt rows to RUB, and `cost_usd_micros` keeps its name. The previous image ignores the new
+  columns, so it keeps working after the migration. A transcription it writes in that window is labelled USD, and stays so.
 
 ## [0.45.2] — 2026-11-05
 

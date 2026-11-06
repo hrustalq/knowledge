@@ -111,12 +111,16 @@ function stripToolMarkup(content: string): string {
 }
 
 /** Provider-reported usage → our shape. */
-function fromUsage(usage: OpenAI.Completions.CompletionUsage): AiUsageTokens {
+export function fromUsage(usage: OpenAI.Completions.CompletionUsage): AiUsageTokens {
+  // DeepSeek reports cache hits at the top level, OpenAI and gen-api under the details; gen-api adds its charge.
+  const extra = usage as { prompt_cache_hit_tokens?: number; cost?: unknown };
   return {
     promptTokens: usage.prompt_tokens ?? 0,
     completionTokens: usage.completion_tokens ?? 0,
     totalTokens: usage.total_tokens ?? (usage.prompt_tokens ?? 0) + (usage.completion_tokens ?? 0),
     estimated: false,
+    cachedPromptTokens: extra.prompt_cache_hit_tokens ?? usage.prompt_tokens_details?.cached_tokens ?? 0,
+    ...(typeof extra.cost === 'number' ? { reportedCost: extra.cost } : {}),
   };
 }
 

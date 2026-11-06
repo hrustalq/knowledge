@@ -30,6 +30,8 @@ import {
   AGENT_SURFACES,
   AGENT_TRIGGER_COOLDOWN_MAX_MINUTES,
   AGENT_TRIGGER_EVENTS,
+  COST_CURRENCIES,
+  type CostCurrency,
   WEB_ACCESS_MODES,
   STYLE_RULE_ID_PATTERN,
   STYLE_RULE_SEVERITIES,
@@ -168,19 +170,32 @@ export class UpdateAiSettingsDto {
   @IsBoolean()
   agentModeEnabled?: boolean;
 
-  @ApiPropertyOptional({ type: Number, nullable: true, description: 'USD per 1M prompt tokens (cost estimate)' })
+  @ApiPropertyOptional({ type: Number, nullable: true, description: 'Per 1M prompt tokens, in priceCurrency (cost estimate)' })
   @IsOptional()
   @NULLABLE<UpdateAiSettingsDto>('pricePromptPerMTok')
   @IsNumber()
   @Min(0, { message: vmsg('min') })
   pricePromptPerMTok?: number | null;
 
-  @ApiPropertyOptional({ type: Number, nullable: true, description: 'USD per 1M completion tokens (cost estimate)' })
+  @ApiPropertyOptional({ type: Number, nullable: true, description: 'Per 1M completion tokens, in priceCurrency (cost estimate)' })
   @IsOptional()
   @NULLABLE<UpdateAiSettingsDto>('priceCompletionPerMTok')
   @IsNumber()
   @Min(0, { message: vmsg('min') })
   priceCompletionPerMTok?: number | null;
+
+  @ApiPropertyOptional({ type: Number, nullable: true, description: 'Per 1M prompt tokens served from the cache; null charges them at the prompt price' })
+  @IsOptional()
+  @NULLABLE<UpdateAiSettingsDto>('priceCachedPerMTok')
+  @IsNumber()
+  @Min(0, { message: vmsg('min') })
+  priceCachedPerMTok?: number | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true, enum: COST_CURRENCIES, description: 'The currency of these prices; null means USD when a price is set, else the list price currency' })
+  @IsOptional()
+  @NULLABLE<UpdateAiSettingsDto>('priceCurrency')
+  @IsIn(COST_CURRENCIES)
+  priceCurrency?: CostCurrency | null;
 
   @ApiPropertyOptional({ type: Number, nullable: true, description: 'Monthly workspace token budget; null = unlimited' })
   @IsOptional()
@@ -450,19 +465,32 @@ export class CreateAiProviderDto {
   @Max(600_000, { message: vmsg('max') })
   timeoutMs?: number | null;
 
-  @ApiPropertyOptional({ type: Number, nullable: true, description: 'USD per 1M prompt tokens' })
+  @ApiPropertyOptional({ type: Number, nullable: true, description: 'Per 1M prompt tokens, in priceCurrency' })
   @IsOptional()
   @NULLABLE<CreateAiProviderDto>('pricePromptPerMTok')
   @IsNumber()
   @Min(0, { message: vmsg('min') })
   pricePromptPerMTok?: number | null;
 
-  @ApiPropertyOptional({ type: Number, nullable: true, description: 'USD per 1M completion tokens' })
+  @ApiPropertyOptional({ type: Number, nullable: true, description: 'Per 1M completion tokens, in priceCurrency' })
   @IsOptional()
   @NULLABLE<CreateAiProviderDto>('priceCompletionPerMTok')
   @IsNumber()
   @Min(0, { message: vmsg('min') })
   priceCompletionPerMTok?: number | null;
+
+  @ApiPropertyOptional({ type: Number, nullable: true, description: 'Per 1M prompt tokens served from the cache; null charges them at the prompt price' })
+  @IsOptional()
+  @NULLABLE<CreateAiProviderDto>('priceCachedPerMTok')
+  @IsNumber()
+  @Min(0, { message: vmsg('min') })
+  priceCachedPerMTok?: number | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true, enum: COST_CURRENCIES, description: 'The currency of these prices; null means USD when a price is set, else the list price currency' })
+  @IsOptional()
+  @NULLABLE<CreateAiProviderDto>('priceCurrency')
+  @IsIn(COST_CURRENCIES)
+  priceCurrency?: CostCurrency | null;
 
   @ApiPropertyOptional({ description: 'Default: true.' })
   @IsOptional()
@@ -558,6 +586,19 @@ export class UpdateAiProviderDto {
   @IsNumber()
   @Min(0, { message: vmsg('min') })
   priceCompletionPerMTok?: number | null;
+
+  @ApiPropertyOptional({ type: Number, nullable: true, description: 'Per 1M prompt tokens served from the cache; null charges them at the prompt price' })
+  @IsOptional()
+  @NULLABLE<UpdateAiProviderDto>('priceCachedPerMTok')
+  @IsNumber()
+  @Min(0, { message: vmsg('min') })
+  priceCachedPerMTok?: number | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true, enum: COST_CURRENCIES, description: 'The currency of these prices; null means USD when a price is set, else the list price currency' })
+  @IsOptional()
+  @NULLABLE<UpdateAiProviderDto>('priceCurrency')
+  @IsIn(COST_CURRENCIES)
+  priceCurrency?: CostCurrency | null;
 
   @ApiPropertyOptional()
   @IsOptional()

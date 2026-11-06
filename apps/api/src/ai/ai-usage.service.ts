@@ -1,4 +1,5 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { GEN_API_COST_CURRENCY } from '@knowledge/contracts';
 import type {
   AiBudgetInfo,
   AiUsageBucket,
@@ -6,6 +7,8 @@ import type {
   AiUsageOperation,
   AiUsageResponse,
   AiUsageSeriesPoint,
+  CostAmount,
+  CostCurrency,
   ListAiBudgetsResponse,
   ListAiUsageLogsResponse,
 } from '@knowledge/contracts';
@@ -21,6 +24,10 @@ export interface AiUsageTokens {
   totalTokens: number;
   /** The provider returned no usage block, so these are locally estimated. */
   estimated: boolean;
+  /** How many of `promptTokens` were served from the provider's cache. */
+  cachedPromptTokens?: number;
+  /** `usage.cost` from the response. What it means depends on the provider, so `record` decides. */
+  reportedCost?: number;
 }
 
 export interface AiUsageRecordInput {
@@ -37,11 +44,21 @@ export interface AiUsageRecordInput {
   /** The run this call was made for (#305). Defaults to the ambient `currentAgentRun()`. */
   agentKey?: string;
   agentRunId?: string;
-  /** A cost the caller already knows; otherwise estimated from the config's model and prices. */
-  costUsdMicros?: number | null;
+  /** A cost the caller already knows; otherwise worked out from the tokens and the config's prices. */
+  cost?: CostAmount | null;
 }
 
 const LOG_PAGE_SIZE = 50;
+
+/** Adds to this currency's amount, so a bucket can never sum across currencies. Sorted, so a list reads the same each time. */
+function addCost(costs: CostAmount[], micros: number, currency: CostCurrency): void {
+  const hit = costs.find((c) => c.currency === currency);
+  if (hit) hit.micros += micros;
+  else {
+    costs.push({ micros, currency });
+    costs.sort((a, b) => a.currency.localeCompare(b.currency));
+  }
+}
 
 /**
  * Crude token estimate for providers that ignore `stream_options.include_usage`
@@ -77,6 +94,7 @@ export class AiUsageService {
 
   async record(input: AiUsageRecordInput): Promise<void> {
     const { config, tokens } = input;
+    const cost = input.cost !== undefined ? input.cost : this.costOf(config, tokens);
     // Read before the first await, though the store would survive one: the
     // caller does not wait for this, and the attribution is the call's.
     const run = currentAgentRun();
@@ -93,10 +111,8 @@ export class AiUsageService {
           completionTokens: tokens.completionTokens,
           totalTokens: tokens.totalTokens,
           estimated: tokens.estimated,
-          costUsdMicros:
-            input.costUsdMicros !== undefined
-              ? input.costUsdMicros
-              : this.aiConfig.estimateCostMicros(config, tokens.promptTokens, tokens.completionTokens),
+          costMicros: cost?.micros ?? null,
+          ...(cost ? { costCurrency: cost.currency } : {}),
           durationMs: input.durationMs,
           ok: input.ok,
           errorCode: input.errorCode ?? null,
@@ -113,18 +129,29 @@ export class AiUsageService {
   }
 
   /**
+   * What gen-api says it charged, when it says (#793), else tokens × price.
+   * `usage.cost` from any other OpenAI-compatible server is in units we do not
+   * know, so it is not trusted.
+   */
+  private costOf(config: ResolvedAiConfig, tokens: AiUsageTokens): CostAmount | null {
+    if (config.provider === 'gen-api' && tokens.reportedCost !== undefined) {
+      return { micros: Math.round(tokens.reportedCost * 1_000_000), currency: GEN_API_COST_CURRENCY };
+    }
+    return this.aiConfig.estimateCost(config, tokens.promptTokens, tokens.completionTokens, tokens.cachedPromptTokens);
+  }
+
+  /**
    * A memo's transcription (#551): env-configured, so the provider comes from
    * env rather than a resolved config, and it is billed by audio length, not
    * tokens. The cost is what the speech server reported (gen-api's `cost`, in
-   * the same units the decision client records), else null. Fire-and-forget
-   * like `record`.
+   * rubles), else null. Fire-and-forget like `record`.
    */
   async recordTranscription(input: {
     workspaceId: string;
     userId: string;
     provider: string;
     model: string;
-    costUsdMicros: number | null;
+    cost: CostAmount | null;
     audioSeconds: number;
     durationMs: number;
     ok: boolean;
@@ -138,7 +165,8 @@ export class AiUsageService {
           operation: 'transcription',
           provider: input.provider,
           model: input.model,
-          costUsdMicros: input.costUsdMicros,
+          costMicros: input.cost?.micros ?? null,
+          ...(input.cost ? { costCurrency: input.cost.currency } : {}),
           audioSeconds: input.audioSeconds,
           durationMs: input.durationMs,
           ok: input.ok,
@@ -334,7 +362,8 @@ export class AiUsageService {
         promptTokens: true,
         completionTokens: true,
         totalTokens: true,
-        costUsdMicros: true,
+        costMicros: true,
+        costCurrency: true,
         ok: true,
         createdAt: true,
       },
@@ -347,7 +376,7 @@ export class AiUsageService {
       promptTokens: 0,
       completionTokens: 0,
       totalTokens: 0,
-      costUsdMicros: null as number | null,
+      costs: [] as CostAmount[],
       unpricedCalls: 0,
       errors: 0,
     };
@@ -363,28 +392,28 @@ export class AiUsageService {
         promptTokens: 0,
         completionTokens: 0,
         totalTokens: 0,
-        costUsdMicros: null,
+        costs: [],
         errors: 0,
       };
       bucket.calls += 1;
       bucket.promptTokens += r.promptTokens;
       bucket.completionTokens += r.completionTokens;
       bucket.totalTokens += r.totalTokens;
-      if (r.costUsdMicros != null) bucket.costUsdMicros = (bucket.costUsdMicros ?? 0) + r.costUsdMicros;
+      if (r.costMicros != null) addCost(bucket.costs, r.costMicros, r.costCurrency as CostCurrency);
       if (!r.ok) bucket.errors += 1;
       fold.set(key, bucket);
 
-      const point = series.get(day) ?? { date: day, totalTokens: 0, calls: 0, costUsdMicros: null };
+      const point = series.get(day) ?? { date: day, totalTokens: 0, calls: 0, costs: [] };
       point.calls += 1;
       point.totalTokens += r.totalTokens;
-      if (r.costUsdMicros != null) point.costUsdMicros = (point.costUsdMicros ?? 0) + r.costUsdMicros;
+      if (r.costMicros != null) addCost(point.costs, r.costMicros, r.costCurrency as CostCurrency);
       series.set(day, point);
 
       totals.calls += 1;
       totals.promptTokens += r.promptTokens;
       totals.completionTokens += r.completionTokens;
       totals.totalTokens += r.totalTokens;
-      if (r.costUsdMicros != null) totals.costUsdMicros = (totals.costUsdMicros ?? 0) + r.costUsdMicros;
+      if (r.costMicros != null) addCost(totals.costs, r.costMicros, r.costCurrency as CostCurrency);
       else totals.unpricedCalls += 1;
       if (!r.ok) totals.errors += 1;
     }
@@ -433,7 +462,8 @@ export class AiUsageService {
       completionTokens: r.completionTokens,
       totalTokens: r.totalTokens,
       estimated: r.estimated,
-      costUsdMicros: r.costUsdMicros,
+      costMicros: r.costMicros,
+      costCurrency: r.costCurrency as CostCurrency,
       durationMs: r.durationMs,
       ok: r.ok,
       errorCode: r.errorCode,

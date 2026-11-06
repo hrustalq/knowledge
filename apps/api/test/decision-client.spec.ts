@@ -32,7 +32,7 @@ function client(opts: { env?: string; config?: Partial<typeof base> } = {}) {
   const aiConfig = {
     resolveFor: vi.fn().mockResolvedValue({ ...base, ...opts.config }),
     decisionSettings: vi.fn().mockResolvedValue(resolveDecisionSettings(null, true)),
-    estimateCostMicros: vi.fn().mockReturnValue(7),
+    estimateCost: vi.fn().mockReturnValue({ micros: 7, currency: 'RUB' }),
   };
   const config = { get: () => opts.env ?? 'gen-api' };
   return { decision: new DecisionClient(aiConfig as never, { record } as never, config as never), record };
@@ -81,7 +81,7 @@ describe('DecisionClient.noul', () => {
     expect(record.mock.calls[0]![0]).toMatchObject({
       operation: 'contradiction',
       ok: true,
-      costUsdMicros: 17,
+      cost: { micros: 17, currency: 'USD' },
       config: { model: 'jev-1.13-20260917' },
       tokens: { promptTokens: 400, completionTokens: 0 },
     });

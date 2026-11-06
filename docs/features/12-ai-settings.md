@@ -52,12 +52,34 @@ profile lands on the default), and its Test tests that row: `useDefault` on
 elsewhere. A profile's result is stored on its row; the default's lasts as long
 as the page.
 
-**A price belongs to a provider.** Prices are USD per 1M tokens, set in the
-provider's dialog on the default row and on each profile alike.
-`effectiveModelPrice` (contracts) is the one rule: each side falls back to the
-list on its own, and a model missing a side has no price. The usage row is
-written under it and the settings row reads it, so a row that says "no price" is
-the row whose calls show `—` in Usage.
+**A price belongs to a provider.** Prices are per 1M tokens in the provider's
+currency (`COST_CURRENCIES`), set in the provider's dialog on the default row and
+on each profile alike. `effectiveModelPrice` (contracts) is the one rule: each side
+falls back to the list on its own, a model missing a side has no price, and the
+list fills a side only in its own currency, since no rate is kept to convert it. A
+price stored with no currency means USD, which is what the dialog asked for before
+#793. The usage row is written under it and the settings row reads it, so a row
+that says "no price" is the row whose calls show `—` in Usage.
+
+**A cached prompt token costs less.** `fromUsage` reads `prompt_cache_hit_tokens`
+(DeepSeek) or `prompt_tokens_details.cached_tokens` (OpenAI, GenAPI) and the
+estimate charges those at the cached rate. They stay inside `promptTokens` and
+`totalTokens`, so budgets count the same tokens as before. The rate comes from the
+provider's own field, else the list, and a configured prompt price does not borrow
+the list's cached rate. With no cached rate a hit costs the prompt price.
+
+**A cost states its currency.** Each `ai_usage` row holds an amount and
+`cost_currency`, and Usage totals per currency (`costs: CostAmount[]`), never one
+sum. The column is still `cost_usd_micros` so a release can roll back over it; the
+Prisma field is `costMicros`. A GenAPI chat call stores the `usage.cost` it reports,
+in rubles, so its row is the real charge rather than an estimate. `usage.cost` from
+any other server is ignored because its units are unknown.
+
+**The list has a date.** The comment on `MODEL_LIST_PRICES` says when every row was
+compared with its vendor's page, and a model the vendor stops listing comes off. DeepSeek's
+page no longer lists `deepseek-chat` or `deepseek-reasoner`, and its prices change
+with the hour, so a DeepSeek provider sets its own price, which it can do per
+provider.
 
 Deleting a profile clears every route and thread pin that referenced it, which
 is the trade for the routing columns carrying no foreign key (house style —

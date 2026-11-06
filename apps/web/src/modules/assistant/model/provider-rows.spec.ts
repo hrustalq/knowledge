@@ -18,11 +18,13 @@ function settings(over: Partial<AiSettingsResponse> = {}): AiSettingsResponse {
   return {
     provider: 'deepseek',
     baseUrl: 'https://api.deepseek.com',
-    model: 'deepseek-chat',
+    model: 'gpt-4o',
     hasApiKey: true,
     apiKeyHint: null,
     pricePromptPerMTok: null,
     priceCompletionPerMTok: null,
+    priceCachedPerMTok: null,
+    priceCurrency: null,
     sources: env,
     routing: { chat: null, review: null, extraction: null, decision: null },
     decision: { available: true },
@@ -41,6 +43,8 @@ function profile(over: Partial<AiProviderSummary> = {}): AiProviderSummary {
     apiKeyHint: null,
     pricePromptPerMTok: null,
     priceCompletionPerMTok: null,
+    priceCachedPerMTok: null,
+    priceCurrency: null,
     enabled: true,
     status: 'unknown',
     lastError: 'stale',
@@ -96,9 +100,9 @@ describe('buildProviderRows', () => {
       profile({ id: 'p2', pricePromptPerMTok: 1, priceCompletionPerMTok: 2 }),
       profile({ id: 'p3', pricePromptPerMTok: 1 }),
     ])
-    expect(rows[0]!.price).toEqual({ prompt: 0.27, completion: 1.1, custom: false })
+    expect(rows[0]!.price).toEqual({ prompt: 2.5, cachedPrompt: 1.25, completion: 10, currency: 'USD', custom: false })
     expect(rows[1]!.price).toBeNull()
-    expect(rows[2]!.price).toEqual({ prompt: 1, completion: 2, custom: true })
+    expect(rows[2]!.price).toEqual({ prompt: 1, cachedPrompt: null, completion: 2, currency: 'USD', custom: true })
     expect(rows[3]!.price).toBeNull()
   })
 
@@ -106,6 +110,11 @@ describe('buildProviderRows', () => {
     const rows = buildProviderRows(settings(), [profile(), profile({ id: 'p2', status: 'error', lastError: 'boom' })])
     expect(rows[1]!.error).toBeNull()
     expect(rows[2]!.error).toBe('boom')
+  })
+
+  it('states the currency a row is priced in', () => {
+    const rubles = { pricePromptPerMTok: 300, priceCompletionPerMTok: 900, priceCurrency: 'RUB' as const }
+    expect(buildProviderRows(settings(), [profile(rubles)])[1]!.price).toMatchObject({ prompt: 300, currency: 'RUB' })
   })
 
   it('stops calling the default environment-only once a price is set', () => {

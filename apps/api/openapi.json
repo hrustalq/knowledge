@@ -43723,12 +43723,26 @@
           "pricePromptPerMTok": {
             "type": "number",
             "nullable": true,
-            "description": "USD per 1M prompt tokens (cost estimate)"
+            "description": "Per 1M prompt tokens, in priceCurrency (cost estimate)"
           },
           "priceCompletionPerMTok": {
             "type": "number",
             "nullable": true,
-            "description": "USD per 1M completion tokens (cost estimate)"
+            "description": "Per 1M completion tokens, in priceCurrency (cost estimate)"
+          },
+          "priceCachedPerMTok": {
+            "type": "number",
+            "nullable": true,
+            "description": "Per 1M prompt tokens served from the cache; null charges them at the prompt price"
+          },
+          "priceCurrency": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "USD",
+              "RUB"
+            ],
+            "description": "The currency of these prices; null means USD when a price is set, else the list price currency"
           },
           "workspaceMonthlyTokenBudget": {
             "type": "number",
@@ -43915,12 +43929,26 @@
           "pricePromptPerMTok": {
             "type": "number",
             "nullable": true,
-            "description": "USD per 1M prompt tokens"
+            "description": "Per 1M prompt tokens, in priceCurrency"
           },
           "priceCompletionPerMTok": {
             "type": "number",
             "nullable": true,
-            "description": "USD per 1M completion tokens"
+            "description": "Per 1M completion tokens, in priceCurrency"
+          },
+          "priceCachedPerMTok": {
+            "type": "number",
+            "nullable": true,
+            "description": "Per 1M prompt tokens served from the cache; null charges them at the prompt price"
+          },
+          "priceCurrency": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "USD",
+              "RUB"
+            ],
+            "description": "The currency of these prices; null means USD when a price is set, else the list price currency"
           },
           "enabled": {
             "type": "boolean",
@@ -43992,6 +44020,20 @@
           "priceCompletionPerMTok": {
             "type": "number",
             "nullable": true
+          },
+          "priceCachedPerMTok": {
+            "type": "number",
+            "nullable": true,
+            "description": "Per 1M prompt tokens served from the cache; null charges them at the prompt price"
+          },
+          "priceCurrency": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "USD",
+              "RUB"
+            ],
+            "description": "The currency of these prices; null means USD when a price is set, else the list price currency"
           },
           "enabled": {
             "type": "boolean"
@@ -50179,16 +50221,18 @@
           "totalTokens": {
             "type": "number"
           },
-          "costUsdMicros": {
-            "type": "number",
-            "nullable": true
+          "costs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CostAmount"
+            }
           }
         },
         "required": [
           "budget",
           "calls",
           "totalTokens",
-          "costUsdMicros"
+          "costs"
         ]
       },
       "AiPageActionsResponse": {
@@ -50437,6 +50481,18 @@
             "type": "number",
             "nullable": true
           },
+          "priceCachedPerMTok": {
+            "type": "number",
+            "nullable": true
+          },
+          "priceCurrency": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CostCurrency"
+              }
+            ],
+            "nullable": true
+          },
           "enabled": {
             "type": "boolean"
           },
@@ -50483,6 +50539,8 @@
           "timeoutMs",
           "pricePromptPerMTok",
           "priceCompletionPerMTok",
+          "priceCachedPerMTok",
+          "priceCurrency",
           "enabled",
           "status",
           "lastError",
@@ -50576,6 +50634,18 @@
             "type": "number",
             "nullable": true
           },
+          "priceCachedPerMTok": {
+            "type": "number",
+            "nullable": true
+          },
+          "priceCurrency": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CostCurrency"
+              }
+            ],
+            "nullable": true
+          },
           "workspaceMonthlyTokenBudget": {
             "type": "number",
             "nullable": true
@@ -50635,6 +50705,8 @@
           "agentModeEnabled",
           "pricePromptPerMTok",
           "priceCompletionPerMTok",
+          "priceCachedPerMTok",
+          "priceCurrency",
           "workspaceMonthlyTokenBudget",
           "defaultUserMonthlyTokenBudget",
           "enforceBudget",
@@ -50822,9 +50894,11 @@
           "totalTokens": {
             "type": "number"
           },
-          "costUsdMicros": {
-            "type": "number",
-            "nullable": true
+          "costs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CostAmount"
+            }
           },
           "errors": {
             "type": "number"
@@ -50837,7 +50911,7 @@
           "promptTokens",
           "completionTokens",
           "totalTokens",
-          "costUsdMicros",
+          "costs",
           "errors"
         ]
       },
@@ -50878,9 +50952,12 @@
           "estimated": {
             "type": "boolean"
           },
-          "costUsdMicros": {
+          "costMicros": {
             "type": "number",
             "nullable": true
+          },
+          "costCurrency": {
+            "$ref": "#/components/schemas/CostCurrency"
           },
           "durationMs": {
             "type": "number"
@@ -50923,7 +51000,8 @@
           "completionTokens",
           "totalTokens",
           "estimated",
-          "costUsdMicros",
+          "costMicros",
+          "costCurrency",
           "durationMs",
           "ok",
           "errorCode",
@@ -51005,9 +51083,11 @@
               "totalTokens": {
                 "type": "number"
               },
-              "costUsdMicros": {
-                "type": "number",
-                "nullable": true
+              "costs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CostAmount"
+                }
               },
               "unpricedCalls": {
                 "type": "number"
@@ -51021,7 +51101,7 @@
               "promptTokens",
               "completionTokens",
               "totalTokens",
-              "costUsdMicros",
+              "costs",
               "unpricedCalls",
               "errors"
             ]
@@ -51060,16 +51140,18 @@
           "calls": {
             "type": "number"
           },
-          "costUsdMicros": {
-            "type": "number",
-            "nullable": true
+          "costs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CostAmount"
+            }
           }
         },
         "required": [
           "date",
           "totalTokens",
           "calls",
-          "costUsdMicros"
+          "costs"
         ]
       },
       "AnalyticsAgentsResponse": {
@@ -57635,6 +57717,28 @@
           "closed",
           "merged",
           "draft"
+        ]
+      },
+      "CostAmount": {
+        "type": "object",
+        "properties": {
+          "micros": {
+            "type": "number"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/CostCurrency"
+          }
+        },
+        "required": [
+          "micros",
+          "currency"
+        ]
+      },
+      "CostCurrency": {
+        "type": "string",
+        "enum": [
+          "USD",
+          "RUB"
         ]
       },
       "CoverageRecommendation": {

@@ -13,6 +13,25 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Changed
+
+- **Settings → AI → Configuration lists every provider in one place** (#792). "Default provider" and "Providers" are one
+  list: the default is the first row, added providers follow it, and **Add provider** is the last row. Each row shows
+  the work it serves, its model and endpoint, where its key comes from and its price, and **Test** checks that row.
+  The default now saves from its own dialog rather than the page's Save button, and **Routing** has its own section once
+  there is a provider to route to. Removing a provider now asks first.
+- **Each provider has its own price** (#792). The old "Cost estimate" prices only ever applied to the default, so a
+  routed provider on a model without a list price could not be priced from this page. A model with no price now says so
+  on its row.
+
+### Fixed
+
+- **AI settings no longer squeeze their controls beside the settings rails** (#792). In a 1360px window the controls got
+  about 200px and the Behavior fields overlapped. Sections now lay out by the width they actually have.
+- **Saving a provider or a route keeps your unsaved AI settings edits** (#792). The refetch used to reset the whole form.
+
 ## [0.45.2] — 2026-11-05
 
 ### Fixed

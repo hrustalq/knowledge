@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { effectiveModelPrice, PROVIDER_DEFAULTS } from '@knowledge/contracts';
 import type {
   AiPurpose,
   AiSettingsSourceMap,
@@ -16,47 +17,6 @@ import { decryptSecret, parseKey } from './secret-box.js';
 import { resolveExternalAiActions } from './external-ai-actions.js';
 import { resolveCaptureSettings } from './capture-settings.js';
 import { resolveDecisionSettings } from './decision-settings.js';
-
-/**
- * Per-provider defaults so `provider=deepseek` works with nothing but an API
- * key. DeepSeek speaks the OpenAI wire protocol, so the official `openai` SDK
- * is the client for every provider (docs/features/09).
- *
- * Moved here from AssistantClient: the resolver is now the one place that
- * knows how a provider name becomes an endpoint.
- */
-export const PROVIDER_DEFAULTS: Record<string, { baseUrl: string; model: string }> = {
-  deepseek: { baseUrl: 'https://api.deepseek.com', model: 'deepseek-chat' },
-  /**
-   * gen-api.ru is an OpenAI-compatible aggregator (the shape OpenRouter has):
-   * one credential, many upstream models addressed by id, on a dedicated
-   * proxy subdomain rather than the marketing domain. `model` is therefore a
-   * default rather than a constraint — `claude-sonnet-4-5`, `gemini-2-5-flash`
-   * and the rest are all valid values for it.
-   */
-  'gen-api': { baseUrl: 'https://proxy.gen-api.ru/v1', model: 'gpt-4-1' },
-};
-
-/**
- * Rough USD-per-1M-token list prices, used only to put a number next to the
- * token counts. Overridable per workspace (ai_settings.price_*_per_mtok)
- * because this table will go stale and self-hosted models are free.
- */
-const MODEL_PRICES: Record<string, { prompt: number; completion: number }> = {
-  'deepseek-chat': { prompt: 0.27, completion: 1.1 },
-  'deepseek-reasoner': { prompt: 0.55, completion: 2.19 },
-  'gpt-4o': { prompt: 2.5, completion: 10 },
-  'gpt-4o-mini': { prompt: 0.15, completion: 0.6 },
-  'gpt-4.1': { prompt: 2, completion: 8 },
-  'gpt-4.1-mini': { prompt: 0.4, completion: 1.6 },
-  // gen-api addresses the same models under its own ids.
-  'gpt-4-1': { prompt: 2, completion: 8 },
-  'claude-sonnet-4-5': { prompt: 3, completion: 15 },
-  'claude-opus-4-5': { prompt: 5, completion: 25 },
-  // TypeSafe Jev through gen-api (#530): input only, output is free.
-  'jev-1-13': { prompt: 0.042, completion: 0 },
-  'jev-latest': { prompt: 0.042, completion: 0 },
-};
 
 /** Effective assistant configuration for one workspace: DB overrides ∪ env ∪ provider defaults. */
 export interface ResolvedAiConfig {
@@ -301,11 +261,9 @@ export class AiConfigService {
    * confident $0.00 for a self-hosted or unlisted model.
    */
   estimateCostMicros(config: ResolvedAiConfig, promptTokens: number, completionTokens: number): number | null {
-    const listed = MODEL_PRICES[config.model];
-    const prompt = config.pricePromptPerMTok ?? listed?.prompt;
-    const completion = config.priceCompletionPerMTok ?? listed?.completion;
-    if (prompt == null || completion == null) return null;
-    const usd = (promptTokens / 1_000_000) * prompt + (completionTokens / 1_000_000) * completion;
+    const price = effectiveModelPrice(config.model, config.pricePromptPerMTok, config.priceCompletionPerMTok);
+    if (!price) return null;
+    const usd = (promptTokens / 1_000_000) * price.prompt + (completionTokens / 1_000_000) * price.completion;
     return Math.round(usd * 1_000_000);
   }
 }

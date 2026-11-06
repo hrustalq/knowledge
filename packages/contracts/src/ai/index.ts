@@ -806,6 +806,70 @@ export type AiProviderKind = 'openai-compatible' | 'deepseek' | 'gen-api';
 export type AiProviderStatus = 'unknown' | 'ok' | 'error';
 
 /**
+ * Per-provider defaults, so `provider=deepseek` works with nothing but an API
+ * key. Here rather than in the resolver because the settings page shows what an
+ * empty field falls back to, and must not guess.
+ */
+export const PROVIDER_DEFAULTS: Readonly<Record<string, { baseUrl: string; model: string }>> = {
+  deepseek: { baseUrl: 'https://api.deepseek.com', model: 'deepseek-chat' },
+  /**
+   * gen-api.ru is an OpenAI-compatible aggregator (the shape OpenRouter has):
+   * one credential, many upstream models addressed by id, on a dedicated
+   * proxy subdomain rather than the marketing domain. `model` is therefore a
+   * default rather than a constraint — `claude-sonnet-4-5`, `gemini-2-5-flash`
+   * and the rest are all valid values for it.
+   */
+  'gen-api': { baseUrl: 'https://proxy.gen-api.ru/v1', model: 'gpt-4-1' },
+};
+
+/**
+ * Rough USD-per-1M-token list prices, used only to put a number next to the
+ * token counts. Overridable per config because this table will go stale and
+ * self-hosted models are free.
+ */
+const MODEL_LIST_PRICES: Readonly<Record<string, { prompt: number; completion: number }>> = {
+  'deepseek-chat': { prompt: 0.27, completion: 1.1 },
+  'deepseek-reasoner': { prompt: 0.55, completion: 2.19 },
+  'gpt-4o': { prompt: 2.5, completion: 10 },
+  'gpt-4o-mini': { prompt: 0.15, completion: 0.6 },
+  'gpt-4.1': { prompt: 2, completion: 8 },
+  'gpt-4.1-mini': { prompt: 0.4, completion: 1.6 },
+  // gen-api addresses the same models under its own ids.
+  'gpt-4-1': { prompt: 2, completion: 8 },
+  'claude-sonnet-4-5': { prompt: 3, completion: 15 },
+  'claude-opus-4-5': { prompt: 5, completion: 25 },
+  // TypeSafe Jev through gen-api (#530): input only, output is free.
+  'jev-1-13': { prompt: 0.042, completion: 0 },
+  'jev-latest': { prompt: 0.042, completion: 0 },
+};
+
+export interface ModelPrice {
+  /** USD per 1M tokens. */
+  prompt: number;
+  completion: number;
+  /** True when a configured price decided either side, rather than the list alone. */
+  custom: boolean;
+}
+
+/**
+ * What a call to `model` is priced at, or null when it cannot be priced — the
+ * one rule behind both the stored cost estimate and the settings row, so the
+ * page cannot promise a number the usage table then leaves empty. Each side
+ * falls back to the list on its own; a model missing a side has no price.
+ */
+export function effectiveModelPrice(
+  model: string,
+  pricePromptPerMTok: number | null,
+  priceCompletionPerMTok: number | null,
+): ModelPrice | null {
+  const listed = MODEL_LIST_PRICES[model];
+  const prompt = pricePromptPerMTok ?? listed?.prompt;
+  const completion = priceCompletionPerMTok ?? listed?.completion;
+  if (prompt == null || completion == null) return null;
+  return { prompt, completion, custom: pricePromptPerMTok != null || priceCompletionPerMTok != null };
+}
+
+/**
  * A named provider profile. Several can exist per workspace; each purpose is
  * routed at one of them, and a chat thread may pin its own.
  */

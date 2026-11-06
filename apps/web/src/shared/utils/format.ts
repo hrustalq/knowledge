@@ -72,6 +72,21 @@ export function formatNumber(value: number, locale?: Locale): string {
 }
 
 /** A 0–1 ratio as a percentage, at most one decimal: 0.1666 → "16.7%". */
+/**
+ * A USD price per million tokens. Keeps up to four decimals, because Jev's input
+ * at 0.042 must not print as 0.04, and never fewer than two, so 2 reads as $2.00.
+ */
+export function formatPrice(usd: number, locale?: Locale): string {
+  return new Intl.NumberFormat(tag(locale), {
+    style: 'currency',
+    currency: 'USD',
+    // en-GB would otherwise print "US$2.00" beside every price.
+    currencyDisplay: 'narrowSymbol',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4,
+  }).format(usd)
+}
+
 export function formatPercent(ratio: number, locale?: Locale): string {
   return new Intl.NumberFormat(tag(locale), { style: 'percent', maximumFractionDigits: 1 }).format(ratio)
 }

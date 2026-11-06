@@ -15518,7 +15518,7 @@
             }
           }
         },
-        "summary": "List chat pane threads for a workspace, most recently active first (search + keyset pagination)",
+        "summary": "List the caller's own chat pane threads in a workspace, most recently active first (search + keyset pagination)",
         "tags": [
           "assistant"
         ]
@@ -40671,7 +40671,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.45.1",
+    "version": "0.45.2",
     "contact": {}
   },
   "tags": [],
@@ -43851,6 +43851,10 @@
             "type": "string",
             "format": "uuid",
             "description": "Test one profile instead of whatever chat is routed at"
+          },
+          "useDefault": {
+            "type": "boolean",
+            "description": "Test the default config itself, even while chat is routed at a profile"
           }
         },
         "required": [

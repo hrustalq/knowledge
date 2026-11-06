@@ -40,6 +40,25 @@ That last step is what keeps it additive — a workspace with no profiles
 resolves exactly as it did before they existed, and a routed profile that is
 later disabled or deleted falls through rather than failing the turn.
 
+**One provider list, two tables underneath.** `/settings/ai/config` shows the
+inline default config and the profiles as one list (`buildProviderRows`): the
+default is the pinned first row, and "Add provider" is the list's last row. The
+tables stay separate because their rules differ. The default inherits the
+environment and is what every unrouted call falls through to, so it has no name,
+no off switch but provider `none`, and no delete. Each row shows the work it
+actually serves, worked out as the resolver does it (a route at a disabled
+profile lands on the default), and its Test tests that row: `useDefault` on
+`POST settings/test` asks for the default config even while chat is routed
+elsewhere. A profile's result is stored on its row; the default's lasts as long
+as the page.
+
+**A price belongs to a provider.** Prices are USD per 1M tokens, set in the
+provider's dialog on the default row and on each profile alike.
+`effectiveModelPrice` (contracts) is the one rule: each side falls back to the
+list on its own, and a model missing a side has no price. The usage row is
+written under it and the settings row reads it, so a row that says "no price" is
+the row whose calls show `—` in Usage.
+
 Deleting a profile clears every route and thread pin that referenced it, which
 is the trade for the routing columns carrying no foreign key (house style —
 see `assignee_id`). Cross-tenant ids are rejected at both ends: the pin is

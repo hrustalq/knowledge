@@ -72,7 +72,7 @@ export class FeedbackDatasetService {
       ...(filter.cursor ? { cursor: { id: filter.cursor }, skip: 1 } : {}),
     });
     const page = rows.slice(0, limit);
-    const titles = await this.titlesFor(page.flatMap((r) => citedIds(r)));
+    const titles = await this.titlesFor(workspaceId, page.flatMap((r) => citedIds(r)));
     return {
       workspaceId,
       entries: page.map((r) => toEntry(r, titles)),
@@ -220,10 +220,10 @@ export class FeedbackDatasetService {
     return { from, to };
   }
 
-  private async titlesFor(documentIds: string[]): Promise<Map<string, string>> {
+  private async titlesFor(workspaceId: string, documentIds: string[]): Promise<Map<string, string>> {
     const ids = [...new Set(documentIds)];
     if (ids.length === 0) return new Map();
-    const docs = await this.prisma.document.findMany({ where: { id: { in: ids } }, select: { id: true, title: true } });
+    const docs = await this.prisma.document.findMany({ where: { id: { in: ids }, workspaceId }, select: { id: true, title: true } });
     return new Map(docs.map((d) => [d.id, d.title]));
   }
 }

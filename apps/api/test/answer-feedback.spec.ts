@@ -19,6 +19,7 @@ const WS = '11111111-1111-4111-8111-111111111111';
 const THREAD = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const REPLY = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const QUESTION = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+const FOREIGN_DOC = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 
 const alice: Principal = {
   userId: 'u-alice',
@@ -74,7 +75,12 @@ function prismaWith(messages: Array<Record<string, unknown>>) {
   };
   // The model lookup a vote makes (#305); none billed here, so unattributed.
   const aiUsage = { findFirst: vi.fn(async () => null) };
-  return { answerFeedback, assistantMessage, aiUsage, store };
+  const document = {
+    findMany: vi.fn(async ({ where }: { where: { id: { in: string[] }; workspaceId: string } }) =>
+      where.workspaceId === WS ? where.id.in.filter((id) => id !== FOREIGN_DOC).map((id) => ({ id })) : [],
+    ),
+  };
+  return { answerFeedback, assistantMessage, aiUsage, document, store };
 }
 
 const thread = [
@@ -195,6 +201,21 @@ describe('AnswerFeedbackService over MCP and /ask', () => {
       alice,
     );
     expect(info).toMatchObject({ surface: 'ask', rating: 'down', reason: 'no-answer', citedDocumentIds: ['doc-a'], messageId: null });
+  });
+
+  it('drops a cited id from another workspace on both client-named paths (#789)', async () => {
+    const prisma = prismaWith(thread);
+    const svc = service(prisma);
+    const ask = await svc.voteOnAsk({ workspaceId: WS, rating: 'up', query: 'q', citedDocumentIds: ['doc-a', FOREIGN_DOC] }, alice);
+    expect(ask.citedDocumentIds).toEqual(['doc-a']);
+    const mcp = await svc.voteOverMcp({ workspaceId: WS, rating: 'up', query: 'q', documentIds: [FOREIGN_DOC, 'doc-a'] }, readKey);
+    expect(mcp.feedback.citedDocumentIds).toEqual(['doc-a']);
+  });
+
+  it('an MCP re-vote only updates a vote of the workspace it names (#789)', async () => {
+    const prisma = prismaWith(thread);
+    await service(prisma).voteOverMcp({ workspaceId: WS, rating: 'up', query: 'q', traceId: 't-1' }, readKey);
+    expect(prisma.answerFeedback.updateMany.mock.calls[0]![0]).toMatchObject({ where: { workspaceId: WS, traceId: 't-1' } });
   });
 });
 

@@ -49,7 +49,7 @@ const FAMILY_STALE: Record<string, number> = {
   '/v1/workflows': LONG,
   '/v1/templates': LONG,
   '/v1/ai/agents/choices': LONG,
-  '/v1/ai/providers/choices': LONG,
+  '/v1/ai/models/choices': LONG,
   '/v1/ai/skills': LONG,
   '/v1/ai/settings': LONG,
   '/v1/lint-policy': LONG,

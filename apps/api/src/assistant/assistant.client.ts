@@ -54,6 +54,9 @@ function withLocaleDirective(
 /** How many distinct provider configurations keep a live SDK instance. */
 const CLIENT_CACHE_MAX = 32;
 
+/** More than any admin will read: a limit on what one upstream answer can put in a response. */
+const MODEL_LIST_MAX = 2_000;
+
 /** Hard ceiling for a single tool result injected back into the conversation. */
 const MAX_TOOL_RESULT_CHARS = 28_000;
 
@@ -202,6 +205,13 @@ export class AssistantClient {
     }
     this.clients.set(key, client);
     return client;
+  }
+
+  /** What the endpoint says it serves, sorted. Throws with the upstream message when it has no list. */
+  async listModels(config: ResolvedAiConfig): Promise<string[]> {
+    const page = await this.clientFor(config).models.list();
+    const codes = (page.data ?? []).map((model) => model.id).filter((id) => typeof id === 'string' && id.length <= 200);
+    return [...new Set(codes)].sort().slice(0, MODEL_LIST_MAX);
   }
 
   /** Single-shot completion (review / suggest). `json` asks for a JSON object response. */

@@ -28,8 +28,8 @@ export interface AssistantThreadSummary {
   workspaceId: string;
   documentId: string | null;
   title: string | null;
-  /** Provider profile pinned to this thread, when the member picked one. */
-  providerId: string | null;
+  /** The model pinned to this thread, when the member picked one. */
+  modelId: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -876,7 +876,7 @@ export interface ModelPrice {
   custom: boolean;
 }
 
-/** A provider's own prices: a row of `ai_settings` or `ai_providers`, or nothing. */
+/** A model's own prices: a row of `ai_settings` or `ai_models`, or nothing. */
 export interface ConfiguredPrice {
   pricePromptPerMTok?: number | null;
   priceCompletionPerMTok?: number | null;
@@ -907,8 +907,8 @@ export function effectiveModelPrice(model: string, configured: ConfiguredPrice =
 }
 
 /**
- * A named provider profile. Several can exist per workspace; each purpose is
- * routed at one of them, and a chat thread may pin its own.
+ * A named provider: a connection. What it serves is listed separately
+ * ({@link AiModelSummary}), and each purpose is routed at a model.
  */
 export interface AiProviderSummary {
   id: string;
@@ -916,24 +916,17 @@ export interface AiProviderSummary {
   name: string;
   provider: AiProviderKind;
   baseUrl: string | null;
-  model: string;
   hasApiKey: boolean;
   apiKeyHint: string | null;
   temperature: number | null;
   maxToolCalls: number | null;
   timeoutMs: number | null;
-  pricePromptPerMTok: number | null;
-  priceCompletionPerMTok: number | null;
-  priceCachedPerMTok: number | null;
-  priceCurrency: CostCurrency | null;
   enabled: boolean;
   status: AiProviderStatus;
   lastError: string | null;
   lastCheckedAt: string | null;
   createdAt: string;
   updatedAt: string;
-  /** Admin-declared capabilities, overriding the model table. Null = use the table. */
-  capabilities: AgentCapability[] | null;
 }
 // GET /v1/ai/providers?workspaceId=
 export interface ListAiProvidersResponse {
@@ -952,8 +945,8 @@ export interface ListAiProvidersResponse {
 export type AiPurpose = 'chat' | 'review' | 'extraction' | 'decision';
 
 /**
- * Which profile serves each purpose. null = fall back to the inline config,
- * then env — except `decision`, where null means off.
+ * Which model serves each purpose. null = fall back to the inline config, then
+ * env — except `decision`, where null means off.
  */
 export interface AiRouting {
   chat: string | null;
@@ -989,21 +982,55 @@ export interface DecisionSettings {
   tunedOn: string;
 }
 
-/**
- * The provider choices a member may make for a thread — name and model only,
- * never endpoints or credentials, since this is readable by any viewer.
- */
-export interface AiProviderChoice {
+/** How a model joined the workspace: ticked from a provider's list, or typed by its code name. */
+export const AI_MODEL_SOURCES = ['fetched', 'manual'] as const;
+export type AiModelSource = (typeof AI_MODEL_SOURCES)[number];
+
+/** A model a provider serves, by the code name its API knows it under. */
+export interface AiModelSummary extends Required<ConfiguredPrice> {
   id: string;
-  name: string;
-  model: string;
+  workspaceId: string;
+  /** Null on a model of the default config, which has no provider row. */
+  providerId: string | null;
+  providerName: string | null;
+  code: string;
+  source: AiModelSource;
+  /** Whether members may pick it for a thread. An agent or a route may use it either way. */
+  inChat: boolean;
+  /** False while its provider is off: hidden from every picker, and pins at it fall through. */
+  available: boolean;
+  /** The provider's kind, or the default config's. */
+  kind: AiProvider;
+  /** Admin-declared capabilities, overriding the model table. Null = use the table. */
+  capabilities: AgentCapability[] | null;
 }
-// GET /v1/ai/providers/choices?workspaceId=
-export interface ListAiProviderChoicesResponse {
-  /** Empty when the workspace defines no profiles — the picker stays hidden. */
-  providers: AiProviderChoice[];
-  /** The profile the workspace routes chat at, when there is one. */
-  defaultProviderId: string | null;
+// GET /v1/ai/models?workspaceId=
+export interface ListAiModelsResponse {
+  models: AiModelSummary[];
+}
+
+/** What a member sees for a thread: a code and whose it is, never endpoints or credentials. */
+export interface AiModelChoice {
+  id: string;
+  code: string;
+  /** Null for a model of the default config. */
+  providerName: string | null;
+}
+// GET /v1/ai/models/choices?workspaceId=
+export interface ListAiModelChoicesResponse {
+  /** "In chat" models of every enabled provider. Empty hides the picker. */
+  models: AiModelChoice[];
+  /** The code an unpinned thread runs on; null when nothing can run. */
+  defaultModel: string | null;
+}
+
+// POST /v1/ai/models/discover
+export interface DiscoverAiModelsResponse {
+  ok: boolean;
+  /** What the provider says it serves, sorted. Nothing is added until an admin ticks it. */
+  codes: string[];
+  /** The upstream message, verbatim: many endpoints have no model list at all. */
+  error?: string;
 }
 
 // POST /v1/ai/settings/test
@@ -1886,8 +1913,10 @@ export interface AiAgentSummary {
   instructions: string;
   tools: string[];
   skillIds: string[];
-  /** Provider profile pinned to this agent; null falls through to the purpose route. */
-  providerId: string | null;
+  /** The model pinned to this agent; null falls through to the purpose route. */
+  modelId: string | null;
+  /** What it runs on now, pinned or not: the code, and the named provider serving it. */
+  model: string;
   providerName: string | null;
   temperature: number;
   maxToolCalls: number;

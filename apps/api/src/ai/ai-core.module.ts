@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { AiConfigService } from './ai-config.service.js';
 import { AiProvidersService } from './ai-providers.service.js';
+import { AiModelsService } from './ai-models.service.js';
 import { AiUsageService } from './ai-usage.service.js';
 import { AiSkillsService } from './ai-skills.service.js';
 import { AgentLearningsService } from './agent-learnings.service.js';
@@ -32,7 +33,7 @@ import { AgentOutcomesService } from './agent-outcomes.service.js';
  */
 @Module({
   imports: [PrismaModule],
-  providers: [AiProvidersService, AiConfigService, AiUsageService, AiSkillsService, AgentLearningsService, SourcePolicyService, AgentOutcomesService],
-  exports: [AiProvidersService, AiConfigService, AiUsageService, AiSkillsService, AgentLearningsService, SourcePolicyService, AgentOutcomesService],
+  providers: [AiModelsService, AiProvidersService, AiConfigService, AiUsageService, AiSkillsService, AgentLearningsService, SourcePolicyService, AgentOutcomesService],
+  exports: [AiModelsService, AiProvidersService, AiConfigService, AiUsageService, AiSkillsService, AgentLearningsService, SourcePolicyService, AgentOutcomesService],
 })
 export class AiCoreModule {}

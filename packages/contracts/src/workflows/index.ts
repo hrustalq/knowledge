@@ -121,7 +121,9 @@ export interface WorkflowStep {
   /** Names from the assistant tool registry this step may call. */
   tools?: string[];
   skillIds?: string[];
-  /** Pin an `ai_providers` profile for this step (feature 12 routing). */
+  /** The model this step pins. */
+  modelId?: string | null;
+  /** Before #798: a provider profile. Its migrated model kept its id, so a stored value still resolves. */
   providerId?: string | null;
   filters?: WorkflowStepFilters;
 }

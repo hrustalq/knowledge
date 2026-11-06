@@ -71,8 +71,12 @@ describe('estimateCost', () => {
 describe('AiSettingsService.test', () => {
   function service() {
     const off = { enabled: false };
-    const aiConfig = { resolve: vi.fn().mockResolvedValue(off), resolveFor: vi.fn().mockResolvedValue(off) };
-    return { aiConfig, settings: new AiSettingsService({} as never, aiConfig as never, {} as never, {} as never, {} as never, {} as never) };
+    const aiConfig = {
+      resolve: vi.fn().mockResolvedValue(off),
+      resolveFor: vi.fn().mockResolvedValue(off),
+      connection: vi.fn().mockResolvedValue(off),
+    };
+    return { aiConfig, settings: new AiSettingsService({} as never, aiConfig as never, {} as never, {} as never, {} as never, {} as never, {} as never) };
   }
 
   it('tests the default config itself when asked, not the route', async () => {
@@ -82,12 +86,19 @@ describe('AiSettingsService.test', () => {
     expect(aiConfig.resolveFor).not.toHaveBeenCalled();
   });
 
-  it('tests a named profile, and otherwise whatever chat is routed at', async () => {
+  it('tests a named provider, and otherwise whatever chat is routed at', async () => {
     const { aiConfig, settings } = service();
     await settings.test('ws', 'user', 'p1');
-    expect(aiConfig.resolveFor).toHaveBeenLastCalledWith('ws', 'chat', 'p1');
+    expect(aiConfig.connection).toHaveBeenLastCalledWith('ws', 'p1');
+    expect(aiConfig.resolveFor).not.toHaveBeenCalled();
     await settings.test('ws', 'user');
-    expect(aiConfig.resolveFor).toHaveBeenLastCalledWith('ws', 'chat', undefined);
+    expect(aiConfig.resolveFor).toHaveBeenLastCalledWith('ws', 'chat');
     expect(aiConfig.resolve).not.toHaveBeenCalled();
+  });
+
+  it('asks for a model before dialling a provider that has none', async () => {
+    const { aiConfig, settings } = service();
+    aiConfig.connection.mockResolvedValue({ enabled: true, model: '' });
+    expect(await settings.test('ws', 'user', 'p1')).toMatchObject({ ok: false, error: 'error.ai.providerNoModels' });
   });
 });

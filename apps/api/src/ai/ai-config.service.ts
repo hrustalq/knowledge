@@ -12,6 +12,7 @@ import type {
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AiProvidersService } from './ai-providers.service.js';
+import { AiModelsService, modelAvailable, modelPrices, type AiModelRow } from './ai-models.service.js';
 import { SourcePolicyService } from './source-policy.service.js';
 import { decryptSecret, parseKey } from './secret-box.js';
 import { resolveExternalAiActions } from './external-ai-actions.js';
@@ -50,9 +51,13 @@ export interface ResolvedAiConfig {
   webAccess: WebAccessSettings;
   /** Whether the page AI actions menu may open external vendors (issue #68). */
   externalAiActions: ExternalAiActionsSettings;
-  /** The named profile serving this call, when one is routed. */
+  /** The named provider serving this call, when one does. Null on the default config. */
   providerId: string | null;
   providerName: string | null;
+  /** The `ai_models` row serving this call, when a pin or a route chose one. */
+  modelId: string | null;
+  /** That row's declared capabilities, overriding the model table (model-capabilities.ts). */
+  capabilities: unknown;
   /** Which layer each field came from — drives the UI's "inherited from env" hints. */
   sources: AiSettingsSourceMap;
 }
@@ -83,6 +88,7 @@ export class AiConfigService {
     private readonly config: ConfigService<Env, true>,
     private readonly prisma: PrismaService,
     private readonly providers: AiProvidersService,
+    private readonly models: AiModelsService,
     private readonly sourcePolicies: SourcePolicyService,
   ) {
     this.key = parseKey(this.config.get('SETTINGS_ENCRYPTION_KEY', { infer: true }));
@@ -149,6 +155,8 @@ export class AiConfigService {
       priceCurrency: (row?.priceCurrency as CostCurrency | null | undefined) ?? null,
       providerId: null,
       providerName: null,
+      modelId: null,
+      capabilities: null,
       sources: {
         provider: row?.provider ? 'db' : 'env',
         baseUrl: row?.baseUrl ? 'db' : 'env',
@@ -198,34 +206,45 @@ export class AiConfigService {
   }
 
   /**
-   * The config for one purpose, honouring provider profiles.
+   * The config for one purpose, honouring pinned and routed models.
    *
-   * Resolution order, first hit wins:
-   *   1. `pinnedProviderId` — the profile a member chose for their thread;
-   *   2. the profile this workspace routes `purpose` at;
+   * Resolution order, first usable hit wins:
+   *   1. `pins`, most specific first — a thread's model, then an agent's;
+   *   2. the model this workspace routes `purpose` at;
    *   3. the inline ai_settings config, then the ASSISTANT_* env vars.
    *
-   * Step 3 is what keeps this backward compatible: a workspace that never
-   * creates a profile resolves exactly as it did before profiles existed.
-   * A pinned or routed profile that has since been disabled or deleted also
-   * falls through to it rather than failing the turn.
+   * Step 3 is what keeps this backward compatible: a workspace that never adds a
+   * model resolves exactly as it did before models existed. A model that has
+   * been removed, belongs to another workspace, or whose provider is off is
+   * looked past rather than failing the turn, so turning a provider back on
+   * restores every pin at it.
    */
   async resolveFor(
     workspaceId: string,
     purpose: AiPurpose,
-    pinnedProviderId?: string | null,
+    ...pins: Array<string | null | undefined>
   ): Promise<ResolvedAiConfig> {
     const base = await this.resolve(workspaceId);
+    for (const id of [...pins, await this.routedModelId(workspaceId, purpose)]) {
+      const config = id ? await this.forModel(base, id) : null;
+      if (config) return config;
+    }
+    return base;
+  }
 
-    const routedId = pinnedProviderId ?? (await this.routedProviderId(workspaceId, purpose));
-    if (!routedId) return base;
+  private async forModel(base: ResolvedAiConfig, id: string): Promise<ResolvedAiConfig | null> {
+    const row = await this.models.find(base.workspaceId, id);
+    if (!row) return null;
+    const connection = row.providerId ? await this.forProvider(base, row.providerId) : base;
+    if (!connection?.enabled) return null;
+    return { ...connection, model: row.code, modelId: row.id, capabilities: row.capabilities, ...modelPrices(row) };
+  }
 
-    const resolved = await this.providers.resolveRow(routedId);
-    // Belt and braces against a profile from another tenant: routing columns
-    // and thread pins are plain uuids with no FK, so the workspace is checked
-    // here rather than trusted.
-    if (!resolved || resolved.row.workspaceId !== workspaceId) return base;
-
+  /** A named provider's connection and budget. It names no model: the caller's model does. */
+  private async forProvider(base: ResolvedAiConfig, providerId: string): Promise<ResolvedAiConfig | null> {
+    const resolved = await this.providers.resolveRow(providerId);
+    // Belt and braces against a provider from another tenant.
+    if (!resolved || resolved.row.workspaceId !== base.workspaceId) return null;
     const { row, apiKey } = resolved;
     const defaults = PROVIDER_DEFAULTS[row.provider];
     return {
@@ -233,27 +252,55 @@ export class AiConfigService {
       enabled: row.provider !== 'none',
       provider: row.provider,
       baseUrl: (row.baseUrl || defaults?.baseUrl || '').replace(/\/$/, ''),
-      model: row.model || defaults?.model || '',
+      model: defaults?.model || '',
       apiKey: apiKey ?? base.apiKey,
       temperature: row.temperature ?? base.temperature,
       maxToolCalls: row.maxToolCalls ?? base.maxToolCalls,
       timeoutMs: row.timeoutMs ?? base.timeoutMs,
-      pricePromptPerMTok: row.pricePromptPerMTok ? Number(row.pricePromptPerMTok) : null,
-      priceCompletionPerMTok: row.priceCompletionPerMTok ? Number(row.priceCompletionPerMTok) : null,
-      priceCachedPerMTok: row.priceCachedPerMTok ? Number(row.priceCachedPerMTok) : null,
-      priceCurrency: row.priceCurrency as CostCurrency | null,
+      pricePromptPerMTok: null,
+      priceCompletionPerMTok: null,
+      priceCachedPerMTok: null,
+      priceCurrency: null,
       providerId: row.id,
       providerName: row.name,
     };
   }
 
-  private async routedProviderId(workspaceId: string, purpose: AiPurpose): Promise<string | null> {
+  /**
+   * What a provider's model list and Test dial: its endpoint and credential, with
+   * the model it would test on. Null when it is off or not this workspace's.
+   */
+  async connection(workspaceId: string, providerId: string): Promise<ResolvedAiConfig | null> {
+    const connection = await this.forProvider(await this.resolve(workspaceId), providerId);
+    if (!connection) return null;
+    const own = (await this.models.roster(workspaceId)).filter((m) => m.providerId === providerId);
+    const model = own.find((m) => m.inChat) ?? own[0];
+    return model ? { ...connection, model: model.code, modelId: model.id, ...modelPrices(model) } : connection;
+  }
+
+  /** Every model this workspace can call right now: a provider that is off hides all of its own. */
+  async availableModels(workspaceId: string): Promise<AiModelRow[]> {
+    const [base, rows] = await Promise.all([this.resolve(workspaceId), this.models.roster(workspaceId)]);
+    return rows.filter((row) => modelAvailable(row, base.provider));
+  }
+
+  /**
+   * A thread's pin, if members may still use it. "In chat" is checked on
+   * execution as well as on offer: a thread outlives an admin's change.
+   */
+  async chatPin(workspaceId: string, modelId: string | null): Promise<string | null> {
+    if (!modelId) return null;
+    const rows = await this.models.roster(workspaceId);
+    return rows.some((row) => row.id === modelId && row.inChat) ? modelId : null;
+  }
+
+  private async routedModelId(workspaceId: string, purpose: AiPurpose): Promise<string | null> {
     const row = await this.prisma.aiSettings.findUnique({
       where: { workspaceId },
-      select: { chatProviderId: true, reviewProviderId: true, extractionProviderId: true, decisionProviderId: true },
+      select: { chatModelId: true, reviewModelId: true, extractionModelId: true, decisionModelId: true },
     });
     if (!row) return null;
-    return { chat: row.chatProviderId, review: row.reviewProviderId, extraction: row.extractionProviderId, decision: row.decisionProviderId }[purpose];
+    return { chat: row.chatModelId, review: row.reviewModelId, extraction: row.extractionModelId, decision: row.decisionModelId }[purpose];
   }
 
   /** Called by every write to ai_settings so the next resolve() sees it immediately. */

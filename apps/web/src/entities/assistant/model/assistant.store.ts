@@ -280,8 +280,8 @@ export const useAssistantStore = defineStore('assistant', {
      * about the conversation, and the next turn should honour it without the
      * sender having to re-pick.
      */
-    async setThreadProvider(threadId: string, providerId: string | null) {
-      const res = await api.patch('/v1/assistant/threads/{id}', { path: { id: threadId }, body: { providerId } })
+    async setThreadModel(threadId: string, modelId: string | null) {
+      const res = await api.patch('/v1/assistant/threads/{id}', { path: { id: threadId }, body: { modelId } })
       this.syncSummary(res.thread)
       if (this.activeThread?.id === threadId) this.activeThread = res.thread
     },

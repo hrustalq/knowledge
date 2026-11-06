@@ -389,7 +389,7 @@ The design follows the sketch this section used to hold.
   behind `AssistantClient`. It is `DecisionClient`, in the controller-free
   `DecisionClientModule`, which the worker (arbiter) and the API (harvest,
   citations) both import.
-- A workspace routes a **GenAPI profile** to the `decision` purpose in AI
+- A workspace routes **a model of a GenAPI provider** to the `decision` purpose in AI
   settings → Providers → Decisions; any other kind is refused with a 400.
 - Unlike chat, review and extraction, an unrouted decision is **off**: it
   never falls back to the inline config, which is the chat model.

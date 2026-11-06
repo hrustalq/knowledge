@@ -186,13 +186,13 @@ describe('usage totals', () => {
 describe('cheapestCapable', () => {
   const pick = (profiles: object[]) =>
     AgentRouterService.prototype.cheapestCapable.call(
-      { providers: { enabledProviders: async () => profiles } } as never,
+      { aiConfig: { availableModels: async () => profiles } } as never,
       'ws',
       [],
     );
   const profile = (id: string, price: number | null, priceCurrency: string | null = null) => ({
     id,
-    model: 'm',
+    code: 'm',
     capabilities: null,
     pricePromptPerMTok: price,
     priceCurrency,

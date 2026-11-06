@@ -284,6 +284,15 @@ export class AccessService {
     return provider.workspaceId;
   }
 
+  async workspaceOfAiModel(modelId: string): Promise<string> {
+    const model = await this.prisma.aiModel.findUnique({
+      where: { id: modelId },
+      select: { workspaceId: true },
+    });
+    if (!model) throw new NotFoundException(t('error.ai.modelNotFound', { id: modelId }));
+    return model.workspaceId;
+  }
+
   async workspaceOfAiPlugin(pluginId: string): Promise<string> {
     const plugin = await this.prisma.aiPlugin.findUnique({
       where: { id: pluginId },

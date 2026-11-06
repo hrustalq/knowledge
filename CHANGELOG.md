@@ -23,6 +23,25 @@ in the pull request that introduces them — see
   **Migration:** read `costs`, with one entry per currency and an empty list when nothing was priced. Do not add entries
   of different currencies together.
 
+- **A route, an agent and a thread now pin a model, not a provider.** `HTTP` `PATCH /v1/ai/settings` takes
+  `chatModelId`, `reviewModelId`, `extractionModelId` and `decisionModelId` in place of the `*ProviderId` fields,
+  `routing` holds model ids, and `PATCH /v1/assistant/threads/:id` and the agent routes take `modelId`. Providers no
+  longer take or return `model`, prices or `capabilities`, and `GET /v1/ai/providers/choices` is now
+  `GET /v1/ai/models/choices` (#798).
+  **Migration:** read model ids from `GET /v1/ai/models`. Every existing provider got one model with the same id, so an
+  id you stored for a provider still works as that model's id. Set prices and capabilities with `PATCH /v1/ai/models/:id`.
+
+### Added
+
+- **A provider now lists the models it serves** (#798). Settings → AI → Configuration shows them under each provider,
+  including the default. **Fetch models** asks the provider what it has and adds the ones you tick; for a server with no
+  model list, type the code name. Price and capabilities belong to the model.
+- **Providers switch on and off from their row** (#798). While one is off, its models leave every picker and calls pinned
+  to them fall through to the next choice. Turning it back on restores those pins.
+- **Each agent can run on its own model** (#798), and **the chat picker lists models rather than providers**: every model
+  marked **In chat** on an enabled provider, grouped by provider. An agent can still use a model that is not in chat, and a
+  thread pinned to one that is switched off goes back to the workspace default on its next turn.
+
 ### Changed
 
 - **Settings → AI → Configuration lists every provider in one place** (#792). "Default provider" and "Providers" are one
@@ -33,6 +52,9 @@ in the pull request that introduces them — see
 - **Each provider has its own price** (#792). The old "Cost estimate" prices only ever applied to the default, so a
   routed provider on a model without a list price could not be priced from this page. A model with no price now says so
   on its row.
+
+- **A pin that cannot run now tries the next choice** (#798). A thread pinned to a disabled provider used to skip the
+  agent's pin and the workspace route and land on the default config. It now tries each in turn.
 
 ### Fixed
 
@@ -63,6 +85,11 @@ in the pull request that introduces them — see
   rubles, as GenAPI lists them.
 
 ### Operations
+
+- **`20270102100000_ai_models` survives a rollback** (#798). It only adds: the `ai_models` table, `model_id` columns, and
+  a default on `ai_providers.model`. Each profile is copied to one model with the same id, and pins are copied across. The
+  previous image still runs against it, but it reads the old columns, so a rollback loses models added and pins set since.
+  The retired `*_provider_id`, `model`, price and capability columns go in a later release.
 
 - **Migration `20270101100000_usage_cost_currency` is additive and survives a rollback** (#793). It adds columns with safe
   defaults and relabels stored gen-stt rows to RUB, and `cost_usd_micros` keeps its name. The previous image ignores the new

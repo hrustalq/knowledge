@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * One provider in the list: what it is, what it runs on, what it serves, what it
- * costs. Status keeps three icon shapes rather than three colours of one dot, so
+ * One provider in the list: a connection, whether it is on, and what it serves.
+ * Status keeps three icon shapes rather than three colours of one dot, so
  * it reads without colour; a failing check's message sits on its own row, not
  * detached below the list where it could belong to anything.
  */
@@ -11,11 +11,13 @@ import { CircleCheck, CircleDashed, CircleOff, CircleX, RefreshCw, Trash2 } from
 import type { AiProvider } from '@knowledge/contracts'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
-import { formatDateTime, formatPrice } from '@/shared/utils/format'
+import { Checkbox } from '@/shared/ui/checkbox'
+import { formatDateTime } from '@/shared/utils/format'
 import type { ProviderRow } from '@/modules/assistant/model/provider-rows'
+import AiModelList from './AiModelList.vue'
 
 const props = defineProps<{ row: ProviderRow; canManage: boolean; testing: boolean }>()
-defineEmits<{ edit: []; test: []; remove: [] }>()
+defineEmits<{ edit: []; test: []; remove: []; toggle: [enabled: boolean] }>()
 
 const { t } = useI18n()
 
@@ -53,7 +55,8 @@ const keyLabel = computed(() => {
 
 <template>
   <!-- Actions sit beside the title once the list has room, and below it on a
-       phone, where they would otherwise squeeze a name into one word a line.
+       phone, where they would otherwise squeeze a name into one word a line. The
+       models come last either way: the actions above them are the connection's.
        The list is the container: the row's width, not the viewport's, decides. -->
   <li
     class="grid grid-cols-[1rem_minmax(0,1fr)] gap-x-3 gap-y-2 px-3 py-3 @lg:grid-cols-[1rem_minmax(0,1fr)_auto]"
@@ -89,12 +92,10 @@ const keyLabel = computed(() => {
       <p v-if="row.kind !== 'none'" class="text-muted-foreground mt-0.5 flex flex-wrap items-baseline gap-x-1.5 text-xs">
         <span v-if="row.name">{{ kindLabel }}</span>
         <span v-if="row.name" aria-hidden="true">·</span>
-        <span class="break-all font-mono">{{ row.model || t('ai.providerDefault') }}</span>
         <template v-if="row.host">
-          <span aria-hidden="true">·</span>
           <span class="break-all">{{ row.host }}</span>
+          <span aria-hidden="true">·</span>
         </template>
-        <span aria-hidden="true">·</span>
         <span :class="[row.key.source === 'missing' && 'text-destructive', row.key.source === 'stored' && row.key.hint && 'font-mono']">
           {{ keyLabel }}
         </span>
@@ -102,7 +103,12 @@ const keyLabel = computed(() => {
       <p v-else class="text-muted-foreground mt-0.5 text-xs">{{ t('ai.providerRow.noneHint') }}</p>
     </div>
 
-    <div v-if="canManage" class="order-last col-start-2 -ml-2 flex items-start gap-0.5 @lg:order-none @lg:col-start-3 @lg:-mt-1 @lg:ml-0">
+    <div v-if="canManage" class="col-start-2 -ml-2 flex flex-wrap items-center gap-0.5 @lg:col-start-3 @lg:-mt-1 @lg:ml-0">
+      <!-- The default has no off switch of its own: its off is provider `none`. -->
+      <label v-if="!row.isDefault" class="mr-1 ml-2 flex items-center gap-1.5 text-xs">
+        <Checkbox :model-value="row.enabled" @update:model-value="$emit('toggle', $event === true)" />
+        {{ t('ai.enabled') }}
+      </label>
       <Button v-if="!off" type="button" variant="ghost" size="sm" :disabled="testing" @click="$emit('test')">
         <RefreshCw class="size-3.5" :class="testing && 'animate-spin'" aria-hidden="true" />
         {{ t('ai.test') }}
@@ -120,33 +126,10 @@ const keyLabel = computed(() => {
       </Button>
     </div>
 
-    <div v-if="row.kind !== 'none'" class="col-start-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 @lg:col-[2/4]">
-      <div class="flex flex-wrap items-center gap-1.5">
-        <Badge v-for="purpose in row.serves" :key="purpose" variant="secondary" class="font-normal">
-          {{ t(`ai.purpose.${purpose}`) }}
-        </Badge>
-        <span v-if="!row.serves.length" class="text-muted-foreground text-xs">
-          {{ row.isDefault ? t('ai.providerRow.noFallback') : t('ai.providerRow.notRouted') }}
-        </span>
-      </div>
-
-      <p class="text-muted-foreground text-xs tabular-nums">
-        <template v-if="row.price">
-          {{
-            t('ai.providerRow.price', {
-              prompt: formatPrice(row.price.prompt, row.price.currency),
-              completion: formatPrice(row.price.completion, row.price.currency),
-            })
-          }}
-          <span v-if="row.price.cachedPrompt !== null">
-            · {{ t('ai.providerRow.priceCached', { price: formatPrice(row.price.cachedPrompt, row.price.currency) }) }}
-          </span>
-          <span v-if="!row.price.custom">· {{ t('ai.providerRow.priceList') }}</span>
-        </template>
-        <template v-else>{{ t('ai.providerRow.priceUnknown') }}</template>
-      </p>
-    </div>
-
     <p v-if="row.error" class="text-destructive col-start-2 text-xs break-words @lg:col-[2/4]">{{ row.error }}</p>
+
+    <div class="col-start-2 @lg:col-[2/4]">
+      <AiModelList :row="row" :title="title" :can-manage="canManage" @edit-provider="$emit('edit')" />
+    </div>
   </li>
 </template>

@@ -203,13 +203,18 @@ export class AiSettingsService {
    * turns "I typed a key" into "the key works", so it reports the upstream
    * message rather than the generic 503 the assistant paths raise.
    */
-  async test(workspaceId: string, principalId: string, providerId?: string): Promise<AiConnectionTestResponse> {
-    // Test whatever chat would actually use, profile routing included —
-    // testing the inline config while chat runs on a profile would be a green
-    // tick for a path nobody takes.
-    const config = providerId
-      ? await this.aiConfig.resolveFor(workspaceId, 'chat', providerId)
-      : await this.aiConfig.resolveFor(workspaceId, 'chat');
+  async test(
+    workspaceId: string,
+    principalId: string,
+    providerId?: string,
+    useDefault = false,
+  ): Promise<AiConnectionTestResponse> {
+    // With no target, test whatever chat would actually use, profile routing
+    // included. `useDefault` is the Default row's own button: that config, even
+    // while chat is routed elsewhere, or its green tick would describe a profile.
+    const config = useDefault
+      ? await this.aiConfig.resolve(workspaceId)
+      : await this.aiConfig.resolveFor(workspaceId, 'chat', providerId);
     if (!config.enabled) {
       return { ok: false, model: '', latencyMs: 0, error: t('error.ai.providerNone') };
     }

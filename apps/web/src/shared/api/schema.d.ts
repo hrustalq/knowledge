@@ -2887,7 +2887,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List chat pane threads for a workspace, most recently active first (search + keyset pagination) */
+        /** List the caller's own chat pane threads in a workspace, most recently active first (search + keyset pagination) */
         get: operations["AssistantController_listThreads"];
         put?: never;
         /** Start a new chat pane thread, optionally pinned to a document */
@@ -8828,6 +8828,8 @@ export interface components {
              * @description Test one profile instead of whatever chat is routed at
              */
             providerId?: string;
+            /** @description Test the default config itself, even while chat is routed at a profile */
+            useDefault?: boolean;
         };
         CreateAiProviderDto: {
             /** Format: uuid */

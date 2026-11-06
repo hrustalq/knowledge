@@ -380,6 +380,11 @@ export class TestAiConnectionDto {
   @IsOptional()
   @IsUUID()
   providerId?: string;
+
+  @ApiPropertyOptional({ type: Boolean, description: 'Test the default config itself, even while chat is routed at a profile' })
+  @IsOptional()
+  @IsBoolean()
+  useDefault?: boolean;
 }
 
 // ---- Provider profiles -----------------------------------------------------

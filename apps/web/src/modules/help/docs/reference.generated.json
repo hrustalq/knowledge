@@ -1324,7 +1324,7 @@
       "method": "GET",
       "path": "/v1/assistant/threads",
       "tag": "assistant",
-      "summary": "List chat pane threads for a workspace, most recently active first (search + keyset pagination)",
+      "summary": "List the caller's own chat pane threads in a workspace, most recently active first (search + keyset pagination)",
       "role": "viewer",
       "source": "query",
       "public": false,

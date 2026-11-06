@@ -179,9 +179,9 @@ export class AiController {
     @Body() dto: TestAiConnectionDto,
     @CurrentPrincipal() principal: Principal,
   ): Promise<AiConnectionTestResponse> {
-    const result = await this.settings.test(dto.workspaceId, principal?.userId, dto.providerId);
+    const result = await this.settings.test(dto.workspaceId, principal?.userId, dto.providerId, dto.useDefault);
     // A profile's row carries its own health, so the list can show it later.
-    if (dto.providerId) await this.providers.recordCheck(dto.providerId, result.ok, result.error);
+    if (dto.providerId && !dto.useDefault) await this.providers.recordCheck(dto.providerId, result.ok, result.error);
     return result;
   }
 

@@ -243,7 +243,9 @@ These are gen-api list prices, which is the only path we can pay for (see
 | `gpt-6-luna` | 0.025 ₽ per 1k tokens | 0.125 ₽ per 1k tokens |
 
 TypeSafe's own price is $0.042 per 1M input tokens, and gen-api's usage
-response carried that figure. Per 1k calls, on our inputs:
+response carried that figure, so a Jev row is stored as USD. gen-api's own `cost`
+fields are in rubles (#793), and its list price for Jev, 10.5 ₽ per 1M input tokens,
+only prices a call that reports nothing. Per 1k calls, on our inputs:
 
 | Call site | gpt-6-luna | Jev |
 | --- | --- | --- |

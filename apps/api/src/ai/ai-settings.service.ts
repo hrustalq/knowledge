@@ -7,6 +7,7 @@ import type {
   AiPageActionsResponse,
   AiProvider,
   AiSettingsResponse,
+  CostCurrency,
   WebAccessMode,
 } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
@@ -58,6 +59,8 @@ export interface UpdateAiSettingsInput {
   qualityAuditDays?: number | null;
   pricePromptPerMTok?: number | null;
   priceCompletionPerMTok?: number | null;
+  priceCachedPerMTok?: number | null;
+  priceCurrency?: CostCurrency | null;
   workspaceMonthlyTokenBudget?: number | null;
   defaultUserMonthlyTokenBudget?: number | null;
   enforceBudget?: boolean;
@@ -127,6 +130,8 @@ export class AiSettingsService {
       },
       pricePromptPerMTok: effective.pricePromptPerMTok,
       priceCompletionPerMTok: effective.priceCompletionPerMTok,
+      priceCachedPerMTok: effective.priceCachedPerMTok,
+      priceCurrency: effective.priceCurrency,
       workspaceMonthlyTokenBudget:
         row?.workspaceMonthlyTokenBudget == null ? null : Number(row.workspaceMonthlyTokenBudget),
       defaultUserMonthlyTokenBudget:
@@ -168,6 +173,8 @@ export class AiSettingsService {
       ...pick(input, 'qualityAuditDays'),
       ...pick(input, 'pricePromptPerMTok'),
       ...pick(input, 'priceCompletionPerMTok'),
+      ...pick(input, 'priceCachedPerMTok'),
+      ...pick(input, 'priceCurrency'),
       ...pick(input, 'workspaceMonthlyTokenBudget'),
       ...pick(input, 'defaultUserMonthlyTokenBudget'),
       ...pick(input, 'chatProviderId'),

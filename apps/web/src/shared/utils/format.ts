@@ -1,4 +1,4 @@
-import type { Locale } from '@knowledge/contracts'
+import type { CostAmount, CostCurrency, Locale } from '@knowledge/contracts'
 import { getLocale } from '../api/api'
 
 /**
@@ -76,15 +76,34 @@ export function formatNumber(value: number, locale?: Locale): string {
  * A USD price per million tokens. Keeps up to four decimals, because Jev's input
  * at 0.042 must not print as 0.04, and never fewer than two, so 2 reads as $2.00.
  */
-export function formatPrice(usd: number, locale?: Locale): string {
+export function formatPrice(amount: number, currency: CostCurrency = 'USD', locale?: Locale): string {
+  return money(amount, currency, 4, locale)
+}
+
+function money(amount: number, currency: CostCurrency, maximumFractionDigits: number, locale?: Locale): string {
   return new Intl.NumberFormat(tag(locale), {
     style: 'currency',
-    currency: 'USD',
+    currency,
     // en-GB would otherwise print "US$2.00" beside every price.
     currencyDisplay: 'narrowSymbol',
     minimumFractionDigits: 2,
-    maximumFractionDigits: 4,
-  }).format(usd)
+    maximumFractionDigits,
+  }).format(amount)
+}
+
+/**
+ * A stored cost. A real charge below a cent must not print as "$0.00": that
+ * reads as "the assistant is free", which is the one thing this number exists
+ * to disprove.
+ */
+export function formatCost({ micros, currency }: CostAmount, locale?: Locale): string {
+  if (micros > 0 && micros < 10_000) return `<${money(0.01, currency, 2, locale)}`
+  return money(micros / 1_000_000, currency, 2, locale)
+}
+
+/** One figure per currency, side by side: no rate is kept, so they are never one number. */
+export function formatCosts(costs: readonly CostAmount[], locale?: Locale): string {
+  return costs.length ? costs.map((c) => formatCost(c, locale)).join(' · ') : '—'
 }
 
 export function formatPercent(ratio: number, locale?: Locale): string {

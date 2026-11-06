@@ -759,6 +759,8 @@ export interface AiSettingsResponse {
   agentModeEnabled: boolean;
   pricePromptPerMTok: number | null;
   priceCompletionPerMTok: number | null;
+  priceCachedPerMTok: number | null;
+  priceCurrency: CostCurrency | null;
   /** Quotas. null = unlimited; only enforced while enforceBudget is true. */
   workspaceMonthlyTokenBudget: number | null;
   defaultUserMonthlyTokenBudget: number | null;
@@ -822,33 +824,64 @@ export const PROVIDER_DEFAULTS: Readonly<Record<string, { baseUrl: string; model
   'gen-api': { baseUrl: 'https://proxy.gen-api.ru/v1', model: 'gpt-4-1' },
 };
 
+/** The currencies a price or a cost is held in. No rate between them is kept, so they are never added together. */
+export const COST_CURRENCIES = ['USD', 'RUB'] as const;
+export type CostCurrency = (typeof COST_CURRENCIES)[number];
+
+/** What gen-api bills and reports in: `cost` from gen-stt and `usage.cost` from its chat proxy (#793). */
+export const GEN_API_COST_CURRENCY: CostCurrency = 'RUB';
+
+/** An amount, in millionths of its currency. */
+export interface CostAmount {
+  micros: number;
+  currency: CostCurrency;
+}
+
 /**
- * Rough USD-per-1M-token list prices, used only to put a number next to the
- * token counts. Overridable per config because this table will go stale and
- * self-hosted models are free.
+ * List prices per 1M tokens, used only to put a number next to the token counts.
+ * Overridable per provider because this table will go stale and self-hosted
+ * models are free. Standard rates; a model the vendor stops listing comes off.
+ *
+ * Every row was compared with its vendor's page on 2026-11-07: https://developers.openai.com/api/docs/pricing,
+ * https://platform.claude.com/docs/en/about-claude/pricing, https://gen-api.ru/pricing
+ * (rubles per 1K tokens there, so × 1000 here). DeepSeek's page
+ * (https://api-docs.deepseek.com/quick_start/pricing.md) no longer lists
+ * `deepseek-chat` or `deepseek-reasoner`, and its prices move with the hour, so
+ * a DeepSeek provider sets its own.
  */
-const MODEL_LIST_PRICES: Readonly<Record<string, { prompt: number; completion: number }>> = {
-  'deepseek-chat': { prompt: 0.27, completion: 1.1 },
-  'deepseek-reasoner': { prompt: 0.55, completion: 2.19 },
-  'gpt-4o': { prompt: 2.5, completion: 10 },
-  'gpt-4o-mini': { prompt: 0.15, completion: 0.6 },
-  'gpt-4.1': { prompt: 2, completion: 8 },
-  'gpt-4.1-mini': { prompt: 0.4, completion: 1.6 },
-  // gen-api addresses the same models under its own ids.
-  'gpt-4-1': { prompt: 2, completion: 8 },
-  'claude-sonnet-4-5': { prompt: 3, completion: 15 },
-  'claude-opus-4-5': { prompt: 5, completion: 25 },
+const MODEL_LIST_PRICES: Readonly<
+  Record<string, { prompt: number; cachedPrompt?: number; completion: number; currency: CostCurrency }>
+> = {
+  'gpt-4o': { prompt: 2.5, cachedPrompt: 1.25, completion: 10, currency: 'USD' },
+  'gpt-4o-mini': { prompt: 0.15, cachedPrompt: 0.075, completion: 0.6, currency: 'USD' },
+  'gpt-4.1': { prompt: 2, cachedPrompt: 0.5, completion: 8, currency: 'USD' },
+  'gpt-4.1-mini': { prompt: 0.4, cachedPrompt: 0.1, completion: 1.6, currency: 'USD' },
+  'claude-sonnet-4-5': { prompt: 3, cachedPrompt: 0.3, completion: 15, currency: 'USD' },
+  'claude-opus-4-5': { prompt: 5, cachedPrompt: 0.5, completion: 25, currency: 'USD' },
+  // gen-api's own ids. A chat call reports what it was charged, so this only prices one that does not.
+  'gpt-4-1': { prompt: 400, completion: 1600, currency: 'RUB' },
   // TypeSafe Jev through gen-api (#530): input only, output is free.
-  'jev-1-13': { prompt: 0.042, completion: 0 },
-  'jev-latest': { prompt: 0.042, completion: 0 },
+  'jev-1-13': { prompt: 10.5, completion: 0, currency: 'RUB' },
+  'jev-latest': { prompt: 10.5, completion: 0, currency: 'RUB' },
 };
 
 export interface ModelPrice {
-  /** USD per 1M tokens. */
+  /** Per 1M tokens, in `currency`. */
   prompt: number;
   completion: number;
+  /** Per 1M prompt tokens served from the provider's cache; null charges them at `prompt`. */
+  cachedPrompt: number | null;
+  currency: CostCurrency;
   /** True when a configured price decided either side, rather than the list alone. */
   custom: boolean;
+}
+
+/** A provider's own prices: a row of `ai_settings` or `ai_providers`, or nothing. */
+export interface ConfiguredPrice {
+  pricePromptPerMTok?: number | null;
+  priceCompletionPerMTok?: number | null;
+  priceCachedPerMTok?: number | null;
+  priceCurrency?: CostCurrency | null;
 }
 
 /**
@@ -857,16 +890,20 @@ export interface ModelPrice {
  * page cannot promise a number the usage table then leaves empty. Each side
  * falls back to the list on its own; a model missing a side has no price.
  */
-export function effectiveModelPrice(
-  model: string,
-  pricePromptPerMTok: number | null,
-  priceCompletionPerMTok: number | null,
-): ModelPrice | null {
+export function effectiveModelPrice(model: string, configured: ConfiguredPrice = {}): ModelPrice | null {
+  const { pricePromptPerMTok, priceCompletionPerMTok, priceCachedPerMTok } = configured;
+  const custom = pricePromptPerMTok != null || priceCompletionPerMTok != null;
   const listed = MODEL_LIST_PRICES[model];
-  const prompt = pricePromptPerMTok ?? listed?.prompt;
-  const completion = priceCompletionPerMTok ?? listed?.completion;
+  // A price stored before #793 has no currency, and was entered in USD.
+  const currency = configured.priceCurrency ?? (custom ? 'USD' : (listed?.currency ?? 'USD'));
+  // The list fills a side only in its own currency: there is no rate to convert it at.
+  const list = listed?.currency === currency ? listed : undefined;
+  const prompt = pricePromptPerMTok ?? list?.prompt;
+  const completion = priceCompletionPerMTok ?? list?.completion;
   if (prompt == null || completion == null) return null;
-  return { prompt, completion, custom: pricePromptPerMTok != null || priceCompletionPerMTok != null };
+  // A list cached rate discounts the list prompt rate, so a configured prompt rate does not borrow it.
+  const cachedPrompt = priceCachedPerMTok ?? (pricePromptPerMTok == null ? (list?.cachedPrompt ?? null) : null);
+  return { prompt, completion, cachedPrompt, currency, custom };
 }
 
 /**
@@ -887,6 +924,8 @@ export interface AiProviderSummary {
   timeoutMs: number | null;
   pricePromptPerMTok: number | null;
   priceCompletionPerMTok: number | null;
+  priceCachedPerMTok: number | null;
+  priceCurrency: CostCurrency | null;
   enabled: boolean;
   status: AiProviderStatus;
   lastError: string | null;
@@ -1305,7 +1344,8 @@ export interface AiUsageBucket {
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
-  costUsdMicros: number | null;
+  /** One amount per currency in the bucket, never one sum across them. Empty when no call was priced. */
+  costs: CostAmount[];
   errors: number;
 }
 
@@ -1314,7 +1354,7 @@ export interface AiUsageSeriesPoint {
   date: string;
   totalTokens: number;
   calls: number;
-  costUsdMicros: number | null;
+  costs: CostAmount[];
 }
 
 // GET /v1/ai/usage?workspaceId=&from=&to=&groupBy=user|model|day
@@ -1327,7 +1367,8 @@ export interface AiUsageResponse {
     promptTokens: number;
     completionTokens: number;
     totalTokens: number;
-    costUsdMicros: number | null;
+    /** One total per currency, never one sum across them. */
+    costs: CostAmount[];
     /** Calls with no known price — the cost total excludes them, so the UI can say so. */
     unpricedCalls: number;
     errors: number;
@@ -1350,7 +1391,9 @@ export interface AiUsageLogEntry {
   completionTokens: number;
   totalTokens: number;
   estimated: boolean;
-  costUsdMicros: number | null;
+  /** In `costCurrency`; null when the call could not be priced. */
+  costMicros: number | null;
+  costCurrency: CostCurrency;
   durationMs: number;
   ok: boolean;
   errorCode: string | null;
@@ -1385,7 +1428,7 @@ export interface AiMyUsageResponse {
   budget: AiBudgetInfo;
   calls: number;
   totalTokens: number;
-  costUsdMicros: number | null;
+  costs: CostAmount[];
 }
 // GET /v1/ai/budgets?workspaceId=
 export interface ListAiBudgetsResponse {

@@ -13,34 +13,58 @@ import { AiSettingsService } from '../src/ai/ai-settings.service.js';
  */
 
 describe('effectiveModelPrice', () => {
-  it('uses the list for a known model', () => {
-    expect(effectiveModelPrice('deepseek-chat', null, null)).toEqual({ prompt: 0.27, completion: 1.1, custom: false });
+  const custom = (prompt: number | null, completion: number | null) => ({ pricePromptPerMTok: prompt, priceCompletionPerMTok: completion });
+
+  it('uses the list for a known model, with its cached rate and currency', () => {
+    expect(effectiveModelPrice('gpt-4o')).toEqual({ prompt: 2.5, cachedPrompt: 1.25, completion: 10, currency: 'USD', custom: false });
+    expect(effectiveModelPrice('gpt-4-1')).toEqual({ prompt: 400, cachedPrompt: null, completion: 1600, currency: 'RUB', custom: false });
+  });
+
+  it('has dropped the models DeepSeek no longer lists', () => {
+    expect(effectiveModelPrice('deepseek-chat')).toBeNull();
+    expect(effectiveModelPrice('deepseek-reasoner')).toBeNull();
   });
 
   it('falls back side by side, and says a configured price decided', () => {
-    expect(effectiveModelPrice('deepseek-chat', 1, null)).toEqual({ prompt: 1, completion: 1.1, custom: true });
+    expect(effectiveModelPrice('gpt-4o', custom(1, null))).toEqual({ prompt: 1, cachedPrompt: null, completion: 10, currency: 'USD', custom: true });
   });
 
   it('has no price for an unlisted model missing a side', () => {
-    expect(effectiveModelPrice('gpt-6-luna', null, null)).toBeNull();
-    expect(effectiveModelPrice('gpt-6-luna', 1, null)).toBeNull();
-    expect(effectiveModelPrice('gpt-6-luna', 1, 2)).toEqual({ prompt: 1, completion: 2, custom: true });
+    expect(effectiveModelPrice('gpt-6-luna')).toBeNull();
+    expect(effectiveModelPrice('gpt-6-luna', custom(1, null))).toBeNull();
+    expect(effectiveModelPrice('gpt-6-luna', custom(1, 2))).toEqual({ prompt: 1, cachedPrompt: null, completion: 2, currency: 'USD', custom: true });
   });
 
   it('treats an explicit 0 as a price: a self-hosted model is free, not unknown', () => {
-    expect(effectiveModelPrice('llama', 0, 0)).toEqual({ prompt: 0, completion: 0, custom: true });
+    expect(effectiveModelPrice('llama', custom(0, 0))).toEqual({ prompt: 0, cachedPrompt: null, completion: 0, currency: 'USD', custom: true });
+  });
+
+  it('reads a price stored before currencies as USD, even on a model the list prices in rubles', () => {
+    expect(effectiveModelPrice('gpt-4-1', custom(2, 8))).toMatchObject({ prompt: 2, completion: 8, currency: 'USD' });
+  });
+
+  it('fills a side from the list only in its own currency: no rate is kept to convert it', () => {
+    expect(effectiveModelPrice('gpt-4o', { pricePromptPerMTok: 200, priceCurrency: 'RUB' })).toBeNull();
+    expect(effectiveModelPrice('gpt-4o', { priceCurrency: 'RUB' })).toBeNull();
+    expect(effectiveModelPrice('gpt-4o', { ...custom(200, 800), priceCurrency: 'RUB' })).toMatchObject({ prompt: 200, currency: 'RUB' });
+  });
+
+  it('keeps a list cached rate off a configured prompt rate, unless one is configured too', () => {
+    expect(effectiveModelPrice('gpt-4o', custom(1, 2))?.cachedPrompt).toBeNull();
+    expect(effectiveModelPrice('gpt-4o', { ...custom(1, 2), priceCachedPerMTok: 0.1 })?.cachedPrompt).toBe(0.1);
+    expect(effectiveModelPrice('gpt-4o', custom(null, 2))?.cachedPrompt).toBe(1.25);
   });
 });
 
-describe('estimateCostMicros', () => {
-  const estimate = AiConfigService.prototype.estimateCostMicros;
+describe('estimateCost', () => {
+  const estimate = AiConfigService.prototype.estimateCost;
   const config = (over: Partial<ResolvedAiConfig>) =>
-    ({ model: 'deepseek-chat', pricePromptPerMTok: null, priceCompletionPerMTok: null, ...over }) as ResolvedAiConfig;
+    ({ model: 'gpt-4o', pricePromptPerMTok: null, priceCompletionPerMTok: null, ...over }) as ResolvedAiConfig;
 
   it('prices tokens by that rule', () => {
-    expect(estimate(config({}), 1_000_000, 1_000_000)).toBe(1_370_000);
+    expect(estimate(config({}), 1_000_000, 1_000_000)).toEqual({ micros: 12_500_000, currency: 'USD' });
     expect(estimate(config({ model: 'gpt-6-luna' }), 1_000_000, 0)).toBeNull();
-    expect(estimate(config({ model: 'llama', pricePromptPerMTok: 0, priceCompletionPerMTok: 0 }), 1_000, 1_000)).toBe(0);
+    expect(estimate(config({ model: 'llama', pricePromptPerMTok: 0, priceCompletionPerMTok: 0 }), 1_000, 1_000)).toEqual({ micros: 0, currency: 'USD' });
   });
 });
 

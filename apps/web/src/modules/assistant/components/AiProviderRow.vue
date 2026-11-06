@@ -132,7 +132,15 @@ const keyLabel = computed(() => {
 
       <p class="text-muted-foreground text-xs tabular-nums">
         <template v-if="row.price">
-          {{ t('ai.providerRow.price', { prompt: formatPrice(row.price.prompt), completion: formatPrice(row.price.completion) }) }}
+          {{
+            t('ai.providerRow.price', {
+              prompt: formatPrice(row.price.prompt, row.price.currency),
+              completion: formatPrice(row.price.completion, row.price.currency),
+            })
+          }}
+          <span v-if="row.price.cachedPrompt !== null">
+            · {{ t('ai.providerRow.priceCached', { price: formatPrice(row.price.cachedPrompt, row.price.currency) }) }}
+          </span>
           <span v-if="!row.price.custom">· {{ t('ai.providerRow.priceList') }}</span>
         </template>
         <template v-else>{{ t('ai.providerRow.priceUnknown') }}</template>

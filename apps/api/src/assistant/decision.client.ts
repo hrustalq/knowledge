@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { DECISION_DEFAULT_MODEL, type AiUsageOperation, type DecisionSite } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { AiConfigService, type ResolvedAiConfig } from '../ai/ai-config.service.js';
+import type { CostAmount } from '@knowledge/contracts';
 import { AiUsageService } from '../ai/ai-usage.service.js';
 import { t } from '../i18n/t.js';
 import { ProviderAccountError } from './assistant.client.js';
@@ -93,7 +94,7 @@ export class DecisionClient {
     const startedAt = Date.now();
     let promptTokens = 0;
     let served = config.model;
-    let costUsdMicros: number | null = null;
+    let cost: CostAmount | null = null;
     try {
       const json = await this.post(config, body);
       const res = (json as { response?: JevResponse }).response;
@@ -101,14 +102,15 @@ export class DecisionClient {
       if (typeof p !== 'number' || !(p >= 0 && p <= 1)) throw new Error('decision model returned no probability');
       promptTokens = res?.usage?.input_tokens ?? 0;
       served = res?.model ?? served;
-      costUsdMicros =
+      // USD, unlike gen-api's other `cost` fields: it carries TypeSafe's own price (docs/features/67).
+      cost =
         typeof res?.usage?.cost === 'number'
-          ? Math.round(res.usage.cost * 1_000_000)
-          : this.aiConfig.estimateCostMicros(config, promptTokens, 0);
-      this.bill(call, served, promptTokens, costUsdMicros, startedAt, true);
+          ? { micros: Math.round(res.usage.cost * 1_000_000), currency: 'USD' }
+          : this.aiConfig.estimateCost(config, promptTokens, 0);
+      this.bill(call, served, promptTokens, cost, startedAt, true);
       return p;
     } catch (err) {
-      this.bill(call, served, promptTokens, costUsdMicros, startedAt, false, err instanceof Error ? err.message : String(err));
+      this.bill(call, served, promptTokens, cost, startedAt, false, err instanceof Error ? err.message : String(err));
       throw this.upstreamError(err);
     }
   }
@@ -134,7 +136,7 @@ export class DecisionClient {
     call: DecisionCall,
     model: string,
     promptTokens: number,
-    costUsdMicros: number | null,
+    cost: CostAmount | null,
     startedAt: number,
     ok: boolean,
     error?: string,
@@ -145,7 +147,7 @@ export class DecisionClient {
       operation: call.operation,
       threadId: call.threadId,
       tokens: { promptTokens, completionTokens: 0, totalTokens: promptTokens, estimated: promptTokens === 0 },
-      costUsdMicros,
+      cost,
       durationMs: Date.now() - startedAt,
       ok,
       error,

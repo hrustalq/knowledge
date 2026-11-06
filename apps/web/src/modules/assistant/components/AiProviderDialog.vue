@@ -14,8 +14,8 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import { effectiveModelPrice, PROVIDER_DEFAULTS } from '@knowledge/contracts'
-import type { AiProvider, AiProviderKind, AiSettingsResponse } from '@knowledge/contracts'
+import { COST_CURRENCIES, effectiveModelPrice, GEN_API_COST_CURRENCY, PROVIDER_DEFAULTS } from '@knowledge/contracts'
+import type { AiProvider, AiProviderKind, AiSettingsResponse, CostCurrency } from '@knowledge/contracts'
 import { useApiMutation } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
 import { getWorkspaceId } from '@/shared/api/api'
@@ -53,10 +53,16 @@ const EMPTY_FORM = {
   enabled: true,
   pricePrompt: '',
   priceCompletion: '',
+  priceCached: '',
+  // Null until someone picks one or a row has one: then the provider kind decides.
+  priceCurrency: null as CostCurrency | null,
 }
 const form = ref({ ...EMPTY_FORM })
 
 const priceText = (n: number | null | undefined) => (n == null ? '' : String(n))
+/** A price stored before #793 has no currency, and was entered in USD. */
+const storedCurrency = (row: { priceCurrency: CostCurrency | null; pricePromptPerMTok: number | null; priceCompletionPerMTok: number | null }) =>
+  row.priceCurrency ?? (row.pricePromptPerMTok !== null || row.priceCompletionPerMTok !== null ? 'USD' : null)
 
 function reset() {
   const s = props.settings
@@ -71,6 +77,8 @@ function reset() {
       enabled: p.enabled,
       pricePrompt: priceText(p.pricePromptPerMTok),
       priceCompletion: priceText(p.priceCompletionPerMTok),
+      priceCached: priceText(p.priceCachedPerMTok),
+      priceCurrency: storedCurrency(p),
     }
   } else if (isDefault.value) {
     form.value = {
@@ -80,6 +88,8 @@ function reset() {
       model: s.sources.model === 'db' ? s.model : '',
       pricePrompt: priceText(s.pricePromptPerMTok),
       priceCompletion: priceText(s.priceCompletionPerMTok),
+      priceCached: priceText(s.priceCachedPerMTok),
+      priceCurrency: storedCurrency(s),
     }
   } else {
     form.value = { ...EMPTY_FORM }
@@ -109,14 +119,29 @@ const inheritedModel = computed(() => inherited('model'))
 
 /** The model the price below applies to: what the field will resolve to. */
 const pricedModel = computed(() => form.value.model.trim() || inheritedModel.value || '')
-const listPrice = computed(() => effectiveModelPrice(pricedModel.value, null, null))
+const listPrice = computed(() => effectiveModelPrice(pricedModel.value))
+/** GenAPI's own price list is in rubles, so that is what its dialog starts on. */
+const currency = computed<CostCurrency>(
+  () => form.value.priceCurrency ?? (form.value.provider === 'gen-api' ? GEN_API_COST_CURRENCY : 'USD'),
+)
+/** The list only fills an empty field in its own currency, so only then is it a hint for one. */
+const listPlaceholder = (side: 'prompt' | 'completion' | 'cachedPrompt') => {
+  const value = listPrice.value?.currency === currency.value ? listPrice.value[side] : null
+  return value == null ? undefined : String(value)
+}
 
 const prompt = computed(() => parsePrice(form.value.pricePrompt))
 const completion = computed(() => parsePrice(form.value.priceCompletion))
-const pricesValid = computed(() => prompt.value !== undefined && completion.value !== undefined)
-const willBePriced = computed(
-  () => !pricesValid.value || effectiveModelPrice(pricedModel.value, prompt.value ?? null, completion.value ?? null) !== null,
-)
+const cached = computed(() => parsePrice(form.value.priceCached))
+const pricesValid = computed(() => prompt.value !== undefined && completion.value !== undefined && cached.value !== undefined)
+/** What Save stores. With no price typed the currency stays unset, so the list applies in its own. */
+const prices = computed(() => ({
+  pricePromptPerMTok: prompt.value ?? null,
+  priceCompletionPerMTok: completion.value ?? null,
+  priceCachedPerMTok: cached.value ?? null,
+  priceCurrency: prompt.value != null || completion.value != null || cached.value != null ? currency.value : null,
+}))
+const willBePriced = computed(() => !pricesValid.value || effectiveModelPrice(pricedModel.value, prices.value) !== null)
 
 /** Anything stored for the default that the reset below would hand back to the environment. */
 const hasOverrides = computed(() => {
@@ -128,7 +153,8 @@ const hasOverrides = computed(() => {
       s.sources.model === 'db' ||
       s.sources.apiKey === 'db' ||
       s.pricePromptPerMTok !== null ||
-      s.priceCompletionPerMTok !== null)
+      s.priceCompletionPerMTok !== null ||
+      s.priceCachedPerMTok !== null)
   )
 })
 
@@ -150,7 +176,6 @@ const keyField = computed(() => (form.value.clearKey ? { apiKey: null } : form.v
 async function submit() {
   if (!pricesValid.value) return
   const f = form.value
-  const prices = { pricePromptPerMTok: prompt.value ?? null, priceCompletionPerMTok: completion.value ?? null }
   try {
     if (isDefault.value) {
       const s = props.settings
@@ -160,7 +185,7 @@ async function submit() {
           provider: f.provider === s.provider && s.sources.provider === 'env' ? null : f.provider,
           baseUrl: off.value ? null : f.baseUrl.trim() || null,
           model: off.value ? null : f.model.trim() || null,
-          ...prices,
+          ...prices.value,
           ...keyField.value,
         },
       })
@@ -173,7 +198,7 @@ async function submit() {
         baseUrl: f.baseUrl.trim() || null,
         model: f.model.trim() || inheritedModel.value || '',
         enabled: f.enabled,
-        ...prices,
+        ...prices.value,
         ...keyField.value,
       }
       if (profile.value) {
@@ -200,7 +225,7 @@ async function useEnvironment() {
   if (!ok) return
   try {
     await saveSettings.mutateAsync({
-      body: { workspaceId, provider: null, baseUrl: null, model: null, apiKey: null, pricePromptPerMTok: null, priceCompletionPerMTok: null },
+      body: { workspaceId, provider: null, baseUrl: null, model: null, apiKey: null, pricePromptPerMTok: null, priceCompletionPerMTok: null, priceCachedPerMTok: null, priceCurrency: null },
     })
     toast.success(t('ai.settingsSaved'))
     open.value = false
@@ -284,14 +309,32 @@ async function useEnvironment() {
 
           <fieldset class="space-y-2">
             <legend class="text-muted-foreground mb-1.5 text-xs font-medium">{{ t('ai.providerDialog.price') }}</legend>
-            <div class="grid gap-3 sm:grid-cols-2">
+            <div class="grid grid-cols-2 items-end gap-3 sm:grid-cols-4">
+              <label class="block space-y-1">
+                <span class="text-xs">{{ t('ai.providerDialog.priceCurrency') }}</span>
+                <Select :model-value="currency" @update:model-value="form.priceCurrency = $event as CostCurrency">
+                  <SelectTrigger class="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="c in COST_CURRENCIES" :key="c" :value="c">{{ c }}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </label>
               <label class="block space-y-1">
                 <span class="text-xs">{{ t('ai.prompt') }}</span>
                 <Input
                   v-model="form.pricePrompt"
                   inputmode="decimal"
-                  :placeholder="listPrice ? String(listPrice.prompt) : undefined"
+                  :placeholder="listPlaceholder('prompt')"
                   :aria-invalid="prompt === undefined || undefined"
+                />
+              </label>
+              <label class="block space-y-1">
+                <span class="text-xs">{{ t('ai.providerDialog.priceCached') }}</span>
+                <Input
+                  v-model="form.priceCached"
+                  inputmode="decimal"
+                  :placeholder="listPlaceholder('cachedPrompt')"
+                  :aria-invalid="cached === undefined || undefined"
                 />
               </label>
               <label class="block space-y-1">
@@ -299,7 +342,7 @@ async function useEnvironment() {
                 <Input
                   v-model="form.priceCompletion"
                   inputmode="decimal"
-                  :placeholder="listPrice ? String(listPrice.completion) : undefined"
+                  :placeholder="listPlaceholder('completion')"
                   :aria-invalid="completion === undefined || undefined"
                 />
               </label>
@@ -312,8 +355,8 @@ async function useEnvironment() {
               {{
                 t('ai.providerDialog.priceListed', {
                   model: pricedModel,
-                  prompt: formatPrice(listPrice.prompt),
-                  completion: formatPrice(listPrice.completion),
+                  prompt: formatPrice(listPrice.prompt, listPrice.currency),
+                  completion: formatPrice(listPrice.completion, listPrice.currency),
                 })
               }}
             </p>

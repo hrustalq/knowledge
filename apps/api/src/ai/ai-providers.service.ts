@@ -1,7 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, type AiProvider } from '@prisma/client';
-import type { AiProviderSummary, AiProviderKind } from '@knowledge/contracts';
+import type { AiProviderSummary, AiProviderKind, CostCurrency } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { readCapabilityOverride } from '../agents/model-capabilities.js';
@@ -23,6 +23,8 @@ export interface UpsertProviderInput {
   timeoutMs?: number | null;
   pricePromptPerMTok?: number | null;
   priceCompletionPerMTok?: number | null;
+  priceCachedPerMTok?: number | null;
+  priceCurrency?: CostCurrency | null;
   /** AgentCapability[] declared by an admin, overriding the model table. */
   capabilities?: string[] | null;
   enabled?: boolean;
@@ -107,6 +109,8 @@ export class AiProvidersService {
         timeoutMs: input.timeoutMs ?? null,
         pricePromptPerMTok: input.pricePromptPerMTok ?? null,
         priceCompletionPerMTok: input.priceCompletionPerMTok ?? null,
+        priceCachedPerMTok: input.priceCachedPerMTok ?? null,
+        priceCurrency: input.priceCurrency ?? null,
         capabilities: input.capabilities ?? Prisma.DbNull,
         enabled: input.enabled ?? true,
         createdBy: actorId ?? null,
@@ -140,6 +144,8 @@ export class AiProvidersService {
         ...(input.capabilities === undefined ? {} : { capabilities: input.capabilities ?? Prisma.DbNull }),
         ...(input.pricePromptPerMTok === undefined ? {} : { pricePromptPerMTok: input.pricePromptPerMTok }),
         ...(input.priceCompletionPerMTok === undefined ? {} : { priceCompletionPerMTok: input.priceCompletionPerMTok }),
+        ...(input.priceCachedPerMTok === undefined ? {} : { priceCachedPerMTok: input.priceCachedPerMTok }),
+        ...(input.priceCurrency === undefined ? {} : { priceCurrency: input.priceCurrency }),
         ...(input.enabled === undefined ? {} : { enabled: input.enabled }),
       },
     });
@@ -223,6 +229,8 @@ export class AiProvidersService {
       timeoutMs: row.timeoutMs,
       pricePromptPerMTok: row.pricePromptPerMTok ? Number(row.pricePromptPerMTok) : null,
       priceCompletionPerMTok: row.priceCompletionPerMTok ? Number(row.priceCompletionPerMTok) : null,
+      priceCachedPerMTok: row.priceCachedPerMTok ? Number(row.priceCachedPerMTok) : null,
+      priceCurrency: row.priceCurrency as CostCurrency | null,
       capabilities: readCapabilityOverride(row.capabilities),
       enabled: row.enabled,
       status: (row.lastStatus as AiProviderSummary['status']) ?? 'unknown',

@@ -178,16 +178,17 @@ export class AiProvidersService {
     this.cache.delete(row.workspaceId);
   }
 
-  async recordCheck(id: string, ok: boolean, error?: string): Promise<void> {
-    const row = await this.prisma.aiProvider.update({
-      where: { id },
+  /** A profile the workspace does not own is left alone: the caller was authorized for `workspaceId`, not for the id (#789). */
+  async recordCheck(workspaceId: string, id: string, ok: boolean, error?: string): Promise<void> {
+    await this.prisma.aiProvider.updateMany({
+      where: { id, workspaceId },
       data: {
         lastStatus: ok ? 'ok' : 'error',
         lastError: ok ? null : (error?.slice(0, 500) ?? 'unknown error'),
         lastCheckedAt: new Date(),
       },
     });
-    this.cache.delete(row.workspaceId);
+    this.cache.delete(workspaceId);
   }
 
   private async getOrThrow(id: string): Promise<AiProvider> {

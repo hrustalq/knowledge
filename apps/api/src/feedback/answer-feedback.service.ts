@@ -198,7 +198,7 @@ export class AnswerFeedbackService {
         comment: input.comment?.trim() || null,
         query: input.query.slice(0, QUERY_MAX_CHARS),
         answerExcerpt: input.answerExcerpt?.slice(0, EXCERPT_MAX_CHARS) ?? null,
-        citedDocumentIds: (input.citedDocumentIds ?? []) as object,
+        citedDocumentIds: (await this.citedInWorkspace(input.workspaceId, input.citedDocumentIds)) as object,
         createdBy: principal.userId,
         apiKeyId: principal.apiKey?.id ?? null,
       },
@@ -224,10 +224,10 @@ export class AnswerFeedbackService {
       reason: input.reason ?? null,
       comment: input.comment?.trim() || null,
       query: input.query.slice(0, QUERY_MAX_CHARS),
-      citedDocumentIds: (input.documentIds ?? []) as object,
+      citedDocumentIds: (await this.citedInWorkspace(input.workspaceId, input.documentIds)) as object,
     };
     if (input.traceId) {
-      const where = { traceId: input.traceId, createdBy: principal.userId, kind: 'vote', surface: 'mcp' };
+      const where = { workspaceId: input.workspaceId, traceId: input.traceId, createdBy: principal.userId, kind: 'vote', surface: 'mcp' };
       const updated = await this.prisma.answerFeedback.updateMany({ where, data: fields });
       if (updated.count > 0) {
         const row = await this.prisma.answerFeedback.findFirst({ where, orderBy: { createdAt: 'desc' } });
@@ -246,6 +246,14 @@ export class AnswerFeedbackService {
       },
     });
     return { feedback: toInfo(row), deduplicated: false };
+  }
+
+  /** A client names these ids, so only pages of the workspace it voted in are kept (#789). */
+  private async citedInWorkspace(workspaceId: string, ids: string[] | undefined): Promise<string[]> {
+    if (!ids?.length) return [];
+    const docs = await this.prisma.document.findMany({ where: { id: { in: ids }, workspaceId }, select: { id: true } });
+    const known = new Set(docs.map((d) => d.id));
+    return ids.filter((id) => known.has(id));
   }
 
   /**

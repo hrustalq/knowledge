@@ -31,6 +31,10 @@ in the pull request that introduces them — see
 - **AI settings no longer squeeze their controls beside the settings rails** (#792). In a 1360px window the controls got
   about 200px and the Behavior fields overlapped. Sections now lay out by the width they actually have.
 - **Saving a provider or a route keeps your unsaved AI settings edits** (#792). The refetch used to reset the whole form.
+- **Four requests no longer reach another workspace's rows by id** (#789). A vote can no longer cite another workspace's
+  page, and the feedback list no longer shows such a page's title. An API spec diff answers only for revisions of the page
+  in the URL, cached or not. A provider's Test result is written only to that workspace's own provider. A connector's sync
+  link can be removed only through that connector, and any other id now returns 404.
 
 ## [0.45.2] — 2026-11-05
 

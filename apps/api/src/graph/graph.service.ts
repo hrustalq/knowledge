@@ -1724,13 +1724,82 @@ export class GraphService {
       const reason = /"detail":"((?:[^"\\]|\\.)*)/.exec(failed[2])?.[1] ?? failed[2];
       throw new BadRequestException(t('error.graph.queryFailed', { reason, query: scoped }));
     }
-    rows = rows.filter((r) => !('workspaceId' in r) || r.workspaceId === workspaceId);
+    rows = rows.filter((r) => !holdsForeignWorkspace(r, workspaceId));
     return { rows: rows.slice(0, cap), truncated: rows.length > cap };
   }
 }
 
+/** Any `workspaceId` other than this one, at any depth: a nested record is as foreign as a top-level one (#788). */
+function holdsForeignWorkspace(value: unknown, workspaceId: string): boolean {
+  if (Array.isArray(value)) return value.some((v) => holdsForeignWorkspace(v, workspaceId));
+  if (typeof value !== 'object' || value === null) return false;
+  return Object.entries(value).some(
+    ([key, v]) => (key === 'workspaceId' && v !== workspaceId) || holdsForeignWorkspace(v, workspaceId),
+  );
+}
+
 /** The only FROM targets an operator query may name: the types whose rows store `workspaceId` (#589). */
 const OPERATOR_QUERY_TYPES: readonly string[] = [...WORKSPACE_VERTEX_TYPES, ...RELATION_EDGE_TYPES];
+
+/**
+ * What an operator query may call (#788), lowercase. Not on a list means
+ * refused, so a reader a later ArcadeDB adds fails closed. Leave off anything
+ * that turns a value into a record (`asRecord`, `asRID`), reads by name or
+ * walks from record ids it is handed (`shortestPath`, `dijkstra`).
+ * `operator-query.e2e-spec.ts` runs each entry against a real store.
+ *
+ * Clause keywords are here because `IN (`, `AND (` read like calls to the scan.
+ */
+export const OPERATOR_QUERY_FUNCTIONS: ReadonlySet<string> = new Set([
+  // clause keywords
+  'select', 'traverse', 'from', 'where', 'and', 'or', 'not', 'in', 'like', 'ilike', 'between', 'matches', 'instanceof',
+  'contains', 'containsall', 'containsany', 'containskey', 'containsvalue', 'containstext', 'by', 'having', 'unwind', 'while',
+  // aggregates and helpers
+  'count', 'sum', 'avg', 'min', 'max', 'first', 'last', 'distinct', 'list', 'set', 'map', 'expand', 'coalesce', 'ifnull', 'if',
+  'abs', 'date', 'sysdate',
+  // moves as functions, from the current row (`in` is above)
+  'out', 'both', 'oute', 'ine', 'bothe', 'outv', 'inv', 'bothv',
+]);
+/** Pure value methods, safe on any receiver. */
+export const OPERATOR_QUERY_METHODS: ReadonlySet<string> = new Set([
+  'tolowercase', 'touppercase', 'trim', 'length', 'size', 'left', 'right', 'substring', 'replace', 'indexof', 'split', 'prefix',
+  'append', 'charat', 'asstring', 'asinteger', 'aslong', 'asfloat', 'asdecimal', 'asboolean', 'asdate', 'asdatetime',
+]);
+/**
+ * Moves leave a row over its own edges, so they need a computed receiver. After
+ * a bare name the store first looks for a function of that dotted name
+ * (`text.format`, `vector.neighbors`), and a `x.out` an upgrade adds must not
+ * pass for a move.
+ */
+export const OPERATOR_QUERY_MOVES: ReadonlySet<string> = new Set(['out', 'in', 'both', 'oute', 'ine', 'bothe', 'outv', 'inv', 'bothv']);
+
+function refuseOperatorSyntax(syntax: string): never {
+  const allowed = [...OPERATOR_QUERY_FUNCTIONS, ...[...OPERATOR_QUERY_METHODS, ...OPERATOR_QUERY_MOVES].map((m) => `.${m}`)].join(', ');
+  throw new BadRequestException(t('error.graph.unsupportedSyntax', { syntax, allowed }));
+}
+
+/**
+ * Every `(` must open a group or a call on the list. The look is backwards from
+ * the paren rather than for `name(`, so an unexpected character before one is
+ * refused rather than missed.
+ */
+function refuseUnlistedCalls(q: string): void {
+  for (const { index } of q.matchAll(/\(/g)) {
+    const before = q.slice(0, index).trimEnd();
+    const name = /[\p{L}\p{N}_$@]+$/u.exec(before)?.[0];
+    if (!name) {
+      if (!/[(,=<>+\-*/%!|&[{:?]$/.test(before)) refuseOperatorSyntax(`${before.slice(-1)}(`);
+      continue;
+    }
+    const head = before.slice(0, -name.length).trimEnd();
+    const isMethod = head.endsWith('.');
+    const called = name.toLowerCase();
+    const allowed = isMethod
+      ? OPERATOR_QUERY_METHODS.has(called) || (OPERATOR_QUERY_MOVES.has(called) && /[)\]]\s*\.$/.test(head))
+      : OPERATOR_QUERY_FUNCTIONS.has(called);
+    if (!allowed) refuseOperatorSyntax(`${isMethod ? '.' : ''}${name}(`);
+  }
+}
 
 /**
  * The tenant fence of the trusted-operator query (#589). Every `FROM <Type>`
@@ -1738,9 +1807,9 @@ const OPERATOR_QUERY_TYPES: readonly string[] = [...WORKSPACE_VERTEX_TYPES, ...R
  * predicate narrows what the query reads rather than what it returns — a
  * count, a GROUP BY or an inner LIMIT then means what it says. Any other
  * target (a RID, `schema:`, an unscoped type such as HAS_CHUNK) is refused,
- * and so is syntax that could reach a record past a FROM this scan sees:
- * comments, `#` (RID literals), MATCH and the by-name readers. String literals are not parsed, so
- * one holding `from x` or `--` is refused too — the fence errs closed.
+ * and so are comments, `#` (RID literals), backticks, MATCH and any call off
+ * the allowlist (#788). String literals are not parsed, so one holding
+ * `from x`, `--` or `foo (bar)` is refused too — the fence errs closed.
  */
 export function scopeOperatorQuery(query: string): string {
   const q = query.trim().replace(/;+\s*$/, '');
@@ -1750,11 +1819,9 @@ export function scopeOperatorQuery(query: string): string {
   if (forbidden.test(q)) {
     throw new BadRequestException(t('error.graph.writeKeyword'));
   }
-  // Besides comments, RIDs and MATCH: backtick-quoted names, and the
-  // functions that read an index or a type by name rather than through a FROM
-  // (ArcadeDB 26: eval, search_*, vector.neighbors & co, promql, ts.*, load csv).
-  const syntax = /\/\*|\*\/|--|\/\/|#|`|\bmatch\b|\beval\s*\(|\bsearch_\w+|\bvector\w*\s*[.(]|\bpromql\b|\bts\s*[._]|\bload_?csv/i.exec(q);
-  if (syntax) throw new BadRequestException(t('error.graph.unsupportedSyntax', { syntax: syntax[0] }));
+  const syntax = /\/\*|\*\/|--|\/\/|#|`|\bmatch\b/i.exec(q);
+  if (syntax) refuseOperatorSyntax(syntax[0]);
+  refuseUnlistedCalls(q);
 
   const types = OPERATOR_QUERY_TYPES.join(', ');
   let targets = 0;

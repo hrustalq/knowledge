@@ -392,7 +392,7 @@ Redis is down. Discovery fails open.
 ## The trusted-operator escape hatch
 
 `POST /v1/graph/query` (and MCP `knowledge_query_graph`) is the one way to ask
-the graph an arbitrary question. It is fenced on five sides:
+the graph an arbitrary question. It is fenced on six sides:
 
 1. **Single `SELECT` only**, enforced by a keyword blocklist.
 2. **Row-capped** by `GRAPH_QUERY_MAX_ROWS`.
@@ -406,14 +406,23 @@ the graph an arbitrary question. It is fenced on five sides:
    `WORKSPACE_VERTEX_TYPES` and the relation edges in `RELATION_EDGE_TYPES`
    (`OPERATOR_QUERY_TYPES`). Anything else after `FROM` (a RID, `schema:types`,
    `HAS_CHUNK`, which stores no `workspaceId`) is a 400 that lists the allowed
-   types, and so is syntax that could reach a record past a `FROM` the scan
-   sees: comments, `#`, backticks, `MATCH`, and the functions that read an
-   index or a type by name (`eval`, `search_*`, `vector.neighbors` and its
-   siblings, `promql`, `ts.*`, CSV loading). That list is ArcadeDB 26's; an
-   ArcadeDB upgrade that adds a by-name reader must add it there. String
-   literals are not parsed, so the fence errs closed. As a second line, a returned row carrying another
-   tenant's `workspaceId` is dropped.
-5. **Audited** into `audit_logs`, readable at `GET /v1/audit-logs` (admin).
+   types. Comments, `#`, backticks and `MATCH` are refused too.
+5. **Only calls on an allowlist** (#788): every `(` must open a group or follow
+   a name in `OPERATOR_QUERY_FUNCTIONS`, or `OPERATOR_QUERY_METHODS` after a dot.
+   A move (`.out()`, `OPERATOR_QUERY_MOVES`) also needs a computed receiver,
+   because after a bare name the store looks for a dotted function first. For the
+   same reason `text.toLowerCase()` fails on the store, since `text` is one of its
+   function namespaces: write `(text).toLowerCase()`.
+   This is what stops `.asRecord()` and `.asRID()`, which turn a string built at
+   query time into a record of any workspace, and `shortestPath` and its kin,
+   which walk from record ids they are handed. An ArcadeDB upgrade that adds a
+   reader fails closed; adding a name to a list is a decision to re-run
+   `test/operator-query.e2e-spec.ts`, which tries each entry against a real store
+   with two workspaces. String literals are not parsed, so a value holding
+   `foo (bar)` is refused as well: the fence errs closed. As a second line, a
+   returned row holding another tenant's `workspaceId` at any depth is dropped.
+   That cannot catch a projected scalar, which is why it is the second line.
+6. **Audited** into `audit_logs`, readable at `GET /v1/audit-logs` (admin).
    The row carries `aclBypass: true`: the query reads the stores past every page
    restriction, as only an admin operator may.
 

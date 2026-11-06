@@ -58,6 +58,60 @@ describe('scopeOperatorQuery', () => {
     expect(() => scopeOperatorQuery(query)).toThrow(/unsupportedSyntax/);
   });
 
+  const asRid = "(@rid.asString().left(1) + '1:1')";
+
+  it.each([
+    // The bypasses of #788: a record built from a string at query time.
+    `SELECT ${asRid}.asRecord().text AS leak FROM Entity`,
+    `SELECT ${asRid}.asRID().text AS leak FROM Entity`,
+    `SELECT ${asRid}.asRecord() AS leak FROM Entity`,
+    `SELECT '\\u00231:1'.asRecord().text AS leak FROM Entity`,
+    // Spelled differently, to the scan.
+    `SELECT ${asRid}.ASRECORD() FROM Entity`,
+    `SELECT ${asRid} . asRecord  () FROM Entity`,
+    `SELECT asRecord(${asRid}) FROM Entity`,
+    // Graph functions that walk from a record id they are handed.
+    `SELECT shortestPath(@rid, ${asRid}) FROM Entity`,
+    `SELECT dijkstra(@rid, ${asRid}, 'w') FROM Entity`,
+    // Off the list means refused: a reader a later ArcadeDB adds fails closed.
+    'SELECT someNewReader(1) FROM Entity',
+    'SELECT name.someNewReader() FROM Entity',
+    'SELECT ts.first(name) FROM Entity',
+    "SELECT promql('up') FROM Entity",
+    // After a bare name the store looks for a dotted function first, so a move needs a computed receiver.
+    "SELECT someNamespace.out('X') FROM Entity",
+    "SELECT text.format('%s') FROM Entity",
+    // A function is not a method, or the other way round.
+    'SELECT name.count() FROM Entity',
+    "SELECT toLowerCase('X') FROM Entity",
+    // A paren after something that is neither a name nor an operator.
+    "SELECT 'x'(1) FROM Entity",
+    'SELECT (name)(1) FROM Entity',
+    'SELECT name[0](1) FROM Entity',
+    'SELECT name.(1) FROM Entity',
+    'SELECT $fn(1) FROM Entity',
+    // Strings are not parsed: this errs closed, and the 400 says so.
+    "SELECT FROM Entity WHERE name = 'billing (prod)'",
+  ])('refuses a call off the allowlist: %s', (query) => {
+    expect(() => scopeOperatorQuery(query)).toThrow(/unsupportedSyntax/);
+  });
+
+  it.each([
+    'SELECT coalesce(name, entityKey) AS label, (1 + 2) AS three FROM Entity',
+    "SELECT out('DESCRIBES').title FROM Document",
+    "SELECT in('DESCRIBES').title AS pages, name.toLowerCase().left(3) AS head FROM Entity",
+    "SELECT expand(out('DESCRIBES')) FROM Document",
+    "SELECT out('DESCRIBES').in('DESCRIBES').title AS peers FROM Document",
+    'SELECT (text).toLowerCase() AS t, name.trim() AS n FROM Chunk',
+    'SELECT FROM (TRAVERSE out() FROM Document) WHERE entityType IS NOT NULL',
+    'SELECT FROM Entity WHERE a = 1 AND (b = 2 OR NOT (c = 3))',
+    "SELECT FROM Entity WHERE entityKey IN (SELECT targetKey FROM DESCRIBES WHERE live = true)",
+    "SELECT FROM Chunk WHERE text LIKE '%(v2)%'",
+    "SELECT COUNT(*) AS n, MAX(idx) AS top FROM Chunk WHERE createdAt > date('2026-01-01')",
+  ])('keeps what an operator needs: %s', (query) => {
+    expect(scopeOperatorQuery(query)).toContain(':workspaceId');
+  });
+
   it('refuses a query with no FROM', () => {
     expect(() => scopeOperatorQuery('SELECT 1')).toThrow(/noTarget/);
   });
@@ -82,6 +136,18 @@ describe('GraphService.operatorQuery', () => {
     const out = await graph.operatorQuery('ws-a', 'SELECT count(*) AS n FROM Entity', 10);
     expect(sent).toBe(`SELECT FROM ( SELECT count(*) AS n ${ENTITY} ) LIMIT 11`);
     expect(out.rows).toEqual([{ n: 2 }, { workspaceId: 'ws-a', entityKey: 'op:a' }]);
+  });
+
+  it("drops a row holding another tenant's workspaceId at any depth, and keeps its own", async () => {
+    const own = [{ page: { workspaceId: 'ws-a', title: 'ours' } }, { pages: [{ workspaceId: 'ws-a' }] }, { title: null, tags: ['x'] }];
+    const foreign = [
+      { leak: { workspaceId: 'ws-b', text: 'secret' } },
+      { leak: [{ workspaceId: 'ws-a' }, { workspaceId: 'ws-b' }] },
+      { a: { b: [{ c: { workspaceId: 'ws-b' } }] } },
+    ];
+    const graph = graphWith((async () => [...own, ...foreign]) as ArcadeClient['query']);
+    const out = await graph.operatorQuery('ws-a', 'SELECT FROM Entity', 10);
+    expect(out.rows).toEqual(own);
   });
 
   it("turns ArcadeDB's refusal into a 400 with its reason, and leaves an outage alone", async () => {

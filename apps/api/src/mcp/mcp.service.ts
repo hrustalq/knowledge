@@ -2156,7 +2156,8 @@ export class McpService {
           'Community [communityId, level, parentId, title, summary, members], ChatChunk [chunkId, bindingId], ' +
           `and the relation edges ${RELATION_EDGE_TYPES.join(', ')} ` +
           '[documentId, revisionId, targetKey, live, extractor, confidence, snippet; out = Document, in = Entity]. ' +
-          'Use @type (not @class) for the type name. Refused: other targets (V, schema:*, record ids), comments, MATCH.',
+          'Use @type (not @class) for the type name. Refused: other targets (V, schema:*, record ids), comments, MATCH, ' +
+          'and any function or method off the allowlist (the error lists it).',
         inputSchema: {
           workspaceId: z.string().uuid(),
           query: z

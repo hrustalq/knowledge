@@ -35,6 +35,11 @@ in the pull request that introduces them — see
   page, and the feedback list no longer shows such a page's title. An API spec diff answers only for revisions of the page
   in the URL, cached or not. A provider's Test result is written only to that workspace's own provider. A connector's sync
   link can be removed only through that connector, and any other id now returns 404.
+- **A raw graph query can no longer read another workspace's records** (#788). `POST /v1/graph/query` and
+  `knowledge_query_graph` now accept only a listed set of functions and methods, so anything else gets a 400 that names it
+  and shows the list, and a function a later ArcadeDB adds is refused by default. A returned row holding another
+  workspace's id at any depth is dropped. A string value with a word before a parenthesis, such as `'billing (prod)'`, is
+  also refused, because strings are not parsed. Use a `LIKE` pattern with `%` before the parenthesis instead.
 
 ## [0.45.2] — 2026-11-05
 

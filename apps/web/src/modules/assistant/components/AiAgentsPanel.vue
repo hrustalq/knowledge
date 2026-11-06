@@ -16,9 +16,9 @@ import {
   nextScheduledRun,
   type AgentScheduleKind,
   type AiAgentSummary,
-  type AiProviderSummary,
+  type AiModelSummary,
   type ListAiAgentsResponse,
-  type ListAiProvidersResponse,
+  type ListAiModelsResponse,
   type ListConnectorsResponse,
 } from '@knowledge/contracts'
 import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
@@ -51,6 +51,7 @@ import {
 } from '@/shared/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 import AgentTriggersEditor from './AgentTriggersEditor.vue'
+import AiModelOptions from './AiModelOptions.vue'
 import AgentRecipesDialog from './AgentRecipesDialog.vue'
 
 const { t } = useI18n()
@@ -61,10 +62,8 @@ const workspaceId = getWorkspaceId()
 const query = useQuery(apiQueryOptions('/v1/ai/agents', { query: { workspaceId } }))
 const agents = computed(() => (query.data.value as ListAiAgentsResponse | undefined)?.agents ?? [])
 
-const providersQuery = useQuery(apiQueryOptions('/v1/ai/providers', { query: { workspaceId } }))
-const providers = computed<AiProviderSummary[]>(
-  () => (providersQuery.data.value as ListAiProvidersResponse | undefined)?.providers ?? [],
-)
+const modelsQuery = useQuery(apiQueryOptions('/v1/ai/models', { query: { workspaceId } }))
+const models = computed<AiModelSummary[]>(() => (modelsQuery.data.value as ListAiModelsResponse | undefined)?.models ?? [])
 
 const invalidates = () => [['/v1/ai/agents'], ['/v1/ai/agents/choices']]
 const createAgent = useApiMutation('post', '/v1/ai/agents', { invalidates })
@@ -106,7 +105,7 @@ const blank = {
   description: '',
   instructions: '',
   tools: [] as string[],
-  providerId: ROUTED,
+  modelId: ROUTED,
   scheduleEnabled: false,
   scheduleKind: 'interval' as AgentScheduleKind,
   scheduleMinutes: null as number | null,
@@ -139,7 +138,7 @@ function openEdit(agent: AiAgentSummary) {
     description: agent.description,
     instructions: agent.instructions,
     tools: [...agent.tools],
-    providerId: agent.providerId ?? ROUTED,
+    modelId: agent.modelId ?? ROUTED,
     scheduleEnabled: agent.scheduleEnabled,
     scheduleKind: agent.scheduleKind,
     scheduleMinutes: agent.scheduleMinutes,
@@ -248,7 +247,7 @@ async function submit() {
           description: f.description.trim(),
           instructions: f.instructions,
           tools: f.tools,
-          providerId: f.providerId === ROUTED ? null : f.providerId,
+          modelId: f.modelId === ROUTED ? null : f.modelId,
         },
       })
       toast.success(t('ai.agents.created'))
@@ -262,7 +261,7 @@ async function submit() {
         description?: string
         instructions?: string
         tools?: string[]
-        providerId?: string | null
+        modelId?: string | null
         scheduleEnabled?: boolean
         scheduleKind?: AgentScheduleKind | null
         scheduleMinutes?: number | null
@@ -275,7 +274,7 @@ async function submit() {
       if (f.description !== s.description) body.description = f.description.trim()
       if (f.instructions !== s.instructions) body.instructions = f.instructions
       if (JSON.stringify([...f.tools].sort()) !== JSON.stringify([...s.tools].sort())) body.tools = f.tools
-      if (f.providerId !== s.providerId) body.providerId = f.providerId === ROUTED ? null : f.providerId
+      if (f.modelId !== s.modelId) body.modelId = f.modelId === ROUTED ? null : f.modelId
       if (f.scheduleEnabled !== s.scheduleEnabled) body.scheduleEnabled = f.scheduleEnabled
       if (f.scheduleKind !== s.scheduleKind) body.scheduleKind = f.scheduleKind
       if (f.scheduleMinutes !== s.scheduleMinutes) body.scheduleMinutes = f.scheduleMinutes
@@ -428,7 +427,8 @@ async function remove(agent: AiAgentSummary) {
             </button>
           </TableCell>
           <TableCell>
-            <span class="text-xs">{{ agent.providerName ?? t('ai.agents.routed', { purpose: agent.purpose }) }}</span>
+            <span class="break-all font-mono text-xs">{{ agent.model }}</span>
+            <span v-if="!agent.modelId" class="text-muted-foreground block text-caption">{{ t('ai.agents.routed', { purpose: agent.purpose }) }}</span>
             <span class="text-muted-foreground block font-mono text-caption">{{ t('count.tools', { n: agent.tools.length }, agent.tools.length) }}</span>
           </TableCell>
           <TableCell>
@@ -556,17 +556,15 @@ async function remove(agent: AiAgentSummary) {
           </div>
 
           <label class="block space-y-1">
-            <span class="text-muted-foreground text-xs font-medium">{{ t('ai.agents.provider') }}</span>
+            <span class="text-muted-foreground text-xs font-medium">{{ t('ai.agents.model') }}</span>
             <Select
-              :model-value="form.providerId"
-              @update:model-value="form.providerId = String($event ?? ROUTED)"
+              :model-value="form.modelId"
+              @update:model-value="form.modelId = String($event ?? ROUTED)"
             >
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem :value="ROUTED">{{ t('ai.agents.followRoute') }}</SelectItem>
-                <SelectItem v-for="p in providers.filter((x) => x.enabled)" :key="p.id" :value="p.id">
-                  {{ p.name }}
-                </SelectItem>
+                <AiModelOptions :models="models" :selected="form.modelId" />
               </SelectContent>
             </Select>
           </label>

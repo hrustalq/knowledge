@@ -63,11 +63,11 @@ export class ConnectorLinksService {
     return row;
   }
 
-  async remove(linkId: string): Promise<void> {
-    const row = await this.prisma.connectorLink.findUnique({ where: { id: linkId } });
-    if (!row) throw new NotFoundException(t('error.connector.linkNotFound', { id: linkId }));
+  /** Only through the connector that owns the link: the route authorized that connector, not the link id (#789). */
+  async remove(connectorId: string, linkId: string): Promise<void> {
     // The page stays: unlinking says "stop syncing this", not "delete it".
-    await this.prisma.connectorLink.delete({ where: { id: linkId } });
+    const { count } = await this.prisma.connectorLink.deleteMany({ where: { id: linkId, connectorId } });
+    if (count === 0) throw new NotFoundException(t('error.connector.linkNotFound', { id: linkId }));
   }
 
   private async titlesFor(documentIds: string[]): Promise<Map<string, string>> {

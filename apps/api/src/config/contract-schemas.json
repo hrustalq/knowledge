@@ -1671,9 +1671,12 @@
           "type": "string"
         }
       },
-      "providerId": {
+      "modelId": {
         "type": "string",
         "nullable": true
+      },
+      "model": {
+        "type": "string"
       },
       "providerName": {
         "type": "string",
@@ -1780,7 +1783,8 @@
       "instructions",
       "tools",
       "skillIds",
-      "providerId",
+      "modelId",
+      "model",
       "providerName",
       "temperature",
       "maxToolCalls",
@@ -1864,6 +1868,110 @@
       "latencyMs"
     ]
   },
+  "AiModelChoice": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "code": {
+        "type": "string"
+      },
+      "providerName": {
+        "type": "string",
+        "nullable": true
+      }
+    },
+    "required": [
+      "id",
+      "code",
+      "providerName"
+    ]
+  },
+  "AiModelSource": {
+    "type": "string",
+    "enum": [
+      "fetched",
+      "manual"
+    ]
+  },
+  "AiModelSummary": {
+    "type": "object",
+    "properties": {
+      "pricePromptPerMTok": {
+        "type": "number",
+        "nullable": true
+      },
+      "priceCompletionPerMTok": {
+        "type": "number",
+        "nullable": true
+      },
+      "priceCachedPerMTok": {
+        "type": "number",
+        "nullable": true
+      },
+      "priceCurrency": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/CostCurrency"
+          }
+        ],
+        "nullable": true
+      },
+      "id": {
+        "type": "string"
+      },
+      "workspaceId": {
+        "type": "string"
+      },
+      "providerId": {
+        "type": "string",
+        "nullable": true
+      },
+      "providerName": {
+        "type": "string",
+        "nullable": true
+      },
+      "code": {
+        "type": "string"
+      },
+      "source": {
+        "$ref": "#/components/schemas/AiModelSource"
+      },
+      "inChat": {
+        "type": "boolean"
+      },
+      "available": {
+        "type": "boolean"
+      },
+      "kind": {
+        "$ref": "#/components/schemas/AiProvider"
+      },
+      "capabilities": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentCapability"
+            }
+          }
+        ],
+        "nullable": true
+      }
+    },
+    "required": [
+      "id",
+      "workspaceId",
+      "providerId",
+      "providerName",
+      "code",
+      "source",
+      "inChat",
+      "available",
+      "kind",
+      "capabilities"
+    ]
+  },
   "AiMyUsageResponse": {
     "type": "object",
     "properties": {
@@ -1876,16 +1984,18 @@
       "totalTokens": {
         "type": "number"
       },
-      "costUsdMicros": {
-        "type": "number",
-        "nullable": true
+      "costs": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/CostAmount"
+        }
       }
     },
     "required": [
       "budget",
       "calls",
       "totalTokens",
-      "costUsdMicros"
+      "costs"
     ]
   },
   "AiPageActionsResponse": {
@@ -2050,25 +2160,6 @@
       "gen-api"
     ]
   },
-  "AiProviderChoice": {
-    "type": "object",
-    "properties": {
-      "id": {
-        "type": "string"
-      },
-      "name": {
-        "type": "string"
-      },
-      "model": {
-        "type": "string"
-      }
-    },
-    "required": [
-      "id",
-      "name",
-      "model"
-    ]
-  },
   "AiProviderKind": {
     "type": "string",
     "enum": [
@@ -2104,9 +2195,6 @@
         "type": "string",
         "nullable": true
       },
-      "model": {
-        "type": "string"
-      },
       "hasApiKey": {
         "type": "boolean"
       },
@@ -2123,14 +2211,6 @@
         "nullable": true
       },
       "timeoutMs": {
-        "type": "number",
-        "nullable": true
-      },
-      "pricePromptPerMTok": {
-        "type": "number",
-        "nullable": true
-      },
-      "priceCompletionPerMTok": {
         "type": "number",
         "nullable": true
       },
@@ -2153,17 +2233,6 @@
       },
       "updatedAt": {
         "type": "string"
-      },
-      "capabilities": {
-        "anyOf": [
-          {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AgentCapability"
-            }
-          }
-        ],
-        "nullable": true
       }
     },
     "required": [
@@ -2172,21 +2241,17 @@
       "name",
       "provider",
       "baseUrl",
-      "model",
       "hasApiKey",
       "apiKeyHint",
       "temperature",
       "maxToolCalls",
       "timeoutMs",
-      "pricePromptPerMTok",
-      "priceCompletionPerMTok",
       "enabled",
       "status",
       "lastError",
       "lastCheckedAt",
       "createdAt",
-      "updatedAt",
-      "capabilities"
+      "updatedAt"
     ]
   },
   "AiPurpose": {
@@ -2273,6 +2338,18 @@
         "type": "number",
         "nullable": true
       },
+      "priceCachedPerMTok": {
+        "type": "number",
+        "nullable": true
+      },
+      "priceCurrency": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/CostCurrency"
+          }
+        ],
+        "nullable": true
+      },
       "workspaceMonthlyTokenBudget": {
         "type": "number",
         "nullable": true
@@ -2332,6 +2409,8 @@
       "agentModeEnabled",
       "pricePromptPerMTok",
       "priceCompletionPerMTok",
+      "priceCachedPerMTok",
+      "priceCurrency",
       "workspaceMonthlyTokenBudget",
       "defaultUserMonthlyTokenBudget",
       "enforceBudget",
@@ -2519,9 +2598,11 @@
       "totalTokens": {
         "type": "number"
       },
-      "costUsdMicros": {
-        "type": "number",
-        "nullable": true
+      "costs": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/CostAmount"
+        }
       },
       "errors": {
         "type": "number"
@@ -2534,7 +2615,7 @@
       "promptTokens",
       "completionTokens",
       "totalTokens",
-      "costUsdMicros",
+      "costs",
       "errors"
     ]
   },
@@ -2575,9 +2656,12 @@
       "estimated": {
         "type": "boolean"
       },
-      "costUsdMicros": {
+      "costMicros": {
         "type": "number",
         "nullable": true
+      },
+      "costCurrency": {
+        "$ref": "#/components/schemas/CostCurrency"
       },
       "durationMs": {
         "type": "number"
@@ -2620,7 +2704,8 @@
       "completionTokens",
       "totalTokens",
       "estimated",
-      "costUsdMicros",
+      "costMicros",
+      "costCurrency",
       "durationMs",
       "ok",
       "errorCode",
@@ -2702,9 +2787,11 @@
           "totalTokens": {
             "type": "number"
           },
-          "costUsdMicros": {
-            "type": "number",
-            "nullable": true
+          "costs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CostAmount"
+            }
           },
           "unpricedCalls": {
             "type": "number"
@@ -2718,7 +2805,7 @@
           "promptTokens",
           "completionTokens",
           "totalTokens",
-          "costUsdMicros",
+          "costs",
           "unpricedCalls",
           "errors"
         ]
@@ -2757,16 +2844,18 @@
       "calls": {
         "type": "number"
       },
-      "costUsdMicros": {
-        "type": "number",
-        "nullable": true
+      "costs": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/CostAmount"
+        }
       }
     },
     "required": [
       "date",
       "totalTokens",
       "calls",
-      "costUsdMicros"
+      "costs"
     ]
   },
   "AnalyticsAgentsResponse": {
@@ -5786,7 +5875,7 @@
         "type": "string",
         "nullable": true
       },
-      "providerId": {
+      "modelId": {
         "type": "string",
         "nullable": true
       },
@@ -5808,7 +5897,7 @@
       "workspaceId",
       "documentId",
       "title",
-      "providerId",
+      "modelId",
       "createdBy",
       "createdAt",
       "updatedAt"
@@ -9334,6 +9423,28 @@
       "draft"
     ]
   },
+  "CostAmount": {
+    "type": "object",
+    "properties": {
+      "micros": {
+        "type": "number"
+      },
+      "currency": {
+        "$ref": "#/components/schemas/CostCurrency"
+      }
+    },
+    "required": [
+      "micros",
+      "currency"
+    ]
+  },
+  "CostCurrency": {
+    "type": "string",
+    "enum": [
+      "USD",
+      "RUB"
+    ]
+  },
   "CoverageRecommendation": {
     "type": "string",
     "enum": [
@@ -10038,6 +10149,27 @@
     "required": [
       "kind",
       "text"
+    ]
+  },
+  "DiscoverAiModelsResponse": {
+    "type": "object",
+    "properties": {
+      "ok": {
+        "type": "boolean"
+      },
+      "codes": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "error": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "ok",
+      "codes"
     ]
   },
   "DismissAgentFindingResponse": {
@@ -14766,6 +14898,39 @@
       "users"
     ]
   },
+  "ListAiModelChoicesResponse": {
+    "type": "object",
+    "properties": {
+      "models": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/AiModelChoice"
+        }
+      },
+      "defaultModel": {
+        "type": "string",
+        "nullable": true
+      }
+    },
+    "required": [
+      "models",
+      "defaultModel"
+    ]
+  },
+  "ListAiModelsResponse": {
+    "type": "object",
+    "properties": {
+      "models": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/AiModelSummary"
+        }
+      }
+    },
+    "required": [
+      "models"
+    ]
+  },
   "ListAiPluginsResponse": {
     "type": "object",
     "properties": {
@@ -14778,25 +14943,6 @@
     },
     "required": [
       "plugins"
-    ]
-  },
-  "ListAiProviderChoicesResponse": {
-    "type": "object",
-    "properties": {
-      "providers": {
-        "type": "array",
-        "items": {
-          "$ref": "#/components/schemas/AiProviderChoice"
-        }
-      },
-      "defaultProviderId": {
-        "type": "string",
-        "nullable": true
-      }
-    },
-    "required": [
-      "providers",
-      "defaultProviderId"
     ]
   },
   "ListAiProvidersResponse": {
@@ -24376,6 +24522,10 @@
         "items": {
           "type": "string"
         }
+      },
+      "modelId": {
+        "type": "string",
+        "nullable": true
       },
       "providerId": {
         "type": "string",

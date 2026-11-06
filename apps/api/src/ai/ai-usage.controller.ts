@@ -95,7 +95,7 @@ export class AiUsageController {
       budget,
       calls: mine?.calls ?? 0,
       totalTokens: mine?.totalTokens ?? 0,
-      costUsdMicros: mine?.costUsdMicros ?? null,
+      costs: mine?.costs ?? [],
     };
   }
 

@@ -472,6 +472,66 @@
     },
     {
       "method": "GET",
+      "path": "/v1/ai/models",
+      "tag": "ai",
+      "summary": "Every model of every provider, including those of a provider that is off",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/ai/models",
+      "tag": "ai",
+      "summary": "Add models to a provider by code name. One it already has is skipped.",
+      "role": "admin",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/ai/models/{id}",
+      "tag": "ai",
+      "summary": "Remove a model, clearing every route, agent and thread pinned to it",
+      "role": "admin",
+      "source": "ai-model",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/ai/models/{id}",
+      "tag": "ai",
+      "summary": "Update a model: whether it is offered in chat, its prices, its capabilities",
+      "role": "admin",
+      "source": "ai-model",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/ai/models/choices",
+      "tag": "ai",
+      "summary": "The models a member may pick for their chat thread: code and provider name, no endpoints or credentials",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/ai/models/discover",
+      "tag": "ai",
+      "summary": "Ask a provider what it serves. Adds nothing, and reports the upstream error verbatim.",
+      "role": "admin",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/ai/page-actions",
       "tag": "ai",
       "summary": "What the page AI actions menu may offer (issue #68): the external \"Open in…\" switch, clamped by AI_EXTERNAL_ACTIONS_ENABLED, and the inline-prompt size limit. Readable by every member.",
@@ -554,7 +614,7 @@
       "method": "DELETE",
       "path": "/v1/ai/providers/{id}",
       "tag": "ai",
-      "summary": "Delete a profile, clearing every route and thread pinned to it",
+      "summary": "Delete a provider and its models, clearing every route, agent and thread pinned to them",
       "role": "admin",
       "source": "ai-provider",
       "public": false,
@@ -567,16 +627,6 @@
       "summary": "Update a profile. Omit apiKey to keep the stored credential; null clears it.",
       "role": "admin",
       "source": "ai-provider",
-      "public": false,
-      "platformAdmin": false
-    },
-    {
-      "method": "GET",
-      "path": "/v1/ai/providers/choices",
-      "tag": "ai",
-      "summary": "Names and models a member may pick for their chat thread — no endpoints or credentials",
-      "role": "viewer",
-      "source": "query",
       "public": false,
       "platformAdmin": false
     },
@@ -1324,7 +1374,7 @@
       "method": "GET",
       "path": "/v1/assistant/threads",
       "tag": "assistant",
-      "summary": "List chat pane threads for a workspace, most recently active first (search + keyset pagination)",
+      "summary": "List the caller's own chat pane threads in a workspace, most recently active first (search + keyset pagination)",
       "role": "viewer",
       "source": "query",
       "public": false,
@@ -7008,7 +7058,7 @@
     },
     {
       "name": "knowledge_query_graph",
-      "description": "TRUSTED-OPERATOR ONLY (plan.md §9): read-only SQL over the graph store. Single SELECT statement, row-limited; every call is written to the audit log. Each FROM <Type> is narrowed to the workspace before the query reads it, so count(*), GROUP BY, LIMIT and subqueries work as written. FROM may name a subquery or one of these types (key fields in brackets): Document [documentId, title], DocumentRevision [revisionId, documentId], Chunk [chunkId, documentId, revisionId, idx, text, headingPath, live], Entity [entityKey e.g. op:* / component:* / service:*, entityType, name], Community [communityId, level, parentId, title, summary, members], ChatChunk [chunkId, bindingId], , [documentId, revisionId, targetKey, live, extractor, confidence, snippet; out = Document, in = Entity]. Use @type (not @class) for the type name. Refused: other targets (V, schema:*, record ids), comments, MATCH.",
+      "description": "TRUSTED-OPERATOR ONLY (plan.md §9): read-only SQL over the graph store. Single SELECT statement, row-limited; every call is written to the audit log. Each FROM <Type> is narrowed to the workspace before the query reads it, so count(*), GROUP BY, LIMIT and subqueries work as written. FROM may name a subquery or one of these types (key fields in brackets): Document [documentId, title], DocumentRevision [revisionId, documentId], Chunk [chunkId, documentId, revisionId, idx, text, headingPath, live], Entity [entityKey e.g. op:* / component:* / service:*, entityType, name], Community [communityId, level, parentId, title, summary, members], ChatChunk [chunkId, bindingId], , [documentId, revisionId, targetKey, live, extractor, confidence, snippet; out = Document, in = Entity]. Use @type (not @class) for the type name. Refused: other targets (V, schema:*, record ids), comments, MATCH, and any function or method off the allowlist (the error lists it).",
       "inputs": [
         {
           "name": "workspaceId",

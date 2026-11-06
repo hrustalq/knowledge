@@ -13,6 +13,88 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.46.0] — 2026-11-07
+
+### Breaking
+
+- **Usage responses report cost per currency.** `HTTP` `GET /v1/ai/usage` and `GET /v1/ai/usage/me` replace
+  `costUsdMicros` with `costs: [{ micros, currency }]` on totals, buckets and series, and `GET /v1/ai/usage/logs` replaces it
+  with `costMicros` and `costCurrency` (#793).
+  **Migration:** read `costs`, with one entry per currency and an empty list when nothing was priced. Do not add entries
+  of different currencies together.
+
+- **A route, an agent and a thread now pin a model, not a provider.** `HTTP` `PATCH /v1/ai/settings` takes
+  `chatModelId`, `reviewModelId`, `extractionModelId` and `decisionModelId` in place of the `*ProviderId` fields,
+  `routing` holds model ids, and `PATCH /v1/assistant/threads/:id` and the agent routes take `modelId`. Providers no
+  longer take or return `model`, prices or `capabilities`, and `GET /v1/ai/providers/choices` is now
+  `GET /v1/ai/models/choices` (#798).
+  **Migration:** read model ids from `GET /v1/ai/models`. Every existing provider got one model with the same id, so an
+  id you stored for a provider still works as that model's id. Set prices and capabilities with `PATCH /v1/ai/models/:id`.
+
+### Added
+
+- **A provider now lists the models it serves** (#798). Settings → AI → Configuration shows them under each provider,
+  including the default. **Fetch models** asks the provider what it has and adds the ones you tick; for a server with no
+  model list, type the code name. Price and capabilities belong to the model.
+- **Providers switch on and off from their row** (#798). While one is off, its models leave every picker and calls pinned
+  to them fall through to the next choice. Turning it back on restores those pins.
+- **Each agent can run on its own model** (#798), and **the chat picker lists models rather than providers**: every model
+  marked **In chat** on an enabled provider, grouped by provider. An agent can still use a model that is not in chat, and a
+  thread pinned to one that is switched off goes back to the workspace default on its next turn.
+
+### Changed
+
+- **Settings → AI → Configuration lists every provider in one place** (#792). "Default provider" and "Providers" are one
+  list: the default is the first row, added providers follow it, and **Add provider** is the last row. Each row shows
+  the work it serves, its model and endpoint, where its key comes from and its price, and **Test** checks that row.
+  The default now saves from its own dialog rather than the page's Save button, and **Routing** has its own section once
+  there is a provider to route to. Removing a provider now asks first.
+- **Each provider has its own price** (#792). The old "Cost estimate" prices only ever applied to the default, so a
+  routed provider on a model without a list price could not be priced from this page. A model with no price now says so
+  on its row.
+
+- **A pin that cannot run now tries the next choice** (#798). A thread pinned to a disabled provider used to skip the
+  agent's pin and the workspace route and land on the default config. It now tries each in turn.
+
+### Fixed
+
+- **AI settings no longer squeeze their controls beside the settings rails** (#792). In a 1360px window the controls got
+  about 200px and the Behavior fields overlapped. Sections now lay out by the width they actually have.
+- **Saving a provider or a route keeps your unsaved AI settings edits** (#792). The refetch used to reset the whole form.
+- **Four requests no longer reach another workspace's rows by id** (#789). A vote can no longer cite another workspace's
+  page, and the feedback list no longer shows such a page's title. An API spec diff answers only for revisions of the page
+  in the URL, cached or not. A provider's Test result is written only to that workspace's own provider. A connector's sync
+  link can be removed only through that connector, and any other id now returns 404.
+- **A raw graph query can no longer read another workspace's records** (#788). `POST /v1/graph/query` and
+  `knowledge_query_graph` now accept only a listed set of functions and methods, so anything else gets a 400 that names it
+  and shows the list, and a function a later ArcadeDB adds is refused by default. A returned row holding another
+  workspace's id at any depth is dropped. A string value with a word before a parenthesis, such as `'billing (prod)'`, is
+  also refused, because strings are not parsed. Use a `LIKE` pattern with `%` before the parenthesis instead.
+- **Transcription costs on Usage are no longer rubles shown as dollars** (#793). 1 ₽ of speech-to-text read as $1. gen-stt
+  reports rubles, so those rows now say ₽, and rows already stored are relabelled by the migration.
+- **Usage never adds rubles and dollars together** (#793). Totals and each row show one figure per currency, side by side.
+- **GenAPI chat costs are what GenAPI charged** (#793). Its proxy reports a cost in rubles on each call and Usage now stores
+  it, where it used to estimate from USD list prices. A call that reports none is estimated from GenAPI's ruble price list.
+  Older GenAPI rows keep their USD estimate.
+- **Cached prompt tokens cost less on Usage** (#793). They were charged at the full rate, which overstated the cost whenever
+  a provider's cache was hit. Token counts and budgets are unchanged.
+- **A provider's price can be in rubles, and can have a cached rate** (#793). The provider dialog has a currency and a cached
+  prompt price, and an existing price stays in USD.
+- **List prices were re-checked on 2026-11-07, and `deepseek-chat` and `deepseek-reasoner` were removed** (#793). DeepSeek no
+  longer lists them, so a provider on either shows no cost until it has its own price. `gpt-4-1` and Jev are now priced in
+  rubles, as GenAPI lists them.
+
+### Operations
+
+- **`20270102100000_ai_models` survives a rollback** (#798). It only adds: the `ai_models` table, `model_id` columns, and
+  a default on `ai_providers.model`. Each profile is copied to one model with the same id, and pins are copied across. The
+  previous image still runs against it, but it reads the old columns, so a rollback loses models added and pins set since.
+  The retired `*_provider_id`, `model`, price and capability columns go in a later release.
+
+- **Migration `20270101100000_usage_cost_currency` is additive and survives a rollback** (#793). It adds columns with safe
+  defaults and relabels stored gen-stt rows to RUB, and `cost_usd_micros` keeps its name. The previous image ignores the new
+  columns, so it keeps working after the migration. A transcription it writes in that window is labelled USD, and stays so.
+
 ## [0.45.2] — 2026-11-05
 
 ### Fixed
@@ -6122,7 +6204,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.45.2...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.46.0...HEAD
+[0.46.0]: https://github.com/hrustalq/knowledge/compare/v0.45.2...v0.46.0
 [0.45.2]: https://github.com/hrustalq/knowledge/compare/v0.45.1...v0.45.2
 [0.45.1]: https://github.com/hrustalq/knowledge/compare/v0.45.0...v0.45.1
 [0.45.0]: https://github.com/hrustalq/knowledge/compare/v0.44.1...v0.45.0

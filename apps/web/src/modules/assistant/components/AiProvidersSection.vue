@@ -1,151 +1,136 @@
 <script setup lang="ts">
-// Named provider profiles, and which purpose each one serves.
-//
-// A workspace with no profiles keeps the single default config below and this
-// section is just an invitation to add one — the whole feature is additive, so
-// the simple case must stay simple.
-import { useI18n } from 'vue-i18n'
+/**
+ * Every provider this workspace can call, in one list, and which work runs on
+ * which of them.
+ *
+ * The default config and the named profiles stay two things underneath: the
+ * default inherits the environment and is what every unrouted call falls through
+ * to, so it cannot be deleted or renamed. To the reader they are one list with a
+ * pinned first row, because "Default provider" and "Providers" as two sections
+ * asked them to learn that distinction before they could add a model.
+ */
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
-import { CircleCheck, CircleDashed, CircleX, Plus, RefreshCw, Trash2 } from 'lucide-vue-next'
-import type {
-  AiProviderSummary,
-  AiRouting,
-  DecisionSettings,
-  ListAiProvidersResponse,
-} from '@knowledge/contracts'
+import { Plus } from 'lucide-vue-next'
+import type { AiSettingsResponse, ListAiModelsResponse, ListAiProvidersResponse } from '@knowledge/contracts'
 import { api } from '@/shared/api/client'
+import { errorMessage } from '@/shared/api/errors'
 import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
-import { Badge } from '@/shared/ui/badge'
-import { Button } from '@/shared/ui/button'
-import { Checkbox } from '@/shared/ui/checkbox'
-import { Input } from '@/shared/ui/input'
+import { confirm } from '@/shared/ui/confirm'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/ui/dialog'
+import { Skeleton } from '@/shared/ui/skeleton'
+import { buildProviderRows, type ProviderDialogTarget, type ProviderRow } from '@/modules/assistant/model/provider-rows'
 import AiSettingsSection from './AiSettingsSection.vue'
 import AiDecisionRoute from './AiDecisionRoute.vue'
+import AiProviderRowItem from './AiProviderRow.vue'
+import AiProviderDialog from './AiProviderDialog.vue'
+import AiModelOptions from './AiModelOptions.vue'
 
 const { t } = useI18n()
 
-const props = defineProps<{
-  canManage: boolean
-  routing: AiRouting
-  decision: DecisionSettings
-  canStoreSecrets: boolean
-}>()
+const props = defineProps<{ canManage: boolean; settings: AiSettingsResponse }>()
 
 const workspaceId = getWorkspaceId()
 const queryClient = useQueryClient()
 const query = useQuery(apiQueryOptions('/v1/ai/providers', { query: { workspaceId } }))
 const providers = computed(() => (query.data.value as ListAiProvidersResponse | undefined)?.providers ?? [])
+const modelsQuery = useQuery(apiQueryOptions('/v1/ai/models', { query: { workspaceId } }))
+const models = computed(() => (modelsQuery.data.value as ListAiModelsResponse | undefined)?.models ?? [])
 
-const invalidates = () => [['/v1/ai/providers'], ['/v1/ai/settings'], ['/v1/ai/providers/choices']]
-const createProvider = useApiMutation('post', '/v1/ai/providers', { invalidates })
-const updateProvider = useApiMutation('patch', '/v1/ai/providers/{id}', { invalidates })
+const invalidates = () => [['/v1/ai/providers'], ['/v1/ai/settings'], ['/v1/ai/models'], ['/v1/ai/models/choices']]
 const deleteProvider = useApiMutation('delete', '/v1/ai/providers/{id}', { invalidates })
+const updateProvider = useApiMutation('patch', '/v1/ai/providers/{id}', { invalidates })
 const saveSettings = useApiMutation('patch', '/v1/ai/settings', { invalidates })
 
-// The three jobs a workspace might want on three different models.
-const PURPOSES = [
-  { key: 'chat', field: 'chatProviderId', label: t('ai.purpose.chat'), hint: t('ai.purpose.chatHint') },
-  { key: 'review', field: 'reviewProviderId', label: t('ai.purpose.review'), hint: t('ai.purpose.reviewHint') },
-  {
-    key: 'extraction',
-    field: 'extractionProviderId',
-    label: t('ai.purpose.extraction'),
-    hint: t('ai.purpose.extractionHint'),
-  },
-] as const
+/**
+ * A profile's last check is stored on its row. The default has no row to store
+ * one on, so its result lasts as long as the page: enough to read the answer to
+ * the button just pressed, and it does not pretend to be a health record.
+ */
+const defaultCheck = ref<{ status: 'ok' | 'error'; error: string | null } | null>(null)
 
-const open = ref(false)
-const editing = ref<AiProviderSummary | null>(null)
-const testingId = ref<string | null>(null)
-const form = ref({
-  name: '',
-  provider: 'deepseek' as 'deepseek' | 'gen-api' | 'openai-compatible',
-  baseUrl: '',
-  model: '',
-  apiKey: '',
-  enabled: true,
+const rows = computed<ProviderRow[]>(() =>
+  buildProviderRows(props.settings, providers.value, models.value).map((row) =>
+    row.isDefault && defaultCheck.value ? { ...row, status: defaultCheck.value.status, error: defaultCheck.value.error } : row,
+  ),
+)
+const defaultRowName = computed(() => {
+  const { provider, model } = props.settings
+  return provider === 'none' ? t('ai.providerRow.none') : model || provider
 })
 
-function openNew() {
-  editing.value = null
-  form.value = { name: '', provider: 'deepseek', baseUrl: '', model: '', apiKey: '', enabled: true }
-  open.value = true
+// --- dialog ---------------------------------------------------------------
+const dialogOpen = ref(false)
+const dialogTarget = ref<ProviderDialogTarget>({ kind: 'new' })
+
+function openDialog(target: ProviderDialogTarget) {
+  dialogTarget.value = target
+  dialogOpen.value = true
 }
 
-function openEdit(p: AiProviderSummary) {
-  editing.value = p
-  // apiKey stays empty: write-only, same convention as everywhere else here.
-  form.value = {
-    name: p.name,
-    provider: p.provider,
-    baseUrl: p.baseUrl ?? '',
-    model: p.model,
-    apiKey: '',
-    enabled: p.enabled,
-  }
-  open.value = true
+function edit(row: ProviderRow) {
+  const provider = providers.value.find((p) => p.id === row.id)
+  if (provider) openDialog({ kind: 'profile', provider })
+  else openDialog({ kind: 'default' })
 }
 
-async function submit() {
-  const f = form.value
-  const body = {
-    name: f.name.trim(),
-    provider: f.provider,
-    baseUrl: f.baseUrl.trim() || null,
-    model: f.model.trim(),
-    enabled: f.enabled,
-    ...(f.apiKey ? { apiKey: f.apiKey } : {}),
-  }
-  try {
-    if (editing.value) {
-      await updateProvider.mutateAsync({ path: { id: editing.value.id }, body })
-      toast.success(t('ai.providerUpdated'))
-    } else {
-      await createProvider.mutateAsync({ body: { workspaceId, ...body } })
-      toast.success(t('ai.providerAdded'))
-    }
-    open.value = false
-  } catch (e) {
-    toast.error((e as Error).message)
-  }
-}
+// --- row actions ----------------------------------------------------------
+const testingId = ref<string | null>(null)
 
-async function test(p: AiProviderSummary) {
-  testingId.value = p.id
+async function test(row: ProviderRow) {
+  testingId.value = row.id
+  const name = row.name ?? t('ai.default')
   try {
     const result = await api.post('/v1/ai/settings/test', {
-      body: { workspaceId, providerId: p.id },
+      body: { workspaceId, ...(row.isDefault ? { useDefault: true } : { providerId: row.id }) },
     })
-    if (result.ok) toast.success(t('ai.providerReached', { name: p.name, model: result.model, ms: result.latencyMs }))
-    else toast.error(t('ai.nameAndError', { name: p.name, error: result.error }))
+    if (row.isDefault) defaultCheck.value = { status: result.ok ? 'ok' : 'error', error: result.ok ? null : (result.error ?? null) }
+    if (result.ok) toast.success(t('ai.providerReached', { name, model: result.model, ms: result.latencyMs }))
+    else toast.error(t('ai.nameAndError', { name, error: result.error }))
   } catch (e) {
-    toast.error((e as Error).message)
+    toast.error(errorMessage(e, t))
   } finally {
     testingId.value = null
     void queryClient.invalidateQueries({ queryKey: ['/v1/ai/providers'] })
   }
 }
 
-async function remove(p: AiProviderSummary) {
+async function toggle(row: ProviderRow, enabled: boolean) {
   try {
-    await deleteProvider.mutateAsync({ path: { id: p.id } })
-    toast.success(t('ai.removedNamed', { name: p.name }))
+    await updateProvider.mutateAsync({ path: { id: row.id }, body: { enabled } })
   } catch (e) {
-    toast.error((e as Error).message)
+    toast.error(errorMessage(e, t))
   }
 }
+
+async function remove(row: ProviderRow) {
+  const name = row.name ?? ''
+  // Removing clears the routes that point at its models, and that work silently
+  // moves to the default, so the people who routed it should hear so first.
+  const ok = await confirm({
+    title: t('ai.removeNamed', { name }),
+    description: row.models.some((m) => m.serves.length) ? t('ai.providerRow.removeRoutedDesc') : t('ai.providerRow.removeDesc'),
+    action: t('common.remove'),
+    destructive: true,
+  })
+  if (!ok) return
+  try {
+    await deleteProvider.mutateAsync({ path: { id: row.id } })
+    toast.success(t('ai.removedNamed', { name }))
+  } catch (e) {
+    toast.error(errorMessage(e, t))
+  }
+}
+
+// --- routing --------------------------------------------------------------
+const PURPOSES = [
+  { key: 'chat', field: 'chatModelId' },
+  { key: 'review', field: 'reviewModelId' },
+  { key: 'extraction', field: 'extractionModelId' },
+] as const
 
 /**
  * reka-ui reserves the empty string for "nothing selected", so an option
@@ -158,163 +143,72 @@ async function route(field: string, value: string) {
   try {
     await saveSettings.mutateAsync({ body: { workspaceId, [field]: value === UNROUTED ? null : value } })
   } catch (e) {
-    toast.error((e as Error).message)
+    toast.error(errorMessage(e, t))
   }
-}
-
-function purposesServedBy(id: string): string[] {
-  const labels: string[] = PURPOSES.filter((p) => props.routing[p.key] === id).map((p) => p.label)
-  if (props.routing.decision === id) labels.push(t('ai.purpose.decision'))
-  return labels
 }
 </script>
 
 <template>
-  <AiSettingsSection
-    :title="t('ai.providers')"
-    :description="
-      providers.length
-        ? t('ai.providersDescRouted')
-        : t('ai.providersDescEmpty')
-    "
-  >
-    <ul v-if="providers.length" class="divide-y rounded-lg border">
-      <li v-for="p in providers" :key="p.id" class="flex flex-wrap items-center gap-3 px-3 py-2.5">
-        <CircleCheck v-if="p.status === 'ok'" class="size-4 shrink-0 text-panel-tip-ink" />
-        <CircleX v-else-if="p.status === 'error'" class="text-destructive size-4 shrink-0" />
-        <CircleDashed v-else class="text-muted-foreground size-4 shrink-0" />
-
-        <button class="min-w-0 flex-1 text-left" :disabled="!canManage" @click="openEdit(p)">
-          <span class="text-sm font-medium" :class="canManage && 'hover:text-primary'">{{ p.name }}</span>
-          <span class="text-muted-foreground block truncate font-mono text-xs">{{ p.model }}</span>
+  <AiSettingsSection :title="t('ai.providers')" :description="t('ai.providersDesc')">
+    <ul class="@container divide-y rounded-lg border">
+      <AiProviderRowItem
+        v-for="row in rows"
+        :key="row.id"
+        :row="row"
+        :can-manage="canManage"
+        :testing="testingId === row.id"
+        @edit="edit(row)"
+        @test="test(row)"
+        @remove="remove(row)"
+        @toggle="toggle(row, $event)"
+      />
+      <li v-if="query.isPending.value" class="px-3 py-3" aria-hidden="true">
+        <Skeleton class="h-4 w-48" />
+      </li>
+      <li v-if="canManage">
+        <button
+          type="button"
+          class="text-muted-foreground hover:text-foreground hover:bg-accent/50 focus-visible:ring-ring/50 flex w-full items-center gap-3 rounded-b-lg px-3 py-2.5 text-left text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-inset"
+          @click="openDialog({ kind: 'new' })"
+        >
+          <Plus class="size-4 shrink-0" aria-hidden="true" />
+          {{ t('ai.addProvider') }}
         </button>
-
-        <div class="flex flex-wrap items-center gap-1.5">
-          <Badge v-for="label in purposesServedBy(p.id)" :key="label" variant="secondary" class="font-normal">
-            {{ label }}
-          </Badge>
-          <Badge v-if="!p.enabled" variant="outline" class="text-muted-foreground font-normal">{{ t('ai.disabled') }}</Badge>
-        </div>
-
-        <div class="flex items-center gap-1">
-          <Button variant="ghost" size="sm" :disabled="!canManage || testingId === p.id" @click="test(p)">
-            <RefreshCw class="size-3.5" :class="testingId === p.id && 'animate-spin'" />
-            {{ t('ai.test') }}
-          </Button>
-          <Button v-if="canManage" variant="ghost" size="sm" :aria-label="t('ai.removeNamed', { name: p.name })" @click="remove(p)">
-            <Trash2 class="size-3.5" />
-          </Button>
-        </div>
       </li>
     </ul>
 
-    <p v-if="providers.some((p) => p.status === 'error')" class="text-destructive text-xs">
-      {{ providers.find((p) => p.status === 'error')?.lastError }}
-    </p>
+    <p v-if="query.isError.value" class="text-destructive text-xs">{{ errorMessage(query.error.value, t) }}</p>
 
-    <Button v-if="canManage" type="button" variant="outline" size="sm" @click="openNew">
-      <Plus class="size-3.5" /> {{ t('ai.addProvider') }}
-    </Button>
+    <AiProviderDialog v-model:open="dialogOpen" :target="dialogTarget" :settings="settings" />
+  </AiSettingsSection>
 
-    <!-- Routing only means anything once there is something to route to. -->
-    <div v-if="providers.length" class="space-y-3 border-t pt-4">
-      <p class="text-xs font-medium">{{ t('ai.routing') }}</p>
+  <!-- Routing only means anything once there is something to route to. -->
+  <AiSettingsSection v-if="models.length" :title="t('ai.routing')" :description="t('ai.routingDesc')">
+    <div class="space-y-3">
       <label v-for="p in PURPOSES" :key="p.key" class="flex flex-wrap items-center justify-between gap-2">
         <span class="text-sm">
-          {{ p.label }}
-          <span class="text-muted-foreground block text-xs">{{ p.hint }}</span>
+          {{ t(`ai.purpose.${p.key}`) }}
+          <span class="text-muted-foreground block text-xs">{{ t(`ai.purpose.${p.key}Hint`) }}</span>
         </span>
         <Select
-          :model-value="routing[p.key] ?? UNROUTED"
+          :model-value="settings.routing[p.key] ?? UNROUTED"
           :disabled="!canManage"
           @update:model-value="route(p.field, String($event ?? UNROUTED))"
         >
-          <SelectTrigger class="w-56"><SelectValue :placeholder="t('ai.default')" /></SelectTrigger>
+          <SelectTrigger class="w-64 max-w-full"><SelectValue :placeholder="t('ai.default')" /></SelectTrigger>
           <SelectContent>
-            <SelectItem :value="UNROUTED">{{ t('ai.defaultBelow') }}</SelectItem>
-            <SelectItem v-for="opt in providers.filter((x) => x.enabled)" :key="opt.id" :value="opt.id">
-              {{ opt.name }}
-            </SelectItem>
+            <SelectItem :value="UNROUTED">{{ t('ai.routeToDefault', { name: defaultRowName }) }}</SelectItem>
+            <AiModelOptions :models="models" :selected="settings.routing[p.key]" />
           </SelectContent>
         </Select>
       </label>
-      <AiDecisionRoute
-        class="border-t pt-3"
-        :can-manage="canManage"
-        :routed="routing.decision"
-        :decision="decision"
-        :providers="providers"
-      />
     </div>
-
-    <Dialog v-model:open="open">
-      <DialogContent class="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{{ editing ? t('ai.editProvider') : t('ai.addProvider') }}</DialogTitle>
-          <DialogDescription>
-            {{ t('ai.providerDialogDesc') }}
-          </DialogDescription>
-        </DialogHeader>
-
-        <form id="provider-form" class="space-y-4" @submit.prevent="submit">
-          <label class="block space-y-1.5">
-            <span class="text-muted-foreground text-xs font-medium">{{ t('ai.name') }}</span>
-            <Input v-model="form.name" required placeholder="DeepSeek prod" />
-          </label>
-          <div class="grid gap-4 sm:grid-cols-2">
-            <label class="block space-y-1.5">
-              <span class="text-muted-foreground text-xs font-medium">{{ t('ai.provider') }}</span>
-              <Select v-model="form.provider">
-                <SelectTrigger class="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="deepseek">DeepSeek</SelectItem>
-                  <SelectItem value="gen-api">GenAPI (gen-api.ru)</SelectItem>
-                  <SelectItem value="openai-compatible">{{ t('ai.openaiCompatible') }}</SelectItem>
-                </SelectContent>
-              </Select>
-            </label>
-            <label class="block space-y-1.5">
-              <span class="text-muted-foreground text-xs font-medium">{{ t('ai.model') }}</span>
-              <Input v-model="form.model" required placeholder="deepseek-chat" />
-            </label>
-          </div>
-          <label class="block space-y-1.5">
-            <span class="text-muted-foreground text-xs font-medium">{{ t('ai.baseUrl') }}</span>
-            <Input v-model="form.baseUrl" :placeholder="t('ai.providerDefault')" />
-          </label>
-          <label class="block space-y-1.5">
-            <span class="text-muted-foreground text-xs font-medium">{{ t('ai.apiKey') }}</span>
-            <Input
-              v-model="form.apiKey"
-              type="password"
-              autocomplete="off"
-              :disabled="!canStoreSecrets"
-              :placeholder="
-                canStoreSecrets
-                  ? (editing?.apiKeyHint ?? 'sk-…')
-                  : t('ai.noEncryptionKey')
-              "
-            />
-            <span v-if="editing?.hasApiKey" class="text-muted-foreground text-xs">{{ t('ai.leaveEmptyToKeep') }}</span>
-          </label>
-          <label class="flex items-center gap-2">
-            <Checkbox :model-value="form.enabled" @update:model-value="form.enabled = $event === true" />
-            <span class="text-sm">{{ t('ai.enabled') }}</span>
-          </label>
-        </form>
-
-        <DialogFooter>
-          <Button type="button" variant="outline" size="sm" @click="open = false">{{ t('common.cancel') }}</Button>
-          <Button
-            type="submit"
-            form="provider-form"
-            size="sm"
-            :disabled="createProvider.isPending.value || updateProvider.isPending.value"
-          >
-            {{ editing ? t('common.save') : t('common.add') }}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <AiDecisionRoute
+      class="border-t pt-3"
+      :can-manage="canManage"
+      :routed="settings.routing.decision"
+      :decision="settings.decision"
+      :models="models"
+    />
   </AiSettingsSection>
 </template>

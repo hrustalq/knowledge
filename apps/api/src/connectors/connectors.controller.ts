@@ -410,7 +410,7 @@ export class ConnectorsController {
     @CurrentPrincipal() principal?: Principal,
   ): Promise<{ ok: true }> {
     const connector = await this.connectors.get(id);
-    await this.links.remove(linkId);
+    await this.links.remove(id, linkId);
     void this.activity.record({
       workspaceId: connector.workspaceId,
       actor: principal?.userId,

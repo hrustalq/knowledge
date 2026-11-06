@@ -69,14 +69,14 @@ export class ExtractorFactory {
     // back to the env extractor, which would ignore the admin's decision.
     if (!agent.enabled) return { extractor: this.noopExtractor, tuning, config: resolved };
 
-    // No profile routed at extraction: keep the env-configured extractor,
+    // No model routed at extraction: keep the env-configured extractor,
     // which is a different provider setting from the assistant's and stays
     // independent of it.
-    if (!resolved.providerId || !resolved.enabled) {
+    if (!resolved.modelId || !resolved.enabled) {
       return { extractor: this.envExtractor, tuning, config: resolved };
     }
 
-    const key = `${resolved.providerId}|${resolved.baseUrl}|${resolved.model}|${resolved.apiKey}`;
+    const key = `${resolved.baseUrl}|${resolved.model}|${resolved.apiKey}`;
     const hit = this.cache.get(key);
     if (hit) return { extractor: hit, tuning, config: resolved };
 

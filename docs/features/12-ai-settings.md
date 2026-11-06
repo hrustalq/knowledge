@@ -10,7 +10,7 @@ from the UI instead of from `.env` and a restart. Five tabs:
 
 | Tab               | What it does                                                                                                             |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| **Configuration** | Provider, endpoint, model, API key, temperature, tool budget, timeout, Agent-mode switch, budgets, cost-estimate prices. |
+| **Configuration** | Providers and the models each serves, routing, temperature, tool budget, timeout, Agent-mode switch, budgets, per-model prices.  |
 | **Skills**        | Instruction packs merged into the assistant's system prompt.                                                             |
 | **Plugins**       | External MCP servers whose tools join the assistant's tool harness.                                                      |
 | **Usage**         | Tokens and estimated cost per user (or per model), a daily chart, and budget administration.                             |
@@ -30,20 +30,90 @@ teach it house rules or point it at their own systems.
 
 ## Decisions
 
-**Multiple providers, routed per purpose.** A workspace can define named
-profiles (`ai_providers`) — "DeepSeek prod", "Local Ollama" — and route each of
-the three jobs at one of them: chat and agent turns, background review and
-suggestion, and the worker's relation extraction. A member can also pin one
-profile to their own chat thread. Resolution is first-hit-wins: thread pin →
-the purpose's route → the inline default config → the `ASSISTANT_*` env vars.
-That last step is what keeps it additive — a workspace with no profiles
-resolves exactly as it did before they existed, and a routed profile that is
-later disabled or deleted falls through rather than failing the turn.
+**A provider is a connection; a model is what it serves (#798).** A workspace can
+define named providers (`ai_providers`), "DeepSeek prod" or "Local Ollama": an
+endpoint, a credential and a harness budget. Each serves the models in `ai_models`,
+identified by the code name its API knows them under. Before #798 one row was both,
+so three models from one vendor meant three copies of the key. The migration turned
+every profile into one provider and one model **with the same id**, which is why a
+workflow step's stored `providerId` still resolves.
 
-Deleting a profile clears every route and thread pin that referenced it, which
-is the trade for the routing columns carrying no foreign key (house style —
-see `assignee_id`). Cross-tenant ids are rejected at both ends: the pin is
-validated on write, and `resolveFor` re-checks the workspace on read.
+**Models are added on purpose.** **Fetch models** calls `GET {baseUrl}/models` through
+the SDK and adds only what is ticked, since an aggregator answers with hundreds. Many
+OpenAI-compatible servers have no list, so a refusal is an ordinary result: the
+upstream message comes back verbatim and the page offers typing a code name. A fetch
+never removes a model, and a repeat never duplicates or resets one: `createMany` with
+`skipDuplicates` over a `NULLS NOT DISTINCT` unique index.
+
+**Everything pins a model.** Purpose routes (chat and agent turns, background review
+and suggestion, the worker's relation extraction, decisions), agents and threads hold
+an `ai_models` id. Resolution is `resolveFor(workspaceId, purpose, ...pins)`,
+first usable hit wins: thread pin → agent pin → the purpose's route → the inline
+default config → the `ASSISTANT_*` env vars. That last step keeps it additive: a
+workspace with no models resolves exactly as it did before they existed. A pin that
+cannot run is looked past, not fatal: a removed model, another workspace's, or one
+whose provider is off.
+
+**Off hides, it does not delete.** A provider's on/off checkbox takes its models out
+of every picker (`availableModels`) and out of resolution, and leaves the pins alone,
+so turning it back on restores them. A settings select holding a pin at a hidden model
+shows that one disabled rather than going blank.
+
+**Members pick from a list an admin curates.** The chat picker (`GET /v1/ai/models/choices`,
+viewer, code and provider name only) is every **In chat** model on an enabled provider.
+`in_chat` governs members only: an agent or a route may use a model that is off for
+chat. It is checked on offer and again on execution (`chatPin`), because a thread
+outlives the change.
+
+**One provider list, two tables underneath.** `/settings/ai/config` shows the inline
+default config and the named providers as one list (`buildProviderRows`): the default
+is the pinned first row, and "Add provider" is the list's last row. The tables stay
+separate because their rules differ. The default inherits the environment and is what
+every unrouted call falls through to, so it has no name, no off switch but provider
+`none`, and no delete. It serves models like any other provider (`ai_models.provider_id`
+null), and its own configured model stays implicit, with no row: it answers for "no
+route", which is what keeps an empty table equal to the old behaviour. To offer that
+model in the chat picker while chat is routed elsewhere, add its code as a model. Each
+model row shows the work it actually serves, worked out as the resolver does it (a
+route at a model of a provider that is off lands on the default's own model), and a
+provider's Test tests that provider, on a model members can use, then any of its models,
+then its kind's default. `useDefault` on `POST settings/test` asks for the default config
+even while chat is routed elsewhere. A provider's result is stored on its row; the
+default's lasts as long as the page.
+
+**A price belongs to a model.** Prices are per 1M tokens in a currency
+(`COST_CURRENCIES`), set in a model's dialog, and in the provider's dialog for the
+default's implicit model. A model's row is its whole price: it does not inherit the
+default config's. `effectiveModelPrice` (contracts) is the one rule: each side
+falls back to the list on its own, a model missing a side has no price, and the
+list fills a side only in its own currency, since no rate is kept to convert it. A
+price stored with no currency means USD, which is what the dialog asked for before
+#793. The usage row is written under it and the settings row reads it, so a row
+that says "no price" is the row whose calls show `—` in Usage.
+
+**A cached prompt token costs less.** `fromUsage` reads `prompt_cache_hit_tokens`
+(DeepSeek) or `prompt_tokens_details.cached_tokens` (OpenAI, GenAPI) and the
+estimate charges those at the cached rate. They stay inside `promptTokens` and
+`totalTokens`, so budgets count the same tokens as before. The rate comes from the
+provider's own field, else the list, and a configured prompt price does not borrow
+the list's cached rate. With no cached rate a hit costs the prompt price.
+
+**A cost states its currency.** Each `ai_usage` row holds an amount and
+`cost_currency`, and Usage totals per currency (`costs: CostAmount[]`), never one
+sum. The column is still `cost_usd_micros` so a release can roll back over it; the
+Prisma field is `costMicros`. A GenAPI chat call stores the `usage.cost` it reports,
+in rubles, so its row is the real charge rather than an estimate. `usage.cost` from
+any other server is ignored because its units are unknown.
+
+**The list has a date.** The comment on `MODEL_LIST_PRICES` says when every row was
+compared with its vendor's page, and a model the vendor stops listing comes off. DeepSeek's
+page no longer lists `deepseek-chat` or `deepseek-reasoner`, and its prices change
+with the hour, so a DeepSeek model sets its own price, which it can do per model.
+
+Deleting a provider takes its models (the one FK here) and clears every route, agent
+and thread pinned to them, which is the trade for the pin columns carrying no foreign
+key (house style, see `assignee_id`). Cross-tenant ids are rejected at both ends: a pin
+is validated on write, and `resolveFor` looks the model up inside the workspace on read.
 
 Routing extraction meant the worker had to resolve providers too, so provider
 resolution and token accounting live in a controller-free `AiCoreModule` that
@@ -131,8 +201,10 @@ rather than implying billing truth.
 ## Surface
 
 **Tables** — `ai_settings` (PK = workspaceId), `ai_providers`,
-`ai_user_budgets`, `ai_skills`, `ai_plugins`, `ai_usage`. Migrations
-`20260908072710_ai_settings` and `20260908082134_ai_provider_profiles`.
+`ai_models`, `ai_user_budgets`, `ai_skills`, `ai_plugins`, `ai_usage`. Migrations
+`20260908072710_ai_settings`, `20260908082134_ai_provider_profiles` and
+`20270102100000_ai_models`, which only adds, so the retired `*_provider_id`, `model`,
+price and capability columns are still there for the previous image to roll back over.
 
 **Module** — `apps/api/src/ai/`, API-only (out of worker and MCP contexts).
 It and `AssistantModule` `forwardRef` each other: a turn needs config, usage,
@@ -143,12 +215,12 @@ skills and plugins; **Test connection** needs `AssistantClient`.
 `GET/POST /v1/ai/plugins`, `PATCH/DELETE /v1/ai/plugins/:id`,
 `POST /v1/ai/plugins/:id/test`; `GET /v1/ai/usage`, `/usage/logs`, `/usage/me`,
 `GET /v1/ai/budgets`, `PUT/DELETE /v1/ai/budgets/:userId`;
-`GET/POST /v1/ai/providers`, `PATCH/DELETE /v1/ai/providers/:id`, and
-`GET /v1/ai/providers/choices` (viewer — names and models only, never
-endpoints or credentials). `PATCH /v1/assistant/threads/:id` gained
-`providerId`. Three new `WorkspaceSource` values — `ai-skill`, `ai-plugin`,
-`ai-provider` — resolve `:id` to its owning workspace so an admin of one
-workspace cannot edit another's.
+`GET/POST /v1/ai/providers`, `PATCH/DELETE /v1/ai/providers/:id`;
+`GET/POST /v1/ai/models`, `PATCH/DELETE /v1/ai/models/:id`, `POST /v1/ai/models/discover`,
+and `GET /v1/ai/models/choices` (viewer — code and provider name only, never
+endpoints or credentials). `PATCH /v1/assistant/threads/:id` takes `modelId`. The
+`WorkspaceSource` values `ai-skill`, `ai-plugin`, `ai-provider` and `ai-model` resolve
+`:id` to its owning workspace so an admin of one workspace cannot edit another's.
 
 **Web** — `/settings/ai` (`AiSettingsPage.vue` + `components/ai/*Panel.vue`),
 gated on workspace admin in the page. Since issue #182 the tabs are a grouped
@@ -160,7 +232,7 @@ section every role can use. The usage chart is inline markup rather
 than a charting library: the repo ships none and one bar series does not
 justify adding one. The chat composer gained a skill picker (`SkillPicker.vue`)
 that sends `skillIds` with the turn, plus a `ModelPicker.vue` that pins the
-thread to a profile (hidden entirely when the workspace defines none).
+thread to a model (hidden entirely when the workspace offers none).
 
 ## Not done
 
@@ -171,3 +243,8 @@ thread to a profile (hidden entirely when the workspace defines none).
   static header credential only.
 - **Config cache is per-instance** with a 30 s TTL, so on a multi-node
   deployment a settings change can take up to one TTL to reach every node.
+- **No model list sync.** A fetch happens when an admin asks; a model the provider
+  stops serving stays until someone removes it, and fails at call time like any
+  other upstream error.
+- **No per-member shortlist and no per-model Test.** The admin curates for the
+  workspace, and Test checks a connection.

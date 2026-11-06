@@ -5,7 +5,7 @@ import { Logger } from '@nestjs/common';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, type Memo } from '@prisma/client';
-import type { AgentRunInput } from '@knowledge/contracts';
+import { GEN_API_COST_CURRENCY, type AgentRunInput } from '@knowledge/contracts';
 import { AgentProducer } from '../agents/agent.producer.js';
 import { Job } from 'bullmq';
 import type { Env } from '../config/env.js';
@@ -116,7 +116,8 @@ export class MemosProcessor extends WorkerHost {
           userId,
           provider: this.stt.provider,
           model: this.stt.model,
-          costUsdMicros: cost === null ? null : Math.round(cost * 1_000_000),
+          // Only gen-stt reports a cost, in rubles: 2.39 s came back as 0.0179 at 0.45 ₽ a minute (#793).
+          cost: cost === null ? null : { micros: Math.round(cost * 1_000_000), currency: GEN_API_COST_CURRENCY },
           audioSeconds: Math.round(seconds),
           durationMs: Date.now() - started,
           ok: !failure,

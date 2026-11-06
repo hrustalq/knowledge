@@ -30,6 +30,9 @@ import {
   AGENT_SURFACES,
   AGENT_TRIGGER_COOLDOWN_MAX_MINUTES,
   AGENT_TRIGGER_EVENTS,
+  AI_MODEL_SOURCES,
+  COST_CURRENCIES,
+  type CostCurrency,
   WEB_ACCESS_MODES,
   STYLE_RULE_ID_PATTERN,
   STYLE_RULE_SEVERITIES,
@@ -42,6 +45,7 @@ import {
   type AgentTriggerEvent,
   type AgentSurface,
   type WebAccessMode,
+  type AiModelSource,
 } from '@knowledge/contracts';
 import { vmsg } from '../common/validation.js';
 
@@ -168,19 +172,32 @@ export class UpdateAiSettingsDto {
   @IsBoolean()
   agentModeEnabled?: boolean;
 
-  @ApiPropertyOptional({ type: Number, nullable: true, description: 'USD per 1M prompt tokens (cost estimate)' })
+  @ApiPropertyOptional({ type: Number, nullable: true, description: 'Per 1M prompt tokens, in priceCurrency (cost estimate)' })
   @IsOptional()
   @NULLABLE<UpdateAiSettingsDto>('pricePromptPerMTok')
   @IsNumber()
   @Min(0, { message: vmsg('min') })
   pricePromptPerMTok?: number | null;
 
-  @ApiPropertyOptional({ type: Number, nullable: true, description: 'USD per 1M completion tokens (cost estimate)' })
+  @ApiPropertyOptional({ type: Number, nullable: true, description: 'Per 1M completion tokens, in priceCurrency (cost estimate)' })
   @IsOptional()
   @NULLABLE<UpdateAiSettingsDto>('priceCompletionPerMTok')
   @IsNumber()
   @Min(0, { message: vmsg('min') })
   priceCompletionPerMTok?: number | null;
+
+  @ApiPropertyOptional({ type: Number, nullable: true, description: 'Per 1M prompt tokens served from the cache; null charges them at the prompt price' })
+  @IsOptional()
+  @NULLABLE<UpdateAiSettingsDto>('priceCachedPerMTok')
+  @IsNumber()
+  @Min(0, { message: vmsg('min') })
+  priceCachedPerMTok?: number | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true, enum: COST_CURRENCIES, description: 'The currency of these prices; null means USD when a price is set, else the list price currency' })
+  @IsOptional()
+  @NULLABLE<UpdateAiSettingsDto>('priceCurrency')
+  @IsIn(COST_CURRENCIES)
+  priceCurrency?: CostCurrency | null;
 
   @ApiPropertyOptional({ type: Number, nullable: true, description: 'Monthly workspace token budget; null = unlimited' })
   @IsOptional()
@@ -299,34 +316,34 @@ export class UpdateAiSettingsDto {
   @IsUUID()
   captureParentDocumentId?: string | null;
 
-  @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true, description: 'Provider profile serving chat and agent turns' })
+  @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true, description: 'Model serving chat and agent turns' })
   @IsOptional()
-  @NULLABLE<UpdateAiSettingsDto>('chatProviderId')
+  @NULLABLE<UpdateAiSettingsDto>('chatModelId')
   @IsUUID()
-  chatProviderId?: string | null;
+  chatModelId?: string | null;
 
-  @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true, description: 'Provider profile serving draft review and suggestions' })
+  @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true, description: 'Model serving draft review and suggestions' })
   @IsOptional()
-  @NULLABLE<UpdateAiSettingsDto>('reviewProviderId')
+  @NULLABLE<UpdateAiSettingsDto>('reviewModelId')
   @IsUUID()
-  reviewProviderId?: string | null;
+  reviewModelId?: string | null;
 
-  @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true, description: 'Provider profile serving the worker\'s relation extraction' })
+  @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true, description: 'Model serving the worker\'s relation extraction' })
   @IsOptional()
-  @NULLABLE<UpdateAiSettingsDto>('extractionProviderId')
+  @NULLABLE<UpdateAiSettingsDto>('extractionModelId')
   @IsUUID()
-  extractionProviderId?: string | null;
+  extractionModelId?: string | null;
 
   @ApiPropertyOptional({
     type: String,
     format: 'uuid',
     nullable: true,
-    description: 'gen-api profile serving the decision pre-filters (#530). Null turns them off.',
+    description: 'Model of a gen-api provider serving the decision pre-filters (#530). Null turns them off.',
   })
   @IsOptional()
-  @NULLABLE<UpdateAiSettingsDto>('decisionProviderId')
+  @NULLABLE<UpdateAiSettingsDto>('decisionModelId')
   @IsUUID()
-  decisionProviderId?: string | null;
+  decisionModelId?: string | null;
 
   @ApiPropertyOptional({
     type: Number,
@@ -376,10 +393,15 @@ export class TestAiConnectionDto {
   @IsUUID()
   workspaceId!: string;
 
-  @ApiPropertyOptional({ format: 'uuid', description: 'Test one profile instead of whatever chat is routed at' })
+  @ApiPropertyOptional({ format: 'uuid', description: 'Test one provider instead of whatever chat is routed at' })
   @IsOptional()
   @IsUUID()
   providerId?: string;
+
+  @ApiPropertyOptional({ type: Boolean, description: 'Test the default config itself, even while chat is routed at a profile' })
+  @IsOptional()
+  @IsBoolean()
+  useDefault?: boolean;
 }
 
 // ---- Provider profiles -----------------------------------------------------
@@ -405,12 +427,6 @@ export class CreateAiProviderDto {
   @IsString()
   @MaxLength(500, { message: vmsg('maxLength') })
   baseUrl?: string | null;
-
-  @ApiProperty({ example: 'deepseek-chat' })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(200, { message: vmsg('maxLength') })
-  model!: string;
 
   @ApiPropertyOptional({ type: String, nullable: true, description: 'Write-only credential; null clears it' })
   @IsOptional()
@@ -445,38 +461,10 @@ export class CreateAiProviderDto {
   @Max(600_000, { message: vmsg('max') })
   timeoutMs?: number | null;
 
-  @ApiPropertyOptional({ type: Number, nullable: true, description: 'USD per 1M prompt tokens' })
-  @IsOptional()
-  @NULLABLE<CreateAiProviderDto>('pricePromptPerMTok')
-  @IsNumber()
-  @Min(0, { message: vmsg('min') })
-  pricePromptPerMTok?: number | null;
-
-  @ApiPropertyOptional({ type: Number, nullable: true, description: 'USD per 1M completion tokens' })
-  @IsOptional()
-  @NULLABLE<CreateAiProviderDto>('priceCompletionPerMTok')
-  @IsNumber()
-  @Min(0, { message: vmsg('min') })
-  priceCompletionPerMTok?: number | null;
-
   @ApiPropertyOptional({ description: 'Default: true.' })
   @IsOptional()
   @IsBoolean()
   enabled?: boolean;
-
-  @ApiPropertyOptional({
-    type: [String],
-    enum: AGENT_CAPABILITIES,
-    nullable: true,
-    description:
-      'What this model can do, overriding the built-in model table. Null returns to the table (docs/features/20).',
-  })
-  @IsOptional()
-  @NULLABLE<CreateAiProviderDto>('capabilities')
-  @IsArray()
-  @ArrayMaxSize(8, { message: vmsg('arrayMaxSize') })
-  @IsIn(AGENT_CAPABILITIES as unknown as string[], { each: true, message: vmsg('isIn') })
-  capabilities?: AgentCapability[] | null;
 
 }
 
@@ -499,13 +487,6 @@ export class UpdateAiProviderDto {
   @IsString()
   @MaxLength(500, { message: vmsg('maxLength') })
   baseUrl?: string | null;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(200, { message: vmsg('maxLength') })
-  model?: string;
 
   @ApiPropertyOptional({ type: String, nullable: true, description: 'Write-only; omit to keep, null to clear' })
   @IsOptional()
@@ -540,39 +521,95 @@ export class UpdateAiProviderDto {
   @Max(600_000, { message: vmsg('max') })
   timeoutMs?: number | null;
 
-  @ApiPropertyOptional({ type: Number, nullable: true })
-  @IsOptional()
-  @NULLABLE<UpdateAiProviderDto>('pricePromptPerMTok')
-  @IsNumber()
-  @Min(0, { message: vmsg('min') })
-  pricePromptPerMTok?: number | null;
-
-  @ApiPropertyOptional({ type: Number, nullable: true })
-  @IsOptional()
-  @NULLABLE<UpdateAiProviderDto>('priceCompletionPerMTok')
-  @IsNumber()
-  @Min(0, { message: vmsg('min') })
-  priceCompletionPerMTok?: number | null;
-
   @ApiPropertyOptional()
   @IsOptional()
   @IsBoolean()
   enabled?: boolean;
 
+}
+
+// ---- Models -----------------------------------------------------------------
+
+export class DiscoverAiModelsDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'The provider to ask. Absent asks the default config.' })
+  @IsOptional()
+  @IsUUID()
+  providerId?: string;
+}
+
+export class AddAiModelsDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true, description: 'The provider serving them. Null is the default config.' })
+  @IsOptional()
+  @NULLABLE<AddAiModelsDto>('providerId')
+  @IsUUID()
+  providerId?: string | null;
+
+  @ApiProperty({ type: [String], example: ['deepseek-chat'], description: 'Code names, as the provider\'s API knows them. One it already has is skipped.' })
+  @IsArray()
+  @ArrayMaxSize(500, { message: vmsg('arrayMaxSize') })
+  @IsString({ each: true })
+  @IsNotEmpty({ each: true })
+  @MaxLength(200, { each: true, message: vmsg('maxLength') })
+  codes!: string[];
+
+  @ApiProperty({ enum: AI_MODEL_SOURCES })
+  @IsIn(AI_MODEL_SOURCES)
+  source!: AiModelSource;
+}
+
+export class UpdateAiModelDto {
+  @ApiPropertyOptional({ description: 'Whether members may pick it for a thread' })
+  @IsOptional()
+  @IsBoolean()
+  inChat?: boolean;
+
+  @ApiPropertyOptional({ type: Number, nullable: true, description: 'Per 1M prompt tokens, in priceCurrency' })
+  @IsOptional()
+  @NULLABLE<UpdateAiModelDto>('pricePromptPerMTok')
+  @IsNumber()
+  @Min(0, { message: vmsg('min') })
+  pricePromptPerMTok?: number | null;
+
+  @ApiPropertyOptional({ type: Number, nullable: true, description: 'Per 1M completion tokens, in priceCurrency' })
+  @IsOptional()
+  @NULLABLE<UpdateAiModelDto>('priceCompletionPerMTok')
+  @IsNumber()
+  @Min(0, { message: vmsg('min') })
+  priceCompletionPerMTok?: number | null;
+
+  @ApiPropertyOptional({ type: Number, nullable: true, description: 'Per 1M prompt tokens served from the cache; null charges them at the prompt price' })
+  @IsOptional()
+  @NULLABLE<UpdateAiModelDto>('priceCachedPerMTok')
+  @IsNumber()
+  @Min(0, { message: vmsg('min') })
+  priceCachedPerMTok?: number | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true, enum: COST_CURRENCIES, description: 'The currency of these prices; null with a price set means USD' })
+  @IsOptional()
+  @NULLABLE<UpdateAiModelDto>('priceCurrency')
+  @IsIn(COST_CURRENCIES)
+  priceCurrency?: CostCurrency | null;
+
   @ApiPropertyOptional({
     type: [String],
     enum: AGENT_CAPABILITIES,
     nullable: true,
-    description:
-      'What this model can do, overriding the built-in model table. Null returns to the table (docs/features/20).',
+    description: 'What this model can do, overriding the built-in model table. Null returns to the table (docs/features/20).',
   })
   @IsOptional()
-  @NULLABLE<UpdateAiProviderDto>('capabilities')
+  @NULLABLE<UpdateAiModelDto>('capabilities')
   @IsArray()
   @ArrayMaxSize(8, { message: vmsg('arrayMaxSize') })
   @IsIn(AGENT_CAPABILITIES as unknown as string[], { each: true, message: vmsg('isIn') })
   capabilities?: AgentCapability[] | null;
-
 }
 
 // ---- Skills ----------------------------------------------------------------
@@ -888,11 +925,11 @@ export class UpdateAiAgentDto {
   @IsUUID('4', { each: true })
   skillIds?: string[] | null;
 
-  @ApiPropertyOptional({ type: String, nullable: true, format: 'uuid', description: 'Provider profile. Null follows the workspace route.' })
+  @ApiPropertyOptional({ type: String, nullable: true, format: 'uuid', description: 'The model it runs on. Null follows the workspace route.' })
   @IsOptional()
-  @NULLABLE<UpdateAiAgentDto>('providerId')
+  @NULLABLE<UpdateAiAgentDto>('modelId')
   @IsUUID()
-  providerId?: string | null;
+  modelId?: string | null;
 
   @ApiPropertyOptional({ type: Number, nullable: true })
   @IsOptional()
@@ -1034,9 +1071,9 @@ export class CreateAiAgentDto {
 
   @ApiPropertyOptional({ type: String, nullable: true, format: 'uuid' })
   @IsOptional()
-  @NULLABLE<CreateAiAgentDto>('providerId')
+  @NULLABLE<CreateAiAgentDto>('modelId')
   @IsUUID()
-  providerId?: string | null;
+  modelId?: string | null;
 }
 
 /** Ask the router what it would do, without running the agent it picks. */

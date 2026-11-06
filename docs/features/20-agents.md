@@ -48,8 +48,9 @@ Seeded rows would have frozen each workspace at its install date.
 **Provider resolution delegates rather than replaces.** `AgentRegistryService`
 folds default ⊕ row and then calls feature 12's `resolveFor`, so the chain grows
 one link at the front — agent pin → purpose route → inline config → env — and
-keeps every property it had: still first-hit-wins, and a disabled or deleted
-profile still falls through instead of failing the call. `AiPurpose` survives as
+keeps every property it had: still first-hit-wins, and a removed model or one whose
+provider is off still falls through instead of failing the call. Since #798 the pin
+is a model (`ai_agents.model_id`), and a thread's pin outranks it. `AiPurpose` survives as
 the coarse bucket each built-in declares, so the routing UI keeps working for a
 workspace that never opens the agents tab.
 
@@ -62,8 +63,8 @@ With no capable provider — or in the worker, where there is no classifier at a
 — the router stops at the rules and is still correct, just less specific.
 
 **A missing capability is a refusal, not a substitution.** `MODEL_CAPABILITIES`
-is a code table with a per-profile override column, the shape `MODEL_PRICES`
-already had, and for the same reason: any hardcoded list of models goes stale.
+is a code table with a per-model override column (`ai_models.capabilities`), the
+shape the list prices already had, and for the same reason: any hardcoded list of models goes stale.
 An unknown model is assumed to do tools and JSON but **not** vision. The
 asymmetry is the whole point — a wrong "supports tools" guess fails loudly at
 call time, while a wrong "supports vision" guess produces a confident

@@ -28,8 +28,8 @@ export interface AssistantThreadSummary {
   workspaceId: string;
   documentId: string | null;
   title: string | null;
-  /** Provider profile pinned to this thread, when the member picked one. */
-  providerId: string | null;
+  /** The model pinned to this thread, when the member picked one. */
+  modelId: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -759,6 +759,8 @@ export interface AiSettingsResponse {
   agentModeEnabled: boolean;
   pricePromptPerMTok: number | null;
   priceCompletionPerMTok: number | null;
+  priceCachedPerMTok: number | null;
+  priceCurrency: CostCurrency | null;
   /** Quotas. null = unlimited; only enforced while enforceBudget is true. */
   workspaceMonthlyTokenBudget: number | null;
   defaultUserMonthlyTokenBudget: number | null;
@@ -806,8 +808,107 @@ export type AiProviderKind = 'openai-compatible' | 'deepseek' | 'gen-api';
 export type AiProviderStatus = 'unknown' | 'ok' | 'error';
 
 /**
- * A named provider profile. Several can exist per workspace; each purpose is
- * routed at one of them, and a chat thread may pin its own.
+ * Per-provider defaults, so `provider=deepseek` works with nothing but an API
+ * key. Here rather than in the resolver because the settings page shows what an
+ * empty field falls back to, and must not guess.
+ */
+export const PROVIDER_DEFAULTS: Readonly<Record<string, { baseUrl: string; model: string }>> = {
+  deepseek: { baseUrl: 'https://api.deepseek.com', model: 'deepseek-chat' },
+  /**
+   * gen-api.ru is an OpenAI-compatible aggregator (the shape OpenRouter has):
+   * one credential, many upstream models addressed by id, on a dedicated
+   * proxy subdomain rather than the marketing domain. `model` is therefore a
+   * default rather than a constraint — `claude-sonnet-4-5`, `gemini-2-5-flash`
+   * and the rest are all valid values for it.
+   */
+  'gen-api': { baseUrl: 'https://proxy.gen-api.ru/v1', model: 'gpt-4-1' },
+};
+
+/** The currencies a price or a cost is held in. No rate between them is kept, so they are never added together. */
+export const COST_CURRENCIES = ['USD', 'RUB'] as const;
+export type CostCurrency = (typeof COST_CURRENCIES)[number];
+
+/** What gen-api bills and reports in: `cost` from gen-stt and `usage.cost` from its chat proxy (#793). */
+export const GEN_API_COST_CURRENCY: CostCurrency = 'RUB';
+
+/** An amount, in millionths of its currency. */
+export interface CostAmount {
+  micros: number;
+  currency: CostCurrency;
+}
+
+/**
+ * List prices per 1M tokens, used only to put a number next to the token counts.
+ * Overridable per provider because this table will go stale and self-hosted
+ * models are free. Standard rates; a model the vendor stops listing comes off.
+ *
+ * Every row was compared with its vendor's page on 2026-11-07: https://developers.openai.com/api/docs/pricing,
+ * https://platform.claude.com/docs/en/about-claude/pricing, https://gen-api.ru/pricing
+ * (rubles per 1K tokens there, so × 1000 here). DeepSeek's page
+ * (https://api-docs.deepseek.com/quick_start/pricing.md) no longer lists
+ * `deepseek-chat` or `deepseek-reasoner`, and its prices move with the hour, so
+ * a DeepSeek provider sets its own.
+ */
+const MODEL_LIST_PRICES: Readonly<
+  Record<string, { prompt: number; cachedPrompt?: number; completion: number; currency: CostCurrency }>
+> = {
+  'gpt-4o': { prompt: 2.5, cachedPrompt: 1.25, completion: 10, currency: 'USD' },
+  'gpt-4o-mini': { prompt: 0.15, cachedPrompt: 0.075, completion: 0.6, currency: 'USD' },
+  'gpt-4.1': { prompt: 2, cachedPrompt: 0.5, completion: 8, currency: 'USD' },
+  'gpt-4.1-mini': { prompt: 0.4, cachedPrompt: 0.1, completion: 1.6, currency: 'USD' },
+  'claude-sonnet-4-5': { prompt: 3, cachedPrompt: 0.3, completion: 15, currency: 'USD' },
+  'claude-opus-4-5': { prompt: 5, cachedPrompt: 0.5, completion: 25, currency: 'USD' },
+  // gen-api's own ids. A chat call reports what it was charged, so this only prices one that does not.
+  'gpt-4-1': { prompt: 400, completion: 1600, currency: 'RUB' },
+  // TypeSafe Jev through gen-api (#530): input only, output is free.
+  'jev-1-13': { prompt: 10.5, completion: 0, currency: 'RUB' },
+  'jev-latest': { prompt: 10.5, completion: 0, currency: 'RUB' },
+};
+
+export interface ModelPrice {
+  /** Per 1M tokens, in `currency`. */
+  prompt: number;
+  completion: number;
+  /** Per 1M prompt tokens served from the provider's cache; null charges them at `prompt`. */
+  cachedPrompt: number | null;
+  currency: CostCurrency;
+  /** True when a configured price decided either side, rather than the list alone. */
+  custom: boolean;
+}
+
+/** A model's own prices: a row of `ai_settings` or `ai_models`, or nothing. */
+export interface ConfiguredPrice {
+  pricePromptPerMTok?: number | null;
+  priceCompletionPerMTok?: number | null;
+  priceCachedPerMTok?: number | null;
+  priceCurrency?: CostCurrency | null;
+}
+
+/**
+ * What a call to `model` is priced at, or null when it cannot be priced — the
+ * one rule behind both the stored cost estimate and the settings row, so the
+ * page cannot promise a number the usage table then leaves empty. Each side
+ * falls back to the list on its own; a model missing a side has no price.
+ */
+export function effectiveModelPrice(model: string, configured: ConfiguredPrice = {}): ModelPrice | null {
+  const { pricePromptPerMTok, priceCompletionPerMTok, priceCachedPerMTok } = configured;
+  const custom = pricePromptPerMTok != null || priceCompletionPerMTok != null;
+  const listed = MODEL_LIST_PRICES[model];
+  // A price stored before #793 has no currency, and was entered in USD.
+  const currency = configured.priceCurrency ?? (custom ? 'USD' : (listed?.currency ?? 'USD'));
+  // The list fills a side only in its own currency: there is no rate to convert it at.
+  const list = listed?.currency === currency ? listed : undefined;
+  const prompt = pricePromptPerMTok ?? list?.prompt;
+  const completion = priceCompletionPerMTok ?? list?.completion;
+  if (prompt == null || completion == null) return null;
+  // A list cached rate discounts the list prompt rate, so a configured prompt rate does not borrow it.
+  const cachedPrompt = priceCachedPerMTok ?? (pricePromptPerMTok == null ? (list?.cachedPrompt ?? null) : null);
+  return { prompt, completion, cachedPrompt, currency, custom };
+}
+
+/**
+ * A named provider: a connection. What it serves is listed separately
+ * ({@link AiModelSummary}), and each purpose is routed at a model.
  */
 export interface AiProviderSummary {
   id: string;
@@ -815,22 +916,17 @@ export interface AiProviderSummary {
   name: string;
   provider: AiProviderKind;
   baseUrl: string | null;
-  model: string;
   hasApiKey: boolean;
   apiKeyHint: string | null;
   temperature: number | null;
   maxToolCalls: number | null;
   timeoutMs: number | null;
-  pricePromptPerMTok: number | null;
-  priceCompletionPerMTok: number | null;
   enabled: boolean;
   status: AiProviderStatus;
   lastError: string | null;
   lastCheckedAt: string | null;
   createdAt: string;
   updatedAt: string;
-  /** Admin-declared capabilities, overriding the model table. Null = use the table. */
-  capabilities: AgentCapability[] | null;
 }
 // GET /v1/ai/providers?workspaceId=
 export interface ListAiProvidersResponse {
@@ -849,8 +945,8 @@ export interface ListAiProvidersResponse {
 export type AiPurpose = 'chat' | 'review' | 'extraction' | 'decision';
 
 /**
- * Which profile serves each purpose. null = fall back to the inline config,
- * then env — except `decision`, where null means off.
+ * Which model serves each purpose. null = fall back to the inline config, then
+ * env — except `decision`, where null means off.
  */
 export interface AiRouting {
   chat: string | null;
@@ -886,21 +982,55 @@ export interface DecisionSettings {
   tunedOn: string;
 }
 
-/**
- * The provider choices a member may make for a thread — name and model only,
- * never endpoints or credentials, since this is readable by any viewer.
- */
-export interface AiProviderChoice {
+/** How a model joined the workspace: ticked from a provider's list, or typed by its code name. */
+export const AI_MODEL_SOURCES = ['fetched', 'manual'] as const;
+export type AiModelSource = (typeof AI_MODEL_SOURCES)[number];
+
+/** A model a provider serves, by the code name its API knows it under. */
+export interface AiModelSummary extends Required<ConfiguredPrice> {
   id: string;
-  name: string;
-  model: string;
+  workspaceId: string;
+  /** Null on a model of the default config, which has no provider row. */
+  providerId: string | null;
+  providerName: string | null;
+  code: string;
+  source: AiModelSource;
+  /** Whether members may pick it for a thread. An agent or a route may use it either way. */
+  inChat: boolean;
+  /** False while its provider is off: hidden from every picker, and pins at it fall through. */
+  available: boolean;
+  /** The provider's kind, or the default config's. */
+  kind: AiProvider;
+  /** Admin-declared capabilities, overriding the model table. Null = use the table. */
+  capabilities: AgentCapability[] | null;
 }
-// GET /v1/ai/providers/choices?workspaceId=
-export interface ListAiProviderChoicesResponse {
-  /** Empty when the workspace defines no profiles — the picker stays hidden. */
-  providers: AiProviderChoice[];
-  /** The profile the workspace routes chat at, when there is one. */
-  defaultProviderId: string | null;
+// GET /v1/ai/models?workspaceId=
+export interface ListAiModelsResponse {
+  models: AiModelSummary[];
+}
+
+/** What a member sees for a thread: a code and whose it is, never endpoints or credentials. */
+export interface AiModelChoice {
+  id: string;
+  code: string;
+  /** Null for a model of the default config. */
+  providerName: string | null;
+}
+// GET /v1/ai/models/choices?workspaceId=
+export interface ListAiModelChoicesResponse {
+  /** "In chat" models of every enabled provider. Empty hides the picker. */
+  models: AiModelChoice[];
+  /** The code an unpinned thread runs on; null when nothing can run. */
+  defaultModel: string | null;
+}
+
+// POST /v1/ai/models/discover
+export interface DiscoverAiModelsResponse {
+  ok: boolean;
+  /** What the provider says it serves, sorted. Nothing is added until an admin ticks it. */
+  codes: string[];
+  /** The upstream message, verbatim: many endpoints have no model list at all. */
+  error?: string;
 }
 
 // POST /v1/ai/settings/test
@@ -1241,7 +1371,8 @@ export interface AiUsageBucket {
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
-  costUsdMicros: number | null;
+  /** One amount per currency in the bucket, never one sum across them. Empty when no call was priced. */
+  costs: CostAmount[];
   errors: number;
 }
 
@@ -1250,7 +1381,7 @@ export interface AiUsageSeriesPoint {
   date: string;
   totalTokens: number;
   calls: number;
-  costUsdMicros: number | null;
+  costs: CostAmount[];
 }
 
 // GET /v1/ai/usage?workspaceId=&from=&to=&groupBy=user|model|day
@@ -1263,7 +1394,8 @@ export interface AiUsageResponse {
     promptTokens: number;
     completionTokens: number;
     totalTokens: number;
-    costUsdMicros: number | null;
+    /** One total per currency, never one sum across them. */
+    costs: CostAmount[];
     /** Calls with no known price — the cost total excludes them, so the UI can say so. */
     unpricedCalls: number;
     errors: number;
@@ -1286,7 +1418,9 @@ export interface AiUsageLogEntry {
   completionTokens: number;
   totalTokens: number;
   estimated: boolean;
-  costUsdMicros: number | null;
+  /** In `costCurrency`; null when the call could not be priced. */
+  costMicros: number | null;
+  costCurrency: CostCurrency;
   durationMs: number;
   ok: boolean;
   errorCode: string | null;
@@ -1321,7 +1455,7 @@ export interface AiMyUsageResponse {
   budget: AiBudgetInfo;
   calls: number;
   totalTokens: number;
-  costUsdMicros: number | null;
+  costs: CostAmount[];
 }
 // GET /v1/ai/budgets?workspaceId=
 export interface ListAiBudgetsResponse {
@@ -1779,8 +1913,10 @@ export interface AiAgentSummary {
   instructions: string;
   tools: string[];
   skillIds: string[];
-  /** Provider profile pinned to this agent; null falls through to the purpose route. */
-  providerId: string | null;
+  /** The model pinned to this agent; null falls through to the purpose route. */
+  modelId: string | null;
+  /** What it runs on now, pinned or not: the code, and the named provider serving it. */
+  model: string;
   providerName: string | null;
   temperature: number;
   maxToolCalls: number;

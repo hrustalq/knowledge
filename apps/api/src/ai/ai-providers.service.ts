@@ -1,41 +1,31 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Prisma, type AiProvider } from '@prisma/client';
+import type { AiProvider } from '@prisma/client';
 import type { AiProviderSummary, AiProviderKind } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { readCapabilityOverride } from '../agents/model-capabilities.js';
+import { AiModelsService } from './ai-models.service.js';
 import { decryptSecret, encryptSecret, maskSecret, MissingEncryptionKeyError, parseKey } from './secret-box.js';
 import { t } from '../i18n/t.js';
-
-/** How long the provider roster is reused before PG is consulted again. */
-const CACHE_TTL_MS = 30_000;
 
 export interface UpsertProviderInput {
   name: string;
   provider: AiProviderKind;
   baseUrl?: string | null;
-  model: string;
   /** Plaintext; encrypted before it touches the database. `null` clears. */
   apiKey?: string | null;
   temperature?: number | null;
   maxToolCalls?: number | null;
   timeoutMs?: number | null;
-  pricePromptPerMTok?: number | null;
-  priceCompletionPerMTok?: number | null;
-  /** AgentCapability[] declared by an admin, overriding the model table. */
-  capabilities?: string[] | null;
   enabled?: boolean;
 }
 
 /**
- * Named provider profiles (docs/features/12).
- *
- * A workspace can define several — "DeepSeek prod", "GPT-4o", "Local Ollama" —
- * and route each purpose at one of them. Profiles are strictly additive: a
- * workspace with none falls back to the single inline config on ai_settings
- * and then to the ASSISTANT_* env vars, which is exactly how it behaved before
- * this existed.
+ * Named providers (docs/features/12): a connection each, serving the models in
+ * `ai_models`. A workspace can define several — "DeepSeek prod", "Local Ollama".
+ * They are strictly additive: a workspace with none falls back to the single
+ * inline config on ai_settings and then to the ASSISTANT_* env vars, which is
+ * exactly how it behaved before this existed.
  *
  * Worker-safe: no controllers, no auth dependencies, so WorkerModule can use
  * it to route relation extraction (the same reason EventsModule is split from
@@ -43,11 +33,11 @@ export interface UpsertProviderInput {
  */
 @Injectable()
 export class AiProvidersService {
-  private readonly cache = new Map<string, { at: number; providers: AiProvider[] }>();
   private readonly key: Buffer | null;
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly models: AiModelsService,
     config: ConfigService<Env, true>,
   ) {
     this.key = parseKey(config.get('SETTINGS_ENCRYPTION_KEY', { infer: true }));
@@ -72,22 +62,6 @@ export class AiProvidersService {
     return { row, apiKey: decryptSecret(row.apiKeyCipher, this.key) };
   }
 
-  /** Cached roster used when routing a turn — one query per workspace per TTL. */
-  async enabledProviders(workspaceId: string): Promise<AiProvider[]> {
-    const hit = this.cache.get(workspaceId);
-    if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.providers;
-    const providers = await this.prisma.aiProvider.findMany({
-      where: { workspaceId, enabled: true },
-      orderBy: { name: 'asc' },
-    });
-    this.cache.set(workspaceId, { at: Date.now(), providers });
-    return providers;
-  }
-
-  decrypt(row: AiProvider): string | null {
-    return decryptSecret(row.apiKeyCipher, this.key);
-  }
-
   async create(workspaceId: string, input: UpsertProviderInput, actorId?: string): Promise<AiProviderSummary> {
     const clash = await this.prisma.aiProvider.findUnique({
       where: { workspaceId_name: { workspaceId, name: input.name } },
@@ -100,19 +74,14 @@ export class AiProvidersService {
         name: input.name,
         provider: input.provider,
         baseUrl: input.baseUrl ?? null,
-        model: input.model,
         apiKeyCipher: this.encrypt(input.apiKey),
         temperature: input.temperature ?? null,
         maxToolCalls: input.maxToolCalls ?? null,
         timeoutMs: input.timeoutMs ?? null,
-        pricePromptPerMTok: input.pricePromptPerMTok ?? null,
-        priceCompletionPerMTok: input.priceCompletionPerMTok ?? null,
-        capabilities: input.capabilities ?? Prisma.DbNull,
         enabled: input.enabled ?? true,
         createdBy: actorId ?? null,
       },
     });
-    this.cache.delete(workspaceId);
     return this.toSummary(row);
   }
 
@@ -130,64 +99,45 @@ export class AiProvidersService {
         ...(input.name === undefined ? {} : { name: input.name }),
         ...(input.provider === undefined ? {} : { provider: input.provider }),
         ...(input.baseUrl === undefined ? {} : { baseUrl: input.baseUrl }),
-        ...(input.model === undefined ? {} : { model: input.model }),
         // undefined keeps the stored credential, null clears it — the same
         // write-only convention the inline provider key uses.
         ...(input.apiKey === undefined ? {} : { apiKeyCipher: this.encrypt(input.apiKey) }),
         ...(input.temperature === undefined ? {} : { temperature: input.temperature }),
         ...(input.maxToolCalls === undefined ? {} : { maxToolCalls: input.maxToolCalls }),
         ...(input.timeoutMs === undefined ? {} : { timeoutMs: input.timeoutMs }),
-        ...(input.capabilities === undefined ? {} : { capabilities: input.capabilities ?? Prisma.DbNull }),
-        ...(input.pricePromptPerMTok === undefined ? {} : { pricePromptPerMTok: input.pricePromptPerMTok }),
-        ...(input.priceCompletionPerMTok === undefined ? {} : { priceCompletionPerMTok: input.priceCompletionPerMTok }),
         ...(input.enabled === undefined ? {} : { enabled: input.enabled }),
       },
     });
-    this.cache.delete(current.workspaceId);
+    // The roster carries the provider's name and whether it is on.
+    this.models.invalidate(current.workspaceId);
     return this.toSummary(row);
   }
 
   /**
-   * Deleting a profile clears every reference to it — the four routing
-   * columns and any thread pinned to it — so a dangling id can never send a
-   * turn to a provider that no longer exists. This is the trade for having no
-   * foreign keys on those columns (house style, see the schema comment).
+   * Deleting a provider takes its models (FK cascade) and clears every pin at
+   * them, so a dangling id can never send a turn anywhere. This is the trade for
+   * having no foreign keys on the pin columns (house style, see the schema comment).
    */
   async remove(id: string): Promise<void> {
     const row = await this.getOrThrow(id);
+    const models = await this.prisma.aiModel.findMany({ where: { providerId: id }, select: { id: true } });
     await this.prisma.$transaction([
-      this.prisma.aiSettings.updateMany({
-        where: { workspaceId: row.workspaceId, chatProviderId: id },
-        data: { chatProviderId: null },
-      }),
-      this.prisma.aiSettings.updateMany({
-        where: { workspaceId: row.workspaceId, reviewProviderId: id },
-        data: { reviewProviderId: null },
-      }),
-      this.prisma.aiSettings.updateMany({
-        where: { workspaceId: row.workspaceId, extractionProviderId: id },
-        data: { extractionProviderId: null },
-      }),
-      this.prisma.aiSettings.updateMany({
-        where: { workspaceId: row.workspaceId, decisionProviderId: id },
-        data: { decisionProviderId: null },
-      }),
-      this.prisma.assistantThread.updateMany({ where: { providerId: id }, data: { providerId: null } }),
+      ...this.models.clearPins(row.workspaceId, models.map((m) => m.id)),
       this.prisma.aiProvider.delete({ where: { id } }),
     ]);
-    this.cache.delete(row.workspaceId);
+    this.models.invalidate(row.workspaceId);
   }
 
-  async recordCheck(id: string, ok: boolean, error?: string): Promise<void> {
-    const row = await this.prisma.aiProvider.update({
-      where: { id },
+  /** A profile the workspace does not own is left alone: the caller was authorized for `workspaceId`, not for the id (#789). */
+  async recordCheck(workspaceId: string, id: string, ok: boolean, error?: string): Promise<void> {
+    await this.prisma.aiProvider.updateMany({
+      where: { id, workspaceId },
       data: {
         lastStatus: ok ? 'ok' : 'error',
         lastError: ok ? null : (error?.slice(0, 500) ?? 'unknown error'),
         lastCheckedAt: new Date(),
       },
     });
-    this.cache.delete(row.workspaceId);
   }
 
   private async getOrThrow(id: string): Promise<AiProvider> {
@@ -214,15 +164,11 @@ export class AiProvidersService {
       name: row.name,
       provider: row.provider as AiProviderKind,
       baseUrl: row.baseUrl,
-      model: row.model,
       hasApiKey: row.apiKeyCipher !== null,
       apiKeyHint: key ? maskSecret(key) : null,
       temperature: row.temperature,
       maxToolCalls: row.maxToolCalls,
       timeoutMs: row.timeoutMs,
-      pricePromptPerMTok: row.pricePromptPerMTok ? Number(row.pricePromptPerMTok) : null,
-      priceCompletionPerMTok: row.priceCompletionPerMTok ? Number(row.priceCompletionPerMTok) : null,
-      capabilities: readCapabilityOverride(row.capabilities),
       enabled: row.enabled,
       status: (row.lastStatus as AiProviderSummary['status']) ?? 'unknown',
       lastError: row.lastError,

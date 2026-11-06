@@ -2,7 +2,7 @@
 // Token spend per user, with a daily bar chart (DailyBars).
 import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
-import { formatNumber } from '@/shared/utils/format'
+import { formatCosts, formatNumber } from '@/shared/utils/format'
 import { useQuery } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 import type { AiBudgetInfo, AiUsageResponse, ListAiBudgetsResponse } from '@knowledge/contracts'
@@ -49,18 +49,6 @@ function fmtTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
   return String(n)
-}
-
-/**
- * Cost is stored in USD micros. A real charge below a cent must not print as
- * "$0.00" — that reads as "the assistant is free", which is the one thing this
- * number exists to disprove.
- */
-function fmtCost(micros: number | null): string {
-  if (micros === null) return '—'
-  if (micros === 0) return '$0.00'
-  if (micros < 10_000) return '<$0.01'
-  return `$${(micros / 1_000_000).toFixed(2)}`
 }
 
 function pct(used: number, budget: number | null): number {
@@ -159,7 +147,7 @@ function labelFor(userId: string): string {
           </div>
           <div>
             <dt class="text-muted-foreground text-xs">{{ t('ai.estimatedCost') }}</dt>
-            <dd class="text-2xl font-semibold tabular-nums">{{ fmtCost(data.totals.costUsdMicros) }}</dd>
+            <dd class="text-2xl font-semibold tabular-nums">{{ formatCosts(data.totals.costs) }}</dd>
             <!-- Without this the total silently reads as the whole bill. -->
             <dd v-if="data.totals.unpricedCalls > 0" class="text-muted-foreground mt-0.5 text-xs">
               {{ t('ai.excludesCalls', { calls: t('count.calls', { n: data.totals.unpricedCalls }, data.totals.unpricedCalls) }) }}
@@ -224,7 +212,7 @@ function labelFor(userId: string): string {
                   {{ fmtTokens(b.completionTokens) }}
                 </TableCell>
                 <TableCell class="text-right font-medium tabular-nums">{{ fmtTokens(b.totalTokens) }}</TableCell>
-                <TableCell class="text-right tabular-nums">{{ fmtCost(b.costUsdMicros) }}</TableCell>
+                <TableCell class="text-right tabular-nums">{{ formatCosts(b.costs) }}</TableCell>
               </TableRow>
             </TableBody>
           </Table>

@@ -1083,9 +1083,11 @@ model AssistantThread {
   // Document the pane was opened from, if any — the default chat grounding.
   documentId  String?  @map("document_id") @db.Uuid
   title       String?
-  /// Provider profile pinned to this thread by whoever is chatting. Null =
-  /// whatever the workspace routes 'chat' at.
+  /// Retired by #798 for `modelId`. Kept so the previous image can roll back over it.
   providerId  String?  @map("provider_id") @db.Uuid
+  /// ai_models row pinned to this thread by whoever is chatting. Null = whatever
+  /// the workspace routes 'chat' at. No FK, like the routing columns.
+  modelId     String?  @map("model_id") @db.Uuid
   // users.id in api-key mode; synthetic actor ("dev") otherwise.
   createdBy   String   @map("created_by") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
@@ -1303,24 +1305,34 @@ model AiSettings {
   /// Lets an admin take write tools (create_document / propose_update) away from the chat.
   agentModeEnabled Boolean @default(true) @map("agent_mode_enabled")
 
-  // Cost estimate inputs (USD per 1M tokens). Null falls back to MODEL_PRICES.
+  // Cost estimate inputs per 1M tokens. Null falls back to the model list (effectiveModelPrice).
   pricePromptPerMTok     Decimal? @map("price_prompt_per_mtok") @db.Decimal(12, 6)
   priceCompletionPerMTok Decimal? @map("price_completion_per_mtok") @db.Decimal(12, 6)
+  priceCachedPerMTok     Decimal? @map("price_cached_per_mtok") @db.Decimal(12, 6)
+  /// 'USD' | 'RUB'. Null with a price set means USD, as prices were before #793.
+  priceCurrency          String?  @map("price_currency")
 
   // Quotas — null = unlimited. Only enforced while enforceBudget is set.
   workspaceMonthlyTokenBudget   BigInt? @map("workspace_monthly_token_budget")
   defaultUserMonthlyTokenBudget BigInt? @map("default_user_monthly_token_budget")
   enforceBudget                 Boolean @default(false) @map("enforce_budget")
 
-  /// Per-purpose routing into ai_providers. Null = fall back to the columns
-  /// above, then to the ASSISTANT_* env vars — so a workspace that never
-  /// creates a provider profile behaves exactly as it did before.
+  /// Retired by #798 for the `*ModelId` columns below. Kept so the previous image
+  /// can roll back over them.
   chatProviderId       String? @map("chat_provider_id") @db.Uuid
   reviewProviderId     String? @map("review_provider_id") @db.Uuid
   extractionProviderId String? @map("extraction_provider_id") @db.Uuid
-  /// #530 — the decision model's profile. Unlike the three above, null means
-  /// off: a decision never falls back to the inline config.
   decisionProviderId   String? @map("decision_provider_id") @db.Uuid
+
+  /// Per-purpose routing into ai_models. Null = fall back to the columns above,
+  /// then to the ASSISTANT_* env vars — so a workspace that never adds a model
+  /// behaves exactly as it did before.
+  chatModelId       String? @map("chat_model_id") @db.Uuid
+  reviewModelId     String? @map("review_model_id") @db.Uuid
+  extractionModelId String? @map("extraction_model_id") @db.Uuid
+  /// #530 — the decision model. Unlike the three above, null means off: a
+  /// decision never falls back to the inline config.
+  decisionModelId   String? @map("decision_model_id") @db.Uuid
 
   /// #530 — pre-filter thresholds. Null inherits DECISION_THRESHOLDS (code);
   /// `decisionTunedModel` is the routed model when an override was last saved,
@@ -1399,11 +1411,8 @@ model SourcePolicy {
   @@map("source_policies")
 }
 
-/// A named provider profile. Several can exist per workspace; ai_settings
-/// routes each purpose (chat / review / extraction) at one of them, and a chat
-/// thread may pin its own. The routing columns carry no FK, mirroring how
-/// assignee_id and author_id are handled elsewhere: the service nulls dangling
-/// references on delete rather than the database cascading them.
+/// A named provider: a connection (endpoint + credential) and the harness budget
+/// its calls run under. What it serves is in ai_models (#798).
 model AiProvider {
   id           String  @id @default(uuid()) @db.Uuid
   workspaceId  String  @map("workspace_id") @db.Uuid
@@ -1412,7 +1421,9 @@ model AiProvider {
   /// 'openai-compatible' | 'deepseek'
   provider     String
   baseUrl      String? @map("base_url")
-  model        String
+  /// Retired by #798, as are the prices and capabilities below: they moved to
+  /// ai_models. The default lets the previous image read a row written since.
+  model        String  @default("")
   /// AES-256-GCM envelope; never leaves the API process.
   apiKeyCipher String? @map("api_key_cipher")
 
@@ -1422,12 +1433,14 @@ model AiProvider {
 
   pricePromptPerMTok     Decimal? @map("price_prompt_per_mtok") @db.Decimal(12, 6)
   priceCompletionPerMTok Decimal? @map("price_completion_per_mtok") @db.Decimal(12, 6)
+  priceCachedPerMTok     Decimal? @map("price_cached_per_mtok") @db.Decimal(12, 6)
+  /// 'USD' | 'RUB'. Null with a price set means USD, as prices were before #793.
+  priceCurrency          String?  @map("price_currency")
 
-  /// AgentCapability[] declared by an admin, overriding the MODEL_CAPABILITIES
-  /// code table the router filters on. Same shape as the price overrides above:
-  /// a code table that will go stale, plus a per-profile escape hatch.
   capabilities Json?
 
+  /// Off hides every model of this provider from every picker. Pins at them are
+  /// kept and fall through until it is back on.
   enabled       Boolean   @default(true)
   lastStatus    String?   @map("last_status")
   lastError     String?   @map("last_error")
@@ -1437,9 +1450,50 @@ model AiProvider {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
+  models AiModel[]
+
   @@unique([workspaceId, name])
   @@index([workspaceId, createdAt])
   @@map("ai_providers")
+}
+
+/// A model a provider serves, by the code name its API knows it under (#798).
+/// Routes, agents and threads pin one of these; they carry no FK and the service
+/// nulls them on delete, so a pin survives its provider being switched off.
+///
+/// `provider_id` null is the default config (ai_settings over ASSISTANT_*), which
+/// has no ai_providers row. Its own configured model stays implicit, so an empty
+/// table reproduces the behaviour before this one existed. One row per code per
+/// provider is a raw NULLS NOT DISTINCT unique index (ai_models_scope_code_key).
+model AiModel {
+  id          String  @id @default(uuid()) @db.Uuid
+  workspaceId String  @map("workspace_id") @db.Uuid
+  providerId  String? @map("provider_id") @db.Uuid
+  provider    AiProvider? @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  code        String
+  /// 'fetched' | 'manual' (AI_MODEL_SOURCES).
+  source      String  @default("manual")
+  /// Whether members may pick it for a thread. An agent or a route may use it either way.
+  inChat      Boolean @default(true) @map("in_chat")
+
+  // Per 1M tokens. Null falls back to the model list (effectiveModelPrice).
+  pricePromptPerMTok     Decimal? @map("price_prompt_per_mtok") @db.Decimal(12, 6)
+  priceCompletionPerMTok Decimal? @map("price_completion_per_mtok") @db.Decimal(12, 6)
+  priceCachedPerMTok     Decimal? @map("price_cached_per_mtok") @db.Decimal(12, 6)
+  /// 'USD' | 'RUB'. Null with a price set means USD, as prices were before #793.
+  priceCurrency          String?  @map("price_currency")
+
+  /// AgentCapability[] declared by an admin, overriding the MODEL_CAPABILITIES
+  /// code table the router filters on: a code table that will go stale, plus a
+  /// per-model escape hatch.
+  capabilities Json?
+
+  createdBy String?  @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([workspaceId, providerId])
+  @@map("ai_models")
 }
 
 /// Per-user override of AiSettings.defaultUserMonthlyTokenBudget.
@@ -1527,10 +1581,12 @@ model AiAgent {
   /// string[] of ai_skills ids always attached to this agent's turns.
   skillIds     Json?   @map("skill_ids")
 
-  /// ai_providers profile pinned to this agent. Null falls through to the
-  /// purpose route, then the inline config, then env (feature 12's chain).
-  /// No FK, matching the other routing columns (house style).
+  /// Retired by #798 for `modelId`. Kept so the previous image can roll back over it.
   providerId String? @map("provider_id") @db.Uuid
+  /// ai_models row pinned to this agent. Null falls through to the purpose route,
+  /// then the inline config, then env (feature 12's chain). No FK, matching the
+  /// other routing columns (house style).
+  modelId    String? @map("model_id") @db.Uuid
 
   temperature  Float?
   maxToolCalls Int?   @map("max_tool_calls")
@@ -1801,7 +1857,9 @@ model AiUsage {
   totalTokens      Int     @default(0) @map("total_tokens")
   /// The provider returned no usage block, so the counts are a local estimate.
   estimated        Boolean @default(false)
-  costUsdMicros    Int?    @map("cost_usd_micros")
+  /// Millionths of `costCurrency`. The column keeps its old name so a release can roll back over it.
+  costMicros       Int?    @map("cost_usd_micros")
+  costCurrency     String  @default("USD") @map("cost_currency")
 
   durationMs    Int     @default(0) @map("duration_ms")
   ok            Boolean @default(true)

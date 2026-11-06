@@ -5,8 +5,10 @@ import { DECISION_DEFAULT_MODEL, DECISION_SITES, DECISION_THRESHOLDS } from '@kn
 import type {
   AiConnectionTestResponse,
   AiPageActionsResponse,
+  DiscoverAiModelsResponse,
   AiProvider,
   AiSettingsResponse,
+  CostCurrency,
   WebAccessMode,
 } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
@@ -15,6 +17,7 @@ import { AssistantClient } from '../assistant/assistant.client.js';
 import { DecisionClient, isJevModel } from '../assistant/decision.client.js';
 import { DECISION_THRESHOLD_COLUMN } from './decision-settings.js';
 import { AiConfigService } from './ai-config.service.js';
+import { AiModelsService } from './ai-models.service.js';
 import { SourcePolicyService } from './source-policy.service.js';
 import { encryptSecret, maskSecret, MissingEncryptionKeyError } from './secret-box.js';
 import { t } from '../i18n/t.js';
@@ -22,11 +25,11 @@ import { currentLocale } from '../i18n/locale.js';
 
 export interface UpdateAiSettingsInput {
   /** Per-purpose routing; null clears a route back to the inline config. */
-  chatProviderId?: string | null;
-  reviewProviderId?: string | null;
-  extractionProviderId?: string | null;
-  /** #530 — null turns the decision pre-filters off. Must name a gen-api profile of this workspace. */
-  decisionProviderId?: string | null;
+  chatModelId?: string | null;
+  reviewModelId?: string | null;
+  extractionModelId?: string | null;
+  /** #530 — null turns the decision pre-filters off. Must name a model of a gen-api provider of this workspace. */
+  decisionModelId?: string | null;
   /** #530 — each null clears the override back to DECISION_THRESHOLDS. */
   decisionArbiterThreshold?: number | null;
   decisionCitationThreshold?: number | null;
@@ -58,6 +61,8 @@ export interface UpdateAiSettingsInput {
   qualityAuditDays?: number | null;
   pricePromptPerMTok?: number | null;
   priceCompletionPerMTok?: number | null;
+  priceCachedPerMTok?: number | null;
+  priceCurrency?: CostCurrency | null;
   workspaceMonthlyTokenBudget?: number | null;
   defaultUserMonthlyTokenBudget?: number | null;
   enforceBudget?: boolean;
@@ -77,6 +82,7 @@ export class AiSettingsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly aiConfig: AiConfigService,
+    private readonly models: AiModelsService,
     private readonly sourcePolicies: SourcePolicyService,
     private readonly client: AssistantClient,
     private readonly config: ConfigService<Env, true>,
@@ -127,6 +133,8 @@ export class AiSettingsService {
       },
       pricePromptPerMTok: effective.pricePromptPerMTok,
       priceCompletionPerMTok: effective.priceCompletionPerMTok,
+      priceCachedPerMTok: effective.priceCachedPerMTok,
+      priceCurrency: effective.priceCurrency,
       workspaceMonthlyTokenBudget:
         row?.workspaceMonthlyTokenBudget == null ? null : Number(row.workspaceMonthlyTokenBudget),
       defaultUserMonthlyTokenBudget:
@@ -134,10 +142,10 @@ export class AiSettingsService {
       enforceBudget: row?.enforceBudget ?? false,
       sources: effective.sources,
       routing: {
-        chat: row?.chatProviderId ?? null,
-        review: row?.reviewProviderId ?? null,
-        extraction: row?.extractionProviderId ?? null,
-        decision: row?.decisionProviderId ?? null,
+        chat: row?.chatModelId ?? null,
+        review: row?.reviewModelId ?? null,
+        extraction: row?.extractionModelId ?? null,
+        decision: row?.decisionModelId ?? null,
       },
       decision,
       canStoreSecrets: this.aiConfig.canStoreSecrets,
@@ -155,6 +163,10 @@ export class AiSettingsService {
       await this.sourcePolicies.assertModeSavable(workspaceId, input.webAccessMode);
     }
     await this.assertCaptureSavable(workspaceId, input);
+    await this.models.assertInWorkspace(
+      workspaceId,
+      [input.chatModelId, input.reviewModelId, input.extractionModelId, input.decisionModelId].filter((id) => id != null),
+    );
     const tunedModel = await this.decisionTunedModel(workspaceId, input);
     const data = {
       ...pick(input, 'provider'),
@@ -168,12 +180,14 @@ export class AiSettingsService {
       ...pick(input, 'qualityAuditDays'),
       ...pick(input, 'pricePromptPerMTok'),
       ...pick(input, 'priceCompletionPerMTok'),
+      ...pick(input, 'priceCachedPerMTok'),
+      ...pick(input, 'priceCurrency'),
       ...pick(input, 'workspaceMonthlyTokenBudget'),
       ...pick(input, 'defaultUserMonthlyTokenBudget'),
-      ...pick(input, 'chatProviderId'),
-      ...pick(input, 'reviewProviderId'),
-      ...pick(input, 'extractionProviderId'),
-      ...pick(input, 'decisionProviderId'),
+      ...pick(input, 'chatModelId'),
+      ...pick(input, 'reviewModelId'),
+      ...pick(input, 'extractionModelId'),
+      ...pick(input, 'decisionModelId'),
       ...pick(input, 'decisionArbiterThreshold'),
       ...pick(input, 'decisionCitationThreshold'),
       ...pick(input, 'decisionHarvestThreshold'),
@@ -203,15 +217,25 @@ export class AiSettingsService {
    * turns "I typed a key" into "the key works", so it reports the upstream
    * message rather than the generic 503 the assistant paths raise.
    */
-  async test(workspaceId: string, principalId: string, providerId?: string): Promise<AiConnectionTestResponse> {
-    // Test whatever chat would actually use, profile routing included —
-    // testing the inline config while chat runs on a profile would be a green
-    // tick for a path nobody takes.
-    const config = providerId
-      ? await this.aiConfig.resolveFor(workspaceId, 'chat', providerId)
-      : await this.aiConfig.resolveFor(workspaceId, 'chat');
+  async test(
+    workspaceId: string,
+    principalId: string,
+    providerId?: string,
+    useDefault = false,
+  ): Promise<AiConnectionTestResponse> {
+    // With no target, test whatever chat would actually use, routing included.
+    // `useDefault` is the Default row's own button: that config, even while chat
+    // is routed elsewhere, or its green tick would describe another provider.
+    const config = useDefault
+      ? await this.aiConfig.resolve(workspaceId)
+      : providerId
+        ? ((await this.aiConfig.connection(workspaceId, providerId)) ?? (await this.aiConfig.resolve(workspaceId)))
+        : await this.aiConfig.resolveFor(workspaceId, 'chat');
     if (!config.enabled) {
       return { ok: false, model: '', latencyMs: 0, error: t('error.ai.providerNone') };
+    }
+    if (!config.model) {
+      return { ok: false, model: '', latencyMs: 0, error: t('error.ai.providerNoModels') };
     }
     const startedAt = Date.now();
     // A Jev profile (#530) cannot answer a chat completion; ask it one noul.
@@ -239,6 +263,21 @@ export class AiSettingsService {
         latencyMs: Date.now() - startedAt,
         error: err instanceof Error ? err.message : String(err),
       };
+    }
+  }
+
+  /**
+   * Asks a provider what it serves (`providerId` absent: the default config).
+   * The upstream message comes back verbatim, like Test's: many OpenAI-compatible
+   * servers have no model list, and the page offers typing a code name instead.
+   */
+  async discoverModels(workspaceId: string, providerId?: string): Promise<DiscoverAiModelsResponse> {
+    const config = providerId ? await this.aiConfig.connection(workspaceId, providerId) : await this.aiConfig.resolve(workspaceId);
+    if (!config?.enabled) return { ok: false, codes: [], error: t('error.ai.providerNone') };
+    try {
+      return { ok: true, codes: await this.client.listModels(config) };
+    } catch (err) {
+      return { ok: false, codes: [], error: err instanceof Error ? err.message : String(err) };
     }
   }
 
@@ -285,12 +324,12 @@ export class AiSettingsService {
    */
   private async decisionTunedModel(workspaceId: string, input: UpdateAiSettingsInput): Promise<string | null | undefined> {
     let routed: string | undefined;
-    if (input.decisionProviderId) {
-      const profile = await this.prisma.aiProvider.findUnique({ where: { id: input.decisionProviderId } });
-      if (profile?.workspaceId !== workspaceId || profile.provider !== 'gen-api') {
+    if (input.decisionModelId) {
+      const config = await this.aiConfig.resolveFor(workspaceId, 'decision', input.decisionModelId);
+      if (config.modelId !== input.decisionModelId || config.provider !== 'gen-api') {
         throw new BadRequestException(t('error.ai.decisionNeedsGenApi'));
       }
-      routed = isJevModel(profile.model) ? profile.model : DECISION_DEFAULT_MODEL;
+      routed = isJevModel(config.model) ? config.model : DECISION_DEFAULT_MODEL;
     }
     const touched = DECISION_SITES.filter((site) => input[DECISION_THRESHOLD_COLUMN[site]] !== undefined);
     if (touched.length === 0) return undefined;

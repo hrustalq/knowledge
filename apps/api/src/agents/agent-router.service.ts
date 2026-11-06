@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { AgentCapability, AgentSurface, Locale } from '@knowledge/contracts';
-import { AiProvidersService } from '../ai/ai-providers.service.js';
+import { AiConfigService } from '../ai/ai-config.service.js';
 import { t } from '../i18n/t.js';
 import { AgentRegistryService, type ResolvedAgent } from './agent-registry.service.js';
 import { capabilitiesFor } from './model-capabilities.js';
@@ -70,7 +70,7 @@ export class AgentRouterService {
 
   constructor(
     private readonly registry: AgentRegistryService,
-    private readonly providers: AiProvidersService,
+    private readonly aiConfig: AiConfigService,
   ) {}
 
   /**
@@ -149,20 +149,20 @@ export class AgentRouterService {
     return this.decide(chosen, 'rules', t('agent.route.noUsableAnswer'), 0.4, rejected);
   }
 
-  /** The cheapest capable profile, used for the classifier's own call. */
+  /** The cheapest capable model, used for the classifier's own call. */
   async cheapestCapable(workspaceId: string, required: AgentCapability[]): Promise<string | null> {
-    const profiles = await this.providers.enabledProviders(workspaceId);
-    const capable = profiles.filter((p) => {
-      const has = capabilitiesFor(p.model, p.capabilities);
+    const models = await this.aiConfig.availableModels(workspaceId);
+    const capable = models.filter((m) => {
+      const has = capabilitiesFor(m.code, m.capabilities);
       return required.every((c) => has.has(c));
     });
     if (capable.length === 0) return null;
-    // Price is optional metadata, so a profile that declares none sorts last
-    // rather than winning by default.
-    const priced = capable
-      .map((p) => ({ id: p.id, price: p.pricePromptPerMTok === null ? Infinity : Number(p.pricePromptPerMTok) }))
-      .sort((a, b) => a.price - b.price);
-    return priced[0].id;
+    // Price is optional metadata, so a model that declares none sorts last
+    // rather than winning by default. 1000 ₽ is not dearer than $2 and no rate is
+    // kept to say otherwise, so another currency sorts after USD, cheapest first.
+    const rank = (p: (typeof capable)[number]) => (p.pricePromptPerMTok === null ? 2 : (p.priceCurrency ?? 'USD') === 'USD' ? 0 : 1);
+    const price = (p: (typeof capable)[number]) => (p.pricePromptPerMTok === null ? 0 : Number(p.pricePromptPerMTok));
+    return [...capable].sort((a, b) => rank(a) - rank(b) || price(a) - price(b))[0].id;
   }
 
   private decide(

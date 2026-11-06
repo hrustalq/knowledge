@@ -15518,7 +15518,7 @@
             }
           }
         },
-        "summary": "List chat pane threads for a workspace, most recently active first (search + keyset pagination)",
+        "summary": "List the caller's own chat pane threads in a workspace, most recently active first (search + keyset pagination)",
         "tags": [
           "assistant"
         ]
@@ -16321,70 +16321,6 @@
         ]
       }
     },
-    "/v1/ai/providers/choices": {
-      "get": {
-        "operationId": "AiController_listProviderChoices",
-        "parameters": [
-          {
-            "name": "workspaceId",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "Accept-Language",
-            "in": "header",
-            "required": false,
-            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "en",
-                "ru"
-              ]
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ListAiProviderChoicesResponse"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Names and models a member may pick for their chat thread — no endpoints or credentials",
-        "tags": [
-          "ai"
-        ]
-      }
-    },
     "/v1/ai/providers/{id}": {
       "patch": {
         "operationId": "AiController_updateProvider",
@@ -16508,7 +16444,394 @@
             }
           }
         },
-        "summary": "Delete a profile, clearing every route and thread pinned to it",
+        "summary": "Delete a provider and its models, clearing every route, agent and thread pinned to them",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/models": {
+      "get": {
+        "operationId": "AiController_listModels",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListAiModelsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Every model of every provider, including those of a provider that is off",
+        "tags": [
+          "ai"
+        ]
+      },
+      "post": {
+        "operationId": "AiController_addModels",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddAiModelsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListAiModelsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Add models to a provider by code name. One it already has is skipped.",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/models/choices": {
+      "get": {
+        "operationId": "AiController_listModelChoices",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListAiModelChoicesResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The models a member may pick for their chat thread: code and provider name, no endpoints or credentials",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/models/discover": {
+      "post": {
+        "operationId": "AiController_discoverModels",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscoverAiModelsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoverAiModelsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Ask a provider what it serves. Adds nothing, and reports the upstream error verbatim.",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/models/{id}": {
+      "patch": {
+        "operationId": "AiController_updateModel",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAiModelDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiModelSummary"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Update a model: whether it is offered in chat, its prices, its capabilities",
+        "tags": [
+          "ai"
+        ]
+      },
+      "delete": {
+        "operationId": "AiController_deleteModel",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Remove a model, clearing every route, agent and thread pinned to it",
         "tags": [
           "ai"
         ]
@@ -40671,7 +40994,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.45.1",
+    "version": "0.45.2",
     "contact": {}
   },
   "tags": [],
@@ -43473,7 +43796,7 @@
             "nullable": true,
             "description": "null clears the manual title so the auto-derived one shows again"
           },
-          "providerId": {
+          "modelId": {
             "type": "string",
             "format": "uuid",
             "nullable": true,
@@ -43723,12 +44046,26 @@
           "pricePromptPerMTok": {
             "type": "number",
             "nullable": true,
-            "description": "USD per 1M prompt tokens (cost estimate)"
+            "description": "Per 1M prompt tokens, in priceCurrency (cost estimate)"
           },
           "priceCompletionPerMTok": {
             "type": "number",
             "nullable": true,
-            "description": "USD per 1M completion tokens (cost estimate)"
+            "description": "Per 1M completion tokens, in priceCurrency (cost estimate)"
+          },
+          "priceCachedPerMTok": {
+            "type": "number",
+            "nullable": true,
+            "description": "Per 1M prompt tokens served from the cache; null charges them at the prompt price"
+          },
+          "priceCurrency": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "USD",
+              "RUB"
+            ],
+            "description": "The currency of these prices; null means USD when a price is set, else the list price currency"
           },
           "workspaceMonthlyTokenBudget": {
             "type": "number",
@@ -43790,29 +44127,29 @@
             "nullable": true,
             "description": "The page new captured pages nest under; null for the project root."
           },
-          "chatProviderId": {
+          "chatModelId": {
             "type": "string",
             "format": "uuid",
             "nullable": true,
-            "description": "Provider profile serving chat and agent turns"
+            "description": "Model serving chat and agent turns"
           },
-          "reviewProviderId": {
+          "reviewModelId": {
             "type": "string",
             "format": "uuid",
             "nullable": true,
-            "description": "Provider profile serving draft review and suggestions"
+            "description": "Model serving draft review and suggestions"
           },
-          "extractionProviderId": {
+          "extractionModelId": {
             "type": "string",
             "format": "uuid",
             "nullable": true,
-            "description": "Provider profile serving the worker's relation extraction"
+            "description": "Model serving the worker's relation extraction"
           },
-          "decisionProviderId": {
+          "decisionModelId": {
             "type": "string",
             "format": "uuid",
             "nullable": true,
-            "description": "gen-api profile serving the decision pre-filters (#530). Null turns them off."
+            "description": "Model of a gen-api provider serving the decision pre-filters (#530). Null turns them off."
           },
           "decisionArbiterThreshold": {
             "type": "number",
@@ -43850,7 +44187,11 @@
           "providerId": {
             "type": "string",
             "format": "uuid",
-            "description": "Test one profile instead of whatever chat is routed at"
+            "description": "Test one provider instead of whatever chat is routed at"
+          },
+          "useDefault": {
+            "type": "boolean",
+            "description": "Test the default config itself, even while chat is routed at a profile"
           }
         },
         "required": [
@@ -43881,10 +44222,6 @@
             "nullable": true,
             "example": "https://api.deepseek.com"
           },
-          "model": {
-            "type": "string",
-            "example": "deepseek-chat"
-          },
           "apiKey": {
             "type": "string",
             "nullable": true,
@@ -43908,39 +44245,15 @@
             "minimum": 1000,
             "maximum": 600000
           },
-          "pricePromptPerMTok": {
-            "type": "number",
-            "nullable": true,
-            "description": "USD per 1M prompt tokens"
-          },
-          "priceCompletionPerMTok": {
-            "type": "number",
-            "nullable": true,
-            "description": "USD per 1M completion tokens"
-          },
           "enabled": {
             "type": "boolean",
             "description": "Default: true."
-          },
-          "capabilities": {
-            "type": "array",
-            "nullable": true,
-            "description": "What this model can do, overriding the built-in model table. Null returns to the table (docs/features/20).",
-            "items": {
-              "type": "string",
-              "enum": [
-                "tools",
-                "vision",
-                "json"
-              ]
-            }
           }
         },
         "required": [
           "workspaceId",
           "name",
-          "provider",
-          "model"
+          "provider"
         ]
       },
       "UpdateAiProviderDto": {
@@ -43961,9 +44274,6 @@
             "type": "string",
             "nullable": true
           },
-          "model": {
-            "type": "string"
-          },
           "apiKey": {
             "type": "string",
             "nullable": true,
@@ -43981,16 +44291,95 @@
             "type": "number",
             "nullable": true
           },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "DiscoverAiModelsDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "providerId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The provider to ask. Absent asks the default config."
+          }
+        },
+        "required": [
+          "workspaceId"
+        ]
+      },
+      "AddAiModelsDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "providerId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "The provider serving them. Null is the default config."
+          },
+          "codes": {
+            "example": [
+              "deepseek-chat"
+            ],
+            "description": "Code names, as the provider's API knows them. One it already has is skipped.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "fetched",
+              "manual"
+            ]
+          }
+        },
+        "required": [
+          "workspaceId",
+          "codes",
+          "source"
+        ]
+      },
+      "UpdateAiModelDto": {
+        "type": "object",
+        "properties": {
+          "inChat": {
+            "type": "boolean",
+            "description": "Whether members may pick it for a thread"
+          },
           "pricePromptPerMTok": {
             "type": "number",
-            "nullable": true
+            "nullable": true,
+            "description": "Per 1M prompt tokens, in priceCurrency"
           },
           "priceCompletionPerMTok": {
             "type": "number",
-            "nullable": true
+            "nullable": true,
+            "description": "Per 1M completion tokens, in priceCurrency"
           },
-          "enabled": {
-            "type": "boolean"
+          "priceCachedPerMTok": {
+            "type": "number",
+            "nullable": true,
+            "description": "Per 1M prompt tokens served from the cache; null charges them at the prompt price"
+          },
+          "priceCurrency": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "USD",
+              "RUB"
+            ],
+            "description": "The currency of these prices; null with a price set means USD"
           },
           "capabilities": {
             "type": "array",
@@ -44528,7 +44917,7 @@
               "type": "string"
             }
           },
-          "providerId": {
+          "modelId": {
             "type": "string",
             "nullable": true,
             "format": "uuid"
@@ -44579,11 +44968,11 @@
               "type": "string"
             }
           },
-          "providerId": {
+          "modelId": {
             "type": "string",
             "nullable": true,
             "format": "uuid",
-            "description": "Provider profile. Null follows the workspace route."
+            "description": "The model it runs on. Null follows the workspace route."
           },
           "temperature": {
             "type": "number",
@@ -49970,9 +50359,12 @@
               "type": "string"
             }
           },
-          "providerId": {
+          "modelId": {
             "type": "string",
             "nullable": true
+          },
+          "model": {
+            "type": "string"
           },
           "providerName": {
             "type": "string",
@@ -50079,7 +50471,8 @@
           "instructions",
           "tools",
           "skillIds",
-          "providerId",
+          "modelId",
+          "model",
           "providerName",
           "temperature",
           "maxToolCalls",
@@ -50163,6 +50556,110 @@
           "latencyMs"
         ]
       },
+      "AiModelChoice": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "providerName": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "providerName"
+        ]
+      },
+      "AiModelSource": {
+        "type": "string",
+        "enum": [
+          "fetched",
+          "manual"
+        ]
+      },
+      "AiModelSummary": {
+        "type": "object",
+        "properties": {
+          "pricePromptPerMTok": {
+            "type": "number",
+            "nullable": true
+          },
+          "priceCompletionPerMTok": {
+            "type": "number",
+            "nullable": true
+          },
+          "priceCachedPerMTok": {
+            "type": "number",
+            "nullable": true
+          },
+          "priceCurrency": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CostCurrency"
+              }
+            ],
+            "nullable": true
+          },
+          "id": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          },
+          "providerId": {
+            "type": "string",
+            "nullable": true
+          },
+          "providerName": {
+            "type": "string",
+            "nullable": true
+          },
+          "code": {
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/AiModelSource"
+          },
+          "inChat": {
+            "type": "boolean"
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/AiProvider"
+          },
+          "capabilities": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/AgentCapability"
+                }
+              }
+            ],
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "workspaceId",
+          "providerId",
+          "providerName",
+          "code",
+          "source",
+          "inChat",
+          "available",
+          "kind",
+          "capabilities"
+        ]
+      },
       "AiMyUsageResponse": {
         "type": "object",
         "properties": {
@@ -50175,16 +50672,18 @@
           "totalTokens": {
             "type": "number"
           },
-          "costUsdMicros": {
-            "type": "number",
-            "nullable": true
+          "costs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CostAmount"
+            }
           }
         },
         "required": [
           "budget",
           "calls",
           "totalTokens",
-          "costUsdMicros"
+          "costs"
         ]
       },
       "AiPageActionsResponse": {
@@ -50349,25 +50848,6 @@
           "gen-api"
         ]
       },
-      "AiProviderChoice": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "model": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "model"
-        ]
-      },
       "AiProviderKind": {
         "type": "string",
         "enum": [
@@ -50403,9 +50883,6 @@
             "type": "string",
             "nullable": true
           },
-          "model": {
-            "type": "string"
-          },
           "hasApiKey": {
             "type": "boolean"
           },
@@ -50422,14 +50899,6 @@
             "nullable": true
           },
           "timeoutMs": {
-            "type": "number",
-            "nullable": true
-          },
-          "pricePromptPerMTok": {
-            "type": "number",
-            "nullable": true
-          },
-          "priceCompletionPerMTok": {
             "type": "number",
             "nullable": true
           },
@@ -50452,17 +50921,6 @@
           },
           "updatedAt": {
             "type": "string"
-          },
-          "capabilities": {
-            "anyOf": [
-              {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/AgentCapability"
-                }
-              }
-            ],
-            "nullable": true
           }
         },
         "required": [
@@ -50471,21 +50929,17 @@
           "name",
           "provider",
           "baseUrl",
-          "model",
           "hasApiKey",
           "apiKeyHint",
           "temperature",
           "maxToolCalls",
           "timeoutMs",
-          "pricePromptPerMTok",
-          "priceCompletionPerMTok",
           "enabled",
           "status",
           "lastError",
           "lastCheckedAt",
           "createdAt",
-          "updatedAt",
-          "capabilities"
+          "updatedAt"
         ]
       },
       "AiPurpose": {
@@ -50572,6 +51026,18 @@
             "type": "number",
             "nullable": true
           },
+          "priceCachedPerMTok": {
+            "type": "number",
+            "nullable": true
+          },
+          "priceCurrency": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CostCurrency"
+              }
+            ],
+            "nullable": true
+          },
           "workspaceMonthlyTokenBudget": {
             "type": "number",
             "nullable": true
@@ -50631,6 +51097,8 @@
           "agentModeEnabled",
           "pricePromptPerMTok",
           "priceCompletionPerMTok",
+          "priceCachedPerMTok",
+          "priceCurrency",
           "workspaceMonthlyTokenBudget",
           "defaultUserMonthlyTokenBudget",
           "enforceBudget",
@@ -50818,9 +51286,11 @@
           "totalTokens": {
             "type": "number"
           },
-          "costUsdMicros": {
-            "type": "number",
-            "nullable": true
+          "costs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CostAmount"
+            }
           },
           "errors": {
             "type": "number"
@@ -50833,7 +51303,7 @@
           "promptTokens",
           "completionTokens",
           "totalTokens",
-          "costUsdMicros",
+          "costs",
           "errors"
         ]
       },
@@ -50874,9 +51344,12 @@
           "estimated": {
             "type": "boolean"
           },
-          "costUsdMicros": {
+          "costMicros": {
             "type": "number",
             "nullable": true
+          },
+          "costCurrency": {
+            "$ref": "#/components/schemas/CostCurrency"
           },
           "durationMs": {
             "type": "number"
@@ -50919,7 +51392,8 @@
           "completionTokens",
           "totalTokens",
           "estimated",
-          "costUsdMicros",
+          "costMicros",
+          "costCurrency",
           "durationMs",
           "ok",
           "errorCode",
@@ -51001,9 +51475,11 @@
               "totalTokens": {
                 "type": "number"
               },
-              "costUsdMicros": {
-                "type": "number",
-                "nullable": true
+              "costs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CostAmount"
+                }
               },
               "unpricedCalls": {
                 "type": "number"
@@ -51017,7 +51493,7 @@
               "promptTokens",
               "completionTokens",
               "totalTokens",
-              "costUsdMicros",
+              "costs",
               "unpricedCalls",
               "errors"
             ]
@@ -51056,16 +51532,18 @@
           "calls": {
             "type": "number"
           },
-          "costUsdMicros": {
-            "type": "number",
-            "nullable": true
+          "costs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CostAmount"
+            }
           }
         },
         "required": [
           "date",
           "totalTokens",
           "calls",
-          "costUsdMicros"
+          "costs"
         ]
       },
       "AnalyticsAgentsResponse": {
@@ -54085,7 +54563,7 @@
             "type": "string",
             "nullable": true
           },
-          "providerId": {
+          "modelId": {
             "type": "string",
             "nullable": true
           },
@@ -54107,7 +54585,7 @@
           "workspaceId",
           "documentId",
           "title",
-          "providerId",
+          "modelId",
           "createdBy",
           "createdAt",
           "updatedAt"
@@ -57633,6 +58111,28 @@
           "draft"
         ]
       },
+      "CostAmount": {
+        "type": "object",
+        "properties": {
+          "micros": {
+            "type": "number"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/CostCurrency"
+          }
+        },
+        "required": [
+          "micros",
+          "currency"
+        ]
+      },
+      "CostCurrency": {
+        "type": "string",
+        "enum": [
+          "USD",
+          "RUB"
+        ]
+      },
       "CoverageRecommendation": {
         "type": "string",
         "enum": [
@@ -58337,6 +58837,27 @@
         "required": [
           "kind",
           "text"
+        ]
+      },
+      "DiscoverAiModelsResponse": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "codes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "codes"
         ]
       },
       "DismissAgentFindingResponse": {
@@ -63065,6 +63586,39 @@
           "users"
         ]
       },
+      "ListAiModelChoicesResponse": {
+        "type": "object",
+        "properties": {
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AiModelChoice"
+            }
+          },
+          "defaultModel": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "models",
+          "defaultModel"
+        ]
+      },
+      "ListAiModelsResponse": {
+        "type": "object",
+        "properties": {
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AiModelSummary"
+            }
+          }
+        },
+        "required": [
+          "models"
+        ]
+      },
       "ListAiPluginsResponse": {
         "type": "object",
         "properties": {
@@ -63077,25 +63631,6 @@
         },
         "required": [
           "plugins"
-        ]
-      },
-      "ListAiProviderChoicesResponse": {
-        "type": "object",
-        "properties": {
-          "providers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AiProviderChoice"
-            }
-          },
-          "defaultProviderId": {
-            "type": "string",
-            "nullable": true
-          }
-        },
-        "required": [
-          "providers",
-          "defaultProviderId"
         ]
       },
       "ListAiProvidersResponse": {
@@ -72675,6 +73210,10 @@
             "items": {
               "type": "string"
             }
+          },
+          "modelId": {
+            "type": "string",
+            "nullable": true
           },
           "providerId": {
             "type": "string",

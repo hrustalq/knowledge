@@ -6,6 +6,7 @@ import {
   type ApiBreakingChangePolicy,
   type ApiSpecDiff,
 } from '@knowledge/contracts';
+import type { DocumentRevision } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { t } from '../i18n/t.js';
@@ -50,6 +51,14 @@ export class ApiSpecDiffService {
     if (!doc) throw new NotFoundException(t('error.document.notFound', { id: documentId }));
     if (!isApiSpecKind(doc.kind)) return null;
 
+    // Before the cache: a `revision_diffs` row answers for any pair of ids, and
+    // the route's access check only vouches for the document in the URL (#789).
+    const ids = fromRevisionId ? [fromRevisionId, toRevisionId] : [toRevisionId];
+    const revisions = await this.prisma.documentRevision.findMany({ where: { id: { in: ids }, documentId } });
+    const foreign = ids.find((id) => !revisions.some((r) => r.id === id));
+    if (foreign) throw new NotFoundException(t('error.revision.notFoundOnDocument', { revisionId: foreign, documentId }));
+    const revisionOf = (id: string) => revisions.find((r) => r.id === id)!;
+
     if (fromRevisionId === toRevisionId) {
       return { documentId, fromRevisionId, toRevisionId, summary: { breaking: 0, nonBreaking: 0, info: 0 }, changes: [] };
     }
@@ -61,8 +70,8 @@ export class ApiSpecDiffService {
     }
 
     const [before, after] = await Promise.all([
-      fromRevisionId ? this.parseRevision(documentId, fromRevisionId, doc.kind) : Promise.resolve(null),
-      this.parseRevision(documentId, toRevisionId, doc.kind),
+      fromRevisionId ? this.parseRevision(revisionOf(fromRevisionId), doc.kind) : Promise.resolve(null),
+      this.parseRevision(revisionOf(toRevisionId), doc.kind),
     ]);
     if (!after || (fromRevisionId && !before)) return null;
 
@@ -120,14 +129,10 @@ export class ApiSpecDiffService {
     return resolveApiBreakingChangePolicy(row?.apiBreakingChangePolicy);
   }
 
-  private async parseRevision(documentId: string, revisionId: string, kind: 'openapi' | 'asyncapi'): Promise<ParsedApiSpec | null> {
-    const revision = await this.prisma.documentRevision.findUnique({ where: { id: revisionId } });
-    if (!revision || revision.documentId !== documentId) {
-      throw new NotFoundException(t('error.revision.notFoundOnDocument', { revisionId, documentId }));
-    }
+  private async parseRevision(revision: DocumentRevision, kind: 'openapi' | 'asyncapi'): Promise<ParsedApiSpec | null> {
     if (!revision.contentHash) {
       throw new BadRequestException(
-        t('error.revision.notComparable', { id: revisionId, status: t(`status.revision.${revision.status}`) }),
+        t('error.revision.notComparable', { id: revision.id, status: t(`status.revision.${revision.status}`) }),
       );
     }
     try {

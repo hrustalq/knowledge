@@ -4,7 +4,6 @@ import type { AgentCapability, AgentSurface, AiPurpose } from '@knowledge/contra
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AiConfigService, type ResolvedAiConfig } from '../ai/ai-config.service.js';
-import { AiProvidersService } from '../ai/ai-providers.service.js';
 import { BUILT_IN_AGENT_DEFAULTS, type BuiltInAgentDefault } from './built-in-agents.js';
 import { missingCapabilities } from './model-capabilities.js';
 
@@ -22,7 +21,7 @@ export interface ResolvedAgent {
   requires: AgentCapability[];
   /** The agent itself is switched on. Distinct from `config.enabled`, which is the provider. */
   enabled: boolean;
-  /** Provider profile + harness budget, with this agent's overrides folded in. */
+  /** Provider, model + harness budget, with this agent's overrides folded in. */
   config: ResolvedAiConfig;
   /**
    * Capabilities the agent needs that the resolved model does not offer.
@@ -48,8 +47,8 @@ const CACHE_TTL_MS = 30_000;
  * Provider resolution DELEGATES to AiConfigService rather than reimplementing
  * it, so the feature-12 chain grows one link at the front and keeps all its
  * existing behaviour: agent pin -> purpose route -> inline config -> env, still
- * first-hit-wins, and a disabled or deleted profile still falls through instead
- * of failing the call.
+ * first-hit-wins, and a model that is removed or whose provider is off still
+ * falls through instead of failing the call.
  *
  * Only the override rows are cached (one query per workspace, like the skills
  * roster). `resolveFor` is deliberately called fresh every time, exactly as the
@@ -63,7 +62,6 @@ export class AgentRegistryService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly aiConfig: AiConfigService,
-    private readonly providers: AiProvidersService,
   ) {}
 
   /** Drop the cached override rows for a workspace. Called from every agent write. */
@@ -85,12 +83,12 @@ export class AgentRegistryService {
    * default agent: a caller asking for `reviewer` and silently getting the chat
    * agent would be far harder to notice than an error.
    */
-  async resolve(workspaceId: string, key: string, pinnedProviderId?: string | null): Promise<ResolvedAgent> {
+  async resolve(workspaceId: string, key: string, pinnedModelId?: string | null): Promise<ResolvedAgent> {
     const rows = await this.rowsFor(workspaceId);
     const row = rows.get(key) ?? null;
     const base = BUILT_IN_AGENT_DEFAULTS[key as keyof typeof BUILT_IN_AGENT_DEFAULTS] ?? null;
     if (!base && !row) throw new Error(t('error.ai.agentNotFound', { key }));
-    return this.merge(workspaceId, key, base, row, pinnedProviderId);
+    return this.merge(workspaceId, key, base, row, pinnedModelId);
   }
 
   /** Every agent this workspace has: the built-in roster ⊕ overrides, plus custom rows. */
@@ -110,27 +108,14 @@ export class AgentRegistryService {
     base: BuiltInAgentDefault | null,
     row: AiAgent | null,
     /** A thread's own pin, which outranks the agent's — the member chose it for this conversation. */
-    pinnedProviderId?: string | null,
+    pinnedModelId?: string | null,
   ): Promise<ResolvedAgent> {
     const purpose: AiPurpose = base?.purpose ?? 'chat';
-    const config = await this.aiConfig.resolveFor(
-      workspaceId,
-      purpose,
-      pinnedProviderId ?? row?.providerId ?? undefined,
-    );
+    const config = await this.aiConfig.resolveFor(workspaceId, purpose, pinnedModelId, row?.modelId);
 
-    // The agent's harness overrides sit on top of whatever profile served it —
+    // The agent's harness overrides sit on top of whatever provider served it —
     // an agent that needs a longer leash than the workspace default says so
     // once, rather than every call site remembering to raise the budget.
-    // An admin's declaration on the profile beats the model table (see
-    // model-capabilities.ts). Only a named profile can carry one; the inline
-    // ai_settings config and the env fall back to the table. Read from the
-    // cached roster rather than a fresh query — this runs on every chat turn.
-    const providerCapabilities = config.providerId
-      ? ((await this.providers.enabledProviders(workspaceId)).find((p) => p.id === config.providerId)
-          ?.capabilities ?? null)
-      : null;
-
     const tuned: ResolvedAiConfig = {
       ...config,
       temperature: row?.temperature ?? config.temperature,
@@ -154,7 +139,7 @@ export class AgentRegistryService {
       requires,
       enabled: row?.enabled ?? true,
       config: tuned,
-      missing: tuned.enabled ? missingCapabilities(requires, tuned.model, providerCapabilities) : [],
+      missing: tuned.enabled ? missingCapabilities(requires, tuned.model, tuned.capabilities) : [],
     };
   }
 }

@@ -111,9 +111,9 @@ export class UpdateAssistantThreadDto {
     description: 'Provider profile to run this thread on; null returns it to the workspace default',
   })
   @IsOptional()
-  @ValidateIf((o: UpdateAssistantThreadDto) => o.providerId !== null)
+  @ValidateIf((o: UpdateAssistantThreadDto) => o.modelId !== null)
   @IsUUID()
-  providerId?: string | null;
+  modelId?: string | null;
 }
 
 export class ListAssistantThreadsQueryDto {

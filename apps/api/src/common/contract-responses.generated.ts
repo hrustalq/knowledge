@@ -11,6 +11,7 @@ import type {
   AiAgentSummary,
   AiBudgetInfo,
   AiConnectionTestResponse,
+  AiModelSummary,
   AiMyUsageResponse,
   AiPageActionsResponse,
   AiPluginSummary,
@@ -107,6 +108,7 @@ import type {
   DeleteProjectResponse,
   DeleteWorkspaceResponse,
   DeriveBlueprintResponse,
+  DiscoverAiModelsResponse,
   DismissAgentFindingResponse,
   DocumentAncestorsResponse,
   DocumentBacklinksResponse,
@@ -172,8 +174,9 @@ import type {
   ListAiAgentChoicesResponse,
   ListAiAgentsResponse,
   ListAiBudgetsResponse,
+  ListAiModelChoicesResponse,
+  ListAiModelsResponse,
   ListAiPluginsResponse,
-  ListAiProviderChoicesResponse,
   ListAiProvidersResponse,
   ListAiSkillsResponse,
   ListAiUsageLogsResponse,
@@ -363,6 +366,7 @@ export interface ContractResponses {
   AiAgentSummary: AiAgentSummary;
   AiBudgetInfo: AiBudgetInfo;
   AiConnectionTestResponse: AiConnectionTestResponse;
+  AiModelSummary: AiModelSummary;
   AiMyUsageResponse: AiMyUsageResponse;
   AiPageActionsResponse: AiPageActionsResponse;
   AiPluginSummary: AiPluginSummary;
@@ -459,6 +463,7 @@ export interface ContractResponses {
   DeleteProjectResponse: DeleteProjectResponse;
   DeleteWorkspaceResponse: DeleteWorkspaceResponse;
   DeriveBlueprintResponse: DeriveBlueprintResponse;
+  DiscoverAiModelsResponse: DiscoverAiModelsResponse;
   DismissAgentFindingResponse: DismissAgentFindingResponse;
   DocumentAncestorsResponse: DocumentAncestorsResponse;
   DocumentBacklinksResponse: DocumentBacklinksResponse;
@@ -524,8 +529,9 @@ export interface ContractResponses {
   ListAiAgentChoicesResponse: ListAiAgentChoicesResponse;
   ListAiAgentsResponse: ListAiAgentsResponse;
   ListAiBudgetsResponse: ListAiBudgetsResponse;
+  ListAiModelChoicesResponse: ListAiModelChoicesResponse;
+  ListAiModelsResponse: ListAiModelsResponse;
   ListAiPluginsResponse: ListAiPluginsResponse;
-  ListAiProviderChoicesResponse: ListAiProviderChoicesResponse;
   ListAiProvidersResponse: ListAiProvidersResponse;
   ListAiSkillsResponse: ListAiSkillsResponse;
   ListAiUsageLogsResponse: ListAiUsageLogsResponse;

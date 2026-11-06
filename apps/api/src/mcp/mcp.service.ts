@@ -129,7 +129,7 @@ import { contentLines } from '../documents/content-lines.js';
  * Bumped by hand at every release, with swagger.ts (docs/versioning.md#known-drift).
  * Named because the connection page and the skill report it too.
  */
-export const MCP_SERVER_VERSION = '0.45.2';
+export const MCP_SERVER_VERSION = '0.46.0';
 
 /**
  * MCP tools (plan.md §9). Tool names use underscores (MCP tool names must
@@ -2156,7 +2156,8 @@ export class McpService {
           'Community [communityId, level, parentId, title, summary, members], ChatChunk [chunkId, bindingId], ' +
           `and the relation edges ${RELATION_EDGE_TYPES.join(', ')} ` +
           '[documentId, revisionId, targetKey, live, extractor, confidence, snippet; out = Document, in = Entity]. ' +
-          'Use @type (not @class) for the type name. Refused: other targets (V, schema:*, record ids), comments, MATCH.',
+          'Use @type (not @class) for the type name. Refused: other targets (V, schema:*, record ids), comments, MATCH, ' +
+          'and any function or method off the allowlist (the error lists it).',
         inputSchema: {
           workspaceId: z.string().uuid(),
           query: z

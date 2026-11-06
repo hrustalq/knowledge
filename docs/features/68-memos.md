@@ -61,6 +61,7 @@ recording that switches between ru and en keeps both. Nothing is translated.
 `TRANSCRIPTION_PROVIDER=gen-api` (#584) calls gen-api's own speech network, `gen-stt` (0.45 ₽ a minute,
 billed per second, built for Russian): `POST https://api.gen-api.ru/api/v1/networks/gen-stt`, multipart
 `audio_url` (the chunk itself) and `is_sync=true`, answered with `{ request_id, cost, response: [text] }`.
+`cost` is in rubles: measured on #793, a 2.39 s clip returned `0.0179`, which is 0.45 ₽ a minute exactly.
 Only `TRANSCRIPTION_API_KEY` is read; the URL is fixed and the model is recorded as `gen-stt`. gen-api's
 OpenAI-shaped proxy has no `/audio/transcriptions` route, which is why this is its own branch in
 `TranscriptionClient` and not a base URL.
@@ -176,8 +177,8 @@ back-pressure; `ScribePublishSweeper`'s shape) finds memos in `analysing` whose 
 the length in the new nullable `ai_usage.audio_seconds` (tokens zero, and `audioSeconds` on the usage log
 entries). It is written by `AiUsageService.recordTranscription`, because env-configured speech has no
 resolved config: the row's provider is `TRANSCRIPTION_PROVIDER`, and its cost is the sum of the `cost`
-gen-stt reports per chunk (null when any chunk reports none, which an OpenAI-compatible server never
-does). `memo` covers the secretary's model calls. Reserve calls `assertWithinBudget` before handing out a URL.
+gen-stt reports per chunk, stored as RUB (null when any chunk reports none, which an OpenAI-compatible
+server never does). `memo` covers the secretary's model calls. Reserve calls `assertWithinBudget` before handing out a URL.
 
 ### Lifecycle
 

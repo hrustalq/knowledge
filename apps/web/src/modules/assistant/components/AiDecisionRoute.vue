@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * The decision route (#530, docs/features/67): which gen-api profile asks
+ * The decision route (#530, docs/features/67): which model of a gen-api provider asks
  * TypeSafe Jev the yes/no questions that pre-filter the arbiter, harvest and
  * citation support, and at what probability each lets an item through.
  *
@@ -16,25 +16,26 @@ import { computed, reactive, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { Info } from 'lucide-vue-next'
-import { DECISION_SITES, type AiProviderSummary, type DecisionSettings, type DecisionSite } from '@knowledge/contracts'
+import { DECISION_SITES, type AiModelSummary, type DecisionSettings, type DecisionSite } from '@knowledge/contracts'
 import { useApiMutation } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
 import { getWorkspaceId } from '@/shared/api/api'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
+import AiModelOptions from './AiModelOptions.vue'
 
 const props = defineProps<{
   canManage: boolean
   routed: string | null
   decision: DecisionSettings
-  providers: AiProviderSummary[]
+  models: AiModelSummary[]
 }>()
 
 const { t } = useI18n()
 const workspaceId = getWorkspaceId()
 const save = useApiMutation('patch', '/v1/ai/settings', {
-  invalidates: () => [['/v1/ai/settings'], ['/v1/ai/providers']],
+  invalidates: () => [['/v1/ai/settings'], ['/v1/ai/models']],
 })
 
 const OFF = '__off__'
@@ -44,13 +45,13 @@ const FIELD = {
   harvest: 'decisionHarvestThreshold',
 } as const satisfies Record<DecisionSite, string>
 
-// Jev is reached only through gen-api; the API refuses any other profile.
-const options = computed(() => props.providers.filter((p) => p.enabled && p.provider === 'gen-api'))
-const routedName = computed(() => props.providers.find((p) => p.id === props.routed)?.name ?? null)
+// Jev is reached only through gen-api; the API refuses a model of any other provider.
+const options = computed(() => props.models.filter((m) => m.kind === 'gen-api'))
+const routedName = computed(() => props.models.find((m) => m.id === props.routed)?.code ?? null)
 
 async function route(value: string) {
   try {
-    await save.mutateAsync({ body: { workspaceId, decisionProviderId: value === OFF ? null : value } })
+    await save.mutateAsync({ body: { workspaceId, decisionModelId: value === OFF ? null : value } })
   } catch (e) {
     toast.error(errorMessage(e, t))
   }
@@ -108,7 +109,7 @@ async function saveThresholds() {
         <SelectTrigger class="w-56"><SelectValue :placeholder="t('ai.decision.off')" /></SelectTrigger>
         <SelectContent>
           <SelectItem :value="OFF">{{ t('ai.decision.off') }}</SelectItem>
-          <SelectItem v-for="opt in options" :key="opt.id" :value="opt.id">{{ opt.name }}</SelectItem>
+          <AiModelOptions :models="options" :selected="routed" />
         </SelectContent>
       </Select>
     </label>
@@ -116,7 +117,7 @@ async function saveThresholds() {
     <p v-if="!decision.available" class="text-muted-foreground text-xs">
       {{ routedName ? t('ai.decision.notAppliedNamed', { name: routedName }) : t('ai.decision.unavailable') }}
     </p>
-    <p v-else-if="!options.length && !routed" class="text-muted-foreground text-xs">{{ t('ai.decision.noGenApi') }}</p>
+    <p v-else-if="!options.some((m) => m.available) && !routed" class="text-muted-foreground text-xs">{{ t('ai.decision.noGenApi') }}</p>
 
     <p class="text-muted-foreground flex gap-2 text-xs leading-relaxed">
       <Info class="mt-px size-3.5 shrink-0" aria-hidden="true" />

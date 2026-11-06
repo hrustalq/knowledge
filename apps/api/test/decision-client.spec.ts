@@ -23,6 +23,7 @@ const base = {
   apiKey: 'k',
   timeoutMs: 5_000,
   providerId: 'p1',
+  modelId: 'm1',
   pricePromptPerMTok: null,
   priceCompletionPerMTok: null,
 } as unknown as DecisionRoute['config'];
@@ -32,7 +33,7 @@ function client(opts: { env?: string; config?: Partial<typeof base> } = {}) {
   const aiConfig = {
     resolveFor: vi.fn().mockResolvedValue({ ...base, ...opts.config }),
     decisionSettings: vi.fn().mockResolvedValue(resolveDecisionSettings(null, true)),
-    estimateCostMicros: vi.fn().mockReturnValue(7),
+    estimateCost: vi.fn().mockReturnValue({ micros: 7, currency: 'RUB' }),
   };
   const config = { get: () => opts.env ?? 'gen-api' };
   return { decision: new DecisionClient(aiConfig as never, { record } as never, config as never), record };
@@ -46,13 +47,13 @@ const question = { instructions: 'q?', criteria: { true: 'yes', false: 'no' } };
 afterEach(() => vi.unstubAllGlobals());
 
 describe('DecisionClient.routeFor', () => {
-  it('is null when the deployment is off, nothing is routed, or the profile is not gen-api', async () => {
+  it('is null when the deployment is off, nothing is routed, or the provider is not gen-api', async () => {
     expect(await client({ env: 'none' }).decision.routeFor('ws')).toBeNull();
-    expect(await client({ config: { providerId: null } }).decision.routeFor('ws')).toBeNull();
+    expect(await client({ config: { modelId: null } }).decision.routeFor('ws')).toBeNull();
     expect(await client({ config: { provider: 'deepseek' } }).decision.routeFor('ws')).toBeNull();
   });
 
-  it('pins the default model, and drops the prices, when the profile names no Jev release', async () => {
+  it('pins the default model, and drops the prices, when the routed model is no Jev release', async () => {
     const route = await client({ config: { model: 'gpt-4-1', pricePromptPerMTok: 2 } }).decision.routeFor('ws');
     expect(route?.config.model).toBe(DECISION_DEFAULT_MODEL);
     expect(route?.config.pricePromptPerMTok).toBeNull();
@@ -81,7 +82,7 @@ describe('DecisionClient.noul', () => {
     expect(record.mock.calls[0]![0]).toMatchObject({
       operation: 'contradiction',
       ok: true,
-      costUsdMicros: 17,
+      cost: { micros: 17, currency: 'USD' },
       config: { model: 'jev-1.13-20260917' },
       tokens: { promptTokens: 400, completionTokens: 0 },
     });

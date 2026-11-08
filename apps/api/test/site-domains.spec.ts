@@ -62,6 +62,8 @@ function setup(opts: { env?: Record<string, unknown>; rows?: Partial<Row>[]; txt
     ...r,
   }));
   const prisma = {
+    withTransaction: async <T>(fn: () => Promise<T>) => fn(),
+    $executeRaw: async () => 1,
     rows,
     publishedSite: {
       findUnique: vi.fn(async () => ({ ...site, domains: rows.filter((r) => r.siteId === SITE) })),

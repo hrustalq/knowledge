@@ -11,6 +11,7 @@ import type {
 import type { Prisma, Project } from '@prisma/client';
 import { visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
 import { LISTED_PAGE } from '../common/listed-page.js';
+import { lockSubject } from '../common/subject-lock.js';
 import { ActivityService } from '../activity/activity.service.js';
 import { ProjectCommitsService } from '../git/project-commits.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
@@ -265,14 +266,15 @@ export class ProjectsService {
       // protects content, and there is none. Both modes do the same thing to an
       // empty project, so the answer just reports which one was asked for
       // rather than rewriting the caller's intent.
-      await this.prisma.$transaction([
+      await this.prisma.$transaction(async (tx) => {
+        await this.lockNotLast(tx, project);
         // A site is the project's face, not content of its own: it goes with
         // the project in every mode (docs/features/44). Its versions cascade.
-        this.prisma.publishedSite.deleteMany({ where: { projectId } }),
+        await tx.publishedSite.deleteMany({ where: { projectId } });
         // Grants on the project go with it (no FK, house policy).
-        this.prisma.accessGrant.deleteMany({ where: { resourceType: 'project', resourceId: projectId } }),
-        this.prisma.project.delete({ where: { id: projectId } }),
-      ]);
+        await tx.accessGrant.deleteMany({ where: { resourceType: 'project', resourceId: projectId } });
+        await tx.project.delete({ where: { id: projectId } });
+      });
       await this.recordDeletion(project, actorId, null, counts, []);
       return {
         deleted: true,
@@ -299,6 +301,7 @@ export class ProjectsService {
       }
       const destroyed = await cascade(projectId, project.workspaceId);
       await this.prisma.$transaction(async (tx) => {
+        await this.lockNotLast(tx, project);
         // Whatever the cascade does not own: the project-scoped rows that
         // outlive its documents.
         await tx.glossaryTerm.deleteMany({ where: { projectId } });
@@ -336,6 +339,7 @@ export class ProjectsService {
     const droppedGlossaryTerms = await this.glossaryConflicts(projectId, moveContentsTo);
 
     await this.prisma.$transaction(async (tx) => {
+      await this.lockNotLast(tx, project);
       // glossary_terms is unique on (project_id, term), so a term both projects
       // define cannot survive the move. The destination's definition wins —
       // it is the one still in use tomorrow — and the dialog says so before the
@@ -388,6 +392,17 @@ export class ProjectsService {
       destroyed: null,
       droppedGlossaryTerms,
     };
+  }
+
+  /**
+   * The last-project rule again, inside the delete's transaction and under the
+   * workspace's lock (#815): two deletes of the last two projects both passed
+   * the early check and left none.
+   */
+  private async lockNotLast(tx: Prisma.TransactionClient, project: { id: string; workspaceId: string }): Promise<void> {
+    await lockSubject(tx, `projects:${project.workspaceId}`);
+    const siblings = await tx.project.count({ where: { workspaceId: project.workspaceId, id: { not: project.id } } });
+    if (siblings === 0) throw new BadRequestException(t('error.project.lastInWorkspace'));
   }
 
   /**

@@ -24,6 +24,7 @@ import type {
   UpdateMergeRequestBranchResponse,
 } from '@knowledge/contracts';
 import type { DocumentBranch, MergeRequest, MergeRequestReviewer } from '@prisma/client';
+import { withSubjectLock } from '../common/subject-lock.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { toRevisionInfo } from './revision-info.js';
 import { StorageService } from '../storage/storage.service.js';
@@ -185,13 +186,14 @@ export class MergeRequestsService {
       throw new BadRequestException(t('error.mergeRequest.sourceNotFinalized', { branch: source.name }));
     }
 
-    await this.rejectDuplicateOpen(source, target);
     this.assertTargetsExist(await this.changedPages(source, target.name), target.name);
 
     // The row, the un-restricted branches and the author's subscription are one
     // change (#658): an open MR over a branch its readers cannot open is worse
-    // than no MR. `recordActivity` defers its publish to the commit.
-    const mr = await this.prisma.withTransaction(async () => {
+    // than no MR. `recordActivity` defers its publish to the commit. The
+    // duplicate check shares the boundary under the pair's lock (#815).
+    const mr = await withSubjectLock(this.prisma, openLockKey(source, target), async () => {
+      await this.rejectDuplicateOpen(source, target);
       const mr = await this.prisma.mergeRequest.create({
         data: {
           documentId,
@@ -380,12 +382,14 @@ export class MergeRequestsService {
     if (mr.status !== 'closed') {
       throw new BadRequestException(t('error.mergeRequest.notClosedForReopen', { id: mr.id, status: t(`status.mr.${mr.status}`) }));
     }
-    await this.rejectDuplicateOpen(mr.sourceBranch, mr.targetBranch);
-
-    // Guarded flip: a concurrent reopen (or delete) makes count 0.
-    const flipped = await this.prisma.mergeRequest.updateMany({
-      where: { id: mr.id, status: 'closed' },
-      data: { status: 'open', closedAt: null },
+    // Guarded flip: a concurrent reopen (or delete) makes count 0. Under the
+    // pair's lock, so a create cannot open a twin between check and flip (#815).
+    const flipped = await withSubjectLock(this.prisma, openLockKey(mr.sourceBranch, mr.targetBranch), async () => {
+      await this.rejectDuplicateOpen(mr.sourceBranch, mr.targetBranch);
+      return this.prisma.mergeRequest.updateMany({
+        where: { id: mr.id, status: 'closed' },
+        data: { status: 'open', closedAt: null },
+      });
     });
     if (flipped.count === 0) {
       throw new ConflictException(t('error.mergeRequest.concurrentChange', { id: mr.id }));
@@ -1656,4 +1660,9 @@ export class MergeRequestsService {
     if (!branch) throw new NotFoundException(t('error.branch.notFound', { name, documentId }));
     return branch;
   }
+}
+
+/** The `withSubjectLock` key of `openFrom`'s identity: one open MR per (source, target) pair (#815). */
+function openLockKey(source: DocumentBranch, target: DocumentBranch): string {
+  return source.projectBranchId ? `mr-open:${source.projectBranchId}:${target.name}` : `mr-open:${source.id}:${target.id}`;
 }

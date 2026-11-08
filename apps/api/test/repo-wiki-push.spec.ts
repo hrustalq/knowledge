@@ -74,6 +74,8 @@ describe('readRepoPushDelivery', () => {
 describe('ConnectorsService.queueRepoPush', () => {
   const runs: Array<Record<string, unknown>> = [];
   const prisma = {
+    withTransaction: async <T>(fn: () => Promise<T>) => fn(),
+    $executeRaw: async () => 1,
     connectorRun: {
       findFirst: vi.fn(async () => runs.find((r) => r.status === 'queued' && r.startedAt === null) ?? null),
       create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {

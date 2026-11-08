@@ -53,6 +53,7 @@ import { AiConfigService } from '../ai/ai-config.service.js';
 import { ActivityService } from '../activity/activity.service.js';
 import { composeFrontmatter } from '../common/frontmatter.js';
 import { LISTED_PAGE } from '../common/listed-page.js';
+import { withSubjectLock } from '../common/subject-lock.js';
 import { t } from '../i18n/t.js';
 import { findSecret } from '../common/secret-scan.js';
 import {
@@ -209,10 +210,12 @@ export class CaptureService {
 
     // The same capture again — a retry, a second session, a looping agent —
     // is a row of its own (it counts against the rate limit) pointing at
-    // what the first became, and proposes nothing.
-    const prior = await this.priorCapture(staged, contentHash);
-    if (prior) {
-      const row = await this.prisma.knowledgeCapture.create({
+    // what the first became, and proposes nothing. Looked up and inserted under
+    // one lock per project (#815), or two at once both stage and both propose.
+    const row = await withSubjectLock(this.prisma, `capture:${staged.projectId}`, async () => {
+      const prior = await this.priorCapture(staged, contentHash);
+      if (!prior) return this.prisma.knowledgeCapture.create({ data: { ...base, status: 'staged' } });
+      return this.prisma.knowledgeCapture.create({
         data: {
           ...base,
           status: 'duplicate',
@@ -222,10 +225,8 @@ export class CaptureService {
           glossaryTermId: prior.glossaryTermId,
         },
       });
-      return this.toResult(row, await this.mergeRequestStatus(row.mergeRequestId));
-    }
-
-    const row = await this.prisma.knowledgeCapture.create({ data: { ...base, status: 'staged' } });
+    });
+    if (row.status === 'duplicate') return this.toResult(row, await this.mergeRequestStatus(row.mergeRequestId));
     return this.drive(row.id, principal);
   }
 

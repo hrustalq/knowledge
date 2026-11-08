@@ -27,6 +27,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { ActivityService } from '../activity/activity.service.js';
 import { ProjectsService } from '../projects/projects.service.js';
 import { composeFrontmatter } from '../common/frontmatter.js';
+import { withSubjectLock } from '../common/subject-lock.js';
 import {
   readFrontmatterRelations,
   readFrontmatterTags,
@@ -397,43 +398,47 @@ export class TemplatesService {
   // ------------------------------------------------------------------ writes
 
   async create(input: CreateTemplateInput, userId?: string): Promise<TemplateDetail> {
-    const total = await this.prisma.pageTemplate.count({ where: { workspaceId: input.workspaceId } });
-    if (total >= TEMPLATES_MAX_PER_WORKSPACE) {
-      throw new ConflictException(t('error.template.limitReached', { max: TEMPLATES_MAX_PER_WORKSPACE }));
-    }
+    // Cap, name check and insert under one lock per workspace (#815): two
+    // creates of one name both passed the check.
+    return withSubjectLock(this.prisma, templateLockKey(input.workspaceId), async () => {
+      const total = await this.prisma.pageTemplate.count({ where: { workspaceId: input.workspaceId } });
+      if (total >= TEMPLATES_MAX_PER_WORKSPACE) {
+        throw new ConflictException(t('error.template.limitReached', { max: TEMPLATES_MAX_PER_WORKSPACE }));
+      }
 
-    if (input.builtInKey !== undefined) return this.createOverride(input, userId);
+      if (input.builtInKey !== undefined) return this.createOverride(input, userId);
 
-    if (input.projectId) await this.projects.requireProjectInWorkspace(input.projectId, input.workspaceId);
-    const name = input.name?.trim();
-    if (!name) throw new BadRequestException(t('error.template.nameRequired'));
-    if (!input.source) throw new BadRequestException(t('error.template.sourceRequired'));
-    const parsed = this.parseOrThrow(input.source);
-    await this.assertNameFree(input.workspaceId, input.projectId ?? null, name);
+      if (input.projectId) await this.projects.requireProjectInWorkspace(input.projectId, input.workspaceId);
+      const name = input.name?.trim();
+      if (!name) throw new BadRequestException(t('error.template.nameRequired'));
+      if (!input.source) throw new BadRequestException(t('error.template.sourceRequired'));
+      const parsed = this.parseOrThrow(input.source);
+      await this.assertNameFree(input.workspaceId, input.projectId ?? null, name);
 
-    // `withTransaction`, not `$transaction`: a scaffold (#716) creates the
-    // project's templates inside its own boundary, and must be able to roll them back.
-    const row = await this.prisma.withTransaction(async () => {
-      const created = await this.prisma.pageTemplate.create({
-        data: {
-          workspaceId: input.workspaceId,
-          projectId: input.projectId ?? null,
-          name,
-          description: input.description ?? parsed.meta.description ?? null,
-          icon: input.icon ?? null,
-          category: parsed.meta.category,
-          currentVersion: 1,
-          enabled: input.enabled ?? true,
-          createdBy: userId ?? null,
-        },
+      // `withTransaction`, not `$transaction`: a scaffold (#716) creates the
+      // project's templates inside its own boundary, and must be able to roll them back.
+      const row = await this.prisma.withTransaction(async () => {
+        const created = await this.prisma.pageTemplate.create({
+          data: {
+            workspaceId: input.workspaceId,
+            projectId: input.projectId ?? null,
+            name,
+            description: input.description ?? parsed.meta.description ?? null,
+            icon: input.icon ?? null,
+            category: parsed.meta.category,
+            currentVersion: 1,
+            enabled: input.enabled ?? true,
+            createdBy: userId ?? null,
+          },
+        });
+        await this.prisma.pageTemplateVersion.create({
+          data: { templateId: created.id, version: 1, source: input.source!, meta: this.metaJson(parsed.meta), createdBy: userId ?? null },
+        });
+        return created;
       });
-      await this.prisma.pageTemplateVersion.create({
-        data: { templateId: created.id, version: 1, source: input.source!, meta: this.metaJson(parsed.meta), createdBy: userId ?? null },
-      });
-      return created;
+      this.record(row, 'template.created', userId);
+      return this.get(row.id);
     });
-    this.record(row, 'template.created', userId);
-    return this.get(row.id);
   }
 
   /**
@@ -443,51 +448,56 @@ export class TemplatesService {
    * source identical to the current one is not a change either.
    */
   async update(id: string, input: UpdateTemplateInput, userId?: string): Promise<TemplateDetail> {
-    const row = await this.requireRow(id);
-    const name = input.name?.trim();
-    if (input.name !== undefined && !name && !row.builtInKey) throw new BadRequestException(t('error.template.nameRequired'));
-    if (name && name !== row.name && !row.builtInKey) await this.assertNameFree(row.workspaceId, row.projectId, name, row.id);
+    // Read again under the workspace's lock (#815): a rename's name check and
+    // a source change's next version number must not race another writer.
+    const { workspaceId } = await this.requireRow(id);
+    return withSubjectLock(this.prisma, templateLockKey(workspaceId), async () => {
+      const row = await this.requireRow(id);
+      const name = input.name?.trim();
+      if (input.name !== undefined && !name && !row.builtInKey) throw new BadRequestException(t('error.template.nameRequired'));
+      if (name && name !== row.name && !row.builtInKey) await this.assertNameFree(row.workspaceId, row.projectId, name, row.id);
 
-    let nextVersion: { version: number; source: string; meta: TemplateMeta } | null = null;
-    if (input.source !== undefined) {
-      const parsed = this.parseOrThrow(input.source);
-      const current = await this.prisma.pageTemplateVersion.findUnique({
-        where: { templateId_version: { templateId: row.id, version: row.currentVersion } },
-        select: { source: true },
-      });
-      if (current?.source !== input.source) {
-        // A built-in override's own versions continue from the shipped one, so
-        // its history reads as one line: shipped v1, then the workspace's v2…
-        const base = current ? row.currentVersion : this.builtInVersion(row);
-        nextVersion = { version: base + 1, source: input.source, meta: parsed.meta };
-      }
-    }
-
-    const data: Prisma.PageTemplateUpdateInput = {
-      ...(input.name !== undefined ? { name: name ?? '' } : {}),
-      ...(input.description !== undefined ? { description: input.description } : {}),
-      ...(input.icon !== undefined ? { icon: input.icon } : {}),
-      ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
-      ...(nextVersion ? { currentVersion: nextVersion.version, category: nextVersion.meta.category } : {}),
-    };
-    if (Object.keys(data).length === 0) return this.get(id);
-
-    const updated = await this.prisma.$transaction(async (tx) => {
-      if (nextVersion) {
-        await tx.pageTemplateVersion.create({
-          data: {
-            templateId: row.id,
-            version: nextVersion.version,
-            source: nextVersion.source,
-            meta: this.metaJson(nextVersion.meta),
-            createdBy: userId ?? null,
-          },
+      let nextVersion: { version: number; source: string; meta: TemplateMeta } | null = null;
+      if (input.source !== undefined) {
+        const parsed = this.parseOrThrow(input.source);
+        const current = await this.prisma.pageTemplateVersion.findUnique({
+          where: { templateId_version: { templateId: row.id, version: row.currentVersion } },
+          select: { source: true },
         });
+        if (current?.source !== input.source) {
+          // A built-in override's own versions continue from the shipped one, so
+          // its history reads as one line: shipped v1, then the workspace's v2…
+          const base = current ? row.currentVersion : this.builtInVersion(row);
+          nextVersion = { version: base + 1, source: input.source, meta: parsed.meta };
+        }
       }
-      return tx.pageTemplate.update({ where: { id: row.id }, data });
+
+      const data: Prisma.PageTemplateUpdateInput = {
+        ...(input.name !== undefined ? { name: name ?? '' } : {}),
+        ...(input.description !== undefined ? { description: input.description } : {}),
+        ...(input.icon !== undefined ? { icon: input.icon } : {}),
+        ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
+        ...(nextVersion ? { currentVersion: nextVersion.version, category: nextVersion.meta.category } : {}),
+      };
+      if (Object.keys(data).length === 0) return this.get(id);
+
+      const updated = await this.prisma.withTransaction(async () => {
+        if (nextVersion) {
+          await this.prisma.pageTemplateVersion.create({
+            data: {
+              templateId: row.id,
+              version: nextVersion.version,
+              source: nextVersion.source,
+              meta: this.metaJson(nextVersion.meta),
+              createdBy: userId ?? null,
+            },
+          });
+        }
+        return this.prisma.pageTemplate.update({ where: { id: row.id }, data });
+      });
+      this.record(updated, 'template.updated', userId, nextVersion ? { version: nextVersion.version } : {});
+      return this.get(id);
     });
-    this.record(updated, 'template.updated', userId, nextVersion ? { version: nextVersion.version } : {});
-    return this.get(id);
   }
 
   /** Soft. Custom templates only: a built-in is hidden (`enabled = false`), not archived. */
@@ -522,9 +532,8 @@ export class TemplatesService {
     const key = input.builtInKey ?? '';
     if (!isBuiltInTemplateKey(key)) throw new NotFoundException(t('error.template.notFound', { ref: key }));
     if (input.projectId) throw new BadRequestException(t('error.template.builtInWorkspaceOnly'));
-    // App-side uniqueness (one override per built-in per workspace). A race
-    // can still insert two; `resolve` reads the first, and reset deletes it,
-    // after which the second takes over — it self-corrects on the next reset.
+    // App-side uniqueness (one override per built-in per workspace), checked
+    // under `create`'s workspace lock (#815).
     const existing = await this.prisma.pageTemplate.findFirst({
       where: { workspaceId: input.workspaceId, builtInKey: key, projectId: null },
       select: { id: true },
@@ -538,8 +547,8 @@ export class TemplatesService {
     }
     const builtIn = BUILT_IN_TEMPLATES[key];
     const parsed = input.source ? this.parseOrThrow(input.source) : null;
-    const row = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.pageTemplate.create({
+    const row = await this.prisma.withTransaction(async () => {
+      const created = await this.prisma.pageTemplate.create({
         data: {
           workspaceId: input.workspaceId,
           projectId: null,
@@ -555,7 +564,7 @@ export class TemplatesService {
         },
       });
       if (parsed) {
-        await tx.pageTemplateVersion.create({
+        await this.prisma.pageTemplateVersion.create({
           data: {
             templateId: created.id,
             version: builtIn.version + 1,
@@ -775,3 +784,6 @@ export class TemplatesService {
     }));
   }
 }
+
+/** One lock per workspace for template writes: the cap, name uniqueness and version numbers (#815). */
+const templateLockKey = (workspaceId: string): string => `templates:${workspaceId}`;

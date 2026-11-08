@@ -229,6 +229,7 @@ describe('AgentScheduleSweeper.startDue', async () => {
     const created: Record<string, unknown>[] = [];
     const findMany = vi.fn(async () => candidates);
     const prisma = {
+      $executeRaw: async () => 1,
       aiAgent: { findMany, update: vi.fn(async () => ({})) },
       agentRun: {
         count: vi.fn(async () => 0),
@@ -374,6 +375,7 @@ describe('AgentScheduleSweeper — stale runs are reset by a guarded statement (
       return hit.length;
     };
     const prisma = {
+      $executeRaw: async () => 1,
       agentRun: {
         findMany: vi.fn(async ({ where }: { where: Where }) => runs.filter((r) => matches(r, where)).map((r) => ({ ...r }))),
         updateMany: vi.fn(async ({ where, data }: { where: Where; data: Record<string, unknown> }) => {
@@ -559,6 +561,8 @@ describe('page-scoped runs (AgentRunInput.documentIds)', async () => {
   function serviceFor(key: string) {
     const created: Record<string, unknown>[] = [];
     const prisma = {
+      withTransaction: async <T>(fn: () => Promise<T>) => fn(),
+      $executeRaw: async () => 1,
       agentRun: {
         count: vi.fn(async () => 0),
         create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
@@ -615,6 +619,8 @@ describe('connector-scoped runs named by project (#553)', async () => {
       repos.filter((r) => !where.projectId || r.projectId === where.projectId),
     );
     const prisma = {
+      withTransaction: async <T>(fn: () => Promise<T>) => fn(),
+      $executeRaw: async () => 1,
       connector: { findMany },
       agentRun: {
         count: vi.fn(async () => 0),

@@ -35,6 +35,8 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { ActivityService } from '../activity/activity.service.js';
 import { ProjectsService } from '../projects/projects.service.js';
 import { WorkflowProducer } from './workflow.producer.js';
+import { workflowRunLockKey } from './workflow.constants.js';
+import { withSubjectLock } from '../common/subject-lock.js';
 import { WorkflowRunnerService } from './workflow-runner.service.js';
 import { templateIssues } from './workflow-templates.js';
 import { TemplatesService } from '../templates/templates.service.js';
@@ -238,30 +240,31 @@ export class WorkflowsService {
     const graph = definition.graph as unknown as WorkflowGraph;
     const { entry } = this.compileOrThrow(graph);
 
-    // One live run per (definition, page). Two runs writing the same fan-out
-    // would race to create the same pages.
-    const existing = await this.prisma.workflowRun.findFirst({
-      where: {
-        definitionId: definition.id,
-        rootDocumentId: document.id,
-        status: { notIn: ['completed', 'cancelled'] },
-      },
-      select: { id: true, status: true },
-    });
-    if (existing) {
-      throw new ConflictException({
-        statusCode: 409,
-        message: t('error.workflow.runInFlightForPage'),
-        reason: 'run-in-flight',
-        runId: existing.id,
-        runStatus: existing.status,
-      });
-    }
-
     const started = applyRunEvent('pending', { type: 'START' }, { snapshot: initialRunSnapshot() });
 
-    const run = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.workflowRun.create({
+    // One live run per (definition, page): two runs writing the same fan-out
+    // would race to create the same pages. Checked and inserted under one lock
+    // (#815), which the event trigger takes too. Run + entry nodes commit together.
+    const run = await withSubjectLock(this.prisma, workflowRunLockKey(definition.id, document.id), async () => {
+      const existing = await this.prisma.workflowRun.findFirst({
+        where: {
+          definitionId: definition.id,
+          rootDocumentId: document.id,
+          status: { notIn: ['completed', 'cancelled'] },
+        },
+        select: { id: true, status: true },
+      });
+      if (existing) {
+        throw new ConflictException({
+          statusCode: 409,
+          message: t('error.workflow.runInFlightForPage'),
+          reason: 'run-in-flight',
+          runId: existing.id,
+          runStatus: existing.status,
+        });
+      }
+
+      const created = await this.prisma.workflowRun.create({
         data: {
           workspaceId: input.workspaceId,
           projectId: document.projectId,
@@ -282,7 +285,7 @@ export class WorkflowsService {
           startedAt: new Date(),
         },
       });
-      await tx.workflowRunNode.createMany({
+      await this.prisma.workflowRunNode.createMany({
         data: entry.map((step) => ({
           runId: created.id,
           parentId: null,

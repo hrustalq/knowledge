@@ -365,6 +365,8 @@ function manager(opts: { enabled?: boolean } = {}) {
     domains: [] as unknown[],
   };
   const prisma = {
+    withTransaction: async <T>(fn: () => Promise<T>) => fn(),
+    $executeRaw: async () => 1,
     publishingSettings: { findUnique: vi.fn(async () => ({ allowPublicSites: opts.enabled ?? true })) },
     project: { findUnique: vi.fn(async () => ({ id: PROJECT, workspaceId: WS, site: null })) },
     publishedSite: {

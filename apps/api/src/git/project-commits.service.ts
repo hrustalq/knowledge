@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Prisma } from '@prisma/client';
+import { lockSubject } from '../common/subject-lock.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { slugFor } from './slug.js';
 
@@ -83,7 +84,7 @@ export class ProjectCommitsService {
    */
   async lock(...projectIds: string[]): Promise<void> {
     for (const id of [...new Set(projectIds)].sort()) {
-      await this.prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`project_commits:${id}`}, 0))`;
+      await lockSubject(this.prisma, `project_commits:${id}`);
     }
   }
 

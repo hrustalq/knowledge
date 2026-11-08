@@ -10,6 +10,8 @@ import { ActivityService } from '../activity/activity.service.js';
 import type { Env } from '../config/env.js';
 import { asLocale } from '../i18n/locale.js';
 import { WorkflowProducer } from './workflow.producer.js';
+import { workflowRunLockKey } from './workflow.constants.js';
+import { withSubjectLock } from '../common/subject-lock.js';
 
 /**
  * Starts runs from document events (docs/features/17).
@@ -93,77 +95,81 @@ export class WorkflowTriggerService implements OnModuleInit {
         );
         continue;
       }
+      const createdBy = definition.createdBy;
       if (!trigger.events?.includes(event.type)) continue;
       if (trigger.categories?.length && !trigger.categories.includes(document.category as never)) continue;
 
-      // Never start a second run for a page this definition is already working
-      // on — two runs would race to create the same pages.
-      const inFlight = await this.prisma.workflowRun.count({
-        where: {
-          definitionId: definition.id,
-          rootDocumentId: document.id,
-          status: { notIn: ['completed', 'cancelled'] },
-        },
-      });
-      if (inFlight > 0) continue;
+      // Every check below and the insert run under two locks (#815): the
+      // workspace's, so a burst of events cannot each pass the active-run cap,
+      // then the (definition, page) one the manual start takes. Always in
+      // that order; the manual start takes only the second.
+      await withSubjectLock(this.prisma, `workflow-trigger:${document.workspaceId}`, () =>
+        withSubjectLock(this.prisma, workflowRunLockKey(definition.id, document.id), async () => {
+          // Never start a second run for a page this definition is already working
+          // on — two runs would race to create the same pages.
+          const inFlight = await this.prisma.workflowRun.count({
+            where: {
+              definitionId: definition.id,
+              rootDocumentId: document.id,
+              status: { notIn: ['completed', 'cancelled'] },
+            },
+          });
+          if (inFlight > 0) return;
 
-      // A page this workflow already produced pages for should not silently
-      // grow a second set; re-running is a deliberate act.
-      //
-      // Repo events are the exception (docs/features/32), and the reason the
-      // guard exists is the reason they are exempt from it: a page event
-      // recurs because a run's own output edits pages, so "only ever once" is
-      // what stops the chain feeding itself. A repo event is caused by a person
-      // on the far side, and an issue that opens, closes and reopens over a
-      // month is three separate pieces of news about the same page — under the
-      // absolute guard only the first would ever be heard.
-      //
-      // Exempt is not unbounded: a flow that closes an issue when it finishes
-      // makes the far side move, so a cooldown replaces the guard rather than
-      // removing it.
-      if (isRepoEvent(event.type)) {
-        const since = new Date(Date.now() - this.repoCooldownMs);
-        const recent = await this.prisma.workflowRun.count({
-          where: {
-            definitionId: definition.id,
-            rootDocumentId: document.id,
-            startedBy: 'trigger',
-            createdAt: { gte: since },
-          },
-        });
-        if (recent > 0) continue;
-      } else {
-        const previous = await this.prisma.workflowRun.count({
-          where: { definitionId: definition.id, rootDocumentId: document.id },
-        });
-        if (previous > 0) continue;
-      }
+          // A page this workflow already produced pages for should not silently
+          // grow a second set; re-running is a deliberate act.
+          //
+          // Repo events are the exception (docs/features/32), and the reason the
+          // guard exists is the reason they are exempt from it: a page event
+          // recurs because a run's own output edits pages, so "only ever once" is
+          // what stops the chain feeding itself. A repo event is caused by a person
+          // on the far side, and an issue that opens, closes and reopens over a
+          // month is three separate pieces of news about the same page — under the
+          // absolute guard only the first would ever be heard.
+          //
+          // Exempt is not unbounded: a flow that closes an issue when it finishes
+          // makes the far side move, so a cooldown replaces the guard rather than
+          // removing it.
+          if (isRepoEvent(event.type)) {
+            const since = new Date(Date.now() - this.repoCooldownMs);
+            const recent = await this.prisma.workflowRun.count({
+              where: {
+                definitionId: definition.id,
+                rootDocumentId: document.id,
+                startedBy: 'trigger',
+                createdAt: { gte: since },
+              },
+            });
+            if (recent > 0) return;
+          } else {
+            const previous = await this.prisma.workflowRun.count({
+              where: { definitionId: definition.id, rootDocumentId: document.id },
+            });
+            if (previous > 0) return;
+          }
 
-      const active = await this.prisma.workflowRun.count({
-        where: {
-          workspaceId: document.workspaceId,
-          startedBy: 'trigger',
-          status: { in: ['pending', 'running', 'awaiting-review'] },
-        },
-      });
-      if (active >= this.maxActive) {
-        this.logger.warn(
-          `Auto-start skipped for "${definition.name}": workspace already has ${active} triggered runs in flight`,
-        );
-        continue;
-      }
+          const active = await this.prisma.workflowRun.count({
+            where: {
+              workspaceId: document.workspaceId,
+              startedBy: 'trigger',
+              status: { in: ['pending', 'running', 'awaiting-review'] },
+            },
+          });
+          if (active >= this.maxActive) {
+            this.logger.warn(
+              `Auto-start skipped for "${definition.name}": workspace already has ${active} triggered runs in flight`,
+            );
+            return;
+          }
 
-      await this.start(
-        // Spelled out rather than passed whole: `createdBy` is narrowed to a
-        // string by the guard above, and the Prisma row's type is not.
-        {
-          id: definition.id,
-          name: definition.name,
-          graph: definition.graph,
-          createdBy: definition.createdBy,
-        },
-        document,
-        event.type,
+          await this.start(
+            // Spelled out rather than passed whole: `createdBy` is narrowed to a
+            // string by the guard above, and the Prisma row's type is not.
+            { id: definition.id, name: definition.name, graph: definition.graph, createdBy },
+            document,
+            event.type,
+          );
+        }),
       );
     }
   }
@@ -198,8 +204,8 @@ export class WorkflowTriggerService implements OnModuleInit {
     // nodes enqueues nothing, so reconcileRun never runs and it sits in the list
     // in-flight forever — which also trips the "one live run per (definition,
     // page)" check, refusing every manual start for that page from then on.
-    const run = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.workflowRun.create({
+    const run = await this.prisma.withTransaction(async () => {
+      const created = await this.prisma.workflowRun.create({
         data: {
           workspaceId: document.workspaceId,
           projectId: document.projectId,
@@ -215,7 +221,7 @@ export class WorkflowTriggerService implements OnModuleInit {
           startedAt: new Date(),
         },
       });
-      await tx.workflowRunNode.createMany({
+      await this.prisma.workflowRunNode.createMany({
         data: entry.map((step) => ({
           runId: created.id,
           stepId: step.id,
@@ -226,21 +232,25 @@ export class WorkflowTriggerService implements OnModuleInit {
       return created;
     });
 
-    const nodes = await this.prisma.workflowRunNode.findMany({
-      where: { runId: run.id },
-      select: { id: true },
-    });
-    for (const node of nodes) await this.producer.enqueue(node.id);
+    // The caller holds a transaction open: jobs follow its commit, or the
+    // worker races to nodes that are not there yet.
+    this.prisma.onCommit(async () => {
+      const nodes = await this.prisma.workflowRunNode.findMany({
+        where: { runId: run.id },
+        select: { id: true },
+      });
+      for (const node of nodes) await this.producer.enqueue(node.id);
 
-    void this.activity.record({
-      workspaceId: run.workspaceId,
-      actor: definition.createdBy,
-      action: 'workflow-run.started',
-      documentId: document.id,
-      subjectId: run.id,
-      metadata: { title: name, startedBy: 'trigger', trigger: eventType },
+      void this.activity.record({
+        workspaceId: run.workspaceId,
+        actor: definition.createdBy,
+        action: 'workflow-run.started',
+        documentId: document.id,
+        subjectId: run.id,
+        metadata: { title: name, startedBy: 'trigger', trigger: eventType },
+      });
+      this.logger.log(`Auto-started "${name}" for document ${document.id} on ${eventType}`);
     });
-    this.logger.log(`Auto-started "${name}" for document ${document.id} on ${eventType}`);
   }
 }
 

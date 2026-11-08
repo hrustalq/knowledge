@@ -2,11 +2,12 @@ import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@ne
 import { ConfigService } from '@nestjs/config';
 import { AGENT_SCHEDULE_TICK_MINUTES, isScheduleDue } from '@knowledge/contracts';
 import { requeueStale, staleFailure } from '../common/requeue-stale.js';
+import { withSubjectLock } from '../common/subject-lock.js';
 import type { Env } from '../config/env.js';
 import { asLocale } from '../i18n/locale.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AgentProducer } from './agent.producer.js';
-import { AGENT_MAX_ATTEMPTS } from './agent.constants.js';
+import { AGENT_MAX_ATTEMPTS, agentRunLockKey } from './agent.constants.js';
 import { RUNNABLE_AGENTS } from './agent.executor.js';
 import { scheduleOf } from './agent-schedule.js';
 
@@ -151,12 +152,6 @@ export class AgentScheduleSweeper implements OnModuleInit, OnModuleDestroy {
       const { spec, state } = scheduleOf(agent);
       if (!isScheduleDue(spec, state, new Date())) continue;
 
-      // Back-pressure: never a second run while one is in flight.
-      const inFlight = await this.prisma.agentRun.count({
-        where: { workspaceId: agent.workspaceId, agentKey: agent.key, status: { in: ['pending', 'running'] } },
-      });
-      if (inFlight > 0) continue;
-
       try {
         // A manual run freezes the principal's locale; a scheduled one has no
         // principal, so it is frozen from the owner's stored preference. Left
@@ -168,7 +163,13 @@ export class AgentScheduleSweeper implements OnModuleInit, OnModuleDestroy {
         });
         // The run and the stamp that says it started commit together (#657);
         // the job follows the commit, and `relayPending` covers a lost one.
-        await this.prisma.withTransaction(async () => {
+        // Back-pressure under the manual start's lock (#815): never a second
+        // run while one is in flight, even one a click queued mid-tick.
+        const queued = await withSubjectLock(this.prisma, agentRunLockKey(agent.workspaceId, agent.key), async () => {
+          const inFlight = await this.prisma.agentRun.count({
+            where: { workspaceId: agent.workspaceId, agentKey: agent.key, status: { in: ['pending', 'running'] } },
+          });
+          if (inFlight > 0) return false;
           const run = await this.prisma.agentRun.create({
             data: {
               workspaceId: agent.workspaceId,
@@ -182,8 +183,9 @@ export class AgentScheduleSweeper implements OnModuleInit, OnModuleDestroy {
           });
           await this.prisma.aiAgent.update({ where: { id: agent.id }, data: { lastRunAt: new Date() } });
           this.prisma.onCommit(() => this.producer.enqueue(run.id));
+          return true;
         });
-        started++;
+        if (queued) started++;
       } catch (error) {
         // One bad schedule must not stop the sweep for every other workspace.
         this.logger.warn(`Could not start scheduled run for ${agent.key}: ${String(error)}`);

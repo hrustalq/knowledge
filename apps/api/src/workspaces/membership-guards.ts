@@ -1,3 +1,4 @@
+import { lockSubject } from '../common/subject-lock.js';
 import type { PrismaService } from '../prisma/prisma.service.js';
 
 /**
@@ -100,7 +101,7 @@ export async function removeMemberGuarded(
  * fine at admin-click and sign-in rates.
  */
 export async function lockMembership(prisma: PrismaService, workspaceId: string): Promise<void> {
-  await prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`workspace_members:${workspaceId}`}, 0))`;
+  await lockSubject(prisma, `workspace_members:${workspaceId}`);
 }
 
 /**

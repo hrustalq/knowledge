@@ -80,7 +80,7 @@ function requests(cached: boolean) {
     },
     aiAgent: { findUnique: vi.fn(async () => null) },
   };
-  const prisma = { $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)) };
+  const prisma = { ...tx, withTransaction: vi.fn(async (fn: () => unknown) => fn()) };
   const suites = {
     operationAt: vi.fn(async () => AT),
     find: vi.fn(async () => (cached ? ROW : null)),

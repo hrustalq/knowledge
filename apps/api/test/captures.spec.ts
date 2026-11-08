@@ -95,6 +95,7 @@ function harness(opts: {
   };
   const mrStatus = new Map<string, string>();
   const prisma = {
+    $executeRaw: async () => 1,
     knowledgeCapture,
     withTransaction: vi.fn(async (fn: () => Promise<unknown>) => fn()),
     project: {

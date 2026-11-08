@@ -16,3 +16,10 @@ export const AGENT_MAX_ATTEMPTS = 3;
  * would otherwise carry sixty lines of the same sentence into every poll.
  */
 export const MAX_RUN_WARNINGS = 20;
+
+/**
+ * The `withSubjectLock` key behind "one run per agent at a time" (#815): a
+ * manual start and the schedule sweeper take the same one, so neither can
+ * queue a second run between the other's count and insert.
+ */
+export const agentRunLockKey = (workspaceId: string, agentKey: string): string => `agent-run:${workspaceId}:${agentKey}`;

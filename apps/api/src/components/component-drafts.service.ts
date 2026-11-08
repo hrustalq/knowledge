@@ -11,6 +11,7 @@ import { AgentProducer } from '../agents/agent.producer.js';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { AiUsageService } from '../ai/ai-usage.service.js';
 import type { Principal } from '../auth/principal.js';
+import { withSubjectLock } from '../common/subject-lock.js';
 import { t } from '../i18n/t.js';
 import { visibilityWhere } from '../permissions/access-scope.js';
 import { PermissionService } from '../permissions/permission.service.js';
@@ -76,43 +77,46 @@ export class ComponentDraftsService {
     }
 
     const subjectKey = `component:${connectorId}:${[...paths].sort().join(',')}`;
-    await this.refuseDuplicate(workspaceId, subjectKey);
-
     const agent = await this.registry.resolve(workspaceId, COMPONENT_DRAFT_AGENT_KEY);
     if (!agent.enabled || !agent.config.enabled || agent.missing.some((c) => c !== 'tools')) {
       throw new BadRequestException(t('error.component.draftNoModel'));
     }
     await this.usage.assertWithinBudget(workspaceId, principal.userId);
-    const pending = await this.prisma.agentRun.count({
-      where: { workspaceId, agentKey: COMPONENT_DRAFT_AGENT_KEY, status: 'pending', subjectKey: { startsWith: 'component:' } },
-    });
-    if (pending >= MAX_PENDING_DRAFTS) {
-      throw new ConflictException({
-        statusCode: 409,
-        message: t('error.component.draftQueueFull', { n: pending }),
-        reason: 'queue-full',
+    // The duplicate check, the queue cap and the insert share one lock (#815):
+    // checked before it, two clicks both pass.
+    const run = await withSubjectLock(this.prisma, `component-draft:${workspaceId}`, async () => {
+      await this.refuseDuplicate(workspaceId, subjectKey);
+      const pending = await this.prisma.agentRun.count({
+        where: { workspaceId, agentKey: COMPONENT_DRAFT_AGENT_KEY, status: 'pending', subjectKey: { startsWith: 'component:' } },
       });
-    }
+      if (pending >= MAX_PENDING_DRAFTS) {
+        throw new ConflictException({
+          statusCode: 409,
+          message: t('error.component.draftQueueFull', { n: pending }),
+          reason: 'queue-full',
+        });
+      }
 
-    const override = await this.prisma.aiAgent.findUnique({
-      where: { workspaceId_key: { workspaceId, key: COMPONENT_DRAFT_AGENT_KEY } },
-      select: { id: true },
-    });
-    const input: AgentRunInput = {
-      connectorId,
-      component: { name, paths, ...(symbols.length ? { symbols } : {}), ...place },
-    };
-    const run = await this.prisma.agentRun.create({
-      data: {
-        workspaceId,
-        agentKey: COMPONENT_DRAFT_AGENT_KEY,
-        agentId: override?.id ?? null,
-        trigger: 'manual',
-        subjectKey,
-        createdBy: principal.userId,
-        locale: principal.locale,
-        input: input as unknown as Prisma.InputJsonValue,
-      },
+      const override = await this.prisma.aiAgent.findUnique({
+        where: { workspaceId_key: { workspaceId, key: COMPONENT_DRAFT_AGENT_KEY } },
+        select: { id: true },
+      });
+      const input: AgentRunInput = {
+        connectorId,
+        component: { name, paths, ...(symbols.length ? { symbols } : {}), ...place },
+      };
+      return this.prisma.agentRun.create({
+        data: {
+          workspaceId,
+          agentKey: COMPONENT_DRAFT_AGENT_KEY,
+          agentId: override?.id ?? null,
+          trigger: 'manual',
+          subjectKey,
+          createdBy: principal.userId,
+          locale: principal.locale,
+          input: input as unknown as Prisma.InputJsonValue,
+        },
+      });
     });
     await this.producer.enqueue(run.id);
     return { runId: run.id, connectorId, title: name, paths };

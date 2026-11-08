@@ -8,6 +8,7 @@ import {
   type AgentRunInput,
   type AgentTriggerFilter,
 } from '@knowledge/contracts';
+import { lockSubject } from '../common/subject-lock.js';
 import type { Env } from '../config/env.js';
 import { asLocale } from '../i18n/locale.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -188,7 +189,7 @@ export class AgentTriggerService {
     });
 
     const result = await this.prisma.$transaction(async (tx): Promise<TriggerOutcome> => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`agent-trigger:${trigger.workspaceId}`}))`;
+      await lockSubject(tx, `agent-trigger:${trigger.workspaceId}`);
 
       // A re-index of the same revision is the same news.
       if (facts.event.revisionId) {

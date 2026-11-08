@@ -24,6 +24,15 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- **A double click or a burst of events no longer starts the same work twice.** Each of these was meant to allow
+  only one at a time, but two requests arriving together could both get through, and most of them start a paid model
+  run: Run on an agent (including a scheduled run that started at the same moment, or one started by each of two API
+  replicas), a spec's drift check, a component draft, a workflow run on a page (started by hand or by several page
+  events at once), the same agent-memory capture sent twice, and a connector sync (two Sync clicks, or two webhooks
+  that should have been folded into one run). The same applied to opening a second merge request for the same
+  branches, two custom templates with one name, a site's version and custom-domain limits, and deleting the last two
+  projects of a workspace at once, which left it with none. The second request now gets the usual "already running",
+  "already open" or "limit reached" answer, or joins the run the first one started. (#815)
 - **Imports, memos, exports, workflow runs and connectors keep the caller's language when they start outside an HTTP
   request.** Started from a chat-bot turn, an @mention reply, a git push or a worker run that carries Russian, they
   recorded English, so the parse, transcript, export or workflow they kicked off wrote English text. The assistant's

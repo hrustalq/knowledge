@@ -13,6 +13,7 @@ import {
 } from '@knowledge/contracts';
 import { ActivityService } from '../activity/activity.service.js';
 import type { Env } from '../config/env.js';
+import { withSubjectLock } from '../common/subject-lock.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
@@ -78,34 +79,37 @@ export class SiteDomainsService {
 
   async add(siteId: string, rawHostname: string, actorId?: string): Promise<SiteDomainSummary> {
     this.requireEnabled();
-    const site = await this.prisma.publishedSite.findUnique({ where: { id: siteId }, include: { domains: true } });
-    if (!site) throw new NotFoundException(t('error.site.notFound'));
-    const hostname = normalizeHostname(rawHostname);
-    if (!hostname) throw new BadRequestException({ statusCode: 400, message: t('error.site.domainInvalid'), reason: 'site.domainInvalid' });
-    if (this.isPlatformHost(hostname)) {
-      throw new BadRequestException({ statusCode: 400, message: t('error.site.domainReserved', { hostname }), reason: 'site.domainReserved' });
-    }
-    if (site.domains.some((d) => d.hostname === hostname)) {
-      throw new ConflictException({ statusCode: 409, message: t('error.site.domainExists', { hostname }), reason: 'site.domainExists' });
-    }
-    if (site.domains.length >= SITE_MAX_DOMAINS) {
-      throw new ConflictException({ statusCode: 409, message: t('error.site.domainLimit', { max: SITE_MAX_DOMAINS }), reason: 'site.domainLimit' });
-    }
+    // The duplicate and cap checks and the insert under one lock per site (#815).
+    const { site, domain } = await withSubjectLock(this.prisma, `site:${siteId}`, async () => {
+      const site = await this.prisma.publishedSite.findUnique({ where: { id: siteId }, include: { domains: true } });
+      if (!site) throw new NotFoundException(t('error.site.notFound'));
+      const hostname = normalizeHostname(rawHostname);
+      if (!hostname) throw new BadRequestException({ statusCode: 400, message: t('error.site.domainInvalid'), reason: 'site.domainInvalid' });
+      if (this.isPlatformHost(hostname)) {
+        throw new BadRequestException({ statusCode: 400, message: t('error.site.domainReserved', { hostname }), reason: 'site.domainReserved' });
+      }
+      if (site.domains.some((d) => d.hostname === hostname)) {
+        throw new ConflictException({ statusCode: 409, message: t('error.site.domainExists', { hostname }), reason: 'site.domainExists' });
+      }
+      if (site.domains.length >= SITE_MAX_DOMAINS) {
+        throw new ConflictException({ statusCode: 409, message: t('error.site.domainLimit', { max: SITE_MAX_DOMAINS }), reason: 'site.domainLimit' });
+      }
 
-    // An unproven claim by another site holds nothing: whoever proves control
-    // first keeps the name. The guarded delete leaves a claim that was
-    // verified in the meantime alone, and the insert below then 409s.
-    await this.prisma.siteDomain.deleteMany({ where: { hostname, verifiedAt: null, siteId: { not: siteId } } });
-    let domain: SiteDomain;
-    try {
-      domain = await this.prisma.siteDomain.create({
-        data: { siteId, hostname, verifyToken: randomBytes(16).toString('hex'), createdBy: actorId ?? AUTHOR_ID_STUB },
-      });
-    } catch (e) {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') throw this.taken(hostname);
-      throw e;
-    }
-    this.record(site, 'site.domain.added', actorId, { hostname });
+      // An unproven claim by another site holds nothing: whoever proves control
+      // first keeps the name. The guarded delete leaves a claim that was
+      // verified in the meantime alone, and the insert below then 409s.
+      await this.prisma.siteDomain.deleteMany({ where: { hostname, verifiedAt: null, siteId: { not: siteId } } });
+      try {
+        const domain = await this.prisma.siteDomain.create({
+          data: { siteId, hostname, verifyToken: randomBytes(16).toString('hex'), createdBy: actorId ?? AUTHOR_ID_STUB },
+        });
+        return { site, domain };
+      } catch (e) {
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') throw this.taken(hostname);
+        throw e;
+      }
+    });
+    this.record(site, 'site.domain.added', actorId, { hostname: domain.hostname });
     return this.summary(domain, site);
   }
 

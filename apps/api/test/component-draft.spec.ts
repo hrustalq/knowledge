@@ -204,6 +204,8 @@ describe('asking for a draft', () => {
   function drafts(opts: { declared?: boolean; prior?: Array<Record<string, unknown>>; model?: boolean; connectors?: number } = {}) {
     const created: Array<{ data: Record<string, unknown> }> = [];
     const prisma = {
+      withTransaction: async <T>(fn: () => Promise<T>) => fn(),
+      $executeRaw: async () => 1,
       componentDeclaration: {
         findMany: vi.fn(async () => (opts.declared ? [{ documentId: 'decl', paths: [POPOVER] }] : [])),
       },

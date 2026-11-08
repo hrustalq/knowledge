@@ -4,14 +4,15 @@ import type { PrismaService } from '../prisma/prisma.service.js';
  * The membership writes that must never leave a workspace without an admin,
  * shared by the members routes and IdP role sync (#75).
  *
- * Last-admin protection has to be ONE statement. `count(other admins)` then
- * `update`/`delete` is check-then-act with nothing enforcing it: two concurrent
- * removals of the last two admins each counted one other admin and each
- * proceeded, leaving a workspace with zero admins — which no API route can
- * repair, since adding a member is itself admin-gated. The EXISTS subquery is
- * evaluated inside the same statement as the write, so exactly one wins. Raw
- * SQL for the same reason AgentFindingsService.claim uses it: the query API
- * cannot express a predicate over a sibling row set.
+ * A workspace left with zero admins cannot be repaired by any API route, since
+ * adding a member is itself admin-gated. One guarded statement is not enough
+ * on its own: under READ COMMITTED, A demoting B while B demotes A is write
+ * skew — each EXISTS still sees the other as admin, each statement locks a
+ * different row, and both commit (#808). So every guarded write first takes
+ * {@link lockMembership}, which serialises them per workspace; the EXISTS is
+ * then read after the other writer committed. Raw SQL for the same reason
+ * AgentFindingsService.claim uses it: the query API cannot express a predicate
+ * over a sibling row set.
  *
  * Both return false when the guard refused (or the row is gone, or is
  * outside `sources`); the caller decides whether that is a 400 or
@@ -37,20 +38,23 @@ export async function setRoleGuarded(
   opts: GuardOptions = {},
 ): Promise<boolean> {
   const sources = opts.sources ? [...opts.sources] : null;
-  const affected = await prisma.$executeRaw`
-    UPDATE workspace_members
-       SET role = ${role}
-     WHERE workspace_id = ${workspaceId}::uuid
-       AND user_id = ${userId}::uuid
-       AND (${sources}::text[] IS NULL OR source = ANY(${sources}::text[]))
-       AND (role <> 'admin' OR ${role}::text = 'admin' OR EXISTS (
-             SELECT 1 FROM workspace_members other
-              WHERE other.workspace_id = ${workspaceId}::uuid
-                AND other.role = 'admin'
-                AND other.user_id <> ${userId}::uuid
-           ))
-  `;
-  return affected > 0;
+  return prisma.withTransaction(async () => {
+    await lockMembership(prisma, workspaceId);
+    const affected = await prisma.$executeRaw`
+      UPDATE workspace_members
+         SET role = ${role}
+       WHERE workspace_id = ${workspaceId}::uuid
+         AND user_id = ${userId}::uuid
+         AND (${sources}::text[] IS NULL OR source = ANY(${sources}::text[]))
+         AND (role <> 'admin' OR ${role}::text = 'admin' OR EXISTS (
+               SELECT 1 FROM workspace_members other
+                WHERE other.workspace_id = ${workspaceId}::uuid
+                  AND other.role = 'admin'
+                  AND other.user_id <> ${userId}::uuid
+             ))
+    `;
+    return affected > 0;
+  });
 }
 
 /**
@@ -64,21 +68,39 @@ export async function removeMemberGuarded(
   opts: GuardOptions = {},
 ): Promise<boolean> {
   const sources = opts.sources ? [...opts.sources] : null;
-  const affected = await prisma.$executeRaw`
-    DELETE FROM workspace_members
-     WHERE workspace_id = ${workspaceId}::uuid
-       AND user_id = ${userId}::uuid
-       AND (${sources}::text[] IS NULL OR source = ANY(${sources}::text[]))
-       AND (role <> 'admin' OR EXISTS (
-             SELECT 1 FROM workspace_members other
-              WHERE other.workspace_id = ${workspaceId}::uuid
-                AND other.role = 'admin'
-                AND other.user_id <> ${userId}::uuid
-           ))
-  `;
-  if (affected === 0) return false;
-  await dropWorkspaceAccess(prisma, workspaceId, userId);
-  return true;
+  // One commit: the member row and the groups and grants it held go together.
+  return prisma.withTransaction(async () => {
+    await lockMembership(prisma, workspaceId);
+    const affected = await prisma.$executeRaw`
+      DELETE FROM workspace_members
+       WHERE workspace_id = ${workspaceId}::uuid
+         AND user_id = ${userId}::uuid
+         AND (${sources}::text[] IS NULL OR source = ANY(${sources}::text[]))
+         AND (role <> 'admin' OR EXISTS (
+               SELECT 1 FROM workspace_members other
+                WHERE other.workspace_id = ${workspaceId}::uuid
+                  AND other.role = 'admin'
+                  AND other.user_id <> ${userId}::uuid
+             ))
+    `;
+    if (affected === 0) return false;
+    await dropWorkspaceAccess(prisma, workspaceId, userId);
+    return true;
+  });
+}
+
+/**
+ * Serialise this workspace's guarded membership writes until the transaction
+ * commits. An advisory lock rather than `workspaces … FOR UPDATE`: a row lock
+ * would also queue behind a rename or a teardown. A caller that writes several
+ * members in one boundary (SCIM, #75) takes it first, so it never holds a member
+ * row while waiting on a guard that holds the lock. A no-op outside a transaction.
+ *
+ * ponytail: one lock per workspace serialises every guarded membership write;
+ * fine at admin-click and sign-in rates.
+ */
+export async function lockMembership(prisma: PrismaService, workspaceId: string): Promise<void> {
+  await prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`workspace_members:${workspaceId}`}, 0))`;
 }
 
 /**

@@ -773,15 +773,14 @@ export class TemplatesService {
   }
 
   private record(row: PageTemplate, action: string, userId?: string, extra: Record<string, unknown> = {}): void {
-    // After commit: `record` publishes on the bus, and an outer boundary may still roll back.
-    this.prisma.onCommit(() => this.activity.record({
+    void this.activity.record({
       workspaceId: row.workspaceId,
       actor: userId,
       action,
       subjectId: row.id,
       ...(row.projectId ? { projectId: row.projectId } : {}),
       metadata: { title: row.name || row.builtInKey || '', builtInKey: row.builtInKey, ...extra },
-    }));
+    });
   }
 }
 

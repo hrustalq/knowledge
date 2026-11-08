@@ -165,8 +165,9 @@ export class AttachmentsService {
 
   async remove(documentId: string, attachmentId: string, actor: string): Promise<{ deleted: true }> {
     const row = await this.require(documentId, attachmentId);
-    await this.storage.deleteObject(row.s3Key);
+    // Row first, as in complete() (#816): a leftover object is harmless, a row pointing at nothing is not.
     await this.prisma.attachment.delete({ where: { id: row.id } });
+    await this.storage.deleteObject(row.s3Key);
     void this.activity.record({
       workspaceId: row.workspaceId,
       actor,

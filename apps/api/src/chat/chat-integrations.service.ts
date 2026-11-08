@@ -424,21 +424,27 @@ export class ChatIntegrationsService {
     const searchSwitch = dto.searchable === undefined || dto.searchable === !!row.searchableAt ? null : dto.searchable;
     const retentionDays = searchSwitch === null ? null : await this.switchSearch(row, searchSwitch);
     const autoOff = dto.autoHarvest === false || !listening;
-    const next = await this.prisma.chatChannelBinding.update({
-      where: { id },
-      data: {
-        ...(dto.title !== undefined ? { title: dto.title?.trim() || null } : {}),
-        ...(dto.projectId !== undefined ? { projectId: dto.projectId } : {}),
-        ...(dto.agentKey !== undefined ? { agentKey: dto.agentKey } : {}),
-        ...(dto.answerMode !== undefined ? { answerMode: dto.answerMode } : {}),
-        ...(dto.locale !== undefined ? { locale: dto.locale } : {}),
-        ...(dto.listening !== undefined ? { listening: dto.listening } : {}),
-        // Never a body field: whoever turns it on is who it runs as (the agent-trigger owner rule).
-        ...(autoOff ? { autoHarvestBy: null, autoHarvestAt: null } : turningAutoOn ? { autoHarvestBy: actorId, autoHarvestAt: new Date() } : {}),
-        // Also never a body field: who turned it on is the caller.
-        ...(searchSwitch === true ? { searchableBy: actorId, searchableAt: new Date() } : searchSwitch === false ? { searchableBy: null, searchableAt: null } : {}),
-      },
-      include: SUBSCRIPTION_COUNT,
+    // What was kept goes with the switch, in its commit (#816): a refused
+    // notice above or a failed write must not have purged a binding still on.
+    const next = await this.prisma.withTransaction(async () => {
+      if (listenSwitch === false) await this.prisma.chatBufferedMessage.deleteMany({ where: { bindingId: row.id } });
+      if (searchSwitch === false) await this.messages.purgeBinding(row.id);
+      return this.prisma.chatChannelBinding.update({
+        where: { id },
+        data: {
+          ...(dto.title !== undefined ? { title: dto.title?.trim() || null } : {}),
+          ...(dto.projectId !== undefined ? { projectId: dto.projectId } : {}),
+          ...(dto.agentKey !== undefined ? { agentKey: dto.agentKey } : {}),
+          ...(dto.answerMode !== undefined ? { answerMode: dto.answerMode } : {}),
+          ...(dto.locale !== undefined ? { locale: dto.locale } : {}),
+          ...(dto.listening !== undefined ? { listening: dto.listening } : {}),
+          // Never a body field: whoever turns it on is who it runs as (the agent-trigger owner rule).
+          ...(autoOff ? { autoHarvestBy: null, autoHarvestAt: null } : turningAutoOn ? { autoHarvestBy: actorId, autoHarvestAt: new Date() } : {}),
+          // Also never a body field: who turned it on is the caller.
+          ...(searchSwitch === true ? { searchableBy: actorId, searchableAt: new Date() } : searchSwitch === false ? { searchableBy: null, searchableAt: null } : {}),
+        },
+        include: SUBSCRIPTION_COUNT,
+      });
     });
     // Only once the switch is stored: a refused notice above has thrown, and writes no row.
     if (listenSwitch === true) this.recordSwitch(row, actorId, { action: 'chat.listen_enabled', retentionDays: this.listenTtlDays });
@@ -471,10 +477,7 @@ export class ChatIntegrationsService {
   private async switchListening(row: ChatChannelBinding, on: boolean): Promise<void> {
     const integration = await this.require(row.integrationId);
     if (!chatPlatformListens(integration.kind as ChatPlatformKind)) throw new BadRequestException(t('error.chat.listenTelegramOnly'));
-    if (!on) {
-      await this.prisma.chatBufferedMessage.deleteMany({ where: { bindingId: row.id } });
-      return;
-    }
+    if (!on) return; // updateBinding purges in the switch's commit.
     // Telegram's commands are /slash; Teams' are plain words.
     const key = integration.kind === 'telegram' ? 'chat.listen.on' : 'chat.listen.onPlain';
     await this.tellGroup(row, (locale) => t(key, { count: this.listenTtlDays }, locale), 'error.chat.listenNoticeFailed', integration);
@@ -487,10 +490,7 @@ export class ChatIntegrationsService {
    * Returns the retention applied when on, for the audit row.
    */
   private async switchSearch(row: ChatChannelBinding, on: boolean): Promise<number | null> {
-    if (!on) {
-      await this.messages.purgeBinding(row.id);
-      return null;
-    }
+    if (!on) return null; // updateBinding purges in the switch's commit.
     if (!this.messages.enabled) throw new BadRequestException(t('error.chat.searchDisabled'));
     const { retentionDays } = await this.messages.settings(row.workspaceId);
     await this.tellGroup(row, (locale) => t('chat.search.on', { count: retentionDays.applied }, locale), 'error.chat.searchNoticeFailed');

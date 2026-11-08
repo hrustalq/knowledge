@@ -422,17 +422,15 @@ export class SsoFlowService {
                 data: { revokedAt: new Date() },
               })
             : { count: 0 };
-        this.prisma.onCommit(() =>
-          this.audit.record({
-            workspaceId: provider.workspaceId,
-            actor: 'idp',
-            action: 'auth.session_revoked',
-            params: { via: 'backchannel', providerId: provider.id, by: claims.sid ? 'sid' : 'sub', sessionsRevoked: count },
-            ok: true,
-            ip: meta.ip,
-            target: identity?.userId ?? null,
-          }),
-        );
+        void this.audit.record({
+          workspaceId: provider.workspaceId,
+          actor: 'idp',
+          action: 'auth.session_revoked',
+          params: { via: 'backchannel', providerId: provider.id, by: claims.sid ? 'sid' : 'sub', sessionsRevoked: count },
+          ok: true,
+          ip: meta.ip,
+          target: identity?.userId ?? null,
+        });
       });
     } catch (e) {
       // Caught outside the boundary: a P2002 aborts the transaction, so nothing inside it may carry on.

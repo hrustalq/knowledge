@@ -581,16 +581,14 @@ export class GitPushService {
       // One feed row per pushed ref, beside each revision's own `revision.finalized`
       // (triggers and chat notifications read those). Post-commit, as every record is.
       const tip = planned.at(-1)!;
-      this.prisma.onCommit(() =>
-        this.activity.record({
-          workspaceId,
-          projectId,
-          actor: userId,
-          action: 'git.pushed',
-          subjectId: commitIds.get(tip.id),
-          metadata: { branch, commits: planned.length, pages: last.size, sha: tip.sha, subject: tip.subject },
-        }),
-      );
+      void this.activity.record({
+        workspaceId,
+        projectId,
+        actor: userId,
+        action: 'git.pushed',
+        subjectId: commitIds.get(tip.id),
+        metadata: { branch, commits: planned.length, pages: last.size, sha: tip.sha, subject: tip.subject },
+      });
       return { created, revisionFor: (documentId: string) => last.get(documentId) ?? null };
     });
   }

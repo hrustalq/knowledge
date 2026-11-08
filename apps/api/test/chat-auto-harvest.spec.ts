@@ -286,6 +286,7 @@ describe('the switch', () => {
       ...over,
     };
     const prisma = {
+      withTransaction: vi.fn(async (fn: () => Promise<unknown>) => fn()),
       chatChannelBinding: {
         findUnique: vi.fn(async () => row),
         update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ ...row, ...data, _count: { subscriptions: 0 }, createdAt: new Date(), updatedAt: new Date() })),

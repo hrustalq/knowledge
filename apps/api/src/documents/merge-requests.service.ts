@@ -1626,21 +1626,15 @@ export class MergeRequestsService {
     });
     if (!doc) return null;
     // The lookup stays inline — callers use the returned page synchronously —
-    // but the record itself is post-commit: it publishes onto the Redis bus and
-    // fans out notifications, neither of which can be taken back. Callers that
-    // run inside a transaction (merge, agent-finding proposals) would otherwise
-    // announce a merge request that has not committed. Outside a transaction
-    // `onCommit` runs it immediately, so every other caller is unchanged.
-    this.prisma.onCommit(() =>
-      this.activity.record({
-        workspaceId: doc.workspaceId,
-        actor,
-        action,
-        documentId,
-        subjectId,
-        metadata: { documentTitle: doc.title, ...metadata },
-      }),
-    );
+    // and `record` itself waits for the commit when a transaction is open.
+    void this.activity.record({
+      workspaceId: doc.workspaceId,
+      actor,
+      action,
+      documentId,
+      subjectId,
+      metadata: { documentTitle: doc.title, ...metadata },
+    });
     return doc;
   }
 

@@ -24,6 +24,22 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- **A failure halfway through an action no longer leaves half of it behind.** Inviting someone without a password could
+  create an account with no invite link, which nobody could sign into and which a second invite refused as taken; the
+  account and its link are now written together. "Link a source" with a new credential left a stray saved connection
+  when the URL could not be read. Rotating your key through the old `POST /v1/me/api-key` route could revoke every key
+  and mint none. A page report could start a paid check that its report never pointed to. Turning a chat's listening
+  or search off deleted what was kept even when the switch then failed to save. Deleting an attachment could remove
+  the file and keep its entry, leaving a broken link. Each of these now either completes in full or leaves nothing.
+  (#816)
+- **Handing the same object off to a tracker twice at once opens one ticket.** Two handoffs arriving together (a
+  person and a handoff rule, or a double click) both opened a ticket, and the second one was left orphaned in the
+  tracker behind an error. The second now waits and returns the first one's ticket. A ticket whose page was deleted
+  no longer gets the same "deleted" comment on every sync tick while the tracker refuses to close it. (#816)
+- **The activity feed, live updates and the audit log no longer report work that was rolled back.** An action that
+  failed after recording itself could still show up in the feed, push a live update or notification, or leave an audit
+  row, and a failed audit write could abort the action it was recording. Both now wait for the action to commit.
+  (#816)
 - **A double click or a burst of events no longer starts the same work twice.** Each of these was meant to allow
   only one at a time, but two requests arriving together could both get through, and most of them start a paid model
   run: Run on an agent (including a scheduled run that started at the same moment, or one started by each of two API

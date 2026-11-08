@@ -187,14 +187,18 @@ export class WorkItemSyncSweeper implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  /** The object is gone: say so on the ticket, close it, drop the row. A failure leaves it for the next tick. */
+  /**
+   * The object is gone: close the ticket, say so on it, drop the row. A failure
+   * leaves it for the next tick, so the step that repeats comes first (#816):
+   * a transition to the status it already has is a no-op, a comment is not.
+   */
   private async closeForDeletedAnchor(connector: Connector, item: ConnectorWorkItem): Promise<void> {
     const tracker = this.trackers.trackerFor(connector);
     const raw = this.workItems.mapFor(connector).outbound.wont_do;
     if (!tracker) return;
     try {
-      await tracker.comment(connector, item, [{ text: t('connector.workItem.deleted', {}, asLocale(connector.locale)) }]);
       if (raw) await tracker.transition(connector, item, raw);
+      await tracker.comment(connector, item, [{ text: t('connector.workItem.deleted', {}, asLocale(connector.locale)) }]);
       await this.prisma.connectorWorkItem.delete({ where: { id: item.id } });
     } catch (err) {
       this.logger.warn(`could not close ${keyOf(item)} for a deleted anchor: ${(err as Error).message}`);

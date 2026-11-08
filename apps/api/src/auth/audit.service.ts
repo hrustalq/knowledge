@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import type { AuditAction, AuditLogEntry } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { activeTransaction } from '../prisma/transaction.js';
 
 export interface AuditEntryInput {
   /** Null for a platform event that belongs to no workspace — a sign-in (#75). */
@@ -48,8 +49,18 @@ export class AuditService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Best-effort: an audit-write failure is logged loudly but never masks the result. */
+  /**
+   * Best-effort: an audit-write failure is logged loudly but never masks the result.
+   * Inside a transaction the row waits for the commit (#816): a swallowed
+   * Postgres error would otherwise abort the caller's transaction, and a row
+   * about a write that then rolls back records something that never happened.
+   */
   async record(entry: AuditEntryInput): Promise<void> {
+    if (activeTransaction()) return this.prisma.onCommit(() => this.write(entry));
+    await this.write(entry);
+  }
+
+  private async write(entry: AuditEntryInput): Promise<void> {
     try {
       await this.prisma.auditLog.create({
         data: {

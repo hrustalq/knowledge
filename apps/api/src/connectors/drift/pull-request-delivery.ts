@@ -21,9 +21,8 @@ export interface PullRequestDelivery {
  * Whether a per-connector delivery is authentic, for either host.
  *
  * GitLab sends the shared secret back verbatim in `X-Gitlab-Token`; GitHub
- * signs the body. `markdown-git`'s own check compared GitLab's token with `!==`,
- * which is fine for a sync trigger and not for a trigger that spends model
- * calls, so this one compares in constant time like the HMAC path does.
+ * signs the body. The token is compared in constant time, like the HMAC path.
+ * `markdown-git`'s push check routes through here too (GHSA-pc42).
  */
 export function verifyRepoDelivery(headers: Record<string, string>, rawBody: string, secret: string): boolean {
   const gitlabToken = headers['x-gitlab-token'];

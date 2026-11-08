@@ -15,6 +15,12 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Security
+
+- **Password-reset and invite links are stricter.** A link works once, and setting a password ends every earlier
+  link sent to that person. Upgrade promptly.
+- **Connector webhooks do less work for unverified deliveries.** Upgrade promptly.
+
 ### Fixed
 
 - **A repeated finalize no longer indexes a revision twice, and a stale save no longer overwrites a newer one.** A

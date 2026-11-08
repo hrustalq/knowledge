@@ -463,7 +463,7 @@ describe('#656 revoke and offboard commit with the change', () => {
     it('resetPassword: the token stays unspent and the old hash stays', async () => {
       const { prisma, committed } = fakePrisma({
         'passwordResetToken.findUnique': { id: 'rt1', userId: U, usedAt: null, expiresAt: new Date(Date.now() + 60_000), purpose: 'reset' },
-        'passwordResetToken.update': {},
+        'passwordResetToken.updateMany': { count: 1 },
         'user.update': {},
         'user.updateMany': { count: 0 },
       });

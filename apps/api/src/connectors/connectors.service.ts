@@ -373,6 +373,32 @@ export class ConnectorsService {
     onStage: (stage: string, progress?: number | null) => Promise<void>,
     signal?: AbortSignal,
   ): Promise<ConnectorContext> {
+    return {
+      ...this.bareContext(row, onStage, signal),
+      ...(await this.credentialFor(row)),
+      // A crawled tree stops at the workspace's page cap (#674, phase 3).
+      ...(row.kind === 'web' && webCrawls(row.config) && this.sourceSettings
+        ? { maxItems: (await this.sourceSettings.limits(row.workspaceId)).maxPages }
+        : {}),
+    };
+  }
+
+  /**
+   * What verifying an unauthenticated webhook delivery needs: the decrypted
+   * webhook secret and the config, never the credential. `contextFor` decrypts
+   * it and, for a Figma grant or a GitHub App, mints a token over the network —
+   * work anyone who knows a connector id could otherwise trigger at will. Every
+   * `verifyWebhook` / `verifyHarvestDelivery` is synchronous and reads only these.
+   */
+  webhookContextFor(row: Connector): ConnectorContext {
+    return { ...this.bareContext(row, async () => undefined), credential: null };
+  }
+
+  private bareContext(
+    row: Connector,
+    onStage: (stage: string, progress?: number | null) => Promise<void>,
+    signal?: AbortSignal,
+  ): Omit<ConnectorContext, 'credential'> {
     // Resolved once per context rather than per call: the flag cannot change
     // mid-run, and an adapter calling `debug` in a tight pagination loop should
     // not pay a ConfigService lookup each time.
@@ -394,7 +420,6 @@ export class ConnectorsService {
       connectorId: row.id,
       workspaceId: row.workspaceId,
       config: (row.config ?? {}) as Record<string, string>,
-      ...(await this.credentialFor(row)),
       webhookSecret: decryptSecret(row.webhookSecret, this.key),
       onStage,
       debug,
@@ -408,10 +433,6 @@ export class ConnectorsService {
       userId: row.createdBy,
       locale: row.locale as ConnectorContext['locale'],
       signal,
-      // A crawled tree stops at the workspace's page cap (#674, phase 3).
-      ...(row.kind === 'web' && webCrawls(row.config) && this.sourceSettings
-        ? { maxItems: (await this.sourceSettings.limits(row.workspaceId)).maxPages }
-        : {}),
     };
   }
 

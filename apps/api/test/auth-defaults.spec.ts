@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import 'reflect-metadata';
-import { UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { AuthFlowService } from '../src/auth/auth-flow.service.js';
 import { AuthPolicyService } from '../src/auth/auth-policy.service.js';
 import { toMeResponse } from '../src/auth/me-response.js';
@@ -75,7 +75,18 @@ function world(values: Record<string, unknown>) {
         return row;
       }),
       findUnique: vi.fn(async ({ where }: Row) => byWhere(db.resets, where)),
-      update: vi.fn(async ({ where, data }: Row) => Object.assign(byWhere(db.resets, where)!, data)),
+      deleteMany: vi.fn(async () => ({ count: 0 })),
+      // The guarded spend (by id) and the sibling revoke (by userId); both only touch unspent rows.
+      updateMany: vi.fn(async ({ where, data }: Row) => {
+        const hit = db.resets.filter(
+          (r) =>
+            (where.id ? r.id === where.id : r.userId === where.userId) &&
+            r.usedAt === null &&
+            (!where.expiresAt || r.expiresAt > where.expiresAt.gt),
+        );
+        for (const r of hit) Object.assign(r, data);
+        return { count: hit.length };
+      }),
     },
     session: {
       deleteMany: vi.fn(async () => ({ count: 0 })),
@@ -153,6 +164,22 @@ describe.each([
     await expect(flow.login(EMAIL, PASSWORD)).rejects.toBeInstanceOf(UnauthorizedException);
     await expect(flow.login(EMAIL, 'a brand new secret')).resolves.toMatchObject({ me: { authMethod: 'password' } });
     expect(templates()).toEqual(['verify-email', 'password-reset', 'password-changed']);
+  });
+
+  it('two submissions of one link set the password once, and a reset spends the older links (GHSA-5w5f)', async () => {
+    const { db, flow } = world(values);
+    await flow.signup(EMAIL, 'Ada', PASSWORD);
+    const older = await flow.forgotPassword(EMAIL);
+    const link = await flow.forgotPassword(EMAIL);
+    // Both pass the read before either spends: only the guarded spend tells them apart.
+    const secrets = ['first new secret', 'second new secret'];
+    const results = await Promise.allSettled(secrets.map((p) => flow.resetPassword(link.debugToken!, p)));
+    expect(results.map((r) => r.status).sort()).toEqual(['fulfilled', 'rejected']);
+    const won = secrets[results.findIndex((r) => r.status === 'fulfilled')]!;
+    await expect(flow.login(EMAIL, won)).resolves.toBeDefined();
+    await expect(flow.login(EMAIL, secrets.find((p) => p !== won)!)).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(db.resets.every((r) => r.usedAt)).toBe(true);
+    await expect(flow.resetPassword(older.debugToken!, 'from an old mailbox')).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('enforces no workspace policy on a session or a key', async () => {

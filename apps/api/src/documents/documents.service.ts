@@ -559,29 +559,6 @@ export class DocumentsService {
     }
     const contentHash = createHash('sha256').update(text, 'utf-8').digest('hex');
 
-    // Content-hash idempotency (plan.md §4), against the branch head only
-    // (#636): a body equal to the head is a no-op, while one equal to an older
-    // revision is a revert and advances the head like any other edit. A merge
-    // revision legitimately repeats the source head's content on the target
-    // branch (plan.md §8), so another branch's revisions never count.
-    const branchHead = await this.prisma.documentBranch.findFirst({
-      where: revision.branchId ? { id: revision.branchId } : { documentId, name: document.defaultBranch },
-      select: { headRevisionId: true },
-    });
-    const existing = branchHead?.headRevisionId && opts.dedupe !== false
-      ? await this.prisma.documentRevision.findFirst({ where: { id: branchHead.headRevisionId, contentHash } })
-      : null;
-    if (existing && existing.id !== revision.id) {
-      await this.prisma.withTransaction(async () => {
-        await this.prisma.revisionParent.deleteMany({ where: { revisionId: revision.id } });
-        await this.prisma.documentRevision.delete({ where: { id: revision.id } });
-        // The draft says what `existing` says: it is published as that, with
-        // no credit to write — `existing` keeps its own.
-        if (revision.collabDraftId) await this.markPublished(revision.collabDraftId, existing.id, revision.collabSnapshot, false);
-      });
-      return { revisionId: existing.id, status: existing.status as RevisionStatus, ingestionJobId: null, deduplicated: true };
-    }
-
     // `withTransaction`, NOT `$transaction`: `$transaction` is in
     // NEVER_FROM_TRANSACTION, so under an outer boundary it opens a SECOND
     // transaction on a SECOND pooled connection instead of joining. That is a
@@ -591,10 +568,15 @@ export class DocumentsService {
     // will not release until this call returns. Postgres sees the outer as
     // `idle in transaction` rather than blocked, so its deadlock detector never
     // fires and the request hangs until something kills the connection.
-    const { job, privateBranch } = await this.prisma.withTransaction(async () => {
+    //
+    // Everything that decides the outcome is read or written after the lock
+    // (#806): the status check above is only a fast path, and a second finalize
+    // that waited on the lock (a double-click, a client or MCP retry) must find
+    // the draft already claimed, not repeat the commit and the outbox row.
+    const outcome = await this.prisma.withTransaction(async () => {
       await this.commits.lock(document.projectId);
-      await this.prisma.documentRevision.update({
-        where: { id: revision.id },
+      const claimed = await this.prisma.documentRevision.updateMany({
+        where: { id: revision.id, status: 'draft' },
         data: {
           status: 'finalized',
           contentHash,
@@ -602,15 +584,60 @@ export class DocumentsService {
           finalizedAt: new Date(),
         },
       });
-      // Advance the head of the branch this revision belongs to (branch_id,
-      // plan.md §4); legacy rows without branchId fall back to the default branch.
-      const branch = await this.prisma.documentBranch.update({
-        where: revision.branchId
-          ? { id: revision.branchId }
-          : { documentId_name: { documentId, name: document.defaultBranch } },
-        data: { headRevisionId: revision.id },
-        select: { restricted: true },
+      if (claimed.count === 0) return { kind: 'current' as const, revision: await this.getRevisionOrThrow(documentId, revision.id) };
+
+      // The branch this revision belongs to (branch_id, plan.md §4); legacy
+      // rows without branchId fall back to the default branch.
+      const branch = await this.prisma.documentBranch.findFirstOrThrow({
+        where: revision.branchId ? { id: revision.branchId } : { documentId, name: document.defaultBranch },
+        select: { id: true, name: true, headRevisionId: true, restricted: true },
       });
+
+      // Content-hash idempotency (plan.md §4), against the branch head only
+      // (#636): a body equal to the head is a no-op, while one equal to an older
+      // revision is a revert and advances the head like any other edit. A merge
+      // revision legitimately repeats the source head's content on the target
+      // branch (plan.md §8), so another branch's revisions never count.
+      const existing = branch.headRevisionId && opts.dedupe !== false
+        ? await this.prisma.documentRevision.findFirst({ where: { id: branch.headRevisionId, contentHash } })
+        : null;
+      if (existing && existing.id !== revision.id) {
+        await this.prisma.revisionParent.deleteMany({ where: { revisionId: revision.id } });
+        await this.prisma.documentRevision.delete({ where: { id: revision.id } });
+        // The draft says what `existing` says: it is published as that, with
+        // no credit to write — `existing` keeps its own.
+        if (revision.collabDraftId) await this.markPublished(revision.collabDraftId, existing.id, revision.collabSnapshot, false);
+        return { kind: 'deduplicated' as const, revision: existing };
+      }
+
+      // The head moves only over a revision this draft descends from (#806).
+      // Its parents were read from an unlocked head when it was drafted, so a
+      // revision that landed since — another save, a merge — would otherwise
+      // drop out of the head's lineage. A git push may parent a draft on its
+      // second parent only, so "the head is any parent" is the rule, not
+      // "the head is parent 1"; an empty branch has nothing to lose.
+      const parents = (
+        await this.prisma.revisionParent.findMany({
+          where: { revisionId: revision.id },
+          orderBy: { parentOrder: 'asc' },
+          select: { parentRevisionId: true },
+        })
+      ).map((p) => p.parentRevisionId);
+      const moved = await this.prisma.documentBranch.updateMany({
+        where: { id: branch.id, OR: [{ headRevisionId: null }, { headRevisionId: { in: parents } }] },
+        data: { headRevisionId: revision.id },
+      });
+      if (moved.count === 0) {
+        const base = parents[0] ?? null;
+        throw new ConflictException({
+          statusCode: 409,
+          message: t('error.branch.headMoved', { name: branch.name, actual: branch.headRevisionId ?? 'unset', expected: base ?? 'unset' }),
+          currentHeadRevisionId: branch.headRevisionId,
+          comparisonUrl: base && branch.headRevisionId
+            ? `/v1/documents/${documentId}/compare?from=${base}&to=${branch.headRevisionId}&mode=merge-base`
+            : null,
+        });
+      }
       if (revision.collabDraftId) await this.markPublished(revision.collabDraftId, revision.id, revision.collabSnapshot, true);
       if (opts.commit !== false) await this.commits.recordRevisions([revision.id]);
       // Outbox (plan.md §5): the job row commits atomically with the status change;
@@ -624,8 +651,15 @@ export class DocumentsService {
           payload: { documentId, revisionId: revision.id, s3Key: revision.s3Key, title: document.title },
         },
       });
-      return { job, privateBranch: branch.restricted };
+      return { kind: 'finalized' as const, job, privateBranch: branch.restricted };
     });
+    if (outcome.kind !== 'finalized') {
+      // Idempotent re-finalize, decided under the lock: report current state.
+      // A deduplicated draft reports the head it matched.
+      const { revision: r } = outcome;
+      return { revisionId: r.id, status: r.status as RevisionStatus, ingestionJobId: null, deduplicated: outcome.kind === 'deduplicated' };
+    }
+    const { job, privateBranch } = outcome;
 
     // Both of these are post-commit by contract, and `onCommit` is what keeps
     // them so when a caller has wrapped this method in an outer transaction: the

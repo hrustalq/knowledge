@@ -187,7 +187,9 @@ async function saveRevision(documentId: string): Promise<string> {
     pendingRevision.value = null
     toast.success(fin.deduplicated ? t('apiSpecEditor.unchanged') : t('apiSpecEditor.saved'))
   } catch (e) {
-    pendingRevision.value = revisionId
+    // A 409 means the page moved on since this draft was opened (#806): a
+    // retry on the same draft would only refuse again, so the next save starts over.
+    pendingRevision.value = isApiRequestError(e) && e.status === 409 ? null : revisionId
     throw e
   }
   return documentId

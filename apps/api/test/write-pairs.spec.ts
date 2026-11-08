@@ -583,3 +583,68 @@ describe('#656 revoke and offboard commit with the change', () => {
     });
   });
 });
+
+/**
+ * #806: finalize decides under the project lock. The fake's writes buffer and
+ * drop as in the cases above; the handlers below keep the state a second call
+ * would see after the first committed.
+ */
+describe('#806 finalize decides under the lock', () => {
+  function rig(head: string | null, parents: string[], staleReads = 0) {
+    const rev = { id: 'r2', documentId: 'd1', status: 'draft', s3Key: 'k', branchId: 'b1', collabDraftId: null, authorId: 'u1', revisionNumber: 2 };
+    const branch = { id: 'b1', name: 'main', headRevisionId: head, restricted: false };
+    const { prisma, committed } = fakePrisma({
+      'document.findUnique': { id: 'd1', workspaceId: WS, projectId: 'p1', title: 'T', defaultBranch: 'main', archivedAt: null, kind: 'page' },
+      // The first `staleReads` reads are the unlocked one at the top of a call
+      // that started before the other committed.
+      'documentRevision.findUnique': () => ({ ...rev, status: staleReads-- > 0 ? 'draft' : rev.status }),
+      'documentRevision.updateMany': ({ where }: any) => {
+        if (rev.status !== where.status) return { count: 0 };
+        rev.status = 'finalized';
+        return { count: 1 };
+      },
+      'documentBranch.findFirstOrThrow': () => ({ ...branch }),
+      'documentRevision.findFirst': null,
+      'revisionParent.findMany': parents.map((parentRevisionId) => ({ parentRevisionId })),
+      'documentBranch.updateMany': ({ where }: any) => {
+        const ok = branch.headRevisionId === null || where.OR[1].headRevisionId.in.includes(branch.headRevisionId);
+        if (ok) branch.headRevisionId = rev.id;
+        return { count: ok ? 1 : 0 };
+      },
+      'ingestionJob.create': { id: 'j1' },
+    });
+    const storage = { headObject: async () => ({ versionId: 'v1' }), getObjectText: async () => 'body' };
+    const commits = { lock: vi.fn(async () => undefined), recordRevisions: vi.fn(async () => undefined) };
+    const ingestion = { enqueue: vi.fn(async () => undefined) };
+    const activity = { record: vi.fn(async () => undefined) };
+    const svc = new DocumentsService(prisma, storage as never, _, ingestion as never, activity as never, _, _, _, _, _, _, _, _, _, _, commits as never);
+    return { svc, committed, commits, ingestion, activity, branch };
+  }
+
+  it('a second finalize that read the draft before the first committed writes nothing', async () => {
+    const r = rig('r1', ['r1'], 2);
+    expect(await r.svc.finalizeRevision('d1', 'r2')).toMatchObject({ status: 'finalized', ingestionJobId: 'j1' });
+    expect(await r.svc.finalizeRevision('d1', 'r2')).toMatchObject({ status: 'finalized', ingestionJobId: null, deduplicated: false });
+    expect(r.committed.filter((k) => k === 'ingestionJob.create')).toHaveLength(1);
+    expect(r.commits.recordRevisions).toHaveBeenCalledTimes(1);
+    expect(r.ingestion.enqueue).toHaveBeenCalledTimes(1);
+  });
+
+  it('a draft whose parent is no longer the head refuses with 409 and moves nothing', async () => {
+    const r = rig('r9', ['r1']);
+    await expect(r.svc.finalizeRevision('d1', 'r2')).rejects.toMatchObject({
+      status: 409,
+      response: { currentHeadRevisionId: 'r9', comparisonUrl: '/v1/documents/d1/compare?from=r1&to=r9&mode=merge-base' },
+    });
+    expect(r.committed).toEqual([]);
+    expect(r.ingestion.enqueue).not.toHaveBeenCalled();
+    expect(r.activity.record).not.toHaveBeenCalled();
+  });
+
+  it('a draft that has the head as any parent advances it (a push parents on its second parent alone)', async () => {
+    const r = rig('r7', ['r7']);
+    await r.svc.finalizeRevision('d1', 'r2', { commit: false, dedupe: false });
+    expect(r.branch.headRevisionId).toBe('r2');
+    expect(r.commits.recordRevisions).not.toHaveBeenCalled();
+  });
+});

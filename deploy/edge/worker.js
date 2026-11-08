@@ -1,12 +1,13 @@
-// knowledge.hrustalq.dev -> the Mac mini's Tailscale Funnel -> caddy on
-// 127.0.0.1:8088. A Cloudflare Tunnel cannot connect from the Mac mini's
+// knowledge.hrustalq.dev -> the homelab cluster's Tailscale Funnel edge
+// (edge.tail92dbf3.ts.net) -> Traefik -> this app's caddy (hrustalq/homelab,
+// k8s/apps/knowledge). A Cloudflare Tunnel cannot connect from the homelab's
 // network (its *.cftunnel.com handshake is filtered on every egress), so this
 // Worker is the Cloudflare side and Funnel is the way in.
 //
 // Deploy: EDGE_SECRET=… ./deploy.sh (Workers Scripts:Edit + Workers Routes:Edit
 // token). The Caddyfile depends on the three X-Knowledge-* headers below, which
 // is why this file lives in the repo beside it (#174).
-const ORIGIN = 'https://eldars-mac-mini.tail92dbf3.ts.net';
+const ORIGIN = 'https://edge.tail92dbf3.ts.net';
 
 export default {
   async fetch(request, env) {
@@ -28,6 +29,10 @@ export default {
       headers.set('X-Knowledge-Host', url.host);
     }
     headers.set('X-Forwarded-Proto', 'https');
+    // The edge is shared by every app on the cluster and Funnel rewrites Host to
+    // the ts.net name, so the cluster's router picks this app by X-Edge-Host.
+    // Routing only: nothing trusts it, so no secret is needed for it.
+    headers.set('X-Edge-Host', url.host);
 
     // WebSocket upgrades (/api/v1/events/ws) pass straight through: fetch()
     // with an Upgrade header returns the origin's 101 and its socket.

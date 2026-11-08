@@ -1,29 +1,36 @@
 name: deploy
 
-# SELF-HOSTED. This repository is public, and GitHub warns against exposing a
-# self-hosted runner to untrusted code. Every trigger here is therefore a version
-# tag or a manual dispatch — NEVER pull_request, which is the one event a fork can
-# cause. See also the `if:` repository guard below and the `production`
-# environment's deployment-branch policy.
+# Production runs on the homelab k3s cluster (hrustalq/homelab, k8s/apps/knowledge),
+# synced by Argo CD. A release here does three things, all on GitHub-hosted
+# runners — no self-hosted runner is exposed by this public repository:
+#   1. builds the images for the tag (images.yml → ghcr.io/hrustalq/knowledge-*);
+#   2. renders the `production` environment, as the old .env was, and seals it
+#      offline with the cluster's public sealed-secrets cert (only the cluster
+#      can decrypt it);
+#   3. commits image tag + sealed config + Caddyfile + searxng settings to the
+#      homelab repo. Argo CD then runs `prisma migrate deploy` (a Sync hook,
+#      after the datastores and before the app) and rolls the app out.
 #
 # TAGS DEPLOY, MERGES DO NOT. `dev` is integration; `main` is the released state
 # and is still not live until `vX.Y.Z` is pushed. The release runbook is in
 # CONTRIBUTING.md#release and the bump rules in docs/versioning.md.
 #
 # NOTE: the `production` environment must carry a *tag* deployment policy for
-# `v*`. A policy listing only the `main` branch will not match `refs/tags/v0.1.0`
-# and every release will fail closed at the environment gate.
+# `v*` — a policy listing only `main` will not match refs/tags/v….
+#
+# Pipeline credentials are named DEPLOY_* and are never rendered into the app's
+# config: DEPLOY_HOMELAB_SSH_KEY is a write deploy key on hrustalq/homelab.
 on:
   push:
     tags: ["v*.*.*"]
   workflow_dispatch:
     inputs:
-      skip_migrations:
-        description: "Skip prisma migrate deploy (use only if migrations already applied)"
-        type: boolean
-        default: false
+      tag:
+        description: "Release tag to (re)deploy, e.g. v0.46.1"
+        type: string
+        required: true
 
-# Never run two deploys at once against one box; never cancel one mid-migration.
+# Never run two deploys at once.
 concurrency:
   group: deploy-production
   cancel-in-progress: false
@@ -32,195 +39,130 @@ permissions:
   contents: read
 
 jobs:
-  deploy:
-    # A fork that somehow triggers this workflow still cannot run it.
+  verify:
     if: github.repository == 'hrustalq/knowledge'
-    # The Mac mini (arm64). Docker is Colima, a brew service started at login;
-    # the runner is a LaunchAgent, so both come back after a reboot because the
-    # box auto-logs-in. Public traffic arrives via a Cloudflare Worker and
-    # Tailscale Funnel to caddy on 127.0.0.1:8088, never a port on this machine.
-    runs-on: [self-hosted, macOS, ARM64, knowledge-macmini]
-    environment: production
-    timeout-minutes: 60
-
-    env:
-      # Images carry both: VERSION is what a human rolls back to, SHA is what
-      # uniquely identifies the build. Neither is `latest`, which moves.
-      VERSION: ${{ github.ref_name }}
-      SHA: ${{ github.sha }}
-      DEPLOY_DIR: /Users/hrustalq/Homelab/infra/knowledge
-      COMPOSE: docker compose -f /Users/hrustalq/Homelab/infra/knowledge/docker-compose.prod.yml
-      # The docker CLI gets its own config, not ~/.docker. Docker Desktop is
-      # installed on the box (unused) and writes `credsStore: desktop` there;
-      # from this LaunchAgent that helper made every BuildKit registry lookup
-      # hit DeadlineExceeded (v0.15.0, attempts 1-2). Images here are public, so
-      # the config holds no credentials at all, and the socket is named rather
-      # than taken from a context Docker Desktop can switch.
-      DOCKER_CONFIG: /Users/hrustalq/Homelab/infra/knowledge/.docker-client
-      DOCKER_HOST: unix:///Users/hrustalq/.colima/default/docker.sock
-
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
-      # buildx and compose come from Homebrew (`brew install docker-buildx
-      # docker-compose`), never from Docker.app's bundle.
-      - name: Docker client config
-        run: |
-          mkdir -p "$DOCKER_CONFIG"
-          printf '%s\n' '{"auths":{},"cliPluginsExtraDirs":["/opt/homebrew/lib/docker/cli-plugins"]}' > "$DOCKER_CONFIG/config.json"
-          docker buildx version
-          docker compose version
+      - id: tag
+        run: echo "tag=${{ inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
 
-      # Full history: the ancestry check below needs more than the tagged commit.
       - uses: actions/checkout@v5
         with:
+          ref: ${{ steps.tag.outputs.tag }}
           fetch-depth: 0
 
-      # A tag can be cut from any commit in the repository, including one that
-      # never passed CI on main. Releases come from main or they do not happen.
-      #
-      # This is why the release promotes `dev` -> `main` by pull request BEFORE
-      # tagging: a tag cut from `dev` is not an ancestor of `main` and fails
-      # here, correctly, but only after it has been pushed and has to be deleted.
+      # A tag can be cut from any commit, including one that never passed CI on
+      # main. Releases come from main or they do not happen.
       - name: Verify the tag is on main
-        if: github.ref_type == 'tag'
         run: |
           git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
-          if ! git merge-base --is-ancestor "$SHA" origin/main; then
-            echo "::error::$VERSION ($SHA) is not an ancestor of origin/main — refusing to deploy"
+          sha=$(git rev-parse HEAD)
+          if ! git merge-base --is-ancestor "$sha" origin/main; then
+            echo "::error::${{ steps.tag.outputs.tag }} ($sha) is not an ancestor of origin/main — refusing to deploy"
             exit 1
           fi
-          echo "$VERSION is on main"
+
+  images:
+    needs: verify
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/images.yml
+    with:
+      ref: ${{ needs.verify.outputs.tag }}
+
+  release:
+    needs: [verify, images]
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 30
+    env:
+      TAG: ${{ needs.verify.outputs.tag }}
+      KUBESEAL_VERSION: 0.41.2
+      APP_DIR: homelab/k8s/apps/knowledge
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.TAG }}
+          path: knowledge
+
+      - uses: actions/checkout@v5
+        with:
+          repository: hrustalq/homelab
+          ssh-key: ${{ secrets.DEPLOY_HOMELAB_SSH_KEY }}
+          path: homelab
 
       # The `production` environment is the source of truth for configuration
-      # (#134): its variables and secrets become $DEPLOY_DIR/.env on every
-      # deploy, which compose both interpolates from and injects into containers.
-      # A hand edit on the box lasts until the next release — change the
-      # environment instead (Settings -> Environments, or
-      # scripts/env-to-github.mjs). The file stays on disk so a manual
-      # `docker compose run …` on the box still sees the same config.
-      #
-      # Both maps reach jq through env and $ENV, never through the script text
-      # or argv. Only UPPER_SNAKE names are kept, which drops the github_token
-      # every secrets map carries. Values are written single-quoted, which
-      # compose reads literally (no `$` interpolation, no ` #` comment), so the
-      # two characters it cannot carry — a newline and a single quote — fail
-      # here instead of truncating a secret.
-      #
-      # GitHub refuses names starting GITHUB_, so the API's GITHUB_* keys are
-      # stored as GH_* and renamed back here (#138). The API reads no GH_* name.
-      #
-      # Fails before anything is built or synced: a key .env.production.example
-      # gives a value to must be present, and no value may still be CHANGE_ME.
-      - name: Render .env from the production environment
+      # (#134), exactly as before: its variables and secrets become the app's
+      # environment. GitHub refuses names starting GITHUB_, so the API's GITHUB_*
+      # keys are stored as GH_* and renamed back here (#138). DEPLOY_* names are
+      # pipeline credentials and are dropped. Fails before anything is committed:
+      # a key .env.production.example gives a value to must be present, and no
+      # value may still be CHANGE_ME.
+      - name: Render and seal the production environment
         env:
           ENV_VARS: ${{ toJSON(vars) }}
           ENV_SECRETS: ${{ toJSON(secrets) }}
         run: |
           set -euo pipefail
+          curl -fsSL "https://github.com/bitnami-labs/sealed-secrets/releases/download/v${KUBESEAL_VERSION}/kubeseal-${KUBESEAL_VERSION}-linux-amd64.tar.gz" \
+            | tar -xz -C /usr/local/bin kubeseal
           umask 077
-          next="$DEPLOY_DIR/.env.next"
-          trap 'rm -f "$next"' EXIT
-          jq -rn '
-            def named: with_entries(select(.key | test("^[A-Z][A-Z0-9_]*$"))
+          env_json=$(jq -n '
+            def named: with_entries(select(.key | test("^[A-Z][A-Z0-9_]*$")) | select(.key | startswith("DEPLOY_") | not)
               | .key |= (if startswith("GH_") then "GITHUB_" + .[3:] else . end));
             ($ENV.ENV_VARS | fromjson | named) as $v
             | ($ENV.ENV_SECRETS | fromjson | named) as $s
             | ([$v | keys[] | select(. as $k | $s | has($k))]) as $both
             | if ($both | length) > 0 then error("set as both a variable and a secret: \($both | join(", "))") else . end
-            | ($v + $s) | to_entries | sort_by(.key)[]
-            | if (.value | test("[\n\r\u0027]")) then error("\(.key): a newline or single quote cannot be written to .env")
-              elif (.value | contains("CHANGE_ME")) then error("\(.key) is still the CHANGE_ME placeholder")
-              else "\(.key)=\u0027\(.value)\u0027" end
-          ' > "$next"
+            | ($v + $s) as $all
+            | ([$all | to_entries[] | select(.value | contains("CHANGE_ME")) | .key]) as $todo
+            | if ($todo | length) > 0 then error("still the CHANGE_ME placeholder: \($todo | join(", "))") else $all end')
           missing=""
-          for key in $(grep -E '^[A-Z][A-Z0-9_]*=.' .env.production.example | cut -d= -f1); do
-            grep -q "^$key=" "$next" || missing="$missing $key"
+          for key in $(grep -E '^[A-Z][A-Z0-9_]*=.' knowledge/.env.production.example | cut -d= -f1); do
+            echo "$env_json" | jq -e --arg k "$key" 'has($k)' >/dev/null || missing="$missing $key"
           done
-          if [ -n "$missing" ]; then
-            echo "::error::missing from the production environment:$missing"
-            exit 1
-          fi
-          if [ -f "$DEPLOY_DIR/.env" ]; then install -m 600 "$DEPLOY_DIR/.env" "$DEPLOY_DIR/.env.bak"; fi
-          mv "$next" "$DEPLOY_DIR/.env"
-          echo "rendered $(wc -l < "$DEPLOY_DIR/.env" | tr -d ' ') keys into $DEPLOY_DIR/.env"
+          if [ -n "$missing" ]; then echo "::error::missing from the production environment:$missing"; exit 1; fi
+          echo "$env_json" \
+            | jq '{apiVersion: "v1", kind: "Secret", type: "Opaque",
+                   metadata: {name: "knowledge-env", namespace: "knowledge"}, stringData: .}' \
+            | kubeseal --cert homelab/k8s/platform/sealed-secrets/pub-cert.pem --format yaml \
+            > "$APP_DIR/sealedsecret-env.yaml"
+          # datastores (sync-wave -1) read this secret, so it must exist first
+          yq -i '.metadata.annotations["argocd.argoproj.io/sync-wave"] = "-2"' "$APP_DIR/sealedsecret-env.yaml"
+          echo "sealed $(echo "$env_json" | jq 'length') keys"
 
-      # The stack runs out of $DEPLOY_DIR, not out of the runner workspace,
-      # which CI rewrites on every job. searxng/settings.yml is the repo copy:
-      # its secret_key is a dev placeholder that SEARXNG_SECRET overrides.
-      - name: Sync deployment config
+      - name: Sync deployment files and image tag
         run: |
-          install -m 644 docker-compose.prod.yml "$DEPLOY_DIR/docker-compose.prod.yml"
-          install -m 644 Caddyfile              "$DEPLOY_DIR/Caddyfile"
-          install -d -m 755 "$DEPLOY_DIR/searxng"
-          install -m 644 searxng/settings.yml   "$DEPLOY_DIR/searxng/settings.yml"
-
-      # SEQUENTIALLY, never in parallel: the Colima VM (10 GB) also holds the
-      # running stack, and two concurrent tsc builds beside it is the likeliest
-      # way it OOMs. Each image is tagged
-      # with the version, the commit SHA and latest, so a rollback is a retag
-      # rather than a rebuild:
-      #   docker tag knowledge-api:v0.4.0 knowledge-api:latest && compose up -d
-      - name: Build api image
-        run: |
-          docker build -f Dockerfile.api --target runtime \
-            -t "knowledge-api:$VERSION" -t "knowledge-api:$SHA" -t knowledge-api:latest .
-
-      # The git remote's image (#636): the api image plus the git binary, from
-      # the same cache, so only the apt layer is new. Built only when the
-      # `git` compose profile is on, since each version's copy keeps ~96 MB.
-      # The rendered .env single-quotes every value, and compose strips the
-      # quotes, so the test must allow them (#662).
-      - name: Build git image
-        run: |
-          if grep -Eq "^COMPOSE_PROFILES='?([^']*,)?git(,|'?\$)" "$DEPLOY_DIR/.env"; then
-            docker build -f Dockerfile.api --target git-runtime \
-              -t "knowledge-api-git:$VERSION" -t "knowledge-api-git:$SHA" -t knowledge-api-git:latest .
-          else
-            echo "COMPOSE_PROFILES has no git: skipped"
-          fi
-
-      - name: Build web image
-        run: |
-          docker build -f Dockerfile.web \
-            -t "knowledge-web:$VERSION" -t "knowledge-web:$SHA" -t knowledge-web:latest .
-
-      # Bring datastores up first so migrations have something to talk to.
-      - name: Start datastores
-        run: $COMPOSE up -d --wait postgres redis minio arcadedb
-
-      # Forward-only, and the database does NOT roll back with a retagged image.
-      # That is why every migration must be runnable by the previous release:
-      # docs/versioning.md#rollback-and-the-expandcontract-rule.
-      - name: Run migrations
-        if: ${{ !inputs.skip_migrations }}
-        run: $COMPOSE run --rm --no-deps api npx prisma migrate deploy
-
-      - name: Roll out application
-        run: $COMPOSE up -d --remove-orphans
-
-      - name: Wait for health
-        run: |
-          for i in $(seq 1 30); do
-            if curl -fsS -o /dev/null http://127.0.0.1:3000/ && curl -fsS -o /dev/null http://127.0.0.1:5173/; then
-              echo "api and web are answering on loopback"; exit 0
-            fi
-            sleep 5
+          set -euo pipefail
+          install -m 644 knowledge/Caddyfile            "$APP_DIR/files/Caddyfile"
+          install -m 644 knowledge/searxng/settings.yml "$APP_DIR/files/searxng-settings.yml"
+          for img in knowledge-api knowledge-api-git knowledge-web; do
+            yq -i "(.images[] | select(.name == \"$img\") | .newTag) = \"$TAG\"" "$APP_DIR/kustomization.yaml"
           done
-          echo "::error::services did not become healthy in 150s"
-          $COMPOSE ps
-          $COMPOSE logs --tail=80 api web
-          exit 1
+          git -C homelab diff --stat
 
+      - name: Commit to the homelab repo (Argo CD deploys it)
+        run: |
+          set -euo pipefail
+          cd homelab
+          git config user.name  "knowledge deploy"
+          git config user.email "deploy@knowledge.hrustalq.dev"
+          git add k8s/apps/knowledge
+          if git diff --cached --quiet; then echo "nothing changed"; exit 0; fi
+          git commit -m "knowledge: deploy $TAG" -m "From hrustalq/knowledge@${{ github.sha }} (run ${{ github.run_id }})."
+          git push origin HEAD:main
+
+      # Argo CD polls every 2 minutes; migrations and the rollout follow. The
+      # public endpoint answering is a smoke check, not proof of the new version.
       - name: Verify public endpoint
-        run: curl -fsS -o /dev/null -w 'public https://knowledge.hrustalq.dev -> %{http_code}\n' https://knowledge.hrustalq.dev
-
-      - name: Report status
-        if: always()
         run: |
-          echo "deployed $VERSION ($SHA)"
-          $COMPOSE ps
-
-      # Keeps the box from filling up over months of deploys. Tagged images
-      # (including the previous version) survive; only dangling layers go.
-      - name: Prune dangling images
-        if: success()
-        run: docker image prune -f
+          for i in $(seq 1 40); do
+            if curl -fsS -o /dev/null https://knowledge.hrustalq.dev; then
+              echo "https://knowledge.hrustalq.dev answers"; exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::public endpoint did not answer within 10 minutes"; exit 1

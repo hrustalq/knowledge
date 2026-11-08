@@ -1,0 +1,74 @@
+name: images
+
+# Builds the three production images for linux/amd64 on GitHub-hosted runners
+# and pushes them to GHCR, tagged with the ref and the commit SHA:
+#   ghcr.io/hrustalq/knowledge-api       (Dockerfile.api, target runtime)
+#   ghcr.io/hrustalq/knowledge-api-git   (Dockerfile.api, target git-runtime)
+#   ghcr.io/hrustalq/knowledge-web       (Dockerfile.web)
+# The homelab k3s cluster runs these (hrustalq/homelab, k8s/apps/knowledge).
+#
+# GitHub-hosted, so no self-hosted runner is exposed by this public repository.
+# Nothing here is triggered by a pull request.
+on:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to build (a release tag, e.g. v0.46.1)"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    if: github.repository == 'hrustalq/knowledge'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { image: knowledge-api, file: Dockerfile.api, target: runtime }
+          - { image: knowledge-api-git, file: Dockerfile.api, target: git-runtime }
+          - { image: knowledge-web, file: Dockerfile.web, target: runtime }
+    env:
+      REF: ${{ inputs.ref }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.REF }}
+
+      - id: meta
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.file }}
+          target: ${{ matrix.target }}
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/hrustalq/${{ matrix.image }}:${{ env.REF }}
+            ghcr.io/hrustalq/${{ matrix.image }}:${{ steps.meta.outputs.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/hrustalq/knowledge
+            org.opencontainers.image.revision=${{ steps.meta.outputs.sha }}
+            org.opencontainers.image.version=${{ env.REF }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}

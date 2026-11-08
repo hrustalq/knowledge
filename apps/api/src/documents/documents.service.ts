@@ -313,23 +313,18 @@ export class DocumentsService {
       status = finalized.status;
     }
 
-    // Post-commit for the reason finalizeRevision's record is: `record` publishes
-    // onto the Redis bus, which cannot be taken back, and announcing a page that
-    // has not committed tells every subscriber about something that may vanish.
-    this.prisma.onCommit(() =>
-      this.activity.record({
-        workspaceId: dto.workspaceId,
-        actor: authorId,
-        action: 'document.created',
-        documentId: document.id,
-        metadata: {
-          title: dto.title,
-          category: dto.category ?? 'other',
-          projectId: dto.projectId,
-          ...(template ? { templateRef: template.ref, templateVersion: template.version } : {}),
-        },
-      }),
-    );
+    void this.activity.record({
+      workspaceId: dto.workspaceId,
+      actor: authorId,
+      action: 'document.created',
+      documentId: document.id,
+      metadata: {
+        title: dto.title,
+        category: dto.category ?? 'other',
+        projectId: dto.projectId,
+        ...(template ? { templateRef: template.ref, templateVersion: template.version } : {}),
+      },
+    });
     // Writing a page is watching it (docs/features/22). A subscription row
     // rather than an implicit rule at fan-out time, so that an author who
     // unwatches their own page stays unwatched.
@@ -708,16 +703,14 @@ export class DocumentsService {
     // A revision on a private branch is nobody's news but its readers' (#474):
     // no feed row, no live frame, no watcher notification.
     if (!privateBranch) {
-      this.prisma.onCommit(() =>
-        this.activity.record({
-          workspaceId: document.workspaceId,
-          actor: revision.authorId,
-          action: 'revision.finalized',
-          documentId,
-          subjectId: revision.id,
-          metadata: { title: document.title, revisionNumber: revision.revisionNumber },
-        }),
-      );
+      void this.activity.record({
+        workspaceId: document.workspaceId,
+        actor: revision.authorId,
+        action: 'revision.finalized',
+        documentId,
+        subjectId: revision.id,
+        metadata: { title: document.title, revisionNumber: revision.revisionNumber },
+      });
     }
 
     return { revisionId: revision.id, status: 'finalized', ingestionJobId: job.id, deduplicated: false };
@@ -880,18 +873,15 @@ export class DocumentsService {
     if (ownerId !== null) await this.assertMember(document.workspaceId, ownerId);
     if (ownerId === document.ownerId) return this.toSummary(document);
     const updated = await this.prisma.document.update({ where: { id: documentId }, data: { ownerId } });
-    // Post-commit: `updateDocument` calls this inside its boundary (#658).
-    this.prisma.onCommit(() =>
-      this.activity.record({
-        workspaceId: document.workspaceId,
-        actor: actorId,
-        action: 'document.owner-changed',
-        documentId,
-        projectId: document.projectId,
-        metadata: { title: document.title, from: document.ownerId, to: ownerId },
-        patch: { ownerId },
-      }),
-    );
+    void this.activity.record({
+      workspaceId: document.workspaceId,
+      actor: actorId,
+      action: 'document.owner-changed',
+      documentId,
+      projectId: document.projectId,
+      metadata: { title: document.title, from: document.ownerId, to: ownerId },
+      patch: { ownerId },
+    });
     if (ownerId && ownerId !== actorId) {
       this.prisma.onCommit(() =>
         this.notifications.notify({
@@ -1045,17 +1035,14 @@ export class DocumentsService {
       },
     });
     if (isPrivate) return { branch: this.toBranchInfo(branch) };
-    // Post-commit: publishes onto the bus (see createDocument above).
-    this.prisma.onCommit(() =>
-      this.activity.record({
-        workspaceId: document.workspaceId,
-        actor: ownerId,
-        action: 'branch.created',
-        documentId,
-        subjectId: branch.id,
-        metadata: { title: document.title, branch: dto.name },
-      }),
-    );
+    void this.activity.record({
+      workspaceId: document.workspaceId,
+      actor: ownerId,
+      action: 'branch.created',
+      documentId,
+      subjectId: branch.id,
+      metadata: { title: document.title, branch: dto.name },
+    });
     return { branch: this.toBranchInfo(branch) };
   }
 
@@ -1802,9 +1789,7 @@ export class DocumentsService {
       if (p.parentDocumentId !== row.parentId || Object.keys(data).length) changed.push(row.id);
       if (p.removed !== (row.archivedAt !== null)) {
         const action = p.removed ? 'document.archived' : 'document.unarchived';
-        this.prisma.onCommit(() =>
-          this.activity.record({ workspaceId: row.workspaceId, actor: actorId, action, documentId: row.id, projectId, metadata: { title: row.title, affected: 1, includeDescendants: false } }),
-        );
+        void this.activity.record({ workspaceId: row.workspaceId, actor: actorId, action, documentId: row.id, projectId, metadata: { title: row.title, affected: 1, includeDescendants: false } });
       }
     }
     return changed;

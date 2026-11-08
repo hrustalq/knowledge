@@ -522,16 +522,14 @@ export class WorkflowsService {
               data: { status: 'materialized', documentId },
             });
             await this.runner.spawnChildren(run, done, step);
-            this.prisma.onCommit(() =>
-              this.activity.record({
-                workspaceId: run.workspaceId,
-                actor: userId,
-                action: 'workflow-node.materialized',
-                documentId: documentId ?? undefined,
-                subjectId: run.id,
-                metadata: { title: finalDraft?.title, stepId: step.id, nodeId },
-              }),
-            );
+            void this.activity.record({
+              workspaceId: run.workspaceId,
+              actor: userId,
+              action: 'workflow-node.materialized',
+              documentId: documentId ?? undefined,
+              subjectId: run.id,
+              metadata: { title: finalDraft?.title, stepId: step.id, nodeId },
+            });
             return done;
           },
           { timeout: 30_000, maxWait: 10_000 },

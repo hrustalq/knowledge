@@ -99,6 +99,8 @@ function world(opts: { filed?: number; sentinel?: { enabled: boolean; config: bo
       }),
     },
     aiAgent: { findUnique: vi.fn(async () => null) },
+    withTransaction: vi.fn(async (fn: () => Promise<unknown>) => fn()),
+    onCommit: vi.fn((fn: () => Promise<unknown>) => void fn()),
     $queryRaw: vi.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
       const sql = strings.join('?');
       if (sql.includes('count(*)::int AS pending')) return [{ pending: opts.pending ?? 0 }];

@@ -209,14 +209,7 @@ export class KnowledgeIssuesService {
       this.logger.warn(`Sentinel check for report ${issue.id} not queued: ${(error as Error).message}`);
       return null;
     });
-    if (runId) {
-      const moved = await this.prisma.knowledgeIssue.updateMany({
-        where: { id: issue.id, status: 'open' },
-        data: { status: 'checking', agentRunId: runId },
-      });
-      if (moved.count === 1) return { ...issue, status: 'checking', agentRunId: runId };
-    }
-    return issue;
+    return runId ? { ...issue, status: 'checking', agentRunId: runId } : issue;
   }
 
   /**
@@ -270,6 +263,8 @@ export class KnowledgeIssuesService {
    * it, so nobody else's authority is borrowed.
    */
   private async queueCheck(issue: KnowledgeIssue, principal: Principal): Promise<string | null> {
+    // The run exists only if the issue moved to `checking` with it (#816): one
+    // that lost the race to a sweeper or a second request writes no run.
     const agent = await this.registry.resolve(issue.workspaceId, REPORT_AGENT_KEY);
     if (!agent.enabled || !agent.config.enabled) return null;
     // Report checks only: drift checks share the agent and have their own cap.
@@ -287,19 +282,24 @@ export class KnowledgeIssuesService {
       select: { id: true },
     });
     const input: AgentRunInput = { issueId: issue.id };
-    const run = await this.prisma.agentRun.create({
-      data: {
-        workspaceId: issue.workspaceId,
-        agentKey: REPORT_AGENT_KEY,
-        agentId: override?.id ?? null,
-        trigger: 'report',
-        createdBy: principal.userId,
-        locale: principal.locale,
-        input: input as unknown as Prisma.InputJsonValue,
-      },
+    return this.prisma.withTransaction(async () => {
+      const moved = await this.prisma.knowledgeIssue.updateMany({ where: { id: issue.id, status: 'open' }, data: { status: 'checking' } });
+      if (moved.count !== 1) return null;
+      const run = await this.prisma.agentRun.create({
+        data: {
+          workspaceId: issue.workspaceId,
+          agentKey: REPORT_AGENT_KEY,
+          agentId: override?.id ?? null,
+          trigger: 'report',
+          createdBy: principal.userId,
+          locale: principal.locale,
+          input: input as unknown as Prisma.InputJsonValue,
+        },
+      });
+      await this.prisma.knowledgeIssue.update({ where: { id: issue.id }, data: { agentRunId: run.id } });
+      this.prisma.onCommit(() => this.producer.enqueue(run.id));
+      return run.id;
     });
-    await this.producer.enqueue(run.id);
-    return run.id;
   }
 
   /**

@@ -13,6 +13,7 @@ import { SITE_MAX_VERSIONS, SitesService } from '../src/publishing/sites.service
 import { TemplatesService } from '../src/templates/templates.service.js';
 import { WorkflowTriggerService } from '../src/workflows/workflow-trigger.service.js';
 import { WorkflowsService } from '../src/workflows/workflows.service.js';
+import { WorkItemHandoffService } from '../src/connectors/handoff/work-item-handoff.service.js';
 
 /**
  * #815: every "is there one already?" read and its insert run under
@@ -374,5 +375,33 @@ describe('published site caps (#815)', () => {
     const res = await Promise.allSettled([service.add('s1', 'a.example.org'), service.add('s1', 'b.example.org')]);
     expect(outcomes(res)).toEqual(['fulfilled', 'rejected']);
     expect(t('siteDomain')).toHaveLength(SITE_MAX_DOMAINS);
+  });
+});
+
+describe('one ticket per anchor (#816)', () => {
+  function handoffs() {
+    const { prisma, t } = rig({
+      projectTrackerRoute: [{ projectId: 'p1', connectorId: 'c1', externalProject: null, issueType: null, boardNodeId: null, boardFieldId: null }],
+      connector: [{ id: 'c1', workspaceId: WS, enabled: true, locale: 'en', name: 'GitHub', config: {} }],
+    });
+    // The tracker call is where the old code raced: both callers were past their "is there one?" read.
+    const createIssue = vi.fn(async () => (await tick(), { kind: 'issue', number: createIssue.mock.calls.length, url: 'https://t/1' }));
+    const workItems = {
+      trackerOf: () => ({ createIssue }),
+      upsertFrom: (row: Row, issue: Row, { documentId, anchor }: Row) =>
+        prisma.connectorWorkItem.create({ data: { connectorId: row.id, kind: issue.kind, number: issue.number, documentId, sourceKind: anchor.kind, sourceId: anchor.id } }),
+    };
+    const anchors = { ticketText: async () => ({ title: 'T', body: 'B' }) };
+    const svc = new WorkItemHandoffService(prisma as never, {} as never, workItems as never, anchors as never, {} as never, activity as never);
+    return { svc, t, createIssue };
+  }
+  const view = { kind: 'issue', id: 'i1', documentId: 'd1', projectId: 'p1' } as never;
+
+  it('two rule handoffs of one object at once open one ticket', async () => {
+    const h = handoffs();
+    const res = await Promise.all([h.svc.handoffByRule(view), h.svc.handoffByRule(view)]);
+    expect(h.createIssue).toHaveBeenCalledTimes(1);
+    expect(h.t('connectorWorkItem')).toHaveLength(1);
+    expect(res.filter(Boolean)).toHaveLength(1);
   });
 });

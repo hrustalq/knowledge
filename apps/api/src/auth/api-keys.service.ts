@@ -81,11 +81,14 @@ export class ApiKeysService {
    */
   async rotate(principal: Principal): Promise<CreateApiKeyResponse> {
     this.requireSession(principal);
-    await this.prisma.apiKey.updateMany({
-      where: { userId: principal.userId, revokedAt: null },
-      data: { revokedAt: new Date() },
+    // One commit (#816): a failed mint must not leave the caller with no key at all.
+    return this.prisma.withTransaction(async () => {
+      await this.prisma.apiKey.updateMany({
+        where: { userId: principal.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      return this.create(principal, { name: 'Rotated key' });
     });
-    return this.create(principal, { name: 'Rotated key' });
   }
 
   /**

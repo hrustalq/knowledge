@@ -363,6 +363,22 @@ export class WebSourcesService {
 
   // ------------------------------------------------------------ page operations
 
+  /** The URL's first read, or the 400 that says why it could not be read. */
+  private async firstVersion(row: Connector, url: string): Promise<ExternalDocument> {
+    try {
+      const ctx = await this.connectors.contextFor(row, async () => undefined);
+      return await this.connectors.adapterFor(row).fetch(ctx, { externalId: url, title: url, url });
+    } catch (err) {
+      const status = err instanceof ConnectorRequestError ? err.status : null;
+      if (status === 401 || status === 403) {
+        throw new BadRequestException({ statusCode: 400, message: t('error.source.needsCredential', { status }), needsCredential: true });
+      }
+      // The status alone: the person just typed the URL, and the upstream body is not theirs to read.
+      const detail = status !== null ? `HTTP ${status}` : (err as Error).message.slice(0, 300);
+      throw new BadRequestException({ statusCode: 400, message: t('error.source.unreadable', { detail }) });
+    }
+  }
+
   /**
    * "Add page → Link a source": the first version is read in the request, so
    * the person gets a page or an error now rather than a run to watch. The
@@ -382,49 +398,37 @@ export class WebSourcesService {
           select: { id: true },
         });
 
-    const summary = await this.connectors.create(
-      {
-        workspaceId: input.workspaceId,
-        kind: 'web',
-        name: `source:${randomUUID()}`,
-        projectId: input.projectId,
-        parentId: input.parentId ?? null,
-        category: 'reference',
-        config: { url, ...(input.crawl ? { crawl: 'tree' } : {}) },
-        ...(input.credential ? { credential: input.credential } : {}),
-        ...(known ? { connectionId: known.id } : {}),
-        syncIntervalMinutes: interval,
-      },
-      userId,
-    );
-    const row = await this.connectors.require(summary.id);
-
-    let doc;
-    try {
-      const ctx = await this.connectors.contextFor(row, async () => undefined);
-      doc = await this.connectors.adapterFor(row).fetch(ctx, { externalId: url, title: url, url });
-    } catch (err) {
-      await this.prisma.connector.delete({ where: { id: row.id } }).catch(() => undefined);
-      const status = err instanceof ConnectorRequestError ? err.status : null;
-      if (status === 401 || status === 403) {
-        throw new BadRequestException({ statusCode: 400, message: t('error.source.needsCredential', { status }), needsCredential: true });
-      }
-      // The status alone: the person just typed the URL, and the upstream body is not theirs to read.
-      const detail = status !== null ? `HTTP ${status}` : (err as Error).message.slice(0, 300);
-      throw new BadRequestException({ statusCode: 400, message: t('error.source.unreadable', { detail }) });
-    }
-
-    // An API spec (phase 4) becomes a spec page, as written; it has nothing to crawl.
-    const spec = doc.spec;
-    const problem = !spec ? null : input.crawl ? t('error.source.specCrawl') : await this.specProblem(doc.markdown, spec.kind);
-    if (problem) {
-      await this.prisma.connector.delete({ where: { id: row.id } }).catch(() => undefined);
-      throw new BadRequestException({ statusCode: 400, message: t('error.source.unreadable', { detail: problem }) });
-    }
-
-    const markdown = composeMarkdown(doc);
-    const created = this.prisma.withTransaction(
+    // One commit for the hidden connector, its connection, the page and the link
+    // (#816): an unreadable URL rolls back all of them, where compensating
+    // deletes left a credential's new connection behind.
+    // ponytail: holds a pooled connection across the first fetch (the adapter's
+    // 30 s timeout); fetch before writing if links ever come in bursts.
+    const { result, row, doc } = await this.prisma.withTransaction(
       async () => {
+        const summary = await this.connectors.create(
+          {
+            workspaceId: input.workspaceId,
+            kind: 'web',
+            name: `source:${randomUUID()}`,
+            projectId: input.projectId,
+            parentId: input.parentId ?? null,
+            category: 'reference',
+            config: { url, ...(input.crawl ? { crawl: 'tree' } : {}) },
+            ...(input.credential ? { credential: input.credential } : {}),
+            ...(known ? { connectionId: known.id } : {}),
+            syncIntervalMinutes: interval,
+          },
+          userId,
+        );
+        const row = await this.connectors.require(summary.id);
+        const doc = await this.firstVersion(row, url);
+
+        // An API spec (phase 4) becomes a spec page, as written; it has nothing to crawl.
+        const spec = doc.spec;
+        const problem = !spec ? null : input.crawl ? t('error.source.specCrawl') : await this.specProblem(doc.markdown, spec.kind);
+        if (problem) throw new BadRequestException({ statusCode: 400, message: t('error.source.unreadable', { detail: problem }) });
+
+        const markdown = composeMarkdown(doc);
         const created = await this.documents.createDocument(
           {
             workspaceId: input.workspaceId,
@@ -456,15 +460,10 @@ export class WebSourcesService {
           where: { id: row.id },
           data: { ownerDocumentId: created.documentId, lastSyncedAt: new Date(), ...(input.crawl ? { parentId: created.documentId } : {}) },
         });
-        return { documentId: created.documentId, connectorId: row.id };
+        return { result: { documentId: created.documentId, connectorId: row.id }, row, doc };
       },
-      { timeout: 30_000, maxWait: 10_000 },
+      { timeout: 90_000, maxWait: 10_000 },
     );
-    // A connector with no page would show up in the Connectors list as a stray.
-    const result = await created.catch(async (err: unknown) => {
-      await this.prisma.connector.delete({ where: { id: row.id } }).catch(() => undefined);
-      throw err;
-    });
     // The first version is the baseline the next one is checked against, and the body a recipe previews on.
     if (doc.source) {
       const linkRow = await this.prisma.connectorLink.findFirstOrThrow({ where: { connectorId: row.id } });

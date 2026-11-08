@@ -131,10 +131,11 @@ export class ChatMessagesService {
 
   /** Searching turned off: what was kept goes at once, not at the retention. */
   async purgeBinding(bindingId: string): Promise<void> {
-    await this.prisma.$transaction([
-      this.prisma.chatChunk.deleteMany({ where: { bindingId } }),
-      this.prisma.chatMessage.deleteMany({ where: { bindingId } }),
-    ]);
+    // withTransaction, not $transaction: it joins the caller's boundary (updateBinding's switch).
+    await this.prisma.withTransaction(async () => {
+      await this.prisma.chatChunk.deleteMany({ where: { bindingId } });
+      await this.prisma.chatMessage.deleteMany({ where: { bindingId } });
+    });
   }
 
   /**

@@ -140,16 +140,14 @@ export class GroupMappingsService {
     await this.prisma.withTransaction(
       async () => {
         await this.prisma.idpGroupMapping.delete({ where: { id: row.id } });
-        this.prisma.onCommit(() =>
-          this.audit.record({
-            workspaceId,
-            actor: principal.userId,
-            action: 'sso.group_mapping_deleted',
-            params: { providerId: row.providerId, externalGroup: row.externalGroup, role: row.role, trustedOperator: row.trustedOperator },
-            ok: true,
-            target: row.id,
-          }),
-        );
+        void this.audit.record({
+          workspaceId,
+          actor: principal.userId,
+          action: 'sso.group_mapping_deleted',
+          params: { providerId: row.providerId, externalGroup: row.externalGroup, role: row.role, trustedOperator: row.trustedOperator },
+          ok: true,
+          target: row.id,
+        });
         if (!row.providerId && this.scim) await this.resyncScimGroup(workspaceId, row.externalGroup);
       },
       SCIM_TX,

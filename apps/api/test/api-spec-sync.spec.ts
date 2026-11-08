@@ -273,6 +273,9 @@ describe('MarkdownGitAdapter with apiSpecs', () => {
     const c = { ...(ctx({ apiSpecs: 'docs/openapi.yaml' }) as object), webhookSecret: 's' } as never;
     const refs = adapter.verifyWebhook(c, { 'x-gitlab-token': 's' }, body);
     expect(refs?.map((r) => r.externalId)).toEqual(['docs/openapi.yaml', 'docs/billing.md']);
+    // The shared token is checked through verifyRepoDelivery, in constant time (GHSA-pc42).
+    expect(adapter.verifyWebhook(c, { 'x-gitlab-token': 'x' }, body)).toBeNull();
+    expect(adapter.verifyWebhook(c, { 'x-gitlab-token': 'ss' }, body)).toBeNull();
   });
 });
 

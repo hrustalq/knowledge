@@ -24,6 +24,10 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- **Imports, memos, exports, workflow runs and connectors keep the caller's language when they start outside an HTTP
+  request.** Started from a chat-bot turn, an @mention reply, a git push or a worker run that carries Russian, they
+  recorded English, so the parse, transcript, export or workflow they kicked off wrote English text. The assistant's
+  interactive turn and the AI settings suggestion had the same gap. (#814)
 - **An operator graph query over MCP now stops at the row limit the server is set to.** `knowledge_query_graph`
   passed its own `limit` (up to 1000) straight to the graph store, so it skipped the `GRAPH_QUERY_MAX_ROWS` ceiling
   that `POST /v1/graph/query` applies, and the audit log recorded the limit asked for, not the one used. Both

@@ -44,9 +44,8 @@ import type {
   ListWorkflowsQueryDto,
   UpdateWorkflowDto,
 } from './workflows.dto.js';
-import { t } from '../i18n/t.js';
+import { currentLocale, t } from '../i18n/t.js';
 import { localizeIssues, localizeTransition } from '../i18n/workflow-messages.js';
-import { currentLocale } from '../i18n/locale.js';
 
 const DEFAULT_TRIGGER: WorkflowTrigger = {
   manual: true,

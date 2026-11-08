@@ -32,8 +32,6 @@ import {
   readFrontmatterTags,
   type FrontmatterRelation,
 } from '../common/relations.js';
-// t.ts's currentLocale honours `withLocale`, so a worker or MCP render answers
-// in the language its caller pinned rather than the default.
 import { currentLocale, t } from '../i18n/t.js';
 import { canSeeProject, visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
 import { BUILT_IN_TEMPLATES, type BuiltInTemplate } from './built-in/index.js';

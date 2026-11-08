@@ -32,9 +32,8 @@ import { TemplatesService, type TemplateDefaults } from '../templates/templates.
 import { applyTemplateDefaults } from '../templates/apply-defaults.js';
 import { ImportProducer } from './import.producer.js';
 import type { CreateImportDto, SubmitImportDto } from './dto/imports.dto.js';
-import { t } from '../i18n/t.js';
+import { currentLocale, t } from '../i18n/t.js';
 import { formatBytes } from '../common/format-bytes.js';
-import { currentLocale } from '../i18n/locale.js';
 
 /** Author fallback in AUTH_MODE=none, the same stub the rest of the API uses. */
 const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';

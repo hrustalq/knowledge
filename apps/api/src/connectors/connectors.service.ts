@@ -29,8 +29,7 @@ import {
 import { decryptSecret, encryptSecret, MissingEncryptionKeyError, maskSecret, parseKey } from '../ai/secret-box.js';
 import { assertSafeExternalUrl } from '../common/safe-url.js';
 import type { Env } from '../config/env.js';
-import { currentLocale } from '../i18n/locale.js';
-import { t } from '../i18n/t.js';
+import { currentLocale, t } from '../i18n/t.js';
 import { canSeeProject, type AccessScope } from '../permissions/access-scope.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ProjectsService } from '../projects/projects.service.js';

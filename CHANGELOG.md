@@ -33,6 +33,17 @@ in the pull request that introduces them — see
   as recovery picked it up is no longer reset and paid for a second time. A memo stuck on "analysing", or a page
   report stuck on "checking", after a crash is picked up again within ten minutes. A report check that fails to
   publish now goes back to open at once. (#809)
+- **Two actions that land at the same moment no longer undo each other.** Pausing or cancelling a connector sync while
+  it was working through a batch could be ignored: the sync set itself back to queued and carried on, after the run
+  had already announced it was paused. Approving and rejecting the same workflow step at once could publish a page
+  for a step that was rejected, or for a run that was cancelled. The second action now gets a "changed while you were
+  acting on it" error. Two people approving a merge request at once could leave only one approval counted, so the
+  approval gate stayed shut. Closing a merge request as it merged, or cancelling a sync as it finished, now leaves
+  whichever happened first. A page's "please check" or "outdated" flag no longer lands over a Verify or Clear made a
+  moment earlier. A sync's counters and warnings are no longer lost when a scoped fill or apply writes alongside it.
+  An import that was retried after you submitted it no longer offers Submit again, so it can no longer create a
+  second page. An export is built once. A worker restart used to start a second build, which could delete the
+  finished file. An export whose worker died now ends as failed (ask for it again) instead of being retried. (#810)
 
 ### Operations
 

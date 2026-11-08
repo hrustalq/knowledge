@@ -802,6 +802,45 @@ export function toRunInfo(row: ConnectorRun, awaitingReview = 0): ConnectorRunIn
 
 export { MAX_WARNINGS };
 
+/** What one writer adds to a run's counters since its last write. */
+export interface RunCounts {
+  created: number;
+  updated: number;
+  skipped: number;
+  failed: number;
+  conflicts: number;
+  applied: number;
+}
+
+export const NO_COUNTS: Readonly<RunCounts> = { created: 0, updated: 0, skipped: 0, failed: 0, conflicts: 0, applied: 0 };
+
+/**
+ * Add to a run's counters and warnings in one statement (#810). A slice, a
+ * scoped task and the API write one run at once, so nothing here is an
+ * absolute value: counters are incremented and warnings appended in SQL,
+ * capped at MAX_WARNINGS. Writing what a writer read earlier lost every count
+ * the other writer made in between.
+ */
+export async function addToRun(
+  prisma: Pick<PrismaService, '$executeRaw'>,
+  runId: string,
+  counts: RunCounts,
+  warnings: readonly ConnectorRunWarning[],
+): Promise<void> {
+  if (warnings.length === 0 && Object.values(counts).every((n) => n === 0)) return;
+  const c = counts;
+  await prisma.$executeRaw`
+    UPDATE connector_runs SET
+      created = created + ${c.created}, updated = updated + ${c.updated}, skipped = skipped + ${c.skipped},
+      failed = failed + ${c.failed}, conflicts = conflicts + ${c.conflicts}, applied = applied + ${c.applied},
+      warnings = COALESCE((
+        SELECT jsonb_agg(w ORDER BY n) FROM jsonb_array_elements(
+          CASE WHEN jsonb_typeof(warnings) = 'array' THEN warnings ELSE '[]'::jsonb END || ${JSON.stringify(warnings)}::jsonb
+        ) WITH ORDINALITY AS e(w, n) WHERE n <= ${MAX_WARNINGS}
+      ), '[]'::jsonb)
+    WHERE id = ${runId}::uuid`;
+}
+
 /**
  * Config keys only the server writes (#557): the Figma grant a connector dials
  * with is bound by the OAuth callback, never named in a request — otherwise an

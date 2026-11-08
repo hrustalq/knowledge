@@ -162,9 +162,6 @@ export class VerificationService {
   async flag(documentId: string, flag: VerificationFlag, opts: FlagOptions): Promise<DocumentDetailResponse | null> {
     const document = await this.row(documentId);
     this.assertNotArchived(document);
-    if (opts.unlessVerifiedAfter && document.verifiedAt && document.verifiedAt >= opts.unlessVerifiedAfter) return null;
-    if (opts.keepOutdated && document.verificationFlag === 'outdated') return null;
-    if (opts.onlyIfFlag && document.verificationFlag !== opts.onlyIfFlag) return null;
 
     const at = new Date();
     const note = opts.note?.slice(0, VERIFICATION_NOTE_MAX_CHARS) ?? null;
@@ -174,11 +171,25 @@ export class VerificationService {
       ...opts.source,
       at: opts.source?.at ?? at.toISOString(),
     };
+    // The "unless" guards live in the write, not in a read before it (#810):
+    // the drift sweeper's requested → outdated step must not land over a
+    // person's Clear or Verify made in between.
     const { count } = await this.prisma.document.updateMany({
-      where: { id: documentId, archivedAt: null },
+      where: {
+        id: documentId,
+        archivedAt: null,
+        AND: [
+          opts.unlessVerifiedAfter ? { OR: [{ verifiedAt: null }, { verifiedAt: { lt: opts.unlessVerifiedAfter } }] } : {},
+          opts.keepOutdated ? { OR: [{ verificationFlag: null }, { verificationFlag: { not: 'outdated' } }] } : {},
+          opts.onlyIfFlag ? { verificationFlag: opts.onlyIfFlag } : {},
+        ],
+      },
       data: { verificationFlag: flag, verificationNote: note, verificationSource: { ...source } },
     });
-    if (count === 0) this.assertNotArchived(await this.row(documentId));
+    if (count === 0) {
+      this.assertNotArchived(await this.row(documentId));
+      return null;
+    }
 
     const action = flag === 'outdated' ? 'document.outdated' : 'document.verification-requested';
     void this.activity.record({
@@ -223,8 +234,8 @@ export class VerificationService {
     const hadStamp = !!document.verifiedRevisionId;
     if (!hadFlag && !hadStamp) return this.documents.getDocument(documentId);
 
-    await this.prisma.document.updateMany({
-      where: { id: documentId, archivedAt: null },
+    const { count } = await this.prisma.document.updateMany({
+      where: { id: documentId, archivedAt: null, OR: [{ verificationFlag: { not: null } }, { verifiedRevisionId: { not: null } }] },
       data: {
         verifiedAt: null,
         verifiedBy: null,
@@ -237,6 +248,11 @@ export class VerificationService {
         expiredNotifiedAt: null,
       },
     });
+    // Nothing left to clear by the time the write ran: records nothing (#810).
+    if (count === 0) {
+      this.assertNotArchived(await this.row(documentId));
+      return this.documents.getDocument(documentId);
+    }
     void this.activity.record({
       workspaceId: document.workspaceId,
       actor: actorId,

@@ -1,15 +1,11 @@
-import { BadRequestException } from '@nestjs/common';
 import type { MergeRequestProvenance } from '@knowledge/contracts';
 import type { PrismaService } from '../prisma/prisma.service.js';
-import type { StorageService } from '../storage/storage.service.js';
 import type { DocumentsService } from './documents.service.js';
 import type { MergeRequestsService } from './merge-requests.service.js';
-import { t } from '../i18n/t.js';
 
 /** The services a draft needs to become a merge request. Passed in, not injected: this is a function, not a provider. */
 export interface DraftMergeRequestDeps {
   prisma: PrismaService;
-  storage: StorageService;
   documents: DocumentsService;
   mergeRequests: MergeRequestsService;
 }
@@ -61,20 +57,15 @@ export async function openDraftMergeRequest(deps: DraftMergeRequestDeps, input: 
   return deps.prisma.withTransaction(
     async () => {
       await deps.documents.createBranch(input.documentId, { name: input.branch });
-      const revision = await deps.documents.createRevision(
+      await deps.documents.writeRevision(
         input.documentId,
-        { branch: input.branch, message: input.title, contentType: 'text/markdown' },
-        undefined,
+        { text: input.markdown, branch: input.branch, message: input.title, contentType: 'text/markdown' },
         input.userId,
       );
-      const row = await deps.prisma.documentRevision.findUnique({ where: { id: revision.revisionId } });
-      if (!row) throw new BadRequestException(t('error.ai.draftRevisionGone'));
-      await deps.storage.putObjectText(row.s3Key, input.markdown, 'text/markdown');
-      await deps.documents.finalizeRevision(input.documentId, revision.revisionId);
 
       const mr = await deps.mergeRequests.create(
         input.documentId,
-        { sourceBranch: input.branch, title: input.title, description: input.description.slice(0, 4_000) },
+        { sourceBranch: input.branch, title: input.title, description: input.description.slice(0, 4_000) || undefined },
         input.userId,
         { provenance: input.provenance, captureId: input.captureId },
       );

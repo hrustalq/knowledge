@@ -2902,44 +2902,35 @@ export class McpService {
     if (!document) throw new Error(`Document ${documentId} not found`);
 
     const branchName = opts.branch ?? document.defaultBranch;
-    const branchRow = await this.prisma.documentBranch.findUnique({
-      where: { documentId_name: { documentId, name: branchName } },
-    });
-    if (opts.baseRevisionId) {
-      if (!branchRow) throw new Error(`Branch ${branchName} not found on document ${documentId}`);
-      if (branchRow.headRevisionId !== opts.baseRevisionId) {
-        // plan.md §7 optimistic concurrency: equivalent of HTTP 409 + comparison link.
-        throw new Error(
-          `Conflict: branch ${branchName} head is ${branchRow.headRevisionId}, not ${opts.baseRevisionId}. ` +
-            `Compare with knowledge_compare_revisions before retrying.`,
-        );
-      }
-    }
-
     // A spec (#78) or fixture (#483) is its text whole: it has no frontmatter
     // to keep, and its content type comes from the kind plus the syntax named here.
     const spec = isStructuredKind(document.kind);
     // The new revision parents on the branch head, so that is whose frontmatter
-    // a bare body keeps. A head with no readable content has none to keep.
-    const base =
-      !spec && branchRow?.headRevisionId
-        ? await this.documents.getContent(documentId, branchRow.headRevisionId).catch(() => null)
-        : null;
-    const content = spec ? opts.content : keepFrontmatter(opts.content, base?.frontmatter);
+    // a bare body keeps. A head with no readable content has none to keep. A
+    // `baseRevisionId` that is no longer the head is writeRevision's 409.
+    const headId = spec
+      ? null
+      : (opts.baseRevisionId ??
+        (
+          await this.prisma.documentBranch.findUnique({
+            where: { documentId_name: { documentId, name: branchName } },
+            select: { headRevisionId: true },
+          })
+        )?.headRevisionId);
+    const base = headId ? await this.documents.getContent(documentId, headId).catch(() => null) : null;
 
-    const draft = await this.documents.createRevision(
+    // plan.md §7 optimistic concurrency: a moved head is the REST route's 409 with its comparison link (#811).
+    return this.documents.writeRevision(
       documentId,
       {
+        text: spec ? opts.content : keepFrontmatter(opts.content, base?.frontmatter),
         branch: branchName,
         message: opts.message,
         contentType: spec ? `application/${opts.syntax ?? 'yaml'}` : 'text/markdown',
+        expectedHeadRevisionId: opts.baseRevisionId,
       },
-      undefined,
       authorId,
     );
-    const row = await this.prisma.documentRevision.findUniqueOrThrow({ where: { id: draft.revisionId } });
-    await this.storage.putObjectText(row.s3Key, content, row.contentType);
-    return this.documents.finalizeRevision(documentId, draft.revisionId);
   }
 
   /** A draft revision plus a presigned PUT for its object (#602). */

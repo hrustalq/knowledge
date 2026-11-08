@@ -10,6 +10,7 @@ import { ComponentDraftsService } from '../src/components/component-drafts.servi
 import { ComponentDraftSweeper } from '../src/components/component-draft.sweeper.js';
 import { AgentFindingsService } from '../src/ai/agent-findings.service.js';
 import type { RepoSnapshot } from '../src/connectors/code-research/repo-snapshot.service.js';
+import { fakeWriteRevision } from './revision-fakes.js';
 
 /**
  * Component pages, phase 5 (#236): "Document this component".
@@ -337,9 +338,9 @@ describe('publishing the draft', () => {
     };
     const storage = { putObjectText: vi.fn(async () => undefined) };
     const mergeRequests = { create: vi.fn(async () => ({ mergeRequest: { mergeRequestId: 'mr-new' } })) };
+    Object.assign(documents, { writeRevision: fakeWriteRevision({ documents, storage, prisma } as never) });
     const service = new AgentFindingsService(
       prisma as never,
-      storage as never,
       documents as never,
       {} as never,
       mergeRequests as never,

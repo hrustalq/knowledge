@@ -172,7 +172,6 @@ function world(opts: { filed?: number; sentinel?: { enabled: boolean; config: bo
 
   const service = new KnowledgeIssuesService(
     prisma as never,
-    {} as never,
     documents as never,
     {} as never,
     permissions as never,

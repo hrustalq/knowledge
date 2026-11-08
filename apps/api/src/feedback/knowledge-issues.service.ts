@@ -21,7 +21,6 @@ import {
   OPEN_KNOWLEDGE_ISSUE_STATUSES,
 } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { StorageService } from '../storage/storage.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { MergeRequestsService } from '../documents/merge-requests.service.js';
 import { openDraftMergeRequest } from '../documents/draft-merge-request.js';
@@ -85,7 +84,6 @@ export class KnowledgeIssuesService {
 
   constructor(
     readonly prisma: PrismaService,
-    readonly storage: StorageService,
     readonly documents: DocumentsService,
     readonly mergeRequests: MergeRequestsService,
     private readonly permissions: PermissionService,

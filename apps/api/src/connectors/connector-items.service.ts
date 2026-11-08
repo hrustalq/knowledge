@@ -272,16 +272,12 @@ export class ConnectorItemsService {
     const source = await sourceConnectorOf(this.prisma, documentId);
     return this.prisma.withTransaction(
       async () => {
-        const revision = await this.documents.createRevision(
+        const revision = await this.documents.writeRevision(
           documentId,
-          { message: t('connector.revertRevisionMessage'), contentType: 'text/markdown' },
-          undefined,
+          { text: markdown, message: t('connector.revertRevisionMessage'), contentType: 'text/markdown' },
           undefined,
           source ? { connectorId: source } : undefined,
         );
-        const row = await this.prisma.documentRevision.findUniqueOrThrow({ where: { id: revision.revisionId } });
-        await this.storage.putObjectText(row.s3Key, markdown, 'text/markdown');
-        await this.documents.finalizeRevision(documentId, revision.revisionId);
         if (item.linkId) {
           await this.prisma.connectorLink.update({
             where: { id: item.linkId },

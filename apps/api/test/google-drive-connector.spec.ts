@@ -1,6 +1,7 @@
 import { createVerify, generateKeyPairSync, randomBytes, randomUUID } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Prisma } from '@prisma/client';
+import { fakeWriteRevision } from './revision-fakes.js';
 
 /**
  * The Google Drive connector (#338), against a mocked Drive API.
@@ -651,6 +652,7 @@ function engine(options: { aclMode?: string } = {}) {
     { changed: async () => undefined } as never,
   );
   const discovery = new ConnectorDiscoveryService(prisma as never, config as never);
+  Object.assign(documents, { writeRevision: fakeWriteRevision({ documents, storage, prisma } as never) });
   const staging = new ConnectorStagingService(prisma as never, documents as never, storage as never, acl, { pinMarkdown: async (_ws: string, md: string) => md } as never);
   const sync = new ConnectorSyncService(
     prisma as never,

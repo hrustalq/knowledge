@@ -168,7 +168,6 @@ describe('Add to glossary', () => {
       {} as never,
       {} as never,
       {} as never,
-      {} as never,
       glossary as never,
     );
     return { svc, glossary, findings };

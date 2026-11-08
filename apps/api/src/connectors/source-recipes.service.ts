@@ -267,17 +267,23 @@ export class SourceRecipesService {
     const markdown = ex.markdown.trim();
     const hash = sha256(markdown);
     if (link.pausedAt || hash === link.contentHash) return;
-    const draft = await this.documents.createRevision(
-      link.documentId,
-      { message: t('connector.sourceRecipeMessage'), contentType: 'text/markdown' },
-      undefined,
-      userId,
-      { connectorId: row.id },
+    // The revision and the link's `contentHash` commit together (#658, #811),
+    // or the next pull reads the recipe's own revision as a new version.
+    await this.prisma.withTransaction(
+      async () => {
+        const written = await this.documents.writeRevision(
+          link.documentId,
+          { text: markdown, message: t('connector.sourceRecipeMessage'), contentType: 'text/markdown' },
+          userId,
+          { connectorId: row.id },
+        );
+        await this.prisma.connectorLink.update({
+          where: { id: link.id },
+          data: { contentHash: hash, revisionId: written.revisionId, lastPulledAt: new Date() },
+        });
+      },
+      { timeout: 30_000, maxWait: 10_000 },
     );
-    const stored = await this.prisma.documentRevision.findUniqueOrThrow({ where: { id: draft.revisionId } });
-    await this.storage.putObjectText(stored.s3Key, markdown, stored.contentType);
-    await this.documents.finalizeRevision(link.documentId, draft.revisionId);
-    await this.prisma.connectorLink.update({ where: { id: link.id }, data: { contentHash: hash, revisionId: draft.revisionId, lastPulledAt: new Date() } });
   }
 
   /**

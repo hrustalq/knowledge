@@ -440,6 +440,40 @@ export class DocumentsService {
     /** The `web` connector writing its own source-backed page (#674); never from a request. */
     writer?: { connectorId: string },
   ): Promise<RevisionInfo> {
+    return toRevisionInfo(await this.openDraft(documentId, dto, expectedHeadRevisionId, authorId, writer));
+  }
+
+  /**
+   * Inline content as a new revision (#811): draft on the branch head, put the
+   * bytes, finalize — one boundary, so a refused finalize leaves no draft behind
+   * and a caller's own transaction absorbs all three. The one writer of inline
+   * revision content; a moved head is `createRevision`'s 409. The MinIO PUT runs
+   * inside, so a caller's boundary needs the raised timeout this one asks for.
+   */
+  async writeRevision(
+    documentId: string,
+    input: { text: string; branch?: string; message?: string; contentType?: string; expectedHeadRevisionId?: string },
+    authorId: string = AUTHOR_ID_STUB,
+    writer?: { connectorId: string },
+  ): Promise<FinalizeRevisionResponse> {
+    const { text, expectedHeadRevisionId, ...dto } = input;
+    return this.prisma.withTransaction(
+      async () => {
+        const draft = await this.openDraft(documentId, dto, expectedHeadRevisionId, authorId, writer);
+        await this.storage.putObjectText(draft.s3Key, text, draft.contentType);
+        return this.finalizeRevision(documentId, draft.id);
+      },
+      { timeout: 30_000, maxWait: 10_000 },
+    );
+  }
+
+  private async openDraft(
+    documentId: string,
+    dto: CreateRevisionDto,
+    expectedHeadRevisionId: string | undefined,
+    authorId: string,
+    writer: { connectorId: string } | undefined,
+  ): Promise<DocumentRevision> {
     const document = await this.getDocumentOrThrow(documentId);
     this.assertNotArchived(document);
 
@@ -465,7 +499,7 @@ export class DocumentsService {
       }
     }
 
-    const revision = await this.createDraftRevision(documentId, {
+    return this.createDraftRevision(documentId, {
       branch: dto.branch,
       message: dto.message,
       // No default here: createDraftRevision picks one from the document's kind.
@@ -474,7 +508,6 @@ export class DocumentsService {
       collab: dto.collabDraftId ? await this.draftOf(documentId, dto.branch ?? document.defaultBranch, dto) : undefined,
       connectorId: writer?.connectorId,
     });
-    return toRevisionInfo(revision);
   }
 
   /**

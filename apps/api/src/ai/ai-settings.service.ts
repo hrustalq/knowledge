@@ -20,8 +20,7 @@ import { AiConfigService } from './ai-config.service.js';
 import { AiModelsService } from './ai-models.service.js';
 import { SourcePolicyService } from './source-policy.service.js';
 import { encryptSecret, maskSecret, MissingEncryptionKeyError } from './secret-box.js';
-import { t } from '../i18n/t.js';
-import { currentLocale } from '../i18n/locale.js';
+import { currentLocale, t } from '../i18n/t.js';
 
 export interface UpdateAiSettingsInput {
   /** Per-purpose routing; null clears a route back to the inline config. */

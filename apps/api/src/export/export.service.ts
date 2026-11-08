@@ -25,8 +25,7 @@ import {
 import { AccessService } from '../auth/access.service.js';
 import type { Principal } from '../auth/principal.js';
 import type { Env } from '../config/env.js';
-import { currentLocale } from '../i18n/locale.js';
-import { t } from '../i18n/t.js';
+import { currentLocale, t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { ExportProducer } from './export.producer.js';

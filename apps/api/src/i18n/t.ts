@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { I18nContext, I18nService } from 'nestjs-i18n';
-import type { Locale } from '@knowledge/contracts';
+import { isLocale, type Locale } from '@knowledge/contracts';
 
 /**
  * Ambient translation for throw sites (docs/features/18).
@@ -37,7 +37,8 @@ export function withLocale<T>(lang: Locale, fn: () => T): T {
  * reason `import_jobs.locale` and `workflow_runs.locale` are columns.
  */
 export function currentLocale(fallback: Locale = 'en'): Locale {
-  return forced.getStore() ?? ((I18nContext.current()?.lang as Locale | undefined) ?? fallback);
+  const lang = forced.getStore() ?? I18nContext.current()?.lang;
+  return isLocale(lang) ? lang : fallback;
 }
 
 @Injectable()

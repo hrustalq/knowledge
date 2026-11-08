@@ -62,8 +62,7 @@ import type {
   AssistantSuggestDto,
   PostAssistantMessageDto,
 } from './assistant.dto.js';
-import { t } from '../i18n/t.js';
-import { currentLocale } from '../i18n/locale.js';
+import { currentLocale, t } from '../i18n/t.js';
 import { applyDraftEdit, refuseDraftEdit } from './draft-edits.js';
 import { templateClause } from './template-clause.js';
 import { TemplatesService } from '../templates/templates.service.js';

@@ -313,7 +313,7 @@ describe('#658 write pairs commit together', () => {
         config: { [WIKI_CONFIG_KEY]: 'on', [WIKI_AUTO_REGENERATE_CONFIG_KEY]: 'on-push', branch: 'main' },
       };
       expect(await svc.queueWebhookRefs(row as never, ['b'])).toMatchObject({ mode: 'review' });
-      expect(await svc.createRun(row as never, 'pull', 'manual', {})).toMatchObject({ mode: 'review' });
+      expect(await svc.createRun(row as never, 'pull', 'manual', { actorId: undefined })).toMatchObject({ mode: 'review' });
       expect(await svc.queueRepoPush(row as never, { branch: 'main' })).toMatchObject({ mode: 'review' });
     });
   });

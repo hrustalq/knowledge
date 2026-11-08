@@ -24,6 +24,11 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- **An operator graph query over MCP now stops at the row limit the server is set to.** `knowledge_query_graph`
+  passed its own `limit` (up to 1000) straight to the graph store, so it skipped the `GRAPH_QUERY_MAX_ROWS` ceiling
+  that `POST /v1/graph/query` applies, and the audit log recorded the limit asked for, not the one used. Both
+  surfaces now run the same clamp and audit. A connector sync started with `knowledge_sync_connector` now records
+  who started it; before, the run showed no actor. (#812)
 - **Work a crashed worker leaves behind is now recovered instead of stuck forever, and finished work is never redone.**
   An agent run, workflow step, indexing job or connector sync that was still marked running after its worker died is
   retried, and one that keeps dying is marked failed with an error saying so. Before, an agent run that crashed on its

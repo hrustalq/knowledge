@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { GraphModule } from './graph.module.js';
 import { GraphQueryController } from './graph-query.controller.js';
+import { GraphQueryService } from './graph-query.service.js';
 
 /**
  * HTTP surface for operator graph queries. Separate from GraphModule so the
@@ -10,5 +11,6 @@ import { GraphQueryController } from './graph-query.controller.js';
 @Module({
   imports: [GraphModule],
   controllers: [GraphQueryController],
+  providers: [GraphQueryService],
 })
 export class GraphQueryModule {}

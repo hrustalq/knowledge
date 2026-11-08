@@ -223,6 +223,8 @@ export class AuthFlowService {
 
     const { token, tokenHash } = mintToken('kr_');
     const ttlMin = this.config.get<number>('AUTH_RESET_TTL_MIN') ?? 30;
+    // Opportunistic cleanup, as sessions do: an expired link is refused anyway.
+    await this.prisma.passwordResetToken.deleteMany({ where: { expiresAt: { lt: new Date() } } });
     await this.prisma.passwordResetToken.create({
       data: { userId: user.id, tokenHash, purpose: 'reset', expiresAt: new Date(Date.now() + ttlMin * 60_000) },
     });
@@ -239,17 +241,27 @@ export class AuthFlowService {
    * Redeems a `kr_` token, whichever mail carried it: a reset the person asked
    * for, or an invite an admin sent (docs/features/41). Either way the link
    * arrived at the address, so following it also proves the address.
+   *
+   * The spend is the first statement and is guarded, so two submissions of one
+   * link set the password once; the read above only shapes the early refusal.
+   * A reset also spends the person's other open links, reset or invite: one in
+   * an old mailbox must stop working once the password is set.
    */
   async resetPassword(token: string, password: string): Promise<void> {
     const reset = await this.prisma.passwordResetToken.findUnique({ where: { tokenHash: hashToken(token) } });
     if (!reset || reset.usedAt || reset.expiresAt < new Date()) {
       throw new BadRequestException(t('error.auth.invalidResetToken'));
     }
-    const now = new Date();
     const passwordHash = await hashPassword(password); // before the boundary: hashing holds no connection
+    const now = new Date();
     // The revoke commits with the reset (#656): the token is spent, so a retry could never repair a missed one.
     await this.prisma.withTransaction(async () => {
-      await this.prisma.passwordResetToken.update({ where: { id: reset.id }, data: { usedAt: now } });
+      const spent = await this.prisma.passwordResetToken.updateMany({
+        where: { id: reset.id, usedAt: null, expiresAt: { gt: now } },
+        data: { usedAt: now },
+      });
+      if (spent.count === 0) throw new BadRequestException(t('error.auth.invalidResetToken'));
+      await this.prisma.passwordResetToken.updateMany({ where: { userId: reset.userId, usedAt: null }, data: { usedAt: now } });
       await this.prisma.user.update({ where: { id: reset.userId }, data: { passwordHash } });
       await this.prisma.user.updateMany({ where: { id: reset.userId, emailVerifiedAt: null }, data: { emailVerifiedAt: now } });
       await this.sessions.revokeAllForUser(reset.userId); // stolen-session hygiene

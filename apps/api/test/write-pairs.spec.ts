@@ -129,11 +129,13 @@ describe('#658 write pairs commit together', () => {
   it('PATCH /v1/documents/:id: a rejected patch leaves the owner alone', async () => {
     const { prisma, committed } = fakePrisma({ 'document.update': { id: 'd1' } });
     const activity = { record: vi.fn(async () => undefined) };
-    const svc = new DocumentsService(prisma, _, _, _, activity as never, _, _, _, _, _, _, _, _, _, _, _);
+    const commits = { lock: async () => undefined, uniqueSlug: async () => 't' };
+    const svc = new DocumentsService(prisma, _, _, _, activity as never, _, _, _, _, _, _, _, _, _, _, commits as never);
     const doc = { id: 'd1', workspaceId: WS, projectId: 'p1', ownerId: 'old', parentId: null, archivedAt: null, title: 'T', path: '/d1/', depth: 0 };
     stub(svc, {
       getDocumentOrThrow: async () => ({ ...doc }),
       assertMember: async () => undefined,
+      toSummary: async () => ({}),
       assertValidParent: async () => {
         throw new BadRequestException('bad parent');
       },

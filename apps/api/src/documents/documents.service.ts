@@ -184,16 +184,6 @@ export class DocumentsService {
         ? `text/${dto.content.format}`
         : 'text/markdown';
 
-    // Feature 08: nested creation — the parent must exist in the same project.
-    let parent: { path: string; depth: number } | null = null;
-    if (dto.parentId) {
-      const row = await this.prisma.document.findUnique({ where: { id: dto.parentId } });
-      if (!row || row.projectId !== dto.projectId) {
-        throw new BadRequestException(t('error.document.parentNotInProject', { id: dto.parentId }));
-      }
-      parent = { path: row.path, depth: row.depth };
-    }
-
     // `path` contains the row's own id, so the id is minted here rather than by
     // the column default — one insert instead of insert-then-update. The
     // `@default(uuid())` stays for anyone who does not go through this method.
@@ -202,17 +192,29 @@ export class DocumentsService {
     // person is writing, default to `private` (#474). System writers keep
     // creating pages the workspace sees, without having to say so.
     const isPrivate = dto.visibility === 'private';
-    const position = await this.prisma.document.count({
-      where: { projectId: dto.projectId, parentId: dto.parentId ?? null },
-    });
 
     // `withTransaction` so an outer boundary absorbs this one — see the note in
     // finalizeRevision. A raw `$transaction` here commits on its own connection
     // regardless of the caller, so an import or connector pull whose outer
     // boundary later rolled back still left the page durably created.
     const { document, revision } = await this.prisma.withTransaction(async () => {
-      // The project's commit lock (#636) makes the slug's sibling check race-free.
+      // The project's commit lock (#636) makes the slug's sibling check race-free,
+      // and the parent and sibling count are read under it (#807): a parent read
+      // first could move into a restricted page before the insert, leaving this
+      // child with the old path and readable outside that page's grants.
       await this.commits.lock(dto.projectId);
+      // Feature 08: nested creation — the parent must exist in the same project.
+      let parent: { path: string; depth: number } | null = null;
+      if (dto.parentId) {
+        const row = await this.prisma.document.findUnique({ where: { id: dto.parentId } });
+        if (!row || row.projectId !== dto.projectId) {
+          throw new BadRequestException(t('error.document.parentNotInProject', { id: dto.parentId }));
+        }
+        parent = { path: row.path, depth: row.depth };
+      }
+      const position = await this.prisma.document.count({
+        where: { projectId: dto.projectId, parentId: dto.parentId ?? null },
+      });
       const document = await this.prisma.document.create({
         data: {
           id,
@@ -1433,25 +1435,16 @@ export class DocumentsService {
     // Project move (Workspace > Project > Document). Cross-workspace moves are
     // out of scope: the S3 key layout, graph vertices and the fulltext index
     // are all keyed by workspace, so the target must be a sibling project.
-    let movedSubtree: string[] = [];
     if (dto.projectId !== undefined && dto.projectId !== document.projectId) {
       await this.projects.requireProjectInWorkspace(dto.projectId, document.workspaceId);
       data.projectId = dto.projectId;
-      movedSubtree = await this.descendantIds(documentId, document.workspaceId);
       // The old parent stays behind, so the moved document is re-rooted unless
       // the same call supplies a parent inside the target project.
       if (dto.parentId === undefined) data.parentId = null;
     }
 
     const targetProject = data.projectId ?? document.projectId;
-    let newParent: { path: string; depth: number } | null = null;
-    if (dto.parentId !== undefined) {
-      if (dto.parentId === documentId) throw new BadRequestException(t('error.document.selfParent'));
-      if (dto.parentId !== null) {
-        newParent = await this.assertValidParent(documentId, dto.parentId, targetProject);
-      }
-      data.parentId = dto.parentId;
-    }
+    if (dto.parentId !== undefined) data.parentId = dto.parentId;
     // A call that only changes the owner ends here, once every other field has
     // been read: an early return dropped a move sent with an owner (#658).
     if (Object.keys(data).length === 0) {
@@ -1459,73 +1452,59 @@ export class DocumentsService {
       return newOwner !== undefined ? this.setOwner(documentId, newOwner, actorId) : this.toSummary(document);
     }
 
-    // A project move with no explicit parent re-roots the page (above), which
-    // is a path change too.
-    const reparented = data.parentId !== undefined && data.parentId !== document.parentId;
-    const oldPath = document.path;
-    const newPath = reparented ? `${newParent?.path ?? '/'}${documentId}/` : oldPath;
-    const depthDelta = reparented ? (newParent?.depth ?? -1) + 1 - document.depth : 0;
-
     // One boundary around the row, its subtree's paths and the subtree's
     // project. The subtree re-project used to sit outside any explicit
     // transaction, so a failure between the two left children in a project
     // their parent had already left.
     const renamed = data.title !== undefined && data.title !== document.title;
-    const placed = reparented || data.projectId !== undefined;
+    const placed = data.parentId !== undefined || data.projectId !== undefined;
     const updated = await this.prisma.withTransaction(async () => {
-      if (newOwner !== undefined) await this.setOwner(documentId, newOwner, actorId);
       // A rename or a move renames or moves the page's file (#636): a fresh
-      // slug under its new parent, and one commit, under the commit lock.
+      // slug under its new parent, and one commit, under the commit lock. The
+      // lock comes first and the page is read again under it (#807), so the
+      // tree a move is checked against is the one it lands in.
+      let row = document;
       let slug: string | undefined;
       if (renamed || placed) {
-        await this.commits.lock(document.projectId, targetProject);
-        const parentAfter = data.parentId !== undefined ? data.parentId : document.parentId;
-        slug = await this.commits.uniqueSlug(targetProject, parentAfter, documentId, data.title ?? document.title, document.slug);
+        row = await this.lockedDocument(document, targetProject);
+        const parentAfter = data.parentId !== undefined ? data.parentId : row.parentId;
+        slug = await this.commits.uniqueSlug(targetProject, parentAfter, documentId, data.title ?? row.title, row.slug);
       }
-
-      // A reparent lands the page at the end of its new siblings. Without this
-      // it kept the index it held under its old parent, which collides with
-      // whoever already holds that index there and leaves the tie to be broken
-      // by title — so a moved page appeared in an arbitrary slot.
-      const position = reparented
-        ? await this.prisma.document.count({
-            where: { projectId: targetProject, parentId: data.parentId ?? null, id: { not: documentId } },
-          })
-        : undefined;
-
-      const row = await this.prisma.document.update({
-        where: { id: documentId },
-        data: {
-          ...data,
-          ...(slug !== undefined ? { slug } : {}),
-          ...(reparented ? { path: newPath, depth: document.depth + depthDelta, position } : {}),
-        },
-      });
-
-      if (reparented) await this.repathSubtree(document.workspaceId, documentId, oldPath, newPath, depthDelta);
+      if (newOwner !== undefined) await this.setOwner(documentId, newOwner, actorId);
+      // A project move with no explicit parent re-roots the page (above), which
+      // is a path change too.
+      const reparented = data.parentId !== undefined && data.parentId !== row.parentId;
+      const movedSubtree = data.projectId ? await this.descendantIds(documentId, document.workspaceId) : [];
 
       // Children follow their parent, otherwise they would be orphaned into a
-      // project their ancestor no longer belongs to.
+      // project their ancestor no longer belongs to. Before the reparent, which
+      // recomputes the subtree's restrictions from its new project.
       if (data.projectId && movedSubtree.length > 0) {
         await this.prisma.document.updateMany({
           where: { id: { in: movedSubtree } },
           data: { projectId: data.projectId },
         });
       }
+
+      const fields = { ...data, ...(slug !== undefined ? { slug } : {}) };
+      const updatedRow = reparented
+        ? await this.reparent(row, data.parentId ?? null, targetProject, fields)
+        : await this.prisma.document.update({ where: { id: documentId }, data: fields });
+
       // Their branches join the new project's branches of the same names.
       if (data.projectId) await this.commits.rehomeBranches(data.projectId);
-      // New ancestors or a new project mean a new chain of restrictions for the
-      // whole subtree, in this transaction, so nobody reads the page in between
-      // with the old ones (#76).
-      if (reparented || data.projectId) await this.permissions.recomputeRestrictedBy({ documentId });
+      // A new project means a new chain of restrictions for the whole subtree,
+      // in this transaction, so nobody reads the page in between with the old
+      // ones (#76). `reparent` already did it for a move.
+      if (!reparented && data.projectId) await this.permissions.recomputeRestrictedBy({ documentId });
 
       if (data.projectId) {
         // Gone from one project's tree, added to the other's, subtree and all.
         const moved = [documentId, ...movedSubtree];
         await this.commits.recordState(document.projectId, moved, { actorId, message: `Move ${slug} to another project`, removed: true });
         await this.commits.recordState(data.projectId, moved, { actorId, message: `Move ${slug} from another project` });
-      } else if (slug !== undefined && (reparented || slug !== document.slug)) {
-        const message = reparented ? `Move ${slug}` : `Rename ${document.slug ?? document.title} to ${slug}`;
+      } else if (slug !== undefined && (reparented || slug !== row.slug)) {
+        const message = reparented ? `Move ${slug}` : `Rename ${row.slug ?? row.title} to ${slug}`;
         await this.commits.recordState(document.projectId, [documentId], { actorId, message });
       }
       // The BM25 rows carry the title (#528): the stale sweeper re-mirrors
@@ -1536,7 +1515,7 @@ export class DocumentsService {
           data: { fulltextStaleAt: new Date() },
         });
       }
-      return row;
+      return updatedRow;
     });
     if (renamed) {
       // Keep the graph vertex label in sync (PG stays authoritative).
@@ -1561,14 +1540,66 @@ export class DocumentsService {
 
 
   /**
+   * Take the project's commit lock (plus `also`), then read the page again
+   * under it (#807). Every tree write starts here: a path, a depth or a parent
+   * read before the lock may be a tree another writer has already changed,
+   * which is how two crossed moves both passed the cycle check.
+   *
+   * A page that changed project before the lock was granted is held under the
+   * wrong lock, so the write is refused rather than run.
+   */
+  private async lockedDocument(document: Document, ...also: string[]): Promise<Document> {
+    await this.commits.lock(document.projectId, ...also);
+    const row = await this.getDocumentOrThrow(document.id);
+    if (row.projectId !== document.projectId) {
+      throw new ConflictException({ statusCode: 409, message: t('error.document.projectChanged', { id: document.id }) });
+    }
+    return row;
+  }
+
+  /**
+   * Put a page under `parentId` (null = the root): the self and cycle checks,
+   * the row's path, depth and position, its subtree's paths and the subtree's
+   * restrictions. The one sequence every mover runs (#807); three copies of it
+   * are how their orderings drifted. Call under the project's commit lock, with
+   * `row` read under it (`lockedDocument`).
+   *
+   * `position` defaults to the end of the new siblings. Keeping the old index
+   * collided with whoever held it under the new parent, leaving the tie to be
+   * broken by title, so a moved page appeared in an arbitrary slot.
+   */
+  private async reparent(
+    row: Document,
+    parentId: string | null,
+    projectId: string,
+    data: Prisma.DocumentUncheckedUpdateInput = {},
+    position?: number,
+  ): Promise<Document> {
+    if (parentId === row.id) throw new BadRequestException(t('error.document.selfParent'));
+    const parent = parentId ? await this.assertValidParent(row.id, parentId, projectId) : null;
+    const path = `${parent?.path ?? '/'}${row.id}/`;
+    const depthDelta = (parent?.depth ?? -1) + 1 - row.depth;
+    position ??= await this.prisma.document.count({ where: { projectId, parentId, id: { not: row.id } } });
+    const updated = await this.prisma.document.update({
+      where: { id: row.id },
+      data: { ...data, parentId, path, depth: row.depth + depthDelta, position },
+    });
+    await this.repathSubtree(row.workspaceId, row.id, row.path, path, depthDelta);
+    // New ancestors mean a new chain of restrictions for the whole subtree, in
+    // this transaction, so nobody reads the page in between with the old ones (#76).
+    await this.permissions.recomputeRestrictedBy({ documentId: row.id });
+    return updated;
+  }
+
+  /**
    * Re-point a moved page's descendants at its new path, in one statement for a
    * subtree of any size. Left-anchored LIKE, so the (workspace_id, path) index
    * serves it; the old upward walk could not express this at all.
    *
-   * Both movers call this. It is one implementation because the `substring`
-   * offset and the depth delta have to agree with the path the row itself was
-   * given, and two copies of that arithmetic is how a subtree ends up at a
-   * depth its own parent disagrees with.
+   * Only `reparent` calls this: the `substring` offset and the depth delta
+   * have to agree with the path the row itself was given, and two copies of
+   * that arithmetic is how a subtree ends up at a depth its own parent
+   * disagrees with.
    */
   private async repathSubtree(
     workspaceId: string,
@@ -1624,32 +1655,20 @@ export class DocumentsService {
     const document = await this.getDocumentOrThrow(documentId);
     const parentId = dto.parentId;
 
-    if (parentId === documentId) throw new BadRequestException(t('error.document.selfParent'));
-
-    // Same guard the update path uses, so a drop onto a page's own descendant
-    // is refused by the server and not only by the dragging client.
-    let newParent: { path: string; depth: number } | null = null;
-    if (parentId !== null) newParent = await this.assertValidParent(documentId, parentId, document.projectId);
-
-    const reparented = parentId !== document.parentId;
-    const oldPath = document.path;
-    const newPath = reparented ? `${newParent?.path ?? '/'}${documentId}/` : oldPath;
-    const depthDelta = reparented ? (newParent?.depth ?? -1) + 1 - document.depth : 0;
-
     const updated = await this.prisma.withTransaction(async () => {
-      // A reparent moves the page's file (#636): see updateDocument.
-      let slug: string | undefined;
-      if (reparented) {
-        await this.commits.lock(document.projectId);
-        slug = await this.commits.uniqueSlug(document.projectId, parentId, documentId, document.title, document.slug);
-      }
+      // The lock first, even for a reorder, and the page read again under it
+      // (#807). Two crossed moves checked against paths read before it both
+      // passed the cycle check, and two drops into one run each renumbered it
+      // from their own read.
+      const row = await this.lockedDocument(document);
+      const reparented = parentId !== row.parentId;
 
       // The destination run in the order the tree draws it, read inside the
       // transaction: that is what makes `beforeId` mean something. A sibling
       // that left between the client's copy of the tree and this call is a 409
       // the caller can act on, not a page quietly landing at the end.
       const siblings = await this.prisma.document.findMany({
-        where: { projectId: document.projectId, parentId, id: { not: documentId } },
+        where: { projectId: row.projectId, parentId, id: { not: documentId } },
         orderBy: [{ position: 'asc' }, { title: 'asc' }],
         select: { id: true },
       });
@@ -1671,29 +1690,24 @@ export class DocumentsService {
       ordered.splice(index, 0, documentId);
       await this.renumberRun(ordered);
 
+      if (!reparented) return { ...row, position: index };
       // The run the page left keeps a hole otherwise. Ordering survives a hole,
       // but the next insert there would renumber around it anyway, so close it
       // now and keep the invariant true between calls rather than eventually.
-      if (reparented) {
-        const vacated = await this.prisma.document.findMany({
-          where: { projectId: document.projectId, parentId: document.parentId, id: { not: documentId } },
-          orderBy: [{ position: 'asc' }, { title: 'asc' }],
-          select: { id: true },
-        });
-        await this.renumberRun(vacated.map((r) => r.id));
-      }
-
-      const row = await this.prisma.document.update({
-        where: { id: documentId },
-        data: reparented ? { parentId, slug, path: newPath, depth: document.depth + depthDelta } : { parentId },
+      const vacated = await this.prisma.document.findMany({
+        where: { projectId: row.projectId, parentId: row.parentId, id: { not: documentId } },
+        orderBy: [{ position: 'asc' }, { title: 'asc' }],
+        select: { id: true },
       });
+      await this.renumberRun(vacated.map((r) => r.id));
 
-      if (reparented) {
-        await this.repathSubtree(document.workspaceId, documentId, oldPath, newPath, depthDelta);
-        await this.permissions.recomputeRestrictedBy({ documentId });
-        await this.commits.recordState(document.projectId, [documentId], { actorId, message: `Move ${slug}` });
-      }
-      return row;
+      // A reparent moves the page's file (#636): see updateDocument. The
+      // parent check is the update path's, so a drop onto a page's own
+      // descendant is refused by the server and not only by the dragging client.
+      const slug = await this.commits.uniqueSlug(row.projectId, parentId, documentId, row.title, row.slug);
+      const moved = await this.reparent(row, parentId, row.projectId, { slug }, index);
+      await this.commits.recordState(row.projectId, [documentId], { actorId, message: `Move ${slug}` });
+      return moved;
     });
 
     await this.activity.record({
@@ -1745,19 +1759,7 @@ export class DocumentsService {
       if (!document || document.projectId !== projectId) continue;
       const row = await this.prisma.document.findUniqueOrThrow({ where: { id: p.documentId } });
       const data: Prisma.DocumentUncheckedUpdateInput = {};
-      if (p.parentDocumentId !== row.parentId) {
-        if (p.parentDocumentId === row.id) throw new BadRequestException(t('error.document.selfParent'));
-        const parent = p.parentDocumentId ? await this.assertValidParent(row.id, p.parentDocumentId, projectId) : null;
-        const newPath = `${parent?.path ?? '/'}${row.id}/`;
-        const depthDelta = (parent?.depth ?? -1) + 1 - row.depth;
-        const position = await this.prisma.document.count({ where: { projectId, parentId: p.parentDocumentId, id: { not: row.id } } });
-        await this.prisma.document.update({
-          where: { id: row.id },
-          data: { parentId: p.parentDocumentId, path: newPath, depth: row.depth + depthDelta, position },
-        });
-        await this.repathSubtree(row.workspaceId, row.id, row.path, newPath, depthDelta);
-        await this.permissions.recomputeRestrictedBy({ documentId: row.id });
-      }
+      if (p.parentDocumentId !== row.parentId) await this.reparent(row, p.parentDocumentId, projectId);
       if (p.slug !== row.slug) data.slug = p.slug;
       if (p.removed !== (row.archivedAt !== null)) {
         data.archivedAt = p.removed ? new Date() : null;
@@ -2408,6 +2410,11 @@ export class DocumentsService {
     // here waits for a lock that cannot be released until this call returns.
     const contentType = this.revisionContentType(document.kind, opts.contentType);
     return this.prisma.withTransaction(async () => {
+      // `max + 1` under the project's commit lock (#807): two saves reading the
+      // same max hit the (document, revisionNumber) unique index, a 500. The
+      // lock is the one every writer takes first, so a merge, which already
+      // holds it, takes it again for free.
+      await this.commits.lock(document.projectId);
       const max = await this.prisma.documentRevision.aggregate({
         where: { documentId },
         _max: { revisionNumber: true },

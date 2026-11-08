@@ -13,6 +13,18 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Fixed
+
+- **A repeated finalize no longer indexes a revision twice, and a stale save no longer overwrites a newer one.** A
+  double-click, a client retry or an MCP retry on `POST /v1/documents/:id/revisions/:revisionId/finalize` wrote a second
+  project commit and a second indexing job, and could set an already indexed revision back to `finalized`. It now
+  reports the revision's current state and writes nothing. A draft finalized after another revision landed on its
+  branch (another save, a merge) silently moved the head past that revision. It now answers `409` with
+  `currentHeadRevisionId` and `comparisonUrl`, the same shape as the `If-Match` conflict, and the head stays where it
+  is. The API spec and test fixture editors start a fresh draft on the next save after that `409` (#806).
+
 ## [0.46.0] — 2026-11-07
 
 ### Breaking

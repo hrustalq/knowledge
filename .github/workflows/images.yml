@@ -21,10 +21,6 @@ on:
         description: "Git ref to build (a release tag, e.g. v0.46.1)"
         type: string
         required: true
-  # Bootstrap only: builds the current release while this workflow is not yet on
-  # the default branch (workflow_dispatch needs that). Removed before merge.
-  push:
-    branches: ["ci/k8s-images"]
 
 permissions:
   contents: read
@@ -43,7 +39,7 @@ jobs:
           - { image: knowledge-api-git, file: Dockerfile.api, target: git-runtime }
           - { image: knowledge-web, file: Dockerfile.web, target: runtime }
     env:
-      REF: ${{ inputs.ref || 'v0.46.1' }}
+      REF: ${{ inputs.ref }}
     steps:
       - uses: actions/checkout@v5
         with:

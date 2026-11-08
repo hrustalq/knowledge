@@ -3,6 +3,7 @@ import { AssistantReadToolsService } from '../src/assistant/assistant-read-tools
 import { AssistantToolsService } from '../src/assistant/assistant.tools.js';
 import { NotFoundException } from '@nestjs/common';
 import { AssistantThreadsService } from '../src/assistant/assistant-threads.service.js';
+import { AssistantService } from '../src/assistant/assistant.service.js';
 import { AccessService } from '../src/auth/access.service.js';
 import { AclGuard } from '../src/auth/acl.guard.js';
 import { DEV_PRINCIPAL } from '../src/auth/principal.js';
@@ -171,5 +172,61 @@ describe('a chat thread belongs to its asker', () => {
     const threads = new AssistantThreadsService({ assistantThread: { findMany } } as never, {} as never, {} as never);
     await threads.listThreads(WS, ALICE);
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ workspaceId: WS, createdBy: ALICE }) }));
+  });
+});
+
+/**
+ * #813: pages the user applies from the composer are read through the same
+ * check as the grounding page, so a restricted page never reaches the prompt.
+ */
+describe('applied documents (documentRefs)', () => {
+  const SECRET = '66666666-6666-4666-8666-666666666666';
+  const OPEN = '77777777-7777-4777-8777-777777777777';
+  const MISSING = '88888888-8888-4888-8888-888888888888';
+  const pages: Record<string, { id: string; workspaceId: string; title: string; projectId: string; path: string; restrictedBy: string[] }> = {
+    [SECRET]: { id: SECRET, workspaceId: WS, title: 'Salaries', projectId: 'p-1', path: `/${SECRET}/`, restrictedBy: [SECRET] },
+    [OPEN]: { id: OPEN, workspaceId: WS, title: 'Onboarding', projectId: 'p-1', path: `/${OPEN}/`, restrictedBy: [] },
+  };
+  const member = { workspaceId: WS, bypass: false, guest: false, denied: new Set([SECRET]), granted: new Set() } as unknown as AccessScope;
+
+  async function turn(documentRefs: string[]) {
+    const svc = Object.create(AssistantService.prototype) as AssistantService;
+    const documents = {
+      getContent: vi.fn(async (id: string) => ({ markdown: id === SECRET ? 'CEO earns 1M' : 'Read the handbook' })),
+      breadcrumbsFor: vi.fn(async () => new Map()),
+    };
+    Object.assign(svc, {
+      permissions: { scopeFor: vi.fn(async () => member) },
+      prisma: { document: { findUnique: vi.fn(async ({ where }: { where: { id: string } }) => pages[where.id] ?? null) } },
+      documents,
+      code: { repositories: vi.fn(async () => []) },
+      tasks: { repositories: vi.fn(async () => []) },
+      tools: { chatAvailable: vi.fn(async () => false) },
+      skills: { forTurn: vi.fn(async () => []), renderPrompt: () => '' },
+      learnings: { promptFor: vi.fn(async () => ({ prompt: '' })) },
+      threads: { recentHistory: vi.fn(async () => []) },
+    });
+    const thread = { id: 't-1', workspaceId: WS, documentId: null };
+    const agent = { instructions: 'You help.', config: { webAccess: { effective: 'off' } }, skillIds: [], key: 'researcher' };
+    const prepared = await (svc as unknown as { prepareTurn: (...a: unknown[]) => Promise<{ messages: Array<{ content: string }>; collected: Map<string, unknown> }> })
+      .prepareTurn(thread, { content: 'What do we pay?', documentRefs }, 'm-1', agent, 'ask', DEV_PRINCIPAL);
+    return { system: prepared.messages[0]!.content, collected: prepared.collected, documents };
+  }
+
+  it('drops a page the member cannot open, unread and untitled', async () => {
+    const { system, collected, documents } = await turn([SECRET, MISSING]);
+    expect(system).not.toContain('CEO earns 1M');
+    expect(system).not.toContain('Salaries');
+    expect(system).toContain('2 other document(s) the user applied are not available to you');
+    expect(collected.has(SECRET)).toBe(false);
+    expect(documents.getContent).not.toHaveBeenCalledWith(SECRET);
+  });
+
+  it('still includes a page the member can open', async () => {
+    const { system, collected } = await turn([OPEN, SECRET]);
+    expect(system).toContain('Read the handbook');
+    expect(system).toContain('"Onboarding"');
+    expect(system).toContain('1 other document(s)');
+    expect(collected.has(OPEN)).toBe(true);
   });
 });

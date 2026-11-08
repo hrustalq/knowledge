@@ -13,6 +13,15 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Security
+
+- **A page you cannot open no longer reaches the assistant through the composer's "Apply documents" list.** Its
+  content went into the prompt with only a workspace check, so a member who knew the id of a restricted page could
+  get answers drawn from it. Such a page is now dropped unread. The assistant is told only that some applied pages are
+  unavailable, never which ones. (#813)
+
 ## [0.46.1] — 2026-11-08
 
 ### Security

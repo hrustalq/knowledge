@@ -25,6 +25,15 @@ in the pull request that introduces them — see
   `currentHeadRevisionId` and `comparisonUrl`, the same shape as the `If-Match` conflict, and the head stays where it
   is. The API spec and test fixture editors start a fresh draft on the next save after that `409` (#806).
 
+- **Concurrent tree moves no longer corrupt the page tree or a child's restrictions.** Two pages moved under each other
+  at the same moment (by drag, `POST /v1/documents/:id/move` or `PATCH` with `parentId`) could both succeed and form a
+  parent cycle, and both pages then disappeared from `GET /v1/documents/tree`. Now one move lands and the other gets
+  the existing `400`. A page created under a parent that was being moved into a restricted page at the same time kept
+  the parent's old place, so it stayed readable outside that page's grants. It now follows its parent. Concurrent
+  drops into one sibling list, and concurrent creates under one parent, no longer collide on a position. Two saves
+  on one page at the same moment no longer fail with a `500`. A move or rename of a page that moved to another
+  project during the call returns `409` and asks the caller to reload (#807).
+
 ## [0.46.0] — 2026-11-07
 
 ### Breaking

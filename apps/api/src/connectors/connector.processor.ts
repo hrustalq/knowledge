@@ -155,6 +155,7 @@ export class ConnectorProcessor extends WorkerHost {
       data: { status: 'running', startedAt: new Date(), stage: null, progress: null, error: Prisma.DbNull },
     });
     if (claimed.count === 0) return;
+    await this.releaseOrphanedItems(runId);
 
     const first = await this.prisma.connectorRun.findUniqueOrThrow({ where: { id: runId } });
     const connector = await this.prisma.connector.findUnique({ where: { id: first.connectorId } });
@@ -219,6 +220,26 @@ export class ConnectorProcessor extends WorkerHost {
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  /**
+   * Items a dead slice claimed and never settled (#809), back to the state
+   * their batch picks up: the phases select only `discovered` and `approved`,
+   * so a stranded `fetching` / `applying` item was skipped and the run ended
+   * `succeeded` without it. Re-applying is safe because `apply` commits the
+   * page and the item's `applied` together. An item touched within one job's
+   * lifetime may belong to a live task, so it is left alone.
+   */
+  private async releaseOrphanedItems(runId: string): Promise<void> {
+    const updatedAt = { lt: new Date(Date.now() - this.timeoutMs) };
+    await this.prisma.connectorRunItem.updateMany({
+      where: { runId, status: 'fetching', updatedAt },
+      data: { status: 'discovered' },
+    });
+    await this.prisma.connectorRunItem.updateMany({
+      where: { runId, status: 'applying', updatedAt },
+      data: { status: 'approved' },
+    });
   }
 
   private async fail(runId: string, message: string): Promise<void> {

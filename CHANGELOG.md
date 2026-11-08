@@ -22,6 +22,23 @@ in the pull request that introduces them — see
   get answers drawn from it. Such a page is now dropped unread. The assistant is told only that some applied pages are
   unavailable, never which ones. (#813)
 
+### Fixed
+
+- **Work a crashed worker leaves behind is now recovered instead of stuck forever, and finished work is never redone.**
+  An agent run, workflow step, indexing job or connector sync that was still marked running after its worker died is
+  retried, and one that keeps dying is marked failed with an error saying so. Before, an agent run that crashed on its
+  last attempt stayed "running" for good and blocked that agent's schedule and triggers, and a connector sync held its
+  connector's only sync slot until someone cancelled it. A connector sync that resumes after a crash also finishes the
+  pages it was in the middle of, where it used to report success with those pages missing. A run that finished just
+  as recovery picked it up is no longer reset and paid for a second time. A memo stuck on "analysing", or a page
+  report stuck on "checking", after a crash is picked up again within ten minutes. A report check that fails to
+  publish now goes back to open at once. (#809)
+
+### Operations
+
+- **Migration `20270103100000_connector_run_attempt`** adds `connector_runs.attempt` (integer, default 0). It is
+  additive, so rolling back to the previous image is safe; that image ignores the column. (#809)
+
 ## [0.46.1] — 2026-11-08
 
 ### Security

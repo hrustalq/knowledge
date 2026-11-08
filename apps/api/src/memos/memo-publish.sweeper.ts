@@ -11,6 +11,8 @@ import { PrismaService } from '../prisma/prisma.service.js';
 
 const SWEEP_INTERVAL_MS = 15_000;
 const BATCH = 5;
+/** A claim older than this was taken by a sweep that died mid-publish, and is retaken (#809). */
+const CLAIM_LEASE_MS = 10 * 60_000;
 
 /**
  * Opens a memo's kept proposals as merge requests once its `secretary` run
@@ -20,10 +22,13 @@ const BATCH = 5;
  * where their principal can be rebuilt and their editor role checked now. It
  * doubles as recovery for a run that finished while the API was down.
  *
- * Each memo is published **at most once**, claimed by stamping
- * `published_at` in one guarded statement before anything is written. A
- * proposal that fails to open stays on the run, where its owner can still
- * propose it by hand.
+ * Each memo is claimed by stamping `published_at` in one guarded statement
+ * before anything is written. The stamp is a lease, not a permanent mark
+ * (#809): a process that dies mid-publish left the memo `analysing` forever,
+ * so a claim older than `CLAIM_LEASE_MS` on a memo still `analysing` is
+ * retaken. Re-driving is safe because a finding that already has a merge
+ * request is skipped. A proposal that fails to open stays on the run, where
+ * its owner can still propose it by hand.
  */
 @Injectable()
 export class MemoPublishSweeper implements OnModuleInit, OnModuleDestroy {
@@ -53,18 +58,19 @@ export class MemoPublishSweeper implements OnModuleInit, OnModuleDestroy {
     if (this.running) return;
     this.running = true;
     try {
+      const expired = new Date(Date.now() - CLAIM_LEASE_MS);
       const due = await this.prisma.$queryRaw<Array<{ id: string }>>`
         SELECT m.id FROM memos m
           JOIN agent_runs r ON r.id = m.agent_run_id
          WHERE m.status = 'analysing'
-           AND m.published_at IS NULL
+           AND (m.published_at IS NULL OR m.published_at < ${expired})
            AND r.status IN ('succeeded', 'failed', 'cancelled')
          ORDER BY r.finished_at ASC NULLS LAST
          LIMIT ${BATCH}
       `;
       for (const { id } of due) {
         const claimed = await this.prisma.memo.updateMany({
-          where: { id, status: 'analysing', publishedAt: null },
+          where: { id, status: 'analysing', OR: [{ publishedAt: null }, { publishedAt: { lt: expired } }] },
           data: { publishedAt: new Date() },
         });
         if (claimed.count === 0) continue;

@@ -40,7 +40,7 @@ import { SearchService } from '../search/search.service.js';
 import { firstPerPage } from '../search/ranking.js';
 import { EntitiesService } from '../entities/entities.service.js';
 import { GraphService } from '../graph/graph.service.js';
-import { AuditService } from '../auth/audit.service.js';
+import { GraphQueryService } from '../graph/graph-query.service.js';
 import { PermissionService, type BranchRefs } from '../permissions/permission.service.js';
 import { WorkItemHandoffService } from '../connectors/handoff/work-item-handoff.service.js';
 import { ResourceAccessService } from '../permissions/resource-access.service.js';
@@ -240,7 +240,7 @@ export class McpService {
     private readonly mergeRequestThreads: MergeRequestThreadsService,
     private readonly entities: EntitiesService,
     private readonly graph: GraphService,
-    private readonly audit: AuditService,
+    private readonly graphQuery: GraphQueryService,
     private readonly permissions: PermissionService,
     private readonly history: HistoryService,
     private readonly ingestionAdmin: IngestionAdminService,
@@ -484,7 +484,8 @@ export class McpService {
         },
       },
       async ({ workspaceId, documentId, revisionId, kind, detail, evidence, suggestedMarkdown }) => {
-        await guard.doc(documentId, 'viewer');
+        // The REST twin's `@Access('viewer', 'body')`; `report` holds the page to its own check.
+        await guard.ws(workspaceId, 'viewer');
         const res = await this.issues.report(
           {
             workspaceId,
@@ -796,7 +797,7 @@ export class McpService {
       async ({ connectorId, direction, externalIds }) => {
         await guard.connector(connectorId, 'editor');
         const row = await this.connectors.require(connectorId);
-        const run = await this.connectors.createRun(row, direction ?? 'pull', 'manual', { externalIds });
+        const run = await this.connectors.createRun(row, direction ?? 'pull', 'manual', { externalIds, actorId: principal.userId });
         await this.connectorProducer.enqueue(run.id);
         return this.json(toRunInfo(run));
       },
@@ -2169,27 +2170,7 @@ export class McpService {
       },
       async ({ workspaceId, query, limit }) => {
         await guard.ws(workspaceId, 'admin', true);
-        const started = Date.now();
-        const base = {
-          workspaceId,
-          actor: principal.mode === 'dev' ? 'mcp-operator' : principal.userId,
-          action: 'graph.query' as const,
-          // Past every page restriction, as the REST twin records (#76).
-          params: { query, limit: limit ?? 200, aclBypass: true },
-        };
-        try {
-          const { rows, truncated } = await this.graph.operatorQuery(workspaceId, query, limit ?? 200);
-          await this.audit.record({ ...base, rowCount: rows.length, durationMs: Date.now() - started, ok: true });
-          return this.json({ rows, rowCount: rows.length, truncated });
-        } catch (e) {
-          await this.audit.record({
-            ...base,
-            durationMs: Date.now() - started,
-            ok: false,
-            error: (e as Error).message,
-          });
-          throw e;
-        }
+        return this.json(await this.graphQuery.run(workspaceId, query, limit, principal.mode === 'dev' ? 'mcp-operator' : principal.userId));
       },
     );
 

@@ -438,6 +438,21 @@ export class ConnectorsService {
 
   // --- runs ---
 
+  // A manual run is someone's act: the overload makes every caller say whose,
+  // so a new surface cannot store it with no actor (#812). `undefined` stays
+  // legal for a principal-less dev request.
+  async createRun(
+    row: Connector,
+    direction: ConnectorRunDirection,
+    trigger: 'manual',
+    options: { externalIds?: string[]; actorId: string | undefined; mode?: ConnectorSyncMode },
+  ): Promise<ConnectorRun>;
+  async createRun(
+    row: Connector,
+    direction: ConnectorRunDirection,
+    trigger: Exclude<ConnectorTrigger, 'manual'>,
+    options?: { externalIds?: string[]; mode?: ConnectorSyncMode },
+  ): Promise<ConnectorRun>;
   async createRun(
     row: Connector,
     direction: ConnectorRunDirection,

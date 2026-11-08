@@ -4,6 +4,7 @@ import { StorageModule } from '../storage/storage.module.js';
 import { AuthCoreModule } from '../auth/auth-core.module.js';
 import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { GraphModule } from '../graph/graph.module.js';
+import { GraphQueryService } from '../graph/graph-query.service.js';
 import { IngestionAdminModule } from '../ingestion/ingestion-admin.module.js';
 import { DocumentsModule } from '../documents/documents.module.js';
 import { SearchModule } from '../search/search.module.js';
@@ -125,7 +126,8 @@ import { McpService } from './mcp.service.js';
     // The question flows behind knowledge_capture_decision / knowledge_flag_document (#425). Controller-free.
     FlowsCoreModule,
   ],
-  providers: [McpService],
+  // Stateless; also provided by GraphQueryModule, which carries the REST controller (#812).
+  providers: [McpService, GraphQueryService],
   exports: [McpService],
 })
 export class McpCoreModule {}

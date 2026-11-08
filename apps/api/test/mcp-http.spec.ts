@@ -10,6 +10,7 @@ import { AccessService } from '../src/auth/access.service.js';
 import { AclGuard } from '../src/auth/acl.guard.js';
 import { READ_KEY_OK_META, type AccessSpec } from '../src/auth/access.decorator.js';
 import { DEV_PRINCIPAL, type Principal } from '../src/auth/principal.js';
+import { GraphQueryService } from '../src/graph/graph-query.service.js';
 import { McpService, type McpExtras } from '../src/mcp/mcp.service.js';
 import type { AgentLearning } from '@prisma/client';
 import { CAPTURE_TOOLS, FEATURE_TOOLS, MCP_INSTRUCTIONS, WRITE_TOOLS, settleTools } from '../src/mcp/mcp-tools.js';
@@ -176,7 +177,7 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
     mergeRequestThreads: {},
     entities: {},
     graph: {},
-    audit: {},
+    graphQuery: {},
     // Page permissions (#76) are pinned in test/permissions.spec.ts; here the
     // page check is the workspace check and every page is visible.
     permissions: {
@@ -1766,5 +1767,39 @@ describe('question flows over MCP (#425)', () => {
       await client.callTool({ name: 'knowledge_flag_document', arguments: { workspaceId: WS_A, documentId: FLOW_PAGE, state: 'outdated', note: 'Gone' } }),
     );
     expect(res).toMatchObject({ state: 'outdated', marked: [FLOW_PAGE] });
+  });
+});
+
+describe('tools that copy a REST twin keep its checks (#812)', () => {
+  const body = (res: unknown) => JSON.parse((res as { content: { text: string }[] }).content[0].text);
+  const admin = keyPrincipal({ id: 'k', scope: 'write', workspaceId: null }, { isAdmin: true });
+
+  it('holds knowledge_query_graph to GRAPH_QUERY_MAX_ROWS and audits the clamped limit', async () => {
+    const { mcp } = service(accessWith('admin'));
+    const rows = Array.from({ length: 1000 }, (_, i) => ({ n: i }));
+    const operatorQuery = vi.fn(async (_ws: string, _q: string, cap: number) => ({ rows: rows.slice(0, cap), truncated: rows.length > cap }));
+    const record = vi.fn(async () => undefined);
+    const config = { get: (key: string) => (key === 'GRAPH_QUERY_MAX_ROWS' ? 200 : undefined) };
+    Object.assign(mcp as unknown as { graphQuery: object }, {
+      graphQuery: new GraphQueryService({ operatorQuery } as never, { record } as never, config as never),
+    });
+    const client = await connect(mcp, admin);
+    const res = await client.callTool({ name: 'knowledge_query_graph', arguments: { workspaceId: WS_A, query: 'SELECT FROM Entity', limit: 1000 } });
+    expect(res.isError).toBeFalsy();
+    expect(body(res)).toMatchObject({ rowCount: 200, truncated: true });
+    expect(operatorQuery).toHaveBeenCalledWith(WS_A, 'SELECT FROM Entity', 200);
+    expect(record).toHaveBeenCalledWith(expect.objectContaining({ actor: admin.userId, params: expect.objectContaining({ limit: 200 }), ok: true }));
+  });
+
+  it('records the caller as the actor of a sync started over MCP', async () => {
+    const { mcp } = service(accessWith('editor'));
+    const row = { id: 'c-1', workspaceId: WS_A };
+    const createRun = vi.fn(async () => ({ id: 'run-1', connectorId: 'c-1', workspaceId: WS_A, status: 'queued', direction: 'pull', trigger: 'manual', createdAt: new Date(), updatedAt: new Date() }));
+    Object.assign(mcp as unknown as { connectors: object }, { connectors: { require: vi.fn(async () => row), createRun } });
+    const principal = keyPrincipal({ id: 'k', scope: 'write', workspaceId: null });
+    const client = await connect(mcp, principal);
+    const res = await client.callTool({ name: 'knowledge_sync_connector', arguments: { connectorId: '44444444-4444-4444-8444-444444444444' } });
+    expect(res.isError).toBeFalsy();
+    expect(createRun).toHaveBeenCalledWith(row, 'pull', 'manual', { externalIds: undefined, actorId: principal.userId });
   });
 });

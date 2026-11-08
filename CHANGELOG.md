@@ -34,6 +34,13 @@ in the pull request that introduces them — see
   on one page at the same moment no longer fail with a `500`. A move or rename of a page that moved to another
   project during the call returns `409` and asks the caller to reload (#807).
 
+- **Two admins demoting or removing each other at the same moment no longer leave a workspace with no admin.** Each
+  request saw the other person as an admin and both went through, and only a platform admin could recover the
+  workspace. Now one lands and the other gets the existing last-admin `400`. IdP role sync and SCIM follow the same
+  rule. Removing a member now drops their groups and page grants in the same commit, so a failure partway no longer
+  leaves those for someone who is no longer a member. A member edit that changes the role together with other fields
+  (trusted operator, capabilities, taking the row over from an IdP) now writes all of them or none (#808).
+
 ## [0.46.0] — 2026-11-07
 
 ### Breaking

@@ -245,6 +245,7 @@ describe('removing a workspace member', () => {
     const prisma = {
       workspace: { findUnique: async () => ({ deletedAt: null }) }, workspaceMember: { findUnique: vi.fn(async () => ({ workspaceId: WS, userId: BOB, role: 'admin' })) },
       $executeRaw: vi.fn(async () => 0),
+      withTransaction: async (fn: () => Promise<unknown>) => fn(),
       userGroupMember: { deleteMany },
     };
     await expect(new WorkspacesService(prisma as never).removeMember(WS, BOB)).rejects.toThrow(/lastAdminRemove/);

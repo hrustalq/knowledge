@@ -257,16 +257,19 @@ export class WorkspacesService {
         source,
       });
     }
-    if (dto.role !== undefined && !(await setRoleGuarded(this.prisma, workspaceId, userId, dto.role))) {
-      throw new BadRequestException(t('error.workspace.lastAdminDemote'));
-    }
-    await this.prisma.workspaceMember.update({
-      where: { workspaceId_userId: { workspaceId, userId } },
-      data: {
-        ...(dto.trustedOperator !== undefined ? { trustedOperator: dto.trustedOperator } : {}),
-        ...(dto.capabilities !== undefined ? { capabilities: memberCapabilitiesOf(dto.capabilities) } : {}),
-        ...(dto.convertToManual ? { source: 'manual' } : {}),
-      },
+    // One commit (#808): a refused demotion leaves the other fields as they were.
+    await this.prisma.withTransaction(async () => {
+      if (dto.role !== undefined && !(await setRoleGuarded(this.prisma, workspaceId, userId, dto.role))) {
+        throw new BadRequestException(t('error.workspace.lastAdminDemote'));
+      }
+      await this.prisma.workspaceMember.update({
+        where: { workspaceId_userId: { workspaceId, userId } },
+        data: {
+          ...(dto.trustedOperator !== undefined ? { trustedOperator: dto.trustedOperator } : {}),
+          ...(dto.capabilities !== undefined ? { capabilities: memberCapabilitiesOf(dto.capabilities) } : {}),
+          ...(dto.convertToManual ? { source: 'manual' } : {}),
+        },
+      });
     });
     if (dto.capabilities !== undefined) {
       this.recordCapabilities(workspaceId, userId, actorId, capabilitiesBefore, memberCapabilitiesOf(dto.capabilities));

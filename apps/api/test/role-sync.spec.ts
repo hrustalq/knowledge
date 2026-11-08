@@ -76,6 +76,8 @@ function fakeDb(members: Row[], mappings: Row[] = []) {
         db.members.splice(db.members.indexOf(row), 1);
         return 1;
       }
+      // lockMembership (#808): one process, nothing to serialise against.
+      if (sql.includes('pg_advisory_xact_lock')) return 0;
       throw new Error(`unexpected SQL: ${sql}`);
     }),
     $transaction: vi.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { IdentityProvider, IdpGroupMapping, WorkspaceMember } from '@prisma/client';
 import { SCIM_DEFAULT_ROLES, WORKSPACE_ROLES, type MembershipSource, type ScimDefaultRole, type WorkspaceRole } from '@knowledge/contracts';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { removeMemberGuarded, setRoleGuarded } from '../../workspaces/membership-guards.js';
+import { lockMembership, removeMemberGuarded, setRoleGuarded } from '../../workspaces/membership-guards.js';
 import { AuditService } from '../audit.service.js';
 import { ROLE_ORDER } from '../principal.js';
 
@@ -137,6 +137,9 @@ export class RoleSyncService {
   async applyScim(workspaceId: string, userIds: string[]): Promise<RoleSyncChange[]> {
     const ids = [...new Set(userIds)];
     if (!ids.length) return [];
+    // Before any read or write (#808): this runs inside SCIM's own boundary and
+    // writes several members, so it takes the guards' lock first, never midway.
+    await lockMembership(this.prisma, workspaceId);
     const [records, memberships, mappings, members, settings] = await Promise.all([
       this.prisma.scimUser.findMany({ where: { workspaceId, userId: { in: ids } } }),
       this.prisma.scimGroupMember.findMany({ where: { userId: { in: ids }, group: { workspaceId } } }),
@@ -217,13 +220,16 @@ export class RoleSyncService {
     const roleChanges = role !== current.role;
     if (!roleChanges && trustedOperator === current.trustedOperator && source === current.source) return null;
 
-    if (roleChanges && !(await setRoleGuarded(this.prisma, workspaceId, userId, role, { sources: ctx.owned }))) {
-      return this.blocked(ctx, userId, workspaceId, current, { role, trustedOperator });
-    }
-    await this.prisma.workspaceMember.updateMany({
-      where: { workspaceId, userId, source: { in: [...ctx.owned] } },
-      data: { trustedOperator, source },
+    // One commit (#808): the role and the fields that follow it.
+    const written = await this.prisma.withTransaction(async () => {
+      if (roleChanges && !(await setRoleGuarded(this.prisma, workspaceId, userId, role, { sources: ctx.owned }))) return false;
+      await this.prisma.workspaceMember.updateMany({
+        where: { workspaceId, userId, source: { in: [...ctx.owned] } },
+        data: { trustedOperator, source },
+      });
+      return true;
     });
+    if (!written) return this.blocked(ctx, userId, workspaceId, current, { role, trustedOperator });
     const after = { role, trustedOperator, source };
     this.record(ctx, userId, workspaceId, current, after, target);
     return { workspaceId, kind: 'updated' };

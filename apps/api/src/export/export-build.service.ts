@@ -87,11 +87,13 @@ export class ExportBuildService {
   }
 
   async build(exportId: string): Promise<void> {
-    // The claim: a row that is already finished — or was failed by the
-    // sweeper — is never rebuilt by a redelivered job. `running` is allowed
-    // back in for the one redelivery BullMQ makes after a worker died mid-job.
+    // The claim: only a `queued` row, so a job has one live builder (#810).
+    // Letting `running` back in for a redelivery let two builds write the same
+    // key, and the loser's purge below deleted the winner's file. A build
+    // whose worker died is failed by `ExportSweeper.failLostJobs` instead; an
+    // export is cheap to ask for again.
     const claimed = await this.prisma.exportJob.updateMany({
-      where: { id: exportId, status: { in: ['queued', 'running'] } },
+      where: { id: exportId, status: 'queued' },
       data: { status: 'running', stage: 'collecting', startedAt: new Date() },
     });
     if (claimed.count === 0) return;

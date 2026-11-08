@@ -591,6 +591,16 @@ function engine(options: { aclMode?: string } = {}) {
     workspaceMember: new Table(),
     withTransaction: async <T>(fn: () => Promise<T>) => fn(),
     onCommit: () => undefined,
+    /** `addToRun`'s one statement (#810), applied to the row: counters added, warnings appended and capped. */
+    $executeRaw: async (_sql: TemplateStringsArray, ...v: unknown[]) => {
+      const [created, updated, skipped, failed, conflicts, applied, json, max, id] = v as [number, number, number, number, number, number, string, number, string];
+      const row = prisma.connectorRun.rows.find((r) => r.id === id);
+      if (!row) return 0;
+      const counts = { created, updated, skipped, failed, conflicts, applied };
+      for (const [k, n] of Object.entries(counts)) row[k] = ((row[k] as number) ?? 0) + n;
+      row.warnings = [...(Array.isArray(row.warnings) ? row.warnings : []), ...(JSON.parse(json) as unknown[])].slice(0, max);
+      return 1;
+    },
   };
   prisma.workspaceMember.rows.push({
     workspaceId: 'ws-1',

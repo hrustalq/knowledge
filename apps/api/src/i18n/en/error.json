@@ -349,6 +349,7 @@
     "disabled": "This workflow is disabled",
     "differentProject": "This workflow is scoped to a different project",
     "runInFlightForPage": "A run of this workflow is already in flight for this page",
+    "changedConcurrently": "This run changed while you were acting on it — reload and retry",
     "nodeNotAwaitingReview": "Only a node awaiting review can be edited (this one is {status})",
     "stepGone": "Step \"{stepId}\" is no longer part of this run",
     "invalidGraph": "The workflow graph is not valid",

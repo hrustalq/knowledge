@@ -152,7 +152,8 @@ describe('#658 write pairs commit together', () => {
 
     it('CANCEL: no cancelled run with live nodes', async () => {
       const { prisma, committed } = fakePrisma({
-        'workflowRun.update': { ...run, status: 'cancelled', definition: { name: 'W' } },
+        'workflowRun.updateMany': { count: 1 },
+        'workflowRun.findUniqueOrThrow': { ...run, status: 'cancelled', definition: { name: 'W' } },
         'workflowRunNode.updateMany': boom,
       });
       const svc = stub(new WorkflowsService(prisma, { record: vi.fn() } as never, _, _, _, _), {
@@ -163,7 +164,10 @@ describe('#658 write pairs commit together', () => {
     });
 
     it('APPROVE: no approved node without its children', async () => {
-      const { prisma, committed } = fakePrisma({ 'workflowRunNode.update': { id: 'n1', status: 'approved', attempt: 0 } });
+      const { prisma, committed } = fakePrisma({
+        'workflowRunNode.updateMany': { count: 1 },
+        'workflowRunNode.findUniqueOrThrow': { id: 'n1', status: 'approved', attempt: 0 },
+      });
       const runner = { spawnChildren: vi.fn(boom) };
       const svc = stub(new WorkflowsService(prisma, _, _, _, runner as never, _), {
         requireRun: async () => run,
@@ -242,7 +246,7 @@ describe('#658 write pairs commit together', () => {
     });
 
     it('APPROVE_ALL: no approved items under a run still awaiting review', async () => {
-      const { prisma, committed } = fakePrisma({ 'connectorRunItem.updateMany': { count: 3 }, 'connectorRunItem.findMany': [], 'connectorRun.update': boom });
+      const { prisma, committed } = fakePrisma({ 'connectorRunItem.updateMany': { count: 3 }, 'connectorRunItem.findMany': [], 'connectorRun.updateMany': boom });
       const producer = { enqueueRetry: vi.fn(), enqueueTask: vi.fn() };
       const svc = stub(new ConnectorItemsService(prisma, {} as never, {} as never, producer as never, {} as never, {} as never), {
         requireRun: async () => ({ id: 'run1', status: 'awaiting-review', mode: 'review', phase: null, discovered: 3, applied: 0 }),

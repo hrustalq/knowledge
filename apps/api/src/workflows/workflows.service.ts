@@ -381,13 +381,19 @@ export class WorkflowsService {
 
     const terminal = next.status === 'cancelled' || next.status === 'completed';
     const updated = await this.prisma.withTransaction(async () => {
-      const row = await this.prisma.workflowRun.update({
-        where: { id },
+      // Guarded on the status the event was checked against (#810): a PAUSE
+      // racing a CANCEL must not bring a cancelled run back.
+      const { count } = await this.prisma.workflowRun.updateMany({
+        where: { id, status: run.status },
         data: {
           status: next.status,
           snapshot: next.snapshot as unknown as Prisma.InputJsonValue,
           ...(terminal ? { finishedAt: new Date() } : {}),
         },
+      });
+      if (count === 0) throw new ConflictException(t('error.workflow.changedConcurrently'));
+      const row = await this.prisma.workflowRun.findUniqueOrThrow({
+        where: { id },
         include: { definition: { select: { name: true } } },
       });
       // Cancelling has to stop the work, not just relabel it: pending nodes are
@@ -438,10 +444,7 @@ export class WorkflowsService {
       stored?.templateRef && stored.templateVersion
         ? { templateRef: stored.templateRef, templateVersion: stored.templateVersion }
         : {};
-    const updated = await this.prisma.workflowRunNode.update({
-      where: { id: nodeId },
-      data: { draft: { ...draft, ...provenance } as unknown as Prisma.InputJsonValue },
-    });
+    const updated = await this.moveNode(node, { draft: { ...draft, ...provenance } as unknown as Prisma.InputJsonValue });
     return this.toNodeInfo(updated);
   }
 
@@ -486,11 +489,12 @@ export class WorkflowsService {
       // A node that finished its life opens the next steps of the graph, in the
       // same commit: `WorkflowSweeper` never revisits an `approved` node (#658).
       current = await this.prisma.withTransaction(async () => {
-        const row = await this.prisma.workflowRunNode.update({ where: { id: nodeId }, data: nodeUpdate });
+        const row = await this.moveNode(node, nodeUpdate);
         if (row.status === 'approved' || row.status === 'materialized') await this.runner.spawnChildren(run, row, step);
         return row;
       });
     } else {
+      let claimed = false;
       try {
         // The status write, the page and the `documentId` back-reference commit
         // together — and so does `spawnChildren`, which opens the next steps.
@@ -508,11 +512,9 @@ export class WorkflowsService {
         // sweeper only revisits nodes still in `materializing`.
         current = await this.prisma.withTransaction(
           async () => {
-            const claimed = await this.prisma.workflowRunNode.update({
-              where: { id: nodeId },
-              data: nodeUpdate,
-            });
-            const documentId = await materialize(claimed, run, step);
+            const row = await this.moveNode(node, nodeUpdate);
+            claimed = true;
+            const documentId = await materialize(row, run, step);
             const done = await this.prisma.workflowRunNode.update({
               where: { id: nodeId },
               data: { status: 'materialized', documentId },
@@ -533,6 +535,8 @@ export class WorkflowsService {
           { timeout: 30_000, maxWait: 10_000 },
         );
       } catch (e) {
+        // Another event won the node: nothing was ours to fail.
+        if (!claimed) throw e;
         // OUTSIDE the boundary on purpose: this write has to SURVIVE while the
         // document work rolls back. Inside, the failure record would roll back
         // with everything it was recording.
@@ -543,10 +547,11 @@ export class WorkflowsService {
         // reviewer found it rather than stranded in `materializing` — press
         // Approve again.
         const message = (e as Error).message;
-        current = await this.prisma.workflowRunNode.update({
-          where: { id: nodeId },
+        await this.prisma.workflowRunNode.updateMany({
+          where: { id: nodeId, status: node.status },
           data: { status: 'failed', error: message },
         });
+        current = await this.prisma.workflowRunNode.findUniqueOrThrow({ where: { id: nodeId } });
         this.logger.warn(`Materialising node ${nodeId} failed: ${message}`);
       }
     }
@@ -557,6 +562,17 @@ export class WorkflowsService {
 
     const runInfo = await this.reconcileRun(runId);
     return { node: this.toNodeInfo(current), run: runInfo };
+  }
+
+  /**
+   * The node write of a review action, guarded on the status the action was
+   * checked against (#810). A concurrent APPROVE and REJECT, or a CANCEL that
+   * skipped the node, makes the loser a 409 instead of an overwrite.
+   */
+  private async moveNode(node: WorkflowRunNode, data: Prisma.WorkflowRunNodeUpdateManyMutationInput): Promise<WorkflowRunNode> {
+    const { count } = await this.prisma.workflowRunNode.updateMany({ where: { id: node.id, status: node.status }, data });
+    if (count === 0) throw new ConflictException(t('error.workflow.changedConcurrently'));
+    return this.prisma.workflowRunNode.findUniqueOrThrow({ where: { id: node.id } });
   }
 
   /**

@@ -728,12 +728,15 @@ export class MergeRequestsService {
     if (mr.status !== 'open') {
       throw new BadRequestException(t('error.mergeRequest.notOpenForApproval', { id: mr.id, status: t(`status.mr.${mr.status}`) }));
     }
-    const approved = [...new Set([...this.approvers(mr), approverId])];
-    const updated = await this.prisma.mergeRequest.update({
-      where: { id: mr.id },
-      data: { approvedBy: approved },
-      include: MR_INCLUDE,
-    });
+    // One statement (#810): appending in SQL keeps a concurrent approval, which
+    // writing back the array read above lost, and the gate under-counted.
+    const added = await this.prisma.$executeRaw`
+      UPDATE merge_requests
+      SET approved_by = CASE WHEN approved_by @> jsonb_build_array(${approverId}::text) THEN approved_by
+                             ELSE approved_by || jsonb_build_array(${approverId}::text) END
+      WHERE id = ${mr.id}::uuid AND status = 'open'`;
+    if (added === 0) throw new ConflictException(t('error.mergeRequest.concurrentChange', { id: mr.id }));
+    const updated = await this.prisma.mergeRequest.findUniqueOrThrow({ where: { id: mr.id }, include: MR_INCLUDE });
     await this.recordActivity(mr.documentId, 'merge-request.approved', mr.id, approverId, { title: mr.title });
     return { mergeRequest: await this.toDetail(updated) };
   }
@@ -743,11 +746,13 @@ export class MergeRequestsService {
     if (mr.status !== 'open') {
       throw new BadRequestException(t('error.mergeRequest.notOpenForClose', { id: mr.id, status: t(`status.mr.${mr.status}`) }));
     }
-    const updated = await this.prisma.mergeRequest.update({
-      where: { id: mr.id },
+    // Guarded flip, like reopen (#810): a merge that landed meanwhile stands.
+    const closed = await this.prisma.mergeRequest.updateMany({
+      where: { id: mr.id, status: 'open' },
       data: { status: 'closed', closedAt: new Date() },
-      include: MR_INCLUDE,
     });
+    if (closed.count === 0) throw new ConflictException(t('error.mergeRequest.concurrentChange', { id: mr.id }));
+    const updated = await this.prisma.mergeRequest.findUniqueOrThrow({ where: { id: mr.id }, include: MR_INCLUDE });
     await this.recordActivity(mr.documentId, 'merge-request.closed', mr.id, actorId, { title: mr.title });
     return { mergeRequest: await this.toDetail(updated) };
   }

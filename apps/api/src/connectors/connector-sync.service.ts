@@ -8,7 +8,7 @@ import { EventsPublisher } from '../events/events.publisher.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CodeImportsService } from './code-imports.service.js';
-import { ConnectorsService, MAX_WARNINGS } from './connectors.service.js';
+import { addToRun, ConnectorsService, MAX_WARNINGS, NO_COUNTS, type RunCounts } from './connectors.service.js';
 import { ConnectorDiscoveryService } from './connector-discovery.service.js';
 import { sha256 } from './connector-markdown.js';
 import { ComponentsService } from '../components/components.service.js';
@@ -19,15 +19,6 @@ import type { ConnectorAdapter, ConnectorContext } from './adapters/connector.ty
 
 /** Stage writes are throttled the way ImportProcessor throttles its own. */
 const STAGE_THROTTLE_MS = 400;
-
-export interface RunTotals {
-  created: number;
-  updated: number;
-  skipped: number;
-  failed: number;
-  conflicts: number;
-  applied: number;
-}
 
 export interface RunWarning {
   externalId: string | null;
@@ -94,15 +85,8 @@ export class ConnectorSyncService {
    * of at the end of a thousand pages.
    */
   async run(row: Connector, runRow: ConnectorRun, signal?: AbortSignal): Promise<RunStep> {
-    const warnings = readWarnings(runRow);
-    const totals: RunTotals = {
-      created: runRow.created,
-      updated: runRow.updated,
-      skipped: runRow.skipped,
-      failed: runRow.failed,
-      conflicts: runRow.conflicts,
-      applied: runRow.applied,
-    };
+    const warnings: RunWarning[] = [];
+    const totals: RunCounts = { ...NO_COUNTS };
 
     let lastStageWrite = 0;
     const onStage = async (stage: string, progress?: number | null): Promise<void> => {
@@ -118,8 +102,11 @@ export class ConnectorSyncService {
     const ctx = await this.connectors.contextFor(row, onStage, signal);
     // Discovery's run-level warnings (#338): what an adapter will not import,
     // said once even when a resumed walk asks the same folder twice.
+    const said = new Set(readWarnings(runRow).filter((w) => w.externalId === null).map((w) => w.message));
     ctx.warn = (message) => {
-      if (!warnings.some((w) => w.externalId === null && w.message === message)) pushWarning(warnings, null, null, message);
+      if (said.has(message)) return;
+      said.add(message);
+      pushWarning(warnings, null, null, message);
     };
 
     // Push has nothing to stage or review; it keeps the pre-feature shape whole.
@@ -147,7 +134,7 @@ export class ConnectorSyncService {
     adapter: ConnectorAdapter,
     ctx: ConnectorContext,
     onStage: (stage: string, progress?: number | null) => Promise<void>,
-    totals: RunTotals,
+    totals: RunCounts,
     warnings: RunWarning[],
   ): Promise<RunStep> {
     const budget = this.batchSize;
@@ -270,7 +257,7 @@ export class ConnectorSyncService {
     ctx: ConnectorContext,
     onStage: (stage: string, progress?: number | null) => Promise<void>,
     items: ConnectorRunItem[],
-    totals: RunTotals,
+    totals: RunCounts,
     warnings: RunWarning[],
   ): Promise<void> {
     const links = await this.linksByExternalId(row.id);
@@ -309,7 +296,7 @@ export class ConnectorSyncService {
     ctx: ConnectorContext,
     onStage: (stage: string, progress?: number | null) => Promise<void>,
     items: ConnectorRunItem[],
-    totals: RunTotals,
+    totals: RunCounts,
     warnings: RunWarning[],
   ): Promise<void> {
     for (const item of items) {
@@ -355,15 +342,8 @@ export class ConnectorSyncService {
     deadline: number,
     signal?: AbortSignal,
   ): Promise<ConnectorTask | null> {
-    const warnings = readWarnings(runRow);
-    const totals: RunTotals = {
-      created: runRow.created,
-      updated: runRow.updated,
-      skipped: runRow.skipped,
-      failed: runRow.failed,
-      conflicts: runRow.conflicts,
-      applied: runRow.applied,
-    };
+    const warnings: RunWarning[] = [];
+    const totals: RunCounts = { ...NO_COUNTS };
 
     let lastStageWrite = 0;
     const onStage = async (stage: string, progress?: number | null): Promise<void> => {
@@ -399,7 +379,7 @@ export class ConnectorSyncService {
     ctx: ConnectorContext,
     onStage: (stage: string, progress?: number | null) => Promise<void>,
     itemIds: string[],
-    totals: RunTotals,
+    totals: RunCounts,
     warnings: RunWarning[],
     deadline: number,
   ): Promise<ConnectorTask | null> {
@@ -429,7 +409,7 @@ export class ConnectorSyncService {
     runRow: ConnectorRun,
     ctx: ConnectorContext,
     onStage: (stage: string, progress?: number | null) => Promise<void>,
-    totals: RunTotals,
+    totals: RunCounts,
     warnings: RunWarning[],
     deadline: number,
   ): Promise<ConnectorTask | null> {
@@ -453,19 +433,16 @@ export class ConnectorSyncService {
   private async parkForReview(
     row: Connector,
     runRow: ConnectorRun,
-    totals: RunTotals,
+    totals: RunCounts,
     warnings: RunWarning[],
   ): Promise<RunStep> {
-    await this.prisma.connectorRun.update({
-      where: { id: runRow.id },
-      data: {
-        status: 'awaiting-review',
-        phase: 'awaiting-review',
-        stage: null,
-        ...totals,
-        warnings: warnings.slice(0, MAX_WARNINGS) as unknown as Prisma.InputJsonValue,
-      },
+    await this.checkpoint(runRow.id, totals, warnings);
+    // Guarded (#810): a PAUSE or CANCEL that landed during the slice stands.
+    const { count } = await this.prisma.connectorRun.updateMany({
+      where: { id: runRow.id, status: 'running' },
+      data: { status: 'awaiting-review', phase: 'awaiting-review', stage: null },
     });
+    if (count === 0) return { done: true };
     await this.events.publish({
       workspaceId: row.workspaceId,
       type: 'connector.run.awaiting-review',
@@ -482,11 +459,12 @@ export class ConnectorSyncService {
    * the timeout lost every count and every warning it had gathered — the run
    * that most needed to explain itself was the one that said nothing.
    */
-  private async checkpoint(runId: string, totals: RunTotals, warnings: RunWarning[]): Promise<void> {
-    await this.prisma.connectorRun.update({
-      where: { id: runId },
-      data: { ...totals, warnings: warnings.slice(0, MAX_WARNINGS) as unknown as Prisma.InputJsonValue },
-    });
+  // `totals` and `warnings` hold only what this writer gathered since its last
+  // write (#810): each write adds them to the row and empties them.
+  private async checkpoint(runId: string, totals: RunCounts, warnings: RunWarning[]): Promise<void> {
+    await addToRun(this.prisma, runId, totals, warnings);
+    Object.assign(totals, NO_COUNTS);
+    warnings.length = 0;
   }
 
   /**
@@ -538,21 +516,24 @@ export class ConnectorSyncService {
   }
 
   /** Terminal bookkeeping, shared by the pull and push paths. */
-  async finish(row: Connector, runRow: ConnectorRun, totals: RunTotals, warnings: RunWarning[]): Promise<void> {
-    const status = totals.failed > 0 ? 'partial' : 'succeeded';
-    await this.prisma.connectorRun.update({
-      where: { id: runRow.id },
+  async finish(row: Connector, runRow: ConnectorRun, totals: RunCounts, warnings: RunWarning[]): Promise<void> {
+    await this.checkpoint(runRow.id, totals, warnings);
+    // The row's count, not this slice's: earlier slices and tasks failed items too.
+    // ponytail: a task failing an item between this read and the write below leaves `succeeded`; a CASE in SQL if that shows up.
+    const { failed } = await this.prisma.connectorRun.findUniqueOrThrow({ where: { id: runRow.id }, select: { failed: true } });
+    // Guarded (#810): a PAUSE or CANCEL that landed during the slice stands.
+    const { count } = await this.prisma.connectorRun.updateMany({
+      where: { id: runRow.id, status: 'running' },
       data: {
-        status,
+        status: failed > 0 ? 'partial' : 'succeeded',
         phase: null,
         stage: null,
         progress: 1,
         cursor: Prisma.DbNull,
-        ...totals,
-        warnings: warnings.slice(0, MAX_WARNINGS) as unknown as Prisma.InputJsonValue,
         completedAt: new Date(),
       },
     });
+    if (count === 0) return;
     await this.prisma.connector.update({
       where: { id: row.id },
       data: {
@@ -565,7 +546,7 @@ export class ConnectorSyncService {
     });
     await this.events.publish({
       workspaceId: row.workspaceId,
-      type: totals.failed > 0 ? 'connector.run.failed' : 'connector.run.succeeded',
+      type: failed > 0 ? 'connector.run.failed' : 'connector.run.succeeded',
       subjectId: row.id,
       title: row.name,
     });
@@ -578,7 +559,7 @@ export class ConnectorSyncService {
     adapter: ConnectorAdapter,
     ctx: ConnectorContext,
     scope: string[] | null,
-    totals: RunTotals,
+    totals: RunCounts,
     warnings: Array<{ externalId: string | null; title: string | null; message: string }>,
   ): Promise<void> {
     if (!adapter.push) {

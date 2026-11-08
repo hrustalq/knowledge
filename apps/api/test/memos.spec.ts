@@ -248,3 +248,24 @@ describe('MemosService.retry', () => {
     expect(producer.enqueue).not.toHaveBeenCalled()
   })
 })
+
+describe('MemoPublishSweeper — the claim is a lease (#809)', async () => {
+  const { MemoPublishSweeper } = await import('../src/memos/memo-publish.sweeper.js');
+
+  it('retakes a memo still analysing whose claim is older than the lease, by the same predicate it read', async () => {
+    const queryRaw = vi.fn(async () => [{ id: 'memo-1' }]);
+    const updateMany = vi.fn(async () => ({ count: 0 }));
+    const prisma = { $queryRaw: queryRaw, memo: { updateMany, findUnique: vi.fn() } };
+    const sweeper = new MemoPublishSweeper(prisma as never, {} as never, {} as never, {} as never, {} as never);
+    await sweeper.sweep();
+    const sql = (queryRaw.mock.calls[0] as unknown as [TemplateStringsArray])[0].join('?');
+    expect(sql).toContain('m.published_at IS NULL OR m.published_at < ?');
+    const where = (updateMany.mock.calls[0] as unknown as [{ where: { OR: Array<{ publishedAt: null | { lt: Date } }> } }])[0]
+      .where;
+    const lease = where.OR[1]!.publishedAt as { lt: Date };
+    expect(where).toMatchObject({ id: 'memo-1', status: 'analysing', OR: [{ publishedAt: null }, { publishedAt: { lt: expect.any(Date) } }] });
+    expect(Date.now() - lease.lt.getTime()).toBeGreaterThanOrEqual(10 * 60_000 - 1000);
+    // Lost the race for the claim: nothing else is read.
+    expect(prisma.memo.findUnique).not.toHaveBeenCalled();
+  });
+});

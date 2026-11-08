@@ -293,7 +293,7 @@ describe('AgentScheduleSweeper — run recovery (#657)', async () => {
       where.status === 'running' ? (rows.stuck ?? []) : (rows.pending ?? []),
     );
     const prisma = {
-      agentRun: { findMany, update: vi.fn(async () => ({})) },
+      agentRun: { findMany, updateMany: vi.fn(async () => ({ count: 1 })) },
       aiAgent: { findMany: vi.fn(async () => []) },
     };
     const producer = { enqueue: vi.fn(async () => undefined), enqueueRetry: vi.fn(async () => undefined) };
@@ -324,8 +324,8 @@ describe('AgentScheduleSweeper — run recovery (#657)', async () => {
   it('recovers a stuck running run with schedules off, and enqueues nothing when no row is stale', async () => {
     const stuck = sweeperWith({ stuck: [{ id: 'dead-run', attempt: 0 }] });
     await stuck.sweeper.sweep();
-    expect(stuck.prisma.agentRun.update).toHaveBeenCalledWith({
-      where: { id: 'dead-run' },
+    expect(stuck.prisma.agentRun.updateMany).toHaveBeenCalledWith({
+      where: { id: 'dead-run', status: 'running', updatedAt: { lt: expect.any(Date) } },
       data: { status: 'pending', attempt: { increment: 1 } },
     });
     expect(stuck.producer.enqueueRetry).toHaveBeenCalledExactlyOnceWith('dead-run', 1);
@@ -340,6 +340,115 @@ describe('AgentScheduleSweeper — run recovery (#657)', async () => {
     const { sweeper, prisma } = sweeperWith({}, true);
     await sweeper.sweep();
     expect(prisma.aiAgent.findMany).toHaveBeenCalledOnce();
+  });
+});
+
+describe('AgentScheduleSweeper — stale runs are reset by a guarded statement (#809)', async () => {
+  const { AgentScheduleSweeper } = await import('../src/agents/agent-schedule.sweeper.js');
+  const { AGENT_MAX_ATTEMPTS } = await import('../src/agents/agent.constants.js');
+  const { vi } = await import('vitest');
+
+  type Run = { id: string; agentKey: string; workspaceId: string; status: string; attempt: number; updatedAt: Date };
+  type Where = {
+    id?: string;
+    status?: string | { in: string[] };
+    updatedAt?: { lt: Date };
+    attempt?: { lt: number };
+    agentKey?: string;
+  };
+  const longAgo = new Date(Date.now() - 60 * 60_000);
+
+  /** Rows that answer `where` the way Postgres would, so a write's guard is actually evaluated. */
+  function sweeperWith(runs: Run[], opts: { beforeWrite?: () => void; agents?: object[] } = {}) {
+    const matches = (r: Run, w: Where) =>
+      (w.id === undefined || r.id === w.id) &&
+      (w.agentKey === undefined || r.agentKey === w.agentKey) &&
+      (w.status === undefined || (typeof w.status === 'string' ? r.status === w.status : w.status.in.includes(r.status))) &&
+      (w.updatedAt === undefined || r.updatedAt < w.updatedAt.lt) &&
+      (w.attempt === undefined || r.attempt < w.attempt.lt);
+    const write = (hit: Run[], data: Record<string, unknown>) => {
+      for (const r of hit) {
+        const { attempt, ...rest } = data as { attempt?: { increment: number } };
+        Object.assign(r, rest, { updatedAt: new Date() }, attempt ? { attempt: r.attempt + attempt.increment } : {});
+      }
+      return hit.length;
+    };
+    const prisma = {
+      agentRun: {
+        findMany: vi.fn(async ({ where }: { where: Where }) => runs.filter((r) => matches(r, where)).map((r) => ({ ...r }))),
+        updateMany: vi.fn(async ({ where, data }: { where: Where; data: Record<string, unknown> }) => {
+          opts.beforeWrite?.();
+          return { count: write(runs.filter((r) => matches(r, where)), data) };
+        }),
+        // The by-id write the sweeper used before #809, kept so this spec fails against it.
+        update: vi.fn(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+          opts.beforeWrite?.();
+          write(runs.filter((r) => r.id === where.id), data);
+          return {};
+        }),
+        count: vi.fn(async ({ where }: { where: Where }) => runs.filter((r) => matches(r, where)).length),
+        create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+          const run = { id: `run-${runs.length + 1}`, status: 'pending', attempt: 0, updatedAt: new Date(), ...data } as Run;
+          runs.push(run);
+          return run;
+        }),
+      },
+      aiAgent: { findMany: vi.fn(async () => opts.agents ?? []), update: vi.fn(async () => ({})) },
+      user: { findUnique: vi.fn(async () => ({ locale: 'en' })) },
+      withTransaction: vi.fn(async (fn: () => Promise<unknown>) => fn()),
+      onCommit: vi.fn((fn: () => Promise<unknown>) => void fn()),
+    };
+    const producer = { enqueue: vi.fn(async () => undefined), enqueueRetry: vi.fn(async () => undefined) };
+    const sweeper = new AgentScheduleSweeper(prisma as never, producer as never, { get: () => true } as never);
+    sweeper.onModuleInit();
+    sweeper.onModuleDestroy();
+    return { sweeper, producer, runs };
+  }
+
+  it('leaves a run that finished between the stale read and the reset finished, and enqueues nothing', async () => {
+    const run: Run = { id: 'slow', agentKey: 'reviewer', workspaceId: 'ws', status: 'running', attempt: 0, updatedAt: longAgo };
+    // The worker settles the run after the sweeper read it and before it wrote.
+    const { sweeper, producer } = sweeperWith([run], {
+      beforeWrite: () => Object.assign(run, { status: 'succeeded', updatedAt: new Date() }),
+    });
+    await sweeper.sweep();
+    expect(run.status).toBe('succeeded');
+    expect(run.attempt).toBe(0);
+    expect(producer.enqueueRetry).not.toHaveBeenCalled();
+  });
+
+  it('fails a stale run on its last attempt, and the schedule it held starts its next run in the same sweep', async () => {
+    const run: Run = {
+      id: 'dead',
+      agentKey: 'reviewer',
+      workspaceId: 'ws',
+      status: 'running',
+      attempt: AGENT_MAX_ATTEMPTS,
+      updatedAt: longAgo,
+    };
+    const agent = {
+      id: 'agent-reviewer',
+      workspaceId: 'ws',
+      key: 'reviewer',
+      enabled: true,
+      scheduleEnabled: true,
+      scheduleKind: null,
+      scheduleMinutes: 60,
+      scheduleTime: null,
+      scheduleWeekdays: null,
+      scheduleTimezone: null,
+      scheduleChangedAt: null,
+      scheduleNote: null,
+      scheduleOwner: '00000000-0000-4000-8000-000000000001',
+      lastRunAt: new Date(Date.now() - 2 * 60 * 60_000),
+    };
+    const { sweeper, producer, runs } = sweeperWith([run], { agents: [agent] });
+    await sweeper.sweep();
+    expect(run).toMatchObject({ status: 'failed', stage: null, error: expect.stringContaining('attempts') });
+    expect(producer.enqueueRetry).not.toHaveBeenCalled();
+    const next = runs.find((r) => r.id !== 'dead');
+    expect(next).toMatchObject({ agentKey: 'reviewer', status: 'pending', trigger: 'schedule' });
+    expect(producer.enqueue).toHaveBeenCalledExactlyOnceWith(next!.id);
   });
 });
 

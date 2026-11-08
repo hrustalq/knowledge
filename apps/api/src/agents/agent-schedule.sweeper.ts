@@ -1,6 +1,7 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AGENT_SCHEDULE_TICK_MINUTES, isScheduleDue } from '@knowledge/contracts';
+import { requeueStale, staleFailure } from '../common/requeue-stale.js';
 import type { Env } from '../config/env.js';
 import { asLocale } from '../i18n/locale.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -75,22 +76,27 @@ export class AgentScheduleSweeper implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  /** A worker that died mid-run leaves a row claimed forever without this. */
+  /**
+   * A worker that died mid-run leaves a row claimed forever without this. A
+   * run out of attempts is failed, which frees its schedule, its trigger's
+   * in-flight guard and its `AGENT_TRIGGER_MAX_ACTIVE` slot (#809).
+   */
   private async requeueStuck(): Promise<void> {
-    const cutoff = new Date(Date.now() - STALE_RUN_MS);
-    const stuck = await this.prisma.agentRun.findMany({
-      where: { status: 'running', updatedAt: { lt: cutoff }, attempt: { lt: AGENT_MAX_ATTEMPTS } },
-      select: { id: true, attempt: true },
-      take: BATCH,
-    });
-    for (const run of stuck) {
-      await this.prisma.agentRun.update({
-        where: { id: run.id },
-        data: { status: 'pending', attempt: { increment: 1 } },
-      });
+    await requeueStale({
+      staleField: 'updatedAt',
+      staleMs: STALE_RUN_MS,
+      maxAttempts: AGENT_MAX_ATTEMPTS,
+      find: (where) => this.prisma.agentRun.findMany({ where, select: { id: true, attempt: true }, take: BATCH }),
+      attemptOf: (run) => run.attempt,
+      requeue: (where) => this.prisma.agentRun.updateMany({ where, data: { status: 'pending', attempt: { increment: 1 } } }),
+      fail: (where) =>
+        this.prisma.agentRun.updateMany({
+          where,
+          data: { status: 'failed', error: staleFailure(AGENT_MAX_ATTEMPTS + 1), stage: null, finishedAt: new Date() },
+        }),
       // A retry needs a fresh jobId: the kept failed job blocks reuse.
-      await this.producer.enqueueRetry(run.id, run.attempt + 1);
-    }
+      enqueue: (run) => this.producer.enqueueRetry(run.id, run.attempt + 1),
+    });
   }
 
   /**

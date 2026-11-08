@@ -2635,6 +2635,9 @@ model ConnectorRun {
   discovered Int @default(0)
   applied    Int @default(0)
   reverted   Int @default(0)
+  /// Times stale-run recovery re-queued this run after its worker died (#809);
+  /// at the ceiling the run is failed instead of re-queued forever.
+  attempt    Int @default(0)
 
   /// Capped [{ externalId, title, message }] — a lossy sync that says nothing
   /// is the failure this feature exists to prevent.

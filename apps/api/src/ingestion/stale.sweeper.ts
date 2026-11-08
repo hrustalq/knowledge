@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { requeueStale, staleFailure } from '../common/requeue-stale.js';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { embeddingSignature } from '../embedding/embedding.provider.js';
@@ -65,16 +66,33 @@ export class StaleSweeper implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * `attempts` counts claims, so a job that keeps killing its worker reaches
+   * the `retryFailed` ceiling and is failed here rather than re-queued forever.
+   */
   private async requeueStuck(): Promise<void> {
-    const timeoutMs = this.config.get('STALE_INDEXING_TIMEOUT_MIN', { infer: true }) * 60_000;
-    const stuck = await this.prisma.ingestionJob.findMany({
-      where: { status: 'running', startedAt: { lt: new Date(Date.now() - timeoutMs) } },
-      take: 10,
+    const maxAttempts = this.config.get('STALE_MAX_ATTEMPTS', { infer: true });
+    const { failed } = await requeueStale({
+      staleField: 'startedAt',
+      staleMs: this.config.get('STALE_INDEXING_TIMEOUT_MIN', { infer: true }) * 60_000,
+      maxAttempts,
+      find: (where) =>
+        this.prisma.ingestionJob.findMany({ where, select: { id: true, attempts: true, revisionId: true }, take: 10 }),
+      attemptOf: (job) => job.attempts,
+      requeue: (where, job) => {
+        this.logger.warn(`Job ${job.id} stuck in 'running' — re-queueing`);
+        return this.prisma.ingestionJob.updateMany({ where, data: { status: 'queued' } });
+      },
+      fail: (where) =>
+        this.prisma.ingestionJob.updateMany({ where, data: { status: 'failed', error: { message: staleFailure(maxAttempts) } } }),
+      enqueue: (job) => this.producer.enqueueRetry(job.id, job.attempts),
     });
-    for (const job of stuck) {
-      this.logger.warn(`Job ${job.id} stuck in 'running' — re-queueing`);
-      await this.prisma.ingestionJob.update({ where: { id: job.id }, data: { status: 'queued' } });
-      await this.producer.enqueueRetry(job.id, job.attempts);
+    for (const job of failed) {
+      this.logger.warn(`Job ${job.id} stuck in 'running' with no attempts left — failed`);
+      await this.prisma.documentRevision.updateMany({
+        where: { id: job.revisionId, status: 'indexing' },
+        data: { status: 'failed' },
+      });
     }
   }
 
@@ -90,8 +108,13 @@ export class StaleSweeper implements OnModuleInit, OnModuleDestroy {
       orderBy: { createdAt: 'asc' },
     });
     for (const job of failed) {
+      // Guarded like the stale reset: a BullMQ retry may have claimed it meanwhile.
+      const reset = await this.prisma.ingestionJob.updateMany({
+        where: { id: job.id, status: 'failed' },
+        data: { status: 'queued' },
+      });
+      if (reset.count !== 1) continue;
       this.logger.log(`Retrying failed job ${job.id} (attempts so far: ${job.attempts}/${maxAttempts})`);
-      await this.prisma.ingestionJob.update({ where: { id: job.id }, data: { status: 'queued' } });
       await this.producer.enqueueRetry(job.id, job.attempts);
     }
   }

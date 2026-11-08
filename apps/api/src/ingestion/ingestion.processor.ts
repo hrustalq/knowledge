@@ -136,16 +136,28 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       return;
     }
 
-    await this.prisma.$transaction([
-      this.prisma.ingestionJob.update({
-        where: { id: ingestionJobId },
+    // Guarded claim (#809): only a queued job, or a failed one being retried, is
+    // ours to start. A re-delivery of a job PG still holds `running` (a stalled
+    // BullMQ job beside a live worker) is a no-op instead of a second pipeline
+    // interleaving its chunk rewrites with the first. A worker that really died
+    // is re-queued by StaleSweeper.requeueStuck.
+    // ponytail: `startedAt` is the lease and nothing renews it, so a job still
+    // alive past STALE_INDEXING_TIMEOUT_MIN is re-queued and runs twice; add a
+    // per-step heartbeat if indexing one revision ever takes that long.
+    const claimed = await this.prisma.withTransaction(async () => {
+      const { count } = await this.prisma.ingestionJob.updateMany({
+        where: { id: ingestionJobId, status: { in: ['queued', 'failed'] } },
         data: { status: 'running', attempts: { increment: 1 }, startedAt: new Date() },
-      }),
-      this.prisma.documentRevision.update({
-        where: { id: revision.id },
-        data: { status: 'indexing' },
-      }),
-    ]);
+      });
+      if (count === 1) {
+        await this.prisma.documentRevision.update({ where: { id: revision.id }, data: { status: 'indexing' } });
+      }
+      return count === 1;
+    });
+    if (!claimed) {
+      this.logger.log(`Ingestion job ${ingestionJobId} is already claimed — skipping this delivery`);
+      return;
+    }
 
     // Declared outside the try so the catch can still report which step the
     // pipeline reached before it failed — that is the single most useful thing

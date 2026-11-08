@@ -140,7 +140,7 @@ describe('GraphService.setLiveRevision (#83)', () => {
 });
 
 describe('IngestionProcessor stamps and reconciles the live projection (#83)', () => {
-  function processorFor(opts: { revisionId: string; headId: string; headStatus?: string }) {
+  function processorFor(opts: { revisionId: string; headId: string; headStatus?: string; claimed?: boolean }) {
     const revision = {
       id: opts.revisionId,
       documentId: DOC,
@@ -154,6 +154,7 @@ describe('IngestionProcessor stamps and reconciles the live projection (#83)', (
       ingestionJob: {
         findUnique: vi.fn(async () => ({ id: 'job', status: 'queued', workspaceId: WS, revisionId: revision.id, payload: {} })),
         update: vi.fn(),
+        updateMany: vi.fn(async () => ({ count: opts.claimed === false ? 0 : 1 })),
       },
       documentRevision: {
         findUnique: vi.fn(async ({ where }: { where: { id: string } }) =>
@@ -177,6 +178,7 @@ describe('IngestionProcessor stamps and reconciles the live projection (#83)', (
         })),
       },
       $transaction: vi.fn(async () => []),
+      withTransaction: vi.fn(async (fn: () => Promise<unknown>) => fn()),
     };
     const graph = {
       upsertRevisionChunks: vi.fn(),
@@ -206,7 +208,7 @@ describe('IngestionProcessor stamps and reconciles the live projection (#83)', (
       undefined as never,
       { recordRevision: vi.fn(async () => undefined), chunksFor: vi.fn(async () => []) } as never,
     );
-    return { processor, graph, fulltext, conflicts };
+    return { processor, graph, fulltext, conflicts, prisma };
   }
   const run = (p: IngestionProcessor) => p.process({ data: { ingestionJobId: 'job' } } as never);
 
@@ -235,6 +237,16 @@ describe('IngestionProcessor stamps and reconciles the live projection (#83)', (
     expect(graph.replaceRevisionFrontmatterFacts).toHaveBeenCalledWith(expect.objectContaining({ live: false }));
     expect(graph.setLiveRevision).not.toHaveBeenCalledWith(WS, DOC, 'feature-x');
     expect(graph.stampRevisions).toHaveBeenCalledWith(WS, DOC, [{ revisionId: 'feature-x', validFrom: null, validTo: null, lineage: 'branch' }]);
+  });
+
+  it('a delivery of a job another worker holds running is dropped before the pipeline (#809)', async () => {
+    const { processor, graph, prisma } = processorFor({ revisionId: 'r2', headId: 'r2', claimed: false });
+    await run(processor);
+    expect(prisma.ingestionJob.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'job', status: { in: ['queued', 'failed'] } } }),
+    );
+    expect(prisma.documentRevision.update).not.toHaveBeenCalled();
+    expect(graph.upsertRevisionChunks).not.toHaveBeenCalled();
   });
 
   it('keeps the previous revision live while the new head is still indexing', async () => {

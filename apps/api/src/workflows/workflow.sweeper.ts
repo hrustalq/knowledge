@@ -1,4 +1,5 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
+import { requeueStale, staleFailure } from '../common/requeue-stale.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { WorkflowProducer } from './workflow.producer.js';
 import { WorkflowRunnerService } from './workflow-runner.service.js';
@@ -50,23 +51,27 @@ export class WorkflowSweeper implements OnModuleInit, OnModuleDestroy {
     if (this.running) return;
     this.running = true;
     try {
-      const cutoff = new Date(Date.now() - this.staleMs);
-
       // Nodes claimed by a worker that never came back. Returning them to
       // `pending` is safe because a step is only ever *read* before it writes.
-      const stuck = await this.prisma.workflowRunNode.findMany({
-        where: { status: 'running', updatedAt: { lt: cutoff }, attempt: { lt: WORKFLOW_MAX_ATTEMPTS } },
-        select: { id: true, runId: true, attempt: true },
-        take: BATCH,
-      });
-      for (const node of stuck) {
-        await this.prisma.workflowRunNode.update({
-          where: { id: node.id },
-          data: { status: 'pending', attempt: { increment: 1 } },
-        });
+      // One out of attempts fails, and `reconcileRun` below settles its run.
+      const { requeued, failed } = await requeueStale({
+        staleField: 'updatedAt',
+        staleMs: this.staleMs,
+        maxAttempts: WORKFLOW_MAX_ATTEMPTS,
+        find: (where) =>
+          this.prisma.workflowRunNode.findMany({ where, select: { id: true, runId: true, attempt: true }, take: BATCH }),
+        attemptOf: (node) => node.attempt,
+        requeue: (where) =>
+          this.prisma.workflowRunNode.updateMany({ where, data: { status: 'pending', attempt: { increment: 1 } } }),
+        fail: (where) =>
+          this.prisma.workflowRunNode.updateMany({
+            where,
+            data: { status: 'failed', error: staleFailure(WORKFLOW_MAX_ATTEMPTS + 1) },
+          }),
         // A fresh jobId: the kept failed job blocks reuse of the original.
-        await this.producer.enqueueRetry(node.id, node.attempt + 1);
-      }
+        enqueue: (node) => this.producer.enqueueRetry(node.id, node.attempt + 1),
+      });
+      const stuck = [...requeued, ...failed];
 
       // Nodes that never got picked up at all — a lost enqueue, or an API
       // process that died between creating the row and reaching Redis.
@@ -85,7 +90,9 @@ export class WorkflowSweeper implements OnModuleInit, OnModuleDestroy {
       for (const runId of runs) await this.runner.reconcileRun(runId);
 
       if (stuck.length || orphaned.length) {
-        this.logger.log(`Workflow sweep re-queued ${stuck.length} stalled and ${orphaned.length} orphaned node(s)`);
+        this.logger.log(
+          `Workflow sweep re-queued ${requeued.length} stalled and ${orphaned.length} orphaned node(s), failed ${failed.length}`,
+        );
       }
     } catch (e) {
       this.logger.warn(`Workflow sweep failed (non-fatal): ${(e as Error).message}`);

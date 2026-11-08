@@ -15,7 +15,6 @@ import type {
 import { composeFrontmatter, withComponentPaths } from '../common/frontmatter.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { StorageService } from '../storage/storage.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { DocumentRelationsService } from '../documents/document-relations.service.js';
 import { MergeRequestsService } from '../documents/merge-requests.service.js';
@@ -51,11 +50,10 @@ const MAX_CITED = 3;
 export class AgentFindingsService {
   private readonly logger = new Logger(AgentFindingsService.name);
 
-  // The first four are `readonly` rather than `private readonly` so the
+  // These three are `readonly` rather than `private readonly` so the
   // service itself satisfies `DraftMergeRequestDeps` — one helper, no adapter.
   constructor(
     readonly prisma: PrismaService,
-    readonly storage: StorageService,
     readonly documents: DocumentsService,
     private readonly relations: DocumentRelationsService,
     readonly mergeRequests: MergeRequestsService,
@@ -433,19 +431,27 @@ export class AgentFindingsService {
         generatedBy: run.agentKey,
         ...(connector ? { repository: connector.name } : {}),
       });
-      const created = await this.documents.createDocument(
-        {
-          workspaceId,
-          projectId,
-          title,
-          content: { mode: 'inline', format: 'markdown', text },
-          ...(connector?.category ? { category: connector.category as DocumentCategory } : {}),
-          ...(connector?.parentId ? { parentId: connector.parentId } : {}),
+      // The page and the finding's record of it commit together (#811), as in
+      // `proposePage`: a page committed before a failed write-back would be
+      // orphaned by the release below, and the next press would create another.
+      return await this.prisma.withTransaction(
+        async () => {
+          const created = await this.documents.createDocument(
+            {
+              workspaceId,
+              projectId,
+              title,
+              content: { mode: 'inline', format: 'markdown', text },
+              ...(connector?.category ? { category: connector.category as DocumentCategory } : {}),
+              ...(connector?.parentId ? { parentId: connector.parentId } : {}),
+            },
+            principal.userId,
+          );
+          await this.writeBackPage(runId, index, created.documentId, title);
+          return { documentId: created.documentId, title };
         },
-        principal.userId,
+        { timeout: 30_000, maxWait: 10_000 },
       );
-      await this.writeBackPage(runId, index, created.documentId, title);
-      return { documentId: created.documentId, title };
     } catch (error) {
       await this.release(runId, index).catch(() => {
         this.logger.warn(`Could not release the create-page claim on run ${runId} finding ${index}`);

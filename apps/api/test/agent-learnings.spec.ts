@@ -220,7 +220,6 @@ describe('AgentFindingsService.dismiss', () => {
       {} as never,
       {} as never,
       {} as never,
-      {} as never,
       w.service,
     );
     return { ...w, findings };

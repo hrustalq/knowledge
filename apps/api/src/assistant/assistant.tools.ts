@@ -25,7 +25,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { DocumentRelationsService } from '../documents/document-relations.service.js';
 import { MergeRequestsService } from '../documents/merge-requests.service.js';
-import { StorageService } from '../storage/storage.service.js';
+import { openDraftMergeRequest } from '../documents/draft-merge-request.js';
 import { AiConfigService } from '../ai/ai-config.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { WebResearchService } from './web-research.service.js';
@@ -115,7 +115,6 @@ export class AssistantToolsService {
     private readonly documents: DocumentsService,
     private readonly relations: DocumentRelationsService,
     private readonly mergeRequests: MergeRequestsService,
-    private readonly storage: StorageService,
     private readonly aiConfig: AiConfigService,
     private readonly web: WebResearchService,
     // The repository tools (docs/features/31), worker-loadable like the read
@@ -755,30 +754,22 @@ export class AssistantToolsService {
       // read_document hands the model the body alone, so a bare body keeps the
       // live page's frontmatter — otherwise every edit drops its relations.
       const base = await this.documents.getContent(documentId).catch(() => null);
-      await this.documents.createBranch(documentId, { name: branchName });
-      const revision = await this.documents.createRevision(
+      // Branch, revision and merge request commit together (#811): a refused
+      // merge request leaves no branch or revision behind.
+      const mergeRequestId = await openDraftMergeRequest({ prisma: this.prisma, documents: this.documents, mergeRequests: this.mergeRequests }, {
         documentId,
-        { branch: branchName, message: title, contentType: 'text/markdown' },
-        undefined,
-        authorId,
-      );
-      const row = await this.prisma.documentRevision.findUnique({ where: { id: revision.revisionId } });
-      if (!row) return this.fail('Draft revision disappeared before it could be written');
-      await this.storage.putObjectText(row.s3Key, keepFrontmatter(markdown, base?.frontmatter), 'text/markdown');
-      await this.documents.finalizeRevision(documentId, revision.revisionId);
-
-      const description = typeof args.description === 'string' ? args.description.slice(0, 4_000) : undefined;
-      const mr = await this.mergeRequests.create(
-        documentId,
-        { sourceBranch: branchName, title, ...(description ? { description } : {}) },
-        authorId,
-        { provenance: 'agent' },
-      );
+        branch: branchName,
+        title,
+        description: typeof args.description === 'string' ? args.description : '',
+        markdown: keepFrontmatter(markdown, base?.frontmatter),
+        userId: authorId,
+        provenance: 'agent',
+      });
       return {
         content: JSON.stringify({
           documentId,
           documentTitle: doc.title,
-          mergeRequestId: mr.mergeRequest.mergeRequestId,
+          mergeRequestId,
           branch: branchName,
           title,
           note: 'Opened as a merge request — a human must review and merge it before the change goes live.',

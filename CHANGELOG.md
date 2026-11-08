@@ -44,6 +44,17 @@ in the pull request that introduces them — see
   An import that was retried after you submitted it no longer offers Submit again, so it can no longer create a
   second page. An export is built once. A worker restart used to start a second build, which could delete the
   finished file. An export whose worker died now ends as failed (ask for it again) instead of being retried. (#810)
+- **A change that fails halfway no longer leaves part of itself behind.** When the assistant's "propose an update"
+  could not open its merge request, the page kept a stray `assistant/…` branch with a finished revision on it. Now
+  nothing is written. "Create page" on an agent finding could create the page and then fail to record it on the
+  finding. Pressing it again then created a second copy. Now the page and the record are saved together. Restoring an
+  earlier version of a source-backed page could pause the source and then fail, leaving nothing restored. Re-reading a
+  source through a new recipe could save the page without its version marker, so the next sync took the recipe's
+  output for a new upstream version. Any write whose content was refused, such as an invalid spec sent over MCP, no
+  longer leaves an empty draft revision on the page. (#811)
+- **An agent writing over MCP from an out-of-date revision now gets the same conflict as the REST API.**
+  `knowledge_create_revision` and `knowledge_patch_document` used to return a plain error. They now return a 409 with
+  `currentHeadRevisionId` and a `comparisonUrl` to compare against before retrying. (#811)
 
 ### Operations
 

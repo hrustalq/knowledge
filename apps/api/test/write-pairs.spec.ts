@@ -21,6 +21,10 @@ import { RoleSyncService } from '../src/auth/sso/role-sync.service.js';
 import { UsersService } from '../src/users/users.service.js';
 import { ScimService } from '../src/scim/scim.service.js';
 import { hashPassword } from '../src/auth/password.js';
+import { fakeWriteRevision } from './revision-fakes.js';
+import { AssistantToolsService } from '../src/assistant/assistant.tools.js';
+import { AgentFindingsService } from '../src/ai/agent-findings.service.js';
+import { McpService } from '../src/mcp/mcp.service.js';
 
 /**
  * #658: write pairs that must commit together. Each case fails the LAST write
@@ -202,17 +206,20 @@ describe('#658 write pairs commit together', () => {
     const row = { id: 'c1', workspaceId: WS, kind: 'confluence', config: {}, projectId: 'p1' };
     const link = { id: 'l1', documentId: 'd1', externalUrl: null };
     const item = { id: 'i1', runId: 'run1', status: 'approved', stagedKey: 'k', linkId: 'l1', documentId: 'd1', action: 'update', draft: null, externalId: 'x', externalVersion: 'v2', externalUrl: null, title: 'T', createdDocument: false, previousRevisionId: 'r0' };
-    const revisionWriter = (prisma: never) => ({
-      createRevision: vi.fn(async () => {
-        await (prisma as { documentRevision: { create: (a: unknown) => Promise<unknown> } }).documentRevision.create({});
-        return { revisionId: 'r2' };
-      }),
-      finalizeRevision: vi.fn(async () => undefined),
-      createBranch: vi.fn(async () => {
-        await (prisma as { documentBranch: { create: (a: unknown) => Promise<unknown> } }).documentBranch.create({});
-      }),
-    });
     const storage = { getObjectText: async () => 'md', putObjectText: async () => undefined };
+    const revisionWriter = (prisma: never) => {
+      const documents = {
+        createRevision: vi.fn(async () => {
+          await (prisma as { documentRevision: { create: (a: unknown) => Promise<unknown> } }).documentRevision.create({});
+          return { revisionId: 'r2' };
+        }),
+        finalizeRevision: vi.fn(async () => undefined),
+        createBranch: vi.fn(async () => {
+          await (prisma as { documentBranch: { create: (a: unknown) => Promise<unknown> } }).documentBranch.create({});
+        }),
+      };
+      return Object.assign(documents, { writeRevision: fakeWriteRevision({ documents, storage, prisma }) });
+    };
     const reads = {
       'connectorLink.findUnique': link,
       'document.findUnique': { id: 'd1', defaultBranch: 'main' },
@@ -652,5 +659,97 @@ describe('#806 finalize decides under the lock', () => {
     await r.svc.finalizeRevision('d1', 'r2', { commit: false, dedupe: false });
     expect(r.branch.headRevisionId).toBe('r2');
     expect(r.commits.recordRevisions).not.toHaveBeenCalled();
+  });
+});
+
+describe('#811 one revision writer', () => {
+  const doc = { id: 'd1', defaultBranch: 'main', archivedAt: null, projectId: 'p1', workspaceId: WS };
+
+  it('writeRevision: a refused finalize leaves no draft behind', async () => {
+    const { prisma, committed } = fakePrisma({});
+    const storage = { putObjectText: vi.fn(async () => undefined) };
+    const svc = stub(Object.create(DocumentsService.prototype) as DocumentsService, {
+      prisma,
+      storage,
+      openDraft: async () => {
+        await (prisma as { documentRevision: { create: (a: unknown) => Promise<unknown> } }).documentRevision.create({});
+        return { id: 'r2', s3Key: 's', contentType: 'text/markdown' };
+      },
+      finalizeRevision: boom,
+    });
+    await expect(svc.writeRevision('d1', { text: 'md' })).rejects.toThrow('boom');
+    expect(storage.putObjectText).toHaveBeenCalledWith('s', 'md', 'text/markdown');
+    expect(committed).toEqual([]);
+  });
+
+  it('writeRevision: a moved head is the 409 with its comparison link', async () => {
+    const { prisma, committed } = fakePrisma({ 'document.findUnique': doc, 'documentBranch.findUnique': { headRevisionId: 'r9' } });
+    const svc = stub(Object.create(DocumentsService.prototype) as DocumentsService, { prisma });
+    const err = await svc.writeRevision('d1', { text: 'md', expectedHeadRevisionId: 'r1' }).catch((e: unknown) => e);
+    expect(err).toMatchObject({ status: 409 });
+    expect((err as { getResponse: () => unknown }).getResponse()).toMatchObject({
+      currentHeadRevisionId: 'r9',
+      comparisonUrl: '/v1/documents/d1/compare?from=r1&to=r9&mode=merge-base',
+    });
+    expect(committed).toEqual([]);
+  });
+
+  it('MCP knowledge_create_revision hands its base revision to writeRevision', async () => {
+    const { prisma } = fakePrisma({ 'document.findUnique': { ...doc, kind: 'page' } });
+    const documents = {
+      getContent: vi.fn(async () => ({ frontmatter: { tags: ['x'] } })),
+      writeRevision: vi.fn(async () => ({ revisionId: 'r2', status: 'finalized' })),
+    };
+    const svc = stub(Object.create(McpService.prototype) as McpService, { prisma, documents });
+    const create = (svc as unknown as { createRevision: (...a: unknown[]) => Promise<unknown> }).createRevision.bind(svc);
+    await create('d1', { baseRevisionId: 'r1', content: '# Body' }, 'u1');
+    expect(documents.getContent).toHaveBeenCalledWith('d1', 'r1');
+    expect(documents.writeRevision).toHaveBeenCalledWith(
+      'd1',
+      expect.objectContaining({ expectedHeadRevisionId: 'r1', branch: 'main', text: expect.stringContaining('# Body') }),
+      'u1',
+    );
+  });
+
+  it('assistant propose_update: a refused merge request leaves no branch and no revision', async () => {
+    const { prisma, committed } = fakePrisma({});
+    const write = (model: string) => (prisma as Record<string, { create: (a: unknown) => Promise<unknown> }>)[model]!.create({});
+    const documents = {
+      getContent: vi.fn(async () => ({ frontmatter: {} })),
+      createBranch: vi.fn(async () => write('documentBranch')),
+      writeRevision: vi.fn(async () => (await write('documentRevision'), { revisionId: 'r2' })),
+    };
+    const svc = stub(Object.create(AssistantToolsService.prototype) as AssistantToolsService, {
+      prisma,
+      documents,
+      mergeRequests: { create: boom },
+      requireWorkspaceDocument: async () => ({ id: 'd1', title: 'Page' }),
+    });
+    const propose = (svc as unknown as { proposeUpdate: (...a: unknown[]) => Promise<{ ok: boolean }> }).proposeUpdate.bind(svc);
+    const result = await propose({ documentId: 'd1', markdown: '# New', title: 'Fix' }, { principal: { userId: 'u1' } });
+    expect(result.ok).toBe(false);
+    expect(documents.writeRevision).toHaveBeenCalled();
+    expect(committed).toEqual([]);
+  });
+
+  it('a finding\'s create page: a failed write-back leaves no page', async () => {
+    const run = { id: 'run1', workspaceId: WS, agentKey: 'archaeologist', input: {}, findings: [{ kind: 'gap', title: 'T', detail: '', documentIds: [], draft: { title: 'New', markdown: '# New' } }] };
+    const { prisma, committed } = fakePrisma({ 'agentRun.findUnique': run, 'project.findFirst': { id: 'p1' } });
+    const documents = {
+      createDocument: vi.fn(async () => {
+        await (prisma as { document: { create: (a: unknown) => Promise<unknown> } }).document.create({});
+        return { documentId: 'new-doc' };
+      }),
+    };
+    const svc = stub(Object.create(AgentFindingsService.prototype) as AgentFindingsService, {
+      prisma,
+      documents,
+      logger: { warn: vi.fn() },
+      writeBackPage: boom,
+    });
+    await expect(svc.createPage(WS, 'run1', 0, { userId: 'u1' } as never)).rejects.toThrow('boom');
+    expect(documents.createDocument).toHaveBeenCalled();
+    // The claim and its release commit on their own; the page does not.
+    expect(committed).toEqual(['$executeRaw', '$executeRaw']);
   });
 });

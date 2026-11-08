@@ -39,7 +39,6 @@ import {
 } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { StorageService } from '../storage/storage.service.js';
 import { AccessService } from '../auth/access.service.js';
 import type { Principal } from '../auth/principal.js';
 import { PermissionService } from '../permissions/permission.service.js';
@@ -149,7 +148,6 @@ export class CaptureService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly storage: StorageService,
     private readonly access: AccessService,
     private readonly permissions: PermissionService,
     private readonly documents: DocumentsService,
@@ -618,7 +616,7 @@ export class CaptureService {
     const entry = capturedEntry(row.id, kind, session, row.createdAt);
     const title = t('capture.mergeRequest.title', { kind: t(`capture.kind.${kind}`, undefined, lang), title: row.title }, lang).slice(0, 200);
     const branch = `capture/${row.id.slice(0, 8)}-${claimedAt.getTime()}`;
-    const deps = { prisma: this.prisma, storage: this.storage, documents: this.documents, mergeRequests: this.mergeRequests };
+    const deps = { prisma: this.prisma, documents: this.documents, mergeRequests: this.mergeRequests };
     const tx = { timeout: 30_000, maxWait: 10_000 };
 
     if (decision.outcome === 'amend-page') {

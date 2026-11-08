@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { fakeWriteRevision } from './revision-fakes.js';
 
 /**
  * Push-triggered regeneration and merge-request delivery for the repo wiki
@@ -193,6 +194,7 @@ describe('ConnectorStagingService.apply, delivered by merge request', () => {
       preview: vi.fn(async () => []),
       applyToPage: vi.fn(async () => ({ changed: false, warnings: [] })),
     };
+    Object.assign(documents, { writeRevision: fakeWriteRevision({ documents, storage, prisma } as never) });
     const staging = new ConnectorStagingService(prisma as never, documents as never, storage as never, acl as never, { pinMarkdown: async (_ws: string, md: string) => md } as never);
     const row = connector(config, { conflict: 'manual' });
     return { staging, row, prisma, documents, conflicts, objects };

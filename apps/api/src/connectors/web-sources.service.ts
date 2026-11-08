@@ -584,20 +584,23 @@ export class WebSourcesService {
     if (!revision) throw new BadRequestException(t('error.source.revisionNotOfPage', { id: revisionId }));
     const markdown = await this.storage.getObjectText(revision.s3Key);
 
-    await this.prisma.connectorLink.update({
-      where: { id: link.id },
-      data: { pausedAt: link.pausedAt ?? new Date(), aheadCount: 0, aheadHash: null },
-    });
-    const draft = await this.documents.createRevision(
-      documentId,
-      { message: t('connector.sourceRestoredMessage', { number: revision.revisionNumber }), contentType: revision.contentType },
-      undefined,
-      actorId,
-      { connectorId: row.id },
+    // The pause and the restored revision commit together (#811): a refused
+    // restore must not leave the source paused with nothing restored.
+    await this.prisma.withTransaction(
+      async () => {
+        await this.prisma.connectorLink.update({
+          where: { id: link.id },
+          data: { pausedAt: link.pausedAt ?? new Date(), aheadCount: 0, aheadHash: null },
+        });
+        await this.documents.writeRevision(
+          documentId,
+          { text: markdown, message: t('connector.sourceRestoredMessage', { number: revision.revisionNumber }), contentType: revision.contentType },
+          actorId,
+          { connectorId: row.id },
+        );
+      },
+      { timeout: 30_000, maxWait: 10_000 },
     );
-    const stored = await this.prisma.documentRevision.findUniqueOrThrow({ where: { id: draft.revisionId } });
-    await this.storage.putObjectText(stored.s3Key, markdown, stored.contentType);
-    await this.documents.finalizeRevision(documentId, draft.revisionId);
     await this.alert(row, documentId, 'paused');
     return this.info(documentId);
   }

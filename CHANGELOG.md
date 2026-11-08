@@ -13,6 +13,40 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.46.1] — 2026-11-08
+
+### Security
+
+- **Password-reset and invite links are stricter.** A link works once, and setting a password ends every earlier
+  link sent to that person. Upgrade promptly.
+- **Connector webhooks do less work for unverified deliveries.** Upgrade promptly.
+
+### Fixed
+
+- **A repeated finalize no longer indexes a revision twice, and a stale save no longer overwrites a newer one.** A
+  double-click, a client retry or an MCP retry on `POST /v1/documents/:id/revisions/:revisionId/finalize` wrote a second
+  project commit and a second indexing job, and could set an already indexed revision back to `finalized`. It now
+  reports the revision's current state and writes nothing. A draft finalized after another revision landed on its
+  branch (another save, a merge) silently moved the head past that revision. It now answers `409` with
+  `currentHeadRevisionId` and `comparisonUrl`, the same shape as the `If-Match` conflict, and the head stays where it
+  is. The API spec and test fixture editors start a fresh draft on the next save after that `409` (#806).
+
+- **Concurrent tree moves no longer corrupt the page tree or a child's restrictions.** Two pages moved under each other
+  at the same moment (by drag, `POST /v1/documents/:id/move` or `PATCH` with `parentId`) could both succeed and form a
+  parent cycle, and both pages then disappeared from `GET /v1/documents/tree`. Now one move lands and the other gets
+  the existing `400`. A page created under a parent that was being moved into a restricted page at the same time kept
+  the parent's old place, so it stayed readable outside that page's grants. It now follows its parent. Concurrent
+  drops into one sibling list, and concurrent creates under one parent, no longer collide on a position. Two saves
+  on one page at the same moment no longer fail with a `500`. A move or rename of a page that moved to another
+  project during the call returns `409` and asks the caller to reload (#807).
+
+- **Two admins demoting or removing each other at the same moment no longer leave a workspace with no admin.** Each
+  request saw the other person as an admin and both went through, and only a platform admin could recover the
+  workspace. Now one lands and the other gets the existing last-admin `400`. IdP role sync and SCIM follow the same
+  rule. Removing a member now drops their groups and page grants in the same commit, so a failure partway no longer
+  leaves those for someone who is no longer a member. A member edit that changes the role together with other fields
+  (trusted operator, capabilities, taking the row over from an IdP) now writes all of them or none (#808).
+
 ## [0.46.0] — 2026-11-07
 
 ### Breaking
@@ -6204,7 +6238,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.46.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.46.1...HEAD
+[0.46.1]: https://github.com/hrustalq/knowledge/compare/v0.46.0...v0.46.1
 [0.46.0]: https://github.com/hrustalq/knowledge/compare/v0.45.2...v0.46.0
 [0.45.2]: https://github.com/hrustalq/knowledge/compare/v0.45.1...v0.45.2
 [0.45.1]: https://github.com/hrustalq/knowledge/compare/v0.45.0...v0.45.1

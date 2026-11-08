@@ -80,6 +80,7 @@
     "selfParent": "A document cannot be its own parent",
     "moveCycle": "Move would create a cycle in the document tree",
     "siblingGone": "The page this was dropped next to is no longer there — the tree moved under you",
+    "projectChanged": "Document {id} moved to another project while this change was being made — reload and try again",
     "nothingToUpdate": "Nothing to update",
     "contentIsDraft": "Revision {id} is a draft — finalize it before reading content",
     "uploadMissing": "No object uploaded at {key} — upload before finalizing",

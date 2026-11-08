@@ -312,7 +312,7 @@ describe('AuthFlowService — forgot-password queues the link', () => {
           where.email === 'ada@example.com' ? { id: 'u1', disabledAt: null } : null,
         ),
       },
-      passwordResetToken: { create: vi.fn(async ({ data }: { data: unknown }) => created.push(data)) },
+      passwordResetToken: { create: vi.fn(async ({ data }: { data: unknown }) => created.push(data)), deleteMany: vi.fn(async () => ({ count: 0 })) },
     };
     const flow = new AuthFlowService(prisma as never, config({ NODE_ENV: 'production' }) as never, {} as never, mail as never, {} as never, noAuthPolicy);
     expect(await flow.forgotPassword('nobody@example.com')).toEqual({ ok: true });

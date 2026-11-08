@@ -67,7 +67,8 @@ export class ConnectorWebhookController {
       throw new UnauthorizedException(t('error.connector.webhookNotConfigured'));
     }
 
-    const ctx = await this.connectors.contextFor(row, async () => undefined);
+    // The secret only: nothing is decrypted or minted for a delivery not yet verified (GHSA-pc42).
+    const ctx = this.connectors.webhookContextFor(row);
     const rawBody = req.rawBody?.toString('utf8') ?? '';
     const lower = lowercaseKeys(headers);
 

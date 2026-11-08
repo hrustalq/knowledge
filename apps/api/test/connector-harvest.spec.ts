@@ -290,8 +290,10 @@ describe('the connector webhook, for a harvest connector', () => {
     const row = { id: 'c-1', workspaceId: 'ws-1', kind: 'linear', enabled: true, webhookSecret: 'sealed', config: {} };
     const claim = vi.fn(async () => true);
     const enqueue = vi.fn();
+    // contextFor decrypts the credential and may mint a token: never for a delivery (GHSA-pc42).
+    const connectors = { require: vi.fn(async () => row), webhookContextFor: vi.fn(() => ctx), contextFor: vi.fn(), adapterFor: () => new LinearAdapter() };
     const ctl = new ConnectorWebhookController(
-      { require: vi.fn(async () => row), contextFor: vi.fn(async () => ctx), adapterFor: () => new LinearAdapter() } as never,
+      connectors as never,
       { enqueue } as never,
       {} as never,
       { trackerFor: () => null } as never,
@@ -299,7 +301,7 @@ describe('the connector webhook, for a harvest connector', () => {
       { claim } as never,
       { get: () => 0 } as never,
     );
-    return { ctl, claim, enqueue, row };
+    return { ctl, claim, enqueue, row, connectors };
   }
   const req = (body: string) => ({ rawBody: Buffer.from(body) }) as never;
 
@@ -313,10 +315,11 @@ describe('the connector webhook, for a harvest connector', () => {
 
   it('401s a forged delivery and claims nothing', async () => {
     const { UnauthorizedException } = await import('@nestjs/common');
-    const { ctl, claim } = await controller();
+    const { ctl, claim, connectors } = await controller();
     const d = delivery({}, Date.now());
     await expect(ctl.receive('c-1', { 'linear-signature': linearSignature('forged', d.body) }, req(d.body))).rejects.toBeInstanceOf(UnauthorizedException);
     expect(claim).not.toHaveBeenCalled();
+    expect(connectors.contextFor).not.toHaveBeenCalled();
   });
 });
 

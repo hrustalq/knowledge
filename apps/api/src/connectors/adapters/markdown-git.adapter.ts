@@ -2,7 +2,8 @@ import { embedLoneUrls } from '@knowledge/editor-schema/markdown';
 import { Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import matter from 'gray-matter';
-import { safeJson, verifyHubSignature } from '../webhook-payload.js';
+import { safeJson } from '../webhook-payload.js';
+import { verifyRepoDelivery } from '../drift/pull-request-delivery.js';
 import { safeFetch } from '../../common/safe-fetch.js';
 import type { ConnectorCapabilities, ConnectorKind } from '@knowledge/contracts';
 import { t } from '../../i18n/t.js';
@@ -252,13 +253,8 @@ export class MarkdownGitAdapter implements ConnectorAdapter {
     const secret = ctx.webhookSecret;
     if (!secret) return null;
 
-    // GitLab sends a plain shared token; GitHub signs the body.
-    const gitlabToken = headers['x-gitlab-token'];
-    if (gitlabToken !== undefined) {
-      if (gitlabToken !== secret) return null;
-    } else if (!verifyHubSignature(headers, rawBody, secret)) {
-      return null;
-    }
+    // GitLab's shared token or GitHub's signature, compared in constant time.
+    if (!verifyRepoDelivery(headers, rawBody, secret)) return null;
 
     const payload = safeJson(rawBody);
     const commits = (payload?.commits ?? []) as Array<{

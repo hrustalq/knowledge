@@ -225,6 +225,8 @@ function fakeDb() {
         tables.workspaceMember = members().filter((m) => m !== row);
         return 1;
       }
+      // lockMembership (#808): one process, nothing to serialise against.
+      if (sql.includes('pg_advisory_xact_lock')) return 0;
       throw new Error(`fake: unexpected SQL ${sql}`);
     }),
   };

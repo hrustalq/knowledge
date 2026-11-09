@@ -8,6 +8,7 @@ import { AiSkillsService } from '../ai/ai-skills.service.js';
 import { AiUsageService } from '../ai/ai-usage.service.js';
 import { AssistantClient } from './assistant.client.js';
 import { parseModelJson } from '../common/model-json.js';
+import type { Env } from '../config/env.js';
 
 export interface StyleLintInput {
   workspaceId: string;
@@ -35,7 +36,7 @@ export class StyleLintService {
     private readonly aiUsage: AiUsageService,
     private readonly skills: AiSkillsService,
     private readonly agents: AgentRegistryService,
-    private readonly env: ConfigService,
+    private readonly env: ConfigService<Env, true>,
   ) {}
 
   async lint(input: StyleLintInput, principal: Principal): Promise<AssistantLintResponse> {
@@ -53,7 +54,7 @@ export class StyleLintService {
       lintMessages(agent.instructions, found.rules, input.title, text),
       { json: true },
     );
-    const max = this.env.get<number>('LINT_MAX_FINDINGS') ?? 15;
+    const max = this.env.get('LINT_MAX_FINDINGS', { infer: true });
     return { enabled: true, styleguide, ...readLintViolations(parseModelJson(raw), found.rules, text, max) };
   }
 }

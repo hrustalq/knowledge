@@ -1043,6 +1043,7 @@ export type I18nTranslations = {
             "disabled": string;
             "differentProject": string;
             "runInFlightForPage": string;
+            "changedConcurrently": string;
             "nodeNotAwaitingReview": string;
             "stepGone": string;
             "invalidGraph": string;

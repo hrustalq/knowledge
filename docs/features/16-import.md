@@ -130,7 +130,6 @@ The resting state is visible; the animation is the enhancement.
 ```
 IMPORT_MAX_BYTES=52428800     # 50 MB, enforced at presign and again from the bucket's HEAD
 IMPORT_PARSE_TIMEOUT_MS=120000
-IMPORT_OCR_MAX_PAGES=20
 ```
 
 ## Not in scope

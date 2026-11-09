@@ -1,3 +1,4 @@
+import { parseArgs } from 'node:util';
 import { Module, type INestApplicationContext } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
@@ -91,12 +92,18 @@ import type { AgentFinding } from '@knowledge/contracts';
 
 const DEMO_WORKSPACE = '11111111-1111-4111-8111-111111111111';
 
-const args = process.argv.slice(2);
-const flag = (name: string): boolean => args.includes(name);
-const option = (name: string, fallback: string): string => {
-  const i = args.indexOf(name);
-  return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
-};
+const str = { type: 'string' } as const;
+const bool = { type: 'boolean' } as const;
+const { values } = parseArgs({
+  // Strict: an unknown or misspelt flag fails the run instead of being ignored.
+  options: {
+    tune: bool, learner: bool, captures: bool, generate: bool, 'export-feedback': bool, report: bool, reembed: bool, verbose: bool,
+    workspace: str, limit: str, k: str, as: str, out: str, from: str, to: str, feedback: str, with: str, 'capture-limit': str, 'min-size': str,
+  },
+});
+const arg = (name: string): string | boolean | undefined => values[name.replace(/^--/, '') as keyof typeof values];
+const flag = (name: string): boolean => arg(name) !== undefined;
+const option = (name: string, fallback: string): string => (arg(name) as string | undefined) || fallback;
 
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0;

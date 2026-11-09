@@ -179,7 +179,7 @@ describe('CommunitiesService', () => {
     await svc.overview(systemScope(WS), undefined, 10);
     expect(embeddings.embed).not.toHaveBeenCalled();
     await svc.overview(systemScope(WS), 'what are our risks?', 10);
-    expect(graph.communities).toHaveBeenLastCalledWith(WS, expect.any(Function), [1, 0]);
+    expect(graph.communities).toHaveBeenLastCalledWith(WS, [1, 0]);
   });
 
   it('colours only pages of communities the reader may see whole', async () => {

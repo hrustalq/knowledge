@@ -1,6 +1,6 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import type { ChatCompletionFunctionTool } from 'openai/resources/chat/completions';
-import { ASSISTANT_TASK_TOOL_NAMES, connectorKindInfo } from '@knowledge/contracts';
+import { connectorKindInfo } from '@knowledge/contracts';
 import type { ConnectorWorkItemInfo } from '@knowledge/contracts';
 import { AccessService } from '../auth/access.service.js';
 import { wrapUntrusted } from '../common/untrusted.js';
@@ -336,6 +336,3 @@ function brief(item: ConnectorWorkItemInfo) {
     updatedAt: item.externalUpdatedAt,
   };
 }
-
-/** Re-exported so a caller can assert the catalogue and the definitions agree. */
-export const TASK_TOOL_NAMES = ASSISTANT_TASK_TOOL_NAMES;

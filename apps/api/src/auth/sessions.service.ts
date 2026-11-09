@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import type { Session, User } from '@prisma/client';
 import { authMethodOf, type AuthMethod, type SessionView } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
+import type { Env } from '../config/env.js';
 
 /**
  * What a new session records about how it was opened (#75). Every field is
@@ -32,7 +33,7 @@ const TOUCH_EVERY_MS = 60_000;
 export class SessionsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
+    private readonly config: ConfigService<Env, true>,
   ) {}
 
   private hash(token: string): string {
@@ -44,7 +45,7 @@ export class SessionsService {
     await this.prisma.session.deleteMany({ where: { expiresAt: { lt: new Date() } } });
 
     const token = `ks_${randomBytes(32).toString('hex')}`;
-    const ttlHours = meta.ttlHours ?? this.config.get<number>('AUTH_SESSION_TTL_HOURS') ?? 720;
+    const ttlHours: number = meta.ttlHours ?? this.config.get('AUTH_SESSION_TTL_HOURS', { infer: true });
     const session = await this.prisma.session.create({
       data: {
         userId,

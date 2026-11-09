@@ -40,9 +40,9 @@ export class AgentTriggersService {
     private readonly registry: AgentRegistryService,
     config: ConfigService<Env, true>,
   ) {
-    this.defaultCooldown = Number(config.get('AGENT_TRIGGER_COOLDOWN_MINUTES', { infer: true }) ?? 60);
+    this.defaultCooldown = config.get('AGENT_TRIGGER_COOLDOWN_MINUTES', { infer: true });
     this.listening = config.get('AGENT_TRIGGERS_ENABLED', { infer: true }) === true;
-    this.apiPublicUrl = String(config.get('API_PUBLIC_URL', { infer: true }) ?? '').replace(/\/+$/, '');
+    this.apiPublicUrl = config.get('API_PUBLIC_URL', { infer: true }).replace(/\/+$/, '');
     this.key = parseKey(config.get('SETTINGS_ENCRYPTION_KEY', { infer: true }));
   }
 

@@ -32,7 +32,7 @@ export class WorkflowSweeper implements OnModuleInit, OnModuleDestroy {
     private readonly runner: WorkflowRunnerService,
     config: ConfigService<Env, true>,
   ) {
-    this.staleMs = Number(config.get('WORKFLOW_NODE_STALE_MS', { infer: true }) ?? 15 * 60_000);
+    this.staleMs = config.get('WORKFLOW_NODE_STALE_MS', { infer: true });
   }
 
   onModuleInit(): void {

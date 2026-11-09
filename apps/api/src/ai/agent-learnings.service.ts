@@ -87,7 +87,7 @@ export class AgentLearningsService {
     private readonly prisma: PrismaService,
     config: ConfigService<Env, true>,
   ) {
-    this.promptLimit = Number(config.get('AGENT_LEARNINGS_MAX', { infer: true }) ?? 20);
+    this.promptLimit = config.get('AGENT_LEARNINGS_MAX', { infer: true });
   }
 
   async list(

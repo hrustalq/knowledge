@@ -9,6 +9,7 @@ import { t, withLocale } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { KnowledgeIssuesService, REPORT_AGENT_KEY } from './knowledge-issues.service.js';
 import { Ticker } from '../common/ticker.js';
+import type { Env } from '../config/env.js';
 
 const SWEEP_INTERVAL_MS = 15_000;
 const BATCH = 5;
@@ -61,7 +62,7 @@ export class ReportPublishSweeper implements OnModuleInit, OnModuleDestroy {
     private readonly issues: KnowledgeIssuesService,
     private readonly findings: AgentFindingsService,
     private readonly access: AccessService,
-    private readonly env: ConfigService,
+    private readonly env: ConfigService<Env, true>,
   ) {}
 
   onModuleInit(): void {
@@ -186,7 +187,7 @@ export class ReportPublishSweeper implements OnModuleInit, OnModuleDestroy {
    * nobody acted on is still a report.
    */
   async purge(): Promise<void> {
-    const days = this.env.get<number>('ANSWER_FEEDBACK_RETENTION_DAYS') ?? 180;
+    const days = this.env.get('ANSWER_FEEDBACK_RETENTION_DAYS', { infer: true });
     const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
     let removed = 0;
     for (let i = 0; i < PURGE_MAX_BATCHES; i += 1) {

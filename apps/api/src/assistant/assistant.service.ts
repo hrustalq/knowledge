@@ -80,6 +80,7 @@ import { DecisionClient } from './decision.client.js';
 import { ProvenanceService } from '../feedback/provenance.service.js';
 import { AnswerFeedbackService } from '../feedback/answer-feedback.service.js';
 import { parseModelJson } from '../common/model-json.js';
+import type { Env } from '../config/env.js';
 
 const SEVERITIES = ['error', 'warning', 'suggestion'] as const;
 
@@ -334,39 +335,24 @@ export class AssistantService {
     private readonly provenance: ProvenanceService,
     private readonly feedback: AnswerFeedbackService,
     private readonly templates: TemplatesService,
-    private readonly env: ConfigService,
+    private readonly env: ConfigService<Env, true>,
     private readonly permissions: PermissionService,
     private readonly learnings: AgentLearningsService,
     private readonly decision: DecisionClient,
   ) {}
 
   /**
-   * Every LLM entry point starts here: resolve this workspace's effective
-   * config (feature 12 — DB overrides ∪ env), then refuse early if the caller
-   * has spent their monthly token budget. Returns null when the assistant is
-   * disabled, which each caller renders as its own degraded `enabled: false`
-   * response rather than an error.
-   */
-  /**
    * Config for `ask`, the one entry point not backed by an agent (see the NOTE
-   * in {@link ask}). The chat paths went through here too until they resolved
-   * their agent, whose config then replaced this one for the actual call — a
-   * second `resolveFor` round trip per turn whose result was thrown away. They
-   * now open on the agent directly ({@link openTurn}).
+   * in {@link ask}): this workspace's `chat` route (feature 12), then a refusal
+   * if the caller has spent their monthly token budget. Null when the assistant
+   * is disabled, which `ask` renders as `enabled: false` rather than an error.
+   * The chat paths open on their agent instead ({@link openTurn}).
    */
-  private async openCall(
-    workspaceId: string,
-    principal: Principal,
-    operation: AiCallContext['operation'],
-    threadId?: string,
-    /** Model the member pinned to this thread, if any. */
-    pinnedModelId?: string | null,
-  ): Promise<AiCallContext | null> {
-    const purpose = operation === 'review' || operation === 'suggest' ? 'review' : 'chat';
-    const config = await this.aiConfig.resolveFor(workspaceId, purpose, pinnedModelId);
+  private async openAskCall(workspaceId: string, principal: Principal): Promise<AiCallContext | null> {
+    const config = await this.aiConfig.resolveFor(workspaceId, 'chat');
     if (!config.enabled) return null;
     await this.aiUsage.assertWithinBudget(workspaceId, principal.userId);
-    return { config, userId: principal.userId, operation, threadId, locale: principal.locale };
+    return { config, userId: principal.userId, operation: 'ask', locale: principal.locale };
   }
 
   /**
@@ -462,7 +448,7 @@ export class AssistantService {
     if (!document || document.workspaceId !== dto.workspaceId || !canSee(scope, document)) {
       throw new NotFoundException(t('error.document.notFoundInWorkspace', { id: dto.documentId }));
     }
-    const call = await this.openCall(dto.workspaceId, principal, 'ask');
+    const call = await this.openAskCall(dto.workspaceId, principal);
     const askTrail = await this.documents.breadcrumbsFor(scope, [document.id]);
     const groundingTrail = askTrail.get(document.id) ? ` — in ${askTrail.get(document.id)}` : '';
     if (!call) {
@@ -603,7 +589,7 @@ export class AssistantService {
         trace,
         toolErrors,
         maxToolCalls,
-        staleAfterDays: this.env.get<number>('ANSWER_STALE_SOURCE_DAYS') ?? 180,
+        staleAfterDays: this.env.get('ANSWER_STALE_SOURCE_DAYS', { infer: true }),
       }),
     );
     return { text: final.text, sources, citations: final.citations, confidence };
@@ -878,7 +864,7 @@ export class AssistantService {
     // same thread pin) — it is simply no longer done twice.
     const agent = await this.resolveTurnAgent(thread, dto, mode);
     // Deliberately `config.enabled` and not `agent.enabled`: this is the
-    // provider check `openCall` made, and it is the one this message describes.
+    // provider check `openAskCall` makes, and it is the one this message describes.
     // A *disabled agent* reaching here can only be the mode's fallback, which
     // `resolveTurnAgent` returns unfiltered — reporting that as "the assistant
     // is disabled" would be wrong, and refusing the turn over it is a

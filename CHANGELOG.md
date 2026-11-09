@@ -15,6 +15,20 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Changed
+
+- **The maintenance scripts now refuse a flag they do not know.** `make backtest`, `make tune`,
+  `make graph-live-backfill`, `make page-links-backfill` and `make auth-bootstrap` used to ignore an unknown or
+  misspelt flag, so `ARGS="--worksapce <id>"` quietly ran against the demo workspace (or every workspace). They now
+  stop with an "unknown option" error before doing anything. Every documented flag works as before. (#824)
+
+### Removed
+
+- **`IMPORT_OCR_MAX_PAGES`.** It was documented as the cap on what one scanned PDF could spend on OCR, but nothing
+  read it, and there was nothing to cap: an image import sends exactly one image to the vision model, and a scanned
+  PDF is never sent to a model at all (it imports with a "this looks scanned" warning). A deployment that still sets
+  it starts normally and the value is ignored. (#824)
+
 ### Security
 
 - **A page you cannot open no longer reaches the assistant through the composer's "Apply documents" list.** Its

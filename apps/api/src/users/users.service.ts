@@ -20,6 +20,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { userAvatarUrl } from '../common/avatar-url.js';
 import type { CreateUserDto, UpdateUserDto } from './users.dto.js';
 import { currentLocale, t } from '../i18n/t.js';
+import type { Env } from '../config/env.js';
 
 /** Users management (platform admin surface — AclGuard enforces @PlatformAdmin). */
 
@@ -31,7 +32,7 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly sessions: SessionsService,
     private readonly mail: MailProducer,
-    private readonly config: ConfigService,
+    private readonly config: ConfigService<Env, true>,
     private readonly audit: AuditService,
   ) {}
 
@@ -67,7 +68,7 @@ export class UsersService {
       // A redeemed invite also proves the address, the way a reset does.
       if (!passwordHash) {
         const { token, tokenHash } = mintToken('kr_');
-        const hours = this.config.get<number>('AUTH_INVITE_TTL_HOURS') ?? 72;
+        const hours = this.config.get('AUTH_INVITE_TTL_HOURS', { infer: true });
         await this.prisma.passwordResetToken.create({
           data: { userId: created.id, tokenHash, purpose: 'invite', expiresAt: new Date(Date.now() + hours * 3_600_000) },
         });

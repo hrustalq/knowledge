@@ -1468,15 +1468,11 @@ export class GraphService {
 
   /**
    * Communities, closest to `queryEmbedding` first (or as stored without
-   * one). Vectors stay here; callers get the score. `admit` drops a community
-   * any of whose pages the reader may not open — its summary was written from
-   * all of them (#76).
+   * one). Vectors stay here; callers get the score. Unfiltered: the caller
+   * withholds a community any of whose pages the reader may not open — its
+   * summary was written from all of them (#76).
    */
-  async communities(
-    workspaceId: string,
-    admit: (members: readonly string[]) => boolean,
-    queryEmbedding?: number[],
-  ): Promise<Array<StoredCommunity & { builtAt: number; score: number }>> {
+  async communities(workspaceId: string, queryEmbedding?: number[]): Promise<Array<StoredCommunity & { builtAt: number; score: number }>> {
     const rows = await this.arcade
       .query<Omit<StoredCommunity, 'level' | 'parentId'> & { level?: number | null; parentId?: string | null; embedding: number[]; builtAt: number }>(
         'sql',
@@ -1485,7 +1481,6 @@ export class GraphService {
       )
       .catch(ignoreMissingType([]));
     return rows
-      .filter((r) => admit(r.members ?? []))
       .map((r) => ({
         communityId: r.communityId,
         // Rows built before #475 have neither: one level, all roots.

@@ -2,11 +2,9 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
-import { Prisma, type Connector, type EmbedFile, type EmbedNode } from '@prisma/client';
+import { Prisma, type EmbedNode } from '@prisma/client';
 import {
-  FIGMA_ALLOWLIST_CONFIG_KEY,
   parseEmbedUrl,
-  parseFigmaAllowlist,
   type EmbedItemState,
   type EmbedItemStatus,
   type EmbedWarning,
@@ -183,7 +181,7 @@ export class EmbedsService {
    * with the captions of each matching group. Visibility and listing are
    * decided in PG, in the same statement, under the caller's scope.
    */
-  async usages(scope: AccessScope, ref: { fileKey: string; nodeId?: string | null }, limit = 25) {
+  async usages(scope: AccessScope, ref: { fileKey: string; nodeId?: string | null }) {
     // A group matches when any of its items is this file (and node); every item of a matching group is returned.
     const node = ref.nodeId === undefined || ref.nodeId === null ? Prisma.sql`TRUE` : Prisma.sql`x.node_id = ${ref.nodeId}`;
     const rows = await this.prisma.$queryRaw<
@@ -205,7 +203,8 @@ export class EmbedsService {
       group.push({ url: r.url, caption: r.caption, version: r.version });
       page.groups.set(r.group_index, group);
     }
-    return [...pages.values()].slice(0, limit).map((p) => ({
+    // ponytail: reads every embedding row and keeps the first 25 pages in Node; a page-level LIMIT in SQL if one file is embedded on thousands of pages.
+    return [...pages.values()].slice(0, 25).map((p) => ({
       documentId: p.documentId,
       title: p.title,
       revisionId: p.revisionId,

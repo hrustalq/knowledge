@@ -53,6 +53,7 @@ import { lintGateEnforced, overridable } from './lint/lint-check.js';
 import { ProjectCommitsService, type PagePlace } from '../git/project-commits.service.js';
 import { sourcePages } from './mr-pages.js';
 import { hasConflictMarkers, threeWay, type ThreeWayResult } from './three-way.js';
+import type { Env } from '../config/env.js';
 
 /** Fallback author when no principal is supplied (AUTH_MODE=none, MCP stdio). */
 export const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
@@ -135,7 +136,7 @@ export class MergeRequestsService {
     private readonly compare: CompareService,
     private readonly activity: ActivityService,
     private readonly access: AccessService,
-    private readonly config: ConfigService,
+    private readonly config: ConfigService<Env, true>,
     private readonly notifications: NotificationsService,
     // See DocumentThreadsService: NotificationsService cannot publish, so the
     // frames for `assigned` and `review-requested` are announced from here.
@@ -964,7 +965,7 @@ export class MergeRequestsService {
     // dev principal IS the zeros author stub (self-approval could never pass),
     // and MCP stdio has no principal. Same trust semantics as requireRole.
     const requiredApprovals =
-      principal && principal.mode !== 'dev' ? (this.config.get<number>('MR_REQUIRED_APPROVALS') ?? 1) : 0;
+      principal && principal.mode !== 'dev' ? this.config.get('MR_REQUIRED_APPROVALS', { infer: true }) : 0;
     const approvals = this.approvers(mr).filter((id) => id !== mr.authorId).length;
     if (approvals < requiredApprovals) {
       throw new ConflictException({

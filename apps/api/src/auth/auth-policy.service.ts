@@ -12,6 +12,7 @@ import { AuditService } from './audit.service.js';
 import type { Principal } from './principal.js';
 import { breakGlassEmails } from './password-policy.js';
 import { liveIdpKinds } from './sso/live-kinds.js';
+import type { Env } from '../config/env.js';
 
 /** How long a workspace's policy is trusted in-process. Writes in this process invalidate at once. */
 const POLICY_TTL_MS = 30_000;
@@ -89,7 +90,7 @@ export class AuthPolicyService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
+    private readonly config: ConfigService<Env, true>,
     private readonly audit: AuditService,
   ) {}
 
@@ -99,7 +100,7 @@ export class AuthPolicyService {
   }
 
   get sessionTtlHours(): number {
-    return this.config.get<number>('AUTH_SESSION_TTL_HOURS') ?? 720;
+    return this.config.get('AUTH_SESSION_TTL_HOURS', { infer: true });
   }
 
   async effective(workspaceId: string): Promise<EffectivePolicy> {

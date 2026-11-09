@@ -77,6 +77,7 @@ describe('AgentWebhookController', () => {
       AGENT_WEBHOOK_MAX_BYTES: opts.maxBytes ?? 1024,
       AGENT_WEBHOOK_TOLERANCE_SECONDS: 300,
       SETTINGS_ENCRYPTION_KEY: KEY_B64,
+      API_PUBLIC_URL: 'http://localhost:3000',
     };
     const config = { get: (k: string) => values[k] };
     const prisma = { agentTrigger: { findUnique: vi.fn(async () => (opts.row === undefined ? trigger() : opts.row)) } };
@@ -96,10 +97,11 @@ describe('AgentWebhookController', () => {
     const sig = createHmac('sha256', over.secret ?? SECRET)
       .update(`${ts}.${over.signBody ?? body}`)
       .digest('hex');
+    // Lowercase, as Node hands them to `@Headers()`.
     const headers: Record<string, string> = {
-      'X-Knowledge-Signature': `sha256=${sig}`,
-      'X-Knowledge-Timestamp': ts,
-      ...(over.delivery === null ? {} : { 'X-Knowledge-Delivery': over.delivery ?? 'dlv-1' }),
+      'x-knowledge-signature': `sha256=${sig}`,
+      'x-knowledge-timestamp': ts,
+      ...(over.delivery === null ? {} : { 'x-knowledge-delivery': over.delivery ?? 'dlv-1' }),
     };
     return c.receive(TRIGGER_ID, headers, { rawBody: Buffer.from(body) } as never);
   };

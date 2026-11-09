@@ -1,0 +1,2208 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`the offered tool set (#822) > a capture key 1`] = `
+{
+  "prompts": [
+    "guide 7de6e8d31452cf87",
+  ],
+  "resourceTemplates": [
+    "document-markdown knowledge://documents/{documentId}.md bddb331c7d754acc",
+    "project-llms-txt knowledge://projects/{projectId}/llms.txt eb21e4d7dafabeb0",
+    "workspace-llms-txt knowledge://workspaces/{workspaceId}/llms.txt 08350f6e851fe33e",
+  ],
+  "resources": [
+    "skill knowledge://skill 767cb5acd79c4b0b",
+  ],
+  "tools": [
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_capture_decision",
+      "schema": "9d4f573690065c29",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_capture_note",
+      "schema": "8f13fcb1c8d92168",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_code_usages",
+      "schema": "b73c0e96a64583f2",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_compare_revisions",
+      "schema": "b44c80db198f6d37",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_diff_api_spec",
+      "schema": "11214c6c322c2448",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_export",
+      "schema": "2be070814f328e24",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_find_embeds",
+      "schema": "b566df294cc9ef8d",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_find_relations",
+      "schema": "b004acc3972a34e9",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_find_similar",
+      "schema": "23299c65125e33a7",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_api_operation",
+      "schema": "bd6e91e1f4563827",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_connector_run",
+      "schema": "e821990eeef2c7be",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_document",
+      "schema": "ea6765e73816b2c3",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_document_content",
+      "schema": "63a0ab6a709d56e6",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_draft",
+      "schema": "e88550c065e0ff65",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_embed",
+      "schema": "5b26e44e3e849d55",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_export",
+      "schema": "5ad951b611c98537",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_historical_context",
+      "schema": "3c9096c5ab38d920",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_memo",
+      "schema": "4272f89055f696dd",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_merge_request",
+      "schema": "49f537fae6f2e25a",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_page_access",
+      "schema": "d6565a368dbdaa86",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_page_insights",
+      "schema": "f4c695c149e7c0e7",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_page_quality",
+      "schema": "22ad40a52902178b",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_template",
+      "schema": "4df177a44d2ea7cd",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_test_fixture",
+      "schema": "7863aa51cff4ad9b",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_test_run",
+      "schema": "4ae94d8634a51ebf",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_test_run_plan",
+      "schema": "13b37dee63ef377e",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_test_suite",
+      "schema": "4bef392bf4d4f72b",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_workflow_run",
+      "schema": "a0c272de7c16cfef",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_workspace_graph",
+      "schema": "83207ead4e476dd9",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_global_overview",
+      "schema": "cdafd2857fad59c1",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_impact_analysis",
+      "schema": "801ae8e055a01983",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_lint_draft",
+      "schema": "a3c725d5bb3569ba",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_agent_learnings",
+      "schema": "d9bc3b1557814b4f",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_agents",
+      "schema": "f2c839e0b66651aa",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_api_operations",
+      "schema": "a5272ff6b1945a22",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_blueprints",
+      "schema": "20321213d8506473",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_branches",
+      "schema": "e8494168749645e1",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_captures",
+      "schema": "15fca86ac69195c3",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_conflicts",
+      "schema": "0fef26c5143e38a7",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_connectors",
+      "schema": "a76416654010aab7",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_documents",
+      "schema": "38daa6938ffb5b18",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_memos",
+      "schema": "300499186bd9ac8b",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_merge_requests",
+      "schema": "166b32732d9f7716",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_projects",
+      "schema": "4e5ebed78d228a8f",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_release_tags",
+      "schema": "8c5b58bbe7d2b916",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_revisions",
+      "schema": "9bc30b93a119851e",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_search_gaps",
+      "schema": "1d4cf5fe467d1c81",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_templates",
+      "schema": "16f254938e425df6",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_test_fixtures",
+      "schema": "6b620e711a1a00f7",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_work_items",
+      "schema": "482834b9d678abc3",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_workflows",
+      "schema": "24de6e3eae7682cb",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_propose_answer",
+      "schema": "d2a71e6462ec7b11",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_propose_glossary_term",
+      "schema": "fdd73082ce325ba0",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_propose_relation",
+      "schema": "9efc2ac758f6602c",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_qa_overview",
+      "schema": "eca0121079cd9b9d",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_query_graph",
+      "schema": "1c6b5609ec3bea94",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_repo_wiki",
+      "schema": "4af003da5aa8a43b",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_search",
+      "schema": "4af710db1c03be6a",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_search_chat",
+      "schema": "94d30e2a8cfd658f",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_suggest_test_fixtures",
+      "schema": "59a2eca171f92243",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_trace_relation",
+      "schema": "e2efd867caf0bbe2",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_whoami",
+      "schema": "881d165a89026485",
+    },
+  ],
+}
+`;
+
+exports[`the offered tool set (#822) > a read key 1`] = `
+{
+  "prompts": [
+    "guide 7de6e8d31452cf87",
+  ],
+  "resourceTemplates": [
+    "document-markdown knowledge://documents/{documentId}.md bddb331c7d754acc",
+    "project-llms-txt knowledge://projects/{projectId}/llms.txt eb21e4d7dafabeb0",
+    "workspace-llms-txt knowledge://workspaces/{workspaceId}/llms.txt 08350f6e851fe33e",
+  ],
+  "resources": [
+    "skill knowledge://skill 767cb5acd79c4b0b",
+  ],
+  "tools": [
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_code_usages",
+      "schema": "b73c0e96a64583f2",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_compare_revisions",
+      "schema": "b44c80db198f6d37",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_diff_api_spec",
+      "schema": "11214c6c322c2448",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_export",
+      "schema": "2be070814f328e24",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_find_embeds",
+      "schema": "b566df294cc9ef8d",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_find_relations",
+      "schema": "b004acc3972a34e9",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_find_similar",
+      "schema": "23299c65125e33a7",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_api_operation",
+      "schema": "bd6e91e1f4563827",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_connector_run",
+      "schema": "e821990eeef2c7be",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_document",
+      "schema": "ea6765e73816b2c3",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_document_content",
+      "schema": "63a0ab6a709d56e6",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_draft",
+      "schema": "e88550c065e0ff65",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_embed",
+      "schema": "5b26e44e3e849d55",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_export",
+      "schema": "5ad951b611c98537",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_historical_context",
+      "schema": "3c9096c5ab38d920",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_memo",
+      "schema": "4272f89055f696dd",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_merge_request",
+      "schema": "49f537fae6f2e25a",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_page_access",
+      "schema": "d6565a368dbdaa86",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_page_insights",
+      "schema": "f4c695c149e7c0e7",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_page_quality",
+      "schema": "22ad40a52902178b",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_template",
+      "schema": "4df177a44d2ea7cd",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_test_fixture",
+      "schema": "7863aa51cff4ad9b",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_test_run",
+      "schema": "4ae94d8634a51ebf",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_test_run_plan",
+      "schema": "13b37dee63ef377e",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_test_suite",
+      "schema": "4bef392bf4d4f72b",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_workflow_run",
+      "schema": "a0c272de7c16cfef",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_workspace_graph",
+      "schema": "83207ead4e476dd9",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_global_overview",
+      "schema": "cdafd2857fad59c1",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_impact_analysis",
+      "schema": "801ae8e055a01983",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_lint_draft",
+      "schema": "a3c725d5bb3569ba",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_agent_learnings",
+      "schema": "d9bc3b1557814b4f",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_agents",
+      "schema": "f2c839e0b66651aa",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_api_operations",
+      "schema": "a5272ff6b1945a22",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_blueprints",
+      "schema": "20321213d8506473",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_branches",
+      "schema": "e8494168749645e1",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_captures",
+      "schema": "15fca86ac69195c3",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_conflicts",
+      "schema": "0fef26c5143e38a7",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_connectors",
+      "schema": "a76416654010aab7",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_documents",
+      "schema": "38daa6938ffb5b18",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_memos",
+      "schema": "300499186bd9ac8b",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_merge_requests",
+      "schema": "166b32732d9f7716",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_projects",
+      "schema": "4e5ebed78d228a8f",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_release_tags",
+      "schema": "8c5b58bbe7d2b916",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_revisions",
+      "schema": "9bc30b93a119851e",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_search_gaps",
+      "schema": "1d4cf5fe467d1c81",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_templates",
+      "schema": "16f254938e425df6",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_test_fixtures",
+      "schema": "6b620e711a1a00f7",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_work_items",
+      "schema": "482834b9d678abc3",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_workflows",
+      "schema": "24de6e3eae7682cb",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_qa_overview",
+      "schema": "eca0121079cd9b9d",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_query_graph",
+      "schema": "1c6b5609ec3bea94",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_repo_wiki",
+      "schema": "4af003da5aa8a43b",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_search",
+      "schema": "4af710db1c03be6a",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_search_chat",
+      "schema": "94d30e2a8cfd658f",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_suggest_test_fixtures",
+      "schema": "59a2eca171f92243",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_trace_relation",
+      "schema": "e2efd867caf0bbe2",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_whoami",
+      "schema": "881d165a89026485",
+    },
+  ],
+}
+`;
+
+exports[`the offered tool set (#822) > a write key 1`] = `
+{
+  "prompts": [
+    "guide 7de6e8d31452cf87",
+  ],
+  "resourceTemplates": [
+    "document-markdown knowledge://documents/{documentId}.md bddb331c7d754acc",
+    "project-llms-txt knowledge://projects/{projectId}/llms.txt eb21e4d7dafabeb0",
+    "workspace-llms-txt knowledge://workspaces/{workspaceId}/llms.txt 08350f6e851fe33e",
+  ],
+  "resources": [
+    "skill knowledge://skill 767cb5acd79c4b0b",
+  ],
+  "tools": [
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_approve_merge_request",
+      "schema": "fb0ea0feb5b9bfd4",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_capture_decision",
+      "schema": "9d4f573690065c29",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_capture_note",
+      "schema": "8f13fcb1c8d92168",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_close_merge_request",
+      "schema": "e18764ed0c2d31f1",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_code_usages",
+      "schema": "b73c0e96a64583f2",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_comment_merge_request",
+      "schema": "f99a7dc934565e9d",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_compare_revisions",
+      "schema": "b44c80db198f6d37",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_create_branch",
+      "schema": "9ccba339051cf1f9",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_create_document",
+      "schema": "b2efe32afd4dfe16",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_create_merge_request",
+      "schema": "a7be82f272240288",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_create_release_tag",
+      "schema": "e362f0476e765108",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_create_revision",
+      "schema": "4553bc2905ab3999",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_diff_api_spec",
+      "schema": "11214c6c322c2448",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_document_component",
+      "schema": "d08f011e8a9f8703",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_export",
+      "schema": "2be070814f328e24",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_feedback",
+      "schema": "65d5bef02a2390f9",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_finalize_upload",
+      "schema": "d9c90052e88092c6",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_find_embeds",
+      "schema": "b566df294cc9ef8d",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_find_relations",
+      "schema": "b004acc3972a34e9",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_find_similar",
+      "schema": "23299c65125e33a7",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_flag_document",
+      "schema": "66658bba3cbf37c9",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_generate_test_suite",
+      "schema": "43b37dcb92f0c3c6",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_api_operation",
+      "schema": "bd6e91e1f4563827",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_connector_run",
+      "schema": "e821990eeef2c7be",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_document",
+      "schema": "ea6765e73816b2c3",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_document_content",
+      "schema": "63a0ab6a709d56e6",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_draft",
+      "schema": "e88550c065e0ff65",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_embed",
+      "schema": "5b26e44e3e849d55",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_export",
+      "schema": "5ad951b611c98537",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_historical_context",
+      "schema": "3c9096c5ab38d920",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_memo",
+      "schema": "4272f89055f696dd",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_merge_request",
+      "schema": "49f537fae6f2e25a",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_page_access",
+      "schema": "d6565a368dbdaa86",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_page_insights",
+      "schema": "f4c695c149e7c0e7",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_page_quality",
+      "schema": "22ad40a52902178b",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_template",
+      "schema": "4df177a44d2ea7cd",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_test_fixture",
+      "schema": "7863aa51cff4ad9b",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_test_run",
+      "schema": "4ae94d8634a51ebf",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_test_run_plan",
+      "schema": "13b37dee63ef377e",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_test_suite",
+      "schema": "4bef392bf4d4f72b",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_workflow_run",
+      "schema": "a0c272de7c16cfef",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_workspace_graph",
+      "schema": "83207ead4e476dd9",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_global_overview",
+      "schema": "cdafd2857fad59c1",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_handoff_work_item",
+      "schema": "0d7876735b5ad0ba",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_impact_analysis",
+      "schema": "801ae8e055a01983",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_ingest",
+      "schema": "071ea10f10f7f906",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_lint_draft",
+      "schema": "a3c725d5bb3569ba",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_agent_learnings",
+      "schema": "d9bc3b1557814b4f",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_agents",
+      "schema": "f2c839e0b66651aa",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_api_operations",
+      "schema": "a5272ff6b1945a22",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_blueprints",
+      "schema": "20321213d8506473",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_branches",
+      "schema": "e8494168749645e1",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_captures",
+      "schema": "15fca86ac69195c3",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_conflicts",
+      "schema": "0fef26c5143e38a7",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_connectors",
+      "schema": "a76416654010aab7",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_documents",
+      "schema": "38daa6938ffb5b18",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_memos",
+      "schema": "300499186bd9ac8b",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_merge_requests",
+      "schema": "166b32732d9f7716",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_projects",
+      "schema": "4e5ebed78d228a8f",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_release_tags",
+      "schema": "8c5b58bbe7d2b916",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_revisions",
+      "schema": "9bc30b93a119851e",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_search_gaps",
+      "schema": "1d4cf5fe467d1c81",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_templates",
+      "schema": "16f254938e425df6",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_test_fixtures",
+      "schema": "6b620e711a1a00f7",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_work_items",
+      "schema": "482834b9d678abc3",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_workflows",
+      "schema": "24de6e3eae7682cb",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_merge_revision",
+      "schema": "80a610a75d261001",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_patch_document",
+      "schema": "9797aeca3b3ce06a",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_propose_agent_learning",
+      "schema": "88a4ae3f367b9555",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_propose_answer",
+      "schema": "d2a71e6462ec7b11",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_propose_glossary_term",
+      "schema": "fdd73082ce325ba0",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_propose_relation",
+      "schema": "9efc2ac758f6602c",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_qa_overview",
+      "schema": "eca0121079cd9b9d",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_query_graph",
+      "schema": "1c6b5609ec3bea94",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_regenerate_wiki",
+      "schema": "b933d3726f9197a6",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_repo_wiki",
+      "schema": "4af003da5aa8a43b",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_report_issue",
+      "schema": "a7a870e982d63e04",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_request_access",
+      "schema": "200af52730af6bbf",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_resolve_conflict",
+      "schema": "9dd6fbc8f69c5524",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_run_test_suite",
+      "schema": "b7b91acd2b023f32",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_scaffold_project",
+      "schema": "642f0af291a5cd0f",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_search",
+      "schema": "4af710db1c03be6a",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_search_chat",
+      "schema": "94d30e2a8cfd658f",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_set_test_fixtures",
+      "schema": "95217f00cfddc453",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_share_page",
+      "schema": "67a3475ecfe8eabd",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_start_upload",
+      "schema": "5eb6a965b4edb719",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_start_workflow",
+      "schema": "40cc5c827988896d",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_suggest_draft_edit",
+      "schema": "5d6e0cf443e0d623",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_suggest_test_fixtures",
+      "schema": "59a2eca171f92243",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_sync_connector",
+      "schema": "17ace47a645b69eb",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_trace_relation",
+      "schema": "e2efd867caf0bbe2",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_update_merge_request_branch",
+      "schema": "912544ad4ddfe270",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_whoami",
+      "schema": "881d165a89026485",
+    },
+  ],
+}
+`;
+
+exports[`the offered tool set (#822) > the stdio principal 1`] = `
+{
+  "prompts": [
+    "guide 7de6e8d31452cf87",
+  ],
+  "resourceTemplates": [
+    "document-markdown knowledge://documents/{documentId}.md bddb331c7d754acc",
+    "project-llms-txt knowledge://projects/{projectId}/llms.txt eb21e4d7dafabeb0",
+    "workspace-llms-txt knowledge://workspaces/{workspaceId}/llms.txt 08350f6e851fe33e",
+  ],
+  "resources": [
+    "skill knowledge://skill 767cb5acd79c4b0b",
+  ],
+  "tools": [
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_approve_merge_request",
+      "schema": "fb0ea0feb5b9bfd4",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_capture_decision",
+      "schema": "9d4f573690065c29",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_capture_note",
+      "schema": "8f13fcb1c8d92168",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_close_merge_request",
+      "schema": "e18764ed0c2d31f1",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_code_usages",
+      "schema": "b73c0e96a64583f2",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_comment_merge_request",
+      "schema": "f99a7dc934565e9d",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_compare_revisions",
+      "schema": "b44c80db198f6d37",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_create_branch",
+      "schema": "9ccba339051cf1f9",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_create_document",
+      "schema": "b2efe32afd4dfe16",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_create_merge_request",
+      "schema": "a7be82f272240288",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_create_release_tag",
+      "schema": "e362f0476e765108",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_create_revision",
+      "schema": "4553bc2905ab3999",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_diff_api_spec",
+      "schema": "11214c6c322c2448",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_document_component",
+      "schema": "d08f011e8a9f8703",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_export",
+      "schema": "2be070814f328e24",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_feedback",
+      "schema": "65d5bef02a2390f9",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_finalize_upload",
+      "schema": "d9c90052e88092c6",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_find_embeds",
+      "schema": "b566df294cc9ef8d",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_find_relations",
+      "schema": "b004acc3972a34e9",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_find_similar",
+      "schema": "23299c65125e33a7",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_flag_document",
+      "schema": "66658bba3cbf37c9",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_generate_test_suite",
+      "schema": "43b37dcb92f0c3c6",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_api_operation",
+      "schema": "bd6e91e1f4563827",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_connector_run",
+      "schema": "e821990eeef2c7be",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_document",
+      "schema": "ea6765e73816b2c3",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_document_content",
+      "schema": "63a0ab6a709d56e6",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_draft",
+      "schema": "e88550c065e0ff65",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_embed",
+      "schema": "5b26e44e3e849d55",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_export",
+      "schema": "5ad951b611c98537",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_historical_context",
+      "schema": "3c9096c5ab38d920",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_memo",
+      "schema": "4272f89055f696dd",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_merge_request",
+      "schema": "49f537fae6f2e25a",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_page_access",
+      "schema": "d6565a368dbdaa86",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_page_insights",
+      "schema": "f4c695c149e7c0e7",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_page_quality",
+      "schema": "22ad40a52902178b",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_template",
+      "schema": "4df177a44d2ea7cd",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_test_fixture",
+      "schema": "7863aa51cff4ad9b",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_test_run",
+      "schema": "4ae94d8634a51ebf",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_test_run_plan",
+      "schema": "13b37dee63ef377e",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_test_suite",
+      "schema": "4bef392bf4d4f72b",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_workflow_run",
+      "schema": "a0c272de7c16cfef",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_get_workspace_graph",
+      "schema": "83207ead4e476dd9",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_global_overview",
+      "schema": "cdafd2857fad59c1",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_handoff_work_item",
+      "schema": "0d7876735b5ad0ba",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_impact_analysis",
+      "schema": "801ae8e055a01983",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_ingest",
+      "schema": "071ea10f10f7f906",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_lint_draft",
+      "schema": "a3c725d5bb3569ba",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_agent_learnings",
+      "schema": "d9bc3b1557814b4f",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_agents",
+      "schema": "f2c839e0b66651aa",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_api_operations",
+      "schema": "a5272ff6b1945a22",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_blueprints",
+      "schema": "20321213d8506473",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_branches",
+      "schema": "e8494168749645e1",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_captures",
+      "schema": "15fca86ac69195c3",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_conflicts",
+      "schema": "0fef26c5143e38a7",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_connectors",
+      "schema": "a76416654010aab7",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_documents",
+      "schema": "38daa6938ffb5b18",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_memos",
+      "schema": "300499186bd9ac8b",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_merge_requests",
+      "schema": "166b32732d9f7716",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_projects",
+      "schema": "4e5ebed78d228a8f",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_release_tags",
+      "schema": "8c5b58bbe7d2b916",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_revisions",
+      "schema": "9bc30b93a119851e",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_search_gaps",
+      "schema": "1d4cf5fe467d1c81",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_templates",
+      "schema": "16f254938e425df6",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_test_fixtures",
+      "schema": "6b620e711a1a00f7",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_work_items",
+      "schema": "482834b9d678abc3",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_list_workflows",
+      "schema": "24de6e3eae7682cb",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_merge_revision",
+      "schema": "80a610a75d261001",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_patch_document",
+      "schema": "9797aeca3b3ce06a",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_propose_agent_learning",
+      "schema": "88a4ae3f367b9555",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_propose_answer",
+      "schema": "d2a71e6462ec7b11",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_propose_glossary_term",
+      "schema": "fdd73082ce325ba0",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_propose_relation",
+      "schema": "9efc2ac758f6602c",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_qa_overview",
+      "schema": "eca0121079cd9b9d",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_query_graph",
+      "schema": "1c6b5609ec3bea94",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_regenerate_wiki",
+      "schema": "b933d3726f9197a6",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_repo_wiki",
+      "schema": "4af003da5aa8a43b",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_report_issue",
+      "schema": "a7a870e982d63e04",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_request_access",
+      "schema": "200af52730af6bbf",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_resolve_conflict",
+      "schema": "9dd6fbc8f69c5524",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_run_test_suite",
+      "schema": "b7b91acd2b023f32",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_scaffold_project",
+      "schema": "642f0af291a5cd0f",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_search",
+      "schema": "4af710db1c03be6a",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_search_chat",
+      "schema": "94d30e2a8cfd658f",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_set_test_fixtures",
+      "schema": "95217f00cfddc453",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_share_page",
+      "schema": "67a3475ecfe8eabd",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_start_upload",
+      "schema": "5eb6a965b4edb719",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_start_workflow",
+      "schema": "40cc5c827988896d",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_suggest_draft_edit",
+      "schema": "5d6e0cf443e0d623",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_suggest_test_fixtures",
+      "schema": "59a2eca171f92243",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_sync_connector",
+      "schema": "17ace47a645b69eb",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_trace_relation",
+      "schema": "e2efd867caf0bbe2",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": false,
+      },
+      "name": "knowledge_update_merge_request_branch",
+      "schema": "912544ad4ddfe270",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_whoami",
+      "schema": "881d165a89026485",
+    },
+  ],
+}
+`;

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { McpController } from '../src/mcp/mcp.controller.js';
@@ -1801,5 +1802,39 @@ describe('tools that copy a REST twin keep its checks (#812)', () => {
     const res = await client.callTool({ name: 'knowledge_sync_connector', arguments: { connectorId: '44444444-4444-4444-8444-444444444444' } });
     expect(res.isError).toBeFalsy();
     expect(createRun).toHaveBeenCalledWith(row, 'pull', 'manual', { externalIds: undefined, actorId: principal.userId });
+  });
+});
+
+/**
+ * What each kind of caller is offered, pinned (#822): splitting `buildServer`
+ * into per-section registrars must leave every name, annotation, description
+ * and schema exactly as it was. Descriptions and schemas are digested so the
+ * snapshot stays readable; any edit to one changes its digest.
+ */
+describe('the offered tool set (#822)', () => {
+  const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0, 16);
+  const byName = <T extends { name: string }>(rows: T[]) => [...rows].sort((a, b) => a.name.localeCompare(b.name));
+
+  it.each([
+    ['the stdio principal', DEV_PRINCIPAL],
+    ['a write key', keyPrincipal({ id: 'k', scope: 'write', workspaceId: null })],
+    ['a capture key', keyPrincipal({ id: 'k', scope: 'capture', workspaceId: null })],
+    ['a read key', keyPrincipal({ id: 'k', scope: 'read', workspaceId: null })],
+  ])('%s', async (_who, principal) => {
+    const client = await connect(service(accessWith('admin')).mcp, principal, { drafts: fakeDrafts() });
+    const { tools } = await client.listTools();
+    const { resources } = await client.listResources();
+    const { resourceTemplates } = await client.listResourceTemplates();
+    const { prompts } = await client.listPrompts();
+    expect({
+      tools: byName(tools).map((tool) => ({
+        name: tool.name,
+        annotations: tool.annotations,
+        schema: digest({ title: tool.title, description: tool.description, input: tool.inputSchema, output: tool.outputSchema }),
+      })),
+      resources: byName(resources).map((r) => `${r.name} ${r.uri} ${digest(r)}`),
+      resourceTemplates: byName(resourceTemplates).map((r) => `${r.name} ${r.uriTemplate} ${digest(r)}`),
+      prompts: byName(prompts).map((p) => `${p.name} ${digest(p)}`),
+    }).toMatchSnapshot();
   });
 });

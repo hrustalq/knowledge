@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { HttpStatus, Injectable, type CanActivate, type ExecutionContext } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request } from 'express';
@@ -8,10 +7,9 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { scimEnabled } from './scim-enabled.js';
 import { ScimError } from './scim-errors.js';
 import type { ScimCaller } from './scim.service.js';
+import { hashToken } from '../auth/auth-tokens.js';
 
 export const SCIM_TOKEN_PREFIX = 'kscim_';
-
-export const hashScimToken = (token: string): string => createHash('sha256').update(token).digest('hex');
 
 /** last_used_at is written at most this often per token; a sync cycle makes many requests. */
 const TOUCH_EVERY_MS = 60_000;
@@ -41,7 +39,7 @@ export class ScimTokenGuard implements CanActivate {
     const header = req.headers['authorization'];
     const bearer = typeof header === 'string' && /^bearer /i.test(header) ? header.slice(7).trim() : '';
     const row = bearer.startsWith(SCIM_TOKEN_PREFIX)
-      ? await this.prisma.scimToken.findUnique({ where: { tokenHash: hashScimToken(bearer) } })
+      ? await this.prisma.scimToken.findUnique({ where: { tokenHash: hashToken(bearer) } })
       : null;
     if (!row || row.revokedAt) throw new ScimError(HttpStatus.UNAUTHORIZED, t('error.scim.unauthorized'));
 

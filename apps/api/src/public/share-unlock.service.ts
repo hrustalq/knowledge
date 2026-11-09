@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.js';
 import { PublicStore } from './public-store.js';
 import { readCookie } from '../common/cookies.js';
+import { hashToken } from '../auth/auth-tokens.js';
 
 const KEY_PREFIX = 'kn:share-unlock:';
 
@@ -42,7 +43,7 @@ export class ShareUnlockService {
   }
 
   private key(session: string): string {
-    return KEY_PREFIX + createHash('sha256').update(session).digest('hex');
+    return KEY_PREFIX + hashToken(session);
   }
 
   /** A new session for this link and password; the value goes into the cookie. */

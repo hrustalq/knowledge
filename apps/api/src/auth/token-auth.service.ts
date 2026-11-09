@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -10,6 +9,7 @@ import { SessionsService } from './sessions.service.js';
 import { UrlTicketsService } from './url-tickets.service.js';
 import { asLocale } from '../i18n/locale.js';
 import { t } from '../i18n/t.js';
+import { hashToken } from './auth-tokens.js';
 
 /**
  * Token → Principal resolution, shared by the HTTP AuthGuard and the live
@@ -118,7 +118,7 @@ export class TokenAuthService {
 
   private async resolveApiKey(key: string): Promise<Principal> {
     const row = await this.prisma.apiKey.findUnique({
-      where: { keyHash: createHash('sha256').update(key).digest('hex') },
+      where: { keyHash: hashToken(key) },
       include: { user: true },
     });
     const now = new Date();

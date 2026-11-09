@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import {
   BadRequestException,
   ForbiddenException,
@@ -44,13 +44,13 @@ import { LDAP_DEFAULT_GROUPS_ATTRIBUTE, LdapService } from './ldap.service.js';
 import { identityFromLdapEntry, ldapConfigOf } from './ldap-profile.js';
 import { LOGOUT_TOKEN_MAX_AGE_SEC } from './oidc.service.js';
 import { UUID_RE } from '@knowledge/contracts';
+import { hashToken } from '../auth-tokens.js';
 
 /** The fragment code's lifetime: long enough for one page load, short enough to be useless later. */
 const EXCHANGE_TTL_MS = 60_000;
 /** Where a sign-in lands when it did not say, and where a bad `returnTo` collapses to. */
 const DEFAULT_RETURN = '/documents';
 
-const sha256 = (value: string): string => createHash('sha256').update(value).digest('hex');
 
 
 const toLoginProvider = (p: IdentityProvider): SsoLoginProvider => ({
@@ -166,7 +166,7 @@ export class SsoFlowService {
       await this.prisma.ssoAuthRequest.create({
         data: {
           providerId: provider.id,
-          stateHash: sha256(checks.state),
+          stateHash: hashToken(checks.state),
           nonce: checks.nonce,
           codeVerifier: checks.codeVerifier,
           returnTo: back,
@@ -186,7 +186,7 @@ export class SsoFlowService {
   async callback(providerId: string, query: URLSearchParams, meta: RequestMeta): Promise<string> {
     const state = query.get('state');
     const row = state && UUID_RE.test(providerId)
-      ? await this.prisma.ssoAuthRequest.findUnique({ where: { stateHash: sha256(state) }, include: { provider: true } })
+      ? await this.prisma.ssoAuthRequest.findUnique({ where: { stateHash: hashToken(state) }, include: { provider: true } })
       : null;
     const provider = row?.provider ?? null;
     const back = row?.returnTo ?? DEFAULT_RETURN;
@@ -239,7 +239,7 @@ export class SsoFlowService {
       await this.prisma.ssoAuthRequest.create({
         data: {
           providerId: provider.id,
-          stateHash: sha256(relayState),
+          stateHash: hashToken(relayState),
           samlRequestId: requestId,
           returnTo: back,
           expiresAt: new Date(Date.now() + this.stateTtlMs),
@@ -264,7 +264,7 @@ export class SsoFlowService {
     const relayState = typeof body.RelayState === 'string' ? body.RelayState : '';
     const provider = await this.samlProvider(providerId);
     const row = relayState
-      ? await this.prisma.ssoAuthRequest.findUnique({ where: { stateHash: sha256(relayState) } })
+      ? await this.prisma.ssoAuthRequest.findUnique({ where: { stateHash: hashToken(relayState) } })
       : null;
     const solicited = row !== null && row.providerId === providerId && row.samlRequestId !== null;
     const back = solicited ? row.returnTo : DEFAULT_RETURN;
@@ -295,7 +295,7 @@ export class SsoFlowService {
       await this.prisma.ssoAuthRequest.create({
         data: {
           providerId: provider.id,
-          stateHash: sha256(`saml-assertion:${provider.id}:${assertion.assertionId}`),
+          stateHash: hashToken(`saml-assertion:${provider.id}:${assertion.assertionId}`),
           returnTo: back,
           consumedAt: new Date(),
           expiresAt: new Date(Date.now() + this.saml.assertionLifetimeMs),
@@ -398,7 +398,7 @@ export class SsoFlowService {
           await this.prisma.ssoAuthRequest.create({
             data: {
               providerId: provider.id,
-              stateHash: sha256(`logout-jti:${provider.id}:${claims.jti}`),
+              stateHash: hashToken(`logout-jti:${provider.id}:${claims.jti}`),
               returnTo: DEFAULT_RETURN,
               consumedAt: new Date(),
               // Past this the token is refused for its age anyway, then the sweeper purges the marker.
@@ -471,7 +471,7 @@ export class SsoFlowService {
 
     const code = randomBytes(32).toString('base64url');
     const exchange = {
-      exchangeCodeHash: sha256(code),
+      exchangeCodeHash: hashToken(code),
       userId: outcome.user.id,
       idpSessionId: identity.idpSessionId,
       expiresAt: new Date(Date.now() + EXCHANGE_TTL_MS),
@@ -481,7 +481,7 @@ export class SsoFlowService {
       await this.prisma.ssoAuthRequest.create({
         data: {
           providerId: provider.id,
-          stateHash: sha256(randomBytes(32).toString('base64url')),
+          stateHash: hashToken(randomBytes(32).toString('base64url')),
           returnTo: back,
           consumedAt: new Date(),
           ...exchange,
@@ -500,7 +500,7 @@ export class SsoFlowService {
    * not found and the audit row names no provider.
    */
   async exchange(code: string, meta: RequestMeta): Promise<Issued<SsoExchangeResponse>> {
-    const hash = sha256(code);
+    const hash = hashToken(code);
     const row = await this.prisma.ssoAuthRequest.findUnique({ where: { exchangeCodeHash: hash }, include: { provider: true } });
     if (!row || !row.userId) throw this.exchangeRefused(row?.provider ?? null, 'exchange code unknown or already spent', meta);
     if (row.expiresAt < new Date()) throw this.exchangeRefused(row.provider, 'exchange code expired', meta, row.userId);

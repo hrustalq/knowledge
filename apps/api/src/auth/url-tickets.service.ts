@@ -1,9 +1,9 @@
-import { createHash, randomBytes } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.js';
 import { SharedRedis } from '../redis/shared-redis.js';
 import type { Principal } from './principal.js';
+import { hashToken, mintToken } from './auth-tokens.js';
 
 /** Where a ticket's principal lives until it is redeemed or expires. */
 const KEY_PREFIX = 'kn:url-ticket:';
@@ -46,11 +46,11 @@ export class UrlTicketsService {
   }
 
   private key(ticket: string): string {
-    return KEY_PREFIX + createHash('sha256').update(ticket).digest('hex');
+    return KEY_PREFIX + hashToken(ticket);
   }
 
   async mint(principal: Principal): Promise<{ ticket: string; expiresAt: string }> {
-    const ticket = `kt_${randomBytes(24).toString('hex')}`;
+    const { token: ticket } = mintToken('kt_', 24);
     await this.store.set(this.key(ticket), JSON.stringify(principal), 'EX', this.ttlSec);
     return { ticket, expiresAt: new Date(Date.now() + this.ttlSec * 1000).toISOString() };
   }

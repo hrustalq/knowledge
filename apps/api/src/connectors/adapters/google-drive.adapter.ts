@@ -1,4 +1,4 @@
-import { createHash, createSign } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { importFormatFor, type ConnectorCapabilities, type ConnectorKind } from '@knowledge/contracts';
 import { t } from '../../i18n/t.js';
@@ -17,6 +17,7 @@ import {
   type ExternalPrincipal,
   type ExternalRef,
 } from './connector.types.js';
+import { signRs256Jwt } from '../github/github-jwt.js';
 
 const DRIVE = 'https://www.googleapis.com/drive/v3';
 const DIRECTORY = 'https://admin.googleapis.com/admin/directory/v1';
@@ -185,14 +186,10 @@ export function parseServiceAccountKey(raw: string | null): ServiceAccountKey {
   return { clientEmail: email, privateKey: key.replace(/\\n/g, '\n') };
 }
 
-function b64url(input: Buffer | string): string {
-  return Buffer.from(input).toString('base64url');
-}
-
 /**
  * The signed JWT a service account trades for an access token (RFC 7523).
- * `sub` is domain-wide delegation: the person whose Drive is read. RS256 over
- * two segments is three lines of `node:crypto`; no Google SDK, the house rule.
+ * `sub` is domain-wide delegation: the person whose Drive is read. Signed by
+ * the GitHub App's `signRs256Jwt`; no Google SDK, the house rule.
  */
 export function serviceAccountAssertion(
   key: ServiceAccountKey,
@@ -201,12 +198,10 @@ export function serviceAccountAssertion(
   now = Date.now(),
 ): string {
   const iat = Math.floor(now / 1000);
-  const header = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-  const claims = b64url(
-    JSON.stringify({ iss: key.clientEmail, scope, aud: TOKEN_URL, iat, exp: iat + 3600, ...(subject ? { sub: subject } : {}) }),
+  return signRs256Jwt(
+    { iss: key.clientEmail, scope, aud: TOKEN_URL, iat, exp: iat + 3600, ...(subject ? { sub: subject } : {}) },
+    key.privateKey,
   );
-  const signature = createSign('RSA-SHA256').update(`${header}.${claims}`).end().sign(key.privateKey);
-  return `${header}.${claims}.${b64url(signature)}`;
 }
 
 /** Drive ids are URL-safe base64-ish; anything else is a typo, and must never reach a `q=` query. */

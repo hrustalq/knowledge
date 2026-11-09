@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { PublicStore } from './public-store.js';
 import { readCookie } from '../common/cookies.js';
 import { AUTHOR_ID_STUB } from '../activity/actor.js';
+import { hashToken } from '../auth/auth-tokens.js';
 
 const SESSION_PREFIX = 'kn:site-session:';
 const CODE_PREFIX = 'kn:site-code:';
@@ -157,7 +158,7 @@ export class SiteSessionService {
   // -------------------------------------------------------------------------
 
   private key(prefix: string, value: string): string {
-    return prefix + createHash('sha256').update(value).digest('hex');
+    return prefix + hashToken(value);
   }
 
   private async open(session: StoredSession, ttlMs: number): Promise<string> {

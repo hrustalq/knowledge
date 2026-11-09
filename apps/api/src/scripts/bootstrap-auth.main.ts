@@ -9,8 +9,8 @@
  * The plaintext API key is printed ONCE; only its SHA-256 lands in Postgres.
  */
 import { parseArgs } from 'node:util';
-import { createHash, randomBytes } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
+import { mintToken } from '../auth/auth-tokens.js';
 
 const DEMO_WORKSPACE_ID = '11111111-1111-4111-8111-111111111111';
 const ROLES = ['viewer', 'editor', 'admin'];
@@ -43,8 +43,7 @@ if (!ROLES.includes(role)) {
 
 const prisma = new PrismaClient();
 try {
-  const key = `kn_${randomBytes(24).toString('hex')}`;
-  const apiKeyHash = createHash('sha256').update(key).digest('hex');
+  const { token: key, tokenHash: apiKeyHash } = mintToken('kn_', 24);
 
   await prisma.workspace.upsert({
     where: { id: workspaceId },

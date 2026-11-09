@@ -23,10 +23,10 @@ import { LISTED_PAGE } from '../common/listed-page.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PublishingSettingsService } from '../publishing/publishing-settings.service.js';
-import { shareTokenHash } from '../publishing/share-links.service.js';
 import { clientIp, PublicRateLimiter, RateLimitedException } from './public-rate-limit.js';
 import { ShareUnlockService } from './share-unlock.service.js';
 import { UUID_RE } from '@knowledge/contracts';
+import { hashToken } from '../auth/auth-tokens.js';
 
 /** `kp_` + 32 bytes base64url. Anything else is a 404 before the database is asked. */
 const TOKEN_RE = /^kp_[A-Za-z0-9_-]{43}$/;
@@ -216,7 +216,7 @@ export class PublicSharesService {
   /** The link, if it is live right now and its workspace still shares; otherwise 404. */
   private async resolve(token: string): Promise<LiveShare> {
     if (!TOKEN_RE.test(token)) throw this.notFound();
-    const share = await this.prisma.shareLink.findUnique({ where: { tokenHash: shareTokenHash(token) } });
+    const share = await this.prisma.shareLink.findUnique({ where: { tokenHash: hashToken(token) } });
     if (!share || share.revokedAt || (share.expiresAt && share.expiresAt.getTime() <= Date.now())) throw this.notFound();
     const settings = await this.settings.effective(share.workspaceId);
     if (!settings.allowShareLinks) throw this.notFound();

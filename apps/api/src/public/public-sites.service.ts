@@ -1,5 +1,4 @@
 import { EmbedsService } from '../embeds/embeds.service.js';
-import { createHash } from 'node:crypto';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Prisma, PublishedSite, SiteDomain, SiteVersion, SiteVersionPage } from '@prisma/client';
@@ -27,7 +26,7 @@ import { AttachmentsService } from '../attachments/attachments.service.js';
 import { AvatarsService } from '../avatars/avatars.service.js';
 import type { Env } from '../config/env.js';
 import { DocumentsService } from '../documents/documents.service.js';
-import { etagMatches } from '../common/http-cache.js';
+import { etagMatches, etagOf } from '../common/http-cache.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PublishingSettingsService } from '../publishing/publishing-settings.service.js';
@@ -238,14 +237,11 @@ export class PublicSitesService {
       page: page ? await this.pageMeta(page, rows, site, version, viewer) : null,
     };
     const publicEmbeds = (await this.settings.effective(site.workspaceId)).allowPublicEmbeds;
-    const etag = `"${createHash('sha256')
-      // The visible set, not just the trimmed tree: the body's links are
-      // resolved against it after this tag, so two viewers who see different
-      // pages must never share one.
-      // The embed switch changes the body's markup (#470), so it is part of the tag too.
-      .update(JSON.stringify([RESOLVE_FORMAT_VERSION, body, page?.revisionId ?? null, rows.map((r) => r.documentId), publicEmbeds]))
-      .digest('hex')
-      .slice(0, 32)}"`;
+    // The visible set, not just the trimmed tree: the body's links are
+    // resolved against it after this tag, so two viewers who see different
+    // pages must never share one.
+    // The embed switch changes the body's markup (#470), so it is part of the tag too.
+    const etag = etagOf(RESOLVE_FORMAT_VERSION, body, page?.revisionId ?? null, rows.map((r) => r.documentId), publicEmbeds);
     if (etagMatches(ifNoneMatch, etag)) return { etag, body: null };
 
     if (page && body.page) {

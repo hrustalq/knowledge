@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { BadRequestException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentsService } from '../documents/documents.service.js';
@@ -8,7 +7,7 @@ import { readPageSource } from '../common/frontmatter.js';
 import { t } from '../i18n/t.js';
 import { type AiReadableScope, isReadableRevisionStatus, listedProjectsWhere, readableDocumentsWhere } from './ai-readable-scope.js';
 import { AI_READABLE_FORMAT_VERSION, etagFor, renderPageMarkdown } from './render.js';
-import { etagMatches } from '../common/http-cache.js';
+import { etagMatches, etagOf } from '../common/http-cache.js';
 import { isScaffoldStub } from '../common/scaffold-stub.js';
 import {
   type IndexPage,
@@ -367,10 +366,7 @@ export class AiReadableService {
     const rows = [...pages]
       .sort((a, b) => a.id.localeCompare(b.id))
       .map((p) => [p.id, p.headRevisionId, p.title, p.category, p.parentId, p.position, p.projectId]);
-    const hash = createHash('sha256')
-      .update(JSON.stringify([AI_READABLE_FORMAT_VERSION, kind, this.webBase(), extra, rows]))
-      .digest('hex');
-    return `"${hash.slice(0, 32)}"`;
+    return etagOf(AI_READABLE_FORMAT_VERSION, kind, this.webBase(), extra, rows);
   }
 
   /** Caps change the bytes of a capped dump, so they are part of its validator. */

@@ -15,3 +15,11 @@ export function mintToken(prefix: string, bytes = 32): { token: string; tokenHas
 export function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
+
+/**
+ * A short, stable stand-in for a stored secret, kept beside a session so that
+ * rotating or clearing the secret ends every session opened under it.
+ */
+export function fingerprint(secret: string): string {
+  return hashToken(secret).slice(0, 32);
+}

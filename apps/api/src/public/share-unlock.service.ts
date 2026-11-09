@@ -1,24 +1,16 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.js';
 import { PublicStore } from './public-store.js';
 import { readCookie } from '../common/cookies.js';
-import { hashToken } from '../auth/auth-tokens.js';
+import { hashToken, fingerprint } from '../auth/auth-tokens.js';
 
 const KEY_PREFIX = 'kn:share-unlock:';
 
 /** The cookie that carries one browser's unlock of one link. */
 export function unlockCookieName(shareId: string): string {
   return `kn_share_${shareId}`;
-}
-
-/**
- * Bound to the password as it is now, so changing (or clearing and setting)
- * it ends every open session at once: the stored fingerprint stops matching.
- */
-function passwordFingerprint(passwordHash: string): string {
-  return createHash('sha256').update(passwordHash).digest('hex').slice(0, 32);
 }
 
 /**
@@ -49,7 +41,7 @@ export class ShareUnlockService {
   /** A new session for this link and password; the value goes into the cookie. */
   async open(shareId: string, passwordHash: string): Promise<string> {
     const session = randomBytes(24).toString('base64url');
-    await this.store.kv.set(this.key(session), `${shareId}|${passwordFingerprint(passwordHash)}`, 'PX', this.ttlMs);
+    await this.store.kv.set(this.key(session), `${shareId}|${fingerprint(passwordHash)}`, 'PX', this.ttlMs);
     return session;
   }
 
@@ -59,7 +51,7 @@ export class ShareUnlockService {
     if (!session) return false;
     try {
       const value = await this.store.kv.get(this.key(session));
-      return value === `${shareId}|${passwordFingerprint(passwordHash)}`;
+      return value === `${shareId}|${fingerprint(passwordHash)}`;
     } catch (err) {
       // Locked is the safe reading of an outage: the gate shows, nothing leaks.
       this.logger.warn({ msg: 'unlock store unavailable', shareId, err });

@@ -1,12 +1,11 @@
 import { EmbedsService } from '../embeds/embeds.service.js';
-import { createHash } from 'node:crypto';
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { SiteVersion } from '@prisma/client';
 import { siteHomeDocumentId, siteMarkdownPath, sitePagePath } from '@knowledge/contracts';
 import { orderPages, renderFullHeader, renderFullPage, renderLlmsIndex, truncatedMarker, unavailableMarker } from '../ai-readable/llms.js';
 import { titledMarkdown } from '../ai-readable/render.js';
-import { etagMatches as matches } from '../common/http-cache.js';
+import { etagMatches as matches, etagOf } from '../common/http-cache.js';
 import type { Env } from '../config/env.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { t } from '../i18n/t.js';
@@ -240,7 +239,7 @@ export class PublicSiteFilesService {
       row = parent ? rows.find((r) => r.slugPath === parent) : rows.find((r) => r.documentId === homeId);
     }
     if (!row) throw this.notFound();
-    const etag = quote(hash([SITE_FILES_FORMAT_VERSION, 'md', row.revisionId, row.title]));
+    const etag = etagOf(SITE_FILES_FORMAT_VERSION, 'md', row.revisionId, row.title);
     if (matches(ifNoneMatch, etag)) return { etag, body: null };
     const content = await this.documents.getContent(row.documentId, row.revisionId).catch(() => null);
     if (!content) throw this.notFound();
@@ -311,16 +310,8 @@ export class PublicSiteFilesService {
 
   /** A version's snapshot changes only when a build stamps `built_at`; with that, the inputs name every byte. */
   private etag(kind: string, site: LiveSite, version: SiteVersion, extra: unknown[]): string {
-    return quote(hash([SITE_FILES_FORMAT_VERSION, kind, site.id, version.id, version.builtAt?.toISOString() ?? null, extra]));
+    return etagOf(SITE_FILES_FORMAT_VERSION, kind, site.id, version.id, version.builtAt?.toISOString() ?? null, extra);
   }
-}
-
-function hash(value: unknown): string {
-  return createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0, 32);
-}
-
-function quote(h: string): string {
-  return `"${h}"`;
 }
 
 function xml(s: string): string {

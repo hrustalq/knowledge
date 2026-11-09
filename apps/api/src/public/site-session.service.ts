@@ -1,4 +1,4 @@
-import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { siteSessionCookieName, type SiteViewer } from '@knowledge/contracts';
@@ -8,7 +8,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { PublicStore } from './public-store.js';
 import { readCookie } from '../common/cookies.js';
 import { AUTHOR_ID_STUB } from '../activity/actor.js';
-import { hashToken } from '../auth/auth-tokens.js';
+import { hashToken, fingerprint } from '../auth/auth-tokens.js';
 
 const SESSION_PREFIX = 'kn:site-session:';
 const CODE_PREFIX = 'kn:site-code:';
@@ -30,15 +30,6 @@ export interface SessionSite {
   id: string;
   workspaceId: string;
   visitorSecretCipher: string | null;
-}
-
-/**
- * The secret a visitor session was opened under, as a fingerprint of its
- * stored envelope: rotating or clearing the secret changes it, which ends
- * every visitor session at once.
- */
-export function secretFingerprint(cipher: string): string {
-  return createHash('sha256').update(cipher).digest('hex').slice(0, 32);
 }
 
 /**
@@ -121,7 +112,7 @@ export class SiteSessionService {
     const ttlMs = Math.min(this.ttlMs, (claims.exp as number) * 1000 - Date.now());
     if (ttlMs <= 0) return null;
     const session = await this.open(
-      { siteId: site.id, kind: 'visitor', claims, secret: secretFingerprint(site.visitorSecretCipher) },
+      { siteId: site.id, kind: 'visitor', claims, secret: fingerprint(site.visitorSecretCipher) },
       ttlMs,
     );
     return { session, ttlMs };
@@ -138,7 +129,7 @@ export class SiteSessionService {
       if (stored.kind === 'member') {
         return (await this.isMember(site.workspaceId, stored.userId)) ? { kind: 'member' } : anonymous;
       }
-      if (stored.kind === 'visitor' && site.visitorSecretCipher && stored.secret === secretFingerprint(site.visitorSecretCipher)) {
+      if (stored.kind === 'visitor' && site.visitorSecretCipher && stored.secret === fingerprint(site.visitorSecretCipher)) {
         return { kind: 'visitor', claims: stored.claims };
       }
       return anonymous;

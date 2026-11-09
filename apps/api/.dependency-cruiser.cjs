@@ -54,6 +54,16 @@ module.exports = {
       to: { path: '-worker\\.module\\.ts$', reachable: true },
     },
     {
+      name: 'api-loads-no-agent-runner',
+      comment:
+        'The agent executor and its runners are worker code (#823). The API asks whether an agent ' +
+        'may run through RUNNABLE_AGENTS / isTriggerableAgent in @knowledge/contracts; reaching ' +
+        'the executor for that drags every runner and its collaborators into the HTTP process.',
+      severity: 'error',
+      from: { path: '^src/app\\.module\\.ts$' },
+      to: { path: '^src/agents/(agent\\.executor|agent-services|agent-runners|runners/)', reachable: true },
+    },
+    {
       name: 'worker-loads-no-controller',
       comment:
         'The worker has no HTTP layer. A controller reaching it drags in guards that need ' +

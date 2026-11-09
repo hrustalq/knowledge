@@ -6,7 +6,7 @@ import { QualityService } from './quality.service.js';
 /**
  * The quality score reads (#74, phase 5), controller-free and auth-free so the
  * MCP tool set can load them (`knowledge_get_page_quality`). The scores
- * themselves are written by the worker's auditor (AgentExecutor `audit()`).
+ * themselves are written by the worker's auditor (`runners/auditor.ts`).
  */
 @Module({
   imports: [PrismaModule, AiCoreModule],

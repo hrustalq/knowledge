@@ -1559,6 +1559,35 @@ export function isTicketScopedAgent(key: string): boolean {
 }
 
 /**
+ * Agents a person may start from the Run button or a schedule (#823). Declared
+ * here rather than beside the worker's runners so the API can refuse a run at
+ * the point somebody asks for it without loading worker code; the worker's
+ * `AGENT_RUNNERS` must hold a runner for each (`test/agent-runners.spec.ts`).
+ * The other runnable agents need an input only their own starter supplies —
+ * a pull request, a ticket, a memo, an operation, a merge request.
+ */
+export const RUNNABLE_AGENTS: ReadonlySet<string> = new Set<BuiltInAgentKey>([
+  'curator',
+  'reviewer',
+  'glossarist',
+  'cartographer',
+  'archaeologist',
+  'surveyor',
+  'digest',
+  'auditor',
+  'arbiter',
+  'atlas',
+]);
+
+/**
+ * Agents a trigger may start: the runnable ones, plus those whose only input
+ * is the event that starts them (#433) — no Run button, no schedule.
+ */
+export function isTriggerableAgent(key: string): boolean {
+  return RUNNABLE_AGENTS.has(key) || isTicketScopedAgent(key);
+}
+
+/**
  * What a run was asked to do — `agent_runs.input`. `note` seeds an extra
  * instruction; `connectorId` scopes a connector-scoped agent to one repository;
  * `pullRequest` names the change a sentinel run checks (docs/features/35);

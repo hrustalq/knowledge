@@ -9,7 +9,8 @@ import { EventsPublisher } from '../events/events.publisher.js';
 import { t, withLocale } from '../i18n/t.js';
 import { asLocale } from '../i18n/locale.js';
 import { AGENT_QUEUE, MAX_RUN_WARNINGS } from './agent.constants.js';
-import { AgentExecutor, type AgentReporter } from './agent.executor.js';
+import { AgentExecutor } from './agent.executor.js';
+import type { AgentReporter } from './agent-services.js';
 import { AgentRegistryService } from './agent-registry.service.js';
 
 /**

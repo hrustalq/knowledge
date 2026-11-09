@@ -15,6 +15,7 @@ import {
   type AiAgentChoice,
   type AiAgentSummary,
   type ListAgentRunsResponse,
+  RUNNABLE_AGENTS,
 } from '@knowledge/contracts';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -23,7 +24,6 @@ import { AiPluginsService } from './ai-plugins.service.js';
 import { AiModelsService } from './ai-models.service.js';
 import { AiUsageService } from './ai-usage.service.js';
 import { AgentProducer } from '../agents/agent.producer.js';
-import { RUNNABLE_AGENTS } from '../agents/agent.executor.js';
 import { agentRunLockKey } from '../agents/agent.constants.js';
 import { withSubjectLock } from '../common/subject-lock.js';
 import { nextRunOf, scheduleKindOf, weekdaysOf } from '../agents/agent-schedule.js';
@@ -307,8 +307,7 @@ function toSummary(agent: ResolvedAgent, row: AiAgent | null): AiAgentSummary {
     maxToolCalls: agent.config.maxToolCalls,
     timeoutMs: agent.config.timeoutMs,
     surfaces: agent.surfaces,
-    // Surface vs. executor: `background` is a declaration, this is the fact.
-    runnable: agent.surfaces.includes('background') && RUNNABLE_AGENTS.has(agent.key),
+    runnable: RUNNABLE_AGENTS.has(agent.key),
     requires: agent.requires,
     missing: agent.missing,
     purpose: agent.purpose,
@@ -362,7 +361,7 @@ export class AgentRunsService {
   ): Promise<AgentRunSummary> {
     const agent = await this.registry.resolve(workspaceId, agentKey);
     if (!agent.enabled) throw new BadRequestException(t('error.ai.agentDisabled', { key: agentKey }));
-    if (!agent.surfaces.includes('background') || !RUNNABLE_AGENTS.has(agentKey)) {
+    if (!RUNNABLE_AGENTS.has(agentKey)) {
       throw new BadRequestException(t('error.ai.agentNotBackground', { key: agentKey }));
     }
     // A connector-scoped agent (docs/features/31) reads one repository. The

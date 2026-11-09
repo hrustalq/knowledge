@@ -123,8 +123,12 @@ describe('GraphService under a DocumentAclFilter', () => {
       live: true,
       aclNodes: [SECRET],
     });
-    const chunkWrite = arcade.command.mock.calls.find(([, sql]) => /CREATE VERTEX Chunk/.test(sql as string))!;
-    expect(chunkWrite[2]).toMatchObject({ aclNodes: [SECRET], aclRestricted: true });
+    // #817: one transaction, so a reader never sees the page between DELETE and CREATE.
+    expect(arcade.command).toHaveBeenCalledTimes(1);
+    const [lang, script, params] = arcade.command.mock.calls[0]!;
+    expect(lang).toBe('sqlscript');
+    expect(script).toMatch(/^BEGIN;\n[\s\S]*CREATE VERTEX Chunk SET chunkId = :chunkId0,[\s\S]*;\nCOMMIT$/);
+    expect(params).toMatchObject({ aclNodes: [SECRET], aclRestricted: true, chunkId0: 's:0', text0: 't' });
 
     arcade.command.mockClear();
     await graph.restampDocument(WS, SECRET, []);

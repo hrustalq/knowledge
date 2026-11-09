@@ -987,7 +987,11 @@ export class DocumentsService {
   async withChunks(head: Omit<DocumentDetailResponse, 'chunks'>): Promise<DocumentDetailResponse> {
     const chunks =
       head.revision.status === 'indexed'
-        ? await this.graph.getRevisionChunks(head.document.workspaceId, head.revision.revisionId)
+        ? (await this.graph.getRevisionChunkTexts(head.document.workspaceId, head.revision.revisionId)).map((c) => ({
+            chunkId: c.chunkId,
+            headingPath: c.headingPath,
+            snippet: c.text.slice(0, 200),
+          }))
         : [];
     return { ...head, chunks };
   }

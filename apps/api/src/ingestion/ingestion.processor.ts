@@ -19,6 +19,7 @@ import { extractFrontmatterFacts } from './relations.js';
 import { pageLinkTargets, replacePageLinks } from './page-links.js';
 import { SourceDependentsService } from '../connectors/source-dependents.service.js';
 import { ExtractorFactory } from '../extraction/extractor-factory.service.js';
+import type { InferredFact } from '../extraction/relation-extractor.provider.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 import { IngestionProducer } from './ingestion.producer.js';
 import { UNFILTERED } from '../common/document-acl.js';
@@ -404,16 +405,19 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
 
 
       // 8. Inferred relation extraction (plan.md §11 Phase 4): LLM-derived
-      //    edges tagged 'inferred' with confidence + source chunk. Non-fatal —
-      //    the revision is already indexed; a flaky LLM must not fail the job.
-      //    Runs even when disabled so stale inferred edges are cleared.
+      //    edges tagged 'inferred' with confidence + source chunk. The model
+      //    call is non-fatal — a flaky LLM must not fail the job, and its edges
+      //    stay as they were. The graph write is not (#817): a failed reconcile
+      //    retries like every other graph write. Runs even when disabled so
+      //    stale inferred edges are cleared.
+      let inferred: InferredFact[] | null = null;
       try {
         // Resolved per job: the workspace may route extraction at its own
         // provider profile (docs/features/12), falling back to EXTRACTOR_*.
         const { extractor, tuning, config } = await this.extractors.forWorkspace(
           revision.document.workspaceId,
         );
-        const inferred = extractor.enabled
+        inferred = extractor.enabled
           ? await extractor.extract({
               documentTitle: revision.document.title,
               minConfidence: tuning.minConfidence,
@@ -429,6 +433,10 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
               })),
             })
           : [];
+      } catch (e) {
+        this.logger.warn(`Inferred extraction failed for revision ${revision.id} (non-fatal): ${(e as Error).message}`);
+      }
+      if (inferred) {
         await this.graph.replaceRevisionInferredFacts({
           workspaceId: revision.document.workspaceId,
           documentId: revision.documentId,
@@ -440,8 +448,6 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
         if (inferred.length > 0) {
           this.logger.log(`Inferred ${inferred.length} relation(s) for revision ${revision.id}`);
         }
-      } catch (e) {
-        this.logger.warn(`Inferred extraction failed for revision ${revision.id} (non-fatal): ${(e as Error).message}`);
       }
       mark('inferred');
 

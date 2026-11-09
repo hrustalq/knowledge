@@ -7,6 +7,7 @@ import { LINT_TEXT_MAX, enabledRules, lintMessages, readLintViolations } from '.
 import { AiSkillsService } from '../ai/ai-skills.service.js';
 import { AiUsageService } from '../ai/ai-usage.service.js';
 import { AssistantClient } from './assistant.client.js';
+import { parseModelJson } from '../common/model-json.js';
 
 export interface StyleLintInput {
   workspaceId: string;
@@ -53,25 +54,7 @@ export class StyleLintService {
       { json: true },
     );
     const max = this.env.get<number>('LINT_MAX_FINDINGS') ?? 15;
-    return { enabled: true, styleguide, ...readLintViolations(parseJson(raw), found.rules, text, max) };
+    return { enabled: true, styleguide, ...readLintViolations(parseModelJson(raw), found.rules, text, max) };
   }
 }
 
-/** A JSON object out of a model reply, tolerating a code fence or prose around it. */
-function parseJson(raw: string): Record<string, unknown> | null {
-  const stripped = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
-  try {
-    return JSON.parse(stripped) as Record<string, unknown>;
-  } catch {
-    const start = stripped.indexOf('{');
-    const end = stripped.lastIndexOf('}');
-    if (start >= 0 && end > start) {
-      try {
-        return JSON.parse(stripped.slice(start, end + 1)) as Record<string, unknown>;
-      } catch {
-        /* fall through */
-      }
-    }
-    return null;
-  }
-}

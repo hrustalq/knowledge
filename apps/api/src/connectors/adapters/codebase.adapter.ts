@@ -84,6 +84,7 @@ import {
 } from './connector.types.js';
 import { githubRepoAcl, githubTeamMembers } from './github-acl.js';
 import { repoSpecFiles, SPEC_KEY_PREFIX, suggestSpecFiles } from './repo-specs.js';
+import { parseModelJson } from '../../common/model-json.js';
 
 /**
  * A repository as a subject to document (docs/features/27).
@@ -1216,7 +1217,7 @@ export class CodebaseAdapter implements ConnectorAdapter {
         ],
         { json: true },
       );
-      const parsed = safeJson(raw) as { summary?: unknown; suspected?: unknown } | null;
+      const parsed = parseModelJson<{ summary?: unknown; suspected?: unknown }>(raw);
       const byRef = new Map(entries.map((e) => [e.ref, e]));
       const suspected = (Array.isArray(parsed?.suspected) ? parsed.suspected : [])
         .filter((x): x is { ref: string; reason?: unknown } => !!x && typeof (x as { ref?: unknown }).ref === 'string')
@@ -1270,7 +1271,7 @@ export class CodebaseAdapter implements ConnectorAdapter {
         ],
         { json: true },
       );
-      const block = this.diagram(ctx, sequenceFromJson(safeJson(raw), plan.wiki.diagrams.maxNodes), warnings);
+      const block = this.diagram(ctx, sequenceFromJson(parseModelJson(raw), plan.wiki.diagrams.maxNodes), warnings);
       if (!block) warnings.push(t('connector.warning.wiki.diagramInvalid', {}, ctx.locale));
       return block;
     } catch (err) {
@@ -1577,14 +1578,6 @@ function code(text: string): string {
 
 function dedupe(warnings: string[]): string[] {
   return [...new Set(warnings)];
-}
-
-function safeJson(raw: string): unknown {
-  try {
-    return JSON.parse(raw.replace(/^```(?:json)?\s*|\s*```$/g, ''));
-  } catch {
-    return null;
-  }
 }
 
 /**

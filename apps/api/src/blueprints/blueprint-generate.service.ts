@@ -13,7 +13,7 @@ import { AiUsageService } from '../ai/ai-usage.service.js';
 import { AssistantClient } from '../assistant/assistant.client.js';
 import { AssistantReadToolsService } from '../assistant/assistant-read-tools.service.js';
 import { wrapUntrusted } from '../common/untrusted.js';
-import { safeJson } from '../glossary/glossary.service.js';
+import { parseModelJson } from '../common/model-json.js';
 import { t } from '../i18n/t.js';
 import { TemplatesService } from '../templates/templates.service.js';
 import { titleLocale } from './derive-rules.js';
@@ -183,7 +183,7 @@ export class BlueprintGenerateService {
             )
           ).content;
 
-    const parsed = safeJson(raw) ?? {};
+    const parsed = parseModelJson(raw) ?? {};
     if (asking) {
       const round = readRound(parsed.questions);
       // "done", or nothing askable: draft now from everything so far, in a second call.

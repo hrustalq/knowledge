@@ -22,6 +22,7 @@ import { EventsPublisher } from '../events/events.publisher.js';
 import { DocumentsService } from './documents.service.js';
 import { parseAgentMentions } from './mentions.js';
 import { t, withLocale } from '../i18n/t.js';
+import { parseModelJson } from '../common/model-json.js';
 
 /**
  * Which discussion an agent was mentioned in. The two thread tables are
@@ -691,18 +692,14 @@ export function renderAnswer(raw: string): string {
   return lines.filter((l, i) => l !== '' || i > 0).join('\n').trim() || text;
 }
 
-/** JSON, including the ```json fence models add even when asked not to. */
+/**
+ * A structured answer, fenced or not. Only a reply that *opens* with the
+ * object counts: prose that quotes a JSON example is still prose.
+ */
 function parseJsonish(text: string): StructuredAnswer | null {
-  const unfenced = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-  if (!unfenced.startsWith('{')) return null;
-  try {
-    const value: unknown = JSON.parse(unfenced);
-    if (typeof value !== 'object' || value === null) return null;
-    const candidate = value as StructuredAnswer;
-    return 'summary' in candidate || 'issues' in candidate ? candidate : null;
-  } catch {
-    return null;
-  }
+  if (!/^(```(?:json)?\s*)?\{/i.test(text)) return null;
+  const candidate = parseModelJson<StructuredAnswer>(text);
+  return candidate && ('summary' in candidate || 'issues' in candidate) ? candidate : null;
 }
 
 /** What the placeholder says when a guard held the run back. */

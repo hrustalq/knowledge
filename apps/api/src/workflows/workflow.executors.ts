@@ -19,6 +19,7 @@ import type { Principal } from '../auth/principal.js';
 import { StorageService } from '../storage/storage.service.js';
 import { asLocale } from '../i18n/locale.js';
 import { t } from '../i18n/t.js';
+import { parseModelJson } from '../common/model-json.js';
 
 /** Caps on what one draft may declare, so a hallucinated list cannot fill a page's frontmatter. */
 /** A page attached to a dozen issues is a page; a flow should not spam all of them. */
@@ -599,14 +600,9 @@ export class WorkflowExecutors {
   // ------------------------------------------------------------------ parsing
 
   private parseObject(raw: string): Record<string, unknown> {
-    const text = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```$/, '');
-    try {
-      const parsed: unknown = JSON.parse(text);
-      return typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : {};
-    } catch {
-      this.logger.warn('Model returned unparseable JSON for a workflow step');
-      return {};
-    }
+    const parsed = parseModelJson(raw);
+    if (!parsed) this.logger.warn('Model returned unparseable JSON for a workflow step');
+    return parsed ?? {};
   }
 
   /**

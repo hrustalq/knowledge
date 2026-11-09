@@ -1,6 +1,7 @@
 import { AGENT_LEARNING_MAX_CHARS, MCP_LEARNING_TARGET, type AgentLearningEvidenceRef, type AgentLearningSideCounts } from '@knowledge/contracts';
 import { wrapUntrusted } from '../common/untrusted.js';
 import { cosine } from '../agents/coverage.js';
+import { parseModelJson } from '../common/model-json.js';
 
 /**
  * The deterministic half of the learner (#305): which dismissed findings are
@@ -193,13 +194,7 @@ export function clusterLocale(cluster: readonly DismissedFinding[], fallback: st
  * declining (`null`) is a good outcome, and nothing is written for it.
  */
 export function readCoachLearning(raw: string): string | null {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''));
-  } catch {
-    return null;
-  }
-  const text = (parsed as { learning?: unknown } | null)?.learning;
+  const text = parseModelJson<{ learning?: unknown }>(raw)?.learning;
   if (typeof text !== 'string') return null;
   const clean = text.replace(/\s+/g, ' ').trim();
   return clean && clean.length <= AGENT_LEARNING_MAX_CHARS ? clean : null;

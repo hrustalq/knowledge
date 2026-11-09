@@ -24,6 +24,7 @@ import { t } from '../i18n/t.js';
 import type { DraftWorkflowDto } from './workflows.dto.js';
 import { TemplatesService } from '../templates/templates.service.js';
 import { templateIssues } from './workflow-templates.js';
+import { parseModelJson } from '../common/model-json.js';
 
 /**
  * The architect: designing a workflow by describing it (docs/features/17).
@@ -125,7 +126,7 @@ export class WorkflowDraftService {
       { json: true },
     );
 
-    const parsed = safeJson(raw);
+    const parsed = parseModelJson(raw);
     const reply = typeof parsed?.reply === 'string' ? parsed.reply.trim() : '';
     const steps = this.readSteps(parsed);
 
@@ -274,18 +275,3 @@ function slug(value: string): string {
     .slice(0, 60);
 }
 
-function safeJson(raw: string): Record<string, unknown> | null {
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
-  } catch {
-    // A fenced block is the common failure of a model told to return JSON.
-    const match = raw.match(/\{[\s\S]*\}/);
-    if (!match) return null;
-    try {
-      return JSON.parse(match[0]) as Record<string, unknown>;
-    } catch {
-      return null;
-    }
-  }
-}

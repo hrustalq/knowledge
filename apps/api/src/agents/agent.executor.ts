@@ -193,6 +193,7 @@ import {
   testerPrompt,
   testerRankingPrompt,
 } from './tester.js';
+import { parseModelJson } from '../common/model-json.js';
 
 /**
  * Agents with a background executor. Exported so the API can refuse a run at
@@ -690,7 +691,7 @@ export class AgentExecutor {
         this.logger.warn(`Arbiter judgement failed for one pair: ${String(error)}`);
         continue;
       }
-      const verdict = readJudgement(safeJson(raw), pair, minConfidence);
+      const verdict = readJudgement(parseModelJson(raw), pair, minConfidence);
       if (!verdict) continue;
       const conflict = await this.conflicts.record({
         workspaceId: run.workspaceId,
@@ -794,7 +795,7 @@ export class AgentExecutor {
       ).join('\n\n');
       try {
         const raw = await this.client.chat(call, [{ role: 'system', content: system }, { role: 'user', content: listing }], { json: true });
-        const parsed = safeJson(raw);
+        const parsed = parseModelJson(raw);
         const title = typeof parsed?.title === 'string' ? parsed.title.trim().slice(0, 120) : '';
         const summary = typeof parsed?.summary === 'string' ? parsed.summary.trim().slice(0, 2_000) : '';
         if (!title || !summary) continue;
@@ -958,7 +959,7 @@ export class AgentExecutor {
                 { jsonFinalRound: true },
               )
             ).content;
-        const parsed = safeJson(raw);
+        const parsed = parseModelJson(raw);
         const proposals = Array.isArray(parsed?.findings) ? (parsed.findings as unknown[]) : [];
         const known = new Map(documents.map((d) => [d.id, d.title]));
         for (const proposal of proposals) {
@@ -1096,7 +1097,7 @@ export class AgentExecutor {
    * the citation is the page under review, so a finding is never uncited.
    */
   private readIssues(raw: string, doc: { id: string; title: string }): AgentFinding[] {
-    const parsed = safeJson(raw);
+    const parsed = parseModelJson(raw);
     const issues = Array.isArray(parsed?.issues) ? (parsed.issues as unknown[]) : [];
     const out: AgentFinding[] = [];
     for (const entry of issues) {
@@ -1186,7 +1187,7 @@ export class AgentExecutor {
       { json: true },
     );
     const max = this.config.get('LINT_MAX_FINDINGS', { infer: true });
-    const { violations, dropped } = readLintViolations(safeJson(raw), styleguide.rules, text, max);
+    const { violations, dropped } = readLintViolations(parseModelJson(raw), styleguide.rules, text, max);
     const page = await this.documents.getContent(doc.id, lint.headRevisionId);
     const findings = styleFindings(violations, styleguide.rules, {
       documentId: doc.id,
@@ -1365,7 +1366,7 @@ export class AgentExecutor {
             { json: true },
           );
           called += 1;
-          model = readModelHalf(safeJson(raw), page.rules, content.markdown);
+          model = readModelHalf(parseModelJson(raw), page.rules, content.markdown);
         } catch (error) {
           if (error instanceof ProviderAccountError) {
             // Every later page would fail the same way: score the facts only.
@@ -1683,7 +1684,7 @@ export class AgentExecutor {
           ],
           { json: true },
         );
-        const topics = safeJson(raw)?.topics;
+        const topics = parseModelJson(raw)?.topics;
         if (Array.isArray(topics) && topics.length > 0) {
           digest = topics
             .filter((topic): topic is { name: string; summary?: string; paths?: unknown } =>
@@ -1774,7 +1775,7 @@ export class AgentExecutor {
           seen: [candidate.path],
         });
         filesRead += 1;
-        const proposals = safeJson(raw)?.findings;
+        const proposals = parseModelJson(raw)?.findings;
         let kept = 0;
         for (const proposal of Array.isArray(proposals) ? proposals : []) {
           const finding = readExcavation(proposal, snapshot, readPaths);
@@ -1897,7 +1898,7 @@ export class AgentExecutor {
       json: true,
       seen: component.paths,
     });
-    const body = readComponentDraft(safeJson(content), rendered.body, snapshot, readPaths, component.paths);
+    const body = readComponentDraft(parseModelJson(content), rendered.body, snapshot, readPaths, component.paths);
     if (!body) throw new Error(t('agent.component.draftUnusable'));
 
     const title = rendered.title?.trim() || component.name;
@@ -2108,7 +2109,7 @@ ${diffExcerpt(shown, MAX_DIFF_CHARS)}`,
           : (await this.client.runWithTools(call, messages, tools, execute, { jsonFinalRound: true })).content;
         checked += 1;
         judged.add(candidate.documentId);
-        const verdict = safeJson(raw);
+        const verdict = parseModelJson(raw);
         const finding = readDriftVerdict(
           verdict,
           { id: candidate.documentId, title: candidate.title, markdown: content.markdown },
@@ -2384,7 +2385,7 @@ ${diffExcerpt(shown, MAX_DIFF_CHARS)}`,
       const raw = agent.missing.includes('tools')
         ? await this.client.chat(call, messages, { json: true })
         : (await this.client.runWithTools(call, messages, tools, execute, { jsonFinalRound: true })).content;
-      const finding = readReportVerdict(safeJson(raw), { id: page.id, title: page.title, markdown: head.markdown }, issue.id);
+      const finding = readReportVerdict(parseModelJson(raw), { id: page.id, title: page.title, markdown: head.markdown }, issue.id);
       return {
         summary: finding
           ? t('agent.report.summaryConfirmed', { title: page.title, drafted: finding.draft ? 1 : 0 })
@@ -2509,7 +2510,7 @@ ${diffExcerpt(shown, MAX_DIFF_CHARS)}`,
           ? await this.client.chat(call, messages, { json: true })
           : (await this.client.runWithTools(call, messages, tools, execute, { jsonFinalRound: true })).content;
         checked += 1;
-        const finding = readSourceVerdict(safeJson(raw), page, origin);
+        const finding = readSourceVerdict(parseModelJson(raw), page, origin);
         if (finding) findings.push(finding);
       } catch (error) {
         if (error instanceof HttpException && error.getStatus() === HttpStatus.TOO_MANY_REQUESTS) {
@@ -2848,7 +2849,7 @@ ${page.markdown}`, files);
           ? await this.client.chat(call, messages, { json: true })
           : (await this.client.runWithTools(call, messages, tools, execute, { jsonFinalRound: true })).content;
         judged += 1;
-        const parsed = safeJson(raw);
+        const parsed = parseModelJson(raw);
         // A cited page must exist here: one query over whatever the model
         // named, and `readCoverageVerdict` keeps only what came back.
         const cited = citedIdsOf(parsed).filter((id) => UUID.test(id));
@@ -2943,7 +2944,7 @@ ${page.markdown}`, files);
             { jsonFinalRound: true },
           )
         ).content;
-    const parsed = safeJson(raw);
+    const parsed = parseModelJson(raw);
 
     // A page to rewrite must be one the run may read: one query over whatever
     // the model named, under the same scope its searches ran with.
@@ -3024,7 +3025,7 @@ ${page.markdown}`, files);
             { jsonFinalRound: true },
           )
         ).content;
-    const parsed = safeJson(raw);
+    const parsed = parseModelJson(raw);
 
     const cited = memoCitedIds(parsed).filter((id) => UUID.test(id) && retrieved.has(id));
     const scope = await this.runScope(run, principal);
@@ -3098,7 +3099,7 @@ ${page.markdown}`, files);
       ],
       { json: true },
     );
-    const parsed = safeJson(raw) ?? {};
+    const parsed = parseModelJson(raw) ?? {};
     const fills = (parsed.cases && typeof parsed.cases === 'object' ? parsed.cases : {}) as Record<string, ApiTestCaseFill>;
     const suite = buildTestSuite(at.spec.document, at.op, parsed.baseline, fills, vars);
 
@@ -3147,7 +3148,7 @@ ${page.markdown}`, files);
       ],
       { json: true },
     );
-    const order = readTesterRanking(safeJson(raw), candidates.map((c) => c.documentId));
+    const order = readTesterRanking(parseModelJson(raw), candidates.map((c) => c.documentId));
     return {
       summary: t('agent.testerRun.rankSummary', { count: order.length, ...op }),
       findings: [],
@@ -3209,7 +3210,7 @@ ${page.markdown}`, files);
                 { jsonFinalRound: true },
               )
             ).content;
-        const parsed = safeJson(raw);
+        const parsed = parseModelJson(raw);
         highlights = readDigestHighlights(parsed, known);
         if (typeof parsed?.summary === 'string' && parsed.summary.trim()) {
           summary = parsed.summary.trim().slice(0, 2_000);
@@ -3493,7 +3494,7 @@ ${page.markdown}`, files);
               )
             ).content;
 
-        const parsed = safeJson(raw);
+        const parsed = parseModelJson(raw);
         for (const proposal of Array.isArray(parsed?.findings) ? (parsed.findings as unknown[]) : []) {
           const finding = this.readRelationFinding(proposal, known);
           if (!finding) continue;
@@ -3646,25 +3647,6 @@ const OUTPUT_CONTRACT =
 /** What a warning shows: the message, never `ServiceUnavailableException: …`. */
 function reasonOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-/** Fence-tolerant parse, matching the leniency of every other JSON call site here. */
-function safeJson(raw: string): Record<string, unknown> | null {
-  const stripped = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
-  try {
-    return JSON.parse(stripped) as Record<string, unknown>;
-  } catch {
-    const start = stripped.indexOf('{');
-    const end = stripped.lastIndexOf('}');
-    if (start >= 0 && end > start) {
-      try {
-        return JSON.parse(stripped.slice(start, end + 1)) as Record<string, unknown>;
-      } catch {
-        return null;
-      }
-    }
-    return null;
-  }
 }
 
 /**

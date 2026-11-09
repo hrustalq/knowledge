@@ -15,7 +15,7 @@ import { AiUsageService } from '../ai/ai-usage.service.js';
 import { AssistantClient } from '../assistant/assistant.client.js';
 import { wrapUntrusted } from '../common/untrusted.js';
 import { DocumentsService } from '../documents/documents.service.js';
-import { safeJson } from '../glossary/glossary.service.js';
+import { parseModelJson } from '../common/model-json.js';
 import { t } from '../i18n/t.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -179,7 +179,7 @@ export class BlueprintDeriveService {
         ],
         { json: true },
       );
-      const parsed = safeJson(raw) ?? {};
+      const parsed = parseModelJson(raw) ?? {};
       applyGuidance(parsed.guidance, ids, lang);
       return { styleguide: readStyleguide(parsed.styleguide) };
     } catch (e) {

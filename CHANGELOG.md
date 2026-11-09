@@ -31,6 +31,12 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- **An AI answer wrapped in a sentence or a code fence is no longer thrown away by some agents.** Models asked for
+  JSON often add "Here is the result:" or a ```` ```json ```` fence. Most AI features already looked past that, but the
+  workflow builder, workflow steps, the learner's coach, the glossary suggestions, blueprint generation, chat harvest,
+  source-recipe drafting and the repo wiki's release notes and diagrams each read the reply their own stricter way. A
+  reply those features dropped as unreadable, so a run that ended with nothing, now goes through. They all read
+  replies the same way now. (#819)
 - **A graph store hiccup during indexing now fails the job and retries, rather than leaving duplicate or stale
   relations.** When ArcadeDB failed briefly while a page was being re-indexed, the indexer read that as "no relations
   yet" and wrote a second copy of each one, and a failure while moving a page's live version still marked the job

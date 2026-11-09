@@ -1,14 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { normalizeEntityKey } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { ttlCache } from '../common/ttl-cache.js';
 
 /** How long a workspace's alias table is trusted without re-reading it. */
 const TTL_MS = 30_000;
-
-interface CacheEntry {
-  at: number;
-  aliases: Map<string, string>;
-}
 
 /**
  * A workspace's canonical spelling for an entity key (docs/features/28).
@@ -38,7 +34,7 @@ export class EntityAliasService {
    * serve a stale table for up to the TTL; that is the deliberate cost, as it
    * is in AiConfigService.
    */
-  private readonly cache = new Map<string, CacheEntry>();
+  private readonly cache = ttlCache<Map<string, string>>(TTL_MS);
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -112,15 +108,12 @@ export class EntityAliasService {
   }
 
   private async aliasesFor(workspaceId: string): Promise<Map<string, string>> {
-    const hit = this.cache.get(workspaceId);
-    if (hit && Date.now() - hit.at < TTL_MS) return hit.aliases;
-
-    const rows = await this.prisma.entityAlias.findMany({
-      where: { workspaceId },
-      select: { alias: true, canonicalKey: true },
+    return this.cache.get(workspaceId, async () => {
+      const rows = await this.prisma.entityAlias.findMany({
+        where: { workspaceId },
+        select: { alias: true, canonicalKey: true },
+      });
+      return new Map(rows.map((r) => [r.alias, r.canonicalKey]));
     });
-    const aliases = new Map(rows.map((r) => [r.alias, r.canonicalKey]));
-    this.cache.set(workspaceId, { at: Date.now(), aliases });
-    return aliases;
   }
 }

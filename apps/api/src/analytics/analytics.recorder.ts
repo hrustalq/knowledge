@@ -5,6 +5,7 @@ import type { AnalyticsChannel } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import type { Principal } from '../auth/principal.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { ttlCache } from '../common/ttl-cache.js';
 
 /**
  * Who is asking, as far as analytics cares (#79). Carried by every recorded
@@ -92,7 +93,7 @@ const SETTINGS_TTL_MS = 60_000;
 export class AnalyticsRecorder {
   private readonly logger = new Logger(AnalyticsRecorder.name);
   private readonly secret: Buffer;
-  private readonly enabledCache = new Map<string, { enabled: boolean; at: number }>();
+  private readonly enabledCache = ttlCache<boolean>(SETTINGS_TTL_MS);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -129,15 +130,13 @@ export class AnalyticsRecorder {
    */
   async enabled(workspaceId: string): Promise<boolean> {
     if (!this.config.get('ANALYTICS_ENABLED', { infer: true })) return false;
-    const hit = this.enabledCache.get(workspaceId);
-    if (hit && Date.now() - hit.at < SETTINGS_TTL_MS) return hit.enabled;
-    const row = await this.prisma.workspaceSettings.findUnique({
-      where: { workspaceId },
-      select: { analyticsEnabled: true },
+    return this.enabledCache.get(workspaceId, async () => {
+      const row = await this.prisma.workspaceSettings.findUnique({
+        where: { workspaceId },
+        select: { analyticsEnabled: true },
+      });
+      return row?.analyticsEnabled ?? true;
     });
-    const enabled = row?.analyticsEnabled ?? true;
-    this.enabledCache.set(workspaceId, { enabled, at: Date.now() });
-    return enabled;
   }
 
   /** Drop the cached setting, after this process changed it. */

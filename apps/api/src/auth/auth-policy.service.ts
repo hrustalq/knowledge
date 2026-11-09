@@ -13,6 +13,7 @@ import type { Principal } from './principal.js';
 import { breakGlassEmails } from './password-policy.js';
 import { liveIdpKinds } from './sso/live-kinds.js';
 import type { Env } from '../config/env.js';
+import { ttlCache } from '../common/ttl-cache.js';
 
 /** How long a workspace's policy is trusted in-process. Writes in this process invalidate at once. */
 const POLICY_TTL_MS = 30_000;
@@ -85,7 +86,7 @@ export function policyFailure(principal: Principal, policy: WorkspaceAuthPolicyA
  */
 @Injectable()
 export class AuthPolicyService {
-  private readonly cache = new Map<string, { at: number; value: EffectivePolicy }>();
+  private readonly cache = ttlCache<EffectivePolicy>(POLICY_TTL_MS);
   private readonly bypassAudited = new Map<string, number>();
 
   constructor(
@@ -104,11 +105,7 @@ export class AuthPolicyService {
   }
 
   async effective(workspaceId: string): Promise<EffectivePolicy> {
-    const hit = this.cache.get(workspaceId);
-    if (hit && Date.now() - hit.at < POLICY_TTL_MS) return hit.value;
-    const value = await this.load(workspaceId);
-    this.cache.set(workspaceId, { at: Date.now(), value });
-    return value;
+    return this.cache.get(workspaceId, () => this.load(workspaceId));
   }
 
   /** After a write. Other processes (the worker, a second API) catch up within POLICY_TTL_MS. */

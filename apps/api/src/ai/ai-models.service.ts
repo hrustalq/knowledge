@@ -4,6 +4,7 @@ import type { AiModelSource, AiModelSummary, AiProvider, CostCurrency } from '@k
 import { PrismaService } from '../prisma/prisma.service.js';
 import { readCapabilityOverride } from '../agents/model-capabilities.js';
 import { t } from '../i18n/t.js';
+import { ttlCache } from '../common/ttl-cache.js';
 
 /** How long the model roster is reused before PG is consulted again. */
 const CACHE_TTL_MS = 30_000;
@@ -33,21 +34,17 @@ export interface UpdateModelInput {
  */
 @Injectable()
 export class AiModelsService {
-  private readonly cache = new Map<string, { at: number; rows: AiModelRow[] }>();
+  private readonly cache = ttlCache<AiModelRow[]>(CACHE_TTL_MS);
 
   constructor(private readonly prisma: PrismaService) {}
 
   /** Cached, because a chat turn reads it. Off providers are included: callers decide. */
   async roster(workspaceId: string): Promise<AiModelRow[]> {
-    const hit = this.cache.get(workspaceId);
-    if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.rows;
-    const rows = await this.prisma.aiModel.findMany({
+    return this.cache.get(workspaceId, () => this.prisma.aiModel.findMany({
       where: { workspaceId },
       include: WITH_PROVIDER,
       orderBy: { code: 'asc' },
-    });
-    this.cache.set(workspaceId, { at: Date.now(), rows });
-    return rows;
+    }));
   }
 
   invalidate(workspaceId: string): void {

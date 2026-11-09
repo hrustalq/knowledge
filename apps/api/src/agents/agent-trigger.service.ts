@@ -7,6 +7,7 @@ import {
   type AgentRunEvent,
   type AgentRunInput,
   type AgentTriggerFilter,
+  isTriggerableAgent,
 } from '@knowledge/contracts';
 import { lockSubject } from '../common/subject-lock.js';
 import type { Env } from '../config/env.js';
@@ -18,7 +19,6 @@ import { AccessService } from '../auth/access.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { AgentRegistryService } from './agent-registry.service.js';
 import { AgentProducer } from './agent.producer.js';
-import { isTriggerableAgent } from './agent.executor.js';
 
 /**
  * What the listener learned about one event, resolved against PostgreSQL —
@@ -143,7 +143,7 @@ export class AgentTriggerService {
     }
 
     const agent = await this.registry.resolve(trigger.workspaceId, trigger.agentKey).catch(() => null);
-    if (!agent?.enabled || !agent.surfaces.includes('background') || !isTriggerableAgent(trigger.agentKey)) {
+    if (!agent?.enabled || !isTriggerableAgent(trigger.agentKey)) {
       this.logger.warn(`Trigger skipped for ${label}: the agent is disabled or cannot run in the background`);
       return skip('agent-unavailable');
     }

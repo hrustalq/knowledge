@@ -10,12 +10,12 @@ import {
   type AgentTriggerFilter,
   type AgentTriggerSummary,
   type RotateAgentTriggerSecretResponse,
+  isTriggerableAgent,
 } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
-import { isTriggerableAgent } from '../agents/agent.executor.js';
 import { filterOf } from '../agents/agent-trigger.service.js';
 import { decryptSecret, encryptSecret, parseKey } from './secret-box.js';
 import type { CreateAgentTriggerDto, UpdateAgentTriggerDto } from './ai.dto.js';
@@ -153,7 +153,7 @@ export class AgentTriggersService {
   private async assertTriggerable(workspaceId: string, agentKey: string, event: AgentTriggerEvent): Promise<void> {
     const agent = await this.registry.resolve(workspaceId, agentKey).catch(() => null);
     if (!agent) throw new NotFoundException(t('error.ai.agentNotFound', { key: agentKey }));
-    if (!agent.surfaces.includes('background') || !isTriggerableAgent(agentKey)) {
+    if (!isTriggerableAgent(agentKey)) {
       throw new BadRequestException(t('error.ai.agentNotBackground', { key: agentKey }));
     }
     if (!agentTriggerEventsFor(agentKey).includes(event)) {

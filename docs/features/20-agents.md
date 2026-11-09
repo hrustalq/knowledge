@@ -322,6 +322,17 @@ Five, following `import/` and `workflows/`:
   processes. Nothing in it may reach for anything the worker cannot load.
 - **`AgentQueueModule`** — producer only, both processes.
 - **`AgentWorkerModule`** — processor, executor, schedule sweeper. Worker only.
+  Each agent is a runner `{ key, run }` in `agents/runners/<key>.ts`, filed in
+  `AGENT_RUNNERS` (`agent-runners.ts`); `AgentExecutor` only opens the run's
+  context, looks the runner up and stamps the run (#823). What every runner
+  shares — the collaborators, `guidance`, `runScope`, `callModel` (the JSON
+  call, or the tool loop with the contract on its last round) and `stopsPass`
+  (a spent budget or a refused account ends the pass) — is the base class
+  `AgentServices`, so the executor keeps one constructor.
+  Which agents a person, a schedule or a trigger may start is `RUNNABLE_AGENTS`
+  / `isTriggerableAgent` in `@knowledge/contracts`: the API reads them without
+  loading worker code (`api-loads-no-agent-runner` in `make deps`), and
+  `test/agent-runners.spec.ts` fails if one has no runner.
 - **`AuthCoreModule`** — `AccessService` without the guards, re-exported by
   `AuthModule` so no existing importer changes.
 - The admin write surface (`AiAgentsService`, `AgentRunsService`,

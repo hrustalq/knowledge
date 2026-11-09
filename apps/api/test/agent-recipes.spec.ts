@@ -1,11 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { AgentTrigger, AiAgent } from '@prisma/client';
-import { AGENT_RECIPES, AGENT_RECIPE_KEYS, BUILT_IN_AGENT_KEYS, agentTriggerEventsFor, nextScheduledRun } from '@knowledge/contracts';
+import {
+  AGENT_RECIPES,
+  AGENT_RECIPE_KEYS,
+  BUILT_IN_AGENT_KEYS,
+  RUNNABLE_AGENTS,
+  agentTriggerEventsFor,
+  isTriggerableAgent,
+  nextScheduledRun,
+} from '@knowledge/contracts';
 import { AgentRecipesService } from '../src/ai/agent-recipes.service.js';
 import { AiAgentsService } from '../src/ai/ai-agents.service.js';
 import { AgentTriggersService } from '../src/ai/agent-triggers.service.js';
-import { RUNNABLE_AGENTS, isTriggerableAgent } from '../src/agents/agent.executor.js';
 import { BUILT_IN_AGENT_DEFAULTS } from '../src/agents/built-in-agents.js';
 import {
   DIGEST_DEFAULT_DAYS,

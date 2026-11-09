@@ -13,7 +13,7 @@ import { verifyHubSignature } from '../src/connectors/webhook-payload.js';
 import { AgentWebhookController } from '../src/ai/agent-webhook.controller.js';
 import { AgentTriggersService } from '../src/ai/agent-triggers.service.js';
 import { encryptSecret } from '../src/ai/secret-box.js';
-import { runBrief } from '../src/agents/agent.executor.js';
+import { runBrief } from '../src/agents/agent-services.js';
 import { MentionRepliesService, runReply } from '../src/documents/mention-replies.service.js';
 
 /**

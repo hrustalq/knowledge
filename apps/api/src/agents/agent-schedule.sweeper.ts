@@ -1,6 +1,6 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AGENT_SCHEDULE_TICK_MINUTES, isScheduleDue } from '@knowledge/contracts';
+import { AGENT_SCHEDULE_TICK_MINUTES, isScheduleDue, RUNNABLE_AGENTS } from '@knowledge/contracts';
 import { requeueStale, staleFailure } from '../common/requeue-stale.js';
 import { withSubjectLock } from '../common/subject-lock.js';
 import type { Env } from '../config/env.js';
@@ -8,7 +8,6 @@ import { asLocale } from '../i18n/locale.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AgentProducer } from './agent.producer.js';
 import { AGENT_MAX_ATTEMPTS, agentRunLockKey } from './agent.constants.js';
-import { RUNNABLE_AGENTS } from './agent.executor.js';
 import { scheduleOf } from './agent-schedule.js';
 import { Ticker } from '../common/ticker.js';
 

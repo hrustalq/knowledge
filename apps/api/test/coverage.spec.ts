@@ -10,7 +10,8 @@ import {
   readCoverageVerdict,
   type CoverageSignal,
 } from '../src/agents/coverage.js';
-import { AgentExecutor, RUNNABLE_AGENTS } from '../src/agents/agent.executor.js';
+import { RUNNABLE_AGENTS } from '@knowledge/contracts';
+import { AgentExecutor } from '../src/agents/agent.executor.js';
 import type { ResolvedAgent } from '../src/agents/agent-registry.service.js';
 import type { Principal } from '../src/auth/principal.js';
 

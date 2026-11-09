@@ -296,9 +296,9 @@ does not take.
 | Lint, pure | `agents/lint.ts` (`lintMessages`, `readLintViolations`, `renderStyleguide`), `documents/lint/lint-check.ts` (`resolveLintPolicy`, `changedText`, `styleFindings`, `planLintThreads`, `lintGate`) |
 | Lint, services | `StyleLintService` (`StyleLintModule`), `LintChecksService` (`LintCoreModule`, both processes), `LintTriggerSweeper` / `LintPublishSweeper` / `LintController` (`LintModule`, API-only) |
 | Gate and override | `MergeRequestsService.merge`, `overrideLintCheck` |
-| Scoring | `agents/quality.ts`, `AgentExecutor.audit`, `GraphService.meanRevisionEmbeddings` |
+| Scoring | `agents/quality.ts`, `runners/auditor.ts` (`audit`), `GraphService.meanRevisionEmbeddings` |
 | Reading scores | `QualityService` (`QualityCoreModule`, imported by MCP), `QualityController` (`QualityModule`) |
-| Glossary | `AgentExecutor.buildGlossary` / `glossaryScanned`, `AgentFindingsService.addTerm` |
+| Glossary | `runners/glossarist.ts` (`buildGlossary` / `glossaryScanned`), `AgentFindingsService.addTerm` |
 
 | Route | Access |
 | --- | --- |

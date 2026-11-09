@@ -4,6 +4,7 @@ import { WorkflowMaterializerService } from './workflow-materializer.service.js'
 import { WorkflowRunnerService } from './workflow-runner.service.js';
 import { stepById } from '@knowledge/workflow';
 import type { WorkflowGraph } from '@knowledge/contracts';
+import { Ticker } from '../common/ticker.js';
 
 const SWEEP_INTERVAL_MS = 5_000;
 const BATCH = 10;
@@ -30,8 +31,7 @@ const BATCH = 10;
 @Injectable()
 export class WorkflowMaterializeSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(WorkflowMaterializeSweeper.name);
-  private timer?: NodeJS.Timeout;
-  private running = false;
+  private readonly ticker = new Ticker(this.logger);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -40,18 +40,15 @@ export class WorkflowMaterializeSweeper implements OnModuleInit, OnModuleDestroy
   ) {}
 
   onModuleInit(): void {
-    this.timer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS);
-    this.timer.unref();
+    this.ticker.every(SWEEP_INTERVAL_MS, () => this.sweep());
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   async sweep(): Promise<void> {
-    if (this.running) return; // a slow sweep must not stack on itself
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       const nodes = await this.prisma.workflowRunNode.findMany({
         where: { status: 'materializing', documentId: null },
         orderBy: { updatedAt: 'asc' },
@@ -120,10 +117,6 @@ export class WorkflowMaterializeSweeper implements OnModuleInit, OnModuleDestroy
         }
         await this.runner.reconcileRun(node.runId);
       }
-    } catch (e) {
-      this.logger.warn(`Materialise sweep failed (non-fatal): ${(e as Error).message}`);
-    } finally {
-      this.running = false;
-    }
+    });
   }
 }

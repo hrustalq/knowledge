@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import type { Env } from '../../config/env.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { SsoDomainsService } from './sso-domains.service.js';
+import { Ticker } from '../../common/ticker.js';
 
 /** One tick does everything; pending domains are therefore rechecked every 15 minutes, as promised. */
 const SWEEP_INTERVAL_MS = 15 * 60_000;
@@ -22,9 +23,8 @@ const SWEEP_INTERVAL_MS = 15 * 60_000;
 @Injectable()
 export class SsoMaintenanceSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(SsoMaintenanceSweeper.name);
+  private readonly ticker = new Ticker(this.logger);
   private readonly on: boolean;
-  private timer?: NodeJS.Timeout;
-  private running = false;
 
   constructor(
     config: ConfigService<Env, true>,
@@ -36,18 +36,15 @@ export class SsoMaintenanceSweeper implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit(): void {
     if (!this.on) return;
-    this.timer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS);
-    this.timer.unref();
+    this.ticker.every(SWEEP_INTERVAL_MS, () => this.sweep());
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   async sweep(now = new Date()): Promise<void> {
-    if (this.running) return; // a slow DNS pass must not stack on itself
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       const [requests, sessions] = await Promise.all([
         this.prisma.ssoAuthRequest.deleteMany({ where: { expiresAt: { lt: now } } }),
         this.prisma.session.deleteMany({ where: { expiresAt: { lt: now } } }),
@@ -56,10 +53,6 @@ export class SsoMaintenanceSweeper implements OnModuleInit, OnModuleDestroy {
       if (requests.count || sessions.count || proved) {
         this.logger.log(`purged ${requests.count} login transactions, ${sessions.count} sessions; verified ${proved} domains`);
       }
-    } catch (e) {
-      this.logger.warn(`sso maintenance failed: ${(e as Error).message}`);
-    } finally {
-      this.running = false;
-    }
+    });
   }
 }

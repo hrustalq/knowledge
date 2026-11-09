@@ -8,6 +8,7 @@ import { asLocale } from '../i18n/locale.js';
 import { t, withLocale } from '../i18n/t.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { Ticker } from '../common/ticker.js';
 
 const SWEEP_INTERVAL_MS = 15_000;
 const BATCH = 5;
@@ -33,8 +34,7 @@ const CLAIM_LEASE_MS = 10 * 60_000;
 @Injectable()
 export class MemoPublishSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(MemoPublishSweeper.name);
-  private timer?: NodeJS.Timeout;
-  private running = false;
+  private readonly ticker = new Ticker(this.logger);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -45,19 +45,15 @@ export class MemoPublishSweeper implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit(): void {
-    this.timer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS);
-    this.timer.unref();
+    this.ticker.every(SWEEP_INTERVAL_MS, () => this.sweep());
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   async sweep(): Promise<void> {
-    // Back-pressure: never a second sweep while one is in flight.
-    if (this.running) return;
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       const expired = new Date(Date.now() - CLAIM_LEASE_MS);
       const due = await this.prisma.$queryRaw<Array<{ id: string }>>`
         SELECT m.id FROM memos m
@@ -81,11 +77,7 @@ export class MemoPublishSweeper implements OnModuleInit, OnModuleDestroy {
           this.fail(memo, (error as Error).message),
         );
       }
-    } catch (error) {
-      this.logger.warn(`Memo publish sweep failed (non-fatal): ${(error as Error).message}`);
-    } finally {
-      this.running = false;
-    }
+    });
   }
 
   async publish(memo: Memo, run: AgentRun): Promise<void> {

@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.js';
 import { CaptureInboxService } from './capture-inbox.service.js';
+import { Ticker } from '../common/ticker.js';
 
 /**
  * Finishes captures a crash stranded between stage and propose (issue #73):
@@ -15,8 +16,7 @@ import { CaptureInboxService } from './capture-inbox.service.js';
 @Injectable()
 export class CaptureSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(CaptureSweeper.name);
-  private timer?: NodeJS.Timeout;
-  private running = false;
+  private readonly ticker = new Ticker(this.logger);
 
   constructor(
     private readonly inbox: CaptureInboxService,
@@ -24,24 +24,17 @@ export class CaptureSweeper implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit(): void {
-    this.timer = setInterval(() => void this.sweep(), this.config.get('CAPTURE_SWEEP_INTERVAL_MS', { infer: true }));
-    this.timer.unref();
+    this.ticker.every(this.config.get('CAPTURE_SWEEP_INTERVAL_MS', { infer: true }), () => this.sweep());
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   async sweep(): Promise<void> {
-    if (this.running) return;
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       const settled = await this.inbox.sweepStranded();
       if (settled > 0) this.logger.log(`settled ${settled} stranded captures`);
-    } catch (e: unknown) {
-      this.logger.warn(`capture sweep failed: ${String(e)}`);
-    } finally {
-      this.running = false;
-    }
+    });
   }
 }

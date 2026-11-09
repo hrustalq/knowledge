@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CHAT_SOCKET_KINDS, ChatAdapterRegistry } from './adapters/chat-adapter.registry.js';
 import { ChatAnswersService } from './chat-answers.service.js';
 import { ChatIntegrationsService } from './chat-integrations.service.js';
+import { Ticker } from '../common/ticker.js';
 
 /** Reconnect delays after a drop, in ms; the last one repeats. Reset by the server's `hello`. */
 const BACKOFF_MS = [1_000, 2_000, 5_000, 10_000, 30_000, 60_000];
@@ -87,6 +88,7 @@ interface Connection {
 @Injectable()
 export class ChatSocketSupervisor implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(ChatSocketSupervisor.name);
+  private readonly ticker = new Ticker(this.logger);
   private readonly connections = new Map<string, Connection>();
   private readonly enabled: boolean;
   private readonly syncMs: number;
@@ -94,8 +96,6 @@ export class ChatSocketSupervisor implements OnApplicationBootstrap, OnModuleDes
   private readonly connect: ChatSocketFactory;
   private readonly claims: ChatInboxClaims;
   private redis: Redis | null = null;
-  private timer: NodeJS.Timeout | null = null;
-  private syncing = false;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -116,21 +116,18 @@ export class ChatSocketSupervisor implements OnApplicationBootstrap, OnModuleDes
   onApplicationBootstrap(): void {
     if (!this.enabled) return;
     void this.sync();
-    this.timer = setInterval(() => void this.sync(), this.syncMs);
-    this.timer.unref();
+    this.ticker.every(this.syncMs, () => this.sync());
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
     for (const id of [...this.connections.keys()]) this.close(id);
     void this.redis?.quit().catch(() => undefined);
   }
 
   /** Open what is enabled and not held, close what is held and no longer enabled, reopen what changed. */
   async sync(): Promise<void> {
-    if (this.syncing) return;
-    this.syncing = true;
-    try {
+    return this.ticker.exclusive(async () => {
       const rows = await this.prisma.chatIntegration.findMany({ where: { kind: { in: [...CHAT_SOCKET_KINDS] }, enabled: true } });
       const wanted = new Map(rows.map((r) => [r.id, r]));
       for (const [id, conn] of this.connections) {
@@ -140,11 +137,7 @@ export class ChatSocketSupervisor implements OnApplicationBootstrap, OnModuleDes
         else conn.row = row;
       }
       for (const row of rows) if (!this.connections.has(row.id)) this.open(row);
-    } catch (err) {
-      this.logger.warn({ msg: 'chat socket sync failed', error: String(err) });
-    } finally {
-      this.syncing = false;
-    }
+    });
   }
 
   /** Bots with a socket open and greeted — for specs and diagnostics. */

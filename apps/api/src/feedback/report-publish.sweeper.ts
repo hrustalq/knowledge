@@ -8,6 +8,7 @@ import { asLocale } from '../i18n/locale.js';
 import { t, withLocale } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { KnowledgeIssuesService, REPORT_AGENT_KEY } from './knowledge-issues.service.js';
+import { Ticker } from '../common/ticker.js';
 
 const SWEEP_INTERVAL_MS = 15_000;
 const BATCH = 5;
@@ -52,8 +53,7 @@ const PURGE_MAX_BATCHES = 20;
 @Injectable()
 export class ReportPublishSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ReportPublishSweeper.name);
-  private timer?: NodeJS.Timeout;
-  private running = false;
+  private readonly ticker = new Ticker(this.logger);
   private lastPurge = 0;
 
   constructor(
@@ -65,19 +65,15 @@ export class ReportPublishSweeper implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit(): void {
-    this.timer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS);
-    this.timer.unref();
+    this.ticker.every(SWEEP_INTERVAL_MS, () => this.sweep());
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   async sweep(): Promise<void> {
-    // Back-pressure: never a second sweep while one is in flight.
-    if (this.running) return;
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       const since = new Date(Date.now() - MAX_AGE_MS);
       const expired = new Date(Date.now() - CLAIM_LEASE_MS);
       const due = await this.prisma.$queryRaw<Array<{ id: string }>>`
@@ -123,11 +119,7 @@ export class ReportPublishSweeper implements OnModuleInit, OnModuleDestroy {
         this.lastPurge = Date.now();
         await this.purge();
       }
-    } catch (error) {
-      this.logger.warn(`Report publish sweep failed (non-fatal): ${(error as Error).message}`);
-    } finally {
-      this.running = false;
-    }
+    });
   }
 
   async publish(run: AgentRun): Promise<void> {

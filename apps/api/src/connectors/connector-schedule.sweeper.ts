@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { ConnectorProducer } from './connector.producer.js';
 import { aclSyncDue } from './connector-acl.js';
 import { ConnectorsService } from './connectors.service.js';
+import { Ticker } from '../common/ticker.js';
 
 const SWEEP_INTERVAL_MS = 5 * 60_000;
 /** A run still `queued` this long after its last slice (or its creation) has probably lost its job (#657). */
@@ -32,8 +33,7 @@ const CONNECTOR_MAX_ATTEMPTS = 3;
 @Injectable()
 export class ConnectorScheduleSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ConnectorScheduleSweeper.name);
-  private timer?: NodeJS.Timeout;
-  private running = false;
+  private readonly ticker = new Ticker(this.logger);
   private schedulesEnabled = false;
 
   constructor(
@@ -48,8 +48,7 @@ export class ConnectorScheduleSweeper implements OnModuleInit, OnModuleDestroy {
     if (!this.schedulesEnabled) {
       this.logger.log('Connector schedules disabled (CONNECTOR_SCHEDULE_ENABLED=false); run recovery stays on');
     }
-    this.timer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS);
-    this.timer.unref();
+    this.ticker.every(SWEEP_INTERVAL_MS, () => this.sweep());
   }
 
   /**
@@ -111,13 +110,11 @@ export class ConnectorScheduleSweeper implements OnModuleInit, OnModuleDestroy {
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   async sweep(): Promise<void> {
-    if (this.running) return; // a slow sweep must not stack on itself
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       await this.relayQueued();
       // After the relay: a run re-queued here still has an old `startedAt`, so
       // the relay would enqueue it a second time in the same tick.
@@ -169,10 +166,6 @@ export class ConnectorScheduleSweeper implements OnModuleInit, OnModuleDestroy {
           });
         }
       }
-    } catch (err) {
-      this.logger.warn(`Connector schedule sweep failed: ${(err as Error).message}`);
-    } finally {
-      this.running = false;
-    }
+    });
   }
 }

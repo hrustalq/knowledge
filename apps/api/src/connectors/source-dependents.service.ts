@@ -10,9 +10,9 @@ import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService, type StoredRevision } from '../storage/storage.service.js';
 import { VerificationService } from '../verification/verification.service.js';
+import { AUTHOR_ID_STUB } from '../activity/actor.js';
 
 /** The system's own actor id, used when a connector's owner was deleted. */
-const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
 /** Changes named in one dependent's note; the rest is "…". */
 const MAX_NOTE_ITEMS = 10;
 /** The agent that judges the linking pages (phase 5b). */

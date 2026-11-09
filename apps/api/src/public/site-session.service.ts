@@ -7,6 +7,7 @@ import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PublicStore } from './public-store.js';
 import { readCookie } from '../common/cookies.js';
+import { AUTHOR_ID_STUB } from '../activity/actor.js';
 
 const SESSION_PREFIX = 'kn:site-session:';
 const CODE_PREFIX = 'kn:site-code:';
@@ -18,7 +19,6 @@ export const SITE_SIGN_IN_CODE_TTL_MS = 2 * 60_000;
 const MAX_TOKEN_CHARS = 8_192;
 
 /** The dev principal's id (AUTH_MODE=none), which has no membership row. */
-const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
 
 type StoredSession =
   | { siteId: string; kind: 'member'; userId: string }

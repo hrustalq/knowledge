@@ -9,6 +9,7 @@ import { SiteSignInDto } from '../publishing/sites.dto.js';
 import { PublicSitesService } from './public-sites.service.js';
 import { SiteSessionService } from './site-session.service.js';
 import { Returns } from '../common/returns.decorator.js';
+import { AUTHOR_ID_STUB } from '../activity/actor.js';
 
 /** The prefix the front proxy (Caddy, or Vite in dev) strips before the API, on the app's origin and on every site host. */
 const API_PREFIX = '/api';
@@ -50,7 +51,7 @@ export class SiteSignInController {
     if (!target) {
       throw new BadRequestException({ statusCode: 400, message: t('error.site.signInReturnInvalid'), reason: 'site.signInReturnInvalid' });
     }
-    const code = await this.sessions.issueCode(site.id, principal?.userId ?? '00000000-0000-0000-0000-000000000000');
+    const code = await this.sessions.issueCode(site.id, principal?.userId ?? AUTHOR_ID_STUB);
     const query = new URLSearchParams({ code, return: target.path });
     return { url: `${target.origin}${API_PREFIX}${publicSiteSessionPath(site.id)}?${query}` };
   }

@@ -32,9 +32,9 @@ import {
   type SourceExtraction,
   type SourceFingerprint,
 } from './source-recipe.js';
+import { AUTHOR_ID_STUB } from '../activity/actor.js';
 
 /** The system's own actor id: a draft nobody asked for is billed to no one. */
-const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
 /** Characters of the last good page the agent reads beside the outline. */
 const PAGE_EXCERPT = 4_000;
 

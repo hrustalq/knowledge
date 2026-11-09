@@ -30,13 +30,13 @@ import {
   type FoldCandidate,
   type LearnerThresholds,
 } from './learner-derive.js';
+import { AUTHOR_ID_STUB } from '../activity/actor.js';
 
 /**
  * No person proposed a derived learning, and `agent_learnings.created_by` is
  * NOT NULL: the zeros stub, the house spelling of "nobody" (merge requests,
  * share links). The coach's usage rows are billed to it for the same reason.
  */
-export const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
 /** Texts sent to the embedding provider in one call. */
 const EMBED_BATCH = 64;
 /** Dismissed findings one workspace pass reads at most, newest first. */

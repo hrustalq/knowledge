@@ -54,9 +54,9 @@ import { ProjectCommitsService, type PagePlace } from '../git/project-commits.se
 import { sourcePages } from './mr-pages.js';
 import { hasConflictMarkers, threeWay, type ThreeWayResult } from './three-way.js';
 import type { Env } from '../config/env.js';
+import { AUTHOR_ID_STUB } from '../activity/actor.js';
 
 /** Fallback author when no principal is supplied (AUTH_MODE=none, MCP stdio). */
-export const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
 
 const MR_INCLUDE = { sourceBranch: true, targetBranch: true, reviewers: true } as const;
 

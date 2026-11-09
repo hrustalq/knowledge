@@ -22,6 +22,7 @@ import {
   type ScimUserRecord,
 } from './scim-resources.js';
 import { UUID_RE } from '@knowledge/contracts';
+import { AUTHOR_ID_STUB } from '../activity/actor.js';
 
 /** Who is calling: the workspace a `kscim_` token belongs to, and which token. */
 export interface ScimCaller {
@@ -86,7 +87,7 @@ export class ScimService {
     if (query.filter) {
       const f = parseUserFilter(query.filter);
       if (!f) throw new ScimError(HttpStatus.BAD_REQUEST, t('error.scim.invalidFilter'), 'invalidFilter');
-      if (f.attribute === 'id') where.userId = UUID_RE.test(f.value) ? f.value : '00000000-0000-0000-0000-000000000000';
+      if (f.attribute === 'id') where.userId = UUID_RE.test(f.value) ? f.value : AUTHOR_ID_STUB;
       else if (f.attribute === 'userName') where.userName = f.value.toLowerCase();
       else if (f.attribute === 'externalId') where.externalId = f.value;
       else where.user = { email: f.value.toLowerCase() };
@@ -325,7 +326,7 @@ export class ScimService {
     if (query.filter) {
       const f = parseGroupFilter(query.filter);
       if (!f) throw new ScimError(HttpStatus.BAD_REQUEST, t('error.scim.invalidFilter'), 'invalidFilter');
-      if (f.attribute === 'id') where.id = UUID_RE.test(f.value) ? f.value : '00000000-0000-0000-0000-000000000000';
+      if (f.attribute === 'id') where.id = UUID_RE.test(f.value) ? f.value : AUTHOR_ID_STUB;
       else if (f.attribute === 'displayName') where.displayName = { equals: f.value, mode: 'insensitive' };
       else where.externalId = f.value;
     }

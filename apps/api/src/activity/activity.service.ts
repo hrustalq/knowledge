@@ -273,7 +273,7 @@ export interface ActivityFilter {
 
 // Re-exported from a leaf module so `EventsPublisher`'s notification fan-out
 // can share them without closing an import cycle back through this file.
-export { actorIdentities, DEV_ACTOR, DEV_ACTOR_ID, isDevActor } from './actor.js';
+export { actorIdentities, AUTHOR_ID_STUB, DEV_ACTOR, isDevActor } from './actor.js';
 
 function emptyKindTally(): Record<ActivityKind, number> {
   return Object.fromEntries(ACTIVITY_KINDS.map((k) => [k, 0])) as Record<ActivityKind, number>;

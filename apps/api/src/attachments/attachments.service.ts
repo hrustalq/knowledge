@@ -17,9 +17,9 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { ActivityService } from '../activity/activity.service.js';
 import { t } from '../i18n/t.js';
+import { AUTHOR_ID_STUB } from '../activity/actor.js';
 
 /** Author fallback for the AUTH_MODE=none dev principal, same stub the rest of the API uses. */
-const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
 
 /**
  * Types the browser may render in-place. Everything else is served as a

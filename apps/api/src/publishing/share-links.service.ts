@@ -17,9 +17,9 @@ import type { Env } from '../config/env.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PublishingSettingsService } from './publishing-settings.service.js';
+import { AUTHOR_ID_STUB } from '../activity/actor.js';
 
 /** The dev principal has no users row; same stub the rest of the API records. */
-const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
 
 /** SHA-256 of a `kp_` token — the only form the database looks a link up by. */
 export function shareTokenHash(token: string): string {

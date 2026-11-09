@@ -36,9 +36,9 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { PublishingSettingsService } from './publishing-settings.service.js';
 import { SiteBuildProducer } from './site-build.producer.js';
 import { siteDomainSummary } from './site-domains.service.js';
+import { AUTHOR_ID_STUB } from '../activity/actor.js';
 
 /** The dev principal has no users row; same stub the rest of the API records. */
-const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
 
 /** Most versions one site keeps. Each is a full snapshot, rebuilt on its own. */
 export const SITE_MAX_VERSIONS = 20;

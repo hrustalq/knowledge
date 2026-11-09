@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const safeFetch = vi.hoisted(() => vi.fn());
 vi.mock('../src/common/safe-fetch.js', () => ({ safeFetch, guardedLookup: vi.fn() }));
 
-import { MattermostAdapter, defuseMentions, markdownForMattermost, signAction } from '../src/chat/adapters/mattermost.adapter.js';
+import { MattermostAdapter, signAction } from '../src/chat/adapters/mattermost.adapter.js';
+import { defuseMentions, markdownForMattermost } from '../src/chat/adapters/chat-markdown.js';
 import { ChatAdapterRegistry } from '../src/chat/adapters/chat-adapter.registry.js';
 import { ChatPlatformError, type ChatAdapterContext, type ChatInbound } from '../src/chat/adapters/chat-adapter.types.js';
 import {

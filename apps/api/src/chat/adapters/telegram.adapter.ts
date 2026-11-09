@@ -15,6 +15,7 @@ import {
   type ChatView,
   type RawInbound,
 } from './chat-adapter.types.js';
+import { MD_LINK_RE, answerButtons, citeNumber, citeUrls, cutAnswer, numberedSources, resolveUrl } from './chat-markdown.js';
 
 /** Telegram counts this many characters of message text, after entity parsing. */
 const MAX_CHARS = 4096;
@@ -35,26 +36,6 @@ export function hashInboundSecret(secret: string): string {
 
 const escapeHtml = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const escapeAttr = (s: string): string => escapeHtml(s).replace(/"/g, '&quot;');
-
-/** `[text](url)`, the URL allowed one level of parentheses (Wikipedia's are common). */
-const MD_LINK_RE = /\[([^\]\n]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)/g;
-
-/** `S3` → `3`: the reader sees a footnote number, not the model's label. */
-const citeNumber = (label: string): string => label.replace(/^S/i, '');
-
-/**
- * Where a link in an answer may point. Page links arrive relative
- * (`/documents/:id`, the PAGE_LINK_RULE shape), which mean nothing in a chat
- * client; anything that is not http(s) after resolving is dropped to its text.
- */
-function resolveUrl(raw: string, base: string): string | null {
-  try {
-    const url = new URL(raw, base.endsWith('/') ? base : `${base}/`);
-    return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : null;
-  } catch {
-    return null;
-  }
-}
 
 /** One line of prose: inline code, links, citation markers, emphasis. */
 function inlineHtml(line: string, cite: (label: string) => string | null, base: string): string {
@@ -134,21 +115,6 @@ export function markdownToPlain(md: string): string {
     .replace(/\*\*([^*\n]+?)\*\*/g, '$1')
     .replace(/`([^`\n]+)`/g, '$1')
     .trim();
-}
-
-/**
- * Cut an answer to `budget` characters at the last paragraph or sentence that
- * fits. Markdown is never shorter than the text Telegram counts after parsing
- * (link targets and `S` prefixes vanish), so a cut that fits here fits there.
- */
-export function cutAnswer(md: string, budget: number): { text: string; cut: boolean } {
-  if (md.length <= budget) return { text: md, cut: false };
-  const window = md.slice(0, budget);
-  const at = Math.max(window.lastIndexOf('\n\n'), window.lastIndexOf('. '), window.lastIndexOf('\n'));
-  // An open code fence would swallow the rest of the message — close it.
-  let text = (at > budget / 2 ? window.slice(0, at + 1) : window).trimEnd();
-  if ((text.match(/```/g)?.length ?? 0) % 2 === 1) text += '\n```';
-  return { text: `${text}\n…`, cut: true };
 }
 
 /**
@@ -298,8 +264,7 @@ export class TelegramAdapter implements ChatAdapter {
   }
 
   private renderAnswer(view: ChatAnswerView): ChatOutMessage {
-    const urls = new Map(view.sources.filter((s) => s.cite).map((s) => [s.cite!.toUpperCase(), s.url]));
-    const numbered = view.sources.map((s, i) => ({ ...s, n: s.cite ? citeNumber(s.cite) : String(i + 1) }));
+    const numbered = numberedSources(view);
     const sourcesHtml = numbered.length
       ? `\n\n<b>${escapeHtml(view.sourcesHeading)}</b>\n` +
         numbered.map((s) => `[${s.n}] <a href="${escapeAttr(s.url)}">${escapeHtml(s.title)}</a>`).join('\n')
@@ -309,9 +274,9 @@ export class TelegramAdapter implements ChatAdapter {
       : '';
     const { text, cut } = cutAnswer(view.answer, MAX_CHARS - ANSWER_HEADROOM - sourcesPlain.length);
     return {
-      text: markdownToTelegramHtml(text, (label) => urls.get(label) ?? null, view.webBaseUrl) + sourcesHtml,
+      text: markdownToTelegramHtml(text, citeUrls(view), view.webBaseUrl) + sourcesHtml,
       plain: (markdownToPlain(text) + sourcesPlain).slice(0, MAX_CHARS),
-      buttons: [...(cut && view.full ? [[view.full]] : []), ...view.actions],
+      buttons: answerButtons(view, cut),
     };
   }
 

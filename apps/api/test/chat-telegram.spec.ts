@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  TelegramAdapter,
-  cutAnswer,
-  hashInboundSecret,
-  markdownToTelegramHtml,
-} from '../src/chat/adapters/telegram.adapter.js';
+import { TelegramAdapter, hashInboundSecret, markdownToTelegramHtml } from '../src/chat/adapters/telegram.adapter.js';
+import { cutAnswer } from '../src/chat/adapters/chat-markdown.js';
 import { ChatPlatformError } from '../src/chat/adapters/chat-adapter.types.js';
 
 /**

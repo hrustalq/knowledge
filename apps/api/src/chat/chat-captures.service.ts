@@ -19,19 +19,13 @@ import { CaptureService } from '../captures/capture.service.js';
 import { GlossaryService } from '../glossary/glossary.service.js';
 import { t } from '../i18n/t.js';
 import type { ChatAdapter, ChatAdapterContext, ChatLinkButton, ChatMessageRef } from './adapters/chat-adapter.types.js';
+import { HarvestRefused } from './harvest.service.js';
 
 /** The newest turns of a conversation the glossarist reads; older ones are rarely what a term is about. */
 const MAX_TURNS = 20;
 /** What the glossarist is handed, at most. */
 const MAX_TRANSCRIPT_CHARS = 24_000;
 const SESSION: CaptureSession = { client: 'chat' };
-
-/** A refusal with something to tell the person, as a message key. */
-class CaptureRefused extends Error {
-  constructor(readonly key: string) {
-    super(key);
-  }
-}
 
 export interface CaptureRequest {
   integration: ChatIntegration;
@@ -163,9 +157,9 @@ export class ChatCapturesService {
       { workspaceId, projectId, markdown: wrapUntrusted(transcript, 'save_thread', 'chat') },
       principal,
     );
-    if (!result.enabled) throw new CaptureRefused('chat.capture.disabled');
+    if (!result.enabled) throw new HarvestRefused('chat.capture.disabled');
     const pick = result.suggestions.find((s) => !s.existingTermId);
-    if (!pick) throw new CaptureRefused('chat.capture.noTerm');
+    if (!pick) throw new HarvestRefused('chat.capture.noTerm');
     return this.captures.capture(
       {
         kind: 'glossary',
@@ -219,7 +213,7 @@ export class ChatCapturesService {
       orderBy: { createdAt: 'asc' },
       select: { id: true },
     });
-    if (!first) throw new CaptureRefused('chat.capture.noProject');
+    if (!first) throw new HarvestRefused('chat.capture.noProject');
     return first.id;
   }
 
@@ -240,14 +234,14 @@ export class ChatCapturesService {
       take: MAX_TURNS,
       select: { assistantMessageId: true },
     });
-    if (!conversation || !shown.length) throw new CaptureRefused('chat.capture.nothing');
+    if (!conversation || !shown.length) throw new HarvestRefused('chat.capture.nothing');
     const messages = await this.prisma.assistantMessage.findMany({
       where: { threadId: conversation.assistantThreadId },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       select: { id: true, role: true, content: true, sources: true },
     });
     const text = chatTranscript(messages, new Set(shown.map((s) => s.assistantMessageId!)));
-    if (!text) throw new CaptureRefused('chat.capture.nothing');
+    if (!text) throw new HarvestRefused('chat.capture.nothing');
     // Newest turns win when it is long: the question Save was pressed under is the last.
     return text.length > MAX_TRANSCRIPT_CHARS ? text.slice(-MAX_TRANSCRIPT_CHARS) : text;
   }
@@ -255,7 +249,7 @@ export class ChatCapturesService {
 
 /** A refusal's message key, from the capture path's `reason` where it gave one. */
 function refusalKey(err: unknown): string {
-  if (err instanceof CaptureRefused) return err.key;
+  if (err instanceof HarvestRefused) return err.key;
   if (!(err instanceof HttpException)) return 'chat.capture.failed';
   const body = err.getResponse();
   const reason = typeof body === 'object' && body !== null ? (body as { reason?: unknown }).reason : undefined;

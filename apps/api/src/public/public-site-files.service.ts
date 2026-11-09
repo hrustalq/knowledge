@@ -3,14 +3,14 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { SiteVersion } from '@prisma/client';
 import { siteHomeDocumentId, siteMarkdownPath, sitePagePath } from '@knowledge/contracts';
-import { orderPages, renderFullHeader, renderFullPage, renderLlmsIndex, truncatedMarker, unavailableMarker } from '../ai-readable/llms.js';
+import { orderPages, renderFullHeader, renderLlmsIndex, streamPages, type TextSink } from '../ai-readable/llms.js';
 import { titledMarkdown } from '../ai-readable/render.js';
 import { etagMatches as matches, etagOf } from '../common/http-cache.js';
 import type { Env } from '../config/env.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { PublicSitesService, SNAPSHOT_ROW, type LiveSite, type SnapshotRow } from './public-sites.service.js';
+import { PublicSitesService, type LiveSite, type SnapshotRow, siteVersion, snapshotRows } from './public-sites.service.js';
 
 /** Bumped when any file's shape changes, so every cached ETag goes stale. */
 const SITE_FILES_FORMAT_VERSION = 1;
@@ -33,10 +33,6 @@ export interface SiteFullPlan {
   etag: string;
   header: string;
   pages: { documentId: string; revisionId: string; title: string; url: string }[];
-}
-
-interface TextSink {
-  write(chunk: string): unknown;
 }
 
 /**
@@ -124,7 +120,7 @@ export class PublicSiteFilesService {
   /** The llmstxt.org index of one version: its pages as markdown links, in reading order, then the other versions. */
   async llmsIndex(query: SiteFileQuery, ifNoneMatch?: string): Promise<SiteFile> {
     const site = await this.sites.find(query);
-    const version = this.version(site, query.version);
+    const version = siteVersion(site, query.version);
     const root = this.sites.rootUrl(site);
     const title = await this.title(site);
     const others = site.versions.filter((v) => v.id !== version.id);
@@ -160,7 +156,7 @@ export class PublicSiteFilesService {
   /** The plan for llms-full.txt: every page of the version at its pinned revision, in reading order. */
   async llmsFullPlan(query: SiteFileQuery): Promise<SiteFullPlan> {
     const site = await this.sites.find(query);
-    const version = this.version(site, query.version);
+    const version = siteVersion(site, query.version);
     const root = this.sites.rootUrl(site);
     const title = await this.title(site);
     const caps = [this.config.get('LLMS_FULL_MAX_DOCS', { infer: true }), this.config.get('LLMS_FULL_MAX_BYTES', { infer: true })];
@@ -180,47 +176,27 @@ export class PublicSiteFilesService {
     };
   }
 
-  /**
-   * Write the plan page by page, never buffered, under the same caps as the
-   * workspace dumps (LLMS_FULL_MAX_DOCS / _BYTES). The status is already sent,
-   * so nothing here throws: an unreadable page is a marker, a cap is a marker.
-   */
+  /** Write the plan through `streamPages`, under the same caps as the workspace dumps (LLMS_FULL_MAX_DOCS / _BYTES). */
   async streamFull(plan: SiteFullPlan, out: TextSink): Promise<void> {
-    const maxDocs = this.config.get('LLMS_FULL_MAX_DOCS', { infer: true });
-    const maxBytes = this.config.get('LLMS_FULL_MAX_BYTES', { infer: true });
-    const window = this.config.get('AI_READABLE_FETCH_CONCURRENCY', { infer: true });
     out.write(plan.header);
-    let bytes = 0;
-    let written = 0;
-    let i = 0;
-    outer: while (i < plan.pages.length) {
-      const batch = plan.pages.slice(i, i + window);
-      const bodies = await Promise.all(
-        batch.map((p) =>
-          this.documents.getContent(p.documentId, p.revisionId).then(
-            // Text for machines: an embed is its captions, never its Figma link (#470).
-            (c) => this.embeds.publicMarkdown(c.markdown, p.revisionId, false),
-            (e: unknown) => {
-              this.logger.warn(`site llms-full: page ${p.documentId} unavailable: ${(e as Error).message}`);
-              return null;
-            },
-          ),
+    await streamPages(
+      out,
+      plan.pages.map((p) => ({ ...p, id: p.documentId })),
+      (p) =>
+        this.documents.getContent(p.documentId, p.revisionId).then(
+          // Text for machines: an embed is its captions, never its Figma link (#470).
+          (c) => this.embeds.publicMarkdown(c.markdown, p.revisionId, false),
+          (e: unknown) => {
+            this.logger.warn(`site llms-full: page ${p.documentId} unavailable: ${(e as Error).message}`);
+            return null;
+          },
         ),
-      );
-      for (let j = 0; j < batch.length; j++) {
-        if (written >= maxDocs) break outer;
-        const page = batch[j];
-        const body = bodies[j];
-        const chunk = body === null ? unavailableMarker(page.documentId) : `${renderFullPage({ title: page.title, body, url: page.url })}\n`;
-        const size = Buffer.byteLength(chunk);
-        if (bytes + size > maxBytes) break outer;
-        out.write(chunk);
-        bytes += size;
-        if (body !== null) written++;
-        i++;
-      }
-    }
-    if (i < plan.pages.length) out.write(truncatedMarker(plan.pages.length - i, []));
+      {
+        maxDocs: this.config.get('LLMS_FULL_MAX_DOCS', { infer: true }),
+        maxBytes: this.config.get('LLMS_FULL_MAX_BYTES', { infer: true }),
+        window: this.config.get('AI_READABLE_FETCH_CONCURRENCY', { infer: true }),
+      },
+    );
   }
 
   /**
@@ -253,25 +229,14 @@ export class PublicSiteFilesService {
     return new NotFoundException(t('error.site.notFound'));
   }
 
-  private version(site: LiveSite, slug: string | undefined) {
-    if (!slug) return site.defaultVersion;
-    const version = site.versions.find((v) => v.slug === slug);
-    if (!version) throw this.notFound();
-    return version;
-  }
-
   /** A version's URL segment; the default version has none. */
   private segment(site: LiveSite, version: SiteVersion): string | null {
     return version.id === site.defaultVersionId ? null : version.slug;
   }
 
   /** The version's public rows. A public stamp folds down from public ancestors, so no row here hangs from a hidden one. */
-  private rows(versionId: string): Promise<SnapshotRow[]> {
-    return this.prisma.siteVersionPage.findMany({
-      where: { versionId, audience: 'public' },
-      orderBy: [{ depth: 'asc' }, { position: 'asc' }],
-      select: SNAPSHOT_ROW,
-    });
+  private async rows(versionId: string): Promise<SnapshotRow[]> {
+    return (await snapshotRows(this.prisma, versionId)).filter((r) => r.audience === 'public');
   }
 
   /** Reading order: depth-first, siblings by position then title — the order of the reader's nav. */

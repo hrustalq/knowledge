@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   SITE_SEARCH_MAX_CHARS,
@@ -9,10 +9,9 @@ import {
   type PublicSiteSearchSnippetPart,
 } from '@knowledge/contracts';
 import { tagFilterKey } from '../common/relations.js';
-import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { storedTags } from '../publishing/site-search.text.js';
-import { PublicSitesService, visibleRows } from './public-sites.service.js';
+import { PublicSitesService, visibleRows, siteVersion, snapshotRows } from './public-sites.service.js';
 
 /** Words a query is cut to; past this, a query is a paste, not a search. */
 const MAX_TERMS = 8;
@@ -175,9 +174,7 @@ export class PublicSiteSearchService {
   /** The live site and the version a reader named, or its default: a 404 before anything is read. */
   private async resolve(siteId: string, versionSlug: string | undefined) {
     const site = await this.sites.findById(siteId);
-    const version = versionSlug ? site.versions.find((v) => v.slug === versionSlug) : site.defaultVersion;
-    if (!version) throw new NotFoundException(t('error.site.notFound'));
-    return { site, version };
+    return { site, version: siteVersion(site, versionSlug) };
   }
 
   /**
@@ -190,11 +187,7 @@ export class PublicSiteSearchService {
     versionId: string,
     cookieHeader: string | undefined,
   ): Promise<Prisma.Sql | null> {
-    const rows = await this.prisma.siteVersionPage.findMany({
-      where: { versionId },
-      orderBy: [{ depth: 'asc' }, { position: 'asc' }],
-      select: { documentId: true, parentId: true, audience: true, audienceClaims: true },
-    });
+    const rows = await snapshotRows(this.prisma, versionId);
     if (rows.every((r) => r.audience === 'public')) return Prisma.empty;
     const visible = visibleRows(rows, await this.sites.viewer(site, cookieHeader));
     if (visible.length === rows.length) return Prisma.empty;

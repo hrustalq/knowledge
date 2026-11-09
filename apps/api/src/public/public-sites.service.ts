@@ -32,6 +32,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { PublishingSettingsService } from '../publishing/publishing-settings.service.js';
 import { SiteSessionService } from './site-session.service.js';
 import { UUID_RE } from '@knowledge/contracts';
+import { publicEmbedUrl } from '../embeds/embed-access.js';
 
 
 /** Longest path a resolve will look at; anything longer is no page of ours. */
@@ -57,9 +58,25 @@ export const SNAPSHOT_ROW = {
 } as const satisfies Prisma.SiteVersionPageSelect;
 export type SnapshotRow = Pick<SiteVersionPage, keyof typeof SNAPSHOT_ROW>;
 
-type BuiltVersion = SiteVersion & { builtAt: Date };
+export type BuiltVersion = SiteVersion & { builtAt: Date };
 /** A site that may be read: live, allowed, and built. `domains` holds its verified hostnames, oldest first. */
 export type LiveSite = PublishedSite & { versions: BuiltVersion[]; defaultVersion: BuiltVersion; domains: SiteDomain[] };
+
+/** The version a reader named by slug, or the default without one: a 404 for a slug the site has not got. */
+export function siteVersion(site: LiveSite, slug: string | undefined): BuiltVersion {
+  const version = slug ? site.versions.find((v) => v.slug === slug) : site.defaultVersion;
+  if (!version) throw new NotFoundException(t('error.site.notFound'));
+  return version;
+}
+
+/** Every row of a version's snapshot, depth first, whatever its audience: a reader's view is `visibleRows` of it. */
+export function snapshotRows(prisma: Pick<PrismaService, 'siteVersionPage'>, versionId: string): Promise<SnapshotRow[]> {
+  return prisma.siteVersionPage.findMany({
+    where: { versionId },
+    orderBy: [{ depth: 'asc' }, { position: 'asc' }],
+    select: SNAPSHOT_ROW,
+  });
+}
 
 /**
  * The rows a viewer may read, in the order given (depth first, as every read
@@ -191,14 +208,7 @@ export class PublicSitesService {
     const path = (query.path ?? '').slice(0, MAX_PATH_CHARS);
     const { version, slugPath } = this.splitPath(site, path);
 
-    const [all, viewer] = await Promise.all([
-      this.prisma.siteVersionPage.findMany({
-        where: { versionId: version.id },
-        orderBy: [{ depth: 'asc' }, { position: 'asc' }],
-        select: SNAPSHOT_ROW,
-      }),
-      this.sessions.viewer(site, cookieHeader),
-    ]);
+    const [all, viewer] = await Promise.all([snapshotRows(this.prisma, version.id), this.sessions.viewer(site, cookieHeader)]);
     const rows = visibleRows(all, viewer);
     // Whether signing in could show more; nothing shows a withheld page.
     const restricted = all.some((r) => r.audience !== 'public' && r.audience !== 'withheld');
@@ -269,18 +279,10 @@ export class PublicSitesService {
     cookieHeader?: string,
   ): Promise<PublicSiteTreeResponse> {
     const site = await this.liveSite({ id: siteId });
-    const version = query.version ? site.versions.find((v) => v.slug === query.version) : site.defaultVersion;
-    if (!version) throw this.notFound();
+    const version = siteVersion(site, query.version);
     const parent = query.parent ?? null;
     if (parent !== null && !UUID_RE.test(parent)) throw this.notFound();
-    const [all, viewer] = await Promise.all([
-      this.prisma.siteVersionPage.findMany({
-        where: { versionId: version.id },
-        orderBy: [{ depth: 'asc' }, { position: 'asc' }],
-        select: SNAPSHOT_ROW,
-      }),
-      this.sessions.viewer(site, cookieHeader),
-    ]);
+    const [all, viewer] = await Promise.all([snapshotRows(this.prisma, version.id), this.sessions.viewer(site, cookieHeader)]);
     const rows = visibleRows(all, viewer);
     if (parent !== null && !rows.some((r) => r.documentId === parent)) throw this.notFound();
     return { nodes: treeLevel(rows, new Set([parent])) };
@@ -419,19 +421,18 @@ export class PublicSitesService {
    */
   async embedUrl(siteId: string, versionId: string, itemId: string, cookieHeader?: string): Promise<string> {
     const site = await this.liveSite({ id: siteId });
-    if (!site.versions.some((v) => v.id === versionId) || !UUID_RE.test(itemId)) throw this.notFound();
-    const item = await this.embeds.publicItem(itemId);
-    if (!item?.fileKey || !item.version || item.nodeId === null) throw this.notFound();
-    const published = await this.prisma.siteVersionPage.findUnique({
-      where: { versionId_documentId: { versionId, documentId: item.documentId } },
-      select: { revisionId: true, audience: true, audienceClaims: true },
-    });
-    if (!published || published.revisionId !== item.revisionId) throw this.notFound();
-    if (published.audience !== 'public' && !siteViewerCanSee(published, await this.sessions.viewer(site, cookieHeader))) throw this.notFound();
+    if (!site.versions.some((v) => v.id === versionId)) throw this.notFound();
     if (!(await this.settings.effective(site.workspaceId)).allowPublicEmbeds) throw this.notFound();
-    return this.embeds.snapshotUrl(item.documentId, { fileKey: item.fileKey, nodeId: item.nodeId, version: item.version }).catch(() => {
-      throw this.notFound();
+    const url = await publicEmbedUrl(this.embeds, itemId, async (item) => {
+      const published = await this.prisma.siteVersionPage.findUnique({
+        where: { versionId_documentId: { versionId, documentId: item.documentId } },
+        select: { revisionId: true, audience: true, audienceClaims: true },
+      });
+      if (!published || published.revisionId !== item.revisionId) return false;
+      return published.audience === 'public' || siteViewerCanSee(published, await this.sessions.viewer(site, cookieHeader));
     });
+    if (!url) throw this.notFound();
+    return url;
   }
 
   /**

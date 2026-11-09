@@ -1035,7 +1035,7 @@ describe('McpService over a principal', () => {
     const doc = '44444444-4444-4444-8444-444444444444';
     const viewer = service(accessWith('viewer'));
     (viewer.mcp as unknown as { access: AccessService }).access.workspaceOfDocument = vi.fn(async () => WS_A);
-    (viewer.mcp as unknown as { access: AccessService }).access.workspaceOfExport = vi.fn(async () => WS_A);
+    (viewer.mcp as unknown as { access: AccessService }).access.workspaceOf = vi.fn(async () => WS_A);
     const p = keyPrincipal({ id: 'k', scope: 'read', workspaceId: WS_A });
     const client = await connect(viewer.mcp, p);
     const names = (await client.listTools()).tools.map((t) => t.name);

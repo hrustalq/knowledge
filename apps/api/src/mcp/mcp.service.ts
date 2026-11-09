@@ -2859,17 +2859,17 @@ export class McpService {
       },
       // Then the connector's project visibility, as AclGuard does (#555).
       connector: async (id: string, role: WorkspaceRole) => {
-        await check(() => this.access.workspaceOfConnector(id), role);
+        await check(() => this.access.workspaceOf('connector', id), role);
         await this.permissions.requireConnectorVisible(principal, { connectorId: id });
       },
       connectorRun: async (id: string, role: WorkspaceRole) => {
-        await check(() => this.access.workspaceOfConnectorRun(id), role);
+        await check(() => this.access.workspaceOf('connector-run', id), role);
         await this.permissions.requireConnectorVisible(principal, { runId: id });
       },
-      workflowRun: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfWorkflowRun(id), role),
-      exportJob: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfExport(id), role),
+      workflowRun: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOf('workflow-run', id), role),
+      exportJob: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOf('export', id), role),
       // The workspace only; whether the caller uploaded it is MemosService's 404 (#551).
-      memo: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfMemo(id), role),
+      memo: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOf('memo', id), role),
     };
   }
 
@@ -2982,7 +2982,7 @@ export class McpService {
     const workspaceId =
       id('workspaceId') ??
       (documentId ? await this.access.workspaceOfDocument(documentId) : null) ??
-      (runId ? await this.access.workspaceOfWorkflowRun(runId) : null);
+      (runId ? await this.access.workspaceOf('workflow-run', runId) : null);
     if (!workspaceId) return;
     await this.access.requireRole(principal, workspaceId, 'viewer', false, { allowGuest: true });
     await this.features.require(workspaceId, feature);

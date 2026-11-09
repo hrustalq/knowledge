@@ -4,7 +4,7 @@ import { keepFrontmatter } from '../../common/frontmatter.js';
 import { applyLineEdits } from '../line-patch.js';
 import { contentLines } from '../../documents/content-lines.js';
 import { json, type McpToolContext } from './context.js';
-import type { McpService } from '../mcp.service.js';
+import type { McpServices } from '../mcp-services.js';
 
 /** Pages, their revisions and branches: read, create, revise, upload and reindex. */
 export function registerDocumentsTools(ctx: McpToolContext): void {
@@ -377,7 +377,7 @@ export function registerDocumentsTools(ctx: McpToolContext): void {
 
 /** Inline-content revision flow: draft on branch head → put bytes → finalize. */
 async function createRevision(
-  svc: McpService,
+  svc: McpServices,
   documentId: string,
   opts: { branch?: string; baseRevisionId?: string; content: string; message?: string; syntax?: ApiSpecSyntax },
   authorId: string,
@@ -419,7 +419,7 @@ async function createRevision(
 
 /** A draft revision plus a presigned PUT for its object (#602). */
 async function startUpload(
-  svc: McpService,
+  svc: McpServices,
   documentId: string,
   opts: { branch?: string; baseRevisionId?: string; message?: string; syntax?: ApiSpecSyntax },
   authorId: string,
@@ -441,7 +441,7 @@ async function startUpload(
 
 /** The presigned PUT for an existing draft revision's object. */
 async function uploadTicket(
-  svc: McpService,documentId: string, revisionId: string) {
+  svc: McpServices,documentId: string, revisionId: string) {
   const row = await svc.prisma.documentRevision.findUniqueOrThrow({ where: { id: revisionId } });
   const url = await svc.storage.presignPut(row.s3Key, row.contentType);
   return {
@@ -458,7 +458,7 @@ async function uploadTicket(
  * body — otherwise uploading a page's own export would drop its relations.
  */
 async function finalizeUpload(
-  svc: McpService,documentId: string, revisionId: string) {
+  svc: McpServices,documentId: string, revisionId: string) {
   const row = await svc.prisma.documentRevision.findFirst({
     where: { id: revisionId, documentId },
     include: { document: { select: { kind: true } }, parents: { select: { parentRevisionId: true }, orderBy: { parentOrder: 'asc' }, take: 1 } },

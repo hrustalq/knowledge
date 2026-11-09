@@ -115,7 +115,7 @@ export function registerWorkspaceTools(ctx: McpToolContext): void {
         'Start here. Who this connection acts as, what its API key is limited to, and every workspace it can reach with your role in it and its projects (ids included). Every other tool takes one of these workspaceIds.',
       inputSchema: {},
     },
-    async () => json(await svc.whoami(principal)),
+    async () => json(await ctx.whoami()),
   );
 
   // ------------------------------------------------------------ templates

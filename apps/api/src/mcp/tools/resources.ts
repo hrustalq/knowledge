@@ -3,7 +3,7 @@ import type { McpToolContext } from './context.js';
 
 /** The skill as a resource and a prompt, and the AI-readable resource templates (#68). */
 export function registerResourcesTools(ctx: McpToolContext): void {
-  const { server, principal, caller, extras, guard, svc } = ctx;
+  const { server, caller, guard, svc } = ctx;
   // ------------------------------------------------------------ the skill
   // The same SKILL.md the connection page hands out, served where a client
   // that has no skills directory can still reach it: as a resource to read,
@@ -16,7 +16,7 @@ export function registerResourcesTools(ctx: McpToolContext): void {
       description: 'How to use this knowledge base well: the workspaces you can reach, the tools, and the flows.',
       mimeType: 'text/markdown',
     },
-    async (uri) => ({ contents: [{ uri: uri.href, mimeType: 'text/markdown', text: await svc.skillFor(principal, undefined, extras) }] }),
+    async (uri) => ({ contents: [{ uri: uri.href, mimeType: 'text/markdown', text: await ctx.skill() }] }),
   );
   server.registerPrompt(
     'guide',
@@ -25,7 +25,7 @@ export function registerResourcesTools(ctx: McpToolContext): void {
       description: 'Load the knowledge-platform skill into the conversation before working with this knowledge base.',
     },
     async () => ({
-      messages: [{ role: 'user', content: { type: 'text', text: await svc.skillFor(principal, undefined, extras) } }],
+      messages: [{ role: 'user', content: { type: 'text', text: await ctx.skill() } }],
     }),
   );
 

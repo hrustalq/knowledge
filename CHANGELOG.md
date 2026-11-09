@@ -28,6 +28,9 @@ in the pull request that introduces them — see
   `make graph-live-backfill`, `make page-links-backfill` and `make auth-bootstrap` used to ignore an unknown or
   misspelt flag, so `ARGS="--worksapce <id>"` quietly ran against the demo workspace (or every workspace). They now
   stop with an "unknown option" error before doing anything. Every documented flag works as before. (#824)
+- **Repo-wiki pages print file sizes the same way as the rest of the app.** The overview's Modules table and each
+  module page's Files line now read `512 B`, `5.3 KB` or `38 MB`, where they read `1 KB`, `5 KB` or `38.0 MB`.
+  (#825)
 
 ### Removed
 
@@ -156,6 +159,10 @@ in the pull request that introduces them — see
 
 - **Migration `20270103100000_connector_run_attempt`** adds `connector_runs.attempt` (integer, default 0). It is
   additive, so rolling back to the previous image is safe; that image ignores the column. (#809)
+- **No mass wiki re-render from the new size format.** Wiki pages are re-rendered only when their source inputs
+  change, so a codebase connector does not regenerate its whole wiki after this release. Each overview and module page
+  picks up the new format the next time it is regenerated anyway, and that one revision (or merge request, under
+  review sync) carries the size line's change beside the real one. Nothing to do. (#825)
 
 ## [0.46.1] — 2026-11-08
 

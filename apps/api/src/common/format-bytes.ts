@@ -1,4 +1,4 @@
-/** `512 B`, `4.2 MB`, `38 MB` — the size a refusal quotes back. */
+/** `512 B`, `4.2 MB`, `38 MB` — a size quoted back by a refusal or printed on a repo-wiki page. */
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   const units = ['KB', 'MB', 'GB'];

@@ -1,17 +1,15 @@
 import { Module } from '@nestjs/common';
-import { IngestionModule } from './ingestion.module.js';
-import { IngestionAdminService } from './ingestion-admin.service.js';
+import { IngestionAdminCoreModule } from './ingestion-admin-core.module.js';
 import { IngestionController } from './ingestion.controller.js';
 
 /**
  * API-side ingestion admin surface (Phase 5). Separate from IngestionModule
  * so the worker context never instantiates the controller and its auth
- * dependencies; imported by AppModule (HTTP) and McpModule (knowledge_ingest).
+ * dependencies. MCP imports IngestionAdminCoreModule instead (#822).
  */
 @Module({
-  imports: [IngestionModule],
+  imports: [IngestionAdminCoreModule],
   controllers: [IngestionController],
-  providers: [IngestionAdminService],
-  exports: [IngestionAdminService],
+  exports: [IngestionAdminCoreModule],
 })
 export class IngestionAdminModule {}

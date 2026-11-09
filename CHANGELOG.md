@@ -31,6 +31,10 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- **A local MCP server (`make dev-mcp`, or an agent client's stdio connection) no longer runs API background work.**
+  Each stdio MCP process loaded the API's document, project, search and workflow modules whole, so it built their
+  HTTP controllers and ran the agent mention reply sweeper, racing the API for the same pending replies. It now loads
+  only what its tools use. The tools, their descriptions and what each kind of key is offered are unchanged. (#822)
 - **A database blip during the Figma change check no longer takes the API down.** That background check had no error
   handler of its own. A failed query in it, such as Postgres restarting mid-tick, became an unhandled rejection and
   ended the API process. It is now logged and retried on the next tick, like every other background sweep. All

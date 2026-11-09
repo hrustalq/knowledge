@@ -5,16 +5,19 @@ import { AuthCoreModule } from '../auth/auth-core.module.js';
 import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { GraphModule } from '../graph/graph.module.js';
 import { GraphQueryService } from '../graph/graph-query.service.js';
-import { IngestionAdminModule } from '../ingestion/ingestion-admin.module.js';
-import { DocumentsModule } from '../documents/documents.module.js';
-import { SearchModule } from '../search/search.module.js';
-import { EntitiesModule } from '../entities/entities.module.js';
-import { ProjectsModule } from '../projects/projects.module.js';
+import { IngestionAdminCoreModule } from '../ingestion/ingestion-admin-core.module.js';
+import { DocumentsCoreModule } from '../documents/documents-core.module.js';
+import { MergeRequestsCoreModule } from '../documents/merge-requests-core.module.js';
+import { MergeRequestThreadsCoreModule } from '../documents/merge-request-threads-core.module.js';
+import { SearchCoreModule } from '../search/search-core.module.js';
+import { EntitiesCoreModule } from '../entities/entities-core.module.js';
+import { ProjectsCoreModule } from '../projects/projects-core.module.js';
+import { ProjectScaffoldCoreModule } from '../projects/project-scaffold-core.module.js';
 import { ConnectorsCoreModule } from '../connectors/connectors-core.module.js';
 import { ConnectorQueueModule } from '../connectors/connector-queue.module.js';
 import { ConnectorWorkItemsModule } from '../connectors/connector-work-items.module.js';
 import { WorkItemHandoffModule } from '../connectors/handoff/work-item-handoff.module.js';
-import { WorkflowsModule } from '../workflows/workflows.module.js';
+import { WorkflowCoreModule } from '../workflows/workflow-core.module.js';
 import { AgentCoreModule } from '../agents/agent-core.module.js';
 import { AiReadableCoreModule } from '../ai-readable/ai-readable-core.module.js';
 import { FeedbackCoreModule } from '../feedback/feedback-core.module.js';
@@ -57,12 +60,17 @@ import { McpService } from './mcp.service.js';
     // Page-level checks behind guard.doc/mr/project and scoped tree/graph tools (#76).
     PermissionsCoreModule,
     GraphModule,
-    IngestionAdminModule,
+    IngestionAdminCoreModule,
     StorageModule,
-    DocumentsModule,
-    SearchModule,
-    EntitiesModule,
-    ProjectsModule,
+    // Core halves only, never a controller-bearing module: the stdio process
+    // loads this module too (#822, rule mcp-core-loads-no-controller).
+    DocumentsCoreModule,
+    MergeRequestsCoreModule,
+    MergeRequestThreadsCoreModule,
+    SearchCoreModule,
+    EntitiesCoreModule,
+    ProjectsCoreModule,
+    ProjectScaffoldCoreModule,
     ConnectorsCoreModule,
     ConnectorQueueModule,
     // Work items (docs/features/32), read-only over this surface: opening an
@@ -72,7 +80,7 @@ import { McpService } from './mcp.service.js';
     WorkItemHandoffModule,
     // Read/start tools only. WorkflowMaterializeModule is deliberately absent —
     // materialisation writes pages and belongs to the API process.
-    WorkflowsModule,
+    WorkflowCoreModule,
     // The registry only — AiAgentsService is API-only (it validates tool lists
     // against the plugin roster) and the agent tools here are read-only anyway.
     AgentCoreModule,

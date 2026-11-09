@@ -91,7 +91,7 @@ import { ChatModule } from './chat/chat.module.js';
     MemosModule,
     WorkflowsModule,
     // API-only: materialisation writes pages, so it runs here and not in the
-    // MCP process, which imports WorkflowsModule for its read/start tools.
+    // MCP process, which imports WorkflowCoreModule for its read/start tools.
     WorkflowMaterializeModule,
     // Page templates (issue #69). API-only: the controller; DocumentsCoreModule
     // loads TemplatesCoreModule on its own to create a page from one.

@@ -6,7 +6,6 @@ import { ProjectsModule } from '../projects/projects.module.js';
 import { WorkflowCoreModule } from './workflow-core.module.js';
 import { WorkflowsController } from './workflows.controller.js';
 import { DocumentWorkflowsController } from './document-workflows.controller.js';
-import { WorkflowsService } from './workflows.service.js';
 import { WorkflowMaterializerService } from './workflow-materializer.service.js';
 import { WorkflowDraftService } from './workflow-draft.service.js';
 import { AgentCoreModule } from '../agents/agent-core.module.js';
@@ -19,11 +18,11 @@ import { TemplatesCoreModule } from '../templates/templates-core.module.js';
  * the controllers depend on the global auth guards (same rationale as
  * GraphQueryModule and ImportModule).
  *
- * `McpModule` DOES import this, for `knowledge_list/start_workflow` and
- * `knowledge_get_workflow_run`. That is why the materialize sweeper lives in
- * `WorkflowMaterializeModule` rather than here: an earlier version of this
- * docstring claimed MCP was excluded, and the sweeper's 5-second timer was
- * running in every stdio process on the strength of it.
+ * MCP imports `WorkflowCoreModule` (which holds `WorkflowsService`) for
+ * `knowledge_list/start_workflow` and `knowledge_get_workflow_run`, never this
+ * module (#822). The materialize sweeper still lives in
+ * `WorkflowMaterializeModule`: an earlier version of this module was imported
+ * by MCP, and the sweeper's 5-second timer ran in every stdio process.
  *
  * DocumentsModule is imported for the one thing the worker cannot do: writing
  * an approved draft into the page tree.
@@ -46,7 +45,7 @@ import { TemplatesCoreModule } from '../templates/templates-core.module.js';
     TemplatesCoreModule,
   ],
   controllers: [WorkflowsController, DocumentWorkflowsController],
-  providers: [WorkflowsService, WorkflowMaterializerService, WorkflowDraftService],
-  exports: [WorkflowsService, WorkflowMaterializerService],
+  providers: [WorkflowMaterializerService, WorkflowDraftService],
+  exports: [WorkflowCoreModule, WorkflowMaterializerService],
 })
 export class WorkflowsModule {}

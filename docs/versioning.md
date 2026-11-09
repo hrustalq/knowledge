@@ -17,25 +17,25 @@ git tag `vX.Y.Z`. Nothing else is authoritative.
 
 ### Known drift (fix before v1.0.0)
 
-Four surfaces declare a version, and none of them derives it from the tag:
+Three surfaces declare a version, and none of them derives it from the tag:
 
 | Surface                                                | Declares  | Should be          |
 | ------------------------------------------------------ | --------- | ------------------ |
-| `apps/api/src/config/swagger.ts` `.setVersion()`       | `0.6.0`   | the tag            |
-| `apps/api/src/mcp/mcp.service.ts` `MCP_SERVER_VERSION` | `0.6.0`   | the tag            |
+| `apps/api/src/config/version.ts` `PRODUCT_VERSION`     | `0.6.0`   | the tag            |
 | `apps/api/package.json`                                | `0.0.1`   | `0.0.0` (internal) |
 | root `package.json`                                    | _(unset)_ | the tag, or unset  |
 
-The first two match `v0.6.0` today, and that is the drift rather than the cure:
-they are correct only because the release runbook in
-[CONTRIBUTING.md](../CONTRIBUTING.md#release) bumps them **by hand** every time,
+`PRODUCT_VERSION` is what both Swagger (`swagger.ts`) and the MCP server
+report; until #822 each held its own literal. It matches `v0.6.0` today, and
+that is the drift rather than the cure: it is correct only because the release
+runbook in [CONTRIBUTING.md](../CONTRIBUTING.md#release) bumps it **by hand** every time,
 so they are one forgotten step away from lying — which is exactly what the
 `0.1.0` / `0.3.0` this table used to record were. A number that is accurate
 because somebody remembered is not a number you can read.
 
 The eventual fix is one build arg (`APP_VERSION`, set from `github.ref_name` in
-`deploy.yml`) read by both call sites, defaulting to `0.0.0-dev` outside a release
-build. It is not done yet because it touches `swagger.ts`, `mcp.service.ts` and
+`deploy.yml`) read by `version.ts`, defaulting to `0.0.0-dev` outside a release
+build. It is not done yet because it touches `version.ts` and
 both Dockerfiles, and a wrong version string is a cosmetic bug where a wrong
 deploy is not.
 

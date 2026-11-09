@@ -24,7 +24,7 @@ import { hashPassword } from '../src/auth/password.js';
 import { fakeWriteRevision } from './revision-fakes.js';
 import { AssistantToolsService } from '../src/assistant/assistant.tools.js';
 import { AgentFindingsService } from '../src/ai/agent-findings.service.js';
-import { McpService } from '../src/mcp/mcp.service.js';
+import { createRevision } from '../src/mcp/tools/documents.js';
 import { ApiKeysService } from '../src/auth/api-keys.service.js';
 import { AuditService } from '../src/auth/audit.service.js';
 import { ActivityService } from '../src/activity/activity.service.js';
@@ -721,9 +721,7 @@ describe('#811 one revision writer', () => {
       getContent: vi.fn(async () => ({ frontmatter: { tags: ['x'] } })),
       writeRevision: vi.fn(async () => ({ revisionId: 'r2', status: 'finalized' })),
     };
-    const svc = stub(Object.create(McpService.prototype) as McpService, { prisma, documents });
-    const create = (svc as unknown as { createRevision: (...a: unknown[]) => Promise<unknown> }).createRevision.bind(svc);
-    await create('d1', { baseRevisionId: 'r1', content: '# Body' }, 'u1');
+    await createRevision({ prisma, documents } as never, 'd1', { baseRevisionId: 'r1', content: '# Body' }, 'u1');
     expect(documents.getContent).toHaveBeenCalledWith('d1', 'r1');
     expect(documents.writeRevision).toHaveBeenCalledWith(
       'd1',

@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import type { INestApplication } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule, type OpenAPIObject } from '@nestjs/swagger';
 import { ApiErrorResponse } from '../common/api-error.dto.js';
+import { PRODUCT_VERSION } from './version.js';
 
 /**
  * Single source of truth for the OpenAPI document — used by main.ts (live
@@ -13,7 +14,7 @@ export function createOpenApiDocument(app: INestApplication): OpenAPIObject {
   const config = new DocumentBuilder()
     .setTitle('Knowledge API')
     .setDescription('Dynamic Knowledge Platform — documents, revisions, ingestion, search')
-    .setVersion('0.46.1')
+    .setVersion(PRODUCT_VERSION)
     .addBearerAuth(
       { type: 'http', scheme: 'bearer', description: 'kn_ API key or ks_ session token (AUTH_MODE=api-key)' },
       'bearer',

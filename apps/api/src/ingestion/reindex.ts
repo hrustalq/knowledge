@@ -5,7 +5,7 @@ import type { IngestionProducer } from './ingestion.producer.js';
 const logger = new Logger('Reindex');
 
 /** The revision to reindex, and what its job payload records about why. */
-export interface ReindexTarget {
+interface ReindexTarget {
   workspaceId: string;
   documentId: string;
   revisionId: string;

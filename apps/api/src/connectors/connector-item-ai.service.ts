@@ -121,7 +121,7 @@ export class ConnectorItemAiService {
     const link = item.linkId ? await this.prisma.connectorLink.findUnique({ where: { id: item.linkId } }) : null;
     if (link?.revisionId) {
       const revision = await this.prisma.documentRevision.findUnique({ where: { id: link.revisionId } });
-      if (revision) base = await this.storage.getObjectText(revision.s3Key).catch(() => '');
+      if (revision) base = await this.storage.getObjectText(revision.s3Key, revision.s3VersionId).catch(() => '');
     }
 
     return [

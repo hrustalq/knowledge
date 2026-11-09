@@ -261,7 +261,7 @@ export class ConnectorItemsService {
     if (!item.previousRevisionId) throw new ConflictException(t('error.connector.revertNoPrevious'));
     const previous = await this.prisma.documentRevision.findUnique({ where: { id: item.previousRevisionId } });
     if (!previous) throw new ConflictException(t('error.connector.revertNoPrevious'));
-    const markdown = await this.storage.getObjectText(previous.s3Key);
+    const markdown = await this.storage.getObjectText(previous.s3Key, previous.s3VersionId);
 
     // The restoring revision, the link's `contentHash` and the item commit
     // together (#658), or the next pull reads our own revert as a local edit.

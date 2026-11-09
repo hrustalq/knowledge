@@ -38,7 +38,7 @@ export interface Project {
   lastSeq: bigint;
   defaultBranch: string;
   /** Revision -> its object key and pushed id line, for a blob not yet hashed or not in a cache. */
-  sources: Map<string, { s3Key: string; idLine: IdLine | null }>;
+  sources: Map<string, { s3Key: string; s3VersionId: string | null; idLine: IdLine | null }>;
   /** Revision -> blob SHA, persisted in `blobs-v1.tsv` so a restart reads no page body twice. */
   blobs: Map<string, string>;
 }
@@ -159,13 +159,13 @@ export class GitRepoService {
     const [revisions, documents] = await Promise.all([
       this.prisma.documentRevision.findMany({
         where: { id: { in: revisionIds } },
-        select: { id: true, branchId: true, contentType: true, s3Key: true, idLine: true },
+        select: { id: true, branchId: true, contentType: true, s3Key: true, s3VersionId: true, idLine: true },
       }),
       this.prisma.document.findMany({ where: { id: { in: documentIds } }, select: { id: true, kind: true } }),
     ]);
     const revision = new Map(revisions.map((r) => [r.id, r]));
     const kind = new Map(documents.map((d) => [d.id, d.kind]));
-    for (const r of revisions) project.sources.set(r.id, { s3Key: r.s3Key, idLine: r.idLine as IdLine | null });
+    for (const r of revisions) project.sources.set(r.id, { s3Key: r.s3Key, s3VersionId: r.s3VersionId, idLine: r.idLine as IdLine | null });
 
     for (const c of commits) {
       project.model.add({
@@ -274,8 +274,8 @@ export class GitRepoService {
 
   /** A revision's bytes as served: its stored body with the page's id line. */
   private async bodyOf(project: Project, ch: ModelChange): Promise<Buffer> {
-    const { s3Key, idLine } = project.sources.get(ch.revisionId)!;
-    return withIdLine(ch.documentId, Buffer.from(await this.storage.getObjectBytes(s3Key)), ch.ext, idLine);
+    const source = project.sources.get(ch.revisionId)!;
+    return withIdLine(ch.documentId, Buffer.from(await this.storage.getObjectBytes(source.s3Key, source.s3VersionId)), ch.ext, source.idLine);
   }
 
   /** The SHAs among `shas` this repository lacks. */

@@ -282,7 +282,7 @@ describe('SiteSearchTextService', () => {
         updateMany: vi.fn((args: unknown) => ({ op: 'update', args })),
       },
       documentRevision: {
-        findMany: vi.fn(async ({ where }: { where: { id: { in: string[] } } }) => where.id.in.map((id) => ({ id, s3Key: `k/${id}`, document: { kind: 'page' } }))),
+        findMany: vi.fn(async ({ where }: { where: { id: { in: string[] } } }) => where.id.in.map((id) => ({ id, s3Key: `k/${id}`, s3VersionId: `v-${id}`, document: { kind: 'page' } }))),
       },
       $executeRaw: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({ op: 'index', sql: strings.join('?'), values })),
       $queryRaw: vi.fn(),
@@ -305,7 +305,8 @@ describe('SiteSearchTextService', () => {
     expect(texts.get('r1')).toEqual({ headings: 'H1', body: 'B1', tags: [{ key: 'tag:a', name: 'A' }] });
     // Frontmatter is not page text; its tags are the page's facets.
     expect(texts.get('r2')).toEqual({ headings: 'k/r2', body: 'body of k/r2', tags: [{ key: 'tag:ops', name: 'Ops' }] });
-    expect(storage.getObjectText.mock.calls).toEqual([['k/r2']]);
+    // Pinned to the version finalize hashed (#818).
+    expect(storage.getObjectText.mock.calls).toEqual([['k/r2', 'v-r2']]);
     // A row from before tags were stored is not a source to copy from.
     expect(prisma.siteVersionPage.findMany.mock.calls[0][0]).toMatchObject({ where: { tags: { not: expect.anything() } } });
   });

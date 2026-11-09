@@ -1329,8 +1329,8 @@ export class MergeRequestsService {
   }
 
   private async bodyOf(revisionId: string): Promise<Body> {
-    const r = await this.prisma.documentRevision.findUniqueOrThrow({ where: { id: revisionId }, select: { s3Key: true, contentType: true } });
-    return { text: await this.storage.getObjectText(r.s3Key), contentType: r.contentType };
+    const r = await this.prisma.documentRevision.findUniqueOrThrow({ where: { id: revisionId }, select: { s3Key: true, s3VersionId: true, contentType: true } });
+    return { text: await this.storage.getObjectText(r.s3Key, r.s3VersionId), contentType: r.contentType };
   }
 
   /** 409 `conflict` naming every conflicting page and its hunks, and the first page as `diverged` named it. Ids, never titles. */

@@ -436,8 +436,8 @@ export class SourceRecipesService {
   private async headMarkdown(documentId: string): Promise<string> {
     const document = await this.prisma.document.findUnique({ where: { id: documentId }, include: { branches: true } });
     const head = document?.branches.find((b) => b.name === document.defaultBranch)?.headRevisionId;
-    const revision = head ? await this.prisma.documentRevision.findUnique({ where: { id: head }, select: { s3Key: true } }) : null;
-    return revision ? this.storage.getObjectText(revision.s3Key) : '';
+    const revision = head ? await this.prisma.documentRevision.findUnique({ where: { id: head }, select: { s3Key: true, s3VersionId: true } }) : null;
+    return revision ? this.storage.getObjectText(revision.s3Key, revision.s3VersionId) : '';
   }
 
   private parse(value: unknown): SourceRecipe {

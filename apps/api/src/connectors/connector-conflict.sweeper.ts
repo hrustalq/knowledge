@@ -140,9 +140,9 @@ export class ConnectorConflictSweeper implements OnModuleInit, OnModuleDestroy {
 
   private async generatedFrom(revisionId: string): Promise<{ headSha?: string; unit?: string }> {
     try {
-      const revision = await this.prisma.documentRevision.findUnique({ where: { id: revisionId }, select: { s3Key: true } });
+      const revision = await this.prisma.documentRevision.findUnique({ where: { id: revisionId }, select: { s3Key: true, s3VersionId: true } });
       if (!revision) return {};
-      const data = matter(await this.storage.getObjectText(revision.s3Key)).data as Record<string, unknown>;
+      const data = matter(await this.storage.getObjectText(revision.s3Key, revision.s3VersionId)).data as Record<string, unknown>;
       return {
         ...(typeof data.headSha === 'string' ? { headSha: data.headSha } : {}),
         ...(typeof data.unit === 'string' ? { unit: data.unit } : {}),

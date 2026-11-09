@@ -84,8 +84,8 @@ describe('streamFull', () => {
         header: '',
         narrower: [],
         pages: [
-          { ...page, id: 'a', s3Key: 'spec', kind: 'openapi' },
-          { ...page, id: 'b', s3Key: 'page', kind: 'page' },
+          { ...page, id: 'a', s3Key: 'spec', s3VersionId: null, kind: 'openapi' },
+          { ...page, id: 'b', s3Key: 'page', s3VersionId: null, kind: 'page' },
         ],
       },
       { write: (chunk) => (out += chunk) },

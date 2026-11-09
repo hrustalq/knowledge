@@ -179,7 +179,7 @@ export class ApiFixturesService {
       throw new NotFoundException(t('error.document.noReadableRevision', { id: documentId }));
     }
     if (revision.status === 'draft') throw new BadRequestException(t('error.document.contentIsDraft', { id: revision.id }));
-    const { fixture, calls, issues } = await this.check(await this.storage.getObjectText(revision.s3Key), scope);
+    const { fixture, calls, issues } = await this.check(await this.storage.getObjectText(revision.s3Key, revision.s3VersionId), scope);
     return {
       documentId,
       revisionId: revision.id,
@@ -259,7 +259,7 @@ export class ApiFixturesService {
     for (const b of bindings) {
       if (parsed.has(b.fixtureId)) continue;
       const revision = b.headRevisionId ? await this.prisma.documentRevision.findUnique({ where: { id: b.headRevisionId } }) : null;
-      const { fixture, issues } = revision ? this.read(await this.storage.getObjectText(revision.s3Key)) : { fixture: null, issues: [] };
+      const { fixture, issues } = revision ? this.read(await this.storage.getObjectText(revision.s3Key, revision.s3VersionId)) : { fixture: null, issues: [] };
       if (!fixture) {
         const reason = issues[0] ? withMessage(issues[0]).message : t('error.document.noReadableRevision', { id: b.fixtureId });
         throw new BadRequestException(t('error.apiTestSuite.fixtureInvalid', { title: b.title, reason }));

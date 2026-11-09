@@ -111,7 +111,7 @@ export class CompareService {
       this.getComparableRevision(documentId, toId),
       this.prisma.document.findUnique({ where: { id: documentId }, select: { kind: true } }),
     ]);
-    const text = await this.storage.getObjectText(to.s3Key);
+    const text = await this.storage.getObjectText(to.s3Key, to.s3VersionId);
     const { additions, deletions, hunks } = toHunks('', text);
     let structural: StructuralDiff | null | undefined;
     if (opts.structural !== false) {
@@ -203,8 +203,8 @@ export class CompareService {
     }
 
     const [fromText, toText] = await Promise.all([
-      this.storage.getObjectText(from.s3Key),
-      this.storage.getObjectText(to.s3Key),
+      this.storage.getObjectText(from.s3Key, from.s3VersionId),
+      this.storage.getObjectText(to.s3Key, to.s3VersionId),
     ]);
 
     const { additions, deletions, hunks } = toHunks(fromText, toText);
@@ -248,8 +248,8 @@ export class CompareService {
     if (cached) return cached.changes as unknown as StructuralDiff;
 
     const [fromText, toText] = await Promise.all([
-      this.storage.getObjectText(from.s3Key),
-      this.storage.getObjectText(to.s3Key),
+      this.storage.getObjectText(from.s3Key, from.s3VersionId),
+      this.storage.getObjectText(to.s3Key, to.s3VersionId),
     ]);
     const fromParsed = parseStructured(from.contentType, fromText);
     const toParsed = parseStructured(to.contentType, toText);

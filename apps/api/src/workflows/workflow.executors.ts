@@ -572,7 +572,7 @@ export class WorkflowExecutors {
     const revision = await this.prisma.documentRevision.findUnique({ where: { id: headId } });
     if (!revision?.s3Key || revision.status === 'draft') return { title: document.title, markdown: '', kind };
 
-    const raw = await this.storage.getObjectText(revision.s3Key).catch(() => '');
+    const raw = await this.storage.getObjectText(revision.s3Key, revision.s3VersionId).catch(() => '');
     // Capped rather than chunked: a chain of steps that each paste a whole page
     // into its prompt is how a run walks off the end of a context window.
     return { title: document.title, markdown: raw.slice(0, 24_000), kind };

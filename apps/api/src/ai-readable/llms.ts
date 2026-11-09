@@ -14,6 +14,7 @@ export interface IndexPage {
   projectId: string;
   headRevisionId: string;
   s3Key: string;
+  s3VersionId: string | null;
   kind: string;
 }
 

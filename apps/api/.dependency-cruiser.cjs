@@ -54,6 +54,16 @@ module.exports = {
       to: { path: '-worker\\.module\\.ts$', reachable: true },
     },
     {
+      name: 'api-loads-no-agent-runner',
+      comment:
+        'The agent executor and its runners are worker code (#823). The API asks whether an agent ' +
+        'may run through RUNNABLE_AGENTS / isTriggerableAgent in @knowledge/contracts; reaching ' +
+        'the executor for that drags every runner and its collaborators into the HTTP process.',
+      severity: 'error',
+      from: { path: '^src/app\\.module\\.ts$' },
+      to: { path: '^src/agents/(agent\\.executor|agent-services|agent-runners|runners/)', reachable: true },
+    },
+    {
       name: 'worker-loads-no-controller',
       comment:
         'The worker has no HTTP layer. A controller reaching it drags in guards that need ' +
@@ -115,12 +125,21 @@ module.exports = {
       to: { path: '^src/collab/collab\\.module\\.ts$', reachable: true },
     },
     {
+      name: 'mcp-core-loads-no-controller',
+      comment:
+        'McpCoreModule is the tool set both transports share (#822): the stdio process loads it ' +
+        'under McpModule and the API under McpHttpModule. A controller-bearing module reached from ' +
+        'it builds HTTP controllers inside the stdio process and drags their dependencies along. ' +
+        'Import the *CoreModule twin, and extract one where it does not exist yet.',
+      severity: 'error',
+      from: { path: '^src/mcp/mcp-core\\.module\\.ts$' },
+      to: { path: '\\.controller\\.ts$', reachable: true },
+    },
+    {
       name: 'mcp-loads-no-processor',
       comment:
-        'The MCP server is a read/act surface over stdio, not a job runner. It legitimately ' +
-        'imports controller-bearing modules (ProjectsModule, SearchModule, ...), so controllers ' +
-        'are NOT forbidden here — but a processor would make every agent client a competing ' +
-        'queue consumer.',
+        'The MCP server is a read/act surface over stdio, not a job runner. A processor would ' +
+        'make every agent client a competing queue consumer.',
       severity: 'error',
       from: { path: '^src/mcp/mcp\\.module\\.ts$' },
       to: { path: '\\.processor\\.ts$', reachable: true },
@@ -130,13 +149,8 @@ module.exports = {
       comment:
         'Same argument as processors, one step weaker: a sweeper is a timer that writes. The ' +
         'MCP process is started once per agent client, so a sweeper reachable from McpModule ' +
-        'runs in N processes at once, all racing the API for the same rows.\n' +
-        'This currently has one known violation, recorded in the baseline: McpModule imports ' +
-        'DocumentsModule, which provides MentionReplySweeper. That sweeper is meant to be ' +
-        'API-side ("the worker generates, the API publishes"), and it settles pending @agent ' +
-        'mention comments — work that is claimed by a guarded INSERT, so the race is survivable ' +
-        'but real. Fixing it means a controller-free split (the DocumentsCoreModule pattern) ' +
-        'that keeps the sweeper out of whatever MCP imports.',
+        'runs in N processes at once, all racing the API for the same rows. MentionReplySweeper ' +
+        'reached it through DocumentsModule until #822 moved McpCoreModule onto core modules.',
       severity: 'error',
       from: { path: '^src/mcp/mcp\\.module\\.ts$' },
       to: { path: '\\.sweeper\\.ts$', reachable: true },

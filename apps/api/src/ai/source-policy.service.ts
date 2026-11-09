@@ -15,6 +15,7 @@ import { isPrivateAddress } from '../common/safe-url.js';
 import { t } from '../i18n/t.js';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
+import { ttlCache } from '../common/ttl-cache.js';
 
 /** Narrowness order. `off` is narrowest, `open` widest — the clamp is one index compare. */
 const ORDER: WebAccessMode[] = ['off', 'allowlist', 'open'];
@@ -46,7 +47,7 @@ export type WebAccessDecision =
  */
 @Injectable()
 export class SourcePolicyService {
-  private readonly cache = new Map<string, { at: number; rows: SourcePolicy[] }>();
+  private readonly cache = ttlCache<SourcePolicy[]>(CACHE_TTL_MS);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -91,17 +92,14 @@ export class SourcePolicyService {
   // ---- Roster ---------------------------------------------------------------
 
   async list(workspaceId: string): Promise<SourcePolicy[]> {
-    const hit = this.cache.get(workspaceId);
-    if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.rows;
-
-    const rows = await this.prisma.sourcePolicy.findMany({
-      where: { workspaceId },
-      // Longest first, so `decide` can take the first host match and stop.
-      orderBy: [{ pattern: 'desc' }],
+    return this.cache.get(workspaceId, async () => {
+      const rows = await this.prisma.sourcePolicy.findMany({
+        where: { workspaceId },
+        // Longest first, so `decide` can take the first host match and stop.
+        orderBy: [{ pattern: 'desc' }],
+      });
+      return rows.map(toSummary).sort((a, b) => b.pattern.length - a.pattern.length);
     });
-    const mapped = rows.map(toSummary).sort((a, b) => b.pattern.length - a.pattern.length);
-    this.cache.set(workspaceId, { at: Date.now(), rows: mapped });
-    return mapped;
   }
 
   async get(id: string): Promise<SourcePolicy> {

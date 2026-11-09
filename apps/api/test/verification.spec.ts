@@ -219,7 +219,7 @@ describe('VerificationService transitions', () => {
     await svc.requestVerification('doc-1', { actorId: 'u-9', note: 'the SLA changed' });
     expect(prisma.document.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'doc-1', archivedAt: null },
+        where: expect.objectContaining({ id: 'doc-1', archivedAt: null }),
         data: expect.objectContaining({ verificationFlag: 'requested', verificationNote: 'the SLA changed' }),
       }),
     );
@@ -234,19 +234,34 @@ describe('VerificationService transitions', () => {
     expect(self.activity.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'document.outdated' }));
   });
 
-  it('flag honours the agent guards: verified after the run, or already outdated', async () => {
-    const recent = harness(doc({ verifiedAt: new Date('2026-10-11T10:00:00Z'), verifiedRevisionId: 'r2' }));
-    const skipped = await recent.svc.flag('doc-1', 'requested', {
+  it('flag honours the agent guards in the write itself (#810): verified after the run, or already outdated', async () => {
+    // The row read says nothing stops the flag; the guarded write matching
+    // nothing is what a Verify or Clear landing in between looks like.
+    const after = new Date('2026-10-11T09:00:00Z');
+    const raced = harness(doc(), 0);
+    const skipped = await raced.svc.flag('doc-1', 'requested', {
       actorId: 'u-1',
       source: { kind: 'drift', runId: 'run-1' },
-      unlessVerifiedAfter: new Date('2026-10-11T09:00:00Z'),
+      unlessVerifiedAfter: after,
+      keepOutdated: true,
+      onlyIfFlag: 'requested',
     });
     expect(skipped).toBeNull();
-    expect(recent.prisma.document.updateMany).not.toHaveBeenCalled();
-
-    const outdated = harness(doc({ verificationFlag: 'outdated' }));
-    expect(await outdated.svc.flag('doc-1', 'requested', { actorId: 'u-1', keepOutdated: true })).toBeNull();
-    expect(outdated.prisma.document.updateMany).not.toHaveBeenCalled();
+    expect(raced.prisma.document.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: 'doc-1',
+          archivedAt: null,
+          AND: [
+            { OR: [{ verifiedAt: null }, { verifiedAt: { lt: after } }] },
+            { OR: [{ verificationFlag: null }, { verificationFlag: { not: 'outdated' } }] },
+            { verificationFlag: 'requested' },
+          ],
+        },
+      }),
+    );
+    expect(raced.activity.record).not.toHaveBeenCalled();
+    expect(raced.notifications.notify).not.toHaveBeenCalled();
   });
 
   it('clear removes stamp and flag together and names what was there', async () => {
@@ -264,6 +279,11 @@ describe('VerificationService transitions', () => {
     const bare = harness(doc());
     await bare.svc.clear('doc-1', 'u-1');
     expect(bare.prisma.document.updateMany).not.toHaveBeenCalled();
+
+    // Cleared by someone else between the read and the write (#810): no event.
+    const raced = harness(doc({ verifiedRevisionId: 'r1' }), 0);
+    await raced.svc.clear('doc-1', 'u-1');
+    expect(raced.activity.record).not.toHaveBeenCalled();
   });
 
   it('archive takes the subtree scoped to the workspace, records one commit, and is idempotent', async () => {

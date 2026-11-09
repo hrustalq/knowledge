@@ -1,12 +1,11 @@
-import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DECISION_DEFAULT_MODEL, type AiUsageOperation, type DecisionSite } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { AiConfigService, type ResolvedAiConfig } from '../ai/ai-config.service.js';
 import type { CostAmount } from '@knowledge/contracts';
 import { AiUsageService } from '../ai/ai-usage.service.js';
-import { t } from '../i18n/t.js';
-import { ProviderAccountError } from './assistant.client.js';
+import { recordAiCall, upstreamException } from './assistant.client.js';
 
 /** gen-api's synchronous endpoint for TypeSafe Jev (docs/features/67). */
 export const JEV_URL = 'https://api.gen-api.ru/api/v1/networks/jev';
@@ -111,7 +110,7 @@ export class DecisionClient {
       return p;
     } catch (err) {
       this.bill(call, served, promptTokens, cost, startedAt, false, err instanceof Error ? err.message : String(err));
-      throw this.upstreamError(err);
+      throw upstreamException(this.logger, 'Decision', err, err instanceof DecisionHttpError ? err : null);
     }
   }
 
@@ -141,7 +140,7 @@ export class DecisionClient {
     ok: boolean,
     error?: string,
   ): void {
-    void this.usage.record({
+    recordAiCall(this.usage, {
       config: { ...call.route.config, model },
       userId: call.userId,
       operation: call.operation,
@@ -152,19 +151,6 @@ export class DecisionClient {
       ok,
       error,
     });
-  }
-
-  private upstreamError(err: unknown): ServiceUnavailableException {
-    if (err instanceof DecisionHttpError) {
-      this.logger.warn(`Decision upstream ${err.status}: ${err.message}`);
-      if (err.status === 402) return new ProviderAccountError(t('error.assistant.upstreamNoCredit'));
-      if (err.status === 401 || err.status === 403) {
-        return new ProviderAccountError(t('error.assistant.upstreamAuth', { status: err.status }));
-      }
-      return new ServiceUnavailableException(t('error.assistant.upstreamStatus', { status: err.status }));
-    }
-    this.logger.warn(`Decision request failed: ${err instanceof Error ? err.message : String(err)}`);
-    return new ServiceUnavailableException(t('error.assistant.unreachable'));
   }
 }
 

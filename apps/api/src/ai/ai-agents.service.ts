@@ -15,6 +15,7 @@ import {
   type AiAgentChoice,
   type AiAgentSummary,
   type ListAgentRunsResponse,
+  RUNNABLE_AGENTS,
 } from '@knowledge/contracts';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -23,7 +24,8 @@ import { AiPluginsService } from './ai-plugins.service.js';
 import { AiModelsService } from './ai-models.service.js';
 import { AiUsageService } from './ai-usage.service.js';
 import { AgentProducer } from '../agents/agent.producer.js';
-import { RUNNABLE_AGENTS } from '../agents/agent.executor.js';
+import { agentRunLockKey } from '../agents/agent.constants.js';
+import { withSubjectLock } from '../common/subject-lock.js';
 import { nextRunOf, scheduleKindOf, weekdaysOf } from '../agents/agent-schedule.js';
 import type { Principal } from '../auth/principal.js';
 import type { CreateAiAgentDto, UpdateAiAgentDto } from './ai.dto.js';
@@ -305,8 +307,7 @@ function toSummary(agent: ResolvedAgent, row: AiAgent | null): AiAgentSummary {
     maxToolCalls: agent.config.maxToolCalls,
     timeoutMs: agent.config.timeoutMs,
     surfaces: agent.surfaces,
-    // Surface vs. executor: `background` is a declaration, this is the fact.
-    runnable: agent.surfaces.includes('background') && RUNNABLE_AGENTS.has(agent.key),
+    runnable: RUNNABLE_AGENTS.has(agent.key),
     requires: agent.requires,
     missing: agent.missing,
     purpose: agent.purpose,
@@ -360,7 +361,7 @@ export class AgentRunsService {
   ): Promise<AgentRunSummary> {
     const agent = await this.registry.resolve(workspaceId, agentKey);
     if (!agent.enabled) throw new BadRequestException(t('error.ai.agentDisabled', { key: agentKey }));
-    if (!agent.surfaces.includes('background') || !RUNNABLE_AGENTS.has(agentKey)) {
+    if (!RUNNABLE_AGENTS.has(agentKey)) {
       throw new BadRequestException(t('error.ai.agentNotBackground', { key: agentKey }));
     }
     // A connector-scoped agent (docs/features/31) reads one repository. The
@@ -381,36 +382,39 @@ export class AgentRunsService {
     await this.usage.assertWithinBudget(workspaceId, principal.userId);
 
     // Back-pressure, the ConnectorScheduleSweeper rule: one run per agent at a
-    // time, so an impatient second click queues nothing.
-    const inFlight = await this.prisma.agentRun.count({
-      where: { workspaceId, agentKey, status: { in: ['pending', 'running'] } },
-    });
-    if (inFlight > 0) {
-      throw new ConflictException({
-        statusCode: 409,
-        message: t('error.ai.agentRunInFlight', { key: agentKey }),
-        reason: 'in-flight',
+    // time, so an impatient second click queues nothing. Count and insert under
+    // one lock (#815), or two clicks both count zero.
+    const run = await withSubjectLock(this.prisma, agentRunLockKey(workspaceId, agentKey), async () => {
+      const inFlight = await this.prisma.agentRun.count({
+        where: { workspaceId, agentKey, status: { in: ['pending', 'running'] } },
       });
-    }
+      if (inFlight > 0) {
+        throw new ConflictException({
+          statusCode: 409,
+          message: t('error.ai.agentRunInFlight', { key: agentKey }),
+          reason: 'in-flight',
+        });
+      }
 
-    const row = await this.prisma.aiAgent.findUnique({ where: { workspaceId_key: { workspaceId, key: agentKey } } });
-    const run = await this.prisma.agentRun.create({
-      data: {
-        workspaceId,
-        agentKey,
-        agentId: row?.id ?? null,
-        trigger: 'manual',
-        createdBy: principal.userId,
-        locale: principal.locale,
-        input:
-          input.note || connectorId || documentIds
-            ? {
-                ...(input.note ? { note: input.note } : {}),
-                ...(connectorId ? { connectorId } : {}),
-                ...(documentIds ? { documentIds } : {}),
-              }
-            : undefined,
-      },
+      const row = await this.prisma.aiAgent.findUnique({ where: { workspaceId_key: { workspaceId, key: agentKey } } });
+      return this.prisma.agentRun.create({
+        data: {
+          workspaceId,
+          agentKey,
+          agentId: row?.id ?? null,
+          trigger: 'manual',
+          createdBy: principal.userId,
+          locale: principal.locale,
+          input:
+            input.note || connectorId || documentIds
+              ? {
+                  ...(input.note ? { note: input.note } : {}),
+                  ...(connectorId ? { connectorId } : {}),
+                  ...(documentIds ? { documentIds } : {}),
+                }
+              : undefined,
+        },
+      });
     });
     await this.producer.enqueue(run.id);
     return toRunSummary(run, agent.name);

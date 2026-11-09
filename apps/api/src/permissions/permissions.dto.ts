@@ -25,9 +25,8 @@ import {
   type RequestableAccessLevel,
 } from '@knowledge/contracts';
 import { vmsg } from '../common/validation.js';
+import { UUID_RE } from '@knowledge/contracts';
 
-/** Mirrors UUID_RE in acl.guard.ts (any version digit, nil allowed). */
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** A group name is a label in a picker and on a grant row, not a sentence. */
 const MAX_GROUP_NAME_CHARS = 80;

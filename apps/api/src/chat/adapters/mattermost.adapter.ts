@@ -1,6 +1,5 @@
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { ChatPlatformKind } from '@knowledge/contracts';
-import { CITE_MARKER_RE } from '../../assistant/citations.js';
 import { safeFetch } from '../../common/safe-fetch.js';
 import {
   ChatPlatformError,
@@ -19,7 +18,7 @@ import {
   type ChatView,
   type RawInbound,
 } from './chat-adapter.types.js';
-import { cutAnswer } from './telegram.adapter.js';
+import { defuseMentions, markdownForMattermost, parseJson, plainCommand, renderMarkdownAnswer } from './chat-markdown.js';
 
 /** Mattermost's post limit is 16 383 characters; the rest is room for the sources block. */
 const MAX_CHARS = 16_000;
@@ -33,10 +32,6 @@ const CALL_TIMEOUT_MS = 15_000;
  * capture) is started after the acknowledgement, never before.
  */
 const ACK_WAIT_MS = 5_000;
-/** Commands as a whole message: a Mattermost client takes a leading `/` as its own slash command. */
-const COMMAND_RE = /^\/?(start|help|new|unlink|bind|unbind|capture|remember|запомни)$/i;
-/** Asking the bot to remember a thread is `capture` (#82), in either language. */
-const CAPTURE_WORDS = new Set(['capture', 'remember', 'запомни']);
 /** The reaction that asks for a harvest (#82): 📌, by its Mattermost name. */
 const HARVEST_EMOJI = 'pushpin';
 /** A direct channel's name is the two user ids joined by `__`; a press carries the name, not the type. */
@@ -72,77 +67,8 @@ export function mattermostPermalink(serverUrl: string, team: string, postId: str
   return `${serverUrl.replace(/\/$/, '')}/${encodeURIComponent(team)}/pl/${encodeURIComponent(postId)}`;
 }
 
-/**
- * A command said as a whole message in plain words (`help`, `capture`…): a
- * Mattermost client, like Slack's, takes every leading `/` for its own slash
- * commands and never posts it. `remember` and `запомни` are `capture`.
- */
-export function plainCommand(text: string): { name: string; args: string } | null {
-  const match = COMMAND_RE.exec(text);
-  if (!match) return null;
-  const name = match[1].toLowerCase();
-  return { name: CAPTURE_WORDS.has(name) ? 'capture' : name, args: '' };
-}
-
-/** `S3` → `3`: the reader sees a footnote number, not the model's label. */
-export const citeNumber = (label: string): string => label.replace(/^S/i, '');
-
-/** `[text](url)`, the URL allowed one level of parentheses — the Telegram adapter's pattern. */
-export const MD_LINK_RE = /\[([^\]\n]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)/g;
-
 /** Link text that came from a page title: brackets would end the link early. */
 const escapeLinkText = (s: string): string => s.replace(/([[\]\\])/g, '\\$1');
-
-/**
- * `@name` → `@​name`. Answers quote pages and titles are typed by people,
- * and on Mattermost `@channel`, `@all` or a colleague's handle in either would ping
- * them. A zero-width space after the `@` keeps the text and drops the mention.
- * An `@` inside a URL (after `/`, `:` or a word character) is left alone.
- */
-export function defuseMentions(text: string): string {
-  return text.replace(/(^|[^\w/:.@])@(?=[\w])/g, '$1@​');
-}
-
-export function resolveUrl(raw: string, base: string): string | null {
-  try {
-    const url = new URL(raw, base.endsWith('/') ? base : `${base}/`);
-    return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * An answer's markdown as Mattermost renders it. It speaks markdown already, so
- * this only does what a chat client cannot: resolve relative page links, turn
- * `[S#]` into numbered links to the source, drop links that are not http(s),
- * and defuse mentions. Code fences pass through untouched.
- */
-export function markdownForMattermost(md: string, cite: (label: string) => string | null, base: string): string {
-  const parts = md.split(/(```[^\n]*\n[\s\S]*?```)/g);
-  return parts
-    .map((part, i) => {
-      if (i % 2 === 1) return part;
-      let s = part.replace(MD_LINK_RE, (_, text: string, href: string) => {
-        const url = resolveUrl(href, base);
-        return url ? `[${text}](${url})` : text;
-      });
-      s = s.replace(new RegExp(CITE_MARKER_RE.source, 'gi'), (_, labels: string) =>
-        labels
-          .split(/\s*[,;]\s*/)
-          .map((label) => {
-            const url = cite(label.toUpperCase());
-            const n = citeNumber(label);
-            // The brackets escaped, so the link reads "[2]" rather than "2".
-            return url ? `[\\[${n}\\]](${url})` : `[${n}]`;
-          })
-          .join(''),
-      );
-      return defuseMentions(s);
-    })
-    .join('')
-    .trim();
-}
 
 function renderUpdates(view: ChatUpdatesView): string {
   const lines = view.items.map((i) => `- ${defuseMentions(i.label)}: [${escapeLinkText(defuseMentions(i.title))}](${i.url})`);
@@ -361,16 +287,13 @@ export class MattermostAdapter implements ChatAdapter {
   }
 
   private renderAnswer(view: ChatAnswerView): ChatOutMessage {
-    const urls = new Map(view.sources.filter((s) => s.cite).map((s) => [s.cite!.toUpperCase(), s.url]));
-    const sources = view.sources.length
-      ? `\n\n**${view.sourcesHeading}**\n` +
-        view.sources
-          .map((s, i) => `${s.cite ? citeNumber(s.cite) : i + 1}. [${escapeLinkText(defuseMentions(s.title))}](${s.url})`)
-          .join('\n')
-      : '';
-    const { text, cut } = cutAnswer(view.answer, MAX_CHARS - ANSWER_HEADROOM - sources.length);
-    const body = markdownForMattermost(text, (label) => urls.get(label) ?? null, view.webBaseUrl) + sources;
-    return { text: body, plain: body, buttons: [...(cut && view.full ? [[view.full]] : []), ...view.actions] };
+    return renderMarkdownAnswer(
+      view,
+      MAX_CHARS - ANSWER_HEADROOM,
+      (sources) =>
+        `\n\n**${view.sourcesHeading}**\n` + sources.map((s) => `${s.n}. [${escapeLinkText(defuseMentions(s.title))}](${s.url})`).join('\n'),
+      markdownForMattermost,
+    );
   }
 
   async postMessage(ctx: ChatAdapterContext, target: ChatTarget, msg: ChatOutMessage): Promise<ChatMessageRef> {
@@ -552,16 +475,6 @@ export class MattermostAdapter implements ChatAdapter {
     const json = (await res.json().catch(() => null)) as (T & { message?: string }) | null;
     if (!res.ok) throw new ChatPlatformError(`${label}: ${json?.message ?? `HTTP ${res.status}`}`);
     return json as T;
-  }
-}
-
-export function parseJson<T>(raw: unknown): T | null {
-  if (typeof raw !== 'string') return null;
-  try {
-    const value: unknown = JSON.parse(raw);
-    return value && typeof value === 'object' ? (value as T) : null;
-  } catch {
-    return null;
   }
 }
 

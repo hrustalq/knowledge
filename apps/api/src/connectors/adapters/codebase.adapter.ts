@@ -21,6 +21,7 @@ import { runCodeReadingLoop, withoutConnectorParam } from '../../agents/code-rea
 import { AiUsageService } from '../../ai/ai-usage.service.js';
 import { AssistantClient } from '../../assistant/assistant.client.js';
 import { wrapUntrusted } from '../../common/untrusted.js';
+import { formatBytes } from '../../common/format-bytes.js';
 import type { Env } from '../../config/env.js';
 import { t } from '../../i18n/t.js';
 import { codeToolDefinitions, SnapshotCodeTools, type CodeToolSnapshot } from '../code-research/code-tools.js';
@@ -84,6 +85,7 @@ import {
 } from './connector.types.js';
 import { githubRepoAcl, githubTeamMembers } from './github-acl.js';
 import { repoSpecFiles, SPEC_KEY_PREFIX, suggestSpecFiles } from './repo-specs.js';
+import { parseModelJson } from '../../common/model-json.js';
 
 /**
  * A repository as a subject to document (docs/features/27).
@@ -1216,7 +1218,7 @@ export class CodebaseAdapter implements ConnectorAdapter {
         ],
         { json: true },
       );
-      const parsed = safeJson(raw) as { summary?: unknown; suspected?: unknown } | null;
+      const parsed = parseModelJson<{ summary?: unknown; suspected?: unknown }>(raw);
       const byRef = new Map(entries.map((e) => [e.ref, e]));
       const suspected = (Array.isArray(parsed?.suspected) ? parsed.suspected : [])
         .filter((x): x is { ref: string; reason?: unknown } => !!x && typeof (x as { ref?: unknown }).ref === 'string')
@@ -1270,7 +1272,7 @@ export class CodebaseAdapter implements ConnectorAdapter {
         ],
         { json: true },
       );
-      const block = this.diagram(ctx, sequenceFromJson(safeJson(raw), plan.wiki.diagrams.maxNodes), warnings);
+      const block = this.diagram(ctx, sequenceFromJson(parseModelJson(raw), plan.wiki.diagrams.maxNodes), warnings);
       if (!block) warnings.push(t('connector.warning.wiki.diagramInvalid', {}, ctx.locale));
       return block;
     } catch (err) {
@@ -1579,14 +1581,6 @@ function dedupe(warnings: string[]): string[] {
   return [...new Set(warnings)];
 }
 
-function safeJson(raw: string): unknown {
-  try {
-    return JSON.parse(raw.replace(/^```(?:json)?\s*|\s*```$/g, ''));
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Module → the modules it declares a dependency on, by package name.
  * Manifest-level only: a module with no manifest, or one that imports a sibling
@@ -1632,10 +1626,6 @@ function positiveInt(value: string | undefined): number | null {
   if (!value) return null;
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-}
-
-function formatBytes(bytes: number): string {
-  return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
 /** A signature containing a pipe would otherwise end the table cell it sits in. */

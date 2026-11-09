@@ -68,13 +68,16 @@ export class ImportProcessor extends WorkerHost {
 
   private async parse(job: Job<ImportJobData>, row: ImportJob): Promise<void> {
     // Idempotent: a re-delivered job for something already parsed (or already
-    // turned into a page) must not overwrite what the reviewer is editing.
-    if (row.status === 'parsed' || row.status === 'submitted') return;
-
-    await this.prisma.importJob.update({
-      where: { id: row.id },
+    // turned into a page) must not overwrite what the reviewer is editing. The
+    // claim and both endings are guarded statements (#810) — a check on the
+    // row read above let a redelivered parse move a `submitted` import back to
+    // `parsed`, offer Submit again, and create a second page. `running` is let
+    // back in for the redelivery BullMQ makes after a worker died mid-parse.
+    const claimed = await this.prisma.importJob.updateMany({
+      where: { id: row.id, status: { notIn: ['parsed', 'submitted'] } },
       data: { status: 'running', startedAt: new Date(), stage: 'Starting', progress: null, error: Prisma.DbNull },
     });
+    if (claimed.count === 0) return;
 
     try {
       const parser = this.parsers.resolve(row.sourceFilename, row.contentType);
@@ -129,8 +132,8 @@ export class ImportProcessor extends WorkerHost {
       );
 
       const meta: ImportMeta = { ...result.meta, images: images.length || result.meta.images };
-      await this.prisma.importJob.update({
-        where: { id: row.id },
+      const parsed = await this.prisma.importJob.updateMany({
+        where: { id: row.id, status: 'running' },
         data: {
           status: 'parsed',
           parser: parser.id,
@@ -142,6 +145,8 @@ export class ImportProcessor extends WorkerHost {
           completedAt: new Date(),
         },
       });
+      // A concurrent parse of the same job got there first.
+      if (parsed.count === 0) return;
 
       await this.events.publish({
         workspaceId: row.workspaceId,
@@ -152,8 +157,8 @@ export class ImportProcessor extends WorkerHost {
     } catch (e) {
       const message = (e as Error).message || t('error.import.failed');
       this.logger.warn(`Import ${row.id} failed: ${message}`);
-      await this.prisma.importJob.update({
-        where: { id: row.id },
+      const failed = await this.prisma.importJob.updateMany({
+        where: { id: row.id, status: 'running' },
         data: {
           status: 'failed',
           stage: null,
@@ -162,6 +167,7 @@ export class ImportProcessor extends WorkerHost {
           completedAt: new Date(),
         },
       });
+      if (failed.count === 0) return;
       await this.events.publish({
         workspaceId: row.workspaceId,
         type: 'import.failed',

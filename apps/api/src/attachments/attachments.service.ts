@@ -17,9 +17,9 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { ActivityService } from '../activity/activity.service.js';
 import { t } from '../i18n/t.js';
+import { AUTHOR_ID_STUB } from '../activity/actor.js';
 
 /** Author fallback for the AUTH_MODE=none dev principal, same stub the rest of the API uses. */
-const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
 
 /**
  * Types the browser may render in-place. Everything else is served as a
@@ -165,8 +165,9 @@ export class AttachmentsService {
 
   async remove(documentId: string, attachmentId: string, actor: string): Promise<{ deleted: true }> {
     const row = await this.require(documentId, attachmentId);
-    await this.storage.deleteObject(row.s3Key);
+    // Row first, as in complete() (#816): a leftover object is harmless, a row pointing at nothing is not.
     await this.prisma.attachment.delete({ where: { id: row.id } });
+    await this.storage.deleteObject(row.s3Key);
     void this.activity.record({
       workspaceId: row.workspaceId,
       actor,

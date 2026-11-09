@@ -11,7 +11,8 @@ import { AiConfigService } from '../ai/ai-config.service.js';
 import { AiUsageService } from '../ai/ai-usage.service.js';
 import { CaptureService } from '../captures/capture.service.js';
 import { wrapUntrusted } from '../common/untrusted.js';
-import { countOccurrences, safeJson } from '../glossary/glossary.service.js';
+import { countOccurrences } from '../glossary/glossary.service.js';
+import { parseModelJson } from '../common/model-json.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { SearchService } from '../search/search.service.js';
 import type { ChatThread } from './adapters/chat-adapter.types.js';
@@ -36,7 +37,7 @@ const SETTLES_QUESTION = {
   },
 };
 
-/** A refusal with something to tell the person, as a message key. */
+/** A refusal with something to tell the person, as a message key: a harvest's, or a chat capture's. */
 export class HarvestRefused extends Error {
   constructor(readonly key: string) {
     super(key);
@@ -136,7 +137,7 @@ export class HarvestService {
       { json: true },
     );
 
-    const plan = planCaptures(safeJson(raw), { workspaceId, projectId, transcript, pages: pages.byLabel });
+    const plan = planCaptures(parseModelJson(raw), { workspaceId, projectId, transcript, pages: pages.byLabel });
     const outcome: HarvestOutcome = { proposed: 0, duplicates: 0, dropped: plan.dropped };
     const origin: CaptureOrigin = {
       platform: input.platform,

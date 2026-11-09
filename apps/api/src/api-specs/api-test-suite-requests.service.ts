@@ -28,6 +28,7 @@ import { AgentRegistryService, type ResolvedAgent } from '../agents/agent-regist
 import { testerConfigHash } from '../agents/tester.js';
 import { AiUsageService } from '../ai/ai-usage.service.js';
 import type { Principal } from '../auth/principal.js';
+import { withSubjectLock } from '../common/subject-lock.js';
 import { t } from '../i18n/t.js';
 import { canSee, type AccessScope } from '../permissions/access-scope.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -145,7 +146,7 @@ export class ApiTestSuiteRequestsService {
   /**
    * Queue a tester run for `subjectKey`, unless one in `reuse` states already
    * exists. Two clicks racing on one key must start one run: the lookup and
-   * the insert run under one advisory lock per key (the AgentTriggerService way).
+   * the insert run under one lock per key (`withSubjectLock`, #815).
    */
   private async startRun(
     principal: Principal,
@@ -154,19 +155,18 @@ export class ApiTestSuiteRequestsService {
     input: AgentRunInput,
     reuse: string[],
   ): Promise<{ runId: string; existing: boolean }> {
-    const started = await this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${subjectKey}))`;
-      const waiting = await tx.agentRun.findFirst({
+    const started = await withSubjectLock(this.prisma, subjectKey, async () => {
+      const waiting = await this.prisma.agentRun.findFirst({
         where: { workspaceId, agentKey: TESTER, subjectKey, status: { in: reuse } },
         orderBy: { createdAt: 'desc' },
         select: { id: true },
       });
       if (waiting) return { runId: waiting.id, existing: true };
-      const override = await tx.aiAgent.findUnique({
+      const override = await this.prisma.aiAgent.findUnique({
         where: { workspaceId_key: { workspaceId, key: TESTER } },
         select: { id: true },
       });
-      const run = await tx.agentRun.create({
+      const run = await this.prisma.agentRun.create({
         data: {
           workspaceId,
           agentKey: TESTER,

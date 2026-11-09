@@ -1,15 +1,12 @@
-import { createHash, randomBytes } from 'node:crypto';
-import { Inject, Injectable, OnModuleDestroy, Optional } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Redis } from 'ioredis';
 import type { Env } from '../config/env.js';
+import { SharedRedis } from '../redis/shared-redis.js';
 import type { Principal } from './principal.js';
+import { hashToken, mintToken } from './auth-tokens.js';
 
 /** Where a ticket's principal lives until it is redeemed or expires. */
 const KEY_PREFIX = 'kn:url-ticket:';
-
-/** DI token for a substitute store (specs); production builds its own Redis client. */
-export const URL_TICKET_STORE = Symbol('URL_TICKET_STORE');
 
 /**
  * Minimal Redis surface the service needs, so a spec can hand it a fake.
@@ -35,24 +32,13 @@ export interface TicketStore {
  * - Redemption is `GETDEL`, so a second use is a 401 even under a race.
  */
 @Injectable()
-export class UrlTicketsService implements OnModuleDestroy {
-  private readonly store: TicketStore & { disconnect?: () => void };
+export class UrlTicketsService {
+  private readonly store: TicketStore;
   private readonly ttlSec: number;
 
-  constructor(
-    config: ConfigService<Env, true>,
-    @Optional() @Inject(URL_TICKET_STORE) store?: TicketStore,
-  ) {
-    this.ttlSec = config.get('AUTH_URL_TICKET_TTL_SEC', { infer: true }) ?? 60;
-    this.store =
-      store ??
-      new Redis(config.get('REDIS_URL', { infer: true }), {
-        // Opened by the first mint, not at boot: the OpenAPI generator and the
-        // MCP entrypoint load AuthModule with no Redis running.
-        lazyConnect: true,
-        maxRetriesPerRequest: 1,
-        connectTimeout: 2_000,
-      });
+  constructor(config: ConfigService<Env, true>, redis: SharedRedis) {
+    this.ttlSec = config.get('AUTH_URL_TICKET_TTL_SEC', { infer: true });
+    this.store = redis.client;
   }
 
   static isTicket(token: string): boolean {
@@ -60,11 +46,11 @@ export class UrlTicketsService implements OnModuleDestroy {
   }
 
   private key(ticket: string): string {
-    return KEY_PREFIX + createHash('sha256').update(ticket).digest('hex');
+    return KEY_PREFIX + hashToken(ticket);
   }
 
   async mint(principal: Principal): Promise<{ ticket: string; expiresAt: string }> {
-    const ticket = `kt_${randomBytes(24).toString('hex')}`;
+    const { token: ticket } = mintToken('kt_', 24);
     await this.store.set(this.key(ticket), JSON.stringify(principal), 'EX', this.ttlSec);
     return { ticket, expiresAt: new Date(Date.now() + this.ttlSec * 1000).toISOString() };
   }
@@ -78,9 +64,5 @@ export class UrlTicketsService implements OnModuleDestroy {
     } catch {
       return null;
     }
-  }
-
-  onModuleDestroy(): void {
-    this.store.disconnect?.();
   }
 }

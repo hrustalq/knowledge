@@ -59,7 +59,7 @@ const config = (overrides: Record<string, unknown> = {}) => ({
 });
 
 function tokenAuthFor(store: FakeStore, mode = 'api-key') {
-  const tickets = new UrlTicketsService(config({ AUTH_MODE: mode }) as never, store);
+  const tickets = new UrlTicketsService(config({ AUTH_MODE: mode }) as never, { client: store } as never);
   const auth = new TokenAuthService(config({ AUTH_MODE: mode }) as never, {} as never, {} as never, tickets);
   // Header and session resolution are TokenAuthService's existing, separately
   // covered paths; stub them to fixed principals so this spec is about URLs.
@@ -122,7 +122,7 @@ describe('UrlTicketsService + TokenAuthService.resolveTicket', () => {
 
   it('stores only the hash of the ticket', async () => {
     const set = vi.fn(async () => 'OK');
-    const tickets = new UrlTicketsService(config() as never, { set, getdel: vi.fn() });
+    const tickets = new UrlTicketsService(config() as never, { client: { set, getdel: vi.fn() } } as never);
     const { ticket } = await tickets.mint(sessionPrincipal);
     const [key, , , ttl] = set.mock.calls[0] as unknown as [string, string, string, number];
     expect(key).not.toContain(ticket);

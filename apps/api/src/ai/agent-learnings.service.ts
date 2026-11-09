@@ -17,6 +17,7 @@ import {
 import type { Env } from '../config/env.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { ttlCache } from '../common/ttl-cache.js';
 
 /** Characters of learning text one prompt takes, whatever AGENT_LEARNINGS_MAX allows. */
 const MAX_PROMPT_CHARS = 4_000;
@@ -80,14 +81,14 @@ export interface LearningAudience {
  */
 @Injectable()
 export class AgentLearningsService {
-  private readonly cache = new Map<string, { at: number; rows: AgentLearning[] }>();
+  private readonly cache = ttlCache<AgentLearning[]>(CACHE_TTL_MS);
   readonly promptLimit: number;
 
   constructor(
     private readonly prisma: PrismaService,
     config: ConfigService<Env, true>,
   ) {
-    this.promptLimit = Number(config.get('AGENT_LEARNINGS_MAX', { infer: true }) ?? 20);
+    this.promptLimit = config.get('AGENT_LEARNINGS_MAX', { infer: true });
   }
 
   async list(
@@ -360,15 +361,11 @@ export class AgentLearningsService {
   }
 
   private async activeRows(workspaceId: string): Promise<AgentLearning[]> {
-    const hit = this.cache.get(workspaceId);
-    if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.rows;
-    const rows = await this.prisma.agentLearning.findMany({
+    return this.cache.get(workspaceId, () => this.prisma.agentLearning.findMany({
       where: { workspaceId, status: 'active' },
       orderBy: { createdAt: 'desc' },
       take: 200,
-    });
-    this.cache.set(workspaceId, { at: Date.now(), rows });
-    return rows;
+    }));
   }
 
   /** A built-in, the `mcp` target, or a custom agent this workspace has a row for. */

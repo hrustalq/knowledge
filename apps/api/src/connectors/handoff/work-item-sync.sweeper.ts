@@ -12,6 +12,7 @@ import { TrackerRegistry } from '../tracker-registry.service.js';
 import { WorkItemAnchorsService } from './work-item-anchors.service.js';
 import { WorkItemRulesService } from './work-item-rules.service.js';
 import { afterFailure, syncDecision } from './work-item-sync.js';
+import { Ticker } from '../../common/ticker.js';
 
 /** Outbound transitions per tick: a tracker's rate limit is shared with every other caller. */
 const PUSH_BATCH = 10;
@@ -38,8 +39,7 @@ const RECONCILE_BATCH = 500;
 @Injectable()
 export class WorkItemSyncSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(WorkItemSyncSweeper.name);
-  private timer?: NodeJS.Timeout;
-  private running = false;
+  private readonly ticker = new Ticker(this.logger);
   private readonly tickMs: number;
   private readonly enabled: boolean;
   /** Round-robin position over the connectors to poll. Per process; a restart starts over. */
@@ -62,26 +62,20 @@ export class WorkItemSyncSweeper implements OnModuleInit, OnModuleDestroy {
       this.logger.log('Work item sync disabled (WORK_ITEM_SYNC_ENABLED=false)');
       return;
     }
-    this.timer = setInterval(() => void this.sweep(), this.tickMs);
-    this.timer.unref();
+    this.ticker.every(this.tickMs, () => this.sweep());
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   async sweep(): Promise<void> {
-    // Back-pressure: never a second sweep while one is in flight.
-    if (this.running) return;
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       await this.step('poll', () => this.poll());
       await this.step('rules', async () => void (await this.rules.autoCreate()));
       await this.step('reconcile', () => this.reconcile());
       await this.step('push', () => this.push());
-    } finally {
-      this.running = false;
-    }
+    });
   }
 
   // --- 1. poll ---
@@ -187,14 +181,18 @@ export class WorkItemSyncSweeper implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  /** The object is gone: say so on the ticket, close it, drop the row. A failure leaves it for the next tick. */
+  /**
+   * The object is gone: close the ticket, say so on it, drop the row. A failure
+   * leaves it for the next tick, so the step that repeats comes first (#816):
+   * a transition to the status it already has is a no-op, a comment is not.
+   */
   private async closeForDeletedAnchor(connector: Connector, item: ConnectorWorkItem): Promise<void> {
     const tracker = this.trackers.trackerFor(connector);
     const raw = this.workItems.mapFor(connector).outbound.wont_do;
     if (!tracker) return;
     try {
-      await tracker.comment(connector, item, [{ text: t('connector.workItem.deleted', {}, asLocale(connector.locale)) }]);
       if (raw) await tracker.transition(connector, item, raw);
+      await tracker.comment(connector, item, [{ text: t('connector.workItem.deleted', {}, asLocale(connector.locale)) }]);
       await this.prisma.connectorWorkItem.delete({ where: { id: item.id } });
     } catch (err) {
       this.logger.warn(`could not close ${keyOf(item)} for a deleted anchor: ${(err as Error).message}`);

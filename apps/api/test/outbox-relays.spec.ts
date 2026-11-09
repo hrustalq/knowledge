@@ -9,13 +9,20 @@ import { ImportService } from '../src/import/import.service.js';
  * Agent runs and memos are covered in agent-schedule.spec.ts and memos.spec.ts.
  */
 describe('ConnectorScheduleSweeper — queued-run relay', () => {
-  function sweeperWith(stale: Array<{ id: string; phase: string | null }>, schedulesEnabled = false) {
+  function sweeperWith(
+    stale: Array<{ id: string; phase: string | null }>,
+    schedulesEnabled = false,
+    stuck: Array<{ id: string; attempt: number }> = [],
+  ) {
     const prisma = {
-      connectorRun: { findMany: vi.fn(async () => stale) },
+      connectorRun: {
+        findMany: vi.fn(async ({ where }: { where: { status: string } }) => (where.status === 'running' ? stuck : stale)),
+        updateMany: vi.fn(async () => ({ count: 1 })),
+      },
       connector: { findMany: vi.fn(async () => []) },
     };
     const producer = { enqueue: vi.fn(async () => undefined), enqueueRetry: vi.fn(async () => undefined) };
-    const config = { get: () => schedulesEnabled };
+    const config = { get: (key: string) => (key === 'CONNECTOR_SYNC_TIMEOUT_MS' ? 600_000 : schedulesEnabled) };
     const sweeper = new ConnectorScheduleSweeper(prisma as never, {} as never, producer as never, config as never);
     sweeper.onModuleInit();
     sweeper.onModuleDestroy();
@@ -34,6 +41,25 @@ describe('ConnectorScheduleSweeper — queued-run relay', () => {
       expect.objectContaining({ where: expect.objectContaining({ status: 'queued' }) }),
     );
     expect(prisma.connector.findMany).not.toHaveBeenCalled();
+  });
+
+  it('re-queues a running run its worker abandoned, by a guarded reset, and fails one out of attempts (#809)', async () => {
+    const { sweeper, prisma, producer } = sweeperWith([], false, [
+      { id: 'crashed', attempt: 0 },
+      { id: 'cursed', attempt: 3 },
+    ]);
+    await sweeper.sweep();
+    const writes = prisma.connectorRun.updateMany.mock.calls as unknown as Array<
+      [{ where: { id: string; status: string; startedAt: { lt: Date } }; data: { status: string } }]
+    >;
+    const reset = writes.find(([w]) => w.where.id === 'crashed')![0];
+    expect(reset.where.status).toBe('running');
+    // Twice the sync timeout: a live slice yields or aborts within one.
+    expect(reset.where.startedAt.lt.getTime()).toBeLessThanOrEqual(Date.now() - 1_200_000);
+    expect(reset.data).toEqual({ status: 'queued', attempt: { increment: 1 } });
+    expect(producer.enqueueRetry).toHaveBeenCalledExactlyOnceWith('crashed', 'stale-1');
+    const failed = writes.find(([w]) => w.where.id === 'cursed')![0];
+    expect(failed.data).toMatchObject({ status: 'failed', completedAt: expect.any(Date) });
   });
 
   it('enqueues nothing when no run is stale', async () => {

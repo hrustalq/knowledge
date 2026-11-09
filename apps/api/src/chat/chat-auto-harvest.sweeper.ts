@@ -13,6 +13,7 @@ import { ChatAdapterRegistry } from './adapters/chat-adapter.registry.js';
 import { ChatBufferService, type ListenedThread } from './chat-buffer.service.js';
 import { autoHarvestLimits } from './chat-integrations.service.js';
 import { HarvestRefused, HarvestService, type HarvestOutcome } from './harvest.service.js';
+import { Ticker } from '../common/ticker.js';
 
 /** The quiet threshold is minutes; a minute's tick is precision enough. */
 const SWEEP_INTERVAL_MS = 60_000;
@@ -85,11 +86,10 @@ export function pickDue(threads: ListenedThread[], now: number, cfg: AutoHarvest
 @Injectable()
 export class ChatAutoHarvestSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ChatAutoHarvestSweeper.name);
+  private readonly ticker = new Ticker(this.logger);
   private readonly available: boolean;
   private readonly cfg: AutoHarvestThresholds;
   private readonly harvestMax: number;
-  private timer?: NodeJS.Timeout;
-  private running = false;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -109,19 +109,16 @@ export class ChatAutoHarvestSweeper implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit(): void {
     if (!this.available || this.cfg.maxPerTick < 1) return;
-    this.timer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS);
-    this.timer.unref();
+    this.ticker.every(SWEEP_INTERVAL_MS, () => this.sweep());
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   /** One tick: the due threads, each harvested at most once. Returns how many were. */
   async sweep(now = Date.now()): Promise<number> {
-    if (this.running) return 0; // a tick of model calls must not stack on itself
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       const due = pickDue(await this.buffer.listenedThreads(), now, this.cfg);
       if (!due.length) return 0;
       const bindings = new Map(
@@ -139,12 +136,7 @@ export class ChatAutoHarvestSweeper implements OnModuleInit, OnModuleDestroy {
       }
       if (harvested) this.logger.log(`harvested ${harvested} listening chat threads`);
       return harvested;
-    } catch (e: unknown) {
-      this.logger.warn(`chat auto-harvest sweep failed: ${String(e)}`);
-      return 0;
-    } finally {
-      this.running = false;
-    }
+    }, 0);
   }
 
   async harvestThread(thread: ListenedThread, binding: BindingRow): Promise<AutoHarvestResult> {

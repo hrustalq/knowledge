@@ -1,7 +1,6 @@
 import { Inject, Logger, OnModuleInit } from '@nestjs/common';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
-import matter from 'gray-matter';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -19,6 +18,7 @@ import { extractFrontmatterFacts } from './relations.js';
 import { pageLinkTargets, replacePageLinks } from './page-links.js';
 import { SourceDependentsService } from '../connectors/source-dependents.service.js';
 import { ExtractorFactory } from '../extraction/extractor-factory.service.js';
+import type { InferredFact } from '../extraction/relation-extractor.provider.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 import { IngestionProducer } from './ingestion.producer.js';
 import { UNFILTERED } from '../common/document-acl.js';
@@ -28,6 +28,8 @@ import { ApiSpecsService, type ApiSpecProjection } from '../api-specs/api-specs.
 import { ApiFixturesService, type ApiFixtureProjection } from '../api-specs/api-fixtures.service.js';
 import { isApiSpecKind, isTestFixtureKind } from '@knowledge/contracts';
 import { bindTrace, currentTrace, emitBacktest, startTrace, withTrace } from '@knowledge/observability';
+import { queueReindex } from './reindex.js';
+import { parseMarkdown } from '../common/frontmatter.js';
 
 interface IngestionJobData {
   ingestionJobId: string;
@@ -136,16 +138,28 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       return;
     }
 
-    await this.prisma.$transaction([
-      this.prisma.ingestionJob.update({
-        where: { id: ingestionJobId },
+    // Guarded claim (#809): only a queued job, or a failed one being retried, is
+    // ours to start. A re-delivery of a job PG still holds `running` (a stalled
+    // BullMQ job beside a live worker) is a no-op instead of a second pipeline
+    // interleaving its chunk rewrites with the first. A worker that really died
+    // is re-queued by StaleSweeper.requeueStuck.
+    // ponytail: `startedAt` is the lease and nothing renews it, so a job still
+    // alive past STALE_INDEXING_TIMEOUT_MIN is re-queued and runs twice; add a
+    // per-step heartbeat if indexing one revision ever takes that long.
+    const claimed = await this.prisma.withTransaction(async () => {
+      const { count } = await this.prisma.ingestionJob.updateMany({
+        where: { id: ingestionJobId, status: { in: ['queued', 'failed'] } },
         data: { status: 'running', attempts: { increment: 1 }, startedAt: new Date() },
-      }),
-      this.prisma.documentRevision.update({
-        where: { id: revision.id },
-        data: { status: 'indexing' },
-      }),
-    ]);
+      });
+      if (count === 1) {
+        await this.prisma.documentRevision.update({ where: { id: revision.id }, data: { status: 'indexing' } });
+      }
+      return count === 1;
+    });
+    if (!claimed) {
+      this.logger.log(`Ingestion job ${ingestionJobId} is already claimed — skipping this delivery`);
+      return;
+    }
 
     // Declared outside the try so the catch can still report which step the
     // pipeline reached before it failed — that is the single most useful thing
@@ -167,7 +181,7 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
 
     try {
       // 1. Fetch raw bytes
-      const raw = await this.storage.getObjectText(revision.s3Key);
+      const raw = await this.storage.getObjectText(revision.s3Key, revision.s3VersionId);
       mark('fetch', raw.length);
 
       // 2. Parse. A spec document (#78) is parsed by its kind, not its content
@@ -205,7 +219,8 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
         if (!revision.contentType.includes('markdown') && !revision.contentType.startsWith('text/')) {
           throw new Error(`Unsupported content type for Phase 1 ingestion: ${revision.contentType}`);
         }
-        parsed = matter(raw);
+        const md = parseMarkdown(raw);
+        parsed = { content: md.body, data: md.data };
       }
 
       // 3. Normalize → persist normalized.json next to the source (plan.md §4 layout)
@@ -392,16 +407,19 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
 
 
       // 8. Inferred relation extraction (plan.md §11 Phase 4): LLM-derived
-      //    edges tagged 'inferred' with confidence + source chunk. Non-fatal —
-      //    the revision is already indexed; a flaky LLM must not fail the job.
-      //    Runs even when disabled so stale inferred edges are cleared.
+      //    edges tagged 'inferred' with confidence + source chunk. The model
+      //    call is non-fatal — a flaky LLM must not fail the job, and its edges
+      //    stay as they were. The graph write is not (#817): a failed reconcile
+      //    retries like every other graph write. Runs even when disabled so
+      //    stale inferred edges are cleared.
+      let inferred: InferredFact[] | null = null;
       try {
         // Resolved per job: the workspace may route extraction at its own
         // provider profile (docs/features/12), falling back to EXTRACTOR_*.
         const { extractor, tuning, config } = await this.extractors.forWorkspace(
           revision.document.workspaceId,
         );
-        const inferred = extractor.enabled
+        inferred = extractor.enabled
           ? await extractor.extract({
               documentTitle: revision.document.title,
               minConfidence: tuning.minConfidence,
@@ -417,6 +435,10 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
               })),
             })
           : [];
+      } catch (e) {
+        this.logger.warn(`Inferred extraction failed for revision ${revision.id} (non-fatal): ${(e as Error).message}`);
+      }
+      if (inferred) {
         await this.graph.replaceRevisionInferredFacts({
           workspaceId: revision.document.workspaceId,
           documentId: revision.documentId,
@@ -428,8 +450,6 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
         if (inferred.length > 0) {
           this.logger.log(`Inferred ${inferred.length} relation(s) for revision ${revision.id}`);
         }
-      } catch (e) {
-        this.logger.warn(`Inferred extraction failed for revision ${revision.id} (non-fatal): ${(e as Error).message}`);
       }
       mark('inferred');
 
@@ -649,41 +669,13 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       if (!headId) continue;
       const head = await this.prisma.documentRevision.findUnique({ where: { id: headId } });
       if (!head || head.status !== 'indexed') continue;
-      const pending = await this.prisma.ingestionJob.findFirst({
-        where: { revisionId: headId, status: { in: ['queued', 'running'] } },
-      });
-      if (pending) continue;
-
-      const job = await this.prisma.ingestionJob.create({
-        data: {
-          workspaceId,
-          revisionId: headId,
-          type: 'reindex',
-          status: 'queued',
-          payload: {
-            documentId: depId,
-            revisionId: headId,
-            s3Key: head.s3Key,
-            title: doc.title,
-            reason: 'dependent-reindex',
-            triggeredBy: documentId,
-          },
-        },
-      });
-      await this.producer.enqueue(job.id).catch((err: unknown) => {
-        // Still non-fatal: OutboxSweeper re-enqueues anything left `queued`,
-        // which is the entire point of the outbox. Logged because "the sweeper
-        // will pick it up in a moment" and "every enqueue is failing" are
-        // indistinguishable from here — the second presents only as unexplained
-        // indexing latency, with nothing to grep for.
-        this.logger.warn({
-          msg: 'Dependent reindex enqueue failed (outbox sweeper will retry)',
-          code: 'JOB_ENQUEUE_FAILED',
-          ingestionJobId: job.id,
-          documentId: depId,
-          err,
-        });
-      });
+      const queued = await queueReindex(
+        this.prisma,
+        this.producer,
+        { workspaceId, documentId: depId, revisionId: headId, s3Key: head.s3Key, title: doc.title, reason: 'dependent-reindex', triggeredBy: documentId },
+        { skipPending: true },
+      );
+      if (!queued) continue;
       await this.events.publish({
         type: 'revision.dependent-reindex',
         workspaceId,

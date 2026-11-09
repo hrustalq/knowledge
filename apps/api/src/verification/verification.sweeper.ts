@@ -8,6 +8,7 @@ import { NotificationsService } from '../notifications/notifications.service.js'
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { VerificationPolicyService } from './verification-policy.service.js';
+import { Ticker } from '../common/ticker.js';
 
 /** One tick. The deadline is a date, so a minute's lag is invisible. */
 const SWEEP_INTERVAL_MS = 60_000;
@@ -33,7 +34,7 @@ interface DueRow {
  *
  * API-side, like `DriftPublishSweeper` and `ReportPublishSweeper`, because
  * a notification is a user-facing act and the worker has no principal. There
- * is no cron in this repo: a fixed tick, a `running` back-pressure flag, and a
+ * is no cron in this repo: a fixed tick with back-pressure (`Ticker`), and a
  * bounded batch per pass.
  *
  * Nothing here changes what a page *reads as*. `expired` is derived by
@@ -52,8 +53,7 @@ interface DueRow {
 @Injectable()
 export class VerificationSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(VerificationSweeper.name);
-  private timer?: NodeJS.Timeout;
-  private running = false;
+  private readonly ticker = new Ticker(this.logger);
   /** Revisions whose source could not be read this process lifetime — skipped, not retried every minute. */
   private readonly unreadable = new Set<string>();
 
@@ -71,26 +71,19 @@ export class VerificationSweeper implements OnModuleInit, OnModuleDestroy {
       this.logger.log('Verification sweeper disabled (VERIFICATION_SWEEP_ENABLED=false)');
       return;
     }
-    this.timer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS);
-    this.timer.unref();
+    this.ticker.every(SWEEP_INTERVAL_MS, () => this.sweep());
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   async sweep(now = new Date()): Promise<void> {
-    if (this.running) return;
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       await this.remind(now);
       await this.expire(now);
       await this.fillBodyChars();
-    } catch (error) {
-      this.logger.warn(`Verification sweep failed (non-fatal): ${(error as Error).message}`);
-    } finally {
-      this.running = false;
-    }
+    });
   }
 
   /**
@@ -182,8 +175,8 @@ export class VerificationSweeper implements OnModuleInit, OnModuleDestroy {
    * value.
    */
   async fillBodyChars(): Promise<number> {
-    const rows = await this.prisma.$queryRaw<Array<{ id: string; s3_key: string; kind: string }>>`
-      SELECT r.id, r.s3_key, d.kind
+    const rows = await this.prisma.$queryRaw<Array<{ id: string; s3_key: string; s3_version_id: string | null; kind: string }>>`
+      SELECT r.id, r.s3_key, r.s3_version_id, d.kind
         FROM document_revisions r
         JOIN document_branches b ON b.head_revision_id = r.id
         JOIN documents d ON d.id = r.document_id
@@ -195,7 +188,7 @@ export class VerificationSweeper implements OnModuleInit, OnModuleDestroy {
     let filled = 0;
     for (const row of rows.filter((r) => !this.unreadable.has(r.id)).slice(0, BODY_CHARS_BATCH)) {
       try {
-        const raw = await this.storage.getObjectText(row.s3_key);
+        const raw = await this.storage.getObjectText(row.s3_key, row.s3_version_id);
         const bodyChars = readPageSource(raw, row.kind).content.trim().length;
         await this.prisma.documentRevision.updateMany({ where: { id: row.id, bodyChars: null }, data: { bodyChars } });
         filled += 1;

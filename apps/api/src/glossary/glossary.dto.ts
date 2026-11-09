@@ -17,9 +17,8 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { vmsg } from '../common/validation.js';
+import { UUID_RE } from '@knowledge/contracts';
 
-/** Mirrors UUID_RE in acl.guard.ts (any version digit, nil allowed). */
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * A term is a linking key, not prose: the linker scans every rendered page for

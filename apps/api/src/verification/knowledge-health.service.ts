@@ -40,6 +40,7 @@ import { VerificationPolicyService } from './verification-policy.service.js';
 import { VerificationService } from './verification.service.js';
 import type { FlagOptions } from './verification.service.js';
 import { sourceStateSql } from '../documents/source-backed.js';
+import { escapeLike } from '../common/like.js';
 
 export type HealthSort = 'activity' | 'title';
 
@@ -423,10 +424,6 @@ function bulkErrorCode(error: unknown): string {
     if (error.getStatus() === 400) return 'invalid';
   }
   return 'failed';
-}
-
-function escapeLike(s: string): string {
-  return s.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
 function encodeCursor(c: { v: string; id: string }): string {

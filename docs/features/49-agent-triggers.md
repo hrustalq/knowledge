@@ -167,7 +167,7 @@ since a sender retrying one delivery must not start two runs however long after.
 The workspace is read from the trigger row and nowhere else.
 
 The body is kept as `input.payload`, cut to 8 000 characters, and reaches the
-model only through `runBrief()` in `agent.executor.ts`, inside
+model only through `runBrief()` in `agent-services.ts`, inside
 `wrapUntrusted(…, 'webhook')`. The secret is a `secret-box` envelope, shown
 once on **Create secret** or **Rotate secret** and never again. Rotating stops
 the old secret at once, so the editor asks first. Without

@@ -1,26 +1,26 @@
-import { createHash } from 'node:crypto';
 import { BadRequestException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentsService } from '../documents/documents.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { StorageService } from '../storage/storage.service.js';
+import { StorageService, type StoredRevision } from '../storage/storage.service.js';
 import { readPageSource } from '../common/frontmatter.js';
 import { t } from '../i18n/t.js';
 import { type AiReadableScope, isReadableRevisionStatus, listedProjectsWhere, readableDocumentsWhere } from './ai-readable-scope.js';
 import { AI_READABLE_FORMAT_VERSION, etagFor, renderPageMarkdown } from './render.js';
-import { etagMatches } from '../common/http-cache.js';
+import { etagMatches, etagOf } from '../common/http-cache.js';
 import { isScaffoldStub } from '../common/scaffold-stub.js';
 import {
+  type FullStats,
   type IndexPage,
   type OrderedPage,
+  type TextSink,
   orderPages,
   renderFullHeader,
-  renderFullPage,
   renderLlmsIndex,
-  truncatedMarker,
-  unavailableMarker,
+  streamPages,
 } from './llms.js';
 import { WORKSPACE_READER } from '../auth/principal.js';
+import type { Env } from '../config/env.js';
 
 export type TextResult = { status: 304; etag: string } | { status: 200; etag: string; body: string };
 
@@ -31,18 +31,6 @@ export interface FullPlan {
   pages: OrderedPage[];
   /** Per-project full-text URLs, named in the truncation marker of a workspace dump. */
   narrower: string[];
-}
-
-export interface FullStats {
-  pages: number;
-  bytes: number;
-  truncated: number;
-  unavailable: number;
-}
-
-/** The subset of an express Response the streamer writes to. */
-export interface TextSink {
-  write(chunk: string): unknown;
 }
 
 export type PageMarkdownResult =
@@ -63,7 +51,7 @@ export class AiReadableService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly documents: DocumentsService,
-    private readonly config: ConfigService,
+    private readonly config: ConfigService<Env, true>,
     // Optional so the single-page path (phase 1) needs no storage of its own:
     // it reads through DocumentsService. The listings stream bodies directly.
     @Optional() private readonly storage?: StorageService,
@@ -168,7 +156,7 @@ export class AiReadableService {
     if (headOf.size === 0) return [];
     const heads = await this.prisma.documentRevision.findMany({
       where: { id: { in: [...headOf.values()] } },
-      select: { id: true, status: true, s3Key: true, origin: true },
+      select: { id: true, status: true, s3Key: true, s3VersionId: true, origin: true },
     });
     // A scaffold stub (#716) is a skeleton, not content an agent should read.
     const readable = new Map(
@@ -187,6 +175,7 @@ export class AiReadableService {
         projectId: d.projectId,
         headRevisionId: rev.id,
         s3Key: rev.s3Key,
+        s3VersionId: rev.s3VersionId,
         kind: d.kind,
       });
     }
@@ -258,51 +247,24 @@ export class AiReadableService {
     };
   }
 
-  /**
-   * Write the plan to `out` page by page — never buffered. Bodies are fetched
-   * in windows of `AI_READABLE_FETCH_CONCURRENCY` but written in order. The
-   * status line is already sent, so nothing here may throw: a failed read is a
-   * marker, a cap is a marker, and the stream always ends cleanly.
-   */
+  /** Write the plan to `out` through `streamPages`: it never throws, the status line is already sent. */
   async streamFull(plan: FullPlan, out: TextSink): Promise<FullStats> {
-    const maxDocs = Number(this.config.get('LLMS_FULL_MAX_DOCS') ?? 2000);
-    const maxBytes = Number(this.config.get('LLMS_FULL_MAX_BYTES') ?? 20_000_000);
-    const window = Math.max(1, Number(this.config.get('AI_READABLE_FETCH_CONCURRENCY') ?? 8));
-    const stats: FullStats = { pages: 0, bytes: 0, truncated: 0, unavailable: 0 };
     out.write(plan.header);
-
-    const pages = plan.pages;
-    let i = 0;
-    outer: while (i < pages.length) {
-      const batch = pages.slice(i, i + window);
-      const bodies = await Promise.all(
-        batch.map((p) =>
-          this.readBody(p.s3Key, p.kind).catch((e: unknown) => {
-            this.logger.warn(`llms-full: page ${p.id} unavailable: ${(e as Error).message}`);
-            return null;
-          }),
-        ),
-      );
-      for (let j = 0; j < batch.length; j++) {
-        const page = batch[j];
-        if (stats.pages >= maxDocs) break outer;
-        const body = bodies[j];
-        const chunk =
-          body === null
-            ? unavailableMarker(page.id)
-            : `${renderFullPage({ title: page.title, body, url: `${this.webBase()}/documents/${page.id}` })}\n`;
-        const size = Buffer.byteLength(chunk);
-        if (stats.bytes + size > maxBytes) break outer;
-        out.write(chunk);
-        stats.bytes += size;
-        if (body === null) stats.unavailable++;
-        else stats.pages++;
-        i++;
-      }
-    }
-    stats.truncated = pages.length - i;
-    if (stats.truncated > 0) out.write(truncatedMarker(stats.truncated, plan.narrower));
-    return stats;
+    return streamPages(
+      out,
+      plan.pages.map((p) => ({ ...p, url: `${this.webBase()}/documents/${p.id}` })),
+      (p) =>
+        this.readBody(p, p.kind).catch((e: unknown) => {
+          this.logger.warn(`llms-full: page ${p.id} unavailable: ${(e as Error).message}`);
+          return null;
+        }),
+      {
+        maxDocs: this.config.get('LLMS_FULL_MAX_DOCS', { infer: true }),
+        maxBytes: this.config.get('LLMS_FULL_MAX_BYTES', { infer: true }),
+        window: this.config.get('AI_READABLE_FETCH_CONCURRENCY', { infer: true }),
+        narrower: plan.narrower,
+      },
+    );
   }
 
   /**
@@ -341,9 +303,9 @@ export class AiReadableService {
     );
   }
 
-  private async readBody(s3Key: string, kind: string): Promise<string> {
+  private async readBody(revision: StoredRevision, kind: string): Promise<string> {
     if (!this.storage) throw new Error('storage unavailable');
-    return readPageSource(await this.storage.getObjectText(s3Key), kind).content;
+    return readPageSource(await this.storage.getObjectText(revision.s3Key, revision.s3VersionId), kind).content;
   }
 
   private links(pages: IndexPage[]) {
@@ -365,10 +327,7 @@ export class AiReadableService {
     const rows = [...pages]
       .sort((a, b) => a.id.localeCompare(b.id))
       .map((p) => [p.id, p.headRevisionId, p.title, p.category, p.parentId, p.position, p.projectId]);
-    const hash = createHash('sha256')
-      .update(JSON.stringify([AI_READABLE_FORMAT_VERSION, kind, this.webBase(), extra, rows]))
-      .digest('hex');
-    return `"${hash.slice(0, 32)}"`;
+    return etagOf(AI_READABLE_FORMAT_VERSION, kind, this.webBase(), extra, rows);
   }
 
   /** Caps change the bytes of a capped dump, so they are part of its validator. */
@@ -377,10 +336,10 @@ export class AiReadableService {
   }
 
   apiBase(): string {
-    return String(this.config.get<string>('API_PUBLIC_URL') ?? '').replace(/\/+$/, '');
+    return this.config.get('API_PUBLIC_URL', { infer: true }).replace(/\/+$/, '');
   }
 
   private webBase(): string {
-    return (this.config.get<string>('WEB_BASE_URL') ?? '').replace(/\/+$/, '');
+    return this.config.get('WEB_BASE_URL', { infer: true }).replace(/\/+$/, '');
   }
 }

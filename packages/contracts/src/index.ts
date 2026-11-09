@@ -7,6 +7,7 @@
 // (TS5097, and allowImportingTsExtensions is illegal alongside emit). Package
 // self-reference resolves in both, which is what keeps this package buildless.
 export * from '@knowledge/contracts/core';
+export * from '@knowledge/contracts/ids';
 export * from '@knowledge/contracts/documents';
 export * from '@knowledge/contracts/graph';
 export * from '@knowledge/contracts/api';

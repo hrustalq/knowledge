@@ -1,6 +1,6 @@
-import matter from 'gray-matter';
 import { load as parseYaml } from 'js-yaml';
 import type { StructuralChange, StructuralDiff } from '@knowledge/contracts';
+import { parseMarkdown } from '../common/frontmatter.js';
 
 /**
  * Path-level structural diffing (plan.md §8): JSON/YAML bodies are diffed as
@@ -16,7 +16,7 @@ export function parseStructured(
   try {
     if (t.includes('json')) return { source: 'content', data: JSON.parse(text) };
     if (t.includes('yaml') || t.includes('yml')) return { source: 'content', data: parseYaml(text) };
-    if (t.includes('markdown') || t.includes('md')) return { source: 'frontmatter', data: matter(text).data };
+    if (t.includes('markdown') || t.includes('md')) return { source: 'frontmatter', data: parseMarkdown(text).data };
   } catch {
     // Unparseable content → no structural view; the text diff still applies.
     return null;

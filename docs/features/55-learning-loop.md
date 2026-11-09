@@ -53,7 +53,7 @@ columns. A row from before it reads as unattributed.
 | `ai_usage`        | `agent_key`, `agent_run_id`                                   | `AiUsageService.record`, from the run context (fire-and-forget) |
 | `answer_feedback` | `provider_id`, `model`                                        | `AnswerFeedbackService`, from the turn's resolved config       |
 
-- `prompt_hash` is `promptHashOf` (`agents/agent.executor.ts`): SHA-256 over
+- `prompt_hash` is `promptHashOf` (`agents/agent-services.ts`): SHA-256 over
   the agent's instructions (the built-in prompt or its override) and the
   **trusted** parts the executor rendered, meaning skills, learnings and a
   styleguide. The parts are order-free, and empty parts are dropped. Page

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { McpController } from '../src/mcp/mcp.controller.js';
@@ -10,6 +11,7 @@ import { AccessService } from '../src/auth/access.service.js';
 import { AclGuard } from '../src/auth/acl.guard.js';
 import { READ_KEY_OK_META, type AccessSpec } from '../src/auth/access.decorator.js';
 import { DEV_PRINCIPAL, type Principal } from '../src/auth/principal.js';
+import { GraphQueryService } from '../src/graph/graph-query.service.js';
 import { McpService, type McpExtras } from '../src/mcp/mcp.service.js';
 import type { AgentLearning } from '@prisma/client';
 import { CAPTURE_TOOLS, FEATURE_TOOLS, MCP_INSTRUCTIONS, WRITE_TOOLS, settleTools } from '../src/mcp/mcp-tools.js';
@@ -165,7 +167,7 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
     getTree: vi.fn(async () => ({ nodes: [] })),
     getContent: vi.fn(async () => ({ revisionId: 'rev-1', markdown: 'Body', frontmatter: {} })),
   };
-  const config = { get: (key: string) => ({ AUTH_MODE: 'api-key', API_PUBLIC_URL: 'https://kb.example.com/api' })[key] };
+  const config = { get: (key: string) => ({ AUTH_MODE: 'api-key', API_PUBLIC_URL: 'https://kb.example.com/api', WEB_BASE_URL: 'http://localhost:5173' })[key] };
   const deps = {
     prisma: {},
     storage: {},
@@ -176,7 +178,7 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
     mergeRequestThreads: {},
     entities: {},
     graph: {},
-    audit: {},
+    graphQuery: {},
     // Page permissions (#76) are pinned in test/permissions.spec.ts; here the
     // page check is the workspace check and every page is visible.
     permissions: {
@@ -1034,7 +1036,7 @@ describe('McpService over a principal', () => {
     const doc = '44444444-4444-4444-8444-444444444444';
     const viewer = service(accessWith('viewer'));
     (viewer.mcp as unknown as { access: AccessService }).access.workspaceOfDocument = vi.fn(async () => WS_A);
-    (viewer.mcp as unknown as { access: AccessService }).access.workspaceOfExport = vi.fn(async () => WS_A);
+    (viewer.mcp as unknown as { access: AccessService }).access.workspaceOf = vi.fn(async () => WS_A);
     const p = keyPrincipal({ id: 'k', scope: 'read', workspaceId: WS_A });
     const client = await connect(viewer.mcp, p);
     const names = (await client.listTools()).tools.map((t) => t.name);
@@ -1766,5 +1768,73 @@ describe('question flows over MCP (#425)', () => {
       await client.callTool({ name: 'knowledge_flag_document', arguments: { workspaceId: WS_A, documentId: FLOW_PAGE, state: 'outdated', note: 'Gone' } }),
     );
     expect(res).toMatchObject({ state: 'outdated', marked: [FLOW_PAGE] });
+  });
+});
+
+describe('tools that copy a REST twin keep its checks (#812)', () => {
+  const body = (res: unknown) => JSON.parse((res as { content: { text: string }[] }).content[0].text);
+  const admin = keyPrincipal({ id: 'k', scope: 'write', workspaceId: null }, { isAdmin: true });
+
+  it('holds knowledge_query_graph to GRAPH_QUERY_MAX_ROWS and audits the clamped limit', async () => {
+    const { mcp } = service(accessWith('admin'));
+    const rows = Array.from({ length: 1000 }, (_, i) => ({ n: i }));
+    const operatorQuery = vi.fn(async (_ws: string, _q: string, cap: number) => ({ rows: rows.slice(0, cap), truncated: rows.length > cap }));
+    const record = vi.fn(async () => undefined);
+    const config = { get: (key: string) => (key === 'GRAPH_QUERY_MAX_ROWS' ? 200 : undefined) };
+    Object.assign(mcp as unknown as { graphQuery: object }, {
+      graphQuery: new GraphQueryService({ operatorQuery } as never, { record } as never, config as never),
+    });
+    const client = await connect(mcp, admin);
+    const res = await client.callTool({ name: 'knowledge_query_graph', arguments: { workspaceId: WS_A, query: 'SELECT FROM Entity', limit: 1000 } });
+    expect(res.isError).toBeFalsy();
+    expect(body(res)).toMatchObject({ rowCount: 200, truncated: true });
+    expect(operatorQuery).toHaveBeenCalledWith(WS_A, 'SELECT FROM Entity', 200);
+    expect(record).toHaveBeenCalledWith(expect.objectContaining({ actor: admin.userId, params: expect.objectContaining({ limit: 200 }), ok: true }));
+  });
+
+  it('records the caller as the actor of a sync started over MCP', async () => {
+    const { mcp } = service(accessWith('editor'));
+    const row = { id: 'c-1', workspaceId: WS_A };
+    const createRun = vi.fn(async () => ({ id: 'run-1', connectorId: 'c-1', workspaceId: WS_A, status: 'queued', direction: 'pull', trigger: 'manual', createdAt: new Date(), updatedAt: new Date() }));
+    Object.assign(mcp as unknown as { connectors: object }, { connectors: { require: vi.fn(async () => row), createRun } });
+    const principal = keyPrincipal({ id: 'k', scope: 'write', workspaceId: null });
+    const client = await connect(mcp, principal);
+    const res = await client.callTool({ name: 'knowledge_sync_connector', arguments: { connectorId: '44444444-4444-4444-8444-444444444444' } });
+    expect(res.isError).toBeFalsy();
+    expect(createRun).toHaveBeenCalledWith(row, 'pull', 'manual', { externalIds: undefined, actorId: principal.userId });
+  });
+});
+
+/**
+ * What each kind of caller is offered, pinned (#822): splitting `buildServer`
+ * into per-section registrars must leave every name, annotation, description
+ * and schema exactly as it was. Descriptions and schemas are digested so the
+ * snapshot stays readable; any edit to one changes its digest.
+ */
+describe('the offered tool set (#822)', () => {
+  const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0, 16);
+  const byName = <T extends { name: string }>(rows: T[]) => [...rows].sort((a, b) => a.name.localeCompare(b.name));
+
+  it.each([
+    ['the stdio principal', DEV_PRINCIPAL],
+    ['a write key', keyPrincipal({ id: 'k', scope: 'write', workspaceId: null })],
+    ['a capture key', keyPrincipal({ id: 'k', scope: 'capture', workspaceId: null })],
+    ['a read key', keyPrincipal({ id: 'k', scope: 'read', workspaceId: null })],
+  ])('%s', async (_who, principal) => {
+    const client = await connect(service(accessWith('admin')).mcp, principal, { drafts: fakeDrafts() });
+    const { tools } = await client.listTools();
+    const { resources } = await client.listResources();
+    const { resourceTemplates } = await client.listResourceTemplates();
+    const { prompts } = await client.listPrompts();
+    expect({
+      tools: byName(tools).map((tool) => ({
+        name: tool.name,
+        annotations: tool.annotations,
+        schema: digest({ title: tool.title, description: tool.description, input: tool.inputSchema, output: tool.outputSchema }),
+      })),
+      resources: byName(resources).map((r) => `${r.name} ${r.uri} ${digest(r)}`),
+      resourceTemplates: byName(resourceTemplates).map((r) => `${r.name} ${r.uriTemplate} ${digest(r)}`),
+      prompts: byName(prompts).map((p) => `${p.name} ${digest(p)}`),
+    }).toMatchSnapshot();
   });
 });

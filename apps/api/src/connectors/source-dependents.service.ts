@@ -8,11 +8,11 @@ import { UNFILTERED } from '../common/document-acl.js';
 import { GraphService } from '../graph/graph.service.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { StorageService } from '../storage/storage.service.js';
+import { StorageService, type StoredRevision } from '../storage/storage.service.js';
 import { VerificationService } from '../verification/verification.service.js';
+import { AUTHOR_ID_STUB } from '../activity/actor.js';
 
 /** The system's own actor id, used when a connector's owner was deleted. */
-const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
 /** Changes named in one dependent's note; the rest is "…". */
 const MAX_NOTE_ITEMS = 10;
 /** The agent that judges the linking pages (phase 5b). */
@@ -109,14 +109,14 @@ export class SourceDependentsService {
 
   private async flagDropped(
     document: { id: string; workspaceId: string; title: string; kind: string },
-    previous: { id: string; s3Key: string },
-    revision: { id: string; s3Key: string },
+    previous: { id: string; s3Key: string; s3VersionId: string | null },
+    revision: { id: string; s3Key: string; s3VersionId: string | null },
     actorId: string,
   ): Promise<string[]> {
     const spec = isApiSpecKind(document.kind);
     const [before, after, keysBefore, keysAfter] = await Promise.all([
-      spec ? this.operationAnchors(previous.id) : this.headingAnchors(previous.s3Key),
-      spec ? this.operationAnchors(revision.id) : this.headingAnchors(revision.s3Key),
+      spec ? this.operationAnchors(previous.id) : this.headingAnchors(previous),
+      spec ? this.operationAnchors(revision.id) : this.headingAnchors(revision),
       this.graph.revisionEntityKeys(document.workspaceId, document.id, previous.id),
       this.graph.revisionEntityKeys(document.workspaceId, document.id, revision.id),
     ]);
@@ -234,8 +234,8 @@ export class SourceDependentsService {
     return run.id;
   }
 
-  private async headingAnchors(s3Key: string): Promise<Anchor[]> {
-    return headingSections(await this.storage.getObjectText(s3Key));
+  private async headingAnchors(revision: StoredRevision): Promise<Anchor[]> {
+    return headingSections(await this.storage.getObjectText(revision.s3Key, revision.s3VersionId));
   }
 
   private async operationAnchors(revisionId: string): Promise<Anchor[]> {

@@ -1,4 +1,3 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import type { ConnectorCapabilities, ConnectorKind } from '@knowledge/contracts';
 import { t } from '../../i18n/t.js';
@@ -12,6 +11,8 @@ import {
   type HarvestDelivery,
   type HarvestItem,
 } from './connector.types.js';
+import { safeJson } from '../webhook-payload.js';
+import { verifyHmacSha256 } from '../../common/hmac.js';
 
 const LINEAR_API = 'https://api.linear.app/graphql';
 /** Linear's own advice: refuse a delivery stamped more than a minute away. */
@@ -20,11 +21,6 @@ const MAX_AGE_MS = 60_000;
 const NOT_FOUND_RE = /ENTITY_NOT_FOUND|not found/i;
 /** Comments read per issue: one page, Linear's maximum. */
 const COMMENTS = 250;
-
-/** `Linear-Signature`: the hex HMAC-SHA256 of the raw body, keyed by the webhook's signing secret. */
-export function linearSignature(secret: string, rawBody: string): string {
-  return createHmac('sha256', secret).update(rawBody).digest('hex');
-}
 
 /**
  * Linear (#382), a **harvest** connector (doc 59): no content moves either
@@ -68,12 +64,10 @@ export class LinearAdapter implements ConnectorAdapter {
    */
   verifyHarvestDelivery(ctx: ConnectorContext, headers: Record<string, string>, rawBody: string): HarvestDelivery | null {
     const secret = ctx.webhookSecret;
+    // `Linear-Signature`: the hex HMAC-SHA256 of the raw body, keyed by the webhook's signing secret.
     const signature = headers['linear-signature'];
-    if (!secret || !signature || !/^[0-9a-f]{64}$/i.test(signature)) return null;
-    const a = Buffer.from(linearSignature(secret, rawBody), 'hex');
-    const b = Buffer.from(signature, 'hex');
-    if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
-    const body = parseJson<LinearWebhook>(rawBody);
+    if (!secret || !signature || !verifyHmacSha256(rawBody, secret, signature)) return null;
+    const body = safeJson<LinearWebhook>(rawBody);
     if (!body || typeof body.webhookTimestamp !== 'number' || Math.abs(Date.now() - body.webhookTimestamp) > MAX_AGE_MS) return null;
     const actor = body.actor;
     const changedState = !!body.updatedFrom && 'stateId' in body.updatedFrom;
@@ -150,15 +144,6 @@ class LinearError extends Error {
     readonly notFound: boolean,
   ) {
     super(message);
-  }
-}
-
-function parseJson<T>(raw: string): T | null {
-  try {
-    const value: unknown = JSON.parse(raw);
-    return value && typeof value === 'object' ? (value as T) : null;
-  } catch {
-    return null;
   }
 }
 

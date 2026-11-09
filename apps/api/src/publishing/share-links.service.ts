@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { ShareLink } from '@prisma/client';
@@ -17,14 +17,10 @@ import type { Env } from '../config/env.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PublishingSettingsService } from './publishing-settings.service.js';
+import { AUTHOR_ID_STUB } from '../activity/actor.js';
+import { hashToken } from '../auth/auth-tokens.js';
 
 /** The dev principal has no users row; same stub the rest of the API records. */
-const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
-
-/** SHA-256 of a `kp_` token — the only form the database looks a link up by. */
-export function shareTokenHash(token: string): string {
-  return createHash('sha256').update(token).digest('hex');
-}
 
 export interface ShareLinkInput {
   includeSubtree?: boolean;
@@ -131,7 +127,7 @@ export class ShareLinksService {
         workspaceId: document.workspaceId,
         documentId,
         includeSubtree: input.includeSubtree ?? false,
-        tokenHash: shareTokenHash(token),
+        tokenHash: hashToken(token),
         tokenCipher: key ? encryptSecret(token, key) : null,
         passwordHash: hasPassword ? await hashPassword(input.password as string) : null,
         allowDownload: input.allowDownload ?? false,

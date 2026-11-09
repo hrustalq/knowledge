@@ -99,6 +99,8 @@ function world(opts: { filed?: number; sentinel?: { enabled: boolean; config: bo
       }),
     },
     aiAgent: { findUnique: vi.fn(async () => null) },
+    withTransaction: vi.fn(async (fn: () => Promise<unknown>) => fn()),
+    onCommit: vi.fn((fn: () => Promise<unknown>) => void fn()),
     $queryRaw: vi.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
       const sql = strings.join('?');
       if (sql.includes('count(*)::int AS pending')) return [{ pending: opts.pending ?? 0 }];
@@ -172,7 +174,6 @@ function world(opts: { filed?: number; sentinel?: { enabled: boolean; config: bo
 
   const service = new KnowledgeIssuesService(
     prisma as never,
-    {} as never,
     documents as never,
     {} as never,
     permissions as never,
@@ -441,6 +442,35 @@ describe('ReportPublishSweeper', () => {
     const { issue } = await w.service.report(report(), viewer);
     await sweeper(w).publish(run(issue.id, { status: 'failed', error: 'provider down' }) as never);
     expect(w.issues[0]!.status).toBe('open');
+  });
+
+  it('a publish that throws hands the report back to open instead of leaving it checking (#809)', async () => {
+    const w = world();
+    const { issue } = await w.service.report(report(), viewer);
+    expect(w.issues[0]!.status).toBe('checking');
+    w.prisma.$queryRaw.mockImplementation(async (strings: TemplateStringsArray) =>
+      strings.join('?').includes('FROM agent_runs') ? [{ id: 'run-1' }] : [],
+    );
+    (w.prisma as unknown as { agentRun: { findUnique: unknown } }).agentRun.findUnique = vi.fn(async () => run(issue.id));
+    vi.spyOn(w.service, 'forRun').mockRejectedValueOnce(new Error('connection reset'));
+    const s = sweeper(w);
+    (s as unknown as { lastPurge: number }).lastPurge = Date.now();
+    await s.sweep();
+    expect(w.issues[0]!.status).toBe('open');
+    expect((w.issues[0]!.evidence as Array<{ note?: string }>).at(-1)!.note).toBe('knowledgeIssue.verdict.failed');
+  });
+
+  it('retakes a claim only once its lease has run out, and only while the issue is still checking on that run (#809)', async () => {
+    const w = world();
+    w.prisma.$queryRaw.mockImplementation(async () => []);
+    const s = sweeper(w);
+    (s as unknown as { lastPurge: number }).lastPurge = Date.now();
+    await s.sweep();
+    const [strings, ...values] = w.prisma.$queryRaw.mock.calls[0] as unknown as [TemplateStringsArray, ...unknown[]];
+    const sql = strings.join('?');
+    expect(sql).toContain("i.agent_run_id = r.id AND i.status = 'checking'");
+    const expired = values.find((v): v is Date => v instanceof Date && v.getTime() > Date.now() - 60 * 60_000)!;
+    expect(Date.now() - expired.getTime()).toBeGreaterThanOrEqual(10 * 60_000 - 1000);
   });
 
   it('claims a run exactly once: the second sweep sees nothing to do', async () => {

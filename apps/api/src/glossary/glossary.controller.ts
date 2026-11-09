@@ -46,7 +46,7 @@ export class GlossaryController {
   ) {}
 
   private async termScope(principal: Principal, termId: string): Promise<AccessScope> {
-    return this.permissions.scopeFor(principal, await this.access.workspaceOfGlossaryTerm(termId));
+    return this.permissions.scopeFor(principal, await this.access.workspaceOf('glossary-term', termId));
   }
 
   @Get()

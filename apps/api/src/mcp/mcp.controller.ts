@@ -9,7 +9,8 @@ import type { Principal } from '../auth/principal.js';
 import { MCP_SERVER_NAME } from './mcp-tools.js';
 import { noTrackOf } from '../analytics/analytics.recorder.js';
 import { CollabDraftToolsService } from '../collab/collab-draft-tools.service.js';
-import { MCP_SERVER_VERSION, McpService, type McpExtras } from './mcp.service.js';
+import { McpService, type McpExtras } from './mcp.service.js';
+import { PRODUCT_VERSION } from '../config/version.js';
 import { Returns } from '../common/returns.decorator.js';
 
 /**
@@ -87,7 +88,7 @@ export class McpController {
       url: this.mcp.publicUrl(),
       serverName: MCP_SERVER_NAME,
       authMode: this.config.get('AUTH_MODE') === 'api-key' ? 'api-key' : 'none',
-      version: MCP_SERVER_VERSION,
+      version: PRODUCT_VERSION,
       tools: this.mcp.toolsFor(principal, this.extras),
     };
   }

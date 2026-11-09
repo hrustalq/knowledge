@@ -214,7 +214,7 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 - Trust boundary: skills are trusted text; **document content, fetched bytes and plugin output are always wrapped untrusted.**
 - A citation rule is a prompt; the enforcement is `finalizeCitations` at the end of the turn. **Never trust a `[S#]` the model wrote** — a label the turn did not hand out is stripped and counted, and the stored text keeps the `[S#]` form (a bare `[2]` collides with prose and reference links). `assessAnswer` reads only what the harness observed; no model self-grading. Provenance is resolved **once per answer** by `ProvenanceService`, never per tool call.
 - One SSRF filter (`common/safe-url.ts`) and one credential store (`ai/secret-box.ts`, AES-256-GCM, write-only over the API) — one implementation is the only safe number.
-- There is **no cron** in this repo: no `@nestjs/schedule`, no BullMQ repeatables. Scheduled work is a due check inside a fixed tick, with back-pressure (never a second run while one is in flight).
+- There is **no cron** in this repo: no `@nestjs/schedule`, no BullMQ repeatables. Scheduled work is a due check inside a fixed tick, with back-pressure (never a second run while one is in flight). Every sweeper gets both from `Ticker` (`common/ticker.ts`): `every` in `onModuleInit`, `stop` in `onModuleDestroy`, and the public `sweep()` body wrapped in `exclusive`, never its own `setInterval` or `running` flag.
 
 **Page permissions** (feature 48)
 

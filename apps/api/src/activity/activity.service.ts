@@ -9,6 +9,7 @@ import type {
 import { ACTIVITY_KINDS, activityKindFor, FRESHNESS_ACTIONS } from '@knowledge/contracts';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { activeTransaction } from '../prisma/transaction.js';
 import { hidesAnything, visibilitySql, type AccessScope } from '../permissions/access-scope.js';
 import { actorIdentities, DEV_ACTOR } from './actor.js';
 import { EventsPublisher } from '../events/events.publisher.js';
@@ -49,7 +50,17 @@ export class ActivityService {
     private readonly events: EventsPublisher,
   ) {}
 
+  /**
+   * Inside a transaction everything here waits for the commit (#816): the row,
+   * the freshness bump, and the publish that subscribers act on. Resolved here
+   * rather than by an `onCommit` at each call site, so a new one cannot forget.
+   */
   async record(input: ActivityRecordInput): Promise<void> {
+    if (activeTransaction()) return this.prisma.onCommit(() => this.write(input));
+    await this.write(input);
+  }
+
+  private async write(input: ActivityRecordInput): Promise<void> {
     try {
       const projectId = input.projectId ?? (await this.projectOf(input));
       await this.prisma.activityLog.create({
@@ -262,7 +273,7 @@ export interface ActivityFilter {
 
 // Re-exported from a leaf module so `EventsPublisher`'s notification fan-out
 // can share them without closing an import cycle back through this file.
-export { actorIdentities, DEV_ACTOR, DEV_ACTOR_ID, isDevActor } from './actor.js';
+export { actorIdentities, AUTHOR_ID_STUB, DEV_ACTOR, isDevActor } from './actor.js';
 
 function emptyKindTally(): Record<ActivityKind, number> {
   return Object.fromEntries(ACTIVITY_KINDS.map((k) => [k, 0])) as Record<ActivityKind, number>;

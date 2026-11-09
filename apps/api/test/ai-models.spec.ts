@@ -72,7 +72,10 @@ function config(opts: { rows?: ReturnType<typeof model>[]; providers?: ReturnTyp
   const svc = Object.create(AiConfigService.prototype) as AiConfigService;
   Object.assign(svc, {
     resolve: async () => ({ ...base, ...opts.base }),
-    prisma: { aiSettings: { findUnique: async () => (opts.route ? { chatModelId: opts.route } : null) } },
+    settings: async () => ({
+      config: { ...base, ...opts.base },
+      routes: { chat: opts.route ?? null, review: null, extraction: null, decision: null },
+    }),
     models: {
       find: async (workspaceId: string, id: string) => rows.find((m) => m.id === id && m.workspaceId === workspaceId) ?? null,
       roster: async (workspaceId: string) => rows.filter((m) => m.workspaceId === workspaceId),

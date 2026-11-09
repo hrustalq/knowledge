@@ -19,6 +19,7 @@ import type { Principal } from '../auth/principal.js';
 import { StorageService } from '../storage/storage.service.js';
 import { asLocale } from '../i18n/locale.js';
 import { t } from '../i18n/t.js';
+import { parseModelJson } from '../common/model-json.js';
 
 /** Caps on what one draft may declare, so a hallucinated list cannot fill a page's frontmatter. */
 /** A page attached to a dozen issues is a page; a flow should not spam all of them. */
@@ -572,7 +573,7 @@ export class WorkflowExecutors {
     const revision = await this.prisma.documentRevision.findUnique({ where: { id: headId } });
     if (!revision?.s3Key || revision.status === 'draft') return { title: document.title, markdown: '', kind };
 
-    const raw = await this.storage.getObjectText(revision.s3Key).catch(() => '');
+    const raw = await this.storage.getObjectText(revision.s3Key, revision.s3VersionId).catch(() => '');
     // Capped rather than chunked: a chain of steps that each paste a whole page
     // into its prompt is how a run walks off the end of a context window.
     return { title: document.title, markdown: raw.slice(0, 24_000), kind };
@@ -599,14 +600,9 @@ export class WorkflowExecutors {
   // ------------------------------------------------------------------ parsing
 
   private parseObject(raw: string): Record<string, unknown> {
-    const text = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```$/, '');
-    try {
-      const parsed: unknown = JSON.parse(text);
-      return typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : {};
-    } catch {
-      this.logger.warn('Model returned unparseable JSON for a workflow step');
-      return {};
-    }
+    const parsed = parseModelJson(raw);
+    if (!parsed) this.logger.warn('Model returned unparseable JSON for a workflow step');
+    return parsed ?? {};
   }
 
   /**

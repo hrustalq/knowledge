@@ -17,7 +17,7 @@ import { LintTriggerSweeper } from './lint-trigger.sweeper.js';
  * alone — the trigger rehydrates the author through AccessService, and the
  * publisher writes discussions attributed to a person, which is the API's job
  * (the worker generates, the API publishes). The run itself is the worker's:
- * AgentExecutor's `linter` case.
+ * the `linter` runner (`agents/runners/linter.ts`).
  */
 @Module({
   imports: [PrismaModule, LintCoreModule, AiCoreModule, AgentQueueModule, EventsModule, ActivityModule, PermissionsCoreModule],

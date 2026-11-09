@@ -242,17 +242,15 @@ export class RoleSyncService {
     current: WorkspaceMember,
     wanted: { role: string; trustedOperator: boolean } | null,
   ): RoleSyncChange {
-    this.prisma.onCommit(() =>
-      this.audit.record({
-        workspaceId,
-        actor: 'role-sync',
-        action: 'role_sync.blocked_last_admin',
-        params: { ...ctx.params, before: snapshot(current), wanted },
-        ok: false,
-        error: 'last-admin',
-        target: userId,
-      }),
-    );
+    void this.audit.record({
+      workspaceId,
+      actor: 'role-sync',
+      action: 'role_sync.blocked_last_admin',
+      params: { ...ctx.params, before: snapshot(current), wanted },
+      ok: false,
+      error: 'last-admin',
+      target: userId,
+    });
     return { workspaceId, kind: 'blocked' };
   }
 
@@ -265,23 +263,19 @@ export class RoleSyncService {
     target: Target | null,
     extra: Record<string, unknown> = {},
   ): void {
-    // After commit: SCIM runs this inside its boundary (#656), where an inline write races the commit
-    // and would outlive a rollback in no sensible way. Outside one it runs at once, as before.
-    this.prisma.onCommit(() =>
-      this.audit.record({
-        workspaceId,
-        actor: 'role-sync',
-        action: 'role_sync.applied',
-        params: {
-          ...ctx.params,
-          before: snapshot(before),
-          after: snapshot(after),
-          matchedGroups: target?.matched ?? [],
-          ...extra,
-        },
-        ok: true,
-        target: userId,
-      }),
-    );
+    void this.audit.record({
+      workspaceId,
+      actor: 'role-sync',
+      action: 'role_sync.applied',
+      params: {
+        ...ctx.params,
+        before: snapshot(before),
+        after: snapshot(after),
+        matchedGroups: target?.matched ?? [],
+        ...extra,
+      },
+      ok: true,
+      target: userId,
+    });
   }
 }

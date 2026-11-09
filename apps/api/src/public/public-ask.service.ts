@@ -23,7 +23,7 @@ import { GraphService } from '../graph/graph.service.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PublicRateLimiter, RateLimitedException } from './public-rate-limit.js';
-import { PublicSitesService, SNAPSHOT_ROW, visibleRows, type LiveSite, type SnapshotRow } from './public-sites.service.js';
+import { PublicSitesService, visibleRows, type LiveSite, type SnapshotRow, siteVersion, snapshotRows } from './public-sites.service.js';
 
 /** Chunks the semantic leg ranks, and pages the keyword leg returns. */
 const SEMANTIC_K = 12;
@@ -158,8 +158,7 @@ export class PublicAskService {
     const site = await this.sites.findById(siteId);
     const budget = effectiveSiteAskBudget(site.askDailyBudget, this.config.get('PUBLIC_ASK_DAILY_BUDGET', { infer: true }));
     if (!site.askEnabled || budget === 0) throw new NotFoundException(t('error.publicAsk.notEnabled'));
-    const version = input.version ? site.versions.find((v) => v.slug === input.version) : site.defaultVersion;
-    if (!version) throw new NotFoundException(t('error.site.notFound'));
+    const version = siteVersion(site, input.version);
     const question = normalizeQuestion(input.question);
 
     if (!(await this.limiter.hit(`ask:${ctx.ip}`, this.config.get('PUBLIC_ASK_RATE_PER_MIN', { infer: true }), 60_000, false))) {
@@ -247,12 +246,7 @@ export class PublicAskService {
     question: string,
     cookieHeader?: string,
   ): Promise<{ passages: AskPassage[]; rows: SnapshotRow[] }> {
-    const all = await this.prisma.siteVersionPage.findMany({
-      where: { versionId },
-      orderBy: [{ depth: 'asc' }, { position: 'asc' }],
-      select: SNAPSHOT_ROW,
-    });
-    const rows = visibleRows(all, await this.sites.viewer(site, cookieHeader));
+    const rows = visibleRows(await snapshotRows(this.prisma, versionId), await this.sites.viewer(site, cookieHeader));
     if (!rows.length) return { passages: [], rows };
     const byDocument = new Map(rows.map((r) => [r.documentId, r]));
     const revisionOf = new Map(rows.map((r) => [r.revisionId, r]));

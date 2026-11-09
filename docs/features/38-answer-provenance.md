@@ -578,14 +578,14 @@ with `make backtest`, and nothing in search reads `answer_feedback`.
   `knowledge-issues.controller.ts`, `knowledge-issues.module.ts`,
   `report-publish.sweeper.ts`; `documents/draft-merge-request.ts` (shared with
   `AgentFindingsService.propose`); `agents/drift.ts` (`REPORT_OUTPUT_CONTRACT`,
-  `reportJudgementPrompt`, `readReportVerdict`), `agents/agent.executor.ts`
+  `reportJudgementPrompt`, `readReportVerdict`), `agents/runners/sentinel.ts`
   (`checkReport`); `common/untrusted.ts` (`report` origin)
 - `apps/web/src/modules/documents/components/KnowledgeIssuesRail.vue`,
   `ReportIssueDialog.vue`; `entities/assistant/model/feedback.store.ts` (`reportIssue`,
   `reportCitedPages`, `closeIssue`), `entities/assistant/model/answer-feedback.ts` (`reportKindFor`,
   `reportablePages`, `issueReportBody`)
 - `apps/api/src/agents/coverage.ts` (`clusterSignals`, `coveragePrompt`,
-  `readCoverageVerdict`), `agents/agent.executor.ts` (`surveyCoverage`),
+  `readCoverageVerdict`), `agents/runners/surveyor.ts` (`surveyCoverage`),
   `agents/built-in-agents.ts` (`surveyor`), `agents/agent-worker.module.ts`
   (imports `EmbeddingModule`); `common/untrusted.ts` (`feedback` origin)
 - `apps/web/src/modules/assistant/components/AiCoveragePanel.vue`, `modules/assistant/pages/AiSettingsPage.vue`

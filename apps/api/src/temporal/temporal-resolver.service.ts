@@ -1,11 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import type { ResolvedAsOf } from '@knowledge/contracts';
+import { type ResolvedAsOf, UUID_RE } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { TemporalPoint } from '../graph/temporal.js';
 import { t } from '../i18n/t.js';
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}([T ][\d:.]+(Z|[+-]\d{2}:?\d{2})?)?$/;
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Turns an `asOf` / `knownAt` pair into the instants a graph read uses (#81).
@@ -41,7 +40,7 @@ export class TemporalResolverService {
   private async instantOf(workspaceId: string, raw: string, now: number): Promise<{ kind: ResolvedAsOf['kind']; at: number }> {
     if (raw.startsWith('rev:')) {
       const id = raw.slice(4);
-      if (!UUID.test(id)) throw new BadRequestException(t('error.temporal.badAsOf', { value: raw }));
+      if (!UUID_RE.test(id)) throw new BadRequestException(t('error.temporal.badAsOf', { value: raw }));
       const revision = await this.prisma.documentRevision.findUnique({
         where: { id },
         select: { finalizedAt: true, document: { select: { workspaceId: true } } },

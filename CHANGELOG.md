@@ -13,6 +13,157 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.46.2] — 2026-11-09
+
+### Changed
+
+- **A change to which model a purpose is routed to now reaches other processes within 30 seconds.** The chat,
+  review, extraction and decision routes are read with the rest of a workspace's AI settings, which every process
+  caches for 30 seconds and the process that saved them drops at once. Before, the route was re-read from Postgres on
+  every model call, about four times per chat turn. (#825)
+- **Each API, worker and MCP process opens one Redis connection for commands instead of up to eight.** Event
+  publishing, URL tickets, the read cache, the public site counters and sessions, and chat inbox claims now share
+  one client with the same timeouts as before. The live-event subscriber keeps its own connection. (#825)
+- **The maintenance scripts now refuse a flag they do not know.** `make backtest`, `make tune`,
+  `make graph-live-backfill`, `make page-links-backfill` and `make auth-bootstrap` used to ignore an unknown or
+  misspelt flag, so `ARGS="--worksapce <id>"` quietly ran against the demo workspace (or every workspace). They now
+  stop with an "unknown option" error before doing anything. Every documented flag works as before. (#824)
+- **Repo-wiki pages print file sizes the same way as the rest of the app.** The overview's Modules table and each
+  module page's Files line now read `512 B`, `5.3 KB` or `38 MB`, where they read `1 KB`, `5 KB` or `38.0 MB`.
+  (#825)
+
+### Removed
+
+- **`IMPORT_OCR_MAX_PAGES`.** It was documented as the cap on what one scanned PDF could spend on OCR, but nothing
+  read it, and there was nothing to cap: an image import sends exactly one image to the vision model, and a scanned
+  PDF is never sent to a model at all (it imports with a "this looks scanned" warning). A deployment that still sets
+  it starts normally and the value is ignored. (#824)
+
+### Security
+
+- **A page you cannot open no longer reaches the assistant through the composer's "Apply documents" list.** Its
+  content went into the prompt with only a workspace check, so a member who knew the id of a restricted page could
+  get answers drawn from it. Such a page is now dropped unread. The assistant is told only that some applied pages are
+  unavailable, never which ones. (#813)
+- **A finalized revision can no longer be changed through its upload link.** The presigned upload URL stays valid for
+  15 minutes, and anyone holding it could overwrite the revision's stored file after it was finalized, even after it
+  had been reviewed and merged. The page then showed bytes nobody reviewed, which disagreed with its content hash and
+  its search index. Every read of a finalized revision (the page view, indexing, compare, merge, export, llms.txt,
+  the git remote, connectors) now fetches the exact object version finalize hashed. Finalize also hashes and records
+  one read, so the recorded version is the one that was hashed. Revisions finalized before this release already carry
+  their version and are protected too. (#818)
+
+### Fixed
+
+- **Decision-model calls now appear in the AI measurement stream.** Every other model call wrote an `ai.call`
+  event to the backtest JSONL beside its `ai_usage` row; decision calls (the Jev pre-filters) wrote only the row, so
+  backtests and `make tune` could not see them. (#825)
+- **A page with broken frontmatter is read the same way every time it is read.** gray-matter remembers a source it
+  failed to parse and, on the next read of the same text, quietly returns it unparsed. #775 fixed that for most
+  reads; the git remote's push, indexing, the markdown-git connector, structural diffs, the plain-text importer and
+  the conflict check still read through the cache, and now do not. (#825)
+- **An embed snapshot no longer queues a second reindex of a page that already has one queued or running.** (#825)
+- **Return paths after sign-in and connector setup refuse a backslash, whitespace or control character anywhere.**
+  The SSO, GitHub and Figma callbacks only refused one right after the leading `/`, while the published-site sign-in
+  refused any; they now share the stricter rule and fall back to their default page. (#825)
+- **A local MCP server (`make dev-mcp`, or an agent client's stdio connection) no longer runs API background work.**
+  Each stdio MCP process loaded the API's document, project, search and workflow modules whole, so it built their
+  HTTP controllers and ran the agent mention reply sweeper, racing the API for the same pending replies. It now loads
+  only what its tools use. The tools, their descriptions and what each kind of key is offered are unchanged. (#822)
+- **A database blip during the Figma change check no longer takes the API down.** That background check had no error
+  handler of its own. A failed query in it, such as Postgres restarting mid-tick, became an unhandled rejection and
+  ended the API process. It is now logged and retried on the next tick, like every other background sweep. All
+  background sweeps now share one timer helper, with the same intervals as before and still never two passes at
+  once. (#820)
+- **An AI answer wrapped in a sentence or a code fence is no longer thrown away by some agents.** Models asked for
+  JSON often add "Here is the result:" or a ```` ```json ```` fence. Most AI features already looked past that, but the
+  workflow builder, workflow steps, the learner's coach, the glossary suggestions, blueprint generation, chat harvest,
+  source-recipe drafting and the repo wiki's release notes and diagrams each read the reply their own stricter way. A
+  reply those features dropped as unreadable, so a run that ended with nothing, now goes through. They all read
+  replies the same way now. (#819)
+- **A graph store hiccup during indexing now fails the job and retries, rather than leaving duplicate or stale
+  relations.** When ArcadeDB failed briefly while a page was being re-indexed, the indexer read that as "no relations
+  yet" and wrote a second copy of each one, and a failure while moving a page's live version still marked the job
+  done with search serving the old version's relations. The only error still ignored is a relation type the graph
+  has not created yet. A failed write of the model-inferred relations now retries the same way; a model that fails
+  still leaves the job alone and the previous inferred relations in place. Re-indexing a page also replaces its
+  chunks in one transaction, so search no longer loses the page for the moment between dropping the old chunks and
+  writing the new ones, and a write that fails keeps the old chunks instead of a partial set. (#817)
+- **A failure halfway through an action no longer leaves half of it behind.** Inviting someone without a password could
+  create an account with no invite link, which nobody could sign into and which a second invite refused as taken; the
+  account and its link are now written together. "Link a source" with a new credential left a stray saved connection
+  when the URL could not be read. Rotating your key through the old `POST /v1/me/api-key` route could revoke every key
+  and mint none. A page report could start a paid check that its report never pointed to. Turning a chat's listening
+  or search off deleted what was kept even when the switch then failed to save. Deleting an attachment could remove
+  the file and keep its entry, leaving a broken link. Each of these now either completes in full or leaves nothing.
+  (#816)
+- **Handing the same object off to a tracker twice at once opens one ticket.** Two handoffs arriving together (a
+  person and a handoff rule, or a double click) both opened a ticket, and the second one was left orphaned in the
+  tracker behind an error. The second now waits and returns the first one's ticket. A ticket whose page was deleted
+  no longer gets the same "deleted" comment on every sync tick while the tracker refuses to close it. (#816)
+- **The activity feed, live updates and the audit log no longer report work that was rolled back.** An action that
+  failed after recording itself could still show up in the feed, push a live update or notification, or leave an audit
+  row, and a failed audit write could abort the action it was recording. Both now wait for the action to commit.
+  (#816)
+- **A double click or a burst of events no longer starts the same work twice.** Each of these was meant to allow
+  only one at a time, but two requests arriving together could both get through, and most of them start a paid model
+  run: Run on an agent (including a scheduled run that started at the same moment, or one started by each of two API
+  replicas), a spec's drift check, a component draft, a workflow run on a page (started by hand or by several page
+  events at once), the same agent-memory capture sent twice, and a connector sync (two Sync clicks, or two webhooks
+  that should have been folded into one run). The same applied to opening a second merge request for the same
+  branches, two custom templates with one name, a site's version and custom-domain limits, and deleting the last two
+  projects of a workspace at once, which left it with none. The second request now gets the usual "already running",
+  "already open" or "limit reached" answer, or joins the run the first one started. (#815)
+- **Imports, memos, exports, workflow runs and connectors keep the caller's language when they start outside an HTTP
+  request.** Started from a chat-bot turn, an @mention reply, a git push or a worker run that carries Russian, they
+  recorded English, so the parse, transcript, export or workflow they kicked off wrote English text. The assistant's
+  interactive turn and the AI settings suggestion had the same gap. (#814)
+- **An operator graph query over MCP now stops at the row limit the server is set to.** `knowledge_query_graph`
+  passed its own `limit` (up to 1000) straight to the graph store, so it skipped the `GRAPH_QUERY_MAX_ROWS` ceiling
+  that `POST /v1/graph/query` applies, and the audit log recorded the limit asked for, not the one used. Both
+  surfaces now run the same clamp and audit. A connector sync started with `knowledge_sync_connector` now records
+  who started it; before, the run showed no actor. (#812)
+- **Work a crashed worker leaves behind is now recovered instead of stuck forever, and finished work is never redone.**
+  An agent run, workflow step, indexing job or connector sync that was still marked running after its worker died is
+  retried, and one that keeps dying is marked failed with an error saying so. Before, an agent run that crashed on its
+  last attempt stayed "running" for good and blocked that agent's schedule and triggers, and a connector sync held its
+  connector's only sync slot until someone cancelled it. A connector sync that resumes after a crash also finishes the
+  pages it was in the middle of, where it used to report success with those pages missing. A run that finished just
+  as recovery picked it up is no longer reset and paid for a second time. A memo stuck on "analysing", or a page
+  report stuck on "checking", after a crash is picked up again within ten minutes. A report check that fails to
+  publish now goes back to open at once. (#809)
+- **Two actions that land at the same moment no longer undo each other.** Pausing or cancelling a connector sync while
+  it was working through a batch could be ignored: the sync set itself back to queued and carried on, after the run
+  had already announced it was paused. Approving and rejecting the same workflow step at once could publish a page
+  for a step that was rejected, or for a run that was cancelled. The second action now gets a "changed while you were
+  acting on it" error. Two people approving a merge request at once could leave only one approval counted, so the
+  approval gate stayed shut. Closing a merge request as it merged, or cancelling a sync as it finished, now leaves
+  whichever happened first. A page's "please check" or "outdated" flag no longer lands over a Verify or Clear made a
+  moment earlier. A sync's counters and warnings are no longer lost when a scoped fill or apply writes alongside it.
+  An import that was retried after you submitted it no longer offers Submit again, so it can no longer create a
+  second page. An export is built once. A worker restart used to start a second build, which could delete the
+  finished file. An export whose worker died now ends as failed (ask for it again) instead of being retried. (#810)
+- **A change that fails halfway no longer leaves part of itself behind.** When the assistant's "propose an update"
+  could not open its merge request, the page kept a stray `assistant/…` branch with a finished revision on it. Now
+  nothing is written. "Create page" on an agent finding could create the page and then fail to record it on the
+  finding. Pressing it again then created a second copy. Now the page and the record are saved together. Restoring an
+  earlier version of a source-backed page could pause the source and then fail, leaving nothing restored. Re-reading a
+  source through a new recipe could save the page without its version marker, so the next sync took the recipe's
+  output for a new upstream version. Any write whose content was refused, such as an invalid spec sent over MCP, no
+  longer leaves an empty draft revision on the page. (#811)
+- **An agent writing over MCP from an out-of-date revision now gets the same conflict as the REST API.**
+  `knowledge_create_revision` and `knowledge_patch_document` used to return a plain error. They now return a 409 with
+  `currentHeadRevisionId` and a `comparisonUrl` to compare against before retrying. (#811)
+
+### Operations
+
+- **Migration `20270103100000_connector_run_attempt`** adds `connector_runs.attempt` (integer, default 0). It is
+  additive, so rolling back to the previous image is safe; that image ignores the column. (#809)
+- **No mass wiki re-render from the new size format.** Wiki pages are re-rendered only when their source inputs
+  change, so a codebase connector does not regenerate its whole wiki after this release. Each overview and module page
+  picks up the new format the next time it is regenerated anyway, and that one revision (or merge request, under
+  review sync) carries the size line's change beside the real one. Nothing to do. (#825)
+
 ## [0.46.1] — 2026-11-08
 
 ### Security
@@ -6238,7 +6389,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.46.1...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.46.2...HEAD
+[0.46.2]: https://github.com/hrustalq/knowledge/compare/v0.46.1...v0.46.2
 [0.46.1]: https://github.com/hrustalq/knowledge/compare/v0.46.0...v0.46.1
 [0.46.0]: https://github.com/hrustalq/knowledge/compare/v0.45.2...v0.46.0
 [0.45.2]: https://github.com/hrustalq/knowledge/compare/v0.45.1...v0.45.2

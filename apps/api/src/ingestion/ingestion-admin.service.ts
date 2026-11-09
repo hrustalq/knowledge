@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { embeddingSignature } from '../embedding/embedding.provider.js';
 import { IngestionProducer } from './ingestion.producer.js';
 import { t } from '../i18n/t.js';
+import { queueReindex } from './reindex.js';
 
 /**
  * Phase 5 API-side ingestion surface (plan.md §7/§11): job status, workspace
@@ -98,25 +99,13 @@ export class IngestionAdminService {
 
     const jobIds: string[] = [];
     for (const rev of revisions) {
-      const job = await this.prisma.ingestionJob.create({
-        data: {
-          workspaceId,
-          revisionId: rev.id,
-          type: 'reindex',
-          status: 'queued',
-          payload: {
-            documentId: rev.documentId,
-            revisionId: rev.id,
-            s3Key: rev.s3Key,
-            title: rev.document.title,
-            reason: 'manual reindex',
-          },
-        },
-      });
-      jobIds.push(job.id);
-      await this.producer.enqueue(job.id).catch(() => {
-        /* outbox sweeper re-enqueues */
-      });
+      const jobId = await queueReindex(
+        this.prisma,
+        this.producer,
+        { workspaceId, documentId: rev.documentId, revisionId: rev.id, s3Key: rev.s3Key, title: rev.document.title, reason: 'manual reindex' },
+        { skipPending: false },
+      );
+      if (jobId) jobIds.push(jobId);
     }
     return { workspaceId, enqueued: jobIds.length, jobIds };
   }

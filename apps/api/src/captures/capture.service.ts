@@ -39,7 +39,6 @@ import {
 } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { StorageService } from '../storage/storage.service.js';
 import { AccessService } from '../auth/access.service.js';
 import type { Principal } from '../auth/principal.js';
 import { PermissionService } from '../permissions/permission.service.js';
@@ -54,6 +53,7 @@ import { AiConfigService } from '../ai/ai-config.service.js';
 import { ActivityService } from '../activity/activity.service.js';
 import { composeFrontmatter } from '../common/frontmatter.js';
 import { LISTED_PAGE } from '../common/listed-page.js';
+import { withSubjectLock } from '../common/subject-lock.js';
 import { t } from '../i18n/t.js';
 import { findSecret } from '../common/secret-scan.js';
 import {
@@ -149,7 +149,6 @@ export class CaptureService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly storage: StorageService,
     private readonly access: AccessService,
     private readonly permissions: PermissionService,
     private readonly documents: DocumentsService,
@@ -211,10 +210,12 @@ export class CaptureService {
 
     // The same capture again — a retry, a second session, a looping agent —
     // is a row of its own (it counts against the rate limit) pointing at
-    // what the first became, and proposes nothing.
-    const prior = await this.priorCapture(staged, contentHash);
-    if (prior) {
-      const row = await this.prisma.knowledgeCapture.create({
+    // what the first became, and proposes nothing. Looked up and inserted under
+    // one lock per project (#815), or two at once both stage and both propose.
+    const row = await withSubjectLock(this.prisma, `capture:${staged.projectId}`, async () => {
+      const prior = await this.priorCapture(staged, contentHash);
+      if (!prior) return this.prisma.knowledgeCapture.create({ data: { ...base, status: 'staged' } });
+      return this.prisma.knowledgeCapture.create({
         data: {
           ...base,
           status: 'duplicate',
@@ -224,10 +225,8 @@ export class CaptureService {
           glossaryTermId: prior.glossaryTermId,
         },
       });
-      return this.toResult(row, await this.mergeRequestStatus(row.mergeRequestId));
-    }
-
-    const row = await this.prisma.knowledgeCapture.create({ data: { ...base, status: 'staged' } });
+    });
+    if (row.status === 'duplicate') return this.toResult(row, await this.mergeRequestStatus(row.mergeRequestId));
     return this.drive(row.id, principal);
   }
 
@@ -618,7 +617,7 @@ export class CaptureService {
     const entry = capturedEntry(row.id, kind, session, row.createdAt);
     const title = t('capture.mergeRequest.title', { kind: t(`capture.kind.${kind}`, undefined, lang), title: row.title }, lang).slice(0, 200);
     const branch = `capture/${row.id.slice(0, 8)}-${claimedAt.getTime()}`;
-    const deps = { prisma: this.prisma, storage: this.storage, documents: this.documents, mergeRequests: this.mergeRequests };
+    const deps = { prisma: this.prisma, documents: this.documents, mergeRequests: this.mergeRequests };
     const tx = { timeout: 30_000, maxWait: 10_000 };
 
     if (decision.outcome === 'amend-page') {

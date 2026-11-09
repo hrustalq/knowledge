@@ -31,6 +31,10 @@ import { PublicSiteFilesService } from '../src/public/public-site-files.service.
  *   never a 403, and the ETags move when a restamp changes who sees what.
  */
 
+/** The answer a render with no tag gets: always a body. */
+const resolveBody = async (service: PublicSitesService, query: Parameters<PublicSitesService['resolveTagged']>[0], cookie?: string) =>
+  (await service.resolveTagged(query, undefined, cookie)).body!;
+
 const WS = '11111111-1111-4111-8111-111111111111';
 const SITE = '22222222-2222-4222-8222-222222222222';
 const V_LATEST = '33333333-3333-4333-8333-333333333333';
@@ -158,6 +162,7 @@ function env(overrides: Record<string, unknown> = {}) {
     SITE_CUSTOM_DOMAINS: true,
     LLMS_FULL_MAX_DOCS: 2000,
     LLMS_FULL_MAX_BYTES: 20_000_000,
+    AI_READABLE_FETCH_CONCURRENCY: 8,
     PUBLIC_ASK_DAILY_BUDGET: 200,
     ...overrides,
   };
@@ -215,7 +220,7 @@ describe('site helpers (contracts)', () => {
 describe('PublicSitesService.resolve', () => {
   it('serves the home page at the root, the default version, and a normalized theme', async () => {
     const { service } = reader();
-    const res = await service.resolve({ slug: 'acme', path: '/' });
+    const res = await resolveBody(service, { slug: 'acme', path: '/' });
     expect(res.page).toMatchObject({ documentId: DOC_HOME, slugPath: 'welcome', markdown: 'body of home-r3' });
     expect(res.version).toMatchObject({ slug: 'latest', isDefault: true });
     // The first verified custom domain is the canonical root.
@@ -226,13 +231,13 @@ describe('PublicSitesService.resolve', () => {
 
   it('lists only versions that have built, default first', async () => {
     const { service } = reader();
-    const res = await service.resolve({ slug: 'acme', path: '/' });
+    const res = await resolveBody(service, { slug: 'acme', path: '/' });
     expect(res.versions.map((v) => v.slug)).toEqual(['latest', 'v1']);
   });
 
   it('reads a frozen version at the revisions it pinned, whatever has been merged since', async () => {
     const { service, documents } = reader();
-    const res = await service.resolve({ slug: 'acme', path: '/v1/welcome' });
+    const res = await resolveBody(service, { slug: 'acme', path: '/v1/welcome' });
     expect(res.version.slug).toBe('v1');
     expect(documents.getContent).toHaveBeenCalledWith(DOC_HOME, 'home-r1');
     expect(res.page?.markdown).toBe('body of home-r1');
@@ -240,21 +245,21 @@ describe('PublicSitesService.resolve', () => {
 
   it('answers a path the snapshot does not have with no page (a 404 in the site’s chrome)', async () => {
     const { service } = reader();
-    expect((await service.resolve({ slug: 'acme', path: '/v1/welcome/install' })).page).toBeNull();
-    expect((await service.resolve({ slug: 'acme', path: `/${DOC_SECRET}` })).page).toBeNull();
+    expect((await resolveBody(service, { slug: 'acme', path: '/v1/welcome/install' })).page).toBeNull();
+    expect((await resolveBody(service, { slug: 'acme', path: `/${DOC_SECRET}` })).page).toBeNull();
   });
 
   it('switching versions keeps the page when the target has it, and lands on its home when not', async () => {
     const { service } = reader();
-    const kept = await service.resolve({ slug: 'acme', path: '/v1/renamed-meanwhile', from: DOC_HOME });
+    const kept = await resolveBody(service, { slug: 'acme', path: '/v1/renamed-meanwhile', from: DOC_HOME });
     expect(kept.page?.documentId).toBe(DOC_HOME);
-    const home = await service.resolve({ slug: 'acme', path: '/v1/welcome/install', from: DOC_INSTALL });
+    const home = await resolveBody(service, { slug: 'acme', path: '/v1/welcome/install', from: DOC_INSTALL });
     expect(home.page?.documentId).toBe(DOC_HOME);
   });
 
   it('resolves a site by its own host under PUBLISH_BASE_DOMAIN, and no deeper or bare base host', async () => {
     const { service } = reader();
-    expect((await service.resolve({ host: 'ACME.docs.example.com:443', path: '/' })).site.slug).toBe('acme');
+    expect((await resolveBody(service, { host: 'ACME.docs.example.com:443', path: '/' })).site.slug).toBe('acme');
     expect(service.siteKeyFromHost('a.b.docs.example.com')).toBeNull();
     expect(service.siteKeyFromHost('docs.example.com')).toBeNull();
     expect(reader({ PUBLISH_BASE_DOMAIN: '' }).service.siteKeyFromHost('acme.docs.example.com')).toEqual({ hostname: 'acme.docs.example.com' });
@@ -262,45 +267,45 @@ describe('PublicSitesService.resolve', () => {
 
   it('resolves a verified custom domain, and 404s a pending one or any domain while SITE_CUSTOM_DOMAINS is off', async () => {
     const { service } = reader();
-    expect((await service.resolve({ host: 'Docs.Acme.com.', path: '/' })).site.slug).toBe('acme');
-    await expect(service.resolve({ host: 'pending.acme.com', path: '/' })).rejects.toBeInstanceOf(NotFoundException);
-    await expect(service.resolve({ host: 'acme.evil.com', path: '/' })).rejects.toBeInstanceOf(NotFoundException);
+    expect((await resolveBody(service, { host: 'Docs.Acme.com.', path: '/' })).site.slug).toBe('acme');
+    await expect(resolveBody(service, { host: 'pending.acme.com', path: '/' })).rejects.toBeInstanceOf(NotFoundException);
+    await expect(resolveBody(service, { host: 'acme.evil.com', path: '/' })).rejects.toBeInstanceOf(NotFoundException);
 
     const off = reader({ SITE_CUSTOM_DOMAINS: false });
-    await expect(off.service.resolve({ host: 'docs.acme.com', path: '/' })).rejects.toBeInstanceOf(NotFoundException);
+    await expect(resolveBody(off.service, { host: 'docs.acme.com', path: '/' })).rejects.toBeInstanceOf(NotFoundException);
     // …and its canonical root falls back to the subdomain.
-    expect((await off.service.resolve({ slug: 'acme', path: '/' })).site.rootUrl).toBe('https://acme.docs.example.com');
+    expect((await resolveBody(off.service, { slug: 'acme', path: '/' })).site.rootUrl).toBe('https://acme.docs.example.com');
   });
 
   it('names the same page in the other built versions, the home at its version root', async () => {
     const { service } = reader();
-    const latest = await service.resolve({ slug: 'acme', path: '/' });
+    const latest = await resolveBody(service, { slug: 'acme', path: '/' });
     expect(latest.page?.alternates).toEqual([{ version: { slug: 'v1', name: 'v1', isDefault: false }, path: '/v1' }]);
-    const install = await service.resolve({ slug: 'acme', path: '/welcome/install' });
+    const install = await resolveBody(service, { slug: 'acme', path: '/welcome/install' });
     expect(install.page?.alternates).toEqual([]); // v1 had no install page
-    const old = await service.resolve({ slug: 'acme', path: '/v1/welcome' });
+    const old = await resolveBody(service, { slug: 'acme', path: '/v1/welcome' });
     expect(old.page?.alternates).toEqual([{ version: { slug: 'latest', name: 'Latest', isDefault: true }, path: '/' }]);
   });
 
   it('404s a site that is not live, switched off by its workspace, or above the ceiling', async () => {
     const draft = reader();
     draft.prisma.site.status = 'draft';
-    await expect(draft.service.resolve({ slug: 'acme' })).rejects.toBeInstanceOf(NotFoundException);
+    await expect(resolveBody(draft.service, { slug: 'acme' })).rejects.toBeInstanceOf(NotFoundException);
 
     const off = reader();
     off.prisma.setSettings(null); // an empty table reproduces "nothing is public"
-    await expect(off.service.resolve({ slug: 'acme' })).rejects.toBeInstanceOf(NotFoundException);
+    await expect(resolveBody(off.service, { slug: 'acme' })).rejects.toBeInstanceOf(NotFoundException);
 
     const ceiling = reader({ PUBLIC_SITES_ENABLED: false });
-    await expect(ceiling.service.resolve({ slug: 'acme' })).rejects.toBeInstanceOf(NotFoundException);
+    await expect(resolveBody(ceiling.service, { slug: 'acme' })).rejects.toBeInstanceOf(NotFoundException);
 
-    await expect(reader().service.resolve({ slug: 'nope' })).rejects.toBeInstanceOf(NotFoundException);
+    await expect(resolveBody(reader().service, { slug: 'nope' })).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('404s a site whose default version has never built', async () => {
     const { service, prisma } = reader();
     prisma.site.defaultVersionId = V_UNBUILT;
-    await expect(service.resolve({ slug: 'acme' })).rejects.toBeInstanceOf(NotFoundException);
+    await expect(resolveBody(service, { slug: 'acme' })).rejects.toBeInstanceOf(NotFoundException);
   });
 });
 
@@ -365,6 +370,8 @@ function manager(opts: { enabled?: boolean } = {}) {
     domains: [] as unknown[],
   };
   const prisma = {
+    withTransaction: async <T>(fn: () => Promise<T>) => fn(),
+    $executeRaw: async () => 1,
     publishingSettings: { findUnique: vi.fn(async () => ({ allowPublicSites: opts.enabled ?? true })) },
     project: { findUnique: vi.fn(async () => ({ id: PROJECT, workspaceId: WS, site: null })) },
     publishedSite: {
@@ -623,7 +630,7 @@ describe('audiences: a page the reader may not see does not exist for them', () 
 
   it('anonymous: gone from the tree, its path answers no page, and the site says it has more', async () => {
     const { service } = restricted();
-    const res = await service.resolve({ slug: 'acme', path: '/welcome/install' });
+    const res = await resolveBody(service, { slug: 'acme', path: '/welcome/install' });
     expect(res.tree.map((n) => n.documentId)).toEqual([DOC_HOME]);
     expect(res.page).toBeNull();
     expect(res.viewer).toBe('anonymous');
@@ -632,14 +639,14 @@ describe('audiences: a page the reader may not see does not exist for them', () 
   });
 
   it('a site with every page public offers no sign-in', async () => {
-    const res = await files().service.resolve({ slug: 'acme', path: '/' });
+    const res = await resolveBody(files().service, { slug: 'acme', path: '/' });
     expect(res.site).toMatchObject({ restricted: false, signInUrl: null });
   });
 
   it('a member sees it, and the cookie is what decides', async () => {
     const { service, sessions } = restricted();
     sessions.viewer.mockResolvedValue({ kind: 'member' });
-    const res = await service.resolve({ slug: 'acme', path: '/welcome/install' }, 'kn_site_x=1');
+    const res = await resolveBody(service, { slug: 'acme', path: '/welcome/install' }, 'kn_site_x=1');
     expect(sessions.viewer).toHaveBeenCalledWith(expect.objectContaining({ id: SITE }), 'kn_site_x=1');
     expect(res.page?.documentId).toBe(DOC_INSTALL);
     expect(res.viewer).toBe('member');
@@ -648,19 +655,19 @@ describe('audiences: a page the reader may not see does not exist for them', () 
   it('a visitors page: only a visitor whose claims match; members-only pages stay hidden from visitors', async () => {
     const { service, sessions } = restricted({ audience: 'visitors', audienceClaims: { plan: ['pro'] } });
     sessions.viewer.mockResolvedValue({ kind: 'visitor', claims: { plan: 'free' } });
-    expect((await service.resolve({ slug: 'acme', path: '/welcome/install' })).page).toBeNull();
+    expect((await resolveBody(service, { slug: 'acme', path: '/welcome/install' })).page).toBeNull();
     sessions.viewer.mockResolvedValue({ kind: 'visitor', claims: { plan: ['basic', 'pro'] } });
-    expect((await service.resolve({ slug: 'acme', path: '/welcome/install' })).page?.documentId).toBe(DOC_INSTALL);
+    expect((await resolveBody(service, { slug: 'acme', path: '/welcome/install' })).page?.documentId).toBe(DOC_INSTALL);
 
     const members = restricted({ audience: 'members' });
     members.sessions.viewer.mockResolvedValue({ kind: 'visitor', claims: { plan: 'pro' } });
-    expect((await members.service.resolve({ slug: 'acme', path: '/welcome/install' })).page).toBeNull();
+    expect((await resolveBody(members.service, { slug: 'acme', path: '/welcome/install' })).page).toBeNull();
   });
 
   it('a child of a hidden page is hidden too, even if its own stamp says public', async () => {
     const { service, prisma } = files();
     prisma.pages.find((p) => p.versionId === V_LATEST && p.documentId === DOC_HOME)!.audience = 'members';
-    const res = await service.resolve({ slug: 'acme', path: '/welcome/install' });
+    const res = await resolveBody(service, { slug: 'acme', path: '/welcome/install' });
     expect(res.tree).toEqual([]);
     expect(res.page).toBeNull();
   });
@@ -684,7 +691,7 @@ describe('audiences: a page the reader may not see does not exist for them', () 
   it('another version does not name it as an alternate to a reader who may not see it there', async () => {
     const { service, prisma } = files();
     prisma.pages.push({ versionId: V_OLD, documentId: DOC_INSTALL, revisionId: 'install-r1', parentId: DOC_HOME, position: 0, depth: 1, slugPath: 'welcome/install', title: 'Install', audience: 'members', audienceClaims: null });
-    const res = await service.resolve({ slug: 'acme', path: '/welcome/install' });
+    const res = await resolveBody(service, { slug: 'acme', path: '/welcome/install' });
     expect(res.page?.alternates).toEqual([]);
   });
 
@@ -725,7 +732,7 @@ describe('the reader’s nav, a level at a time (issue #204)', () => {
 
   it('resolve sends the top level and the open path’s children, each with the children the viewer may see', async () => {
     const { service, sessions } = deeper();
-    const home = await service.resolve({ slug: 'acme', path: '/' });
+    const home = await resolveBody(service, { slug: 'acme', path: '/' });
     expect(home.tree.map((n) => [n.documentId, n.childCount])).toEqual([
       [DOC_HOME, 1],
       [DOC_INSTALL, 0], // Deep is members-only
@@ -733,7 +740,7 @@ describe('the reader’s nav, a level at a time (issue #204)', () => {
     ]);
 
     sessions.viewer.mockResolvedValue({ kind: 'member' });
-    const member = await service.resolve({ slug: 'acme', path: '/guides' });
+    const member = await resolveBody(service, { slug: 'acme', path: '/guides' });
     // Welcome is not on the path to Guides: its child is not sent, only counted.
     expect(member.tree.map((n) => [n.documentId, n.childCount])).toEqual([
       [DOC_HOME, 1],
@@ -759,14 +766,14 @@ describe('the reader’s nav, a level at a time (issue #204)', () => {
 
   it('prev and next walk the whole reading order, skipping what the viewer may not see', async () => {
     const { service, sessions } = deeper();
-    const install = await service.resolve({ slug: 'acme', path: '/welcome/install' });
+    const install = await resolveBody(service, { slug: 'acme', path: '/welcome/install' });
     expect(install.page?.prev?.documentId).toBe(DOC_HOME);
     expect(install.page?.next?.documentId).toBe(DOC_GUIDES);
 
     sessions.viewer.mockResolvedValue({ kind: 'member' });
-    const member = await service.resolve({ slug: 'acme', path: '/welcome/install' });
+    const member = await resolveBody(service, { slug: 'acme', path: '/welcome/install' });
     expect(member.page?.next).toEqual({ documentId: DOC_DEEP, title: 'Deep', slugPath: 'welcome/install/deep' });
-    expect((await service.resolve({ slug: 'acme', path: '/guides' })).page?.next).toBeNull();
+    expect((await resolveBody(service, { slug: 'acme', path: '/guides' })).page?.next).toBeNull();
   });
 
   it('a body’s page links resolve against every visible page, not just the trimmed tree', async () => {
@@ -776,10 +783,10 @@ describe('the reader’s nav, a level at a time (issue #204)', () => {
       revisionId,
       markdown: `[g](/documents/${DOC_GUIDES}) [d](/documents/${DOC_DEEP}#x) [g again](/documents/${DOC_GUIDES})`,
     }));
-    expect((await service.resolve({ slug: 'acme', path: '/guides' })).page?.links).toEqual([{ documentId: DOC_GUIDES, slugPath: 'guides' }]);
+    expect((await resolveBody(service, { slug: 'acme', path: '/guides' })).page?.links).toEqual([{ documentId: DOC_GUIDES, slugPath: 'guides' }]);
 
     sessions.viewer.mockResolvedValue({ kind: 'member' });
-    expect((await service.resolve({ slug: 'acme', path: '/guides' })).page?.links).toEqual([
+    expect((await resolveBody(service, { slug: 'acme', path: '/guides' })).page?.links).toEqual([
       { documentId: DOC_GUIDES, slugPath: 'guides' },
       { documentId: DOC_DEEP, slugPath: 'welcome/install/deep' },
     ]);
@@ -793,13 +800,13 @@ describe('the reader’s nav, a level at a time (issue #204)', () => {
       markdown: `[g](https://kb.example/documents/${DOC_GUIDES}?branch=x) [t](Guides) [d](Deep) [n](Nowhere)`,
     }));
     // Deep is members-only: its title resolves to nothing for an anonymous reader.
-    expect((await service.resolve({ slug: 'acme', path: '/guides' })).page?.links).toEqual([
+    expect((await resolveBody(service, { slug: 'acme', path: '/guides' })).page?.links).toEqual([
       { documentId: DOC_GUIDES, slugPath: 'guides' },
       { documentId: DOC_GUIDES, slugPath: 'guides', ref: 'Guides' },
     ]);
 
     sessions.viewer.mockResolvedValue({ kind: 'member' });
-    expect((await service.resolve({ slug: 'acme', path: '/guides' })).page?.links).toContainEqual({
+    expect((await resolveBody(service, { slug: 'acme', path: '/guides' })).page?.links).toContainEqual({
       documentId: DOC_DEEP,
       slugPath: 'welcome/install/deep',
       ref: 'Deep',

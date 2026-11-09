@@ -1,7 +1,6 @@
 import { canonicalEmbedUrl, parseEmbedUrl } from '@knowledge/contracts';
 import { embedGroupMarkup, embedGroupsOf } from '@knowledge/editor-schema/markdown';
 import { Injectable } from '@nestjs/common';
-import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { ConnectorCapabilities, ConnectorKind } from '@knowledge/contracts';
 import { safeJson } from '../webhook-payload.js';
 import { t } from '../../i18n/t.js';
@@ -14,6 +13,7 @@ import {
   type ExternalRef,
   type OutboundDocument,
 } from './connector.types.js';
+import { verifyHmacSha256 } from '../../common/hmac.js';
 
 const API = 'https://api.notion.com/v1';
 /** Pinned: Notion's API is versioned by date and unversioned requests are refused. */
@@ -189,11 +189,7 @@ export class NotionAdapter implements ConnectorAdapter {
     const secret = ctx.webhookSecret;
     if (!secret) return null;
     const sent = (headers['x-notion-signature'] ?? '').replace(/^v0=/, '');
-    if (!sent) return null;
-    const expected = createHmac('sha256', secret).update(rawBody, 'utf8').digest('hex');
-    const a = Buffer.from(sent, 'hex');
-    const b = Buffer.from(expected, 'hex');
-    if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+    if (!verifyHmacSha256(rawBody, secret, sent)) return null;
 
     const id = payload?.entity?.id ?? payload?.page?.id;
     return id ? [{ externalId: String(id), title: '' }] : [];

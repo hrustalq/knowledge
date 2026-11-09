@@ -72,10 +72,14 @@ describe('scope predicate', () => {
 });
 
 describe('streamFull', () => {
+  // The zod defaults a real boot always supplies.
+  const env: Record<string, unknown> = { LLMS_FULL_MAX_DOCS: 2000, LLMS_FULL_MAX_BYTES: 20_000_000, AI_READABLE_FETCH_CONCURRENCY: 8, WEB_BASE_URL: '' };
+  const config = { get: (k: string) => env[k] };
+
   it('writes a spec that opens with --- whole, and strips a page\'s frontmatter (#763)', async () => {
     const yaml = '---\nopenapi: 3.0.0\n';
     const storage = { getObjectText: vi.fn(async (key: string) => (key === 'spec' ? yaml : '---\ntags: [x]\n---\nPage body\n')) };
-    const svc = new AiReadableService({} as never, {} as never, { get: () => undefined } as never, storage as never);
+    const svc = new AiReadableService({} as never, {} as never, config as never, storage as never);
     const page = { title: 'T', category: 'other', parentId: null, position: 0, projectId: 'p', headRevisionId: 'r', depth: 0 };
     let out = '';
     await svc.streamFull(
@@ -84,8 +88,8 @@ describe('streamFull', () => {
         header: '',
         narrower: [],
         pages: [
-          { ...page, id: 'a', s3Key: 'spec', kind: 'openapi' },
-          { ...page, id: 'b', s3Key: 'page', kind: 'page' },
+          { ...page, id: 'a', s3Key: 'spec', s3VersionId: null, kind: 'openapi' },
+          { ...page, id: 'b', s3Key: 'page', s3VersionId: null, kind: 'page' },
         ],
       },
       { write: (chunk) => (out += chunk) },

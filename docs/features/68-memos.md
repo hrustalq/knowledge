@@ -134,7 +134,7 @@ uploader's name (`trigger: 'manual'`, `subjectKey: memo:<id>`, `input.memo = { m
 to `analysing` and enqueues the run. The worker already creates runs (the schedule sweeper), and a run
 brings retries, budget and attribution.
 
-`AgentExecutor.minute` shows the masked transcript as `[n] m:ss–m:ss text` lines. It runs the read tools
+The `secretary` runner (`agents/runners/secretary.ts`) shows the masked transcript as `[n] m:ss–m:ss text` lines. It runs the read tools
 as the uploader and collects every page id a tool result carried. Its model calls bill as `memo`. It writes
 the summary and the dropped list onto the memo.
 

@@ -4,6 +4,7 @@ import {
   type AnswerRating,
   type ChatCaptureKind,
 } from '@knowledge/contracts';
+import { UUID_RE } from '@knowledge/contracts';
 
 /**
  * What a button under a bot message means, written into the button's data
@@ -25,7 +26,6 @@ export type ChatAction =
   /** Put the vote row back without choosing. */
   | { kind: 'back'; answerId: string };
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function encodeChatAction(action: ChatAction): string {
   switch (action.kind) {

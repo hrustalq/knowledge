@@ -271,7 +271,6 @@ export class ConnectorStagingService {
    * five-second tick.
    */
   async apply(row: Connector, run: ConnectorRun, item: ConnectorRunItem): Promise<void> {
-    if (item.documentId && item.status === 'applied') return; // idempotent
     if (!item.stagedKey) throw new Error(t('error.connector.nothingStaged'));
 
     const markdown = await this.storage.getObjectText(item.stagedKey);
@@ -443,36 +442,20 @@ export class ConnectorStagingService {
     reRooted: boolean,
   ): Promise<void> {
     const spec = specOf(item);
-    // Created without inline content and written once afterwards, the way import
-    // submit does: one revision, whose content was never half-written. A spec
-    // (#78) goes in inline instead, because that is the path that names its
-    // syntax — the revision is `source.json` or `source.yaml` from the start —
-    // and validates it before the page exists. Its category is `reference`,
-    // whatever the connector files its pages under: that is what a spec is.
-    const created = spec
-      ? await this.documents.createDocument({
-          workspaceId: row.workspaceId,
-          projectId: row.projectId,
-          title: item.title || 'API',
-          category: 'reference',
-          kind: spec.kind,
-          content: { mode: 'inline', format: spec.syntax, text: markdown },
-          ...(parentId ? { parentId } : {}),
-        })
-      : await this.documents.createDocument({
-          workspaceId: row.workspaceId,
-          projectId: row.projectId,
-          title: item.title || 'Untitled',
-          category: row.category as DocumentCategory,
-          ...(parentId ? { parentId } : {}),
-        });
-
-    if (!spec) {
-      const revision = await this.prisma.documentRevision.findUnique({ where: { id: created.revisionId } });
-      if (!revision) throw new Error('revision vanished between create and write');
-      await this.storage.putObjectText(revision.s3Key, markdown, 'text/markdown');
-      await this.documents.finalizeRevision(created.documentId, created.revisionId);
-    }
+    // Inline content: one revision, whose content was never half-written. A
+    // spec (#78) names its syntax — the revision is `source.json` or
+    // `source.yaml` from the start — and is validated before the page exists.
+    // Its category is `reference`, whatever the connector files its pages
+    // under: that is what a spec is.
+    const created = await this.documents.createDocument({
+      workspaceId: row.workspaceId,
+      projectId: row.projectId,
+      title: item.title || (spec ? 'API' : 'Untitled'),
+      category: spec ? 'reference' : (row.category as DocumentCategory),
+      ...(spec ? { kind: spec.kind } : {}),
+      content: { mode: 'inline', format: spec?.syntax ?? 'markdown', text: markdown },
+      ...(parentId ? { parentId } : {}),
+    });
 
     const link = await this.prisma.connectorLink.create({
       data: {
@@ -569,16 +552,10 @@ export class ConnectorStagingService {
     spec?: ItemDraft['spec'],
   ): Promise<string> {
     const contentType = spec ? apiSpecContentType(spec.kind, spec.syntax) : 'text/markdown';
-    const dto = { branch, message: t('connector.syncRevisionMessage'), contentType };
     // A `web` connector names itself as the writer: its source-backed page refuses every other (#674).
-    const revision = writer
-      ? await this.documents.createRevision(documentId, dto, undefined, undefined, writer)
-      : await this.documents.createRevision(documentId, dto);
-    const row = await this.prisma.documentRevision.findUnique({ where: { id: revision.revisionId } });
-    if (!row) throw new Error('revision vanished between create and write');
-    await this.storage.putObjectText(row.s3Key, markdown, row.contentType);
-    await this.documents.finalizeRevision(documentId, revision.revisionId);
-    return revision.revisionId;
+    return (
+      await this.documents.writeRevision(documentId, { text: markdown, branch, message: t('connector.syncRevisionMessage'), contentType }, undefined, writer)
+    ).revisionId;
   }
 
   /**
@@ -688,11 +665,11 @@ export class ConnectorStagingService {
   private async revisionHash(revisionId: string): Promise<string | null> {
     const revision = await this.prisma.documentRevision.findUnique({
       where: { id: revisionId },
-      select: { s3Key: true, status: true },
+      select: { s3Key: true, s3VersionId: true, status: true },
     });
     if (!revision || revision.status === 'draft') return null;
     try {
-      return sha256(await this.storage.getObjectText(revision.s3Key));
+      return sha256(await this.storage.getObjectText(revision.s3Key, revision.s3VersionId));
     } catch {
       return null;
     }

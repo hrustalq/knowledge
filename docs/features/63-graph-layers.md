@@ -341,7 +341,7 @@ One PR each into `dev`:
 2. **Community hierarchy** (#494): the aggregation in `agents/communities.ts`
    (`level`, `parentId`, deterministic, with a spec); `Community.level` /
    `parentId` and reads by level in `GraphService`; upper-level summaries and
-   the shared budget in `AgentExecutor`; withheld-whole up the tree and
+   the shared budget in the atlas runner (`agents/runners/atlas.ts`); withheld-whole up the tree and
    `level` in `CommunitiesService.overview` and
    `GET /v1/graph/communities`.
 3. **Entity layers** (#495): `entityLayerFor`, `entityTypesOfLayer` and

@@ -14,6 +14,7 @@ import { asLocale } from '../../i18n/locale.js';
 import { t } from '../../i18n/t.js';
 import { PermissionService } from '../../permissions/permission.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { lockSubject } from '../../common/subject-lock.js';
 import { labelFor, type TrackerAdapter } from '../adapters/tracker.js';
 import { ConnectorWorkItemsService, keyOf } from '../connector-work-items.service.js';
 import { ConnectorsService } from '../connectors.service.js';
@@ -47,46 +48,21 @@ export class WorkItemHandoffService {
     const connectorId = input.connectorId ?? route?.connectorId;
     if (!connectorId) throw new BadRequestException(t('error.workItem.noRoute'));
     const { row, tracker } = await this.requireTracker(input.workspaceId, connectorId);
-
-    const existing = await this.prisma.connectorWorkItem.findFirst({
-      where: { connectorId: row.id, sourceKind: view.kind, sourceId: view.id },
+    const { item, created } = await this.underAnchorLock(row, view, async () => {
+      const existing = await this.anchoredTo(row, view);
+      if (existing) return { item: existing, created: false };
+      return { item: await this.createOrAttach(view, row, tracker, route, input.attach), created: true };
     });
-    if (existing) {
-      if (input.attach && !sameTicket(tracker, row, existing, input.attach)) {
-        throw new ConflictException({
-          statusCode: 409,
-          message: t('error.workItem.anchorTaken', { key: keyOf(existing), name: row.name }),
-          reason: 'anchor-taken',
-          workItemId: existing.id,
-        });
-      }
-      return (await this.workItems.decorate([existing]))[0];
-    }
-
-    const anchor = { kind: view.kind, id: view.id };
-    let saved: ConnectorWorkItem;
-    if (input.attach) {
-      const ref = tracker.parseRef(row, input.attach);
-      if (!ref) throw new BadRequestException(t('error.workItem.badRef', { ref: input.attach, name: row.name }));
-      const issue = await tracker.getIssue(row, ref);
-      if (!issue) throw new NotFoundException(t('error.workItem.ticketNotFound', { ref: input.attach, name: row.name }));
-      const held = await this.prisma.connectorWorkItem.findUnique({
-        where: { connectorId_kind_number: { connectorId: row.id, kind: issue.kind, number: issue.number } },
+    if (!created && input.attach && !sameTicket(tracker, row, item, input.attach)) {
+      throw new ConflictException({
+        statusCode: 409,
+        message: t('error.workItem.anchorTaken', { key: keyOf(item), name: row.name }),
+        reason: 'anchor-taken',
+        workItemId: item.id,
       });
-      if (held?.sourceId && (held.sourceKind !== view.kind || held.sourceId !== view.id)) {
-        throw new ConflictException({
-          statusCode: 409,
-          message: t('error.workItem.ticketTaken', { key: keyOf(held) }),
-          reason: 'ticket-taken',
-          workItemId: held.id,
-        });
-      }
-      saved = await this.workItems.upsertFrom(row, issue, { documentId: view.documentId, anchor });
-    } else {
-      saved = await this.create(view, row, tracker, route);
     }
-    this.recordHandoff(principal.userId, row, view, saved, !!input.attach);
-    return (await this.workItems.decorate([saved]))[0];
+    if (created) this.recordHandoff(principal.userId, row, view, item, !!input.attach);
+    return (await this.workItems.decorate([item]))[0];
   }
 
   /**
@@ -101,8 +77,11 @@ export class WorkItemHandoffService {
     const row = await this.prisma.connector.findUnique({ where: { id: route.connectorId } });
     const tracker = row?.enabled ? this.workItems.trackerOf(row) : null;
     if (!row || !tracker) return null;
-    const saved = await this.create(view, row, tracker, route);
-    this.recordHandoff(`rule:${view.kind}`, row, view, saved, false);
+    // A person may have handed the same object off since the rule picked it.
+    const saved = await this.underAnchorLock(row, view, async () =>
+      (await this.anchoredTo(row, view)) ? null : this.create(view, row, tracker, route),
+    );
+    if (saved) this.recordHandoff(`rule:${view.kind}`, row, view, saved, false);
     return saved;
   }
 
@@ -240,6 +219,55 @@ export class WorkItemHandoffService {
 
   // --- internals ---
 
+  /**
+   * One handoff per (connector, anchor) at a time (#816). The ticket is opened
+   * on the tracker before its row can exist, so without this two concurrent
+   * handoffs both open one and the loser's is orphaned behind a P2002. Under
+   * it, the second waits and then finds the first's row.
+   * ponytail: holds a pooled connection across the tracker calls; insert a
+   * pending row first instead if handoffs ever come in bursts.
+   */
+  private underAnchorLock<T>(row: Connector, view: AnchorView, fn: () => Promise<T>): Promise<T> {
+    return this.prisma.withTransaction(
+      async () => {
+        await lockSubject(this.prisma, `work-item:${row.id}:${view.kind}:${view.id}`);
+        return fn();
+      },
+      { timeout: 60_000, maxWait: 10_000 },
+    );
+  }
+
+  private anchoredTo(row: Connector, view: AnchorView): Promise<ConnectorWorkItem | null> {
+    return this.prisma.connectorWorkItem.findFirst({ where: { connectorId: row.id, sourceKind: view.kind, sourceId: view.id } });
+  }
+
+  /** Attach the ticket `attach` names, or open a new one. */
+  private async createOrAttach(
+    view: AnchorView,
+    row: Connector,
+    tracker: TrackerAdapter,
+    route: ProjectTrackerRoute | null,
+    attach: string | undefined,
+  ): Promise<ConnectorWorkItem> {
+    if (!attach) return this.create(view, row, tracker, route);
+    const ref = tracker.parseRef(row, attach);
+    if (!ref) throw new BadRequestException(t('error.workItem.badRef', { ref: attach, name: row.name }));
+    const issue = await tracker.getIssue(row, ref);
+    if (!issue) throw new NotFoundException(t('error.workItem.ticketNotFound', { ref: attach, name: row.name }));
+    const held = await this.prisma.connectorWorkItem.findUnique({
+      where: { connectorId_kind_number: { connectorId: row.id, kind: issue.kind, number: issue.number } },
+    });
+    if (held?.sourceId && (held.sourceKind !== view.kind || held.sourceId !== view.id)) {
+      throw new ConflictException({
+        statusCode: 409,
+        message: t('error.workItem.ticketTaken', { key: keyOf(held) }),
+        reason: 'ticket-taken',
+        workItemId: held.id,
+      });
+    }
+    return this.workItems.upsertFrom(row, issue, { documentId: view.documentId, anchor: { kind: view.kind, id: view.id } });
+  }
+
   /** Open the ticket, record it, and put its card on the route's board. */
   private async create(view: AnchorView, row: Connector, tracker: TrackerAdapter, route: ProjectTrackerRoute | null): Promise<ConnectorWorkItem> {
     const text = await this.anchors.ticketText(view, asLocale(row.locale));
@@ -252,8 +280,10 @@ export class WorkItemHandoffService {
     });
     const anchor = { kind: view.kind, id: view.id };
     const saved = await this.save(row, () => this.workItems.upsertFrom(row, issue, { documentId: view.documentId, anchor }));
+    // After commit: a board that refuses the card must not roll back a ticket that now exists.
     if (ours?.boardNodeId && ours.boardFieldId && tracker.setBoardStatus) {
-      await tracker.setBoardStatus(row, saved, { nodeId: ours.boardNodeId, fieldId: ours.boardFieldId }, 'open');
+      const board = { nodeId: ours.boardNodeId, fieldId: ours.boardFieldId };
+      this.prisma.onCommit(() => tracker.setBoardStatus!(row, saved, board, 'open'));
     }
     return saved;
   }

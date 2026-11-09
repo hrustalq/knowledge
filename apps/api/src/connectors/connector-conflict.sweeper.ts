@@ -1,12 +1,13 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import type { Connector, ConnectorConflict } from '@prisma/client';
-import matter from 'gray-matter';
 import { SUPERSEDING_CONFLICT_REASONS, type ConnectorConflictReason } from '@knowledge/contracts';
 import { MergeRequestsService } from '../documents/merge-requests.service.js';
 import { asLocale } from '../i18n/locale.js';
 import { t, withLocale } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
+import { Ticker } from '../common/ticker.js';
+import { parseMarkdown } from '../common/frontmatter.js';
 
 const SWEEP_INTERVAL_MS = 30_000;
 const BATCH = 20;
@@ -24,8 +25,7 @@ const BATCH = 20;
 @Injectable()
 export class ConnectorConflictSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ConnectorConflictSweeper.name);
-  private timer?: NodeJS.Timeout;
-  private running = false;
+  private readonly ticker = new Ticker(this.logger);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -34,21 +34,18 @@ export class ConnectorConflictSweeper implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit(): void {
-    this.timer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS);
-    this.timer.unref();
+    this.ticker.every(SWEEP_INTERVAL_MS, () => this.sweep());
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   async sweep(): Promise<void> {
     // On a 30s tick against a batch of 20 merge-request creations, a slow sweep
     // can still be running when the next fires — and both would read the same
     // `pending` rows and open the merge request twice.
-    if (this.running) return;
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       const pending = await this.prisma.connectorConflict.findMany({
         where: { status: 'pending' },
         orderBy: { createdAt: 'asc' },
@@ -97,11 +94,7 @@ export class ConnectorConflictSweeper implements OnModuleInit, OnModuleDestroy {
           this.logger.warn(`Conflict ${conflict.id} could not become a merge request: ${(err as Error).message}`);
         }
       }
-    } catch (err) {
-      this.logger.warn(`Connector conflict sweep failed: ${(err as Error).message}`);
-    } finally {
-      this.running = false;
-    }
+    });
   }
 
   /** The merge request's title and description, by why the conflict row exists. */
@@ -140,9 +133,9 @@ export class ConnectorConflictSweeper implements OnModuleInit, OnModuleDestroy {
 
   private async generatedFrom(revisionId: string): Promise<{ headSha?: string; unit?: string }> {
     try {
-      const revision = await this.prisma.documentRevision.findUnique({ where: { id: revisionId }, select: { s3Key: true } });
+      const revision = await this.prisma.documentRevision.findUnique({ where: { id: revisionId }, select: { s3Key: true, s3VersionId: true } });
       if (!revision) return {};
-      const data = matter(await this.storage.getObjectText(revision.s3Key)).data as Record<string, unknown>;
+      const data = parseMarkdown(await this.storage.getObjectText(revision.s3Key, revision.s3VersionId)).data;
       return {
         ...(typeof data.headSha === 'string' ? { headSha: data.headSha } : {}),
         ...(typeof data.unit === 'string' ? { unit: data.unit } : {}),

@@ -8,11 +8,15 @@ import { asLocale } from '../i18n/locale.js';
 import { t, withLocale } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { KnowledgeIssuesService, REPORT_AGENT_KEY } from './knowledge-issues.service.js';
+import { Ticker } from '../common/ticker.js';
+import type { Env } from '../config/env.js';
 
 const SWEEP_INTERVAL_MS = 15_000;
 const BATCH = 5;
 /** A run older than this is history: a restart after a long outage must not act on last month's reports. */
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
+/** A claim older than this was taken by a sweep that died mid-publish, and is retaken (#809). */
+const CLAIM_LEASE_MS = 10 * 60_000;
 /** Retention runs once an hour, not every tick — a DELETE with a date predicate is not free on a large table. */
 const PURGE_INTERVAL_MS = 60 * 60 * 1000;
 const PURGE_BATCH = 500;
@@ -29,10 +33,13 @@ const PURGE_MAX_BATCHES = 20;
  * finished while the API was down is published when it comes back, inside
  * `MAX_AGE_MS`.
  *
- * Each run is published **at most once**, claimed by stamping
- * `input.publishedAt` in one guarded statement before anything is written.
- * The drift sweeper's query excludes report runs and this one excludes drift
- * runs, so the two never race for the same row.
+ * Each run is claimed by stamping `input.publishedAt` in one guarded
+ * statement before anything is written. The stamp is a lease (#809): a
+ * process that died after the claim left the issue `checking` forever, so a
+ * claim older than `CLAIM_LEASE_MS` is retaken while the issue is still
+ * `checking` on this run. A publish that throws hands the issue back to
+ * `open` at once. The drift sweeper's query excludes report runs and this one
+ * excludes drift runs, so the two never race for the same row.
  *
  * What the verdict does to the issue (all guarded on it still being
  * `checking`, so a person who closed it meanwhile keeps their word):
@@ -47,8 +54,7 @@ const PURGE_MAX_BATCHES = 20;
 @Injectable()
 export class ReportPublishSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ReportPublishSweeper.name);
-  private timer?: NodeJS.Timeout;
-  private running = false;
+  private readonly ticker = new Ticker(this.logger);
   private lastPurge = 0;
 
   constructor(
@@ -56,53 +62,65 @@ export class ReportPublishSweeper implements OnModuleInit, OnModuleDestroy {
     private readonly issues: KnowledgeIssuesService,
     private readonly findings: AgentFindingsService,
     private readonly access: AccessService,
-    private readonly env: ConfigService,
+    private readonly env: ConfigService<Env, true>,
   ) {}
 
   onModuleInit(): void {
-    this.timer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS);
-    this.timer.unref();
+    this.ticker.every(SWEEP_INTERVAL_MS, () => this.sweep());
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   async sweep(): Promise<void> {
-    // Back-pressure: never a second sweep while one is in flight.
-    if (this.running) return;
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       const since = new Date(Date.now() - MAX_AGE_MS);
+      const expired = new Date(Date.now() - CLAIM_LEASE_MS);
       const due = await this.prisma.$queryRaw<Array<{ id: string }>>`
-        SELECT id FROM agent_runs
-         WHERE agent_key = ${REPORT_AGENT_KEY}
-           AND status IN ('succeeded', 'failed', 'cancelled')
-           AND finished_at >= ${since}
-           AND COALESCE(input ->> 'issueId', '') <> ''
-           AND COALESCE(input ->> 'publishedAt', '') = ''
-         ORDER BY finished_at ASC
+        SELECT r.id FROM agent_runs r
+         WHERE r.agent_key = ${REPORT_AGENT_KEY}
+           AND r.status IN ('succeeded', 'failed', 'cancelled')
+           AND r.finished_at >= ${since}
+           AND COALESCE(r.input ->> 'issueId', '') <> ''
+           AND (
+             NULLIF(r.input ->> 'publishedAt', '') IS NULL
+             OR (
+               NULLIF(r.input ->> 'publishedAt', '')::timestamptz < ${expired}
+               AND EXISTS (SELECT 1 FROM knowledge_issues i WHERE i.agent_run_id = r.id AND i.status = 'checking')
+             )
+           )
+         ORDER BY r.finished_at ASC
          LIMIT ${BATCH}
       `;
       for (const { id } of due) {
-        if (!(await this.claim(id))) continue;
+        if (!(await this.claim(id, expired))) continue;
         const run = await this.prisma.agentRun.findUnique({ where: { id } });
         if (!run) continue;
         try {
           await withLocale(asLocale(run.locale), () => this.publish(run));
         } catch (error) {
-          this.logger.warn(`Publishing report check ${id} failed: ${(error as Error).message}`);
+          const message = (error as Error).message;
+          this.logger.warn(`Publishing report check ${id} failed: ${message}`);
+          // Only `settleCheck` leaves `checking`; without this the issue waits out the lease.
+          const issueId = ((run.input ?? {}) as AgentRunInput).issueId;
+          if (issueId) {
+            await withLocale(asLocale(run.locale), () =>
+              this.issues.settleCheck(issueId, {
+                status: 'open',
+                note: t('knowledgeIssue.verdict.failed', { error: message.slice(0, 300) }),
+              }),
+            ).catch((settleError: unknown) =>
+              this.logger.warn(`Report ${issueId} stays checking until the lease ends: ${String(settleError)}`),
+            );
+          }
         }
       }
       if (Date.now() - this.lastPurge >= PURGE_INTERVAL_MS) {
         this.lastPurge = Date.now();
         await this.purge();
       }
-    } catch (error) {
-      this.logger.warn(`Report publish sweep failed (non-fatal): ${(error as Error).message}`);
-    } finally {
-      this.running = false;
-    }
+    });
   }
 
   async publish(run: AgentRun): Promise<void> {
@@ -169,7 +187,7 @@ export class ReportPublishSweeper implements OnModuleInit, OnModuleDestroy {
    * nobody acted on is still a report.
    */
   async purge(): Promise<void> {
-    const days = this.env.get<number>('ANSWER_FEEDBACK_RETENTION_DAYS') ?? 180;
+    const days = this.env.get('ANSWER_FEEDBACK_RETENTION_DAYS', { infer: true });
     const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
     let removed = 0;
     for (let i = 0; i < PURGE_MAX_BATCHES; i += 1) {
@@ -195,13 +213,16 @@ export class ReportPublishSweeper implements OnModuleInit, OnModuleDestroy {
     if (removed > 0) this.logger.log(`Retention purged ${removed} feedback rows and closed issues older than ${days} days`);
   }
 
-  /** Stamp `publishedAt` if nobody has. One statement, so two sweeps cannot both win. */
-  private async claim(runId: string): Promise<boolean> {
+  /** Stamp `publishedAt` if nobody has, or their lease ran out. One statement, so two sweeps cannot both win. */
+  private async claim(runId: string, expired: Date): Promise<boolean> {
     const affected = await this.prisma.$executeRaw`
       UPDATE agent_runs
          SET input = jsonb_set(COALESCE(input, '{}'::jsonb), '{publishedAt}', to_jsonb(${new Date().toISOString()}::text), true)
        WHERE id = ${runId}::uuid
-         AND COALESCE(input ->> 'publishedAt', '') = ''
+         AND (
+           NULLIF(input ->> 'publishedAt', '') IS NULL
+           OR NULLIF(input ->> 'publishedAt', '')::timestamptz < ${expired}
+         )
     `;
     return affected > 0;
   }

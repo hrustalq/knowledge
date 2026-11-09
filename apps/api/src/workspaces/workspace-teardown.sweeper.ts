@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { WorkspaceTeardownService } from './workspace-teardown.service.js';
+import { Ticker } from '../common/ticker.js';
 
 /** A deletion is kicked at once by the request; the tick is its crash recovery. */
 export const WORKSPACE_TEARDOWN_INTERVAL_MS = 60_000;
@@ -14,8 +15,7 @@ export const WORKSPACE_TEARDOWN_INTERVAL_MS = 60_000;
 @Injectable()
 export class WorkspaceTeardownSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(WorkspaceTeardownSweeper.name);
-  private timer?: NodeJS.Timeout;
-  private running = false;
+  private readonly ticker = new Ticker(this.logger);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -23,19 +23,16 @@ export class WorkspaceTeardownSweeper implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit(): void {
-    this.timer = setInterval(() => void this.sweep(), WORKSPACE_TEARDOWN_INTERVAL_MS);
-    this.timer.unref();
+    this.ticker.every(WORKSPACE_TEARDOWN_INTERVAL_MS, () => this.sweep());
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   /** Workspaces removed this pass. A pass already running makes this one a no-op; the next tick catches up. */
   async sweep(): Promise<number> {
-    if (this.running) return 0;
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       const due = await this.prisma.workspace.findMany({
         where: { deletedAt: { not: null } },
         orderBy: { deletedAt: 'asc' },
@@ -51,11 +48,6 @@ export class WorkspaceTeardownSweeper implements OnModuleInit, OnModuleDestroy {
       }
       if (removed > 0) this.logger.log(`removed ${removed} deleted workspace(s)`);
       return removed;
-    } catch (e) {
-      this.logger.warn(`workspace teardown sweep failed: ${String(e)}`);
-      return 0;
-    } finally {
-      this.running = false;
-    }
+    }, 0);
   }
 }

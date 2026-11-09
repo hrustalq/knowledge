@@ -12,6 +12,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { readStyleRules } from '../agents/lint.js';
 import type { Env } from '../config/env.js';
 import { t } from '../i18n/t.js';
+import { ttlCache } from '../common/ttl-cache.js';
 
 /** Skills merged into one turn, and the total instruction budget they share. */
 const MAX_SKILLS_PER_TURN = 3;
@@ -56,7 +57,7 @@ export interface UpsertSkillInput {
  */
 @Injectable()
 export class AiSkillsService {
-  private readonly cache = new Map<string, { at: number; skills: AiSkill[] }>();
+  private readonly cache = ttlCache<AiSkill[]>(CACHE_TTL_MS);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -314,14 +315,10 @@ export class AiSkillsService {
   }
 
   private async enabledSkills(workspaceId: string): Promise<AiSkill[]> {
-    const hit = this.cache.get(workspaceId);
-    if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.skills;
-    const skills = await this.prisma.aiSkill.findMany({
+    return this.cache.get(workspaceId, () => this.prisma.aiSkill.findMany({
       where: { workspaceId, kind: 'skill', enabled: true },
       orderBy: { name: 'asc' },
-    });
-    this.cache.set(workspaceId, { at: Date.now(), skills });
-    return skills;
+    }));
   }
 }
 

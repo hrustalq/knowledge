@@ -24,6 +24,7 @@ import type {
   UpdateMergeRequestBranchResponse,
 } from '@knowledge/contracts';
 import type { DocumentBranch, MergeRequest, MergeRequestReviewer } from '@prisma/client';
+import { withSubjectLock } from '../common/subject-lock.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { toRevisionInfo } from './revision-info.js';
 import { StorageService } from '../storage/storage.service.js';
@@ -52,9 +53,10 @@ import { lintGateEnforced, overridable } from './lint/lint-check.js';
 import { ProjectCommitsService, type PagePlace } from '../git/project-commits.service.js';
 import { sourcePages } from './mr-pages.js';
 import { hasConflictMarkers, threeWay, type ThreeWayResult } from './three-way.js';
+import type { Env } from '../config/env.js';
+import { AUTHOR_ID_STUB } from '../activity/actor.js';
 
 /** Fallback author when no principal is supplied (AUTH_MODE=none, MCP stdio). */
-export const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
 
 const MR_INCLUDE = { sourceBranch: true, targetBranch: true, reviewers: true } as const;
 
@@ -134,7 +136,7 @@ export class MergeRequestsService {
     private readonly compare: CompareService,
     private readonly activity: ActivityService,
     private readonly access: AccessService,
-    private readonly config: ConfigService,
+    private readonly config: ConfigService<Env, true>,
     private readonly notifications: NotificationsService,
     // See DocumentThreadsService: NotificationsService cannot publish, so the
     // frames for `assigned` and `review-requested` are announced from here.
@@ -185,13 +187,14 @@ export class MergeRequestsService {
       throw new BadRequestException(t('error.mergeRequest.sourceNotFinalized', { branch: source.name }));
     }
 
-    await this.rejectDuplicateOpen(source, target);
     this.assertTargetsExist(await this.changedPages(source, target.name), target.name);
 
     // The row, the un-restricted branches and the author's subscription are one
     // change (#658): an open MR over a branch its readers cannot open is worse
-    // than no MR. `recordActivity` defers its publish to the commit.
-    const mr = await this.prisma.withTransaction(async () => {
+    // than no MR. `recordActivity` defers its publish to the commit. The
+    // duplicate check shares the boundary under the pair's lock (#815).
+    const mr = await withSubjectLock(this.prisma, openLockKey(source, target), async () => {
+      await this.rejectDuplicateOpen(source, target);
       const mr = await this.prisma.mergeRequest.create({
         data: {
           documentId,
@@ -380,12 +383,14 @@ export class MergeRequestsService {
     if (mr.status !== 'closed') {
       throw new BadRequestException(t('error.mergeRequest.notClosedForReopen', { id: mr.id, status: t(`status.mr.${mr.status}`) }));
     }
-    await this.rejectDuplicateOpen(mr.sourceBranch, mr.targetBranch);
-
-    // Guarded flip: a concurrent reopen (or delete) makes count 0.
-    const flipped = await this.prisma.mergeRequest.updateMany({
-      where: { id: mr.id, status: 'closed' },
-      data: { status: 'open', closedAt: null },
+    // Guarded flip: a concurrent reopen (or delete) makes count 0. Under the
+    // pair's lock, so a create cannot open a twin between check and flip (#815).
+    const flipped = await withSubjectLock(this.prisma, openLockKey(mr.sourceBranch, mr.targetBranch), async () => {
+      await this.rejectDuplicateOpen(mr.sourceBranch, mr.targetBranch);
+      return this.prisma.mergeRequest.updateMany({
+        where: { id: mr.id, status: 'closed' },
+        data: { status: 'open', closedAt: null },
+      });
     });
     if (flipped.count === 0) {
       throw new ConflictException(t('error.mergeRequest.concurrentChange', { id: mr.id }));
@@ -728,12 +733,15 @@ export class MergeRequestsService {
     if (mr.status !== 'open') {
       throw new BadRequestException(t('error.mergeRequest.notOpenForApproval', { id: mr.id, status: t(`status.mr.${mr.status}`) }));
     }
-    const approved = [...new Set([...this.approvers(mr), approverId])];
-    const updated = await this.prisma.mergeRequest.update({
-      where: { id: mr.id },
-      data: { approvedBy: approved },
-      include: MR_INCLUDE,
-    });
+    // One statement (#810): appending in SQL keeps a concurrent approval, which
+    // writing back the array read above lost, and the gate under-counted.
+    const added = await this.prisma.$executeRaw`
+      UPDATE merge_requests
+      SET approved_by = CASE WHEN approved_by @> jsonb_build_array(${approverId}::text) THEN approved_by
+                             ELSE approved_by || jsonb_build_array(${approverId}::text) END
+      WHERE id = ${mr.id}::uuid AND status = 'open'`;
+    if (added === 0) throw new ConflictException(t('error.mergeRequest.concurrentChange', { id: mr.id }));
+    const updated = await this.prisma.mergeRequest.findUniqueOrThrow({ where: { id: mr.id }, include: MR_INCLUDE });
     await this.recordActivity(mr.documentId, 'merge-request.approved', mr.id, approverId, { title: mr.title });
     return { mergeRequest: await this.toDetail(updated) };
   }
@@ -743,11 +751,13 @@ export class MergeRequestsService {
     if (mr.status !== 'open') {
       throw new BadRequestException(t('error.mergeRequest.notOpenForClose', { id: mr.id, status: t(`status.mr.${mr.status}`) }));
     }
-    const updated = await this.prisma.mergeRequest.update({
-      where: { id: mr.id },
+    // Guarded flip, like reopen (#810): a merge that landed meanwhile stands.
+    const closed = await this.prisma.mergeRequest.updateMany({
+      where: { id: mr.id, status: 'open' },
       data: { status: 'closed', closedAt: new Date() },
-      include: MR_INCLUDE,
     });
+    if (closed.count === 0) throw new ConflictException(t('error.mergeRequest.concurrentChange', { id: mr.id }));
+    const updated = await this.prisma.mergeRequest.findUniqueOrThrow({ where: { id: mr.id }, include: MR_INCLUDE });
     await this.recordActivity(mr.documentId, 'merge-request.closed', mr.id, actorId, { title: mr.title });
     return { mergeRequest: await this.toDetail(updated) };
   }
@@ -955,7 +965,7 @@ export class MergeRequestsService {
     // dev principal IS the zeros author stub (self-approval could never pass),
     // and MCP stdio has no principal. Same trust semantics as requireRole.
     const requiredApprovals =
-      principal && principal.mode !== 'dev' ? (this.config.get<number>('MR_REQUIRED_APPROVALS') ?? 1) : 0;
+      principal && principal.mode !== 'dev' ? this.config.get('MR_REQUIRED_APPROVALS', { infer: true }) : 0;
     const approvals = this.approvers(mr).filter((id) => id !== mr.authorId).length;
     if (approvals < requiredApprovals) {
       throw new ConflictException({
@@ -1320,8 +1330,8 @@ export class MergeRequestsService {
   }
 
   private async bodyOf(revisionId: string): Promise<Body> {
-    const r = await this.prisma.documentRevision.findUniqueOrThrow({ where: { id: revisionId }, select: { s3Key: true, contentType: true } });
-    return { text: await this.storage.getObjectText(r.s3Key), contentType: r.contentType };
+    const r = await this.prisma.documentRevision.findUniqueOrThrow({ where: { id: revisionId }, select: { s3Key: true, s3VersionId: true, contentType: true } });
+    return { text: await this.storage.getObjectText(r.s3Key, r.s3VersionId), contentType: r.contentType };
   }
 
   /** 409 `conflict` naming every conflicting page and its hunks, and the first page as `diverged` named it. Ids, never titles. */
@@ -1617,21 +1627,15 @@ export class MergeRequestsService {
     });
     if (!doc) return null;
     // The lookup stays inline — callers use the returned page synchronously —
-    // but the record itself is post-commit: it publishes onto the Redis bus and
-    // fans out notifications, neither of which can be taken back. Callers that
-    // run inside a transaction (merge, agent-finding proposals) would otherwise
-    // announce a merge request that has not committed. Outside a transaction
-    // `onCommit` runs it immediately, so every other caller is unchanged.
-    this.prisma.onCommit(() =>
-      this.activity.record({
-        workspaceId: doc.workspaceId,
-        actor,
-        action,
-        documentId,
-        subjectId,
-        metadata: { documentTitle: doc.title, ...metadata },
-      }),
-    );
+    // and `record` itself waits for the commit when a transaction is open.
+    void this.activity.record({
+      workspaceId: doc.workspaceId,
+      actor,
+      action,
+      documentId,
+      subjectId,
+      metadata: { documentTitle: doc.title, ...metadata },
+    });
     return doc;
   }
 
@@ -1651,4 +1655,9 @@ export class MergeRequestsService {
     if (!branch) throw new NotFoundException(t('error.branch.notFound', { name, documentId }));
     return branch;
   }
+}
+
+/** The `withSubjectLock` key of `openFrom`'s identity: one open MR per (source, target) pair (#815). */
+function openLockKey(source: DocumentBranch, target: DocumentBranch): string {
+  return source.projectBranchId ? `mr-open:${source.projectBranchId}:${target.name}` : `mr-open:${source.id}:${target.id}`;
 }

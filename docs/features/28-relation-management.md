@@ -34,8 +34,9 @@ path first, and it is the same one a human now benefits from.
 **A relation edit is a revision, so it is a merge request.** Declaring a
 relation means changing the page, and an AI-authored page change is a proposal —
 the rule `propose_update` and `AgentFindingsService.propose` already follow.
-`DocumentRelationsService` walks that exact path: branch → revision →
-`putObjectText` → finalize → `MergeRequestsService.create`. Unlike the findings
+`DocumentRelationsService` walks that exact path through
+`openDraftMergeRequest`: branch → `DocumentsService.writeRevision` →
+`MergeRequestsService.create`. Unlike the findings
 path there is no model call in the middle, so the whole write fits in one
 transaction rather than having to keep an LLM round trip outside it.
 

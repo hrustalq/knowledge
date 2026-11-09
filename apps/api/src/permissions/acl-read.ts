@@ -1,5 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
-import type { AccessResourceType, WorkspaceRole } from '@knowledge/contracts';
+import { type AccessResourceType, type WorkspaceRole, UUID_RE } from '@knowledge/contracts';
 import type { PrismaService } from '../prisma/prisma.service.js';
 import { t } from '../i18n/t.js';
 import { levelOn, type ChainNode, type GrantRow } from './access-scope.js';
@@ -121,4 +121,3 @@ export async function whoCanOpen(db: AclDb, resource: AccessResource, userIds: s
   return out;
 }
 
-export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

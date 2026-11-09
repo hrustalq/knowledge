@@ -4,6 +4,7 @@ import type { Env } from '../config/env.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 import { StorageService } from '../storage/storage.service.js';
 import { CollabDraftsService } from './collab-drafts.service.js';
+import { Ticker } from '../common/ticker.js';
 
 /** Checkpoints are minutes apart; a minute of slack on when one is due costs nothing. */
 const SWEEP_INTERVAL_MS = 60_000;
@@ -28,8 +29,7 @@ export function checkpointKey(workspaceId: string, documentId: string, branchId:
 @Injectable()
 export class CollabCheckpointSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(CollabCheckpointSweeper.name);
-  private timer?: NodeJS.Timeout;
-  private running = false;
+  private readonly ticker = new Ticker(this.logger);
 
   constructor(
     private readonly config: ConfigService<Env, true>,
@@ -40,18 +40,15 @@ export class CollabCheckpointSweeper implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit(): void {
     if (!this.config.get('COLLAB_ENABLED', { infer: true })) return;
-    this.timer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS);
-    this.timer.unref();
+    this.ticker.every(SWEEP_INTERVAL_MS, () => this.sweep());
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   async sweep(): Promise<void> {
-    if (this.running) return;
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       const due = await this.drafts.dueForCheckpoint(this.config.get('COLLAB_CHECKPOINT_INTERVAL_MINUTES', { infer: true }), BATCH);
       for (const draft of due) {
         const state = await this.drafts.claimCheckpoint(draft.id, draft.last_checkpoint_at);
@@ -69,10 +66,6 @@ export class CollabCheckpointSweeper implements OnModuleInit, OnModuleDestroy {
       }
       const dropped = await this.drafts.dropIdle(this.config.get('COLLAB_DRAFT_RETENTION_DAYS', { infer: true }));
       if (dropped > 0) this.logger.log(`dropped ${dropped} idle shared drafts`);
-    } catch (e: unknown) {
-      this.logger.warn(`collab checkpoint sweep failed: ${String(e)}`);
-    } finally {
-      this.running = false;
-    }
+    });
   }
 }

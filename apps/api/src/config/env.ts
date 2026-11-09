@@ -703,8 +703,6 @@ export const envSchema = z.object({
   IMPORT_MAX_BYTES: z.coerce.number().int().positive().default(52_428_800),
   /** Wall-clock ceiling for one parse, so a pathological file fails instead of pinning a worker. */
   IMPORT_PARSE_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
-  /** Vision-OCR page ceiling — bounds the spend a single scanned PDF can incur. */
-  IMPORT_OCR_MAX_PAGES: z.coerce.number().int().positive().default(20),
 
   /**
    * Memos (#551, docs/features/68): speech-to-text over any OpenAI-compatible

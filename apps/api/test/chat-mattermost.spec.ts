@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const safeFetch = vi.hoisted(() => vi.fn());
 vi.mock('../src/common/safe-fetch.js', () => ({ safeFetch, guardedLookup: vi.fn() }));
 
-import { MattermostAdapter, defuseMentions, markdownForMattermost, signAction } from '../src/chat/adapters/mattermost.adapter.js';
+import { MattermostAdapter, signAction } from '../src/chat/adapters/mattermost.adapter.js';
+import { defuseMentions, markdownForMattermost } from '../src/chat/adapters/chat-markdown.js';
 import { ChatAdapterRegistry } from '../src/chat/adapters/chat-adapter.registry.js';
 import { ChatPlatformError, type ChatAdapterContext, type ChatInbound } from '../src/chat/adapters/chat-adapter.types.js';
 import {
@@ -395,6 +396,7 @@ describe.each(PLATFORMS)('$kind', ({ kind, server }) => {
       { context: () => ({ ...ctx }) } as never,
       { receive } as never,
       config as never,
+      {} as never,
       (url, token) => {
         const s = new FakeSocket(url, token);
         sockets.push(s);
@@ -660,6 +662,7 @@ describe('one supervisor, both kinds (#343)', () => {
       { context: (r: { serverUrl: string }) => ({ token: TOKEN, botUsername: BOT, serverUrl: r.serverUrl, actionUrl: '' }) } as never,
       { receive } as never,
       config as never,
+      {} as never,
       (url) => {
         const socket = {
           on: (event: string, listener: (data: unknown) => void) => {

@@ -119,8 +119,7 @@
     "missingParams": "type and targetKey query params are required",
     "noneGiven": "Give at least one relation to add or remove, or a list of tags.",
     "unknownType": "\"{type}\" is not a relation type. Use one of: {allowed}.",
-    "badTarget": "The {type} relation needs a target key, such as \"service:identity\".",
-    "revisionGone": "The draft revision disappeared before the relation change could be written."
+    "badTarget": "The {type} relation needs a target key, such as \"service:identity\"."
   },
   "mergeRequest": {
     "notFound": "Merge request {id} not found",
@@ -277,7 +276,6 @@
     "findingDocumentGone": "The page this finding cites ({documentId}) is no longer in this workspace.",
     "assistantDisabled": "The AI assistant is disabled for this workspace.",
     "drafterCannot": "The model routed at the drafter cannot: {capabilities}.",
-    "draftRevisionGone": "Draft revision disappeared before it could be written.",
     "noReadableContent": "\"{title}\" has no readable content to rewrite yet.",
     "emptyPage": "The model returned an empty page.",
     "agentRunInFlight": "A run of \"{key}\" is already in progress.",
@@ -349,6 +347,7 @@
     "disabled": "This workflow is disabled",
     "differentProject": "This workflow is scoped to a different project",
     "runInFlightForPage": "A run of this workflow is already in flight for this page",
+    "changedConcurrently": "This run changed while you were acting on it — reload and retry",
     "nodeNotAwaitingReview": "Only a node awaiting review can be edited (this one is {status})",
     "stepGone": "Step \"{stepId}\" is no longer part of this run",
     "invalidGraph": "The workflow graph is not valid",

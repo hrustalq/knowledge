@@ -136,7 +136,7 @@ export class ApiSpecDiffService {
       );
     }
     try {
-      return await this.specs.parse(await this.storage.getObjectText(revision.s3Key), kind);
+      return await this.specs.parse(await this.storage.getObjectText(revision.s3Key, revision.s3VersionId), kind);
     } catch (e) {
       if (e instanceof ApiSpecError) return null;
       throw e;

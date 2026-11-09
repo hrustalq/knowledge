@@ -162,6 +162,7 @@ describe('the searchable switch', () => {
   function integrations(post: () => Promise<unknown> = async () => ({}), row: Record<string, unknown> = {}) {
     const binding = { id: 'b-1', integrationId: 'int-1', workspaceId: 'ws-1', externalChatId: 'ch-1', listening: false, searchableAt: null, locale: null, ...row };
     const prisma = {
+      withTransaction: vi.fn(async (fn: () => Promise<unknown>) => fn()),
       chatChannelBinding: {
         findUnique: vi.fn(async () => binding),
         update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ ...binding, ...data, _count: { subscriptions: 0 }, createdAt: new Date(), updatedAt: new Date() })),

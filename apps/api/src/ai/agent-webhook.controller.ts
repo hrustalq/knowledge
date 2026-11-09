@@ -67,8 +67,8 @@ export class AgentWebhookController {
     config: ConfigService<Env, true>,
   ) {
     this.enabled = config.get('AGENT_TRIGGERS_ENABLED', { infer: true }) === true;
-    this.maxBytes = Number(config.get('AGENT_WEBHOOK_MAX_BYTES', { infer: true }) ?? 65_536);
-    this.toleranceSeconds = Number(config.get('AGENT_WEBHOOK_TOLERANCE_SECONDS', { infer: true }) ?? 300);
+    this.maxBytes = config.get('AGENT_WEBHOOK_MAX_BYTES', { infer: true });
+    this.toleranceSeconds = config.get('AGENT_WEBHOOK_TOLERANCE_SECONDS', { infer: true });
   }
 
   @Post(':id/webhook')
@@ -91,17 +91,16 @@ export class AgentWebhookController {
 
     if (!secret) throw new UnauthorizedException(t('error.ai.agentWebhookNotConfigured'));
 
-    const lower = Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), String(v)]));
-    const timestamp = lower[AGENT_WEBHOOK_HEADERS.timestamp] ?? '';
+    const timestamp = headers[AGENT_WEBHOOK_HEADERS.timestamp] ?? '';
     const body = raw.toString('utf8');
-    if (!/^\d{1,12}$/.test(timestamp) || !verifyHmacSha256(`${timestamp}.${body}`, secret, lower[AGENT_WEBHOOK_HEADERS.signature] ?? '')) {
+    if (!/^\d{1,12}$/.test(timestamp) || !verifyHmacSha256(`${timestamp}.${body}`, secret, headers[AGENT_WEBHOOK_HEADERS.signature] ?? '')) {
       throw new UnauthorizedException(t('error.ai.agentWebhookBadSignature'));
     }
     if (Math.abs(Date.now() / 1000 - Number(timestamp)) > this.toleranceSeconds) {
       throw new UnauthorizedException(t('error.ai.agentWebhookStale', { seconds: this.toleranceSeconds }));
     }
 
-    const deliveryId = lower[AGENT_WEBHOOK_HEADERS.delivery] ?? '';
+    const deliveryId = headers[AGENT_WEBHOOK_HEADERS.delivery] ?? '';
     if (!DELIVERY_ID.test(deliveryId)) {
       throw new BadRequestException(t('error.ai.agentWebhookDeliveryId'));
     }

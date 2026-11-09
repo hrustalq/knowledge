@@ -6,6 +6,7 @@ import { captureContentHash, decidePage, dedupeText, foldTermKeys, rankSimilar }
 import { findSecret } from '../src/common/secret-scan.js';
 import { parseMarkdown } from '../src/common/frontmatter.js';
 import type { Principal } from '../src/auth/principal.js';
+import { fakeWriteRevision } from './revision-fakes.js';
 
 // i18n is not booted here, so `t` returns the key. Marking Russian lets a case see which language was asked for.
 vi.mock('../src/i18n/t.js', async (actual) => {
@@ -94,6 +95,7 @@ function harness(opts: {
   };
   const mrStatus = new Map<string, string>();
   const prisma = {
+    $executeRaw: async () => 1,
     knowledgeCapture,
     withTransaction: vi.fn(async (fn: () => Promise<unknown>) => fn()),
     project: {
@@ -161,9 +163,9 @@ function harness(opts: {
   const activity = { record: vi.fn(async () => undefined) };
   const env: Record<string, unknown> = { WEB_BASE_URL: 'https://kn.test/', CAPTURE_MAX_CHARS: 8000, CAPTURE_STALE_MS: 300_000 };
   const config = { get: (key: string) => env[key] };
+  Object.assign(documents, { writeRevision: fakeWriteRevision({ documents, storage, prisma } as never) });
   const svc = new CaptureService(
     prisma as never,
-    storage as never,
     access as never,
     permissions as never,
     documents as never,

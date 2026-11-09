@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { load as parseYaml } from 'js-yaml';
+import { fakeWriteRevision } from './revision-fakes.js';
 
 /**
  * Repo sync of API spec files (#78, phase 7): which files are specs, how a
@@ -330,6 +331,7 @@ describe('ConnectorStagingService, spec items', () => {
       preview: vi.fn(async () => []),
       applyToPage: vi.fn(async () => ({ changed: false, warnings: [] })),
     };
+    Object.assign(documents, { writeRevision: fakeWriteRevision({ documents, storage, prisma } as never) });
     const staging = new ConnectorStagingService(prisma as never, documents as never, storage as never, acl as never, { pinMarkdown: async (_ws: string, md: string) => md } as never);
     const row = {
       id: 'c1',

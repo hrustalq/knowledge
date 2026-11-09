@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { GraphService } from '../graph/graph.service.js';
 import { EMBEDDING_PROVIDER, type EmbeddingProvider } from '../embedding/embedding.provider.js';
 import { sealedWindows, windowText, type UnpackedMessage, type WindowRules } from './chat-windows.js';
+import { Ticker } from '../common/ticker.js';
 
 /** Threads packed per tick, at most: a backlog drains over several ticks, one embedding call per thread. */
 const THREADS_PER_TICK = 50;
@@ -38,10 +39,9 @@ const REAP_PAGE = 1000;
 @Injectable()
 export class ChatIndexSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ChatIndexSweeper.name);
+  private readonly ticker = new Ticker(this.logger);
   private readonly rules: WindowRules;
   private readonly tickMs: number;
-  private timer?: NodeJS.Timeout;
-  private running = false;
   private ticks = 0;
 
   constructor(
@@ -59,29 +59,21 @@ export class ChatIndexSweeper implements OnModuleInit, OnModuleDestroy {
   }
 
   onModuleInit(): void {
-    this.timer = setInterval(() => void this.sweep(), this.tickMs);
-    this.timer.unref();
+    this.ticker.every(this.tickMs, () => this.sweep());
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   /** One tick. Returns the windows packed. */
   async sweep(now = Date.now()): Promise<number> {
-    if (this.running) return 0;
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       const packed = await this.index(now);
       this.ticks += 1;
       if (this.ticks % REAP_EVERY_TICKS === 0) await this.reap(now);
       return packed;
-    } catch (e) {
-      this.logger.warn(`Chat index sweep failed: ${(e as Error).message}`);
-      return 0;
-    } finally {
-      this.running = false;
-    }
+    }, 0);
   }
 
   private async index(now: number): Promise<number> {

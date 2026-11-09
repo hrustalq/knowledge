@@ -15,6 +15,7 @@ import {
   toolNameFor,
 } from './mcp-client.service.js';
 import { t } from '../i18n/t.js';
+import { ttlCache } from '../common/ttl-cache.js';
 
 /** How long the enabled-plugin roster is reused before PG is consulted again. */
 const CACHE_TTL_MS = 30_000;
@@ -42,7 +43,7 @@ export interface UpsertPluginInput {
 @Injectable()
 export class AiPluginsService {
   private readonly logger = new Logger(AiPluginsService.name);
-  private readonly cache = new Map<string, { at: number; plugins: AiPlugin[] }>();
+  private readonly cache = ttlCache<AiPlugin[]>(CACHE_TTL_MS);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -233,14 +234,10 @@ export class AiPluginsService {
   // -------------------------------------------------------------------------
 
   private async enabledPlugins(workspaceId: string): Promise<AiPlugin[]> {
-    const hit = this.cache.get(workspaceId);
-    if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.plugins;
-    const plugins = await this.prisma.aiPlugin.findMany({
+    return this.cache.get(workspaceId, () => this.prisma.aiPlugin.findMany({
       where: { workspaceId, enabled: true },
       orderBy: { name: 'asc' },
-    });
-    this.cache.set(workspaceId, { at: Date.now(), plugins });
-    return plugins;
+    }));
   }
 
   private async getOrThrow(id: string): Promise<AiPlugin> {

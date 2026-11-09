@@ -10,12 +10,12 @@ import {
   type AgentTriggerFilter,
   type AgentTriggerSummary,
   type RotateAgentTriggerSecretResponse,
+  isTriggerableAgent,
 } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
-import { isTriggerableAgent } from '../agents/agent.executor.js';
 import { filterOf } from '../agents/agent-trigger.service.js';
 import { decryptSecret, encryptSecret, parseKey } from './secret-box.js';
 import type { CreateAgentTriggerDto, UpdateAgentTriggerDto } from './ai.dto.js';
@@ -40,9 +40,9 @@ export class AgentTriggersService {
     private readonly registry: AgentRegistryService,
     config: ConfigService<Env, true>,
   ) {
-    this.defaultCooldown = Number(config.get('AGENT_TRIGGER_COOLDOWN_MINUTES', { infer: true }) ?? 60);
+    this.defaultCooldown = config.get('AGENT_TRIGGER_COOLDOWN_MINUTES', { infer: true });
     this.listening = config.get('AGENT_TRIGGERS_ENABLED', { infer: true }) === true;
-    this.apiPublicUrl = String(config.get('API_PUBLIC_URL', { infer: true }) ?? '').replace(/\/+$/, '');
+    this.apiPublicUrl = config.get('API_PUBLIC_URL', { infer: true }).replace(/\/+$/, '');
     this.key = parseKey(config.get('SETTINGS_ENCRYPTION_KEY', { infer: true }));
   }
 
@@ -153,7 +153,7 @@ export class AgentTriggersService {
   private async assertTriggerable(workspaceId: string, agentKey: string, event: AgentTriggerEvent): Promise<void> {
     const agent = await this.registry.resolve(workspaceId, agentKey).catch(() => null);
     if (!agent) throw new NotFoundException(t('error.ai.agentNotFound', { key: agentKey }));
-    if (!agent.surfaces.includes('background') || !isTriggerableAgent(agentKey)) {
+    if (!isTriggerableAgent(agentKey)) {
       throw new BadRequestException(t('error.ai.agentNotBackground', { key: agentKey }));
     }
     if (!agentTriggerEventsFor(agentKey).includes(event)) {

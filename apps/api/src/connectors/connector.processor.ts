@@ -17,7 +17,7 @@ import {
   type ConnectorTask,
 } from './connector.producer.js';
 import { ConnectorSyncService } from './connector-sync.service.js';
-import { ConnectorsService, MAX_WARNINGS } from './connectors.service.js';
+import { addToRun, ConnectorsService, NO_COUNTS } from './connectors.service.js';
 
 /**
  * Runs one sync (docs/features/19, sliced by 26).
@@ -130,20 +130,9 @@ export class ConnectorProcessor extends WorkerHost {
 
   /** Append one warning to the run, leaving its status alone. */
   private async warn(runId: string, message: string): Promise<void> {
-    const run = await this.prisma.connectorRun.findUnique({ where: { id: runId } });
-    if (!run) return;
-    const warnings = Array.isArray(run.warnings) ? (run.warnings as unknown[]) : [];
-    await this.prisma.connectorRun
-      .update({
-        where: { id: runId },
-        data: {
-          warnings: [...warnings, { externalId: null, title: null, message: message.slice(0, 500) }].slice(
-            0,
-            MAX_WARNINGS,
-          ) as unknown as Prisma.InputJsonValue,
-        },
-      })
-      .catch(() => undefined);
+    await addToRun(this.prisma, runId, NO_COUNTS, [{ externalId: null, title: null, message: message.slice(0, 500) }]).catch(
+      () => undefined,
+    );
   }
 
   private async execute(runId: string): Promise<void> {
@@ -155,6 +144,7 @@ export class ConnectorProcessor extends WorkerHost {
       data: { status: 'running', startedAt: new Date(), stage: null, progress: null, error: Prisma.DbNull },
     });
     if (claimed.count === 0) return;
+    await this.releaseOrphanedItems(runId);
 
     const first = await this.prisma.connectorRun.findUniqueOrThrow({ where: { id: runId } });
     const connector = await this.prisma.connector.findUnique({ where: { id: first.connectorId } });
@@ -196,7 +186,12 @@ export class ConnectorProcessor extends WorkerHost {
           // Fresh jobId, because the completed job blocks reuse of the original
           // — StaleSweeper.enqueueRetry's reasoning, applied to a continuation.
           const attempt = run.discovered + run.applied;
-          await this.prisma.connectorRun.update({ where: { id: runId }, data: { status: 'queued' } });
+          // Guarded (#810): a PAUSE or CANCEL that landed mid-slice stands, and gets no continuation.
+          const requeued = await this.prisma.connectorRun.updateMany({
+            where: { id: runId, status: 'running' },
+            data: { status: 'queued' },
+          });
+          if (requeued.count === 0) return;
           await this.producer.enqueueRetry(runId, String(attempt));
           this.logger.log(`Connector run ${runId} checkpointed and re-enqueued`);
           return;
@@ -207,13 +202,14 @@ export class ConnectorProcessor extends WorkerHost {
         ? `the sync exceeded ${Math.round(this.timeoutMs / 1000)}s and was stopped`
         : (err as Error).message;
       this.logger.error(`Connector run ${runId} failed: ${message}`);
-      await this.fail(runId, message);
-      await this.events.publish({
-        workspaceId: first.workspaceId,
-        type: 'connector.run.failed',
-        subjectId: connector.id,
-        title: connector.name,
-      });
+      if (await this.fail(runId, message)) {
+        await this.events.publish({
+          workspaceId: first.workspaceId,
+          type: 'connector.run.failed',
+          subjectId: connector.id,
+          title: connector.name,
+        });
+      }
       // Deliberately swallowed: the row already carries the failure, and a
       // BullMQ retry would repeat an identical run against the same upstream.
     } finally {
@@ -221,10 +217,31 @@ export class ConnectorProcessor extends WorkerHost {
     }
   }
 
-  private async fail(runId: string, message: string): Promise<void> {
-    await this.prisma.connectorRun
-      .update({
-        where: { id: runId },
+  /**
+   * Items a dead slice claimed and never settled (#809), back to the state
+   * their batch picks up: the phases select only `discovered` and `approved`,
+   * so a stranded `fetching` / `applying` item was skipped and the run ended
+   * `succeeded` without it. Re-applying is safe because `apply` commits the
+   * page and the item's `applied` together. An item touched within one job's
+   * lifetime may belong to a live task, so it is left alone.
+   */
+  private async releaseOrphanedItems(runId: string): Promise<void> {
+    const updatedAt = { lt: new Date(Date.now() - this.timeoutMs) };
+    await this.prisma.connectorRunItem.updateMany({
+      where: { runId, status: 'fetching', updatedAt },
+      data: { status: 'discovered' },
+    });
+    await this.prisma.connectorRunItem.updateMany({
+      where: { runId, status: 'applying', updatedAt },
+      data: { status: 'approved' },
+    });
+  }
+
+  /** Guarded (#810): a run someone paused or cancelled stays so. True when this call failed it. */
+  private async fail(runId: string, message: string): Promise<boolean> {
+    const { count } = await this.prisma.connectorRun
+      .updateMany({
+        where: { id: runId, status: 'running' },
         data: {
           status: 'failed',
           stage: null,
@@ -233,6 +250,7 @@ export class ConnectorProcessor extends WorkerHost {
           completedAt: new Date(),
         },
       })
-      .catch(() => undefined);
+      .catch(() => ({ count: 0 }));
+    return count === 1;
   }
 }

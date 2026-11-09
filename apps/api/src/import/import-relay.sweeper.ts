@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ImportProducer } from './import.producer.js';
+import { Ticker } from '../common/ticker.js';
 
 const SWEEP_INTERVAL_MS = 5 * 60_000;
 /** Measured from the reservation: `import_jobs` has no `updatedAt`, and a live job absorbs an early relay anyway. */
@@ -15,8 +16,7 @@ const STALE_QUEUED_MS = 10 * 60_000;
 @Injectable()
 export class ImportRelaySweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ImportRelaySweeper.name);
-  private timer?: NodeJS.Timeout;
-  private running = false;
+  private readonly ticker = new Ticker(this.logger);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -24,18 +24,15 @@ export class ImportRelaySweeper implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit(): void {
-    this.timer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS);
-    this.timer.unref();
+    this.ticker.every(SWEEP_INTERVAL_MS, () => this.sweep());
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   async sweep(): Promise<void> {
-    if (this.running) return;
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       const stale = await this.prisma.importJob.findMany({
         where: { status: 'queued', createdAt: { lt: new Date(Date.now() - STALE_QUEUED_MS) } },
         select: { id: true },
@@ -46,10 +43,6 @@ export class ImportRelaySweeper implements OnModuleInit, OnModuleDestroy {
         this.logger.log(`Re-enqueueing stale queued import ${row.id}`);
         await this.producer.enqueue(row.id);
       }
-    } catch (error) {
-      this.logger.warn(`Import relay sweep failed: ${(error as Error).message}`);
-    } finally {
-      this.running = false;
-    }
+    });
   }
 }

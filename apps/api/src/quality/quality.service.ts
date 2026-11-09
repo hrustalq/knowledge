@@ -25,6 +25,7 @@ import { canSee, visibilitySql, type AccessScope } from '../permissions/access-s
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { Env } from '../config/env.js';
 import { t } from '../i18n/t.js';
+import { escapeLike } from '../common/like.js';
 
 /** Pages on the summary's worst list. */
 const WORST = 10;
@@ -311,8 +312,4 @@ const SORTS: Record<QualitySort, (a: LatestRow, b: LatestRow) => number> = {
 /** A `date` column as `YYYY-MM-DD`, read in UTC (the driver hands back midnight UTC). */
 function toDay(day: Date | string): string {
   return typeof day === 'string' ? day.slice(0, 10) : day.toISOString().slice(0, 10);
-}
-
-function escapeLike(s: string): string {
-  return s.replace(/[\\%_]/g, (c) => `\\${c}`);
 }

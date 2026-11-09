@@ -13,7 +13,8 @@ import {
   refKey,
   type DismissedFinding,
 } from '../src/learner/learner-derive.js';
-import { AUTHOR_ID_STUB, LearnerService } from '../src/learner/learner.service.js';
+import { AUTHOR_ID_STUB } from '../src/activity/actor.js';
+import { LearnerService } from '../src/learner/learner.service.js';
 import { LearnerTicker } from '../src/learner/learner.ticker.js';
 import { AgentLearningsService, choosePromptLearnings, evidenceRefsOf } from '../src/ai/agent-learnings.service.js';
 import { BUILT_IN_CASES, measure, recommend } from '../src/learner/learner-calibration.js';

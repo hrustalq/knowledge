@@ -154,7 +154,7 @@ Every recorder method swallows its own failure (the
 `ActivityService.record` rule). A broken analytics write never fails the
 search, read or tool call it describes. Searches nobody typed are not
 recorded: the backtest replay, and the PR-drift candidate search in
-`agent.executor.ts`.
+`agents/runners/sentinel.ts`.
 
 ### Settings: the env is a ceiling
 

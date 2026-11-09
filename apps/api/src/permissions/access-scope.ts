@@ -6,6 +6,7 @@ import {
   type EffectiveAccessLevel,
   type WorkspaceRole,
 } from '@knowledge/contracts';
+import { AUTHOR_ID_STUB } from '../activity/actor.js';
 
 /**
  * Who is asking, as far as page levels care (#76). Enough to rank one person's
@@ -80,7 +81,7 @@ export function hidesAnything(scope: AccessScope): boolean {
 export function systemScope(workspaceId: string): AccessScope {
   return {
     workspaceId,
-    userId: '00000000-0000-0000-0000-000000000000',
+    userId: AUTHOR_ID_STUB,
     role: null,
     bypass: true,
     guest: false,

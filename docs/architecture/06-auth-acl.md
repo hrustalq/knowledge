@@ -105,6 +105,15 @@ always `AclGuard`/`AccessService`.**
 `:id` param to its owning workspace. A resource id from another tenant therefore
 **403s before the handler sees it**.
 
+Each id-param source is one row of `WORKSPACE_SOURCES`
+(`apps/api/src/auth/workspace-sources.ts`): the param, the invalid-id subject,
+the 404 message and how PostgreSQL finds the owner — its own `workspace_id`
+column, or a join through a parent for the few that have none (a merge request
+through its page, a site version through its site). `WorkspaceSource` is
+derived from the table's keys, the guard looks the row up, and
+`AccessService.workspaceOf(source, id)` is the one resolver services call too.
+A new resource is a new row; nothing else changes.
+
 Two consequences:
 
 - **A new route without `@Access` is authenticated-only with no workspace

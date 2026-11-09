@@ -1,7 +1,7 @@
 import { BadRequestException, Controller, Get, Query } from '@nestjs/common';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
-import type { ActivityCalendarResponse, ListActivityResponse } from '@knowledge/contracts';
+import { type ActivityCalendarResponse, type ListActivityResponse, UUID_RE } from '@knowledge/contracts';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { PermissionService } from '../permissions/permission.service.js';
@@ -9,7 +9,6 @@ import { ActivityService } from './activity.service.js';
 import { t } from '../i18n/t.js';
 import { Returns } from '../common/returns.decorator.js';
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Longest window the calendar will aggregate in one request (~14 months). */
 const MAX_CALENDAR_DAYS = 431;

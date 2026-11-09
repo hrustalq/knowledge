@@ -16,8 +16,7 @@ import {
   type ChatView,
   type RawInbound,
 } from './chat-adapter.types.js';
-import { MD_LINK_RE, citeNumber, parseJson, plainCommand, resolveUrl } from './mattermost.adapter.js';
-import { cutAnswer } from './telegram.adapter.js';
+import { MD_LINK_RE, citeNumber, parseJson, plainCommand, renderMarkdownAnswer, resolveUrl } from './chat-markdown.js';
 
 const SLACK_API = 'https://slack.com/api';
 /** What one message holds: four 3000-character sections, with room for the sources. */
@@ -296,14 +295,12 @@ export class SlackAdapter implements ChatAdapter {
   }
 
   private renderAnswer(view: ChatAnswerView): ChatOutMessage {
-    const urls = new Map(view.sources.filter((s) => s.cite).map((s) => [s.cite!.toUpperCase(), s.url]));
-    const sources = view.sources.length
-      ? `\n\n*${escapeText(view.sourcesHeading)}*\n` +
-        view.sources.map((s, i) => `${s.cite ? citeNumber(s.cite) : i + 1}. ${link(s.url, s.title)}`).join('\n')
-      : '';
-    const { text, cut } = cutAnswer(view.answer, MAX_CHARS - ANSWER_HEADROOM - sources.length);
-    const body = markdownForSlack(text, (label) => urls.get(label) ?? null, view.webBaseUrl) + sources;
-    return { text: body, plain: body, buttons: [...(cut && view.full ? [[view.full]] : []), ...view.actions] };
+    return renderMarkdownAnswer(
+      view,
+      MAX_CHARS - ANSWER_HEADROOM,
+      (sources) => `\n\n*${escapeText(view.sourcesHeading)}*\n` + sources.map((s) => `${s.n}. ${link(s.url, s.title)}`).join('\n'),
+      markdownForSlack,
+    );
   }
 
   async postMessage(ctx: ChatAdapterContext, target: ChatTarget, msg: ChatOutMessage): Promise<ChatMessageRef> {

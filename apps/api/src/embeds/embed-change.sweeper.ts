@@ -7,6 +7,7 @@ import { figmaGet } from '../connectors/adapters/figma.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { figmaSubtreeHash, type FigmaNode } from './embed-snapshot.service.js';
 import { EmbedsService } from './embeds.service.js';
+import { Ticker } from '../common/ticker.js';
 
 /** How often the due check runs; each Figma connector is due every EMBED_CHECK_INTERVAL_HOURS. */
 const TICK_MS = 5 * 60_000;
@@ -27,8 +28,7 @@ const IDS_PER_CALL = 50;
 @Injectable()
 export class EmbedChangeSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(EmbedChangeSweeper.name);
-  private timer?: NodeJS.Timeout;
-  private running = false;
+  private readonly ticker = new Ticker(this.logger);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -38,18 +38,15 @@ export class EmbedChangeSweeper implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit(): void {
-    this.timer = setInterval(() => void this.sweep(), TICK_MS);
-    this.timer.unref();
+    this.ticker.every(TICK_MS, () => this.sweep());
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   async sweep(now = new Date()): Promise<void> {
-    if (this.running) return; // a slow check must not stack on itself
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       const interval = this.config.get('EMBED_CHECK_INTERVAL_HOURS', { infer: true }) * 3_600_000;
       const connectors = await this.prisma.connector.findMany({ where: { kind: 'figma', enabled: true } });
       for (const connector of connectors) {
@@ -61,9 +58,7 @@ export class EmbedChangeSweeper implements OnModuleInit, OnModuleDestroy {
         await this.prisma.connector.update({ where: { id: connector.id }, data: { lastSyncedAt: now } });
       }
       await this.retryRenders(now);
-    } finally {
-      this.running = false;
-    }
+    });
   }
 
   /**

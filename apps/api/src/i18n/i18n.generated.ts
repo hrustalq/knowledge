@@ -814,7 +814,6 @@ export type I18nTranslations = {
             "noneGiven": string;
             "unknownType": string;
             "badTarget": string;
-            "revisionGone": string;
         };
         "mergeRequest": {
             "notFound": string;
@@ -971,7 +970,6 @@ export type I18nTranslations = {
             "findingDocumentGone": string;
             "assistantDisabled": string;
             "drafterCannot": string;
-            "draftRevisionGone": string;
             "noReadableContent": string;
             "emptyPage": string;
             "agentRunInFlight": string;
@@ -1045,6 +1043,7 @@ export type I18nTranslations = {
             "disabled": string;
             "differentProject": string;
             "runInFlightForPage": string;
+            "changedConcurrently": string;
             "nodeNotAwaitingReview": string;
             "stepGone": string;
             "invalidGraph": string;

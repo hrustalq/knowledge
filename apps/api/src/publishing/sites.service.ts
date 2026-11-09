@@ -30,14 +30,15 @@ import {
 import { ActivityService } from '../activity/activity.service.js';
 import { AiConfigService } from '../ai/ai-config.service.js';
 import type { Env } from '../config/env.js';
+import { withSubjectLock } from '../common/subject-lock.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PublishingSettingsService } from './publishing-settings.service.js';
 import { SiteBuildProducer } from './site-build.producer.js';
 import { siteDomainSummary } from './site-domains.service.js';
+import { AUTHOR_ID_STUB } from '../activity/actor.js';
 
 /** The dev principal has no users row; same stub the rest of the API records. */
-const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
 
 /** Most versions one site keeps. Each is a full snapshot, rebuilt on its own. */
 export const SITE_MAX_VERSIONS = 20;
@@ -216,44 +217,49 @@ export class SitesService {
   }
 
   async createVersion(siteId: string, input: CreateVersionInput, actorId?: string): Promise<SiteVersionSummary> {
-    const site = await this.requireSite(siteId);
-    if (site.versions.length >= SITE_MAX_VERSIONS) {
-      throw new ConflictException({ statusCode: 409, message: t('error.site.versionLimit', { max: SITE_MAX_VERSIONS }), reason: 'site.versionLimit' });
-    }
-    const name = input.name.trim();
-    const slug = (input.slug ?? suggestVersionSlug(name)).trim();
-    if (!isValidVersionSlug(slug)) throw new BadRequestException(t('error.site.versionSlugInvalid'));
-    if (site.versions.some((v) => v.slug === slug)) {
-      throw new ConflictException({ statusCode: 409, message: t('error.site.versionSlugTaken', { slug }), reason: 'site.versionSlugTaken' });
-    }
-    // A version owns the first segment of a URL. A top-level page already
-    // there would vanish behind it, so the address is refused rather than
-    // silently shadowing a page people may have linked to.
-    if (site.defaultVersionId) {
-      const shadowed = await this.prisma.siteVersionPage.findFirst({
-        where: { versionId: site.defaultVersionId, depth: 0, slugPath: slug },
-        select: { documentId: true },
-      });
-      if (shadowed) {
-        throw new ConflictException({ statusCode: 409, message: t('error.site.versionSlugShadowsPage', { slug }), reason: 'site.versionSlugShadowsPage' });
+    // The cap and slug checks and the insert under one lock per site (#815):
+    // checked only before it, two creates both pass the cap.
+    const { site, version } = await withSubjectLock(this.prisma, `site:${siteId}`, async () => {
+      const site = await this.requireSite(siteId);
+      if (site.versions.length >= SITE_MAX_VERSIONS) {
+        throw new ConflictException({ statusCode: 409, message: t('error.site.versionLimit', { max: SITE_MAX_VERSIONS }), reason: 'site.versionLimit' });
       }
-    }
+      const name = input.name.trim();
+      const slug = (input.slug ?? suggestVersionSlug(name)).trim();
+      if (!isValidVersionSlug(slug)) throw new BadRequestException(t('error.site.versionSlugInvalid'));
+      if (site.versions.some((v) => v.slug === slug)) {
+        throw new ConflictException({ statusCode: 409, message: t('error.site.versionSlugTaken', { slug }), reason: 'site.versionSlugTaken' });
+      }
+      // A version owns the first segment of a URL. A top-level page already
+      // there would vanish behind it, so the address is refused rather than
+      // silently shadowing a page people may have linked to.
+      if (site.defaultVersionId) {
+        const shadowed = await this.prisma.siteVersionPage.findFirst({
+          where: { versionId: site.defaultVersionId, depth: 0, slugPath: slug },
+          select: { documentId: true },
+        });
+        if (shadowed) {
+          throw new ConflictException({ statusCode: 409, message: t('error.site.versionSlugShadowsPage', { slug }), reason: 'site.versionSlugShadowsPage' });
+        }
+      }
 
-    const version = await this.prisma.siteVersion.create({
-      data: {
-        siteId,
-        name,
-        slug,
-        kind: input.kind,
-        sourceBranch: input.sourceBranch?.trim() || null,
-        createdBy: actorId ?? AUTHOR_ID_STUB,
-      },
+      const version = await this.prisma.siteVersion.create({
+        data: {
+          siteId,
+          name,
+          slug,
+          kind: input.kind,
+          sourceBranch: input.sourceBranch?.trim() || null,
+          createdBy: actorId ?? AUTHOR_ID_STUB,
+        },
+      });
+      return { site, version };
     });
     await this.builds.enqueue(version.id, { now: true });
     // The new slug is reserved at the top level from the next build on; live
     // versions pick that up without waiting for an edit.
     for (const v of site.versions.filter((v) => v.kind === 'live')) await this.builds.enqueue(v.id);
-    this.record(site, 'site.version.created', actorId, { version: slug, kind: version.kind });
+    this.record(site, 'site.version.created', actorId, { version: version.slug, kind: version.kind });
     return this.toVersionSummary(version, site.defaultVersionId);
   }
 

@@ -69,15 +69,14 @@ export class GithubWebhookController {
     // refused rather than trusted — the same shape as GITHUB_APP_ID being empty.
     if (!this.secret) throw new UnauthorizedException(t('error.connector.webhookNotConfigured'));
 
-    const lower = lowercaseKeys(headers);
     const rawBody = req.rawBody?.toString('utf8') ?? '';
-    if (!verifyHubSignature(lower, rawBody, this.secret)) {
+    if (!verifyHubSignature(headers, rawBody, this.secret)) {
       // Answering 401 without having touched anything is the point of verifying first.
       throw new UnauthorizedException(t('error.connector.webhookInvalidSignature'));
     }
 
     const payload = safeJson(rawBody);
-    const event = lower['x-github-event'] ?? '';
+    const event = headers['x-github-event'] ?? '';
     if (!payload || !event) return { accepted: true, handled: 0 };
 
     // A board card names an org and a content node, never a repository.
@@ -243,8 +242,3 @@ const ISSUE_ACTIONS: Record<string, RepoEventType | undefined> = {
   labeled: 'repo.issue.labeled',
   unlabeled: 'repo.issue.labeled',
 };
-
-/** Node lowercases incoming header names, but a signature check should not bet on it. */
-function lowercaseKeys(headers: Record<string, string>): Record<string, string> {
-  return Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]));
-}

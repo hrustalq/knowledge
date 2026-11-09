@@ -2,6 +2,7 @@ import { Injectable, Logger, type OnApplicationBootstrap, type OnApplicationShut
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.js';
 import { LearnerService } from './learner.service.js';
+import { Ticker } from '../common/ticker.js';
 
 /** How often a workspace is passed over, at most. */
 export const LEARNER_PASS_INTERVAL_MS = 86_400_000;
@@ -28,10 +29,9 @@ export type TickOutcome =
 @Injectable()
 export class LearnerTicker implements OnApplicationBootstrap, OnApplicationShutdown {
   private readonly logger = new Logger(LearnerTicker.name);
+  private readonly ticker = new Ticker(this.logger);
   private readonly enabled: boolean;
   private readonly tickMs: number;
-  private timer: NodeJS.Timeout | null = null;
-  private inFlight: Promise<TickOutcome> | null = null;
   /** When each workspace's last pass started. */
   private readonly lastPass = new Map<string, number>();
 
@@ -47,7 +47,7 @@ export class LearnerTicker implements OnApplicationBootstrap, OnApplicationShutd
     // The timer runs either way: it is what keeps this process alive, so a
     // disabled learner idles (each tick returns at once) instead of exiting
     // and being restarted by its container in a loop.
-    this.timer = setInterval(() => void this.tick(), this.tickMs);
+    this.ticker.every(this.tickMs, () => this.tick(), { keepAlive: true });
     if (!this.enabled) {
       this.logger.log('Learner disabled (LEARNER_ENABLED=false): idle');
       return;
@@ -56,19 +56,13 @@ export class LearnerTicker implements OnApplicationBootstrap, OnApplicationShutd
   }
 
   onApplicationShutdown(): void {
-    if (this.timer) clearInterval(this.timer);
-    this.timer = null;
+    this.ticker.stop();
   }
 
   /** One tick. Never throws: a failing workspace is logged and retried at its next due time. */
   tick(now: () => number = Date.now): Promise<TickOutcome> {
     if (!this.enabled) return Promise.resolve('disabled');
-    if (this.inFlight) return Promise.resolve('busy');
-    const run = this.passDue(now).finally(() => {
-      this.inFlight = null;
-    });
-    this.inFlight = run;
-    return run;
+    return this.ticker.exclusive(() => this.passDue(now), 'busy');
   }
 
   private async passDue(now: () => number): Promise<TickOutcome> {

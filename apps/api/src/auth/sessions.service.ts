@@ -1,9 +1,10 @@
-import { createHash, randomBytes } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Session, User } from '@prisma/client';
 import { authMethodOf, type AuthMethod, type SessionView } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
+import type { Env } from '../config/env.js';
+import { hashToken, mintToken } from './auth-tokens.js';
 
 /**
  * What a new session records about how it was opened (#75). Every field is
@@ -32,23 +33,19 @@ const TOUCH_EVERY_MS = 60_000;
 export class SessionsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
+    private readonly config: ConfigService<Env, true>,
   ) {}
-
-  private hash(token: string): string {
-    return createHash('sha256').update(token).digest('hex');
-  }
 
   async create(userId: string, meta: SessionMeta = {}): Promise<{ token: string; session: Session }> {
     // Opportunistic cleanup — no cron needed for a table this small.
     await this.prisma.session.deleteMany({ where: { expiresAt: { lt: new Date() } } });
 
-    const token = `ks_${randomBytes(32).toString('hex')}`;
-    const ttlHours = meta.ttlHours ?? this.config.get<number>('AUTH_SESSION_TTL_HOURS') ?? 720;
+    const { token, tokenHash } = mintToken('ks_');
+    const ttlHours: number = meta.ttlHours ?? this.config.get('AUTH_SESSION_TTL_HOURS', { infer: true });
     const session = await this.prisma.session.create({
       data: {
         userId,
-        tokenHash: this.hash(token),
+        tokenHash,
         expiresAt: new Date(Date.now() + ttlHours * 3600_000),
         authMethod: meta.authMethod ?? 'password',
         providerId: meta.providerId ?? null,
@@ -63,7 +60,7 @@ export class SessionsService {
   /** Resolve a live (unexpired, unrevoked) session together with its user. */
   async resolve(token: string): Promise<(Session & { user: User }) | null> {
     const session = await this.prisma.session.findUnique({
-      where: { tokenHash: this.hash(token) },
+      where: { tokenHash: hashToken(token) },
       include: { user: true },
     });
     if (!session || session.revokedAt || session.expiresAt < new Date()) return null;

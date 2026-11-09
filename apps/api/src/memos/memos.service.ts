@@ -31,8 +31,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { MemosProducer } from './memos.producer.js';
 import { formatBytes } from '../common/format-bytes.js';
-import { currentLocale } from '../i18n/locale.js';
-import { t } from '../i18n/t.js';
+import { currentLocale, t } from '../i18n/t.js';
 
 export interface CreateMemoInput {
   workspaceId: string;

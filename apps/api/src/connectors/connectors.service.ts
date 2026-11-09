@@ -28,9 +28,9 @@ import {
 } from '@knowledge/contracts';
 import { decryptSecret, encryptSecret, MissingEncryptionKeyError, maskSecret, parseKey } from '../ai/secret-box.js';
 import { assertSafeExternalUrl } from '../common/safe-url.js';
+import { withSubjectLock } from '../common/subject-lock.js';
 import type { Env } from '../config/env.js';
-import { currentLocale } from '../i18n/locale.js';
-import { t } from '../i18n/t.js';
+import { currentLocale, t } from '../i18n/t.js';
 import { canSeeProject, type AccessScope } from '../permissions/access-scope.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ProjectsService } from '../projects/projects.service.js';
@@ -45,6 +45,9 @@ import type { ConnectorContext } from './adapters/connector.types.js';
 
 /** Warnings are capped: a run over a 5 000-page space must not write a novel into one row. */
 const MAX_WARNINGS = 200;
+
+/** One lock per connector for every writer that queues a run (#815). */
+const connectorRunLockKey = (connectorId: string): string => `connector-run:${connectorId}`;
 
 export interface CreateConnectorInput {
   workspaceId: string;
@@ -438,6 +441,21 @@ export class ConnectorsService {
 
   // --- runs ---
 
+  // A manual run is someone's act: the overload makes every caller say whose,
+  // so a new surface cannot store it with no actor (#812). `undefined` stays
+  // legal for a principal-less dev request.
+  async createRun(
+    row: Connector,
+    direction: ConnectorRunDirection,
+    trigger: 'manual',
+    options: { externalIds?: string[]; actorId: string | undefined; mode?: ConnectorSyncMode },
+  ): Promise<ConnectorRun>;
+  async createRun(
+    row: Connector,
+    direction: ConnectorRunDirection,
+    trigger: Exclude<ConnectorTrigger, 'manual'>,
+    options?: { externalIds?: string[]; mode?: ConnectorSyncMode },
+  ): Promise<ConnectorRun>;
   async createRun(
     row: Connector,
     direction: ConnectorRunDirection,
@@ -462,31 +480,35 @@ export class ConnectorsService {
     // same links and could both create the same page. `paused` and
     // `awaiting-review` count as in flight — a parked run still owns its items,
     // and starting a second pull behind it would stage the same pages twice.
-    const inFlight = await this.prisma.connectorRun.findFirst({
-      where: { connectorId: row.id, status: { in: ['queued', 'running', 'paused', 'awaiting-review'] } },
-      select: { id: true },
-    });
-    if (inFlight) throw new ConflictException(t('error.connector.runInFlight'));
+    // Checked and inserted under the connector's run lock (#815), which the
+    // webhook and push coalescers take too.
+    return withSubjectLock(this.prisma, connectorRunLockKey(row.id), async () => {
+      const inFlight = await this.prisma.connectorRun.findFirst({
+        where: { connectorId: row.id, status: { in: ['queued', 'running', 'paused', 'awaiting-review'] } },
+        select: { id: true },
+      });
+      if (inFlight) throw new ConflictException(t('error.connector.runInFlight'));
 
-    // A push is a write-out, not an import: there is nothing to stage or review,
-    // so it always runs straight through whatever the connector's mode says.
-    const mode: ConnectorSyncMode =
-      direction === 'push' ? 'auto' : (options.mode ?? (row.syncMode as ConnectorSyncMode));
+      // A push is a write-out, not an import: there is nothing to stage or review,
+      // so it always runs straight through whatever the connector's mode says.
+      const mode: ConnectorSyncMode =
+        direction === 'push' ? 'auto' : (options.mode ?? (row.syncMode as ConnectorSyncMode));
 
-    return this.prisma.connectorRun.create({
-      data: {
-        connectorId: row.id,
-        workspaceId: row.workspaceId,
-        direction,
-        trigger,
-        status: 'queued',
-        // Frozen here, not read from the connector at execution time: editing the
-        // connector must not change a run already under way.
-        mode,
-        scope: options.externalIds?.length ? (options.externalIds as Prisma.InputJsonValue) : Prisma.DbNull,
-        locale: row.locale,
-        actorId: options.actorId ?? null,
-      },
+      return this.prisma.connectorRun.create({
+        data: {
+          connectorId: row.id,
+          workspaceId: row.workspaceId,
+          direction,
+          trigger,
+          status: 'queued',
+          // Frozen here, not read from the connector at execution time: editing the
+          // connector must not change a run already under way.
+          mode,
+          scope: options.externalIds?.length ? (options.externalIds as Prisma.InputJsonValue) : Prisma.DbNull,
+          locale: row.locale,
+          actorId: options.actorId ?? null,
+        },
+      });
     });
   }
 
@@ -503,38 +525,41 @@ export class ConnectorsService {
   async queueWebhookRefs(row: Connector, externalIds: string[]): Promise<ConnectorRun | null> {
     if (!row.enabled || (row.kind === 'web' && !this.webSourcesEnabled)) return null;
 
-    const queued = await this.prisma.connectorRun.findFirst({
-      where: { connectorId: row.id, status: 'queued', direction: 'pull' },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (queued) {
-      // A queued run with no scope is a full sync and already covers everything.
-      const scope = Array.isArray(queued.scope) ? (queued.scope as unknown as string[]) : null;
-      if (!scope) return null;
-      // Guarded (#658): a worker that claimed the run since the read has frozen
-      // its scope, and a concurrent merge has changed it. Either way these ids
-      // get a run of their own below instead of being dropped.
-      const merged = [...new Set([...scope, ...externalIds])];
-      const { count } = await this.prisma.connectorRun.updateMany({
-        where: { id: queued.id, status: 'queued', scope: { equals: queued.scope as Prisma.InputJsonValue } },
-        data: { scope: merged as Prisma.InputJsonValue },
+    // Under the run lock (#815): two webhooks at once must merge, not both create.
+    return withSubjectLock(this.prisma, connectorRunLockKey(row.id), async () => {
+      const queued = await this.prisma.connectorRun.findFirst({
+        where: { connectorId: row.id, status: 'queued', direction: 'pull' },
+        orderBy: { createdAt: 'desc' },
       });
-      if (count === 1) return null;
-    }
 
-    return this.prisma.connectorRun.create({
-      data: {
-        connectorId: row.id,
-        workspaceId: row.workspaceId,
-        direction: 'pull',
-        trigger: 'webhook',
-        status: 'queued',
-        // Frozen like any other run's: a webhook must not write past a `review` connector.
-        mode: row.syncMode,
-        scope: [...new Set(externalIds)] as Prisma.InputJsonValue,
-        locale: row.locale,
-      },
+      if (queued) {
+        // A queued run with no scope is a full sync and already covers everything.
+        const scope = Array.isArray(queued.scope) ? (queued.scope as unknown as string[]) : null;
+        if (!scope) return null;
+        // Guarded (#658): a worker that claimed the run since the read has frozen
+        // its scope, and a concurrent merge has changed it. Either way these ids
+        // get a run of their own below instead of being dropped.
+        const merged = [...new Set([...scope, ...externalIds])];
+        const { count } = await this.prisma.connectorRun.updateMany({
+          where: { id: queued.id, status: 'queued', scope: { equals: queued.scope as Prisma.InputJsonValue } },
+          data: { scope: merged as Prisma.InputJsonValue },
+        });
+        if (count === 1) return null;
+      }
+
+      return this.prisma.connectorRun.create({
+        data: {
+          connectorId: row.id,
+          workspaceId: row.workspaceId,
+          direction: 'pull',
+          trigger: 'webhook',
+          status: 'queued',
+          // Frozen like any other run's: a webhook must not write past a `review` connector.
+          mode: row.syncMode,
+          scope: [...new Set(externalIds)] as Prisma.InputJsonValue,
+          locale: row.locale,
+        },
+      });
     });
   }
 
@@ -574,32 +599,35 @@ export class ConnectorsService {
       if (!reads || reads !== delivery.branch) return null;
     }
 
-    const queued = await this.prisma.connectorRun.findFirst({
-      where: { connectorId: row.id, status: 'queued', direction: 'pull', startedAt: null },
-      orderBy: { createdAt: 'desc' },
-    });
-    if (queued) {
-      // A scoped run would read only its scope; this push needs the whole
-      // repository hashed, so the waiting run is widened to unscoped. Guarded
-      // (#658): one the worker claimed since the read no longer folds, and the
-      // push gets a run of its own below.
-      const { count } = await this.prisma.connectorRun.updateMany({
-        where: { id: queued.id, status: 'queued', startedAt: null },
-        data: { scope: Prisma.DbNull },
+    // Under the run lock (#815), like queueWebhookRefs.
+    return withSubjectLock(this.prisma, connectorRunLockKey(row.id), async () => {
+      const queued = await this.prisma.connectorRun.findFirst({
+        where: { connectorId: row.id, status: 'queued', direction: 'pull', startedAt: null },
+        orderBy: { createdAt: 'desc' },
       });
-      if (count === 1) return null;
-    }
+      if (queued) {
+        // A scoped run would read only its scope; this push needs the whole
+        // repository hashed, so the waiting run is widened to unscoped. Guarded
+        // (#658): one the worker claimed since the read no longer folds, and the
+        // push gets a run of its own below.
+        const { count } = await this.prisma.connectorRun.updateMany({
+          where: { id: queued.id, status: 'queued', startedAt: null },
+          data: { scope: Prisma.DbNull },
+        });
+        if (count === 1) return null;
+      }
 
-    return this.prisma.connectorRun.create({
-      data: {
-        connectorId: row.id,
-        workspaceId: row.workspaceId,
-        direction: 'pull',
-        trigger: 'webhook',
-        status: 'queued',
-        mode: row.syncMode,
-        locale: row.locale,
-      },
+      return this.prisma.connectorRun.create({
+        data: {
+          connectorId: row.id,
+          workspaceId: row.workspaceId,
+          direction: 'pull',
+          trigger: 'webhook',
+          status: 'queued',
+          mode: row.syncMode,
+          locale: row.locale,
+        },
+      });
     });
   }
 
@@ -801,6 +829,45 @@ export function toRunInfo(row: ConnectorRun, awaitingReview = 0): ConnectorRunIn
 }
 
 export { MAX_WARNINGS };
+
+/** What one writer adds to a run's counters since its last write. */
+export interface RunCounts {
+  created: number;
+  updated: number;
+  skipped: number;
+  failed: number;
+  conflicts: number;
+  applied: number;
+}
+
+export const NO_COUNTS: Readonly<RunCounts> = { created: 0, updated: 0, skipped: 0, failed: 0, conflicts: 0, applied: 0 };
+
+/**
+ * Add to a run's counters and warnings in one statement (#810). A slice, a
+ * scoped task and the API write one run at once, so nothing here is an
+ * absolute value: counters are incremented and warnings appended in SQL,
+ * capped at MAX_WARNINGS. Writing what a writer read earlier lost every count
+ * the other writer made in between.
+ */
+export async function addToRun(
+  prisma: Pick<PrismaService, '$executeRaw'>,
+  runId: string,
+  counts: RunCounts,
+  warnings: readonly ConnectorRunWarning[],
+): Promise<void> {
+  if (warnings.length === 0 && Object.values(counts).every((n) => n === 0)) return;
+  const c = counts;
+  await prisma.$executeRaw`
+    UPDATE connector_runs SET
+      created = created + ${c.created}, updated = updated + ${c.updated}, skipped = skipped + ${c.skipped},
+      failed = failed + ${c.failed}, conflicts = conflicts + ${c.conflicts}, applied = applied + ${c.applied},
+      warnings = COALESCE((
+        SELECT jsonb_agg(w ORDER BY n) FROM jsonb_array_elements(
+          CASE WHEN jsonb_typeof(warnings) = 'array' THEN warnings ELSE '[]'::jsonb END || ${JSON.stringify(warnings)}::jsonb
+        ) WITH ORDINALITY AS e(w, n) WHERE n <= ${MAX_WARNINGS}
+      ), '[]'::jsonb)
+    WHERE id = ${runId}::uuid`;
+}
 
 /**
  * Config keys only the server writes (#557): the Figma grant a connector dials

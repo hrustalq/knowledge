@@ -9,7 +9,8 @@ import { EventsPublisher } from '../events/events.publisher.js';
 import { t, withLocale } from '../i18n/t.js';
 import { asLocale } from '../i18n/locale.js';
 import { AGENT_QUEUE, MAX_RUN_WARNINGS } from './agent.constants.js';
-import { AgentExecutor, type AgentReporter } from './agent.executor.js';
+import { AgentExecutor } from './agent.executor.js';
+import type { AgentReporter } from './agent-services.js';
 import { AgentRegistryService } from './agent-registry.service.js';
 
 /**
@@ -42,7 +43,6 @@ export class AgentProcessor extends WorkerHost {
     const runId = job.data.runId;
     const row = await this.prisma.agentRun.findUnique({ where: { id: runId } });
     if (!row) return;
-    if (row.status === 'cancelled' || row.status === 'succeeded') return;
 
     // Guarded claim: two workers racing a re-delivered job never ask the model
     // the same question twice (the WorkflowRunnerService.claim pattern).

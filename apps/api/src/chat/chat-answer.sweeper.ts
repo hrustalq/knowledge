@@ -4,6 +4,7 @@ import type { Env } from '../config/env.js';
 import { ChatAnswersService } from './chat-answers.service.js';
 import { ChatBufferService } from './chat-buffer.service.js';
 import { ChatMessagesService } from './chat-messages.service.js';
+import { Ticker } from '../common/ticker.js';
 
 /** A stranded placeholder is rare and already late; a minute more is nothing. */
 const SWEEP_INTERVAL_MS = 60_000;
@@ -24,8 +25,7 @@ const SWEEP_INTERVAL_MS = 60_000;
 @Injectable()
 export class ChatAnswerSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ChatAnswerSweeper.name);
-  private timer?: NodeJS.Timeout;
-  private running = false;
+  private readonly ticker = new Ticker(this.logger);
 
   constructor(
     private readonly answers: ChatAnswersService,
@@ -35,28 +35,21 @@ export class ChatAnswerSweeper implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit(): void {
-    this.timer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS);
-    this.timer.unref();
+    this.ticker.every(SWEEP_INTERVAL_MS, () => this.sweep());
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   async sweep(): Promise<void> {
-    if (this.running) return; // a slow sweep must not stack on itself
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       if (this.config.get('CHAT_ENABLED', { infer: true })) {
         const closed = await this.answers.reapStale();
         if (closed > 0) this.logger.warn(`timed out ${closed} unanswered chat questions`);
       }
       await this.buffer.purgeExpired();
       await this.messages.purgeExpired();
-    } catch (e: unknown) {
-      this.logger.warn(`chat answer sweep failed: ${String(e)}`);
-    } finally {
-      this.running = false;
-    }
+    });
   }
 }

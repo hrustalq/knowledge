@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import type { AgentRun } from '@prisma/client';
 import type {
   AddFindingTermResponse,
   AgentFinding,
@@ -15,7 +16,6 @@ import type {
 import { composeFrontmatter, withComponentPaths } from '../common/frontmatter.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { StorageService } from '../storage/storage.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { DocumentRelationsService } from '../documents/document-relations.service.js';
 import { MergeRequestsService } from '../documents/merge-requests.service.js';
@@ -51,11 +51,10 @@ const MAX_CITED = 3;
 export class AgentFindingsService {
   private readonly logger = new Logger(AgentFindingsService.name);
 
-  // The first four are `readonly` rather than `private readonly` so the
+  // These three are `readonly` rather than `private readonly` so the
   // service itself satisfies `DraftMergeRequestDeps` — one helper, no adapter.
   constructor(
     readonly prisma: PrismaService,
-    readonly storage: StorageService,
     readonly documents: DocumentsService,
     private readonly relations: DocumentRelationsService,
     readonly mergeRequests: MergeRequestsService,
@@ -89,10 +88,7 @@ export class AgentFindingsService {
     principal: Principal,
     learning?: { text: string; projectId?: string | null; allAgents?: boolean },
   ): Promise<DismissAgentFindingResponse> {
-    const run = await this.prisma.agentRun.findUnique({ where: { id: runId } });
-    if (!run || run.workspaceId !== workspaceId) throw new NotFoundException(t('error.ai.agentRunNotFound', { id: runId }));
-    const findings = Array.isArray(run.findings) ? (run.findings as unknown as AgentFinding[]) : [];
-    if (!findings[index]) throw new NotFoundException(t('error.ai.findingNotFound', { runId, index }));
+    const { run } = await this.findingOf(workspaceId, runId, index);
 
     const at = new Date().toISOString();
     const won = await this.prisma.$transaction(async (tx) => {
@@ -149,12 +145,7 @@ export class AgentFindingsService {
     index: number,
     principal: Principal,
   ): Promise<ProposeAgentFindingResponse> {
-    const run = await this.prisma.agentRun.findUnique({ where: { id: runId } });
-    if (!run || run.workspaceId !== workspaceId) throw new NotFoundException(t('error.ai.agentRunNotFound', { id: runId }));
-
-    const findings = Array.isArray(run.findings) ? (run.findings as unknown as AgentFinding[]) : [];
-    const finding = findings[index];
-    if (!finding) throw new NotFoundException(t('error.ai.findingNotFound', { runId, index }));
+    const { run, finding } = await this.findingOf(workspaceId, runId, index);
     if (finding.mergeRequestId) {
       throw new ConflictException({
         statusCode: 409,
@@ -183,15 +174,7 @@ export class AgentFindingsService {
     // settles: two presses race here, and the loser sees the 409 above on its
     // next read rather than opening a second merge request. `jsonb_set` is
     // guarded on the claim still being absent, so exactly one caller proceeds.
-    if (!(await this.claim(runId, index))) {
-      throw new ConflictException({
-        statusCode: 409,
-        message: t('error.ai.findingInFlight'),
-        reason: 'in-flight',
-      });
-    }
-
-    try {
+    return this.underClaim(runId, index, 'proposal', async () => {
       const markdown = await this.replacementFor(finding, document, workspaceId, principal, run.locale as Locale);
       const title = `${finding.title.slice(0, 200)}`;
       const branch = `agent/${run.agentKey}-${Date.now()}`;
@@ -229,21 +212,7 @@ export class AgentFindingsService {
       }
 
       return { mergeRequestId, documentId, documentTitle: document.title, branch, title };
-    } catch (error) {
-      // Release the claim, or a failed proposal would make the finding
-      // permanently unproposable. Nothing is left behind either way now: a
-      // failure before the boundary had written nothing yet, and one inside it
-      // rolled the branch, revision and merge request back.
-      //
-      // This MUST stay outside the boundary. It runs after the rollback, with
-      // the ambient scope already gone, so it reaches the base client and
-      // commits on its own — move it inside and the release rolls back with
-      // everything else, which is precisely the stuck-at-409 bug being fixed.
-      await this.release(runId, index).catch(() => {
-        this.logger.warn(`Could not release the proposal claim on run ${runId} finding ${index}`);
-      });
-      throw error;
-    }
+    });
   }
 
   /**
@@ -263,11 +232,7 @@ export class AgentFindingsService {
     index: number,
     principal: Principal,
   ): Promise<FlagFindingOutdatedResponse> {
-    const run = await this.prisma.agentRun.findUnique({ where: { id: runId } });
-    if (!run || run.workspaceId !== workspaceId) throw new NotFoundException(t('error.ai.agentRunNotFound', { id: runId }));
-    const findings = Array.isArray(run.findings) ? (run.findings as unknown as AgentFinding[]) : [];
-    const finding = findings[index];
-    if (!finding) throw new NotFoundException(t('error.ai.findingNotFound', { runId, index }));
+    const { run, finding } = await this.findingOf(workspaceId, runId, index);
     if (finding.kind !== 'stale') throw new BadRequestException(t('error.ai.findingNotStale'));
     const documentId = finding.documentIds[0];
     if (!documentId) throw new BadRequestException(t('error.ai.findingNoDocument'));
@@ -309,11 +274,7 @@ export class AgentFindingsService {
     principal: Principal,
     edits: { term?: string; definition?: string; aliases?: string[] } = {},
   ): Promise<AddFindingTermResponse> {
-    const run = await this.prisma.agentRun.findUnique({ where: { id: runId } });
-    if (!run || run.workspaceId !== workspaceId) throw new NotFoundException(t('error.ai.agentRunNotFound', { id: runId }));
-    const findings = Array.isArray(run.findings) ? (run.findings as unknown as AgentFinding[]) : [];
-    const finding = findings[index];
-    if (!finding) throw new NotFoundException(t('error.ai.findingNotFound', { runId, index }));
+    const { run, finding } = await this.findingOf(workspaceId, runId, index);
     const proposed = finding.term;
     if (!proposed) throw new BadRequestException(t('error.ai.findingNoTerm'));
     if (finding.termId) {
@@ -324,15 +285,7 @@ export class AgentFindingsService {
         termId: finding.termId,
       });
     }
-    if (!(await this.claim(runId, index))) {
-      throw new ConflictException({
-        statusCode: 409,
-        message: t('error.ai.findingInFlight'),
-        reason: 'in-flight',
-      });
-    }
-
-    try {
+    return this.underClaim(runId, index, 'add-term', async () => {
       const created = await this.glossary.create(
         {
           workspaceId,
@@ -352,12 +305,7 @@ export class AgentFindingsService {
          WHERE id = ${runId}::uuid
       `;
       return { termId: created.termId, term: created.term, projectId: created.projectId };
-    } catch (error) {
-      await this.release(runId, index).catch(() => {
-        this.logger.warn(`Could not release the add-term claim on run ${runId} finding ${index}`);
-      });
-      throw error;
-    }
+    });
   }
 
   /**
@@ -381,13 +329,9 @@ export class AgentFindingsService {
     index: number,
     principal: Principal,
   ): Promise<CreatePageFromFindingResponse> {
-    const run = await this.prisma.agentRun.findUnique({ where: { id: runId } });
-    if (!run || run.workspaceId !== workspaceId) throw new NotFoundException(t('error.ai.agentRunNotFound', { id: runId }));
-
-    const findings = Array.isArray(run.findings) ? (run.findings as unknown as AgentFinding[]) : [];
-    const finding = findings[index];
-    if (!finding) throw new NotFoundException(t('error.ai.findingNotFound', { runId, index }));
-    if (!finding.draft?.title || !finding.draft.markdown) throw new BadRequestException(t('error.ai.findingNoDraft'));
+    const { run, finding } = await this.findingOf(workspaceId, runId, index);
+    const draft = finding.draft;
+    if (!draft?.title || !draft.markdown) throw new BadRequestException(t('error.ai.findingNoDraft'));
     // A component draft (#236) is never published directly: it opens as a
     // merge request (`proposePage`), and this button must not be a way round it.
     if ((run.input as AgentRunInput | null)?.component) throw new BadRequestException(t('error.ai.findingComponentDraft'));
@@ -416,42 +360,37 @@ export class AgentFindingsService {
     if (!projectId) throw new BadRequestException(t('error.ai.findingNoDraft'));
 
     // Same guard as `propose`: two presses race here, and only one may create.
-    if (!(await this.claim(runId, index))) {
-      throw new ConflictException({
-        statusCode: 409,
-        message: t('error.ai.findingInFlight'),
-        reason: 'in-flight',
-      });
-    }
-
-    try {
-      const title = finding.draft.title.trim().slice(0, 300);
+    return this.underClaim(runId, index, 'create-page', async () => {
+      const title = draft.title.trim().slice(0, 300);
       const sources = (finding.sources ?? []).map((s) => s.url);
-      const text = composeFrontmatter(finding.draft.markdown.trim(), {
+      const text = composeFrontmatter(draft.markdown.trim(), {
         source: sources[0],
         ...(sources.length > 1 ? { sources } : {}),
         generatedBy: run.agentKey,
         ...(connector ? { repository: connector.name } : {}),
       });
-      const created = await this.documents.createDocument(
-        {
-          workspaceId,
-          projectId,
-          title,
-          content: { mode: 'inline', format: 'markdown', text },
-          ...(connector?.category ? { category: connector.category as DocumentCategory } : {}),
-          ...(connector?.parentId ? { parentId: connector.parentId } : {}),
+      // The page and the finding's record of it commit together (#811), as in
+      // `proposePage`: a page committed before a failed write-back would be
+      // orphaned by the release below, and the next press would create another.
+      return await this.prisma.withTransaction(
+        async () => {
+          const created = await this.documents.createDocument(
+            {
+              workspaceId,
+              projectId,
+              title,
+              content: { mode: 'inline', format: 'markdown', text },
+              ...(connector?.category ? { category: connector.category as DocumentCategory } : {}),
+              ...(connector?.parentId ? { parentId: connector.parentId } : {}),
+            },
+            principal.userId,
+          );
+          await this.writeBackPage(runId, index, created.documentId, title);
+          return { documentId: created.documentId, title };
         },
-        principal.userId,
+        { timeout: 30_000, maxWait: 10_000 },
       );
-      await this.writeBackPage(runId, index, created.documentId, title);
-      return { documentId: created.documentId, title };
-    } catch (error) {
-      await this.release(runId, index).catch(() => {
-        this.logger.warn(`Could not release the create-page claim on run ${runId} finding ${index}`);
-      });
-      throw error;
-    }
+    });
   }
 
   /**
@@ -475,11 +414,7 @@ export class AgentFindingsService {
     principal: Principal,
     place: { projectId: string; parentId?: string | null },
   ): Promise<DraftPageProposalResponse> {
-    const run = await this.prisma.agentRun.findUnique({ where: { id: runId } });
-    if (!run || run.workspaceId !== workspaceId) throw new NotFoundException(t('error.ai.agentRunNotFound', { id: runId }));
-    const findings = Array.isArray(run.findings) ? (run.findings as unknown as AgentFinding[]) : [];
-    const finding = findings[index];
-    if (!finding) throw new NotFoundException(t('error.ai.findingNotFound', { runId, index }));
+    const { run, finding } = await this.findingOf(workspaceId, runId, index);
     const draft = finding.draft;
     if (!draft?.title || !draft.markdown) throw new BadRequestException(t('error.ai.findingNoDraft'));
     if (finding.mergeRequestId) {
@@ -490,11 +425,7 @@ export class AgentFindingsService {
         mergeRequestId: finding.mergeRequestId,
       });
     }
-    if (!(await this.claim(runId, index))) {
-      throw new ConflictException({ statusCode: 409, message: t('error.ai.findingInFlight'), reason: 'in-flight' });
-    }
-
-    try {
+    return this.underClaim(runId, index, 'page proposal', async () => {
       const title = draft.title.trim().slice(0, 300);
       return await this.prisma.withTransaction(
         async () => {
@@ -532,14 +463,7 @@ export class AgentFindingsService {
         },
         { timeout: 30_000, maxWait: 10_000 },
       );
-    } catch (error) {
-      // Outside the boundary, for `propose`'s reason: the release must commit
-      // on its own after everything else rolled back.
-      await this.release(runId, index).catch(() => {
-        this.logger.warn(`Could not release the page proposal claim on run ${runId} finding ${index}`);
-      });
-      throw error;
-    }
+    });
   }
 
   /**
@@ -560,14 +484,7 @@ export class AgentFindingsService {
     index: number,
     principal: Principal,
   ): Promise<ProposeRelationsResponse> {
-    const run = await this.prisma.agentRun.findUnique({ where: { id: runId } });
-    if (!run || run.workspaceId !== workspaceId) {
-      throw new NotFoundException(t('error.ai.agentRunNotFound', { id: runId }));
-    }
-
-    const findings = Array.isArray(run.findings) ? (run.findings as unknown as AgentFinding[]) : [];
-    const finding = findings[index];
-    if (!finding) throw new NotFoundException(t('error.ai.findingNotFound', { runId, index }));
+    const { run, finding } = await this.findingOf(workspaceId, runId, index);
     if (finding.mergeRequestId) {
       throw new ConflictException({
         statusCode: 409,
@@ -588,15 +505,7 @@ export class AgentFindingsService {
       throw new BadRequestException(t('error.ai.findingDocumentGone', { documentId }));
     }
 
-    if (!(await this.claim(runId, index))) {
-      throw new ConflictException({
-        statusCode: 409,
-        message: t('error.ai.findingInFlight'),
-        reason: 'in-flight',
-      });
-    }
-
-    try {
+    return this.underClaim(runId, index, 'proposal', async () => {
       const result = await this.relations.propose(
         documentId,
         {
@@ -621,12 +530,7 @@ export class AgentFindingsService {
 
       await this.writeBack(runId, index, result.mergeRequestId);
       return result;
-    } catch (error) {
-      await this.release(runId, index).catch(() => {
-        this.logger.warn(`Could not release the proposal claim on run ${runId} finding ${index}`);
-      });
-      throw error;
-    }
+    });
   }
 
   /**
@@ -762,6 +666,42 @@ export class AgentFindingsService {
       .trim();
     if (!markdown) throw new BadRequestException(t('error.ai.emptyPage'));
     return markdown;
+  }
+
+  /** The run and its finding at `index`, both of this workspace: a 404 otherwise. */
+  private async findingOf(workspaceId: string, runId: string, index: number): Promise<{ run: AgentRun; finding: AgentFinding }> {
+    const run = await this.prisma.agentRun.findUnique({ where: { id: runId } });
+    if (!run || run.workspaceId !== workspaceId) throw new NotFoundException(t('error.ai.agentRunNotFound', { id: runId }));
+    const findings = Array.isArray(run.findings) ? (run.findings as unknown as AgentFinding[]) : [];
+    const finding = findings[index];
+    if (!finding) throw new NotFoundException(t('error.ai.findingNotFound', { runId, index }));
+    return { run, finding };
+  }
+
+  /**
+   * `work` under the finding's claim: a 409 `in-flight` when another press
+   * holds it, and the claim released if `work` throws, or a failed attempt
+   * would leave the finding permanently at 409. Nothing is left behind either
+   * way: a failure before a transaction boundary had written nothing yet, and
+   * one inside it rolled everything back.
+   *
+   * The release MUST stay outside any boundary `work` opens. It runs after the
+   * rollback, with the ambient scope already gone, so it reaches the base
+   * client and commits on its own; inside, it would roll back with everything
+   * else, which is the stuck-at-409 bug this guards against.
+   */
+  private async underClaim<T>(runId: string, index: number, label: string, work: () => Promise<T>): Promise<T> {
+    if (!(await this.claim(runId, index))) {
+      throw new ConflictException({ statusCode: 409, message: t('error.ai.findingInFlight'), reason: 'in-flight' });
+    }
+    try {
+      return await work();
+    } catch (error) {
+      await this.release(runId, index).catch(() => {
+        this.logger.warn(`Could not release the ${label} claim on run ${runId} finding ${index}`);
+      });
+      throw error;
+    }
   }
 
   /**

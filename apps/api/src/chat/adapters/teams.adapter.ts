@@ -14,8 +14,7 @@ import {
   type ChatView,
   type RawInbound,
 } from './chat-adapter.types.js';
-import { citeNumber, defuseMentions, markdownForMattermost, parseJson, plainCommand } from './mattermost.adapter.js';
-import { cutAnswer } from './telegram.adapter.js';
+import { defuseMentions, markdownForMattermost, parseJson, plainCommand, renderMarkdownAnswer } from './chat-markdown.js';
 
 /** Bot Framework's signing keys, and who signs a delivery to a bot. */
 const BOT_FRAMEWORK_JWKS = 'https://login.botframework.com/v1/.well-known/keys';
@@ -203,16 +202,14 @@ export class TeamsAdapter implements ChatAdapter {
   }
 
   private renderAnswer(view: ChatAnswerView): ChatOutMessage {
-    const urls = new Map(view.sources.filter((s) => s.cite).map((s) => [s.cite!.toUpperCase(), s.url]));
-    const sources = view.sources.length
-      ? `\n\n**${defuseMentions(view.sourcesHeading)}**\n\n` +
-        view.sources
-          .map((s, i) => `${s.cite ? citeNumber(s.cite) : i + 1}. [${defuseMentions(s.title).replace(/[[\]]/g, '')}](${s.url})`)
-          .join('\n')
-      : '';
-    const { text, cut } = cutAnswer(view.answer, MAX_CHARS - ANSWER_HEADROOM - sources.length);
-    const body = markdownForMattermost(text, (label) => urls.get(label) ?? null, view.webBaseUrl) + sources;
-    return { text: body, plain: body, buttons: [...(cut && view.full ? [[view.full]] : []), ...view.actions] };
+    return renderMarkdownAnswer(
+      view,
+      MAX_CHARS - ANSWER_HEADROOM,
+      (sources) =>
+        `\n\n**${defuseMentions(view.sourcesHeading)}**\n\n` +
+        sources.map((s) => `${s.n}. [${defuseMentions(s.title).replace(/[[\]]/g, '')}](${s.url})`).join('\n'),
+      markdownForMattermost,
+    );
   }
 
   async postMessage(ctx: ChatAdapterContext, target: ChatTarget, msg: ChatOutMessage): Promise<ChatMessageRef> {

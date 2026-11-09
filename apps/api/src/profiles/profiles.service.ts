@@ -13,7 +13,7 @@ import { visibilityWhere } from '../permissions/access-scope.js';
 import { userAvatarUrl } from '../common/avatar-url.js';
 import type { Principal } from '../auth/principal.js';
 import { t } from '../i18n/t.js';
-import { DEV_ACTOR_ID } from '../activity/activity.service.js';
+import { AUTHOR_ID_STUB } from '../activity/activity.service.js';
 
 /** Pages listed inline on a profile; the count beside them is not capped. */
 const PAGE_LIMIT = 12;
@@ -43,7 +43,7 @@ export class ProfilesService {
     // the point. Without this the default development mode 404s on its own
     // profile, so the one link the avatar menu always shows would dead-end.
     // Same accommodation `requireRole` and the merge gate already make for it.
-    if (!user && userId === DEV_ACTOR_ID && principal.mode === 'dev') {
+    if (!user && userId === AUTHOR_ID_STUB && principal.mode === 'dev') {
       return this.devProfile(principal, workspaceId);
     }
     if (!user) throw new NotFoundException(t('error.user.notFound', { id: userId }));
@@ -202,12 +202,12 @@ export class ProfilesService {
    */
   private async devProfile(principal: Principal, workspaceId: string): Promise<UserProfileResponse> {
     const [pages, pageCount, openWork] = await Promise.all([
-      this.pagesFor(workspaceId, DEV_ACTOR_ID, {}),
-      this.pageCountFor(workspaceId, DEV_ACTOR_ID, {}),
-      this.openWorkFor(workspaceId, DEV_ACTOR_ID),
+      this.pagesFor(workspaceId, AUTHOR_ID_STUB, {}),
+      this.pageCountFor(workspaceId, AUTHOR_ID_STUB, {}),
+      this.openWorkFor(workspaceId, AUTHOR_ID_STUB),
     ]);
     return {
-      userId: DEV_ACTOR_ID,
+      userId: AUTHOR_ID_STUB,
       email: principal.email,
       displayName: principal.displayName,
       // No users row, so no avatar to have. The initials face is what the dev

@@ -16,6 +16,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { AiConfigService, type ResolvedAiConfig } from './ai-config.service.js';
 import { t } from '../i18n/t.js';
 import { currentAgentRun } from './agent-run-context.js';
+import { AUTHOR_ID_STUB } from '../activity/actor.js';
 
 /** Token counts as reported by the provider (OpenAI-shaped `usage` block). */
 export interface AiUsageTokens {
@@ -500,7 +501,7 @@ export class AiUsageService {
       for (const site of sites) map.set(site.id, `site: ${site.slug}`);
     }
     for (const id of unique) {
-      if (!map.has(id) && id === '00000000-0000-0000-0000-000000000000') map.set(id, 'dev (AUTH_MODE=none)');
+      if (!map.has(id) && id === AUTHOR_ID_STUB) map.set(id, 'dev (AUTH_MODE=none)');
     }
     return map;
   }

@@ -21,7 +21,6 @@ import {
   OPEN_KNOWLEDGE_ISSUE_STATUSES,
 } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { StorageService } from '../storage/storage.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { MergeRequestsService } from '../documents/merge-requests.service.js';
 import { openDraftMergeRequest } from '../documents/draft-merge-request.js';
@@ -37,6 +36,7 @@ import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { AgentProducer } from '../agents/agent.producer.js';
 import { MIN_DRAFT_CHARS } from '../agents/archaeology.js';
 import { t } from '../i18n/t.js';
+import type { Env } from '../config/env.js';
 
 /** The agent a report check runs as — the drift check's sentinel, pointed at a report instead of a diff. */
 export const REPORT_AGENT_KEY = 'sentinel';
@@ -85,7 +85,6 @@ export class KnowledgeIssuesService {
 
   constructor(
     readonly prisma: PrismaService,
-    readonly storage: StorageService,
     readonly documents: DocumentsService,
     readonly mergeRequests: MergeRequestsService,
     private readonly permissions: PermissionService,
@@ -94,14 +93,14 @@ export class KnowledgeIssuesService {
     private readonly events: EventsPublisher,
     private readonly registry: AgentRegistryService,
     private readonly producer: AgentProducer,
-    private readonly env: ConfigService,
+    private readonly env: ConfigService<Env, true>,
   ) {}
 
   private get dailyLimit(): number {
-    return this.env.get<number>('KNOWLEDGE_ISSUE_DAILY_LIMIT') ?? 50;
+    return this.env.get('KNOWLEDGE_ISSUE_DAILY_LIMIT', { infer: true });
   }
   private get maxPendingChecks(): number {
-    return this.env.get<number>('KNOWLEDGE_ISSUE_MAX_PENDING_CHECKS') ?? 10;
+    return this.env.get('KNOWLEDGE_ISSUE_MAX_PENDING_CHECKS', { infer: true });
   }
 
   /** File a report, folding it into an open issue for the same page and kind when one exists. */
@@ -211,14 +210,7 @@ export class KnowledgeIssuesService {
       this.logger.warn(`Sentinel check for report ${issue.id} not queued: ${(error as Error).message}`);
       return null;
     });
-    if (runId) {
-      const moved = await this.prisma.knowledgeIssue.updateMany({
-        where: { id: issue.id, status: 'open' },
-        data: { status: 'checking', agentRunId: runId },
-      });
-      if (moved.count === 1) return { ...issue, status: 'checking', agentRunId: runId };
-    }
-    return issue;
+    return runId ? { ...issue, status: 'checking', agentRunId: runId } : issue;
   }
 
   /**
@@ -272,6 +264,8 @@ export class KnowledgeIssuesService {
    * it, so nobody else's authority is borrowed.
    */
   private async queueCheck(issue: KnowledgeIssue, principal: Principal): Promise<string | null> {
+    // The run exists only if the issue moved to `checking` with it (#816): one
+    // that lost the race to a sweeper or a second request writes no run.
     const agent = await this.registry.resolve(issue.workspaceId, REPORT_AGENT_KEY);
     if (!agent.enabled || !agent.config.enabled) return null;
     // Report checks only: drift checks share the agent and have their own cap.
@@ -289,19 +283,24 @@ export class KnowledgeIssuesService {
       select: { id: true },
     });
     const input: AgentRunInput = { issueId: issue.id };
-    const run = await this.prisma.agentRun.create({
-      data: {
-        workspaceId: issue.workspaceId,
-        agentKey: REPORT_AGENT_KEY,
-        agentId: override?.id ?? null,
-        trigger: 'report',
-        createdBy: principal.userId,
-        locale: principal.locale,
-        input: input as unknown as Prisma.InputJsonValue,
-      },
+    return this.prisma.withTransaction(async () => {
+      const moved = await this.prisma.knowledgeIssue.updateMany({ where: { id: issue.id, status: 'open' }, data: { status: 'checking' } });
+      if (moved.count !== 1) return null;
+      const run = await this.prisma.agentRun.create({
+        data: {
+          workspaceId: issue.workspaceId,
+          agentKey: REPORT_AGENT_KEY,
+          agentId: override?.id ?? null,
+          trigger: 'report',
+          createdBy: principal.userId,
+          locale: principal.locale,
+          input: input as unknown as Prisma.InputJsonValue,
+        },
+      });
+      await this.prisma.knowledgeIssue.update({ where: { id: issue.id }, data: { agentRunId: run.id } });
+      this.prisma.onCommit(() => this.producer.enqueue(run.id));
+      return run.id;
     });
-    await this.producer.enqueue(run.id);
-    return run.id;
   }
 
   /**

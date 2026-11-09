@@ -48,9 +48,6 @@ export interface DocumentParser {
   parse(bytes: Uint8Array, ctx: ParseContext): Promise<ParseResult>;
 }
 
-/** DI token for the registry's parser set. */
-export const DOCUMENT_PARSERS = Symbol('DOCUMENT_PARSERS');
-
 // --- shared helpers ---------------------------------------------------------
 
 const BULLET = /^[ \t]*[\u2022\u25aa\u25e6\u2023\u00b7]\s+/;

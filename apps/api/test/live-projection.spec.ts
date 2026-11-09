@@ -140,20 +140,21 @@ describe('GraphService.setLiveRevision (#83)', () => {
 });
 
 describe('IngestionProcessor stamps and reconciles the live projection (#83)', () => {
-  function processorFor(opts: { revisionId: string; headId: string; headStatus?: string }) {
+  function processorFor(opts: { revisionId: string; headId: string; headStatus?: string; claimed?: boolean; graph?: GraphService; extract?: () => Promise<unknown> }) {
     const revision = {
       id: opts.revisionId,
       documentId: DOC,
       authorId: 'u',
       s3Key: `workspaces/${WS}/documents/${DOC}/revisions/${opts.revisionId}/source.md`,
       contentType: 'text/markdown',
-      document: { id: DOC, workspaceId: WS, title: 'Doc' },
+      document: { id: DOC, workspaceId: WS, title: 'Doc', restrictedBy: [] },
     };
     const prisma = {
       workspace: { findUnique: async () => ({ deletedAt: null }) },
       ingestionJob: {
         findUnique: vi.fn(async () => ({ id: 'job', status: 'queued', workspaceId: WS, revisionId: revision.id, payload: {} })),
         update: vi.fn(),
+        updateMany: vi.fn(async () => ({ count: opts.claimed === false ? 0 : 1 })),
       },
       documentRevision: {
         findUnique: vi.fn(async ({ where }: { where: { id: string } }) =>
@@ -177,8 +178,9 @@ describe('IngestionProcessor stamps and reconciles the live projection (#83)', (
         })),
       },
       $transaction: vi.fn(async () => []),
+      withTransaction: vi.fn(async (fn: () => Promise<unknown>) => fn()),
     };
-    const graph = {
+    const graph = opts.graph ?? {
       upsertRevisionChunks: vi.fn(),
       replaceRevisionFrontmatterFacts: vi.fn(),
       replaceRevisionInferredFacts: vi.fn(),
@@ -195,7 +197,7 @@ describe('IngestionProcessor stamps and reconciles the live projection (#83)', (
       { getObjectText: vi.fn(async () => '---\ntags: [legacy]\n---\n# T\n\nAlpha unique-token-zebra\n'), putObjectJson: vi.fn() } as never,
       graph as never,
       { embedBatch: vi.fn(async (xs: string[]) => xs.map(() => emb)) } as never,
-      { forWorkspace: vi.fn(async () => ({ extractor: { enabled: false }, tuning: {}, config: {} })) } as never,
+      { forWorkspace: vi.fn(async () => ({ extractor: { enabled: !!opts.extract, extract: opts.extract }, tuning: {}, config: {} })) } as never,
       fulltext as never,
       { get: vi.fn((key: string) => (key === 'WEB_BASE_URL' ? 'http://localhost:5173' : 0)) } as never,
       { publish: vi.fn() } as never,
@@ -206,7 +208,7 @@ describe('IngestionProcessor stamps and reconciles the live projection (#83)', (
       undefined as never,
       { recordRevision: vi.fn(async () => undefined), chunksFor: vi.fn(async () => []) } as never,
     );
-    return { processor, graph, fulltext, conflicts };
+    return { processor, graph, fulltext, conflicts, prisma };
   }
   const run = (p: IngestionProcessor) => p.process({ data: { ingestionJobId: 'job' } } as never);
 
@@ -235,6 +237,72 @@ describe('IngestionProcessor stamps and reconciles the live projection (#83)', (
     expect(graph.replaceRevisionFrontmatterFacts).toHaveBeenCalledWith(expect.objectContaining({ live: false }));
     expect(graph.setLiveRevision).not.toHaveBeenCalledWith(WS, DOC, 'feature-x');
     expect(graph.stampRevisions).toHaveBeenCalledWith(WS, DOC, [{ revisionId: 'feature-x', validFrom: null, validTo: null, lineage: 'branch' }]);
+  });
+
+  it('a delivery of a job another worker holds running is dropped before the pipeline (#809)', async () => {
+    const { processor, graph, prisma } = processorFor({ revisionId: 'r2', headId: 'r2', claimed: false });
+    await run(processor);
+    expect(prisma.ingestionJob.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'job', status: { in: ['queued', 'failed'] } } }),
+    );
+    expect(prisma.documentRevision.update).not.toHaveBeenCalled();
+    expect(graph.upsertRevisionChunks).not.toHaveBeenCalled();
+  });
+
+  describe('a graph write that fails fails the job (#817)', () => {
+    const http500 = new Error('ArcadeDB query failed with 500: {"exception":"java.io.IOException","detail":"Timeout"}');
+    const missing = new Error(`ArcadeDB query failed with 500: {"exception":"com.arcadedb.exception.SchemaException","detail":"Type with name 'TAGGED_WITH' was not found"}`);
+    const statuses = (prisma: { ingestionJob: { update: ReturnType<typeof vi.fn> } }) =>
+      prisma.ingestionJob.update.mock.calls.map(([a]) => (a as { data: { status: string } }).data.status);
+
+    it('a 500 while reading the facts to reconcile fails the job and creates no edge', async () => {
+      const { graph, arcade, commands } = graphWith({});
+      arcade.query.mockImplementation(async (_l: string, sql: string) => {
+        if (/FROM TAGGED_WITH/.test(sql)) throw http500;
+        return [];
+      });
+      const { processor, prisma } = processorFor({ revisionId: 'r2', headId: 'r2', graph });
+      await expect(run(processor)).rejects.toThrow(/500/);
+      expect(statuses(prisma)).toEqual(['failed']);
+      // Before #817 the read answered [] and the re-index created a second live edge.
+      expect(commands.some((c) => c.sql.startsWith('CREATE EDGE TAGGED_WITH'))).toBe(false);
+    });
+
+    it('a type not created yet still reads as no rows', async () => {
+      const { graph, arcade, commands } = graphWith({});
+      arcade.query.mockImplementation(async (_l: string, sql: string) => {
+        if (/FROM TAGGED_WITH/.test(sql)) throw missing;
+        return [];
+      });
+      const { processor, prisma } = processorFor({ revisionId: 'r2', headId: 'r2', graph });
+      await run(processor);
+      expect(statuses(prisma)).not.toContain('failed');
+      expect(commands.some((c) => c.sql.startsWith('CREATE EDGE TAGGED_WITH'))).toBe(true);
+    });
+
+    it('a 500 while moving the live flags fails the job', async () => {
+      const { graph, arcade } = graphWith({});
+      arcade.command.mockImplementation(async (_l: string, sql: string) => {
+        if (sql.startsWith('UPDATE DEPENDS_ON SET live = false')) throw http500;
+        return [];
+      });
+      const { processor, prisma } = processorFor({ revisionId: 'r2', headId: 'r2', graph });
+      await expect(run(processor)).rejects.toThrow(/500/);
+      expect(statuses(prisma)).toEqual(['failed']);
+    });
+
+    it('a failing model stays non-fatal and leaves the inferred edges alone', async () => {
+      const { processor, graph, prisma } = processorFor({
+        revisionId: 'r2',
+        headId: 'r2',
+        extract: async () => {
+          throw new Error('model timeout');
+        },
+      });
+      await run(processor);
+      expect(statuses(prisma)).not.toContain('failed');
+      expect((graph as { replaceRevisionInferredFacts: ReturnType<typeof vi.fn> }).replaceRevisionInferredFacts).not.toHaveBeenCalled();
+    });
   });
 
   it('keeps the previous revision live while the new head is still indexing', async () => {

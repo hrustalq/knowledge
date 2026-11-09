@@ -21,6 +21,19 @@ import { RoleSyncService } from '../src/auth/sso/role-sync.service.js';
 import { UsersService } from '../src/users/users.service.js';
 import { ScimService } from '../src/scim/scim.service.js';
 import { hashPassword } from '../src/auth/password.js';
+import { fakeWriteRevision } from './revision-fakes.js';
+import { AssistantToolsService } from '../src/assistant/assistant.tools.js';
+import { AgentFindingsService } from '../src/ai/agent-findings.service.js';
+import { createRevision } from '../src/mcp/tools/documents.js';
+import { ApiKeysService } from '../src/auth/api-keys.service.js';
+import { AuditService } from '../src/auth/audit.service.js';
+import { ActivityService } from '../src/activity/activity.service.js';
+import { KnowledgeIssuesService } from '../src/feedback/knowledge-issues.service.js';
+import { WebSourcesService } from '../src/connectors/web-sources.service.js';
+import { ChatIntegrationsService } from '../src/chat/chat-integrations.service.js';
+import { WorkItemSyncSweeper } from '../src/connectors/handoff/work-item-sync.sweeper.js';
+import { ConnectorRequestError } from '../src/connectors/adapters/connector.types.js';
+import { deferUntilCommit, drainAfterCommit, runInTransaction } from '../src/prisma/transaction.js';
 
 /**
  * #658: write pairs that must commit together. Each case fails the LAST write
@@ -65,6 +78,7 @@ function fakePrisma(handlers: Record<string, Handler>) {
         if (prop === '$executeRaw') {
           return async () => ((buffer ?? committed).push('$executeRaw'), (handlers.$executeRaw as number | undefined) ?? 1);
         }
+        if (prop === '$queryRaw') return async () => handlers.$queryRaw;
         if (prop === 'onCommit') {
           return (fn: () => Promise<unknown>) => (effects ? effects.push(fn) : void fn());
         }
@@ -103,6 +117,17 @@ const config = (values: Record<string, unknown>) => ({ get: (k: string) => value
 const WS = '11111111-1111-4111-8111-111111111111';
 /** A dependency the case never reaches. */
 const _ = {} as never;
+/**
+ * An audit or activity recorder as the real ones behave since #816: `record`
+ * defers its write to the commit itself. `fired` is what was written.
+ */
+const recorder = (prisma: unknown) => {
+  const fired: unknown[] = [];
+  const record = vi.fn(async (entry: unknown) =>
+    (prisma as { onCommit(fn: () => Promise<unknown>): void }).onCommit(async () => fired.push(entry)),
+  );
+  return { record, fired };
+};
 
 describe('#658 write pairs commit together', () => {
   it('merge request: no MR without its un-restricted branch and subscription', async () => {
@@ -111,7 +136,7 @@ describe('#658 write pairs commit together', () => {
       'mergeRequest.create': { id: 'mr1', documentId: 'd1' },
       'documentBranch.updateMany': { count: 1 },
     });
-    const activity = { record: vi.fn() };
+    const activity = recorder(prisma);
     const notifications = { ensureSubscription: vi.fn(boom) };
     const svc = new MergeRequestsService(prisma, _, _, _, activity as never, _, _, notifications as never, _, _, _, _, _, _, _, _);
     stub(svc, {
@@ -123,12 +148,12 @@ describe('#658 write pairs commit together', () => {
 
     await expect(svc.create('d1', { sourceBranch: 'feature', title: 'x' } as never, 'u1')).rejects.toThrow('boom');
     expect(committed).toEqual([]);
-    expect(activity.record).not.toHaveBeenCalled();
+    expect(activity.fired).toEqual([]);
   });
 
   it('PATCH /v1/documents/:id: a rejected patch leaves the owner alone', async () => {
     const { prisma, committed } = fakePrisma({ 'document.update': { id: 'd1' } });
-    const activity = { record: vi.fn(async () => undefined) };
+    const activity = recorder(prisma);
     const commits = { lock: async () => undefined, uniqueSlug: async () => 't' };
     const svc = new DocumentsService(prisma, _, _, _, activity as never, _, _, _, _, _, _, _, _, _, _, commits as never);
     const doc = { id: 'd1', workspaceId: WS, projectId: 'p1', ownerId: 'old', parentId: null, archivedAt: null, title: 'T', path: '/d1/', depth: 0 };
@@ -143,7 +168,7 @@ describe('#658 write pairs commit together', () => {
 
     await expect(svc.updateDocument('d1', { ownerId: 'new', parentId: 'p-elsewhere' } as never, 'u1')).rejects.toThrow('bad parent');
     expect(committed).toEqual([]);
-    expect(activity.record).not.toHaveBeenCalled();
+    expect(activity.fired).toEqual([]);
   });
 
   describe('workflows', () => {
@@ -152,7 +177,8 @@ describe('#658 write pairs commit together', () => {
 
     it('CANCEL: no cancelled run with live nodes', async () => {
       const { prisma, committed } = fakePrisma({
-        'workflowRun.update': { ...run, status: 'cancelled', definition: { name: 'W' } },
+        'workflowRun.updateMany': { count: 1 },
+        'workflowRun.findUniqueOrThrow': { ...run, status: 'cancelled', definition: { name: 'W' } },
         'workflowRunNode.updateMany': boom,
       });
       const svc = stub(new WorkflowsService(prisma, { record: vi.fn() } as never, _, _, _, _), {
@@ -163,7 +189,10 @@ describe('#658 write pairs commit together', () => {
     });
 
     it('APPROVE: no approved node without its children', async () => {
-      const { prisma, committed } = fakePrisma({ 'workflowRunNode.update': { id: 'n1', status: 'approved', attempt: 0 } });
+      const { prisma, committed } = fakePrisma({
+        'workflowRunNode.updateMany': { count: 1 },
+        'workflowRunNode.findUniqueOrThrow': { id: 'n1', status: 'approved', attempt: 0 },
+      });
       const runner = { spawnChildren: vi.fn(boom) };
       const svc = stub(new WorkflowsService(prisma, _, _, _, runner as never, _), {
         requireRun: async () => run,
@@ -198,17 +227,20 @@ describe('#658 write pairs commit together', () => {
     const row = { id: 'c1', workspaceId: WS, kind: 'confluence', config: {}, projectId: 'p1' };
     const link = { id: 'l1', documentId: 'd1', externalUrl: null };
     const item = { id: 'i1', runId: 'run1', status: 'approved', stagedKey: 'k', linkId: 'l1', documentId: 'd1', action: 'update', draft: null, externalId: 'x', externalVersion: 'v2', externalUrl: null, title: 'T', createdDocument: false, previousRevisionId: 'r0' };
-    const revisionWriter = (prisma: never) => ({
-      createRevision: vi.fn(async () => {
-        await (prisma as { documentRevision: { create: (a: unknown) => Promise<unknown> } }).documentRevision.create({});
-        return { revisionId: 'r2' };
-      }),
-      finalizeRevision: vi.fn(async () => undefined),
-      createBranch: vi.fn(async () => {
-        await (prisma as { documentBranch: { create: (a: unknown) => Promise<unknown> } }).documentBranch.create({});
-      }),
-    });
     const storage = { getObjectText: async () => 'md', putObjectText: async () => undefined };
+    const revisionWriter = (prisma: never) => {
+      const documents = {
+        createRevision: vi.fn(async () => {
+          await (prisma as { documentRevision: { create: (a: unknown) => Promise<unknown> } }).documentRevision.create({});
+          return { revisionId: 'r2' };
+        }),
+        finalizeRevision: vi.fn(async () => undefined),
+        createBranch: vi.fn(async () => {
+          await (prisma as { documentBranch: { create: (a: unknown) => Promise<unknown> } }).documentBranch.create({});
+        }),
+      };
+      return Object.assign(documents, { writeRevision: fakeWriteRevision({ documents, storage, prisma }) });
+    };
     const reads = {
       'connectorLink.findUnique': link,
       'document.findUnique': { id: 'd1', defaultBranch: 'main' },
@@ -242,7 +274,7 @@ describe('#658 write pairs commit together', () => {
     });
 
     it('APPROVE_ALL: no approved items under a run still awaiting review', async () => {
-      const { prisma, committed } = fakePrisma({ 'connectorRunItem.updateMany': { count: 3 }, 'connectorRunItem.findMany': [], 'connectorRun.update': boom });
+      const { prisma, committed } = fakePrisma({ 'connectorRunItem.updateMany': { count: 3 }, 'connectorRunItem.findMany': [], 'connectorRun.updateMany': boom });
       const producer = { enqueueRetry: vi.fn(), enqueueTask: vi.fn() };
       const svc = stub(new ConnectorItemsService(prisma, {} as never, {} as never, producer as never, {} as never, {} as never), {
         requireRun: async () => ({ id: 'run1', status: 'awaiting-review', mode: 'review', phase: null, discovered: 3, applied: 0 }),
@@ -302,7 +334,7 @@ describe('#658 write pairs commit together', () => {
         config: { [WIKI_CONFIG_KEY]: 'on', [WIKI_AUTO_REGENERATE_CONFIG_KEY]: 'on-push', branch: 'main' },
       };
       expect(await svc.queueWebhookRefs(row as never, ['b'])).toMatchObject({ mode: 'review' });
-      expect(await svc.createRun(row as never, 'pull', 'manual', {})).toMatchObject({ mode: 'review' });
+      expect(await svc.createRun(row as never, 'pull', 'manual', { actorId: undefined })).toMatchObject({ mode: 'review' });
       expect(await svc.queueRepoPush(row as never, { branch: 'main' })).toMatchObject({ mode: 'review' });
     });
   });
@@ -392,7 +424,7 @@ describe('#656 revoke and offboard commit with the change', () => {
   const U = '22222222-2222-4222-8222-222222222222';
   const G = '33333333-3333-4333-8333-333333333333';
   const P = '44444444-4444-4444-8444-444444444444';
-  const audit = () => ({ record: vi.fn(async () => undefined) });
+  const audit = recorder;
   const failingSessions = () => ({ revokeAllForUser: vi.fn(boom) });
   const scimConfig = config({ API_PUBLIC_URL: 'http://x', AUTH_SCIM_MAX_PAGE: 100, AUTH_SCIM_ENABLED: true, AUTH_MODE: 'api-key' });
   const caller = { workspaceId: WS, tokenId: 't1' };
@@ -404,13 +436,13 @@ describe('#656 revoke and offboard commit with the change', () => {
       'identityProvider.delete': {},
       [failing]: boom,
     });
-    const a = audit();
+    const a = audit(prisma);
     const oidc = { forget: vi.fn() };
     const policy = { invalidate: vi.fn() };
     const svc = new IdentityProvidersService(prisma, config({}), oidc as never, a as never, policy as never, _, _);
     await expect(svc.remove(WS, P, { userId: 'u1' } as never)).rejects.toThrow('boom');
     expect(committed).toEqual([]);
-    expect(a.record).not.toHaveBeenCalled();
+    expect(a.fired).toEqual([]);
     expect(oidc.forget).not.toHaveBeenCalled();
   });
 
@@ -436,10 +468,10 @@ describe('#656 revoke and offboard commit with the change', () => {
         'userIdentity.findUnique': { userId: U },
         'session.updateMany': boom,
       });
-      const a = audit();
+      const a = audit(prisma);
       await expect(flow(prisma, a).backchannelLogout(P, 'tok', { ip: null } as never)).rejects.toThrow('boom');
       expect(committed).toEqual([]);
-      expect(a.record).not.toHaveBeenCalled();
+      expect(a.fired).toEqual([]);
     });
 
     it('a replayed token is still refused, with the same reason', async () => {
@@ -449,7 +481,7 @@ describe('#656 revoke and offboard commit with the change', () => {
           throw new Prisma.PrismaClientKnownRequestError('dup', { code: 'P2002', clientVersion: 'x' });
         },
       });
-      const a = audit();
+      const a = audit(prisma);
       await expect(flow(prisma, a).backchannelLogout(P, 'tok', { ip: null } as never)).resolves.toBe(false);
       expect(committed).toEqual([]);
       expect(a.record).toHaveBeenCalledWith(expect.objectContaining({ ok: false, error: 'logout token replayed' }));
@@ -497,7 +529,7 @@ describe('#656 revoke and offboard commit with the change', () => {
 
   describe('SCIM', () => {
     const scim = (prisma: never, opts: { roleSync?: unknown; sessions?: unknown; a?: ReturnType<typeof audit> } = {}) =>
-      new ScimService(prisma, (opts.roleSync ?? { applyScim: vi.fn(async () => []) }) as never, (opts.sessions ?? failingSessions()) as never, (opts.a ?? audit()) as never, scimConfig);
+      new ScimService(prisma, (opts.roleSync ?? { applyScim: vi.fn(async () => []) }) as never, (opts.sessions ?? failingSessions()) as never, (opts.a ?? audit(prisma)) as never, scimConfig);
     const call = <T>(svc: ScimService, method: string, ...args: unknown[]) =>
       (svc as unknown as Record<string, (...a: unknown[]) => Promise<T>>)[method](...args);
     const rec = { userId: U, userName: 'a@x.test', externalId: null, active: true, user: { email: 'a@x.test', displayName: 'A' } };
@@ -510,11 +542,11 @@ describe('#656 revoke and offboard commit with the change', () => {
         'user.create': { id: U },
         'scimUser.create': {},
       });
-      const a = audit();
+      const a = audit(prisma);
       const body = { schemas: ['urn:ietf:params:scim:schemas:core:2.0:User'], userName: 'a@x.test', active: false, emails: [{ value: 'a@x.test', primary: true }] };
       await expect(scim(prisma, { a }).createUser(caller, body)).rejects.toThrow('boom');
       expect(committed).toEqual([]);
-      expect(a.record).not.toHaveBeenCalled();
+      expect(a.fired).toEqual([]);
     });
 
     it('deleteUser: the row stays while access and sessions stay (through the real role sync)', async () => {
@@ -531,21 +563,21 @@ describe('#656 revoke and offboard commit with the change', () => {
         'userGroupMember.deleteMany': {},
         'accessGrant.deleteMany': {},
       });
-      const a = audit();
+      const a = audit(prisma);
       // Real RoleSyncService: removeMemberGuarded → dropWorkspaceAccess, which must join the boundary, not open a raw $transaction.
       const roleSync = new RoleSyncService(prisma, a as never);
       await expect(scim(prisma, { roleSync, a }).deleteUser(caller, U)).rejects.toThrow('boom');
       expect(committed).toEqual([]);
-      expect(a.record).not.toHaveBeenCalled();
+      expect(a.fired).toEqual([]);
     });
 
     it('deactivate: active stays true, so a retry still offboards', async () => {
       const { prisma, committed } = fakePrisma({ 'ssoDomain.findFirst': null, 'scimUser.update': {} });
-      const a = audit();
+      const a = audit(prisma);
       const fields = { userName: rec.userName, externalId: null, active: false, email: rec.user.email, displayName: 'A', raw: {} };
       await expect(call(scim(prisma, { a }), 'update', caller, rec, fields)).rejects.toThrow('boom');
       expect(committed).toEqual([]);
-      expect(a.record).not.toHaveBeenCalled();
+      expect(a.fired).toEqual([]);
     });
 
     const failingSync = () => ({ applyScim: vi.fn(boom) });
@@ -577,11 +609,11 @@ describe('#656 revoke and offboard commit with the change', () => {
         'idpGroupMapping.delete': {},
         'scimGroupMember.findMany': [{ userId: U }],
       });
-      const a = audit();
+      const a = audit(prisma);
       const svc = new GroupMappingsService(prisma, a as never, failingSync() as never, scimConfig);
       await expect(svc.remove(WS, 'm1', { userId: 'u1' } as never)).rejects.toThrow('boom');
       expect(committed).toEqual([]);
-      expect(a.record).not.toHaveBeenCalled();
+      expect(a.fired).toEqual([]);
     });
   });
 });
@@ -615,7 +647,7 @@ describe('#806 finalize decides under the lock', () => {
       },
       'ingestionJob.create': { id: 'j1' },
     });
-    const storage = { headObject: async () => ({ versionId: 'v1' }), getObjectText: async () => 'body' };
+    const storage = { getObjectVersion: async () => ({ text: 'body', versionId: 'v1' }) };
     const commits = { lock: vi.fn(async () => undefined), recordRevisions: vi.fn(async () => undefined) };
     const ingestion = { enqueue: vi.fn(async () => undefined) };
     const activity = { record: vi.fn(async () => undefined) };
@@ -648,5 +680,281 @@ describe('#806 finalize decides under the lock', () => {
     await r.svc.finalizeRevision('d1', 'r2', { commit: false, dedupe: false });
     expect(r.branch.headRevisionId).toBe('r2');
     expect(r.commits.recordRevisions).not.toHaveBeenCalled();
+  });
+});
+
+describe('#811 one revision writer', () => {
+  const doc = { id: 'd1', defaultBranch: 'main', archivedAt: null, projectId: 'p1', workspaceId: WS };
+
+  it('writeRevision: a refused finalize leaves no draft behind', async () => {
+    const { prisma, committed } = fakePrisma({});
+    const storage = { putObjectText: vi.fn(async () => undefined) };
+    const svc = stub(Object.create(DocumentsService.prototype) as DocumentsService, {
+      prisma,
+      storage,
+      openDraft: async () => {
+        await (prisma as { documentRevision: { create: (a: unknown) => Promise<unknown> } }).documentRevision.create({});
+        return { id: 'r2', s3Key: 's', contentType: 'text/markdown' };
+      },
+      finalizeRevision: boom,
+    });
+    await expect(svc.writeRevision('d1', { text: 'md' })).rejects.toThrow('boom');
+    expect(storage.putObjectText).toHaveBeenCalledWith('s', 'md', 'text/markdown');
+    expect(committed).toEqual([]);
+  });
+
+  it('writeRevision: a moved head is the 409 with its comparison link', async () => {
+    const { prisma, committed } = fakePrisma({ 'document.findUnique': doc, 'documentBranch.findUnique': { headRevisionId: 'r9' } });
+    const svc = stub(Object.create(DocumentsService.prototype) as DocumentsService, { prisma });
+    const err = await svc.writeRevision('d1', { text: 'md', expectedHeadRevisionId: 'r1' }).catch((e: unknown) => e);
+    expect(err).toMatchObject({ status: 409 });
+    expect((err as { getResponse: () => unknown }).getResponse()).toMatchObject({
+      currentHeadRevisionId: 'r9',
+      comparisonUrl: '/v1/documents/d1/compare?from=r1&to=r9&mode=merge-base',
+    });
+    expect(committed).toEqual([]);
+  });
+
+  it('MCP knowledge_create_revision hands its base revision to writeRevision', async () => {
+    const { prisma } = fakePrisma({ 'document.findUnique': { ...doc, kind: 'page' } });
+    const documents = {
+      getContent: vi.fn(async () => ({ frontmatter: { tags: ['x'] } })),
+      writeRevision: vi.fn(async () => ({ revisionId: 'r2', status: 'finalized' })),
+    };
+    await createRevision({ prisma, documents } as never, 'd1', { baseRevisionId: 'r1', content: '# Body' }, 'u1');
+    expect(documents.getContent).toHaveBeenCalledWith('d1', 'r1');
+    expect(documents.writeRevision).toHaveBeenCalledWith(
+      'd1',
+      expect.objectContaining({ expectedHeadRevisionId: 'r1', branch: 'main', text: expect.stringContaining('# Body') }),
+      'u1',
+    );
+  });
+
+  it('assistant propose_update: a refused merge request leaves no branch and no revision', async () => {
+    const { prisma, committed } = fakePrisma({});
+    const write = (model: string) => (prisma as Record<string, { create: (a: unknown) => Promise<unknown> }>)[model]!.create({});
+    const documents = {
+      getContent: vi.fn(async () => ({ frontmatter: {} })),
+      createBranch: vi.fn(async () => write('documentBranch')),
+      writeRevision: vi.fn(async () => (await write('documentRevision'), { revisionId: 'r2' })),
+    };
+    const svc = stub(Object.create(AssistantToolsService.prototype) as AssistantToolsService, {
+      prisma,
+      documents,
+      mergeRequests: { create: boom },
+      requireWorkspaceDocument: async () => ({ id: 'd1', title: 'Page' }),
+    });
+    const propose = (svc as unknown as { proposeUpdate: (...a: unknown[]) => Promise<{ ok: boolean }> }).proposeUpdate.bind(svc);
+    const result = await propose({ documentId: 'd1', markdown: '# New', title: 'Fix' }, { principal: { userId: 'u1' } });
+    expect(result.ok).toBe(false);
+    expect(documents.writeRevision).toHaveBeenCalled();
+    expect(committed).toEqual([]);
+  });
+
+  it('a finding\'s create page: a failed write-back leaves no page', async () => {
+    const run = { id: 'run1', workspaceId: WS, agentKey: 'archaeologist', input: {}, findings: [{ kind: 'gap', title: 'T', detail: '', documentIds: [], draft: { title: 'New', markdown: '# New' } }] };
+    const { prisma, committed } = fakePrisma({ 'agentRun.findUnique': run, 'project.findFirst': { id: 'p1' } });
+    const documents = {
+      createDocument: vi.fn(async () => {
+        await (prisma as { document: { create: (a: unknown) => Promise<unknown> } }).document.create({});
+        return { documentId: 'new-doc' };
+      }),
+    };
+    const svc = stub(Object.create(AgentFindingsService.prototype) as AgentFindingsService, {
+      prisma,
+      documents,
+      logger: { warn: vi.fn() },
+      writeBackPage: boom,
+    });
+    await expect(svc.createPage(WS, 'run1', 0, { userId: 'u1' } as never)).rejects.toThrow('boom');
+    expect(documents.createDocument).toHaveBeenCalled();
+    // The claim and its release commit on their own; the page does not.
+    expect(committed).toEqual(['$executeRaw', '$executeRaw']);
+  });
+});
+
+/**
+ * #816: the rest of the two-commit pairs, side effects that ran before the
+ * write guarding them, and the recorders, which now defer to the commit
+ * themselves instead of relying on an `onCommit` at every call site.
+ */
+describe('#816 one commit, effects after it', () => {
+  const U = '22222222-2222-4222-8222-222222222222';
+
+  it('invite: no account without its link, and no mail', async () => {
+    const { prisma, committed } = fakePrisma({
+      'user.findUnique': null,
+      'user.create': { id: U, email: 'a@x.test', memberships: [], apiKeys: [] },
+      'passwordResetToken.create': boom,
+    });
+    const mail = { enqueue: vi.fn() };
+    const svc = new UsersService(prisma, _, mail as never, config({}), _);
+    await expect(svc.create({ mode: 'session', displayName: 'Admin' } as never, { email: 'a@x.test', displayName: 'A' } as never)).rejects.toThrow('boom');
+    expect(committed).toEqual([]);
+    expect(mail.enqueue).not.toHaveBeenCalled();
+  });
+
+  it('rotate: the old keys stay live when the new one is not minted', async () => {
+    const { prisma, committed } = fakePrisma({ 'apiKey.updateMany': { count: 2 }, 'apiKey.count': 0, 'apiKey.create': boom });
+    const svc = new ApiKeysService(prisma);
+    await expect(svc.rotate({ mode: 'session', userId: U } as never)).rejects.toThrow('boom');
+    expect(committed).toEqual([]);
+  });
+
+  describe('report check', () => {
+    const issue = { id: 'i1', workspaceId: WS, status: 'open' };
+    const service = (prisma: never, producer: { enqueue: ReturnType<typeof vi.fn> }) => {
+      const registry = { resolve: async () => ({ enabled: true, config: { enabled: true } }) };
+      const svc = new KnowledgeIssuesService(prisma, _, _, _, _, _, _, registry as never, producer as never, config({}));
+      return (svc as unknown as { queueCheck(i: unknown, p: unknown): Promise<string | null> }).queueCheck.bind(svc);
+    };
+
+    it('no run, no job, and the issue stays open when the run cannot be written', async () => {
+      const { prisma, committed } = fakePrisma({
+        $queryRaw: [{ pending: 0 }],
+        'aiAgent.findUnique': null,
+        'knowledgeIssue.updateMany': { count: 1 },
+        'agentRun.create': { id: 'run1' },
+        'knowledgeIssue.update': boom,
+      });
+      const producer = { enqueue: vi.fn() };
+      await expect(service(prisma, producer)(issue, { userId: U, locale: 'en' })).rejects.toThrow('boom');
+      expect(committed).toEqual([]);
+      expect(producer.enqueue).not.toHaveBeenCalled();
+    });
+
+    it('an issue another writer moved first gets no run at all', async () => {
+      const { prisma, committed } = fakePrisma({ $queryRaw: [{ pending: 0 }], 'aiAgent.findUnique': null, 'knowledgeIssue.updateMany': { count: 0 } });
+      const producer = { enqueue: vi.fn() };
+      expect(await service(prisma, producer)(issue, { userId: U, locale: 'en' })).toBeNull();
+      expect(committed).toEqual(['knowledgeIssue.updateMany']);
+      expect(producer.enqueue).not.toHaveBeenCalled();
+    });
+
+    it('the job is queued only after the run and the move commit', async () => {
+      const order: string[] = [];
+      const { prisma } = fakePrisma({
+        $queryRaw: [{ pending: 0 }],
+        'aiAgent.findUnique': null,
+        'knowledgeIssue.updateMany': { count: 1 },
+        'agentRun.create': { id: 'run1' },
+        'knowledgeIssue.update': () => order.push('update'),
+      });
+      const producer = { enqueue: vi.fn(async () => order.push('enqueue')) };
+      expect(await service(prisma, producer)(issue, { userId: U, locale: 'en' })).toBe('run1');
+      expect(order).toEqual(['update', 'enqueue']);
+    });
+  });
+
+  describe('Link a source', () => {
+    const doc = { title: 'Page', markdown: '# Page', ref: { url: 'https://x.test/a' } };
+    function linker(prisma: any, fetch: () => Promise<unknown>) {
+      const row = { id: 'c1', workspaceId: WS };
+      const connectors = {
+        assertKindEnabled: () => undefined,
+        // As the real one does with a new credential: the connector, then its connection.
+        create: async () => {
+          await prisma.connector.create({});
+          await prisma.connection.create({});
+          return { id: 'c1' };
+        },
+        require: async () => row,
+        contextFor: async () => ({}),
+        adapterFor: () => ({ fetch }),
+      };
+      const documents = { createDocument: async () => (await prisma.document.create({}), { documentId: 'd1', revisionId: 'r1' }) };
+      return new WebSourcesService(prisma, config({}), connectors as never, documents as never, _, _, _, _, _, _, _, _, _);
+    }
+    const input = { workspaceId: WS, projectId: 'p1', url: 'https://x.test/a', credential: 'secret' };
+
+    it('an unreadable URL leaves no connector and no connection', async () => {
+      const { prisma, committed } = fakePrisma({});
+      const svc = linker(prisma, async () => {
+        throw new ConnectorRequestError('nope', 500);
+      });
+      await expect(svc.link(input as never, U)).rejects.toBeInstanceOf(BadRequestException);
+      expect(committed).toEqual([]);
+    });
+
+    it('a failed link leaves no page, connector or connection', async () => {
+      const { prisma, committed } = fakePrisma({ 'connectorLink.create': boom });
+      await expect(linker(prisma, async () => doc).link(input as never, U)).rejects.toThrow('boom');
+      expect(committed).toEqual([]);
+    });
+  });
+
+  it('attachment delete: the object stays while its row does', async () => {
+    const { prisma } = fakePrisma({ 'attachment.findUnique': { id: 'a1', documentId: 'd1', s3Key: 'k' }, 'attachment.delete': boom });
+    const storage = { deleteObject: vi.fn() };
+    const svc = new AttachmentsService(prisma, storage as never, _, config({ ATTACHMENT_MAX_BYTES: 10 }));
+    await expect(svc.remove('d1', 'a1', U)).rejects.toThrow('boom');
+    expect(storage.deleteObject).not.toHaveBeenCalled();
+  });
+
+  it('chat listening off: what was kept stays while the switch is not written', async () => {
+    const binding = { id: 'b1', integrationId: 'int1', workspaceId: WS, externalChatId: '-1', listening: true, searchableAt: null, autoHarvestBy: null, locale: null };
+    const { prisma, committed } = fakePrisma({ 'chatChannelBinding.findUnique': binding, 'chatBufferedMessage.deleteMany': { count: 3 }, 'chatChannelBinding.update': boom });
+    const a = recorder(prisma);
+    const svc = new ChatIntegrationsService(prisma, _, _, config({ API_PUBLIC_URL: 'https://api.test' }), _, a as never);
+    vi.spyOn(svc, 'require').mockResolvedValue({ id: 'int1', kind: 'telegram', locale: 'en' } as never);
+    await expect(svc.updateBinding('b1', { listening: false } as never, U)).rejects.toThrow('boom');
+    expect(committed).toEqual([]);
+    expect(a.fired).toEqual([]);
+  });
+
+  it('a ticket whose anchor is gone: a failing close never posts the comment', async () => {
+    const tracker = { transition: vi.fn(boom), comment: vi.fn() };
+    const { prisma, committed } = fakePrisma({});
+    const workItems = { mapFor: () => ({ outbound: { wont_do: 'not_planned' } }) };
+    const sweeper = new WorkItemSyncSweeper(prisma, { trackerFor: () => tracker } as never, workItems as never, _, _, config({}));
+    const close = (sweeper as unknown as { closeForDeletedAnchor(c: unknown, i: unknown): Promise<void> }).closeForDeletedAnchor.bind(sweeper);
+    await close({ id: 'c1', locale: 'en' }, { id: 'w1', kind: 'issue', number: 1 });
+    await close({ id: 'c1', locale: 'en' }, { id: 'w1', kind: 'issue', number: 1 });
+    expect(tracker.comment).not.toHaveBeenCalled();
+    expect(committed).toEqual([]);
+  });
+
+  describe('recorders wait for the commit', () => {
+    const entry = { workspaceId: WS, actor: U, action: 'graph.query' as const, params: {}, ok: true };
+    const real = () => {
+      const rows: string[] = [];
+      const prisma = {
+        onCommit: deferUntilCommit,
+        auditLog: { create: async () => rows.push('auditLog') },
+        activityLog: { create: async () => rows.push('activityLog') },
+      };
+      const events = { publish: async () => rows.push('publish') };
+      return { rows, audit: new AuditService(prisma as never), activity: new ActivityService(prisma as never, events as never) };
+    };
+    const tx = {} as never;
+
+    it('inside a transaction nothing is written or published until it commits', async () => {
+      const r = real();
+      const [, scope] = await runInTransaction(tx, async () => {
+        await r.audit.record(entry);
+        await r.activity.record({ workspaceId: WS, actor: U, action: 'project.created', subjectId: 'p1' });
+        expect(r.rows).toEqual([]);
+      });
+      await drainAfterCommit(scope);
+      expect(r.rows).toEqual(['auditLog', 'activityLog', 'publish']);
+    });
+
+    it('a rolled-back transaction leaves no row and no event', async () => {
+      const r = real();
+      await expect(
+        runInTransaction(tx, async () => {
+          await r.audit.record(entry);
+          await r.activity.record({ workspaceId: WS, actor: U, action: 'project.created', subjectId: 'p1' });
+          throw new Error('rollback');
+        }),
+      ).rejects.toThrow('rollback');
+      expect(r.rows).toEqual([]);
+    });
+
+    it('outside one, record has written by the time it returns', async () => {
+      const r = real();
+      await r.audit.record(entry);
+      expect(r.rows).toEqual(['auditLog']);
+    });
   });
 });

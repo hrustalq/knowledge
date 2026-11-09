@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.js';
 import { ChatSubscriptionsService } from './chat-subscriptions.service.js';
+import { Ticker } from '../common/ticker.js';
 
 /**
  * Tells subscribed groups what changed (issue #71, phase 3). One path for
@@ -17,8 +18,7 @@ import { ChatSubscriptionsService } from './chat-subscriptions.service.js';
 @Injectable()
 export class ChatSubscriptionSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ChatSubscriptionSweeper.name);
-  private timer?: NodeJS.Timeout;
-  private running = false;
+  private readonly ticker = new Ticker(this.logger);
 
   constructor(
     private readonly subscriptions: ChatSubscriptionsService,
@@ -27,24 +27,17 @@ export class ChatSubscriptionSweeper implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit(): void {
     if (!this.config.get('CHAT_ENABLED', { infer: true })) return;
-    this.timer = setInterval(() => void this.sweep(), this.config.get('CHAT_DIGEST_TICK_MS', { infer: true }));
-    this.timer.unref();
+    this.ticker.every(this.config.get('CHAT_DIGEST_TICK_MS', { infer: true }), () => this.sweep());
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   async sweep(): Promise<void> {
-    if (this.running) return;
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       const sent = await this.subscriptions.deliverDue();
       if (sent > 0) this.logger.log(`sent ${sent} chat subscription updates`);
-    } catch (e: unknown) {
-      this.logger.warn(`chat subscription sweep failed: ${String(e)}`);
-    } finally {
-      this.running = false;
-    }
+    });
   }
 }

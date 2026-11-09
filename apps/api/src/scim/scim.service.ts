@@ -21,6 +21,8 @@ import {
   type ScimUserFields,
   type ScimUserRecord,
 } from './scim-resources.js';
+import { UUID_RE } from '@knowledge/contracts';
+import { AUTHOR_ID_STUB } from '../activity/actor.js';
 
 /** Who is calling: the workspace a `kscim_` token belongs to, and which token. */
 export interface ScimCaller {
@@ -37,7 +39,6 @@ export interface ScimPageQuery {
 
 type Doc = Record<string, unknown>;
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const USER_INCLUDE = { user: { select: { email: true, displayName: true, createdAt: true } } } as const;
 const GROUP_INCLUDE = { members: { include: { user: { select: { displayName: true } } } } } as const;
 
@@ -86,7 +87,7 @@ export class ScimService {
     if (query.filter) {
       const f = parseUserFilter(query.filter);
       if (!f) throw new ScimError(HttpStatus.BAD_REQUEST, t('error.scim.invalidFilter'), 'invalidFilter');
-      if (f.attribute === 'id') where.userId = UUID.test(f.value) ? f.value : '00000000-0000-0000-0000-000000000000';
+      if (f.attribute === 'id') where.userId = UUID_RE.test(f.value) ? f.value : AUTHOR_ID_STUB;
       else if (f.attribute === 'userName') where.userName = f.value.toLowerCase();
       else if (f.attribute === 'externalId') where.externalId = f.value;
       else where.user = { email: f.value.toLowerCase() };
@@ -154,16 +155,14 @@ export class ScimService {
         if (isUnique(e)) throw conflict(t('error.scim.userExists', { userName: f.userName }));
         throw e;
       }
-      this.prisma.onCommit(() =>
-        this.audit.record({
-          workspaceId: ws,
-          actor: 'scim',
-          action: 'scim.user_created',
-          params: { tokenId: caller.tokenId, userName: f.userName, email: f.email, linked, active: f.active },
-          ok: true,
-          target: user.id,
-        }),
-      );
+      void this.audit.record({
+        workspaceId: ws,
+        actor: 'scim',
+        action: 'scim.user_created',
+        params: { tokenId: caller.tokenId, userName: f.userName, email: f.email, linked, active: f.active },
+        ok: true,
+        target: user.id,
+      });
       if (!f.active) await this.offboard(user.id, authority);
       await this.roleSync.applyScim(ws, [user.id]);
       return user.id;
@@ -193,16 +192,14 @@ export class ScimService {
       await this.prisma.scimUser.deleteMany({ where: { workspaceId: ws, userId: rec.userId } });
       await this.roleSync.applyScim(ws, [rec.userId]);
       const disabled = await this.offboard(rec.userId, authority);
-      this.prisma.onCommit(() =>
-        this.audit.record({
-          workspaceId: ws,
-          actor: 'scim',
-          action: 'scim.user_deleted',
-          params: { tokenId: caller.tokenId, userName: rec.userName, accountDisabled: disabled },
-          ok: true,
-          target: rec.userId,
-        }),
-      );
+      void this.audit.record({
+        workspaceId: ws,
+        actor: 'scim',
+        action: 'scim.user_deleted',
+        params: { tokenId: caller.tokenId, userName: rec.userName, accountDisabled: disabled },
+        ok: true,
+        target: rec.userId,
+      });
     }, SCIM_TX);
   }
 
@@ -251,28 +248,24 @@ export class ScimService {
       if (f.active !== rec.active) await this.roleSync.applyScim(ws, [rec.userId]);
       if (!f.active && rec.active) {
         const disabled = await this.offboard(rec.userId, authority);
-        this.prisma.onCommit(() =>
-          this.audit.record({
-            workspaceId: ws,
-            actor: 'scim',
-            action: 'scim.user_deactivated',
-            params: { tokenId: caller.tokenId, userName: f.userName, changed, accountDisabled: disabled },
-            ok: true,
-            target: rec.userId,
-          }),
-        );
+        void this.audit.record({
+          workspaceId: ws,
+          actor: 'scim',
+          action: 'scim.user_deactivated',
+          params: { tokenId: caller.tokenId, userName: f.userName, changed, accountDisabled: disabled },
+          ok: true,
+          target: rec.userId,
+        });
       } else if (changed.length) {
         if (f.active && !rec.active) await this.reinstate(rec.userId, authority);
-        this.prisma.onCommit(() =>
-          this.audit.record({
-            workspaceId: ws,
-            actor: 'scim',
-            action: 'scim.user_updated',
-            params: { tokenId: caller.tokenId, userName: f.userName, changed },
-            ok: true,
-            target: rec.userId,
-          }),
-        );
+        void this.audit.record({
+          workspaceId: ws,
+          actor: 'scim',
+          action: 'scim.user_updated',
+          params: { tokenId: caller.tokenId, userName: f.userName, changed },
+          ok: true,
+          target: rec.userId,
+        });
       }
     }, SCIM_TX);
     return this.render(ws, await this.loadUser(ws, rec.userId));
@@ -303,7 +296,7 @@ export class ScimService {
   }
 
   private async loadUser(workspaceId: string, id: string): Promise<ScimUserRecord> {
-    const rec = UUID.test(id)
+    const rec = UUID_RE.test(id)
       ? await this.prisma.scimUser.findUnique({ where: { workspaceId_userId: { workspaceId, userId: id } }, include: USER_INCLUDE })
       : null;
     if (!rec) throw notFound('user', id);
@@ -333,7 +326,7 @@ export class ScimService {
     if (query.filter) {
       const f = parseGroupFilter(query.filter);
       if (!f) throw new ScimError(HttpStatus.BAD_REQUEST, t('error.scim.invalidFilter'), 'invalidFilter');
-      if (f.attribute === 'id') where.id = UUID.test(f.value) ? f.value : '00000000-0000-0000-0000-000000000000';
+      if (f.attribute === 'id') where.id = UUID_RE.test(f.value) ? f.value : AUTHOR_ID_STUB;
       else if (f.attribute === 'displayName') where.displayName = { equals: f.value, mode: 'insensitive' };
       else where.externalId = f.value;
     }
@@ -366,16 +359,14 @@ export class ScimService {
         throw e;
       }
       const { added, skipped } = await this.writeMembers(ws, group.id, new Set(), next.members);
-      this.prisma.onCommit(() =>
-        this.audit.record({
-          workspaceId: ws,
-          actor: 'scim',
-          action: 'scim.group_created',
-          params: { tokenId: caller.tokenId, displayName: next.displayName, members: added.length, skipped },
-          ok: true,
-          target: group.id,
-        }),
-      );
+      void this.audit.record({
+        workspaceId: ws,
+        actor: 'scim',
+        action: 'scim.group_created',
+        params: { tokenId: caller.tokenId, displayName: next.displayName, members: added.length, skipped },
+        ok: true,
+        target: group.id,
+      });
       await this.roleSync.applyScim(ws, added);
       return group.id;
     }, SCIM_TX);
@@ -404,16 +395,14 @@ export class ScimService {
       await this.prisma.scimGroup.delete({ where: { id: group.id } });
       // A SCIM mapping names the group by id; without the group it can never match again.
       await this.prisma.idpGroupMapping.deleteMany({ where: { workspaceId: ws, providerId: null, externalGroup: group.id } });
-      this.prisma.onCommit(() =>
-        this.audit.record({
-          workspaceId: ws,
-          actor: 'scim',
-          action: 'scim.group_deleted',
-          params: { tokenId: caller.tokenId, displayName: group.displayName, members: group.members.length },
-          ok: true,
-          target: group.id,
-        }),
-      );
+      void this.audit.record({
+        workspaceId: ws,
+        actor: 'scim',
+        action: 'scim.group_deleted',
+        params: { tokenId: caller.tokenId, displayName: group.displayName, members: group.members.length },
+        ok: true,
+        target: group.id,
+      });
       await this.roleSync.applyScim(ws, group.members.map((m) => m.userId));
     }, SCIM_TX);
   }
@@ -431,23 +420,21 @@ export class ScimService {
         }
       }
       const { added, removed, skipped } = await this.writeMembers(ws, group.id, new Set(group.members.map((m) => m.userId)), next.members);
-      this.prisma.onCommit(() =>
-        this.audit.record({
-          workspaceId: ws,
-          actor: 'scim',
-          action: 'scim.group_updated',
-          params: {
-            tokenId: caller.tokenId,
-            displayName: next.displayName,
-            ...(next.displayName !== group.displayName ? { renamedFrom: group.displayName } : {}),
-            added: added.length,
-            removed: removed.length,
-            skipped,
-          },
-          ok: true,
-          target: group.id,
-        }),
-      );
+      void this.audit.record({
+        workspaceId: ws,
+        actor: 'scim',
+        action: 'scim.group_updated',
+        params: {
+          tokenId: caller.tokenId,
+          displayName: next.displayName,
+          ...(next.displayName !== group.displayName ? { renamedFrom: group.displayName } : {}),
+          added: added.length,
+          removed: removed.length,
+          skipped,
+        },
+        ok: true,
+        target: group.id,
+      });
       await this.roleSync.applyScim(ws, [...added, ...removed]);
     }, SCIM_TX);
     return renderGroup(this.base, await this.loadGroup(ws, group.id));
@@ -464,7 +451,7 @@ export class ScimService {
     current: Set<string>,
     wanted: Set<string>,
   ): Promise<{ added: string[]; removed: string[]; skipped: number }> {
-    const candidates = [...wanted].filter((id) => UUID.test(id) && !current.has(id));
+    const candidates = [...wanted].filter((id) => UUID_RE.test(id) && !current.has(id));
     const provisioned = candidates.length
       ? await this.prisma.scimUser.findMany({ where: { workspaceId, userId: { in: candidates } }, select: { userId: true } })
       : [];
@@ -478,7 +465,7 @@ export class ScimService {
   }
 
   private async loadGroup(workspaceId: string, id: string) {
-    const group = UUID.test(id) ? await this.prisma.scimGroup.findFirst({ where: { id, workspaceId }, include: GROUP_INCLUDE }) : null;
+    const group = UUID_RE.test(id) ? await this.prisma.scimGroup.findFirst({ where: { id, workspaceId }, include: GROUP_INCLUDE }) : null;
     if (!group) throw notFound('group', id);
     return group;
   }

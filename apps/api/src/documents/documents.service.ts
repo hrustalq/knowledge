@@ -83,9 +83,9 @@ import { canSee, visibilityWhere, type AccessScope } from '../permissions/access
 import { LISTED_PAGE } from '../common/listed-page.js';
 import { ReadCache, READ_CACHE_FAMILIES } from '../cache/read-cache.service.js';
 import { ProjectCommitsService } from '../git/project-commits.service.js';
+import { AUTHOR_ID_STUB } from '../activity/actor.js';
 
 /** Fallback author when no principal is supplied (AUTH_MODE=none, MCP stdio). */
-const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
 
 /**
  * Edge cap for the workspace-wide graph. Chosen for legibility, not for speed:
@@ -313,23 +313,18 @@ export class DocumentsService {
       status = finalized.status;
     }
 
-    // Post-commit for the reason finalizeRevision's record is: `record` publishes
-    // onto the Redis bus, which cannot be taken back, and announcing a page that
-    // has not committed tells every subscriber about something that may vanish.
-    this.prisma.onCommit(() =>
-      this.activity.record({
-        workspaceId: dto.workspaceId,
-        actor: authorId,
-        action: 'document.created',
-        documentId: document.id,
-        metadata: {
-          title: dto.title,
-          category: dto.category ?? 'other',
-          projectId: dto.projectId,
-          ...(template ? { templateRef: template.ref, templateVersion: template.version } : {}),
-        },
-      }),
-    );
+    void this.activity.record({
+      workspaceId: dto.workspaceId,
+      actor: authorId,
+      action: 'document.created',
+      documentId: document.id,
+      metadata: {
+        title: dto.title,
+        category: dto.category ?? 'other',
+        projectId: dto.projectId,
+        ...(template ? { templateRef: template.ref, templateVersion: template.version } : {}),
+      },
+    });
     // Writing a page is watching it (docs/features/22). A subscription row
     // rather than an implicit rule at fan-out time, so that an author who
     // unwatches their own page stays unwatched.
@@ -440,6 +435,40 @@ export class DocumentsService {
     /** The `web` connector writing its own source-backed page (#674); never from a request. */
     writer?: { connectorId: string },
   ): Promise<RevisionInfo> {
+    return toRevisionInfo(await this.openDraft(documentId, dto, expectedHeadRevisionId, authorId, writer));
+  }
+
+  /**
+   * Inline content as a new revision (#811): draft on the branch head, put the
+   * bytes, finalize — one boundary, so a refused finalize leaves no draft behind
+   * and a caller's own transaction absorbs all three. The one writer of inline
+   * revision content; a moved head is `createRevision`'s 409. The MinIO PUT runs
+   * inside, so a caller's boundary needs the raised timeout this one asks for.
+   */
+  async writeRevision(
+    documentId: string,
+    input: { text: string; branch?: string; message?: string; contentType?: string; expectedHeadRevisionId?: string },
+    authorId: string = AUTHOR_ID_STUB,
+    writer?: { connectorId: string },
+  ): Promise<FinalizeRevisionResponse> {
+    const { text, expectedHeadRevisionId, ...dto } = input;
+    return this.prisma.withTransaction(
+      async () => {
+        const draft = await this.openDraft(documentId, dto, expectedHeadRevisionId, authorId, writer);
+        await this.storage.putObjectText(draft.s3Key, text, draft.contentType);
+        return this.finalizeRevision(documentId, draft.id);
+      },
+      { timeout: 30_000, maxWait: 10_000 },
+    );
+  }
+
+  private async openDraft(
+    documentId: string,
+    dto: CreateRevisionDto,
+    expectedHeadRevisionId: string | undefined,
+    authorId: string,
+    writer: { connectorId: string } | undefined,
+  ): Promise<DocumentRevision> {
     const document = await this.getDocumentOrThrow(documentId);
     this.assertNotArchived(document);
 
@@ -465,7 +494,7 @@ export class DocumentsService {
       }
     }
 
-    const revision = await this.createDraftRevision(documentId, {
+    return this.createDraftRevision(documentId, {
       branch: dto.branch,
       message: dto.message,
       // No default here: createDraftRevision picks one from the document's kind.
@@ -474,7 +503,6 @@ export class DocumentsService {
       collab: dto.collabDraftId ? await this.draftOf(documentId, dto.branch ?? document.defaultBranch, dto) : undefined,
       connectorId: writer?.connectorId,
     });
-    return toRevisionInfo(revision);
   }
 
   /**
@@ -544,12 +572,12 @@ export class DocumentsService {
       return { revisionId: revision.id, status: revision.status as RevisionStatus, ingestionJobId: null, deduplicated: false };
     }
 
-    const head = await this.storage.headObject(revision.s3Key);
-    if (!head) {
+    // One read (#818): the hashed bytes and the stored version are the same object.
+    const stored = await this.storage.getObjectVersion(revision.s3Key);
+    if (!stored) {
       throw new BadRequestException(t('error.document.uploadMissing', { key: revision.s3Key }));
     }
-
-    const text = await this.storage.getObjectText(revision.s3Key);
+    const { text } = stored;
     // #78: a spec that will not parse is refused here, with the validator's
     // messages, rather than queued to fail in the worker. The draft stays, so
     // the caller can upload a corrected body to the same revision.
@@ -582,7 +610,7 @@ export class DocumentsService {
         data: {
           status: 'finalized',
           contentHash,
-          s3VersionId: head.versionId,
+          s3VersionId: stored.versionId,
           finalizedAt: new Date(),
         },
       });
@@ -675,16 +703,14 @@ export class DocumentsService {
     // A revision on a private branch is nobody's news but its readers' (#474):
     // no feed row, no live frame, no watcher notification.
     if (!privateBranch) {
-      this.prisma.onCommit(() =>
-        this.activity.record({
-          workspaceId: document.workspaceId,
-          actor: revision.authorId,
-          action: 'revision.finalized',
-          documentId,
-          subjectId: revision.id,
-          metadata: { title: document.title, revisionNumber: revision.revisionNumber },
-        }),
-      );
+      void this.activity.record({
+        workspaceId: document.workspaceId,
+        actor: revision.authorId,
+        action: 'revision.finalized',
+        documentId,
+        subjectId: revision.id,
+        metadata: { title: document.title, revisionNumber: revision.revisionNumber },
+      });
     }
 
     return { revisionId: revision.id, status: 'finalized', ingestionJobId: job.id, deduplicated: false };
@@ -847,18 +873,15 @@ export class DocumentsService {
     if (ownerId !== null) await this.assertMember(document.workspaceId, ownerId);
     if (ownerId === document.ownerId) return this.toSummary(document);
     const updated = await this.prisma.document.update({ where: { id: documentId }, data: { ownerId } });
-    // Post-commit: `updateDocument` calls this inside its boundary (#658).
-    this.prisma.onCommit(() =>
-      this.activity.record({
-        workspaceId: document.workspaceId,
-        actor: actorId,
-        action: 'document.owner-changed',
-        documentId,
-        projectId: document.projectId,
-        metadata: { title: document.title, from: document.ownerId, to: ownerId },
-        patch: { ownerId },
-      }),
-    );
+    void this.activity.record({
+      workspaceId: document.workspaceId,
+      actor: actorId,
+      action: 'document.owner-changed',
+      documentId,
+      projectId: document.projectId,
+      metadata: { title: document.title, from: document.ownerId, to: ownerId },
+      patch: { ownerId },
+    });
     if (ownerId && ownerId !== actorId) {
       this.prisma.onCommit(() =>
         this.notifications.notify({
@@ -964,7 +987,11 @@ export class DocumentsService {
   async withChunks(head: Omit<DocumentDetailResponse, 'chunks'>): Promise<DocumentDetailResponse> {
     const chunks =
       head.revision.status === 'indexed'
-        ? await this.graph.getRevisionChunks(head.document.workspaceId, head.revision.revisionId)
+        ? (await this.graph.getRevisionChunkTexts(head.document.workspaceId, head.revision.revisionId)).map((c) => ({
+            chunkId: c.chunkId,
+            headingPath: c.headingPath,
+            snippet: c.text.slice(0, 200),
+          }))
         : [];
     return { ...head, chunks };
   }
@@ -1012,17 +1039,14 @@ export class DocumentsService {
       },
     });
     if (isPrivate) return { branch: this.toBranchInfo(branch) };
-    // Post-commit: publishes onto the bus (see createDocument above).
-    this.prisma.onCommit(() =>
-      this.activity.record({
-        workspaceId: document.workspaceId,
-        actor: ownerId,
-        action: 'branch.created',
-        documentId,
-        subjectId: branch.id,
-        metadata: { title: document.title, branch: dto.name },
-      }),
-    );
+    void this.activity.record({
+      workspaceId: document.workspaceId,
+      actor: ownerId,
+      action: 'branch.created',
+      documentId,
+      subjectId: branch.id,
+      metadata: { title: document.title, branch: dto.name },
+    });
     return { branch: this.toBranchInfo(branch) };
   }
 
@@ -1331,7 +1355,7 @@ export class DocumentsService {
   }): Promise<DocumentContentResponse> {
     // A finalized revision's bytes never change (contentRevision refuses a draft).
     const family = READ_CACHE_FAMILIES.content;
-    const raw = await this.cache.wrap(workspaceId, family.key(revision.id), () => this.storage.getObjectText(revision.s3Key), family.ttlMs);
+    const raw = await this.cache.wrap(workspaceId, family.key(revision.id), () => this.storage.getObjectText(revision.s3Key, revision.s3VersionId), family.ttlMs);
     const parsed = readPageSource(raw, kind);
     return {
       documentId: revision.documentId,
@@ -1769,9 +1793,7 @@ export class DocumentsService {
       if (p.parentDocumentId !== row.parentId || Object.keys(data).length) changed.push(row.id);
       if (p.removed !== (row.archivedAt !== null)) {
         const action = p.removed ? 'document.archived' : 'document.unarchived';
-        this.prisma.onCommit(() =>
-          this.activity.record({ workspaceId: row.workspaceId, actor: actorId, action, documentId: row.id, projectId, metadata: { title: row.title, affected: 1, includeDescendants: false } }),
-        );
+        void this.activity.record({ workspaceId: row.workspaceId, actor: actorId, action, documentId: row.id, projectId, metadata: { title: row.title, affected: 1, includeDescendants: false } });
       }
     }
     return changed;

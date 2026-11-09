@@ -25,7 +25,7 @@ import type { RunWarning } from './connector-sync.service.js';
 import type { ItemDraft } from './connector-staging.service.js';
 import { sourceConnectorOf } from '../documents/source-backed.js';
 import { sha256, stagedObject } from './connector-markdown.js';
-import { MAX_WARNINGS, toRunInfo } from './connectors.service.js';
+import { addToRun, NO_COUNTS, toRunInfo } from './connectors.service.js';
 import { hiddenRunItems } from './run-visibility.js';
 
 /**
@@ -261,7 +261,7 @@ export class ConnectorItemsService {
     if (!item.previousRevisionId) throw new ConflictException(t('error.connector.revertNoPrevious'));
     const previous = await this.prisma.documentRevision.findUnique({ where: { id: item.previousRevisionId } });
     if (!previous) throw new ConflictException(t('error.connector.revertNoPrevious'));
-    const markdown = await this.storage.getObjectText(previous.s3Key);
+    const markdown = await this.storage.getObjectText(previous.s3Key, previous.s3VersionId);
 
     // The restoring revision, the link's `contentHash` and the item commit
     // together (#658), or the next pull reads our own revert as a local edit.
@@ -272,16 +272,12 @@ export class ConnectorItemsService {
     const source = await sourceConnectorOf(this.prisma, documentId);
     return this.prisma.withTransaction(
       async () => {
-        const revision = await this.documents.createRevision(
+        const revision = await this.documents.writeRevision(
           documentId,
-          { message: t('connector.revertRevisionMessage'), contentType: 'text/markdown' },
-          undefined,
+          { text: markdown, message: t('connector.revertRevisionMessage'), contentType: 'text/markdown' },
           undefined,
           source ? { connectorId: source } : undefined,
         );
-        const row = await this.prisma.documentRevision.findUniqueOrThrow({ where: { id: revision.revisionId } });
-        await this.storage.putObjectText(row.s3Key, markdown, 'text/markdown');
-        await this.documents.finalizeRevision(documentId, revision.revisionId);
         if (item.linkId) {
           await this.prisma.connectorLink.update({
             where: { id: item.linkId },
@@ -359,7 +355,7 @@ export class ConnectorItemsService {
         break;
       }
       case 'RESUME':
-        await this.prisma.connectorRun.update({ where: { id: runId }, data: { status: 'queued' } });
+        await this.moveRun(run, { status: 'queued' });
         await this.producer.enqueueRetry(runId, String(run.discovered + run.applied + 1));
         await this.publishRun(run, 'connector.run.resumed');
         break;
@@ -370,23 +366,15 @@ export class ConnectorItemsService {
         // left in `cursor` — unused, but it is the record of what went unread,
         // and `finish()` clears it.
         const unwalked = Array.isArray(run.cursor) ? (run.cursor as unknown[]).length : 0;
-        const warnings = readWarnings(run);
-        if (unwalked > 0 && warnings.length < MAX_WARNINGS) {
+        await this.prisma.withTransaction(async () => {
+          await this.moveRun(run, { status: 'queued', phase: 'fetching' });
           // A lossy import that says nothing is the failure this feature exists
           // to prevent, and stopping the walk is exactly that kind of loss.
-          warnings.push({
-            externalId: null,
-            title: null,
-            message: t('connector.warning.discoveryStopped', { count: unwalked }),
-          });
-        }
-        await this.prisma.connectorRun.update({
-          where: { id: runId },
-          data: {
-            status: 'queued',
-            phase: 'fetching',
-            warnings: warnings as unknown as Prisma.InputJsonValue,
-          },
+          if (unwalked > 0) {
+            await addToRun(this.prisma, runId, NO_COUNTS, [
+              { externalId: null, title: null, message: t('connector.warning.discoveryStopped', { count: unwalked }) },
+            ]);
+          }
         });
         // Salted by clock rather than by the run's counters, which every other
         // event uses to collapse a double-click. Those counters do not move when
@@ -398,17 +386,11 @@ export class ConnectorItemsService {
         break;
       }
       case 'NEXT':
-        await this.prisma.connectorRun.update({
-          where: { id: runId },
-          data: { status: 'queued', phase: 'fetching' },
-        });
+        await this.moveRun(run, { status: 'queued', phase: 'fetching' });
         await this.producer.enqueueRetry(runId, String(run.discovered + run.applied + 1));
         break;
       case 'CANCEL':
-        await this.prisma.connectorRun.update({
-          where: { id: runId },
-          data: { status: 'cancelled', phase: null, stage: null, completedAt: new Date() },
-        });
+        await this.moveRun(run, { status: 'cancelled', phase: null, stage: null, completedAt: new Date() });
         break;
       case 'APPROVE_ALL':
         // One commit (#658): approved items under a run still `awaiting-review`
@@ -440,10 +422,7 @@ export class ConnectorItemsService {
       this.prisma.onCommit(() => this.producer.enqueueTask(runId, { kind: 'apply' }, String(Date.now())));
       return;
     }
-    await this.prisma.connectorRun.update({
-      where: { id: runId },
-      data: { status: 'queued', phase: 'applying' },
-    });
+    await this.moveRun(run, { status: 'queued', phase: 'applying' });
     this.prisma.onCommit(() => this.producer.enqueueRetry(runId, String(run.discovered + run.applied + 1)));
   }
 
@@ -460,6 +439,19 @@ export class ConnectorItemsService {
   }
 
   // --- helpers ---
+
+  /**
+   * A run event's write, guarded on the status the event was checked against
+   * (#810): the worker writes this row too, and a CANCEL must not land over a
+   * run that finished in between, nor a RESUME revive a cancelled one.
+   */
+  private async moveRun(run: ConnectorRun, data: Prisma.ConnectorRunUpdateManyMutationInput): Promise<void> {
+    const { count } = await this.prisma.connectorRun.updateMany({ where: { id: run.id, status: run.status }, data });
+    if (count === 0) {
+      const now = await this.requireRun(run.id);
+      throw new ConflictException(t('error.connector.runEvent', { status: now.status }));
+    }
+  }
 
   async runInfo(runId: string): Promise<ConnectorRunInfo> {
     const run = await this.requireRun(runId);

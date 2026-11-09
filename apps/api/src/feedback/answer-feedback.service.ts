@@ -16,6 +16,7 @@ import { isPageSource } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { Principal } from '../auth/principal.js';
 import { t } from '../i18n/t.js';
+import type { Env } from '../config/env.js';
 
 const QUERY_MAX_CHARS = 4_000;
 const EXCERPT_MAX_CHARS = 1_000;
@@ -72,12 +73,12 @@ export class AnswerFeedbackService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly env: ConfigService,
+    private readonly env: ConfigService<Env, true>,
   ) {}
 
   /** `ANSWER_FEEDBACK_ENABLED` — a master switch, read per call so a test can flip it. */
   get enabled(): boolean {
-    return this.env.get<boolean>('ANSWER_FEEDBACK_ENABLED') ?? true;
+    return this.env.get('ANSWER_FEEDBACK_ENABLED', { infer: true });
   }
 
   private assertEnabled(): void {

@@ -64,7 +64,7 @@ export class CommunitiesService {
    * ancestor of a withheld community is withheld by the same check.
    */
   private async readable(scope: AccessScope, embedding?: number[]) {
-    const all = await this.graph.communities(scope.workspaceId, () => true, embedding);
+    const all = await this.graph.communities(scope.workspaceId, embedding);
     const ids = [...new Set(all.flatMap((r) => r.members))];
     const docs = ids.length
       ? await this.prisma.document.findMany({

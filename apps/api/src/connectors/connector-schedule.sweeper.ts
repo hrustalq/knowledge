@@ -1,15 +1,19 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { requeueStale, staleFailure } from '../common/requeue-stale.js';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ConnectorProducer } from './connector.producer.js';
 import { aclSyncDue } from './connector-acl.js';
 import { ConnectorsService } from './connectors.service.js';
+import { Ticker } from '../common/ticker.js';
 
 const SWEEP_INTERVAL_MS = 5 * 60_000;
 /** A run still `queued` this long after its last slice (or its creation) has probably lost its job (#657). */
 const STALE_QUEUED_MS = 15 * 60_000;
 const RELAY_BATCH = 20;
+/** Stale-run re-queues before a run whose worker keeps dying is failed (#809). */
+const CONNECTOR_MAX_ATTEMPTS = 3;
 
 /**
  * Enqueues scheduled syncs (docs/features/19), mirroring StaleSweeper, and
@@ -23,13 +27,13 @@ const RELAY_BATCH = 20;
  * It is also the outbox relay for `connector_runs` (#657), on whether or not
  * schedules are: a run is committed `queued` before its job, so a lost enqueue
  * would otherwise hold the connector's one in-flight slot until someone
- * cancelled by hand.
+ * cancelled by hand. `requeueStuck` is the same slot's other half: a run
+ * whose worker died mid-slice (#809).
  */
 @Injectable()
 export class ConnectorScheduleSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ConnectorScheduleSweeper.name);
-  private timer?: NodeJS.Timeout;
-  private running = false;
+  private readonly ticker = new Ticker(this.logger);
   private schedulesEnabled = false;
 
   constructor(
@@ -44,8 +48,7 @@ export class ConnectorScheduleSweeper implements OnModuleInit, OnModuleDestroy {
     if (!this.schedulesEnabled) {
       this.logger.log('Connector schedules disabled (CONNECTOR_SCHEDULE_ENABLED=false); run recovery stays on');
     }
-    this.timer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS);
-    this.timer.unref();
+    this.ticker.every(SWEEP_INTERVAL_MS, () => this.sweep());
   }
 
   /**
@@ -73,15 +76,49 @@ export class ConnectorScheduleSweeper implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * A `running` run whose worker died, back to `queued` (#809). Each slice's
+   * claim stamps `startedAt`, and a live slice yields or aborts within
+   * CONNECTOR_SYNC_TIMEOUT_MS, so twice that untouched is dead. The processor
+   * puts the dead slice's half-done items back when it claims the run.
+   */
+  private async requeueStuck(): Promise<void> {
+    await requeueStale({
+      staleField: 'startedAt',
+      staleMs: 2 * this.config.get('CONNECTOR_SYNC_TIMEOUT_MS', { infer: true }),
+      maxAttempts: CONNECTOR_MAX_ATTEMPTS,
+      find: (where) =>
+        this.prisma.connectorRun.findMany({ where, select: { id: true, attempt: true }, take: RELAY_BATCH }),
+      attemptOf: (run) => run.attempt,
+      requeue: (where, run) => {
+        this.logger.warn(`Connector run ${run.id} stuck in 'running' — re-queueing`);
+        return this.prisma.connectorRun.updateMany({ where, data: { status: 'queued', attempt: { increment: 1 } } });
+      },
+      fail: (where) =>
+        this.prisma.connectorRun.updateMany({
+          where,
+          data: {
+            status: 'failed',
+            stage: null,
+            progress: null,
+            error: { message: staleFailure(CONNECTOR_MAX_ATTEMPTS + 1) },
+            completedAt: new Date(),
+          },
+        }),
+      enqueue: (run) => this.producer.enqueueRetry(run.id, `stale-${run.attempt + 1}`),
+    });
+  }
+
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   async sweep(): Promise<void> {
-    if (this.running) return; // a slow sweep must not stack on itself
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       await this.relayQueued();
+      // After the relay: a run re-queued here still has an old `startedAt`, so
+      // the relay would enqueue it a second time in the same tick.
+      await this.requeueStuck();
       if (!this.schedulesEnabled) return;
       const due = await this.prisma.connector.findMany({
         where: {
@@ -129,10 +166,6 @@ export class ConnectorScheduleSweeper implements OnModuleInit, OnModuleDestroy {
           });
         }
       }
-    } catch (err) {
-      this.logger.warn(`Connector schedule sweep failed: ${(err as Error).message}`);
-    } finally {
-      this.running = false;
-    }
+    });
   }
 }

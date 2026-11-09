@@ -6,10 +6,19 @@ import {
   type ExecutionContext,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { ACCESS_META, FEATURE_META, PLATFORM_ADMIN_META, PUBLIC_META, READ_KEY_OK_META, type AccessSpec } from './access.decorator.js';
+import {
+  ACCESS_META,
+  FEATURE_META,
+  PLATFORM_ADMIN_META,
+  PUBLIC_META,
+  READ_KEY_OK_META,
+  type AccessSpec,
+  type WorkspaceSource,
+} from './access.decorator.js';
+import { WORKSPACE_SOURCES } from './workspace-sources.js';
 import { AccessService } from './access.service.js';
 import { FeaturesService } from './features.service.js';
-import type { WorkspaceFeature } from '@knowledge/contracts';
+import { type WorkspaceFeature, UUID_RE } from '@knowledge/contracts';
 import { PermissionService, type AccessResource, type BranchRefs } from '../permissions/permission.service.js';
 import type { Principal } from './principal.js';
 import { t } from '../i18n/t.js';
@@ -17,7 +26,6 @@ import { bindTrace } from '@knowledge/observability';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Where a page route names one of its branches or revisions (#474). The guard
@@ -152,28 +160,16 @@ export class AclGuard implements CanActivate {
   }
 
   /** The workspace, plus the resource page permissions apply to when the route names one. */
-  private async resolveTarget(
-    spec: AccessSpec,
-    req: { body?: Record<string, unknown>; query?: Record<string, unknown>; params?: Record<string, string> },
-  ): Promise<{ workspaceId: string; resource?: AccessResource }> {
-    switch (spec.source) {
-      case 'document': {
-        const id = this.uuid(req.params?.id, 'document');
-        return { workspaceId: await this.access.workspaceOfDocument(id), resource: { type: 'document', id } };
-      }
-      case 'merge-request': {
-        const { workspaceId, documentId } = await this.access.documentOfMergeRequest(
-          this.uuid(req.params?.id, 'mergeRequest'),
-        );
-        return { workspaceId, resource: { type: 'document', id: documentId } };
-      }
-      case 'project': {
-        const id = this.uuid(req.params?.id, 'project');
-        return { workspaceId: await this.access.workspaceOfProject(id), resource: { type: 'project', id } };
-      }
-      default:
-        return { workspaceId: await this.resolveWorkspace(spec, req) };
+  private async resolveTarget(spec: AccessSpec, req: Req): Promise<{ workspaceId: string; resource?: AccessResource }> {
+    if (spec.source === 'merge-request') {
+      const { workspaceId, documentId } = await this.access.documentOfMergeRequest(this.uuid(req.params?.id, 'mergeRequest'));
+      return { workspaceId, resource: { type: 'document', id: documentId } };
     }
+    const workspaceId = await this.resolveWorkspace(spec.source, req);
+    if (spec.source === 'document' || spec.source === 'project') {
+      return { workspaceId, resource: { type: spec.source, id: req.params?.id as string } };
+    }
+    return { workspaceId };
   }
 
   // `subject` is a catalog key (subject.*), not an English fragment: Russian
@@ -185,102 +181,20 @@ export class AclGuard implements CanActivate {
     return value;
   }
 
-  private async resolveWorkspace(
-    spec: AccessSpec,
-    req: { body?: Record<string, unknown>; query?: Record<string, unknown>; params?: Record<string, string> },
-  ): Promise<string> {
-    const uuid = (value: unknown, subject: string): string => this.uuid(value, subject);
-    // Saved filters are the one resource keyed by an integer (they are shown
-    // and linked as `#7`), so they need their own parse — uuid() would reject
-    // every valid id.
-    const intId = (value: unknown, subject: string): number => {
-      const n = Number(value);
-      if (!Number.isInteger(n) || n <= 0) {
-        throw new BadRequestException(t('error.invalidNumericId', { subject: t(`subject.${subject}`) }));
-      }
-      return n;
-    };
-    switch (spec.source) {
-      case 'body':
-        return uuid(req.body?.workspaceId, 'workspaceId');
-      case 'query':
-        return uuid(req.query?.workspaceId, 'workspaceId');
-      case 'job':
-        return this.access.workspaceOfJob(uuid(req.params?.id, 'job'));
-      case 'assistant-thread':
-        return this.access.workspaceOfAssistantThread(uuid(req.params?.id, 'assistantThread'));
-      case 'assistant-message':
-        return this.access.workspaceOfAssistantMessage(uuid(req.params?.id, 'assistantMessage'));
-      case 'knowledge-issue':
-        return this.access.workspaceOfKnowledgeIssue(uuid(req.params?.id, 'knowledgeIssue'));
-      case 'ai-skill':
-        return this.access.workspaceOfAiSkill(uuid(req.params?.id, 'skill'));
-      case 'ai-plugin':
-        return this.access.workspaceOfAiPlugin(uuid(req.params?.id, 'plugin'));
-      case 'ai-provider':
-        return this.access.workspaceOfAiProvider(uuid(req.params?.id, 'provider'));
-      case 'ai-model':
-        return this.access.workspaceOfAiModel(uuid(req.params?.id, 'model'));
-      case 'agent-trigger':
-        return this.access.workspaceOfAgentTrigger(uuid(req.params?.id, 'agentTrigger'));
-      case 'agent-learning':
-        return this.access.workspaceOfAgentLearning(uuid(req.params?.id, 'agentLearning'));
-      case 'saved-filter':
-        return this.access.workspaceOfSavedFilter(intId(req.params?.filterId, 'savedFilter'));
-      case 'glossary-term':
-        return this.access.workspaceOfGlossaryTerm(uuid(req.params?.id, 'glossaryTerm'));
-      case 'source-policy':
-        return this.access.workspaceOfSourcePolicy(uuid(req.params?.id, 'sourcePolicy'));
-      case 'import':
-        return this.access.workspaceOfImport(uuid(req.params?.id, 'import'));
-      case 'memo':
-        return this.access.workspaceOfMemo(uuid(req.params?.id, 'memo'));
-      case 'workflow-definition':
-        return this.access.workspaceOfWorkflowDefinition(uuid(req.params?.id, 'workflow'));
-      case 'workflow-run':
-        return this.access.workspaceOfWorkflowRun(uuid(req.params?.id, 'workflowRun'));
-      case 'template':
-        return this.access.workspaceOfTemplate(uuid(req.params?.id, 'template'));
-      case 'blueprint':
-        return this.access.workspaceOfBlueprint(uuid(req.params?.id, 'blueprint'));
-      case 'share-link':
-        return this.access.workspaceOfShareLink(uuid(req.params?.id, 'shareLink'));
-      case 'site':
-        return this.access.workspaceOfSite(uuid(req.params?.id, 'site'));
-      case 'site-version':
-        return this.access.workspaceOfSiteVersion(uuid(req.params?.id, 'siteVersion'));
-      case 'site-domain':
-        return this.access.workspaceOfSiteDomain(uuid(req.params?.id, 'siteDomain'));
-      case 'export':
-        return this.access.workspaceOfExport(uuid(req.params?.id, 'export'));
-      case 'connector':
-        return this.access.workspaceOfConnector(uuid(req.params?.id, 'connector'));
-      case 'connector-run':
-        return this.access.workspaceOfConnectorRun(uuid(req.params?.runId, 'connectorRun'));
-      case 'connection':
-        return this.access.workspaceOfConnection(uuid(req.params?.id, 'connection'));
-      case 'chat-integration':
-        return this.access.workspaceOfChatIntegration(uuid(req.params?.id, 'chatIntegration'));
-      case 'chat-binding':
-        return this.access.workspaceOfChatBinding(uuid(req.params?.id, 'chatBinding'));
-      case 'chat-subscription':
-        return this.access.workspaceOfChatSubscription(uuid(req.params?.id, 'chatSubscription'));
-      case 'group':
-        return this.access.workspaceOfGroup(uuid(req.params?.id, 'group'));
-      case 'access-request':
-        return this.access.workspaceOfAccessRequest(uuid(req.params?.id, 'accessRequest'));
-      case 'capture':
-        return this.access.workspaceOfCapture(uuid(req.params?.id, 'capture'));
-      case 'release-tag':
-        return this.access.workspaceOfReleaseTag(uuid(req.params?.id, 'releaseTag'));
-      case 'conflict':
-        return this.access.workspaceOfConflict(uuid(req.params?.id, 'conflict'));
-      case 'workspace':
-        return this.access.workspaceExists(uuid(req.params?.id, 'workspace'));
-      case 'document':
-      case 'merge-request':
-      case 'project':
-        throw new Error(`resolveTarget handles ${spec.source}`);
+  private intId(value: unknown, subject: string): number {
+    const n = Number(value);
+    if (!Number.isInteger(n) || n <= 0) {
+      throw new BadRequestException(t('error.invalidNumericId', { subject: t(`subject.${subject}`) }));
     }
+    return n;
+  }
+
+  private async resolveWorkspace(source: WorkspaceSource, req: Req): Promise<string> {
+    if (source === 'body') return this.uuid(req.body?.workspaceId, 'workspaceId');
+    if (source === 'query') return this.uuid(req.query?.workspaceId, 'workspaceId');
+    if (source === 'workspace') return this.access.workspaceExists(this.uuid(req.params?.id, 'workspace'));
+    const row = WORKSPACE_SOURCES[source];
+    const raw = req.params?.[row.param ?? 'id'];
+    return this.access.workspaceOf(source, row.int ? this.intId(raw, row.subject) : this.uuid(raw, row.subject));
   }
 }

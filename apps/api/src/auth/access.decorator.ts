@@ -1,5 +1,6 @@
 import { SetMetadata, createParamDecorator, type ExecutionContext } from '@nestjs/common';
 import type { MemberCapability, WorkspaceFeature, WorkspaceRole } from '@knowledge/contracts';
+import type { RowSource } from './workspace-sources.js';
 
 export const ACCESS_META = 'knowledge:access';
 export const PUBLIC_META = 'knowledge:public';
@@ -9,49 +10,13 @@ export const QUERY_TOKEN_OK_META = 'knowledge:query-token-ok';
 export const UNVERIFIED_OK_META = 'knowledge:unverified-ok';
 export const FEATURE_META = 'knowledge:feature';
 
-/** Where AclGuard finds the workspace id for a route (resolved in PostgreSQL). */
-export type WorkspaceSource =
-  | 'body' // request body carries workspaceId
-  | 'query' // ?workspaceId=
-  | 'document' // :id path param is a document id
-  | 'merge-request' // :id path param is a merge request id
-  | 'job' // :id path param is an ingestion job id
-  | 'project' // :id path param is a project id (resolved to its workspace)
-  | 'assistant-thread' // :id path param is an assistant chat thread id
-  | 'assistant-message' // :id path param is an assistant chat message id (resolved through its thread; docs/features/38)
-  | 'knowledge-issue' // :id path param is a knowledge issue id (docs/features/38, phase 3)
-  | 'ai-skill' // :id path param is an AI skill id
-  | 'ai-plugin' // :id path param is an AI plugin (MCP server) id
-  | 'ai-provider' // :id path param is an AI provider profile id
-  | 'ai-model' // :id path param is an ai_models id
-  | 'agent-trigger' // :id path param is an agent trigger id (#70)
-  | 'agent-learning' // :id path param is an agent learning id (#70)
-  | 'glossary-term' // :id path param is a glossary term id
-  | 'source-policy' // :id path param is a web source policy id (docs/features/25)
-  | 'saved-filter' // :filterId path param is a saved merge-request filter id (integer)
-  | 'import' // :id path param is an import job id (docs/features/16)
-  | 'memo' // :id path param is a memo id (#551; ownership is the service's)
-  | 'workflow-definition' // :id path param is a workflow definition id (docs/features/17)
-  | 'workflow-run' // :id path param is a workflow run id (docs/features/17)
-  | 'template' // :id path param is a page template id (issue #69)
-  | 'blueprint' // :id path param is a project blueprint row id (#716)
-  | 'share-link' // :id path param is a share link id (docs/features/43)
-  | 'site' // :id path param is a published site id (docs/features/44)
-  | 'site-version' // :id path param is a site version id (resolved through its site; docs/features/44)
-  | 'site-domain' // :id path param is a site domain id (resolved through its site; docs/features/44)
-  | 'export' // :id path param is an export job id (docs/features/45)
-  | 'connector' // :id path param is a connector id (docs/features/19)
-  | 'connector-run' // :runId path param is a connector run id (docs/features/19)
-  | 'connection' // :id path param is a connection id (#564)
-  | 'chat-integration' // :id path param is a chat bot id (issue #71)
-  | 'chat-binding' // :id path param is a chat channel binding id (issue #71)
-  | 'chat-subscription' // :id path param is a chat subscription id (issue #71, phase 3)
-  | 'group' // :id path param is a user group id (issue #76)
-  | 'access-request' // :id path param is an access request id (issue #76, phase 5)
-  | 'capture' // :id path param is a knowledge capture id (issue #73, phase 3)
-  | 'release-tag' // :id path param is a release tag id (issue #81, phase 2)
-  | 'conflict' // :id path param is a knowledge conflict id (issue #81, phase 5)
-  | 'workspace'; // :id path param IS the workspace id (existence-checked)
+/**
+ * Where AclGuard finds the workspace id for a route (resolved in PostgreSQL):
+ * the request body's or query's `workspaceId`, the `:id` param as the
+ * workspace itself (existence-checked), or a row named by a path param —
+ * one row in `WORKSPACE_SOURCES` per resource.
+ */
+export type WorkspaceSource = 'body' | 'query' | 'workspace' | RowSource;
 
 export interface AccessSpec {
   role: WorkspaceRole;

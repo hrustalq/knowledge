@@ -3,7 +3,6 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ForbiddenException, HttpException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import matter from 'gray-matter';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
@@ -20,14 +19,13 @@ import { runGit, GitRepoService, type Project } from './git-repo.service.js';
 import { isValidRefName } from './git-objects.js';
 import { stripIdLine, withIdLine, type GitView, type IdLine, type ModelCommit, type PageExt } from './git-view.js';
 import { ProjectCommitsService, type CommitChange } from './project-commits.service.js';
+import { parseMarkdown } from '../common/frontmatter.js';
+import { FILENAME_FORBIDDEN, RESERVED_STEM } from './slug.js';
 
 const ZERO = '0'.repeat(40);
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 /** No `atomic`: each ref is its own transaction, so a push of two branches can land one. */
 const CAPS = 'report-status side-band-64k push-options ofs-delta object-format=sha1 agent=knowledge';
-const RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/i;
-// eslint-disable-next-line no-control-regex
-const FORBIDDEN = /[/\\:*?"<>|\u0000-\u001f\u007f]/;
 
 /** A push refused: `reason` goes in git's `ng <ref> <reason>`, `message` in `remote:` lines. */
 export class PushRefused extends Error {
@@ -401,7 +399,7 @@ export class GitPushService {
       const orphan = dir !== null && !stems.has(dir) && before.has(path) && !stemsBefore.has(dir);
       if (dir !== null && !stems.has(dir) && !orphan) throw new PushRefused('no parent page', t('error.git.push.noParentPage', { path, dir }));
       const name = nameOf(path);
-      if (!name || FORBIDDEN.test(name) || RESERVED.test(name) || name.startsWith('.')) {
+      if (!name || FILENAME_FORBIDDEN.test(name) || RESERVED_STEM.test(name) || name.startsWith('.')) {
         throw new PushRefused('bad file name', t('error.git.push.badName', { path, name }));
       }
       const folded = `${dir ?? ''}/${name.normalize('NFC').toLowerCase()}`;
@@ -581,16 +579,14 @@ export class GitPushService {
       // One feed row per pushed ref, beside each revision's own `revision.finalized`
       // (triggers and chat notifications read those). Post-commit, as every record is.
       const tip = planned.at(-1)!;
-      this.prisma.onCommit(() =>
-        this.activity.record({
-          workspaceId,
-          projectId,
-          actor: userId,
-          action: 'git.pushed',
-          subjectId: commitIds.get(tip.id),
-          metadata: { branch, commits: planned.length, pages: last.size, sha: tip.sha, subject: tip.subject },
-        }),
-      );
+      void this.activity.record({
+        workspaceId,
+        projectId,
+        actor: userId,
+        action: 'git.pushed',
+        subjectId: commitIds.get(tip.id),
+        metadata: { branch, commits: planned.length, pages: last.size, sha: tip.sha, subject: tip.subject },
+      });
       return { created, revisionFor: (documentId: string) => last.get(documentId) ?? null };
     });
   }
@@ -604,7 +600,7 @@ export class GitPushService {
       await this.prisma.revisionParent.create({ data: { revisionId: draft.revisionId, parentRevisionId: rev(ch.secondParent), parentOrder: hasFirst ? 2 : 1 } });
     }
     const row = await this.prisma.documentRevision.findUniqueOrThrow({ where: { id: draft.revisionId }, select: { s3Key: true, contentType: true } });
-    const body = source ? Buffer.from(await this.storage.getObjectBytes(source.s3Key)) : (ch.content as { body: Buffer }).body;
+    const body = source ? Buffer.from(await this.storage.getObjectBytes(source.s3Key, source.s3VersionId)) : (ch.content as { body: Buffer }).body;
     const idLine = source ? source.idLine : (ch.content as { idLine: IdLine | null }).idLine;
     await this.storage.putObjectBytes(row.s3Key, new Uint8Array(body), row.contentType);
     if (idLine) await this.prisma.documentRevision.update({ where: { id: draft.revisionId }, data: { idLine: idLine as object } });
@@ -725,7 +721,7 @@ function parseCommit(raw: Buffer): { parents: string[]; header: Buffer } {
 /** A new page's title: its frontmatter `title:`, else its first `# ` heading, else its file name. */
 function titleOf(text: string, fileName: string): string {
   try {
-    const fm = matter(text).data as { title?: unknown };
+    const fm = parseMarkdown(text).data;
     if (typeof fm.title === 'string' && fm.title.trim()) return fm.title.trim();
   } catch {
     // Unparseable frontmatter is the page's own business; the heading or the name will do.

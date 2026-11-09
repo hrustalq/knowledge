@@ -13,6 +13,7 @@ import { PermissionsCoreModule } from '../permissions/permissions-core.module.js
 import { ApiSpecsCoreModule } from '../api-specs/api-specs-core.module.js';
 import { DocumentsService } from './documents.service.js';
 import { CompareService } from './compare.service.js';
+import { HistoryService } from './history.service.js';
 import { ReadCacheCoreModule } from '../cache/read-cache.module.js';
 import { GitCoreModule } from '../git/git-core.module.js';
 
@@ -58,7 +59,8 @@ import { GitCoreModule } from '../git/git-core.module.js';
   ],
   // CompareService too: a merge request's lint reads its diff in the worker
   // (#74). Prisma, storage, graph and the spec diff — all already here.
-  providers: [DocumentsService, CompareService],
-  exports: [DocumentsService, CompareService, GitCoreModule],
+  // HistoryService: a page's facts at a revision, read by the REST route and MCP (#822).
+  providers: [DocumentsService, CompareService, HistoryService],
+  exports: [DocumentsService, CompareService, HistoryService, GitCoreModule],
 })
 export class DocumentsCoreModule {}

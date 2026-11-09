@@ -29,6 +29,7 @@ import type {
   UpdateGlossaryTermDto,
 } from './glossary.dto.js';
 import { t } from '../i18n/t.js';
+import { parseModelJson } from '../common/model-json.js';
 
 /** How much of a page the extractor sees — the same ceiling `review` uses. */
 const MAX_SOURCE_CHARS = 60_000;
@@ -247,7 +248,7 @@ export class GlossaryService {
       { json: true },
     );
 
-    const parsed = safeJson(raw);
+    const parsed = parseModelJson(raw);
     const proposals = Array.isArray(parsed?.terms) ? (parsed.terms as Array<Record<string, unknown>>) : [];
     const seen = new Set<string>();
     const suggestions: GlossaryTermSuggestion[] = [];
@@ -458,15 +459,6 @@ export function countOccurrences(haystack: string, term: string): number {
   // as grounding for an AI proposal must be the same rule, and once was not.
   const re = new RegExp(`${GLOSSARY_BOUNDARY_BEFORE}${escaped}${GLOSSARY_BOUNDARY_AFTER}`, 'giu');
   return (haystack.match(re) ?? []).length;
-}
-
-export function safeJson(raw: string): Record<string, unknown> | null {
-  try {
-    const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
-    return JSON.parse(fenced ? fenced[1]! : raw) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
 }
 
 /** Row -> contract. `anchor` is Json, so it is read defensively. */

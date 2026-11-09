@@ -4,6 +4,7 @@ import type { Env } from '../config/env.js';
 import { isWorkspaceFeature, type WorkspaceFeature } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { t } from '../i18n/t.js';
+import { ttlCache } from '../common/ttl-cache.js';
 
 const FEATURES_TTL_MS = 30_000;
 
@@ -15,7 +16,7 @@ const FEATURES_TTL_MS = 30_000;
  */
 @Injectable()
 export class FeaturesService {
-  private readonly cache = new Map<string, { at: number; value: WorkspaceFeature[] }>();
+  private readonly cache = ttlCache<WorkspaceFeature[]>(FEATURES_TTL_MS);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -32,13 +33,11 @@ export class FeaturesService {
   }
 
   async disabled(workspaceId: string): Promise<WorkspaceFeature[]> {
-    const hit = this.cache.get(workspaceId);
-    if (hit && Date.now() - hit.at < FEATURES_TTL_MS) return hit.value;
-    const row = await this.prisma.workspaceSettings.findUnique({ where: { workspaceId }, select: { disabledFeatures: true } });
-    // A value a later release dropped from the catalogue reads as nothing.
-    const value = (row?.disabledFeatures ?? []).filter(isWorkspaceFeature);
-    this.cache.set(workspaceId, { at: Date.now(), value });
-    return value;
+    return this.cache.get(workspaceId, async () => {
+      const row = await this.prisma.workspaceSettings.findUnique({ where: { workspaceId }, select: { disabledFeatures: true } });
+      // A value a later release dropped from the catalogue reads as nothing.
+      return (row?.disabledFeatures ?? []).filter(isWorkspaceFeature);
+    });
   }
 
   /** 404, as if the route or tool did not exist: a switched-off section is absent, not forbidden. */

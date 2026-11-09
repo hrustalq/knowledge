@@ -14,7 +14,7 @@ import { AiUsageService } from '../ai/ai-usage.service.js';
 import { AssistantClient } from '../assistant/assistant.client.js';
 import { wrapUntrusted } from '../common/untrusted.js';
 import { DocumentsService } from '../documents/documents.service.js';
-import { safeJson } from '../glossary/glossary.service.js';
+import { parseModelJson } from '../common/model-json.js';
 import { t } from '../i18n/t.js';
 import { type AccessScope, visibilityWhere } from '../permissions/access-scope.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -32,9 +32,9 @@ import {
   type SourceExtraction,
   type SourceFingerprint,
 } from './source-recipe.js';
+import { AUTHOR_ID_STUB } from '../activity/actor.js';
 
 /** The system's own actor id: a draft nobody asked for is billed to no one. */
-const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
 /** Characters of the last good page the agent reads beside the outline. */
 const PAGE_EXCERPT = 4_000;
 
@@ -267,17 +267,23 @@ export class SourceRecipesService {
     const markdown = ex.markdown.trim();
     const hash = sha256(markdown);
     if (link.pausedAt || hash === link.contentHash) return;
-    const draft = await this.documents.createRevision(
-      link.documentId,
-      { message: t('connector.sourceRecipeMessage'), contentType: 'text/markdown' },
-      undefined,
-      userId,
-      { connectorId: row.id },
+    // The revision and the link's `contentHash` commit together (#658, #811),
+    // or the next pull reads the recipe's own revision as a new version.
+    await this.prisma.withTransaction(
+      async () => {
+        const written = await this.documents.writeRevision(
+          link.documentId,
+          { text: markdown, message: t('connector.sourceRecipeMessage'), contentType: 'text/markdown' },
+          userId,
+          { connectorId: row.id },
+        );
+        await this.prisma.connectorLink.update({
+          where: { id: link.id },
+          data: { contentHash: hash, revisionId: written.revisionId, lastPulledAt: new Date() },
+        });
+      },
+      { timeout: 30_000, maxWait: 10_000 },
     );
-    const stored = await this.prisma.documentRevision.findUniqueOrThrow({ where: { id: draft.revisionId } });
-    await this.storage.putObjectText(stored.s3Key, markdown, stored.contentType);
-    await this.documents.finalizeRevision(link.documentId, draft.revisionId);
-    await this.prisma.connectorLink.update({ where: { id: link.id }, data: { contentHash: hash, revisionId: draft.revisionId, lastPulledAt: new Date() } });
   }
 
   /**
@@ -334,7 +340,7 @@ export class SourceRecipesService {
       ],
       { json: true },
     );
-    const parsed = (safeJson(raw) ?? {}) as Record<string, unknown>;
+    const parsed = (parseModelJson(raw) ?? {}) as Record<string, unknown>;
     const { recipe } = readRecipe(parsed.recipe ?? parsed);
     // The agent drafts where the content is; the rules are people's and carry over.
     if (current && recipe.rules.length === 0) recipe.rules = current.rules;
@@ -430,8 +436,8 @@ export class SourceRecipesService {
   private async headMarkdown(documentId: string): Promise<string> {
     const document = await this.prisma.document.findUnique({ where: { id: documentId }, include: { branches: true } });
     const head = document?.branches.find((b) => b.name === document.defaultBranch)?.headRevisionId;
-    const revision = head ? await this.prisma.documentRevision.findUnique({ where: { id: head }, select: { s3Key: true } }) : null;
-    return revision ? this.storage.getObjectText(revision.s3Key) : '';
+    const revision = head ? await this.prisma.documentRevision.findUnique({ where: { id: head }, select: { s3Key: true, s3VersionId: true } }) : null;
+    return revision ? this.storage.getObjectText(revision.s3Key, revision.s3VersionId) : '';
   }
 
   private parse(value: unknown): SourceRecipe {

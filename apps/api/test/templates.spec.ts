@@ -315,6 +315,7 @@ function fakePrisma() {
   const versions: VersionRow[] = [];
   const count = (id: string) => versions.filter((v) => v.templateId === id).length;
   const prisma = {
+    $executeRaw: async () => 1,
     templates,
     versions,
     pageTemplate: {

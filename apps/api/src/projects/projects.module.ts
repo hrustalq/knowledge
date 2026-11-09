@@ -11,8 +11,7 @@ import { FulltextModule } from '../fulltext/fulltext.module.js';
 import { DocumentsCoreModule } from '../documents/documents-core.module.js';
 import { TemplatesCoreModule } from '../templates/templates-core.module.js';
 import { AiCoreModule } from '../ai/ai-core.module.js';
-import { ProjectScaffoldService } from './project-scaffold.service.js';
-import { BlueprintsService } from '../blueprints/blueprints.service.js';
+import { ProjectScaffoldCoreModule } from './project-scaffold-core.module.js';
 import { BlueprintDeriveService } from '../blueprints/blueprint-derive.service.js';
 import { AgentCoreModule } from '../agents/agent-core.module.js';
 import { AssistantClientModule } from '../assistant/assistant-client.module.js';
@@ -21,16 +20,11 @@ import { BlueprintGenerateService } from '../blueprints/blueprint-generate.servi
 
 /**
  * Workspace > Project > Document — the organizational layer above pages.
- * Controller-bearing but also imported by McpModule (knowledge_list_projects),
- * same shape as IngestionAdminModule: its only guard dependencies come from
- * the global AuthModule, so the MCP context can instantiate it safely. Keep it
- * out of WorkerModule, which has no auth at all — the worker imports
- * ProjectsCoreModule instead.
+ * API-only: MCP and the worker import ProjectsCoreModule (and MCP
+ * ProjectScaffoldCoreModule) instead (#822).
  */
 @Module({
-  // Storage/graph/fulltext are here for the cascade teardown only. All three
-  // are already in the MCP context (which imports this module), and none opens
-  // a connection at construction, so they cost that context nothing.
+  // Storage/graph/fulltext are here for the cascade teardown only.
   // Documents, templates and AI skills write a scaffold's pages and conventions (#716).
   imports: [
     ProjectsCoreModule,
@@ -45,12 +39,14 @@ import { BlueprintGenerateService } from '../blueprints/blueprint-generate.servi
     AgentCoreModule,
     AssistantClientModule,
     AssistantReadToolsModule,
+    // Blueprints and the scaffold write, shared with MCP (#822).
+    ProjectScaffoldCoreModule,
   ],
   controllers: [ProjectsController, BlueprintsController],
-  providers: [ProjectOverviewService, ProjectCascadeService, ProjectScaffoldService, BlueprintsService, BlueprintDeriveService, BlueprintGenerateService],
+  providers: [ProjectOverviewService, ProjectCascadeService, BlueprintDeriveService, BlueprintGenerateService],
   // The cascade is exported because connector revert reuses it to undo a page
   // this product otherwise has no way to delete (docs/features/26). Blueprints
   // and scaffold back knowledge_list_blueprints / knowledge_scaffold_project (#716).
-  exports: [ProjectsCoreModule, ProjectCascadeService, BlueprintsService, ProjectScaffoldService],
+  exports: [ProjectsCoreModule, ProjectCascadeService, ProjectScaffoldCoreModule],
 })
 export class ProjectsModule {}

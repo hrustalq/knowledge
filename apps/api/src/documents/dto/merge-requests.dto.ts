@@ -16,16 +16,10 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
-import { MR_PROVENANCES, type MergeRequestProvenance } from '@knowledge/contracts';
+import { MR_PROVENANCES, type MergeRequestProvenance, UUID_RE } from '@knowledge/contracts';
 import { vmsg } from '../../common/validation.js';
 import { MAX_INLINE_TEXT_CHARS } from './documents.dto.js';
 
-/**
- * Permissive UUID shape (any version digit, nil allowed) — class-validator's
- * @IsUUID rejects the zeros AUTHOR_ID_STUB used when no principal exists.
- * Mirrors UUID_RE in acl.guard.ts.
- */
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * A text anchor stores the passage it was left on, so it stays bounded: a

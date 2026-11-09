@@ -10,6 +10,7 @@ import { t, withLocale } from '../../i18n/t.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type { TrackerBodyLine } from '../adapters/tracker.js';
 import { TrackerRegistry } from '../tracker-registry.service.js';
+import { Ticker } from '../../common/ticker.js';
 
 const SWEEP_INTERVAL_MS = 15_000;
 const BATCH = 5;
@@ -32,9 +33,8 @@ const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 @Injectable()
 export class ScribePublishSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ScribePublishSweeper.name);
+  private readonly ticker = new Ticker(this.logger);
   private readonly webBaseUrl: string;
-  private timer?: NodeJS.Timeout;
-  private running = false;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -47,19 +47,15 @@ export class ScribePublishSweeper implements OnModuleInit, OnModuleDestroy {
   }
 
   onModuleInit(): void {
-    this.timer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS);
-    this.timer.unref();
+    this.ticker.every(SWEEP_INTERVAL_MS, () => this.sweep());
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   async sweep(): Promise<void> {
-    // Back-pressure: never a second sweep while one is in flight.
-    if (this.running) return;
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       const since = new Date(Date.now() - MAX_AGE_MS);
       const due = await this.prisma.$queryRaw<Array<{ id: string }>>`
         SELECT id FROM agent_runs
@@ -80,11 +76,7 @@ export class ScribePublishSweeper implements OnModuleInit, OnModuleDestroy {
           this.logger.warn(`Publishing scribe run ${id} failed: ${(error as Error).message}`);
         }
       }
-    } catch (error) {
-      this.logger.warn(`Scribe sweep failed (non-fatal): ${(error as Error).message}`);
-    } finally {
-      this.running = false;
-    }
+    });
   }
 
   async publish(run: AgentRun): Promise<void> {

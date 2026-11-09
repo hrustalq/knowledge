@@ -161,6 +161,7 @@ describe('the listening switch', () => {
   function integrations(kind: string, post: () => Promise<unknown> = async () => ({})) {
     const row = { id: 'b-1', integrationId: 'int-1', workspaceId: 'ws', externalChatId: '-1001', listening: false, locale: null };
     const prisma = {
+      withTransaction: vi.fn(async (fn: () => Promise<unknown>) => fn()),
       chatChannelBinding: {
         findUnique: vi.fn(async () => row),
         update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ ...row, ...data, _count: { subscriptions: 0 }, createdAt: new Date(), updatedAt: new Date() })),

@@ -14,6 +14,7 @@ export interface IndexPage {
   projectId: string;
   headRevisionId: string;
   s3Key: string;
+  s3VersionId: string | null;
   kind: string;
 }
 
@@ -116,6 +117,56 @@ export function truncatedMarker(remaining: number, see: string[]): string {
 
 export function unavailableMarker(documentId: string): string {
   return `<!-- unavailable: ${documentId} -->\n\n`;
+}
+
+/** The subset of an express Response the streamer writes to. */
+export interface TextSink {
+  write(chunk: string): unknown;
+}
+
+export interface FullStats {
+  pages: number;
+  bytes: number;
+  truncated: number;
+  unavailable: number;
+}
+
+/**
+ * Write an llms-full body page by page, never buffered: bodies are read
+ * `window` at a time but written in order. The status line is already sent, so
+ * nothing here may throw: `read` resolves null for a page it could not read
+ * (a marker), and a cap is a marker naming the `narrower` dumps.
+ */
+export async function streamPages<P extends { id: string; title: string; url: string }>(
+  out: TextSink,
+  pages: P[],
+  read: (page: P) => Promise<string | null>,
+  caps: { maxDocs: number; maxBytes: number; window: number; narrower?: string[] },
+): Promise<FullStats> {
+  // A window of 0 (or a missing setting) would slice nothing and spin forever.
+  const window = caps.window > 0 ? caps.window : 1;
+  const stats: FullStats = { pages: 0, bytes: 0, truncated: 0, unavailable: 0 };
+  let i = 0;
+  outer: while (i < pages.length) {
+    const batch = pages.slice(i, i + window);
+    const bodies = await Promise.all(batch.map(read));
+    for (let j = 0; j < batch.length; j++) {
+      if (stats.pages >= caps.maxDocs) break outer;
+      const page = batch[j];
+      const body = bodies[j];
+      const chunk = body === null ? unavailableMarker(page.id) : `${renderFullPage({ title: page.title, body, url: page.url })}\n`;
+      const size = Buffer.byteLength(chunk);
+      if (stats.bytes + size > caps.maxBytes) break outer;
+      out.write(chunk);
+      stats.bytes += size;
+      if (body === null) stats.unavailable++;
+      else stats.pages++;
+      i++;
+    }
+  }
+  stats.truncated = pages.length - i;
+  if (stats.truncated > 0) out.write(truncatedMarker(stats.truncated, caps.narrower ?? []));
+  return stats;
 }
 
 export interface HubWorkspace {

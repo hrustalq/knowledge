@@ -1,5 +1,5 @@
-import { I18nContext } from 'nestjs-i18n';
 import { DEFAULT_LOCALE, isLocale, parseAcceptLanguage, type Locale } from '@knowledge/contracts';
+import { readCookie } from '../common/cookies.js';
 
 /**
  * Narrow a stored `locale` column (a plain TEXT) to a supported Locale.
@@ -28,24 +28,10 @@ export function localeFromRequest(req: {
   if (isLocale(query)) return query;
 
   const rawCookie = req.headers['cookie'];
-  const cookie = Array.isArray(rawCookie) ? rawCookie.join('; ') : rawCookie;
-  for (const part of cookie?.split(';') ?? []) {
-    const eq = part.indexOf('=');
-    if (eq > 0 && part.slice(0, eq).trim() === 'kn_lang') {
-      const value = decodeURIComponent(part.slice(eq + 1).trim());
-      if (isLocale(value)) return value;
-    }
-  }
+  const cookie = readCookie(Array.isArray(rawCookie) ? rawCookie.join('; ') : rawCookie, 'kn_lang');
+  if (isLocale(cookie)) return cookie;
 
   const raw = req.headers['accept-language'];
   return parseAcceptLanguage(Array.isArray(raw) ? raw[0] : raw) ?? DEFAULT_LOCALE;
 }
 
-/**
- * The language the current HTTP request resolved to, for code that must put a
- * locale into a value (an AiCallContext) rather than just translate a string.
- * Falls back to the default outside a request — worker paths pass their own.
- */
-export function currentLocale(): Locale {
-  return asLocale(I18nContext.current()?.lang);
-}

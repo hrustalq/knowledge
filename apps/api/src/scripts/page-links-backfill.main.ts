@@ -1,7 +1,7 @@
+import { parseArgs } from 'node:util';
 import { Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
-import matter from 'gray-matter';
 import { isApiSpecKind, isTestFixtureKind } from '@knowledge/contracts';
 import { BootstrapModule } from '../config/bootstrap.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
@@ -10,6 +10,7 @@ import { StorageModule } from '../storage/storage.module.js';
 import { StorageService } from '../storage/storage.service.js';
 import type { Env } from '../config/env.js';
 import { pageLinkTargets, replacePageLinks } from '../ingestion/page-links.js';
+import { parseMarkdown } from '../common/frontmatter.js';
 
 /**
  * One-time fill of `page_links` (#673) for pages indexed before it existed.
@@ -31,15 +32,11 @@ import { pageLinkTargets, replacePageLinks } from '../ingestion/page-links.js';
 @Module({ imports: [BootstrapModule, PrismaModule, StorageModule] })
 class BackfillModule {}
 
-const args = process.argv.slice(2);
-const option = (name: string): string | undefined => {
-  const i = args.indexOf(name);
-  return i >= 0 ? args[i + 1] : undefined;
-};
+const { values } = parseArgs({ options: { workspace: { type: 'string' }, 'dry-run': { type: 'boolean' } } });
 
 async function main(): Promise<void> {
-  const workspaceId = option('--workspace');
-  const dryRun = args.includes('--dry-run');
+  const workspaceId = values.workspace;
+  const dryRun = values['dry-run'] === true;
 
   const app = await NestFactory.createApplicationContext(BackfillModule, { logger: ['error', 'warn'] });
   const prisma = app.get(PrismaService);
@@ -57,14 +54,14 @@ async function main(): Promise<void> {
   for (const doc of docs) {
     const headId = doc.branches.find((b) => b.name === doc.defaultBranch)?.headRevisionId;
     const head = headId
-      ? await prisma.documentRevision.findUnique({ where: { id: headId }, select: { id: true, status: true, s3Key: true } })
+      ? await prisma.documentRevision.findUnique({ where: { id: headId }, select: { id: true, status: true, s3Key: true, s3VersionId: true } })
       : null;
     if (!head || head.status !== 'indexed' || isApiSpecKind(doc.kind) || isTestFixtureKind(doc.kind)) {
       skipped += 1;
       continue;
     }
     try {
-      const found = pageLinkTargets(matter(await storage.getObjectText(head.s3Key)).content, webBaseUrl, doc.id);
+      const found = pageLinkTargets(parseMarkdown(await storage.getObjectText(head.s3Key, head.s3VersionId)).body, webBaseUrl, doc.id);
       links += found.length;
       if (dryRun) continue;
       if (await replacePageLinks(prisma, { workspaceId: doc.workspaceId, documentId: doc.id, revisionId: head.id, links: found })) {

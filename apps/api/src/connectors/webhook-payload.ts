@@ -34,10 +34,10 @@ export function verifyHubSignature(headers: Record<string, string>, rawBody: str
 }
 
 /** Parse a payload we did not write. Anything that is not an object reads as absent. */
-export function safeJson(raw: string): Record<string, any> | null {
+export function safeJson<T = Record<string, any>>(raw: string): T | null {
   try {
     const parsed: unknown = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? (parsed as Record<string, any>) : null;
+    return parsed && typeof parsed === 'object' ? (parsed as T) : null;
   } catch {
     return null;
   }

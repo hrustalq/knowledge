@@ -1,13 +1,15 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AGENT_SCHEDULE_TICK_MINUTES, isScheduleDue } from '@knowledge/contracts';
+import { AGENT_SCHEDULE_TICK_MINUTES, isScheduleDue, RUNNABLE_AGENTS } from '@knowledge/contracts';
+import { requeueStale, staleFailure } from '../common/requeue-stale.js';
+import { withSubjectLock } from '../common/subject-lock.js';
 import type { Env } from '../config/env.js';
 import { asLocale } from '../i18n/locale.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AgentProducer } from './agent.producer.js';
-import { AGENT_MAX_ATTEMPTS } from './agent.constants.js';
-import { RUNNABLE_AGENTS } from './agent.executor.js';
+import { AGENT_MAX_ATTEMPTS, agentRunLockKey } from './agent.constants.js';
 import { scheduleOf } from './agent-schedule.js';
+import { Ticker } from '../common/ticker.js';
 
 /** One tick; a schedule's own interval or slot is checked inside it. */
 const SWEEP_INTERVAL_MS = AGENT_SCHEDULE_TICK_MINUTES * 60_000;
@@ -40,8 +42,7 @@ const STALE_PENDING_MS = 10 * 60_000;
 @Injectable()
 export class AgentScheduleSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(AgentScheduleSweeper.name);
-  private timer?: NodeJS.Timeout;
-  private running = false;
+  private readonly ticker = new Ticker(this.logger);
   private schedulesEnabled = false;
 
   constructor(
@@ -53,44 +54,42 @@ export class AgentScheduleSweeper implements OnModuleInit, OnModuleDestroy {
   onModuleInit(): void {
     this.schedulesEnabled = this.config.get('AGENT_SCHEDULE_ENABLED', { infer: true });
     if (!this.schedulesEnabled) this.logger.log('Agent schedules disabled (AGENT_SCHEDULE_ENABLED=false); run recovery stays on');
-    this.timer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS);
-    this.timer.unref();
+    this.ticker.every(SWEEP_INTERVAL_MS, () => this.sweep());
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   async sweep(): Promise<void> {
-    if (this.running) return;
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       await this.requeueStuck();
       await this.relayPending();
       if (this.schedulesEnabled) await this.startDue();
-    } catch (error) {
-      this.logger.warn(`Agent schedule sweep failed: ${String(error)}`);
-    } finally {
-      this.running = false;
-    }
+    });
   }
 
-  /** A worker that died mid-run leaves a row claimed forever without this. */
+  /**
+   * A worker that died mid-run leaves a row claimed forever without this. A
+   * run out of attempts is failed, which frees its schedule, its trigger's
+   * in-flight guard and its `AGENT_TRIGGER_MAX_ACTIVE` slot (#809).
+   */
   private async requeueStuck(): Promise<void> {
-    const cutoff = new Date(Date.now() - STALE_RUN_MS);
-    const stuck = await this.prisma.agentRun.findMany({
-      where: { status: 'running', updatedAt: { lt: cutoff }, attempt: { lt: AGENT_MAX_ATTEMPTS } },
-      select: { id: true, attempt: true },
-      take: BATCH,
-    });
-    for (const run of stuck) {
-      await this.prisma.agentRun.update({
-        where: { id: run.id },
-        data: { status: 'pending', attempt: { increment: 1 } },
-      });
+    await requeueStale({
+      staleField: 'updatedAt',
+      staleMs: STALE_RUN_MS,
+      maxAttempts: AGENT_MAX_ATTEMPTS,
+      find: (where) => this.prisma.agentRun.findMany({ where, select: { id: true, attempt: true }, take: BATCH }),
+      attemptOf: (run) => run.attempt,
+      requeue: (where) => this.prisma.agentRun.updateMany({ where, data: { status: 'pending', attempt: { increment: 1 } } }),
+      fail: (where) =>
+        this.prisma.agentRun.updateMany({
+          where,
+          data: { status: 'failed', error: staleFailure(AGENT_MAX_ATTEMPTS + 1), stage: null, finishedAt: new Date() },
+        }),
       // A retry needs a fresh jobId: the kept failed job blocks reuse.
-      await this.producer.enqueueRetry(run.id, run.attempt + 1);
-    }
+      enqueue: (run) => this.producer.enqueueRetry(run.id, run.attempt + 1),
+    });
   }
 
   /**
@@ -145,12 +144,6 @@ export class AgentScheduleSweeper implements OnModuleInit, OnModuleDestroy {
       const { spec, state } = scheduleOf(agent);
       if (!isScheduleDue(spec, state, new Date())) continue;
 
-      // Back-pressure: never a second run while one is in flight.
-      const inFlight = await this.prisma.agentRun.count({
-        where: { workspaceId: agent.workspaceId, agentKey: agent.key, status: { in: ['pending', 'running'] } },
-      });
-      if (inFlight > 0) continue;
-
       try {
         // A manual run freezes the principal's locale; a scheduled one has no
         // principal, so it is frozen from the owner's stored preference. Left
@@ -162,7 +155,13 @@ export class AgentScheduleSweeper implements OnModuleInit, OnModuleDestroy {
         });
         // The run and the stamp that says it started commit together (#657);
         // the job follows the commit, and `relayPending` covers a lost one.
-        await this.prisma.withTransaction(async () => {
+        // Back-pressure under the manual start's lock (#815): never a second
+        // run while one is in flight, even one a click queued mid-tick.
+        const queued = await withSubjectLock(this.prisma, agentRunLockKey(agent.workspaceId, agent.key), async () => {
+          const inFlight = await this.prisma.agentRun.count({
+            where: { workspaceId: agent.workspaceId, agentKey: agent.key, status: { in: ['pending', 'running'] } },
+          });
+          if (inFlight > 0) return false;
           const run = await this.prisma.agentRun.create({
             data: {
               workspaceId: agent.workspaceId,
@@ -176,8 +175,9 @@ export class AgentScheduleSweeper implements OnModuleInit, OnModuleDestroy {
           });
           await this.prisma.aiAgent.update({ where: { id: agent.id }, data: { lastRunAt: new Date() } });
           this.prisma.onCommit(() => this.producer.enqueue(run.id));
+          return true;
         });
-        started++;
+        if (queued) started++;
       } catch (error) {
         // One bad schedule must not stop the sweep for every other workspace.
         this.logger.warn(`Could not start scheduled run for ${agent.key}: ${String(error)}`);

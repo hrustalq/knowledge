@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { ScimToken } from '@prisma/client';
 import type { ScimDefaultRole, ScimSettingsView, ScimTokenCreated, ScimTokenView } from '@knowledge/contracts';
@@ -7,8 +6,9 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { AuditService } from '../auth/audit.service.js';
 import type { Principal } from '../auth/principal.js';
 import { RoleSyncService, scimDefaultRoleOf } from '../auth/sso/role-sync.service.js';
-import { hashScimToken, SCIM_TOKEN_PREFIX } from './scim-token.guard.js';
+import { SCIM_TOKEN_PREFIX } from './scim-token.guard.js';
 import { ScimService } from './scim.service.js';
+import { mintToken } from '../auth/auth-tokens.js';
 
 /** Live tokens per workspace: one per IdP, plus room to rotate. */
 const MAX_ACTIVE_TOKENS = 10;
@@ -81,9 +81,9 @@ export class ScimTokensService {
   async create(workspaceId: string, name: string, principal: Principal): Promise<ScimTokenCreated> {
     const active = await this.prisma.scimToken.count({ where: { workspaceId, revokedAt: null } });
     if (active >= MAX_ACTIVE_TOKENS) throw new BadRequestException(t('error.scim.tokenLimit', { max: MAX_ACTIVE_TOKENS }));
-    const secret = `${SCIM_TOKEN_PREFIX}${randomBytes(32).toString('hex')}`;
+    const { token: secret, tokenHash } = mintToken(SCIM_TOKEN_PREFIX);
     const row = await this.prisma.scimToken.create({
-      data: { workspaceId, name, tokenHash: hashScimToken(secret), prefix: secret.slice(0, SCIM_TOKEN_PREFIX.length + 8) },
+      data: { workspaceId, name, tokenHash, prefix: secret.slice(0, SCIM_TOKEN_PREFIX.length + 8) },
     });
     void this.audit.record({
       workspaceId,

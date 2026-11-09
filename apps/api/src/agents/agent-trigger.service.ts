@@ -7,7 +7,9 @@ import {
   type AgentRunEvent,
   type AgentRunInput,
   type AgentTriggerFilter,
+  isTriggerableAgent,
 } from '@knowledge/contracts';
+import { lockSubject } from '../common/subject-lock.js';
 import type { Env } from '../config/env.js';
 import { asLocale } from '../i18n/locale.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -17,7 +19,6 @@ import { AccessService } from '../auth/access.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { AgentRegistryService } from './agent-registry.service.js';
 import { AgentProducer } from './agent.producer.js';
-import { isTriggerableAgent } from './agent.executor.js';
 
 /**
  * What the listener learned about one event, resolved against PostgreSQL —
@@ -122,7 +123,7 @@ export class AgentTriggerService {
     private readonly access: AccessService,
     private readonly permissions: PermissionService,
   ) {
-    this.maxActive = Number(config.get('AGENT_TRIGGER_MAX_ACTIVE', { infer: true }) ?? 5);
+    this.maxActive = config.get('AGENT_TRIGGER_MAX_ACTIVE', { infer: true });
   }
 
   async fire(
@@ -142,7 +143,7 @@ export class AgentTriggerService {
     }
 
     const agent = await this.registry.resolve(trigger.workspaceId, trigger.agentKey).catch(() => null);
-    if (!agent?.enabled || !agent.surfaces.includes('background') || !isTriggerableAgent(trigger.agentKey)) {
+    if (!agent?.enabled || !isTriggerableAgent(trigger.agentKey)) {
       this.logger.warn(`Trigger skipped for ${label}: the agent is disabled or cannot run in the background`);
       return skip('agent-unavailable');
     }
@@ -188,7 +189,7 @@ export class AgentTriggerService {
     });
 
     const result = await this.prisma.$transaction(async (tx): Promise<TriggerOutcome> => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`agent-trigger:${trigger.workspaceId}`}))`;
+      await lockSubject(tx, `agent-trigger:${trigger.workspaceId}`);
 
       // A re-index of the same revision is the same news.
       if (facts.event.revisionId) {

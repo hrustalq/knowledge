@@ -1,11 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsInt, IsNotEmpty, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
-import { COMPONENT_DRAFT_MAX_PATHS } from '@knowledge/contracts';
+import { COMPONENT_DRAFT_MAX_PATHS, UUID_RE } from '@knowledge/contracts';
 import { vmsg } from '../common/validation.js';
 import { MAX_USAGE_LIMIT } from './component-match.js';
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** `?symbols=A,B` → `['A', 'B']`; repeated `?symbols=` params arrive as an array already. */
 const toList = ({ value }: { value: unknown }) =>

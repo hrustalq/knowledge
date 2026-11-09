@@ -11,10 +11,9 @@ import {
   MaxLength,
   ValidateIf,
 } from 'class-validator';
-import { DOCUMENT_CATEGORIES, type DocumentCategory } from '@knowledge/contracts';
+import { DOCUMENT_CATEGORIES, type DocumentCategory, UUID_RE } from '@knowledge/contracts';
 import { vmsg } from '../../common/validation.js';
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /** Matches InlineContentDto's ceiling — both end up as one document body. */
 const MAX_MARKDOWN_CHARS = 500_000;

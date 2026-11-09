@@ -4,6 +4,7 @@ import type { Env } from '../config/env.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
+import { Ticker } from '../common/ticker.js';
 
 /** Files deleted per tick: each is an S3 round trip, and a tick must not outlast its interval. */
 const EXPIRIES_PER_TICK = 50;
@@ -29,8 +30,7 @@ export const EXPORT_SWEEP_INTERVAL_MS = 60_000;
 @Injectable()
 export class ExportSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ExportSweeper.name);
-  private timer?: NodeJS.Timeout;
-  private running = false;
+  private readonly ticker = new Ticker(this.logger);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -39,18 +39,15 @@ export class ExportSweeper implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit(): void {
-    this.timer = setInterval(() => void this.sweep(), EXPORT_SWEEP_INTERVAL_MS);
-    this.timer.unref();
+    this.ticker.every(EXPORT_SWEEP_INTERVAL_MS, () => this.sweep());
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   async sweep(now = new Date()): Promise<{ expired: number; failed: number }> {
-    if (this.running) return { expired: 0, failed: 0 };
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       const expired = await this.expireFiles(now).catch((e: unknown) => {
         this.logger.warn(`export expiry sweep failed: ${String(e)}`);
         return 0;
@@ -61,9 +58,7 @@ export class ExportSweeper implements OnModuleInit, OnModuleDestroy {
       });
       if (failed > 0) this.logger.warn(`failed ${failed} exports that lost their worker`);
       return { expired, failed };
-    } finally {
-      this.running = false;
-    }
+    }, { expired: 0, failed: 0 });
   }
 
   private async expireFiles(now: Date): Promise<number> {

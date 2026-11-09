@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { ChatIntegration } from '@prisma/client';
-import { Redis } from 'ioredis';
+import { SharedRedis } from '../redis/shared-redis.js';
 import WebSocket from 'ws';
 import type { Env } from '../config/env.js';
 import { guardedLookup } from '../common/safe-fetch.js';
@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CHAT_SOCKET_KINDS, ChatAdapterRegistry } from './adapters/chat-adapter.registry.js';
 import { ChatAnswersService } from './chat-answers.service.js';
 import { ChatIntegrationsService } from './chat-integrations.service.js';
+import { Ticker } from '../common/ticker.js';
 
 /** Reconnect delays after a drop, in ms; the last one repeats. Reset by the server's `hello`. */
 const BACKOFF_MS = [1_000, 2_000, 5_000, 10_000, 30_000, 60_000];
@@ -87,15 +88,13 @@ interface Connection {
 @Injectable()
 export class ChatSocketSupervisor implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(ChatSocketSupervisor.name);
+  private readonly ticker = new Ticker(this.logger);
   private readonly connections = new Map<string, Connection>();
   private readonly enabled: boolean;
   private readonly syncMs: number;
   private readonly allowPrivate: boolean;
   private readonly connect: ChatSocketFactory;
   private readonly claims: ChatInboxClaims;
-  private redis: Redis | null = null;
-  private timer: NodeJS.Timeout | null = null;
-  private syncing = false;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -103,6 +102,7 @@ export class ChatSocketSupervisor implements OnApplicationBootstrap, OnModuleDes
     private readonly integrations: ChatIntegrationsService,
     private readonly answers: ChatAnswersService,
     config: ConfigService<Env, true>,
+    redis: SharedRedis,
     @Optional() @Inject(CHAT_SOCKET_FACTORY) connect?: ChatSocketFactory,
     @Optional() @Inject(CHAT_INBOX_CLAIMS) claims?: ChatInboxClaims,
   ) {
@@ -110,27 +110,23 @@ export class ChatSocketSupervisor implements OnApplicationBootstrap, OnModuleDes
     this.syncMs = config.get('CHAT_SOCKET_SYNC_MS', { infer: true });
     this.allowPrivate = config.get('CHAT_ALLOW_PRIVATE_URLS', { infer: true });
     this.connect = connect ?? ((url, token) => this.dial(url, token));
-    this.claims = claims ?? this.redisClaims(config.get('REDIS_URL', { infer: true }));
+    this.claims = claims ?? redisClaims(redis);
   }
 
   onApplicationBootstrap(): void {
     if (!this.enabled) return;
     void this.sync();
-    this.timer = setInterval(() => void this.sync(), this.syncMs);
-    this.timer.unref();
+    this.ticker.every(this.syncMs, () => this.sync());
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
     for (const id of [...this.connections.keys()]) this.close(id);
-    void this.redis?.quit().catch(() => undefined);
   }
 
   /** Open what is enabled and not held, close what is held and no longer enabled, reopen what changed. */
   async sync(): Promise<void> {
-    if (this.syncing) return;
-    this.syncing = true;
-    try {
+    return this.ticker.exclusive(async () => {
       const rows = await this.prisma.chatIntegration.findMany({ where: { kind: { in: [...CHAT_SOCKET_KINDS] }, enabled: true } });
       const wanted = new Map(rows.map((r) => [r.id, r]));
       for (const [id, conn] of this.connections) {
@@ -140,11 +136,7 @@ export class ChatSocketSupervisor implements OnApplicationBootstrap, OnModuleDes
         else conn.row = row;
       }
       for (const row of rows) if (!this.connections.has(row.id)) this.open(row);
-    } catch (err) {
-      this.logger.warn({ msg: 'chat socket sync failed', error: String(err) });
-    } finally {
-      this.syncing = false;
-    }
+    });
   }
 
   /** Bots with a socket open and greeted — for specs and diagnostics. */
@@ -306,15 +298,11 @@ export class ChatSocketSupervisor implements OnApplicationBootstrap, OnModuleDes
     }) as unknown as ChatSocket;
   }
 
-  private redisClaims(url: string): ChatInboxClaims {
-    return {
-      claim: async (key) => {
-        // Opened by the first message, not at boot: with CHAT_ENABLED off nothing dials Redis.
-        this.redis ??= new Redis(url, { lazyConnect: true, maxRetriesPerRequest: 1, connectTimeout: 2_000 });
-        return (await this.redis.set(key, '1', 'EX', CLAIM_TTL_SEC, 'NX')) === 'OK';
-      },
-    };
-  }
+}
+
+/** A claim is one `SET NX`: whichever process sets the key first owns the post. */
+function redisClaims(redis: SharedRedis): ChatInboxClaims {
+  return { claim: async (key) => (await redis.client.set(key, '1', 'EX', CLAIM_TTL_SEC, 'NX')) === 'OK' };
 }
 
 function fingerprint(row: ChatIntegration): string {

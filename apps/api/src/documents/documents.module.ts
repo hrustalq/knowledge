@@ -9,13 +9,11 @@ import { DocumentsCoreModule } from './documents-core.module.js';
 import { NotificationsCoreModule } from '../notifications/notifications-core.module.js';
 import { GlossaryCoreModule } from '../glossary/glossary-core.module.js';
 import { DocumentsController } from './documents.controller.js';
-import { DocumentRelationsService } from './document-relations.service.js';
 import { MergeRequestsController } from './merge-requests.controller.js';
 import { MergeRequestsCoreModule } from './merge-requests-core.module.js';
-import { MergeRequestThreadsService } from './merge-request-threads.service.js';
+import { MergeRequestThreadsCoreModule } from './merge-request-threads-core.module.js';
 import { SavedFiltersService } from './saved-filters.service.js';
 import { DocumentThreadsService } from './document-threads.service.js';
-import { HistoryService } from './history.service.js';
 import { ActivityModule } from '../activity/activity.module.js';
 import { ProjectsModule } from '../projects/projects.module.js';
 import { ConnectorsCoreModule } from '../connectors/connectors-core.module.js';
@@ -25,7 +23,6 @@ import { AgentCoreModule } from '../agents/agent-core.module.js';
 import { AgentTriggerCoreModule } from '../agents/agent-trigger-core.module.js';
 import { AiCoreModule } from '../ai/ai-core.module.js';
 import { AssistantClientModule } from '../assistant/assistant-client.module.js';
-import { MentionRepliesService } from './mention-replies.service.js';
 import { MentionReplySweeper } from './mention-reply.sweeper.js';
 import { AiReadableCoreModule } from '../ai-readable/ai-readable-core.module.js';
 import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
@@ -90,26 +87,20 @@ import { AnalyticsCoreModule } from '../analytics/analytics-core.module.js';
     LintCoreModule,
     // Opening, updating and merging merge requests (#636): core, so the git process loads it too.
     MergeRequestsCoreModule,
+    // Review threads and mention replies, shared with MCP (#822).
+    MergeRequestThreadsCoreModule,
   ],
   controllers: [DocumentsController, MergeRequestsController],
   providers: [
-    // Frontmatter relation edits (docs/features/28). API-only by construction:
-    // it opens merge requests, so it needs MergeRequestsService.
-    DocumentRelationsService,
-    MergeRequestThreadsService,
     SavedFiltersService,
     DocumentThreadsService,
-    HistoryService,
-    MentionRepliesService,
     MentionReplySweeper,
   ],
   exports: [
     DocumentsCoreModule,
-    DocumentRelationsService,
     MergeRequestsCoreModule,
-    MergeRequestThreadsService,
+    MergeRequestThreadsCoreModule,
     DocumentThreadsService,
-    HistoryService,
   ],
 })
 export class DocumentsModule {}

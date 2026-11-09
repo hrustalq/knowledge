@@ -20,6 +20,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { userAvatarUrl } from '../common/avatar-url.js';
 import type { CreateUserDto, UpdateUserDto } from './users.dto.js';
 import { currentLocale, t } from '../i18n/t.js';
+import type { Env } from '../config/env.js';
 
 /** Users management (platform admin surface — AclGuard enforces @PlatformAdmin). */
 
@@ -31,7 +32,7 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly sessions: SessionsService,
     private readonly mail: MailProducer,
-    private readonly config: ConfigService,
+    private readonly config: ConfigService<Env, true>,
     private readonly audit: AuditService,
   ) {}
 
@@ -47,33 +48,35 @@ export class UsersService {
     const email = dto.email.trim().toLowerCase();
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) throw new ConflictException(t('error.auth.emailTaken'));
-    const user = await this.prisma.user.create({
-      data: {
-        email,
-        displayName: dto.displayName.trim(),
-        isAdmin: dto.isAdmin ?? false,
-        passwordHash: dto.password ? await hashPassword(dto.password) : null,
-        // The admin's language is the best guess at the team's; the person
-        // can switch it after signing in.
-        locale: currentLocale(),
-      },
-      include: { memberships: true, apiKeys: ACTIVE_KEY },
+    const passwordHash = dto.password ? await hashPassword(dto.password) : null;
+    // The account and its invite link commit together (#816), as signup's do (#658):
+    // an account with no password and no link is unreachable, and a retry 409s.
+    const user = await this.prisma.withTransaction(async () => {
+      const created = await this.prisma.user.create({
+        data: {
+          email,
+          displayName: dto.displayName.trim(),
+          isAdmin: dto.isAdmin ?? false,
+          passwordHash,
+          // The admin's language is the best guess at the team's; the person
+          // can switch it after signing in.
+          locale: currentLocale(),
+        },
+        include: { memberships: true, apiKeys: ACTIVE_KEY },
+      });
+      // No password: the only way in is a link, so mail one (docs/features/41).
+      // A redeemed invite also proves the address, the way a reset does.
+      if (!passwordHash) {
+        const { token, tokenHash } = mintToken('kr_');
+        const hours = this.config.get('AUTH_INVITE_TTL_HOURS', { infer: true });
+        await this.prisma.passwordResetToken.create({
+          data: { userId: created.id, tokenHash, purpose: 'invite', expiresAt: new Date(Date.now() + hours * 3_600_000) },
+        });
+        const inviter = actor.mode === 'dev' ? null : actor.displayName;
+        this.prisma.onCommit(() => this.mail.enqueue({ template: 'invite', userId: created.id, token, inviter }));
+      }
+      return created;
     });
-    // No password: the only way in is a link, so mail one (docs/features/41).
-    // A redeemed invite also proves the address, the way a reset does.
-    if (!dto.password) {
-      const { token, tokenHash } = mintToken('kr_');
-      const hours = this.config.get<number>('AUTH_INVITE_TTL_HOURS') ?? 72;
-      await this.prisma.passwordResetToken.create({
-        data: { userId: user.id, tokenHash, purpose: 'invite', expiresAt: new Date(Date.now() + hours * 3_600_000) },
-      });
-      await this.mail.enqueue({
-        template: 'invite',
-        userId: user.id,
-        token,
-        inviter: actor.mode === 'dev' ? null : actor.displayName,
-      });
-    }
     return this.toSummary(user);
   }
 

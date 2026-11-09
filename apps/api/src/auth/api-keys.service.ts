@@ -1,4 +1,3 @@
-import { createHash, randomBytes } from 'node:crypto';
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, type ApiKey } from '@prisma/client';
 import { apiKeyScopeOf, type ApiKeyInfo, type CreateApiKeyResponse, type ListApiKeysResponse } from '@knowledge/contracts';
@@ -6,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import type { Principal } from './principal.js';
 import type { CreateApiKeyDto } from './api-keys.dto.js';
 import { t } from '../i18n/t.js';
+import { mintToken } from './auth-tokens.js';
 
 /** Plenty for "one per machine per client"; a ceiling so a script loop cannot fill the table. */
 const MAX_ACTIVE_KEYS = 50;
@@ -49,12 +49,12 @@ export class ApiKeysService {
 
     // Same shape as `make auth-bootstrap`: 24 random bytes, and only the
     // SHA-256 ever reaches PostgreSQL.
-    const apiKey = `kn_${randomBytes(24).toString('hex')}`;
+    const { token: apiKey, tokenHash: keyHash } = mintToken('kn_', 24);
     const row = await this.prisma.apiKey.create({
       data: {
         userId: principal.userId,
         name: dto.name,
-        keyHash: createHash('sha256').update(apiKey).digest('hex'),
+        keyHash,
         prefix: apiKey.slice(0, 11),
         scope: dto.scope ?? 'write',
         workspaceId: dto.workspaceId ?? null,
@@ -81,11 +81,14 @@ export class ApiKeysService {
    */
   async rotate(principal: Principal): Promise<CreateApiKeyResponse> {
     this.requireSession(principal);
-    await this.prisma.apiKey.updateMany({
-      where: { userId: principal.userId, revokedAt: null },
-      data: { revokedAt: new Date() },
+    // One commit (#816): a failed mint must not leave the caller with no key at all.
+    return this.prisma.withTransaction(async () => {
+      await this.prisma.apiKey.updateMany({
+        where: { userId: principal.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      return this.create(principal, { name: 'Rotated key' });
     });
-    return this.create(principal, { name: 'Rotated key' });
   }
 
   /**

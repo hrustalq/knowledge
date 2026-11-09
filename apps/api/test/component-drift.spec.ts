@@ -450,7 +450,6 @@ describe('proposing a path fix', () => {
   // No registry, client or budget: a path fix with no drafted body must never reach the drafter.
   const service = new AgentFindingsService(
     {} as never,
-    {} as never,
     { getContent: async () => current } as never,
     {} as never,
     {} as never,

@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
-import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Redis } from 'ioredis';
+import type { Redis } from 'ioredis';
 import type { Env } from '../config/env.js';
+import { SharedRedis } from '../redis/shared-redis.js';
 
 /**
  * Every key family the read cache holds (#472, docs/architecture/10-caching.md),
@@ -16,20 +17,15 @@ import type { Env } from '../config/env.js';
  * the TTL is only the backstop.
  */
 export const READ_CACHE_FAMILIES = {
-  /** A finalized revision's raw bytes. Immutable: a revision never changes. */
-  content: { key: (revisionId: string) => `content:${revisionId}`, ttlMs: 24 * 3_600_000, invalidatedBy: 'nothing (immutable)' },
-  /** A query's embedding in one embedding space. Immutable for that space. */
+  /** A finalized revision's raw bytes. Immutable: a revision never changes, so nothing invalidates it. */
+  content: { key: (revisionId: string) => `content:${revisionId}`, ttlMs: 24 * 3_600_000 },
+  /** A query's embedding in one embedding space. Immutable: the signature names the space. */
   embedding: {
     key: (signature: string, text: string) => `embedding:${signature}:${createHash('sha256').update(text).digest('hex')}`,
     ttlMs: 24 * 3_600_000,
-    invalidatedBy: 'nothing (the signature names the space)',
   },
-  /** The sparse knowledge-health settings row. */
-  healthSettings: {
-    key: () => 'health-settings',
-    ttlMs: null,
-    invalidatedBy: 'VerificationPolicyService.update',
-  },
+  /** The sparse knowledge-health settings row. Invalidated by `VerificationPolicyService.update`. */
+  healthSettings: { key: () => 'health-settings', ttlMs: null },
 } as const;
 
 /** `global` for an answer no workspace owns (an embedding of a query text). */
@@ -42,20 +38,16 @@ export type CacheNamespace = string | 'global';
  * Keys are `cache:{workspaceId|global}:{family key}`, each with a TTL.
  */
 @Injectable()
-export class ReadCache implements OnModuleDestroy {
+export class ReadCache {
   private readonly logger = new Logger(ReadCache.name);
   private readonly redis: Redis | null;
   private readonly defaultTtlMs: number;
 
-  constructor(config: ConfigService<Env, true>) {
+  constructor(config: ConfigService<Env, true>, redis: SharedRedis) {
     this.defaultTtlMs = config.get('READ_CACHE_DEFAULT_TTL_MS', { infer: true });
-    // Lazy, for the reason UrlTicketsService gives: the OpenAPI generator boots
-    // AppModule with no Redis running. One retry and a short connect timeout,
-    // so a dead Redis costs a read two seconds once, not forever.
-    this.redis = config.get('READ_CACHE_ENABLED', { infer: true })
-      ? new Redis(config.get('REDIS_URL', { infer: true }), { lazyConnect: true, maxRetriesPerRequest: 1, connectTimeout: 2_000 })
-      : null;
-    this.redis?.on('error', () => undefined);
+    // SharedRedis's one retry and short connect timeout mean a dead Redis
+    // costs a read two seconds once, not forever.
+    this.redis = config.get('READ_CACHE_ENABLED', { infer: true }) ? redis.client : null;
   }
 
   /** The cached answer, or `load()`'s — which is stored for next time. */
@@ -92,9 +84,5 @@ export class ReadCache implements OnModuleDestroy {
     } catch {
       // The TTL is the backstop.
     }
-  }
-
-  onModuleDestroy(): void {
-    this.redis?.disconnect();
   }
 }

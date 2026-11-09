@@ -79,6 +79,7 @@ import {
 import { DecisionClient } from './decision.client.js';
 import { ProvenanceService } from '../feedback/provenance.service.js';
 import { AnswerFeedbackService } from '../feedback/answer-feedback.service.js';
+import { parseModelJson } from '../common/model-json.js';
 
 const SEVERITIES = ['error', 'warning', 'suggestion'] as const;
 
@@ -412,7 +413,7 @@ export class AssistantService {
       ],
       { json: true },
     );
-    const parsed = this.parseJson(raw);
+    const parsed = parseModelJson(raw);
     const issues: AssistantIssue[] = Array.isArray(parsed?.issues)
       ? (parsed?.issues as Array<Record<string, unknown>>)
           .filter((i) => typeof i?.message === 'string')
@@ -1487,21 +1488,4 @@ export class AssistantService {
     return { results: res.results, related: res.related };
   }
 
-  private parseJson(raw: string): Record<string, unknown> | null {
-    const stripped = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
-    try {
-      return JSON.parse(stripped) as Record<string, unknown>;
-    } catch {
-      const start = stripped.indexOf('{');
-      const end = stripped.lastIndexOf('}');
-      if (start >= 0 && end > start) {
-        try {
-          return JSON.parse(stripped.slice(start, end + 1)) as Record<string, unknown>;
-        } catch {
-          /* fall through */
-        }
-      }
-    }
-    return null;
-  }
 }

@@ -14,6 +14,7 @@ import {
   type HarvestDelivery,
   type HarvestItem,
 } from './connector.types.js';
+import { safeJson } from '../webhook-payload.js';
 
 /** A delivery stamped further than this from now is refused as a replay. */
 const MAX_AGE_MS = 5 * 60_000;
@@ -76,7 +77,7 @@ export class ZendeskAdapter implements ConnectorAdapter {
     if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
     const at = Date.parse(timestamp);
     if (!Number.isFinite(at) || Math.abs(Date.now() - at) > MAX_AGE_MS) return null;
-    const body = parseJson<ZendeskTriggerBody>(rawBody);
+    const body = safeJson<ZendeskTriggerBody>(rawBody);
     const ticket = String(body?.ticket_id ?? '').trim();
     const actor = String(body?.updated_by_id ?? '').trim();
     const status = String(body?.status ?? '').trim().toLowerCase();
@@ -146,15 +147,6 @@ function zendeskBase(ctx: Pick<ConnectorContext, 'config'>): string {
 function splitCredential(raw: string): [string, string] {
   const at = raw.indexOf(':');
   return at < 0 ? [raw, ''] : [raw.slice(0, at), raw.slice(at + 1)];
-}
-
-function parseJson<T>(raw: string): T | null {
-  try {
-    const value: unknown = JSON.parse(raw);
-    return value && typeof value === 'object' ? (value as T) : null;
-  } catch {
-    return null;
-  }
 }
 
 interface ZendeskTriggerBody {

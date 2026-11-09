@@ -14,7 +14,7 @@ import { AiUsageService } from '../ai/ai-usage.service.js';
 import { AssistantClient } from '../assistant/assistant.client.js';
 import { wrapUntrusted } from '../common/untrusted.js';
 import { DocumentsService } from '../documents/documents.service.js';
-import { safeJson } from '../glossary/glossary.service.js';
+import { parseModelJson } from '../common/model-json.js';
 import { t } from '../i18n/t.js';
 import { type AccessScope, visibilityWhere } from '../permissions/access-scope.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -340,7 +340,7 @@ export class SourceRecipesService {
       ],
       { json: true },
     );
-    const parsed = (safeJson(raw) ?? {}) as Record<string, unknown>;
+    const parsed = (parseModelJson(raw) ?? {}) as Record<string, unknown>;
     const { recipe } = readRecipe(parsed.recipe ?? parsed);
     // The agent drafts where the content is; the rules are people's and carry over.
     if (current && recipe.rules.length === 0) recipe.rules = current.rules;

@@ -13,6 +13,7 @@ import {
   type HarvestDelivery,
   type HarvestItem,
 } from './connector.types.js';
+import { safeJson } from '../webhook-payload.js';
 
 /** Each data region is its own API host. */
 const API_HOSTS: Record<string, string> = {
@@ -90,7 +91,7 @@ export class IntercomAdapter implements ConnectorAdapter {
     const a = Buffer.from(intercomSignature(secret, rawBody));
     const b = Buffer.from(signature);
     if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
-    const body = parseJson<IntercomNotification>(rawBody);
+    const body = safeJson<IntercomNotification>(rawBody);
     const conversation = body?.data?.item;
     if (body?.topic !== 'conversation.admin.closed' || !conversation?.id) return { item: null };
     const close = [...(conversation.conversation_parts?.conversation_parts ?? [])].reverse().find((p) => p.part_type === 'close');
@@ -156,15 +157,6 @@ export class IntercomAdapter implements ConnectorAdapter {
       ctx,
     );
     return (await res.json()) as T;
-  }
-}
-
-function parseJson<T>(raw: string): T | null {
-  try {
-    const value: unknown = JSON.parse(raw);
-    return value && typeof value === 'object' ? (value as T) : null;
-  } catch {
-    return null;
   }
 }
 

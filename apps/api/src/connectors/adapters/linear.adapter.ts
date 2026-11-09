@@ -12,6 +12,7 @@ import {
   type HarvestDelivery,
   type HarvestItem,
 } from './connector.types.js';
+import { safeJson } from '../webhook-payload.js';
 
 const LINEAR_API = 'https://api.linear.app/graphql';
 /** Linear's own advice: refuse a delivery stamped more than a minute away. */
@@ -73,7 +74,7 @@ export class LinearAdapter implements ConnectorAdapter {
     const a = Buffer.from(linearSignature(secret, rawBody), 'hex');
     const b = Buffer.from(signature, 'hex');
     if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
-    const body = parseJson<LinearWebhook>(rawBody);
+    const body = safeJson<LinearWebhook>(rawBody);
     if (!body || typeof body.webhookTimestamp !== 'number' || Math.abs(Date.now() - body.webhookTimestamp) > MAX_AGE_MS) return null;
     const actor = body.actor;
     const changedState = !!body.updatedFrom && 'stateId' in body.updatedFrom;
@@ -150,15 +151,6 @@ class LinearError extends Error {
     readonly notFound: boolean,
   ) {
     super(message);
-  }
-}
-
-function parseJson<T>(raw: string): T | null {
-  try {
-    const value: unknown = JSON.parse(raw);
-    return value && typeof value === 'object' ? (value as T) : null;
-  } catch {
-    return null;
   }
 }
 

@@ -4,6 +4,7 @@ import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { AgentRouterService } from '../agents/agent-router.service.js';
 import { AiConfigService } from './ai-config.service.js';
 import { AssistantClient } from '../assistant/assistant.client.js';
+import { parseModelJson } from '../common/model-json.js';
 
 /**
  * The router's classifier (docs/features/20), API-side only.
@@ -57,7 +58,7 @@ export class AgentTiebreakService implements AgentTiebreak {
       { json: true },
     );
 
-    const parsed = safeJson(raw);
+    const parsed = parseModelJson(raw);
     const agentKey = typeof parsed?.agentKey === 'string' ? parsed.agentKey : null;
     if (!agentKey) return null;
     const confidence = typeof parsed?.confidence === 'number' ? clamp(parsed.confidence) : 0.5;
@@ -68,21 +69,3 @@ export class AgentTiebreakService implements AgentTiebreak {
 
 const clamp = (n: number) => Math.min(1, Math.max(0, n));
 
-/** Fence-tolerant parse, matching AssistantService.parseJson's leniency. */
-function safeJson(raw: string): Record<string, unknown> | null {
-  const stripped = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
-  try {
-    return JSON.parse(stripped) as Record<string, unknown>;
-  } catch {
-    const start = stripped.indexOf('{');
-    const end = stripped.lastIndexOf('}');
-    if (start >= 0 && end > start) {
-      try {
-        return JSON.parse(stripped.slice(start, end + 1)) as Record<string, unknown>;
-      } catch {
-        return null;
-      }
-    }
-    return null;
-  }
-}

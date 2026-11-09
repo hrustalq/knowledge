@@ -14,31 +14,6 @@
     }
   },
   {
-    "type": "reachability",
-    "from": "src/mcp/mcp.module.ts",
-    "to": "src/documents/mention-reply.sweeper.ts",
-    "rule": {
-      "severity": "error",
-      "name": "mcp-loads-no-sweeper"
-    },
-    "via": [
-      {
-        "name": "src/documents/documents.module.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
-      },
-      {
-        "name": "src/documents/mention-reply.sweeper.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
-      }
-    ]
-  },
-  {
     "type": "dependency",
     "from": "src/auth/me.controller.ts",
     "to": "src/prisma/prisma.service.ts",

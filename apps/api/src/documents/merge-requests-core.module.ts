@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { DocumentRelationsService } from './document-relations.service.js';
 import { ActivityCoreModule } from '../activity/activity-core.module.js';
 import { ApiSpecsCoreModule } from '../api-specs/api-specs-core.module.js';
 import { AuthCoreModule } from '../auth/auth-core.module.js';
@@ -32,7 +33,9 @@ import { MergeRequestsService } from './merge-requests.service.js';
     LintCoreModule,
     ConflictsCoreModule,
   ],
-  providers: [MergeRequestsService],
-  exports: [MergeRequestsService],
+  // Frontmatter relation edits (docs/features/28) open merge requests, so they
+  // live beside them; captures and MCP reach them without DocumentsModule (#822).
+  providers: [MergeRequestsService, DocumentRelationsService],
+  exports: [MergeRequestsService, DocumentRelationsService],
 })
 export class MergeRequestsCoreModule {}

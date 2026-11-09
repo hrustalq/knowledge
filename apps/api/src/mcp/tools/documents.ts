@@ -376,7 +376,7 @@ export function registerDocumentsTools(ctx: McpToolContext): void {
 }
 
 /** Inline-content revision flow: draft on branch head → put bytes → finalize. */
-async function createRevision(
+export async function createRevision(
   svc: McpServices,
   documentId: string,
   opts: { branch?: string; baseRevisionId?: string; content: string; message?: string; syntax?: ApiSpecSyntax },

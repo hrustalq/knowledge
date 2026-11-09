@@ -44,6 +44,7 @@ import {
 } from './assistant-tool-types.js';
 import type { AssistantToolContext, AssistantToolResult } from './assistant-tool-types.js';
 import { readPromptFields } from './prompt-fields.js';
+import { UUID_RE } from '@knowledge/contracts';
 
 /** Tools that mutate the workspace — require 'editor', not just 'viewer'. Exported so
  * AssistantService can also filter them out of the tool list when mode = 'ask'.
@@ -963,7 +964,7 @@ export class AssistantToolsService {
     needed: AccessLevel,
   ): Promise<{ id: string; title: string } | string> {
     const notFound = `Document ${documentId} not found in this workspace`;
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(documentId)) return notFound;
+    if (!UUID_RE.test(documentId)) return notFound;
     const doc = await this.prisma.document.findUnique({
       where: { id: documentId },
       select: { id: true, workspaceId: true, title: true },

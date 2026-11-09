@@ -44,7 +44,7 @@ const config = (mode = 'api-key') => ({ get: (k: string) => ({ AUTH_MODE: mode, 
 
 function authWith(prisma: unknown = {}, mode = 'api-key') {
   const store = new FakeStore();
-  const tickets = new UrlTicketsService(config(mode) as never, store);
+  const tickets = new UrlTicketsService(config(mode) as never, { client: store } as never);
   return { auth: new TokenAuthService(config(mode) as never, prisma as never, {} as never, tickets), tickets, store };
 }
 

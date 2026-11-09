@@ -1,7 +1,6 @@
 import { embedLoneUrls } from '@knowledge/editor-schema/markdown';
 import { Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
-import matter from 'gray-matter';
 import { safeJson } from '../webhook-payload.js';
 import { verifyRepoDelivery } from '../drift/pull-request-delivery.js';
 import { safeFetch } from '../../common/safe-fetch.js';
@@ -31,6 +30,7 @@ import { githubRepoAcl, githubTeamMembers } from './github-acl.js';
 import { repoSpecFiles, suggestSpecFiles, type RepoSpecFile } from './repo-specs.js';
 import { apiSpecGlobs } from '@knowledge/contracts';
 import { globToRegExp } from '../../common/glob.js';
+import { parseMarkdown } from '../../common/frontmatter.js';
 
 /**
  * Markdown in a git repository (docs/features/19).
@@ -168,7 +168,7 @@ export class MarkdownGitAdapter implements ConnectorAdapter {
     if (!bytes) throw new Error(t('error.connector.fileGone', { path: ref.externalId }, ctx.locale));
 
     const raw = Buffer.from(bytes).toString('utf8');
-    const parsed = matter(raw);
+    const parsed = parseMarkdown(raw);
     const warnings: string[] = [];
 
     // Obsidian wiki-links resolve inside a vault and nowhere else. They are left
@@ -185,7 +185,7 @@ export class MarkdownGitAdapter implements ConnectorAdapter {
       ref,
       title: (typeof parsed.data.title === 'string' && parsed.data.title) || titleFor(ref.externalId, bytes),
       // A Figma link alone on a line is how a plain markdown file embeds a frame (#470).
-      markdown: embedLoneUrls(parsed.content.trim()),
+      markdown: embedLoneUrls(parsed.body.trim()),
       frontmatter: { ...parsed.data, source: blobUrl(ctx, ref.externalId, await resolveBranch(ctx)) },
       warnings,
     };

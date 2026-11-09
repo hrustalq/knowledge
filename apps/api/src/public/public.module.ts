@@ -20,7 +20,7 @@ import { PublicSiteSearchService } from './public-site-search.service.js';
 import { PublicSitesController } from './public-sites.controller.js';
 import { PublicSitesService } from './public-sites.service.js';
 import { PublicSharesService } from './public-shares.service.js';
-import { PublicStore } from './public-store.js';
+import { RedisModule } from '../redis/redis.module.js';
 import { ShareUnlockService } from './share-unlock.service.js';
 import { SiteSessionService } from './site-session.service.js';
 import { SiteSignInController } from './site-sign-in.controller.js';
@@ -34,6 +34,7 @@ import { SiteSignInController } from './site-sign-in.controller.js';
  */
 @Module({
   imports: [
+    RedisModule,
     PrismaModule,
     PublishingCoreModule,
     DocumentsCoreModule,
@@ -53,7 +54,6 @@ import { SiteSignInController } from './site-sign-in.controller.js';
   ],
   controllers: [PublicSharesController, PublicSitesController, PublicSiteFilesController, PublicDomainsController, SiteSignInController],
   providers: [
-    PublicStore,
     PublicRateLimiter,
     PublicRateLimitGuard,
     ShareUnlockService,

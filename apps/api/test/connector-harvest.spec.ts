@@ -1,10 +1,12 @@
+import { createHmac } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ConnectorContext, HarvestItem } from '../src/connectors/adapters/connector.types.js';
 
 vi.mock('../src/common/safe-fetch.js', () => ({ safeFetch: vi.fn() }));
 
 const { safeFetch } = await import('../src/common/safe-fetch.js');
-const { LinearAdapter, linearSignature } = await import('../src/connectors/adapters/linear.adapter.js');
+const { LinearAdapter } = await import('../src/connectors/adapters/linear.adapter.js');
+const linearSignature = (secret: string, body: string) => createHmac('sha256', secret).update(body).digest('hex');
 const { ConnectorHarvestSweeper, capMessages, harvestLabelFor, qualifies } = await import('../src/connectors/harvest/connector-harvest.sweeper.js');
 const { HarvestRefused } = await import('../src/chat/harvest.service.js');
 

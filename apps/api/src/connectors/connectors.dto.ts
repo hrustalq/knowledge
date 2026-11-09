@@ -43,10 +43,10 @@ import type {
   DocumentCategory,
 } from '@knowledge/contracts';
 import { vmsg } from '../common/validation.js';
+import { UUID_RE } from '@knowledge/contracts';
 
 const DIRECTIONS = ['pull', 'push', 'both'];
 const CONFLICTS = ['manual', 'external-wins', 'local-wins'];
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /**
  * `null` clears and absent keeps, so nullable fields use ValidateIf rather than

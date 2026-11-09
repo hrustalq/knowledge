@@ -1,8 +1,7 @@
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { Redis } from 'ioredis';
+import { Injectable, Logger } from '@nestjs/common';
+import type { Redis } from 'ioredis';
 import type { KnowledgeEvent } from '@knowledge/contracts';
-import type { Env } from '../config/env.js';
+import { SharedRedis } from '../redis/shared-redis.js';
 import { EVENTS_CHANNEL } from './events.constants.js';
 import { NotificationsService, type NotificationDelivery } from '../notifications/notifications.service.js';
 import { MailProducer } from '../mail/mail.producer.js';
@@ -29,28 +28,18 @@ import { isMailedReason } from '../mail/mail.types.js';
  * fan out into another one.
  */
 @Injectable()
-export class EventsPublisher implements OnModuleDestroy {
+export class EventsPublisher {
   private readonly logger = new Logger(EventsPublisher.name);
   private readonly redis: Redis;
 
   constructor(
-    config: ConfigService<Env, true>,
+    redis: SharedRedis,
     private readonly notifications: NotificationsService,
     private readonly mail: MailProducer,
   ) {
-    this.redis = new Redis(config.get('REDIS_URL', { infer: true }), {
-      lazyConnect: true,
-      // Bound how long a publish against a down Redis can hold its caller.
-      // "Non-fatal" was only ever try/catch, not latency: ioredis defaults to
-      // 20 reconnection attempts before it rejects a queued command, and
-      // `publish` sits in request paths through `ActivityService.record`.
-      //
-      // The offline queue stays ON deliberately — with `lazyConnect` the first
-      // publish is what opens the connection, so disabling it would make that
-      // one fail every time.
-      maxRetriesPerRequest: 1,
-      connectTimeout: 2_000,
-    });
+    // Bounded (one retry, 2 s connect) by SharedRedis, because `publish` sits
+    // in request paths through `ActivityService.record`.
+    this.redis = redis.client;
   }
 
   async publish(event: Omit<KnowledgeEvent, 'at'>): Promise<void> {
@@ -124,9 +113,5 @@ export class EventsPublisher implements OnModuleDestroy {
     } catch (e) {
       this.logger.warn(`Notification announce failed (non-fatal): ${(e as Error).message}`);
     }
-  }
-
-  onModuleDestroy(): void {
-    this.redis.disconnect();
   }
 }

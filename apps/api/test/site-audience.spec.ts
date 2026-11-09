@@ -14,7 +14,7 @@ import {
 import { encryptSecret } from '../src/ai/secret-box.js';
 import { SiteAudienceStamper, pathIds } from '../src/publishing/site-audience.stamper.js';
 import { SiteAudiencesService } from '../src/publishing/site-audiences.service.js';
-import { safeReturnPath } from '../src/public/public-sites.controller.js';
+import { safeReturnTo } from '../src/common/safe-return-to.js';
 import { PublicSiteSearchService } from '../src/public/public-site-search.service.js';
 import { SiteSessionService, verifyVisitorToken } from '../src/public/site-session.service.js';
 import type { PublicKeyValueStore } from '../src/public/public-store.js';
@@ -422,9 +422,9 @@ describe('search keeps hidden pages out in the statement itself', () => {
 
 describe('the session route’s redirect', () => {
   it('goes back only to a path on its own origin', () => {
-    expect(safeReturnPath('/pub/acme/guides?x=1')).toBe('/pub/acme/guides?x=1');
+    expect(safeReturnTo('/pub/acme/guides?x=1', '/')).toBe('/pub/acme/guides?x=1');
     for (const bad of [undefined, '', 'https://evil.example', '//evil.example/x', '/\\evil.example', 'javascript:alert(1)', '/a b']) {
-      expect(safeReturnPath(bad)).toBe('/');
+      expect(safeReturnTo(bad, '/')).toBe('/');
     }
   });
 });

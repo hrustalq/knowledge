@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { ChatIntegration } from '@prisma/client';
-import { Redis } from 'ioredis';
+import { SharedRedis } from '../redis/shared-redis.js';
 import WebSocket from 'ws';
 import type { Env } from '../config/env.js';
 import { guardedLookup } from '../common/safe-fetch.js';
@@ -95,7 +95,6 @@ export class ChatSocketSupervisor implements OnApplicationBootstrap, OnModuleDes
   private readonly allowPrivate: boolean;
   private readonly connect: ChatSocketFactory;
   private readonly claims: ChatInboxClaims;
-  private redis: Redis | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -103,6 +102,7 @@ export class ChatSocketSupervisor implements OnApplicationBootstrap, OnModuleDes
     private readonly integrations: ChatIntegrationsService,
     private readonly answers: ChatAnswersService,
     config: ConfigService<Env, true>,
+    redis: SharedRedis,
     @Optional() @Inject(CHAT_SOCKET_FACTORY) connect?: ChatSocketFactory,
     @Optional() @Inject(CHAT_INBOX_CLAIMS) claims?: ChatInboxClaims,
   ) {
@@ -110,7 +110,7 @@ export class ChatSocketSupervisor implements OnApplicationBootstrap, OnModuleDes
     this.syncMs = config.get('CHAT_SOCKET_SYNC_MS', { infer: true });
     this.allowPrivate = config.get('CHAT_ALLOW_PRIVATE_URLS', { infer: true });
     this.connect = connect ?? ((url, token) => this.dial(url, token));
-    this.claims = claims ?? this.redisClaims(config.get('REDIS_URL', { infer: true }));
+    this.claims = claims ?? redisClaims(redis);
   }
 
   onApplicationBootstrap(): void {
@@ -122,7 +122,6 @@ export class ChatSocketSupervisor implements OnApplicationBootstrap, OnModuleDes
   onModuleDestroy(): void {
     this.ticker.stop();
     for (const id of [...this.connections.keys()]) this.close(id);
-    void this.redis?.quit().catch(() => undefined);
   }
 
   /** Open what is enabled and not held, close what is held and no longer enabled, reopen what changed. */
@@ -299,15 +298,11 @@ export class ChatSocketSupervisor implements OnApplicationBootstrap, OnModuleDes
     }) as unknown as ChatSocket;
   }
 
-  private redisClaims(url: string): ChatInboxClaims {
-    return {
-      claim: async (key) => {
-        // Opened by the first message, not at boot: with CHAT_ENABLED off nothing dials Redis.
-        this.redis ??= new Redis(url, { lazyConnect: true, maxRetriesPerRequest: 1, connectTimeout: 2_000 });
-        return (await this.redis.set(key, '1', 'EX', CLAIM_TTL_SEC, 'NX')) === 'OK';
-      },
-    };
-  }
+}
+
+/** A claim is one `SET NX`: whichever process sets the key first owns the post. */
+function redisClaims(redis: SharedRedis): ChatInboxClaims {
+  return { claim: async (key) => (await redis.client.set(key, '1', 'EX', CLAIM_TTL_SEC, 'NX')) === 'OK' };
 }
 
 function fingerprint(row: ChatIntegration): string {

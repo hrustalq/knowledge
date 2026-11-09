@@ -83,9 +83,9 @@ import { canSee, visibilityWhere, type AccessScope } from '../permissions/access
 import { LISTED_PAGE } from '../common/listed-page.js';
 import { ReadCache, READ_CACHE_FAMILIES } from '../cache/read-cache.service.js';
 import { ProjectCommitsService } from '../git/project-commits.service.js';
+import { AUTHOR_ID_STUB } from '../activity/actor.js';
 
 /** Fallback author when no principal is supplied (AUTH_MODE=none, MCP stdio). */
-const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
 
 /**
  * Edge cap for the workspace-wide graph. Chosen for legibility, not for speed:

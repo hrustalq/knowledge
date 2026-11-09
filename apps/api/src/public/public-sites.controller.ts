@@ -46,6 +46,7 @@ import { PublicSiteSearchService } from './public-site-search.service.js';
 import { PublicSitesService } from './public-sites.service.js';
 import { SiteSessionService } from './site-session.service.js';
 import { Returns } from '../common/returns.decorator.js';
+import { safeReturnTo } from '../common/safe-return-to.js';
 
 export class ResolveSiteQueryDto {
   @ApiPropertyOptional({ description: 'Path mode: the site slug from `/pub/<slug>`' })
@@ -203,16 +204,6 @@ export class SiteSessionQueryDto {
   @IsString()
   @MaxLength(2000)
   return?: string;
-}
-
-/**
- * A path on the origin the request came in on, or `/`: a protocol-relative
- * `//host`, a backslash (which browsers read as a slash) or anything absolute
- * would make the session route an open redirect.
- */
-export function safeReturnPath(raw: string | undefined): string {
-  if (!raw || !raw.startsWith('/') || raw.startsWith('//') || /[\\\s]/.test(raw)) return '/';
-  return raw;
 }
 
 /**
@@ -378,7 +369,7 @@ export class PublicSitesController {
     }
     // The URL carried a code or a token: it must not travel on as a Referer.
     res.setHeader('Referrer-Policy', 'no-referrer');
-    res.redirect(302, safeReturnPath(query.return));
+    res.redirect(302, safeReturnTo(query.return, '/'));
   }
 
   @Post(':siteId/session/end')

@@ -1,4 +1,5 @@
 import type { ApiKeyScope, AuthMethod, AvatarUrl, Locale, WorkspaceRole } from '@knowledge/contracts';
+import { AUTHOR_ID_STUB } from '../activity/actor.js';
 
 /**
  * Resolved caller identity (Phase 5, plan.md §11). Attached to the request by
@@ -57,7 +58,7 @@ export interface Principal {
 
 /** AUTH_MODE=none principal. Matches the Phase 1 author stub id on purpose. */
 export const DEV_PRINCIPAL: Principal = {
-  userId: '00000000-0000-0000-0000-000000000000',
+  userId: AUTHOR_ID_STUB,
   email: 'dev@localhost',
   displayName: 'Dev (AUTH_MODE=none)',
   // No users row to hang a picture on; the initials face is correct here.

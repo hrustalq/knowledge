@@ -17,6 +17,13 @@ in the pull request that introduces them — see
 
 ### Changed
 
+- **A change to which model a purpose is routed to now reaches other processes within 30 seconds.** The chat,
+  review, extraction and decision routes are read with the rest of a workspace's AI settings, which every process
+  caches for 30 seconds and the process that saved them drops at once. Before, the route was re-read from Postgres on
+  every model call, about four times per chat turn. (#825)
+- **Each API, worker and MCP process opens one Redis connection for commands instead of up to eight.** Event
+  publishing, URL tickets, the read cache, the public site counters and sessions, and chat inbox claims now share
+  one client with the same timeouts as before. The live-event subscriber keeps its own connection. (#825)
 - **The maintenance scripts now refuse a flag they do not know.** `make backtest`, `make tune`,
   `make graph-live-backfill`, `make page-links-backfill` and `make auth-bootstrap` used to ignore an unknown or
   misspelt flag, so `ARGS="--worksapce <id>"` quietly ran against the demo workspace (or every workspace). They now
@@ -45,6 +52,17 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- **Decision-model calls now appear in the AI measurement stream.** Every other model call wrote an `ai.call`
+  event to the backtest JSONL beside its `ai_usage` row; decision calls (the Jev pre-filters) wrote only the row, so
+  backtests and `make tune` could not see them. (#825)
+- **A page with broken frontmatter is read the same way every time it is read.** gray-matter remembers a source it
+  failed to parse and, on the next read of the same text, quietly returns it unparsed. #775 fixed that for most
+  reads; the git remote's push, indexing, the markdown-git connector, structural diffs, the plain-text importer and
+  the conflict check still read through the cache, and now do not. (#825)
+- **An embed snapshot no longer queues a second reindex of a page that already has one queued or running.** (#825)
+- **Return paths after sign-in and connector setup refuse a backslash, whitespace or control character anywhere.**
+  The SSO, GitHub and Figma callbacks only refused one right after the leading `/`, while the published-site sign-in
+  refused any; they now share the stricter rule and fall back to their default page. (#825)
 - **A local MCP server (`make dev-mcp`, or an agent client's stdio connection) no longer runs API background work.**
   Each stdio MCP process loaded the API's document, project, search and workflow modules whole, so it built their
   HTTP controllers and ran the agent mention reply sweeper, racing the API for the same pending replies. It now loads

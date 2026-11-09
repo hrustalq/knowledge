@@ -28,6 +28,7 @@ import { ChatSearchController } from './chat-search.controller.js';
 import { ChatSearchCoreModule } from './chat-search-core.module.js';
 import { ChatSettingsController } from './chat-settings.controller.js';
 import { ChatSocketSupervisor } from './chat-socket.supervisor.js';
+import { RedisModule } from '../redis/redis.module.js';
 import { ChatSubscriptionSweeper } from './chat-subscription.sweeper.js';
 import { ChatSubscriptionsService } from './chat-subscriptions.service.js';
 import { ChatWebhookController } from './chat-webhook.controller.js';
@@ -55,6 +56,7 @@ import { HarvestCoreModule } from './harvest-core.module.js';
  */
 @Module({
   imports: [
+    RedisModule,
     HarvestCoreModule,
     PrismaModule,
     AgentCoreModule,

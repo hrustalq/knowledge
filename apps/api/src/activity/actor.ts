@@ -14,8 +14,11 @@
 
 /** The literal `ActivityService.record` writes when a call site passes no actor. */
 export const DEV_ACTOR = 'dev';
-/** DEV_PRINCIPAL.userId — the same person, as an id. */
-export const DEV_ACTOR_ID = '00000000-0000-0000-0000-000000000000';
+/**
+ * DEV_PRINCIPAL.userId — the same person, as an id. Also the author recorded
+ * when a write has no principal, and the id no real row ever has.
+ */
+export const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
 
 /**
  * The AUTH_MODE=none actor has two spellings in the activity table and always
@@ -30,12 +33,12 @@ export const DEV_ACTOR_ID = '00000000-0000-0000-0000-000000000000';
  * resolves to itself, so no real user's rows can ever be folded into another's.
  */
 export function actorIdentities(actor: string): string[] {
-  return actor === DEV_ACTOR || actor === DEV_ACTOR_ID ? [DEV_ACTOR, DEV_ACTOR_ID] : [actor];
+  return actor === DEV_ACTOR || actor === AUTHOR_ID_STUB ? [DEV_ACTOR, AUTHOR_ID_STUB] : [actor];
 }
 
 /** Whether an actor string is the dev principal under either spelling. */
 export function isDevActor(actor: string | null | undefined): boolean {
-  return actor === DEV_ACTOR || actor === DEV_ACTOR_ID;
+  return actor === DEV_ACTOR || actor === AUTHOR_ID_STUB;
 }
 
 /**

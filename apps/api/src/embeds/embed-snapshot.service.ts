@@ -10,6 +10,7 @@ import { embedSnapshotKey, type EmbedSnapshotJob } from './embeds.constants.js';
 import { EMBED_RETRY_MS, NOT_ALLOWLISTED } from './embeds.service.js';
 import { FigmaFilesService } from './figma-files.service.js';
 import { IngestionProducer } from '../ingestion/ingestion.producer.js';
+import { queueReindex } from '../ingestion/reindex.js';
 
 /** The slice of a Figma node this file reads. */
 export interface FigmaNode {
@@ -152,16 +153,12 @@ export class EmbedSnapshotService {
          AND re.node_id = ${job.nodeId} AND re.version = ${job.version}
          AND r.status IN ('indexed', 'failed')`;
     for (const rev of heads) {
-      const row = await this.prisma.ingestionJob.create({
-        data: {
-          workspaceId: job.workspaceId,
-          revisionId: rev.id,
-          type: 'reindex',
-          status: 'queued',
-          payload: { documentId: rev.document_id, revisionId: rev.id, s3Key: rev.s3_key, title: rev.title, reason: 'embed rendered' },
-        },
-      });
-      await this.ingestion.enqueue(row.id).catch(() => undefined); // the outbox sweeper re-enqueues
+      await queueReindex(
+        this.prisma,
+        this.ingestion,
+        { workspaceId: job.workspaceId, documentId: rev.document_id, revisionId: rev.id, s3Key: rev.s3_key, title: rev.title, reason: 'embed rendered' },
+        { skipPending: true },
+      );
     }
   }
 

@@ -9,7 +9,7 @@ import { TokenAuthService } from '../auth/token-auth.service.js';
 import { FeaturesService } from '../auth/features.service.js';
 import type { Principal } from '../auth/principal.js';
 import { PermissionService } from '../permissions/permission.service.js';
-import { UUID_RE } from '../permissions/acl-read.js';
+import { UUID_RE } from '@knowledge/contracts';
 import type { AccessScope } from '../permissions/access-scope.js';
 import { PublicRateLimiter, RateLimitedException } from '../public/public-rate-limit.js';
 import { t, withLocale } from '../i18n/t.js';

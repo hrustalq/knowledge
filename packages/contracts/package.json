@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./core": "./src/core/index.ts",
+    "./ids": "./src/ids/index.ts",
     "./documents": "./src/documents/index.ts",
     "./reviews": "./src/reviews/index.ts",
     "./graph": "./src/graph/index.ts",

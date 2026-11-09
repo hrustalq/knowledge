@@ -5,6 +5,7 @@ import { lockSubject } from '../common/subject-lock.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { slugFor } from './slug.js';
 import type { Env } from '../config/env.js';
+import { AUTHOR_ID_STUB } from '../activity/actor.js';
 
 /** One page's tree state after a commit (`project_commit_changes`). */
 export interface CommitChange {
@@ -54,7 +55,6 @@ export interface Place {
 }
 
 /** Fallback author when no principal is supplied (AUTH_MODE=none, system writers). */
-const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
 
 /**
  * Stored project commits (#636, docs/features/71 "Stored commits"). Every

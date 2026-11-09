@@ -7,7 +7,7 @@ import type {
 } from 'openai/resources/chat/completions';
 import type { AssistantToolCall, AiUsageOperation } from '@knowledge/contracts';
 import type { ResolvedAiConfig } from '../ai/ai-config.service.js';
-import { AiUsageService, estimateTokens, type AiUsageTokens } from '../ai/ai-usage.service.js';
+import { AiUsageService, estimateTokens, type AiUsageRecordInput, type AiUsageTokens } from '../ai/ai-usage.service.js';
 import { FREE_TOOLS, PARALLEL_SAFE_TOOLS } from './assistant-tool-types.js';
 import type { Locale } from '@knowledge/contracts';
 import { t } from '../i18n/t.js';
@@ -162,6 +162,63 @@ export type ToolExecutor = (
 export class ProviderAccountError extends ServiceUnavailableException {}
 
 /**
+ * Records one upstream model call: its `ai_usage` row and its measurement
+ * twin on the JSONL stream. Every client funnels through here — including
+ * failure and cancellation paths, the calls worth measuring most.
+ *
+ * Deliberately not awaited: token accounting is observability, and a failed
+ * insert must never turn a good answer into an error (AiUsageService.record
+ * swallows and warns, same as ActivityService). The ai_usage row stays billing
+ * truth in Postgres; the event carries the trace id, so a model or prompt
+ * change can be compared against the run before it without a SQL join per
+ * experiment.
+ */
+export function recordAiCall(usage: AiUsageService, input: AiUsageRecordInput): void {
+  void usage.record(input);
+  emitBacktest({
+    ...(currentTrace() ?? { traceId: 'unscoped', source: 'cli' as const }),
+    workspaceId: input.config.workspaceId,
+    userId: input.userId,
+    kind: 'ai.call',
+    ts: new Date().toISOString(),
+    durationMs: input.durationMs,
+    operation: input.operation,
+    provider: input.config.provider,
+    model: input.config.model,
+    promptTokens: input.tokens.promptTokens,
+    completionTokens: input.tokens.completionTokens,
+    toolCallCount: input.toolCallCount ?? 0,
+    ok: input.ok,
+    estimated: input.tokens.estimated,
+  });
+}
+
+/**
+ * An upstream failure as the error a caller sees. A refused account (402, or
+ * a 401/403 key) is a `ProviderAccountError`, which stops a pass over many
+ * pages; any other status, or no response at all, is a plain 503.
+ */
+export function upstreamException(
+  logger: Logger,
+  label: string,
+  err: unknown,
+  http: { status?: number; message: string } | null,
+): ServiceUnavailableException {
+  if (http) {
+    logger.warn(`${label} upstream ${http.status}: ${String(http.message).slice(0, 300)}`);
+    if (http.status === 402) return new ProviderAccountError(t('error.assistant.upstreamNoCredit'));
+    if (http.status === 401 || http.status === 403) {
+      return new ProviderAccountError(t('error.assistant.upstreamAuth', { status: http.status }));
+    }
+    return new ServiceUnavailableException(
+      http.status ? t('error.assistant.upstreamStatus', { status: http.status }) : t('error.assistant.upstreamError'),
+    );
+  }
+  logger.warn(`${label} request failed: ${err instanceof Error ? err.message : String(err)}`);
+  return new ServiceUnavailableException(t('error.assistant.unreachable'));
+}
+
+/**
  * Thin wrapper around the official OpenAI SDK: one place that knows how a
  * resolved config becomes a client, the error mapping, the bounded
  * tool-calling loop (harness), and where token usage is recorded. Services
@@ -242,116 +299,20 @@ export class AssistantClient {
      */
     opts?: { jsonFinalRound?: boolean },
   ): Promise<{ content: string; trace: AssistantToolCall[] }> {
-    const trace: AssistantToolCall[] = [];
-    const convo: ChatCompletionMessageParam[] = [...messages];
-
-    const free = tools.filter((t) => FREE_TOOLS.has(t.function.name));
-    const maxRounds = roundsFor(ctx.config.maxToolCalls);
-
-    for (let round$ = 0; ; round$++) {
-      // Defensive only: the last permitted round is forced toolless below, so
-      // the loop normally exits through the no-tools-requested return with real
-      // prose. This used to return '' — a blank bubble shown to the reader as
-      // the answer, which is worse than saying plainly that nothing came back.
-      if (round$ >= maxRounds) return { content: t('error.assistant.roundsExhausted'), trace };
-
-      const budgetLeft = this.budgetLeft(ctx, trace);
-      // Spending the budget is no longer the only way to reach the end: the
-      // final round offers no tools at all, so a model that would otherwise keep
-      // calling has to answer with what it has.
-      const finalRound = round$ >= maxRounds - 1;
-      const offered = finalRound ? [] : budgetLeft > 0 ? tools : free;
-      const completion = await this.create(ctx, {
-        messages: finalRound || budgetLeft <= 0 ? [...convo, LAST_ROUND_NUDGE] : convo,
-        ...(offered.length > 0 ? { tools: offered } : {}),
-        ...(opts?.jsonFinalRound && offered.length === 0
-          ? { response_format: { type: 'json_object' as const } }
-          : {}),
-      });
-      const message = completion.choices[0]?.message;
-      // No choices at all is an upstream failure, not an empty answer.
-      if (!message) throw this.upstreamError(new Error('Provider returned no completion choices'));
-
-      const requested = (message.tool_calls ?? []).filter(
-        (c): c is ChatCompletionMessageFunctionToolCall => c.type === 'function',
-      );
-      if (requested.length === 0) {
-        return { content: stripToolMarkup(message.content ?? ''), trace };
-      }
-
-      convo.push(message);
-      // The budget is per call, not per round: one round can ask for ten tools
-      // at once, and counting rounds would let it run all ten against a budget
-      // of six. Everything past the line still needs a `tool` reply — the
-      // protocol requires one per tool_call_id — so the overflow is answered
-      // with an error instead of being dropped.
-      //
-      // Allowance is decided up front, in request order, rather than by a
-      // counter incremented as each call runs. The two give identical answers;
-      // only the first survives execution that is no longer one-at-a-time.
-      let spent = 0;
-      const planned = requested.map((call) => ({
-        call,
-        allowed: FREE_TOOLS.has(call.function.name) || spent++ < budgetLeft,
-      }));
-      const results = new Array<ToolExecutionResult | undefined>(planned.length);
-
-      const runOne = async (call: ChatCompletionMessageFunctionToolCall, at: number): Promise<void> => {
-        let args: Record<string, unknown> = {};
-        try {
-          args = JSON.parse(call.function.arguments || '{}') as Record<string, unknown>;
-        } catch {
-          // The model produced invalid JSON — run the tool with no args so it
-          // gets a structured error back instead of the request 500ing.
-        }
-        try {
-          results[at] = await execute(call.function.name, args);
-        } catch (err) {
-          this.logger.warn(`Tool ${call.function.name} failed: ${err instanceof Error ? err.message : err}`);
-          results[at] = { content: JSON.stringify({ error: 'Tool execution failed' }), ok: false };
-        }
-      };
-
-      // Reads together, everything else one at a time (docs/features/29). Ten
-      // parallel tool_calls used to be ten sequential awaits, so a round of
-      // web_fetches spent minutes of wall clock on work the model asked for at
-      // once. PARALLEL_SAFE_TOOLS is an allowlist of calls with no side effects
-      // rather than "not a declared write": a plugin tool is an external
-      // server's code this process cannot see the effects of.
-      const live = planned.map((p, at) => ({ ...p, at })).filter((p) => p.allowed);
-      await Promise.all(
-        live.filter((p) => PARALLEL_SAFE_TOOLS.has(p.call.function.name)).map((p) => runOne(p.call, p.at)),
-      );
-      for (const p of live) {
-        if (PARALLEL_SAFE_TOOLS.has(p.call.function.name)) continue;
-        await runOne(p.call, p.at);
-      }
-
-      // Replayed in the order the model asked, whatever order they finished in:
-      // this transcript is what the next round reads, and it should not depend
-      // on which fetch happened to return first.
-      for (const [at, { call, allowed }] of planned.entries()) {
-        const result = allowed ? results[at] : undefined;
-        if (!result) {
-          convo.push({
-            role: 'tool',
-            tool_call_id: call.id,
-            content: JSON.stringify({ error: 'Tool budget for this turn is exhausted; answer with what you have.' }),
-          });
-          continue;
-        }
-        trace.push({
-          tool: call.function.name,
-          arguments: call.function.arguments.slice(0, 500),
-          ok: result.ok ?? true,
-        });
-        convo.push({
-          role: 'tool',
-          tool_call_id: call.id,
-          content: result.content.slice(0, MAX_TOOL_RESULT_CHARS),
-        });
-      }
-    }
+    const { content, trace } = await this.toolLoop(ctx, messages, tools, execute, {
+      jsonFinalRound: opts?.jsonFinalRound,
+      complete: async (params) => {
+        const message = (await this.create(ctx, params)).choices[0]?.message;
+        // No choices at all is an upstream failure, not an empty answer.
+        if (!message) throw this.upstreamError(new Error('Provider returned no completion choices'));
+        const toolCalls = (message.tool_calls ?? [])
+          .filter((c): c is ChatCompletionMessageFunctionToolCall => c.type === 'function')
+          .map((c) => ({ id: c.id, name: c.function.name, arguments: c.function.arguments }));
+        // The provider's own message goes back into the transcript, whatever else it carries.
+        return { content: message.content ?? '', toolCalls, cancelled: false, assistant: message };
+      },
+    });
+    return { content, trace };
   }
 
   /**
@@ -386,6 +347,43 @@ export class AssistantClient {
     /** Aborted when the client hangs up — see the controller's Stop handling. */
     signal?: AbortSignal,
   ): Promise<{ content: string; trace: AssistantToolCall[]; cancelled: boolean }> {
+    return this.toolLoop(ctx, messages, tools, execute, {
+      ...on,
+      signal,
+      complete: (params) => this.createStream(ctx, params, on.delta, signal, on.toolArgs),
+    });
+  }
+
+  /**
+   * The one round loop behind {@link runWithTools} and {@link runWithToolsStream}.
+   * `complete` runs one round, buffered or streamed; the hooks and `signal`
+   * are the stream's.
+   */
+  private async toolLoop(
+    ctx: AiCallContext,
+    messages: ChatCompletionMessageParam[],
+    tools: ChatCompletionFunctionTool[],
+    execute: ToolExecutor,
+    loop: {
+      complete: (params: {
+        messages: ChatCompletionMessageParam[];
+        tools?: ChatCompletionFunctionTool[];
+        response_format?: { type: 'json_object' };
+      }) => Promise<{
+        content: string;
+        toolCalls: Array<{ id: string; name: string; arguments: string }>;
+        cancelled: boolean;
+        /** The assistant turn to replay; built from `content` + `toolCalls` when absent. */
+        assistant?: ChatCompletionMessageParam;
+      }>;
+      jsonFinalRound?: boolean;
+      signal?: AbortSignal;
+      toolStart?: (tool: string, args: string) => Promise<void> | void;
+      toolEnd?: (tool: string, ok: boolean) => Promise<void> | void;
+      roundEnd?: (text: string) => void;
+    },
+  ): Promise<{ content: string; trace: AssistantToolCall[]; cancelled: boolean }> {
+    const { signal } = loop;
     const trace: AssistantToolCall[] = [];
     const convo: ChatCompletionMessageParam[] = [...messages];
 
@@ -396,44 +394,49 @@ export class AssistantClient {
       if (signal?.aborted) return { content: '', trace, cancelled: true };
       // A hard stop independent of the budget: free tools do not consume it,
       // so without this a model that kept calling one could loop forever.
-      // Defensive only, as in runWithTools — the final round below is toolless,
-      // so this used to hand the pane `stripToolMarkup('')`, an empty bubble.
-      if (round$ >= maxRounds) {
-        return { content: t('error.assistant.roundsExhausted'), trace, cancelled: false };
-      }
+      // Defensive only: the last permitted round is forced toolless below, so
+      // the loop normally exits through the no-tools-requested return with real
+      // prose. This used to return '' — a blank bubble shown to the reader as
+      // the answer, which is worse than saying plainly that nothing came back.
+      if (round$ >= maxRounds) return { content: t('error.assistant.roundsExhausted'), trace, cancelled: false };
+
       const budgetLeft = this.budgetLeft(ctx, trace);
+      // Spending the budget is no longer the only way to reach the end: the
+      // final round offers no tools at all, so a model that would otherwise keep
+      // calling has to answer with what it has.
       const finalRound = round$ >= maxRounds - 1;
       const offered = finalRound ? [] : budgetLeft > 0 ? tools : free;
-      const round = await this.createStream(
-        ctx,
-        {
-          messages: finalRound || budgetLeft <= 0 ? [...convo, LAST_ROUND_NUDGE] : convo,
-          ...(offered.length > 0 ? { tools: offered } : {}),
-        },
-        on.delta,
-        signal,
-        on.toolArgs,
-      );
-
-      if (round.cancelled) return { content: stripToolMarkup(round.content), trace, cancelled: true };
-      if (round.toolCalls.length === 0) {
-        return { content: stripToolMarkup(round.content), trace, cancelled: false };
-      }
-
-      on.roundEnd(round.content);
-      convo.push({
-        role: 'assistant',
-        ...(round.content ? { content: round.content } : {}),
-        tool_calls: round.toolCalls.map((c) => ({
-          id: c.id,
-          type: 'function' as const,
-          function: { name: c.name, arguments: c.arguments },
-        })),
+      const round = await loop.complete({
+        messages: finalRound || budgetLeft <= 0 ? [...convo, LAST_ROUND_NUDGE] : convo,
+        ...(offered.length > 0 ? { tools: offered } : {}),
+        ...(loop.jsonFinalRound && offered.length === 0 ? { response_format: { type: 'json_object' as const } } : {}),
       });
 
-      // Per call, not per round — see the note in runWithTools. Free tools are
-      // always let through; only billable calls are rationed, and the allowance
-      // is settled in request order before anything runs.
+      if (round.cancelled) return { content: stripToolMarkup(round.content), trace, cancelled: true };
+      if (round.toolCalls.length === 0) return { content: stripToolMarkup(round.content), trace, cancelled: false };
+
+      loop.roundEnd?.(round.content);
+      convo.push(
+        round.assistant ?? {
+          role: 'assistant',
+          ...(round.content ? { content: round.content } : {}),
+          tool_calls: round.toolCalls.map((c) => ({
+            id: c.id,
+            type: 'function' as const,
+            function: { name: c.name, arguments: c.arguments },
+          })),
+        },
+      );
+
+      // The budget is per call, not per round: one round can ask for ten tools
+      // at once, and counting rounds would let it run all ten against a budget
+      // of six. Everything past the line still needs a `tool` reply — the
+      // protocol requires one per tool_call_id — so the overflow is answered
+      // with an error instead of being dropped.
+      //
+      // Allowance is decided up front, in request order, rather than by a
+      // counter incremented as each call runs. The two give identical answers;
+      // only the first survives execution that is no longer one-at-a-time.
       let spent = 0;
       const planned = round.toolCalls.map((call) => ({
         call,
@@ -442,13 +445,13 @@ export class AssistantClient {
       const results = new Array<ToolExecutionResult | undefined>(planned.length);
 
       const runOne = async (call: { id: string; name: string; arguments: string }, at: number): Promise<void> => {
-        await on.toolStart(call.name, call.arguments.slice(0, 500));
+        await loop.toolStart?.(call.name, call.arguments.slice(0, 500));
         let args: Record<string, unknown> = {};
         try {
           args = JSON.parse(call.arguments || '{}') as Record<string, unknown>;
         } catch {
-          // Invalid JSON from the model — run with no args so it gets a
-          // structured error back instead of the stream dying.
+          // The model produced invalid JSON — run the tool with no args so it
+          // gets a structured error back instead of the turn failing.
         }
         let result: ToolExecutionResult;
         try {
@@ -458,31 +461,34 @@ export class AssistantClient {
           result = { content: JSON.stringify({ error: 'Tool execution failed' }), ok: false };
         }
         results[at] = result;
-        await on.toolEnd(call.name, result.ok ?? true);
+        await loop.toolEnd?.(call.name, result.ok ?? true);
       };
 
+      // Reads together, everything else one at a time (docs/features/29). Ten
+      // parallel tool_calls used to be ten sequential awaits, so a round of
+      // web_fetches spent minutes of wall clock on work the model asked for at
+      // once. PARALLEL_SAFE_TOOLS is an allowlist of calls with no side effects
+      // rather than "not a declared write": a plugin tool is an external
+      // server's code this process cannot see the effects of.
+      //
       // A cancelled turn stops before the next side effect. Tools can create
       // pages and open merge requests, so "stop" has to mean stop *before* one
-      // of those runs, not merely stop showing the user the result.
-      //
-      // That is why the batch below is reads only (docs/features/29): a batch
-      // in flight cannot be interrupted between its members, so running writes
-      // inside one would quietly downgrade Stop from "no further side effects"
-      // to "no further output". Reads change nothing, so a batch of them is
-      // interruptible in the only sense that matters, and the abort check stays
-      // exactly where the side effects are — before each serial call.
+      // of those runs, not merely stop showing the user the result. A batch in
+      // flight cannot be interrupted between its members, which is why only
+      // reads are batched: the abort check stays exactly where the side effects
+      // are — before each serial call.
       if (signal?.aborted) return { content: round.content, trace, cancelled: true };
       const live = planned.map((p, at) => ({ ...p, at })).filter((p) => p.allowed);
-      await Promise.all(
-        live.filter((p) => PARALLEL_SAFE_TOOLS.has(p.call.name)).map((p) => runOne(p.call, p.at)),
-      );
+      await Promise.all(live.filter((p) => PARALLEL_SAFE_TOOLS.has(p.call.name)).map((p) => runOne(p.call, p.at)));
       for (const p of live) {
         if (PARALLEL_SAFE_TOOLS.has(p.call.name)) continue;
         if (signal?.aborted) return { content: round.content, trace, cancelled: true };
         await runOne(p.call, p.at);
       }
 
-      // Replayed in the order the model asked, whatever order they finished in.
+      // Replayed in the order the model asked, whatever order they finished in:
+      // this transcript is what the next round reads, and it should not depend
+      // on which fetch happened to return first.
       for (const [at, { call, allowed }] of planned.entries()) {
         const result = allowed ? results[at] : undefined;
         if (!result) {
@@ -494,11 +500,7 @@ export class AssistantClient {
           continue;
         }
         trace.push({ tool: call.name, arguments: call.arguments.slice(0, 500), ok: result.ok ?? true });
-        convo.push({
-          role: 'tool',
-          tool_call_id: call.id,
-          content: result.content.slice(0, MAX_TOOL_RESULT_CHARS),
-        });
+        convo.push({ role: 'tool', tool_call_id: call.id, content: result.content.slice(0, MAX_TOOL_RESULT_CHARS) });
       }
     }
   }
@@ -615,50 +617,23 @@ export class AssistantClient {
     }
   }
 
-  /**
-   * Records one upstream call. Deliberately not awaited: token accounting is
-   * observability, and a failed insert must never turn a good answer into an
-   * error (AiUsageService.record swallows and warns, same as ActivityService).
-   */
+  /** One upstream call of create() or createStream(), through `recordAiCall`. */
   private bill(
     ctx: AiCallContext,
     tokens: AiUsageTokens,
     startedAt: number,
     outcome: { ok: boolean; error?: string; toolCallCount?: number },
   ): void {
-    const durationMs = Date.now() - startedAt;
-    void this.usage.record({
+    recordAiCall(this.usage, {
       config: ctx.config,
       userId: ctx.userId,
       operation: ctx.operation,
       threadId: ctx.threadId,
       tokens,
-      durationMs,
+      durationMs: Date.now() - startedAt,
       ok: outcome.ok,
       error: outcome.error,
       toolCallCount: outcome.toolCallCount ?? 0,
-    });
-    // The measurement twin of the ai_usage row. ai_usage stays billing truth in
-    // Postgres; this rides the JSONL stream and carries the trace id, so a model
-    // or prompt change can be compared against the run before it without a SQL
-    // join per experiment. Emitted from bill() because that is the one funnel
-    // both create() and createStream() already pass through — including their
-    // failure and cancellation paths, which are the calls worth measuring most.
-    emitBacktest({
-      ...(currentTrace() ?? { traceId: 'unscoped', source: 'cli' as const }),
-      workspaceId: ctx.config.workspaceId,
-      userId: ctx.userId,
-      kind: 'ai.call',
-      ts: new Date().toISOString(),
-      durationMs,
-      operation: ctx.operation,
-      provider: ctx.config.provider,
-      model: ctx.config.model,
-      promptTokens: tokens.promptTokens,
-      completionTokens: tokens.completionTokens,
-      toolCallCount: outcome.toolCallCount ?? 0,
-      ok: outcome.ok,
-      estimated: tokens.estimated,
     });
   }
 
@@ -668,17 +643,6 @@ export class AssistantClient {
   }
 
   private upstreamError(err: unknown): ServiceUnavailableException {
-    if (err instanceof OpenAI.APIError) {
-      this.logger.warn(`Assistant upstream ${err.status}: ${String(err.message).slice(0, 300)}`);
-      if (err.status === 402) return new ProviderAccountError(t('error.assistant.upstreamNoCredit'));
-      if (err.status === 401 || err.status === 403) {
-        return new ProviderAccountError(t('error.assistant.upstreamAuth', { status: err.status }));
-      }
-      return new ServiceUnavailableException(
-        err.status ? t('error.assistant.upstreamStatus', { status: err.status }) : t('error.assistant.upstreamError'),
-      );
-    }
-    this.logger.warn(`Assistant request failed: ${err instanceof Error ? err.message : String(err)}`);
-    return new ServiceUnavailableException(t('error.assistant.unreachable'));
+    return upstreamException(this.logger, 'Assistant', err, err instanceof OpenAI.APIError ? { status: err.status, message: String(err.message) } : null);
   }
 }

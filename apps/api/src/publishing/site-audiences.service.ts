@@ -18,9 +18,9 @@ import { hasRealPath } from '../documents/documents.service.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SiteAudienceStamper } from './site-audience.stamper.js';
+import { AUTHOR_ID_STUB } from '../activity/actor.js';
 
 /** The dev principal has no users row; same stub the rest of the API records. */
-const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
 
 /** Most rules one site keeps. A rule covers a subtree, so a site needs a handful. */
 export const SITE_MAX_AUDIENCE_RULES = 200;

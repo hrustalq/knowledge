@@ -15,11 +15,13 @@ import { createHmac, createSign, timingSafeEqual } from 'node:crypto';
  */
 
 function b64url(input: Buffer | string): string {
-  return Buffer.from(input)
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
+  return Buffer.from(input).toString('base64url');
+}
+
+/** An RS256 JWT over `claims`: two base64url segments and their signature. */
+export function signRs256Jwt(claims: object, privateKeyPem: string): string {
+  const signed = `${b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))}.${b64url(JSON.stringify(claims))}`;
+  return `${signed}.${b64url(createSign('RSA-SHA256').update(signed).end().sign(privateKeyPem))}`;
 }
 
 /**
@@ -53,10 +55,7 @@ export function parsePrivateKey(raw: string): string | null {
  */
 export function appJwt(appId: string, privateKeyPem: string, now = Date.now()): string {
   const seconds = Math.floor(now / 1000);
-  const header = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-  const payload = b64url(JSON.stringify({ iat: seconds - 60, exp: seconds + 480, iss: appId }));
-  const signature = createSign('RSA-SHA256').update(`${header}.${payload}`).end().sign(privateKeyPem);
-  return `${header}.${payload}.${b64url(signature)}`;
+  return signRs256Jwt({ iat: seconds - 60, exp: seconds + 480, iss: appId }, privateKeyPem);
 }
 
 /** What the OAuth/install round trip has to carry across a redirect we do not control. */

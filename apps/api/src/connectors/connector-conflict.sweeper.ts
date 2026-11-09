@@ -1,6 +1,5 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import type { Connector, ConnectorConflict } from '@prisma/client';
-import matter from 'gray-matter';
 import { SUPERSEDING_CONFLICT_REASONS, type ConnectorConflictReason } from '@knowledge/contracts';
 import { MergeRequestsService } from '../documents/merge-requests.service.js';
 import { asLocale } from '../i18n/locale.js';
@@ -8,6 +7,7 @@ import { t, withLocale } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { Ticker } from '../common/ticker.js';
+import { parseMarkdown } from '../common/frontmatter.js';
 
 const SWEEP_INTERVAL_MS = 30_000;
 const BATCH = 20;
@@ -135,7 +135,7 @@ export class ConnectorConflictSweeper implements OnModuleInit, OnModuleDestroy {
     try {
       const revision = await this.prisma.documentRevision.findUnique({ where: { id: revisionId }, select: { s3Key: true, s3VersionId: true } });
       if (!revision) return {};
-      const data = matter(await this.storage.getObjectText(revision.s3Key, revision.s3VersionId)).data as Record<string, unknown>;
+      const data = parseMarkdown(await this.storage.getObjectText(revision.s3Key, revision.s3VersionId)).data;
       return {
         ...(typeof data.headSha === 'string' ? { headSha: data.headSha } : {}),
         ...(typeof data.unit === 'string' ? { unit: data.unit } : {}),

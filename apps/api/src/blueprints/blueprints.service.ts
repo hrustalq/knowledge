@@ -11,9 +11,9 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { t } from '../i18n/t.js';
 import { parseBlueprint } from './blueprint.schema.js';
 import { BUILT_IN_BLUEPRINTS } from './built-in/index.js';
+import { UUID_RE } from '@knowledge/contracts';
 
 const BLUEPRINTS_MAX_PER_WORKSPACE = 100;
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const withCurrent = { versions: { orderBy: { version: 'desc' }, take: 1 } } as const;
 type Row = Prisma.ProjectBlueprintGetPayload<{ include: typeof withCurrent }>;

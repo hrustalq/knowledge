@@ -1,7 +1,6 @@
 import { Inject, Logger, OnModuleInit } from '@nestjs/common';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
-import matter from 'gray-matter';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -29,6 +28,8 @@ import { ApiSpecsService, type ApiSpecProjection } from '../api-specs/api-specs.
 import { ApiFixturesService, type ApiFixtureProjection } from '../api-specs/api-fixtures.service.js';
 import { isApiSpecKind, isTestFixtureKind } from '@knowledge/contracts';
 import { bindTrace, currentTrace, emitBacktest, startTrace, withTrace } from '@knowledge/observability';
+import { queueReindex } from './reindex.js';
+import { parseMarkdown } from '../common/frontmatter.js';
 
 interface IngestionJobData {
   ingestionJobId: string;
@@ -218,7 +219,8 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
         if (!revision.contentType.includes('markdown') && !revision.contentType.startsWith('text/')) {
           throw new Error(`Unsupported content type for Phase 1 ingestion: ${revision.contentType}`);
         }
-        parsed = matter(raw);
+        const md = parseMarkdown(raw);
+        parsed = { content: md.body, data: md.data };
       }
 
       // 3. Normalize → persist normalized.json next to the source (plan.md §4 layout)
@@ -667,41 +669,13 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       if (!headId) continue;
       const head = await this.prisma.documentRevision.findUnique({ where: { id: headId } });
       if (!head || head.status !== 'indexed') continue;
-      const pending = await this.prisma.ingestionJob.findFirst({
-        where: { revisionId: headId, status: { in: ['queued', 'running'] } },
-      });
-      if (pending) continue;
-
-      const job = await this.prisma.ingestionJob.create({
-        data: {
-          workspaceId,
-          revisionId: headId,
-          type: 'reindex',
-          status: 'queued',
-          payload: {
-            documentId: depId,
-            revisionId: headId,
-            s3Key: head.s3Key,
-            title: doc.title,
-            reason: 'dependent-reindex',
-            triggeredBy: documentId,
-          },
-        },
-      });
-      await this.producer.enqueue(job.id).catch((err: unknown) => {
-        // Still non-fatal: OutboxSweeper re-enqueues anything left `queued`,
-        // which is the entire point of the outbox. Logged because "the sweeper
-        // will pick it up in a moment" and "every enqueue is failing" are
-        // indistinguishable from here — the second presents only as unexplained
-        // indexing latency, with nothing to grep for.
-        this.logger.warn({
-          msg: 'Dependent reindex enqueue failed (outbox sweeper will retry)',
-          code: 'JOB_ENQUEUE_FAILED',
-          ingestionJobId: job.id,
-          documentId: depId,
-          err,
-        });
-      });
+      const queued = await queueReindex(
+        this.prisma,
+        this.producer,
+        { workspaceId, documentId: depId, revisionId: headId, s3Key: head.s3Key, title: doc.title, reason: 'dependent-reindex', triggeredBy: documentId },
+        { skipPending: true },
+      );
+      if (!queued) continue;
       await this.events.publish({
         type: 'revision.dependent-reindex',
         workspaceId,

@@ -18,6 +18,7 @@ import { decryptSecret, parseKey } from './secret-box.js';
 import { resolveExternalAiActions } from './external-ai-actions.js';
 import { resolveCaptureSettings } from './capture-settings.js';
 import { resolveDecisionSettings } from './decision-settings.js';
+import { ttlCache } from '../common/ttl-cache.js';
 
 /** Effective assistant configuration for one workspace: DB overrides ∪ env ∪ provider defaults. */
 export interface ResolvedAiConfig {
@@ -62,6 +63,9 @@ export interface ResolvedAiConfig {
   sources: AiSettingsSourceMap;
 }
 
+/** One ai_settings read: the resolved config, and the model each purpose is routed at. */
+type WorkspaceAi = { config: ResolvedAiConfig; routes: Record<AiPurpose, string | null> };
+
 /** How long a resolved config is reused before the DB is consulted again. */
 const CACHE_TTL_MS = 30_000;
 
@@ -74,14 +78,15 @@ const CACHE_TTL_MS = 30_000;
  * ASSISTANT_* env var, then to PROVIDER_DEFAULTS. An empty ai_settings table
  * therefore reproduces the old behaviour exactly.
  *
- * Cached for CACHE_TTL_MS per workspace and invalidated on write. On a
+ * Cached for CACHE_TTL_MS per workspace (the config and the purpose routes,
+ * from the one ai_settings read) and invalidated on write. On a
  * multi-instance deployment a change can take up to one TTL to reach every
  * node; that is the deliberate cost of not hitting PG on every token.
  */
 @Injectable()
 export class AiConfigService {
   private readonly logger = new Logger(AiConfigService.name);
-  private readonly cache = new Map<string, { at: number; config: ResolvedAiConfig }>();
+  private readonly cache = ttlCache<WorkspaceAi>(CACHE_TTL_MS);
   private readonly key: Buffer | null;
 
   constructor(
@@ -107,9 +112,14 @@ export class AiConfigService {
   }
 
   async resolve(workspaceId: string): Promise<ResolvedAiConfig> {
-    const hit = this.cache.get(workspaceId);
-    if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.config;
+    return (await this.settings(workspaceId)).config;
+  }
 
+  private settings(workspaceId: string) {
+    return this.cache.get(workspaceId, () => this.load(workspaceId));
+  }
+
+  private async load(workspaceId: string): Promise<WorkspaceAi> {
     const row = await this.prisma.aiSettings.findUnique({ where: { workspaceId } });
 
     const envProvider = this.config.get('ASSISTANT_PROVIDER', { infer: true });
@@ -175,8 +185,13 @@ export class AiConfigService {
       },
     };
 
-    this.cache.set(workspaceId, { at: Date.now(), config });
-    return config;
+    const routes = {
+      chat: row?.chatModelId ?? null,
+      review: row?.reviewModelId ?? null,
+      extraction: row?.extractionModelId ?? null,
+      decision: row?.decisionModelId ?? null,
+    };
+    return { config, routes };
   }
 
   /**
@@ -224,8 +239,8 @@ export class AiConfigService {
     purpose: AiPurpose,
     ...pins: Array<string | null | undefined>
   ): Promise<ResolvedAiConfig> {
-    const base = await this.resolve(workspaceId);
-    for (const id of [...pins, await this.routedModelId(workspaceId, purpose)]) {
+    const { config: base, routes } = await this.settings(workspaceId);
+    for (const id of [...pins, routes[purpose]]) {
       const config = id ? await this.forModel(base, id) : null;
       if (config) return config;
     }
@@ -292,15 +307,6 @@ export class AiConfigService {
     if (!modelId) return null;
     const rows = await this.models.roster(workspaceId);
     return rows.some((row) => row.id === modelId && row.inChat) ? modelId : null;
-  }
-
-  private async routedModelId(workspaceId: string, purpose: AiPurpose): Promise<string | null> {
-    const row = await this.prisma.aiSettings.findUnique({
-      where: { workspaceId },
-      select: { chatModelId: true, reviewModelId: true, extractionModelId: true, decisionModelId: true },
-    });
-    if (!row) return null;
-    return { chat: row.chatModelId, review: row.reviewModelId, extraction: row.extractionModelId, decision: row.decisionModelId }[purpose];
   }
 
   /** Called by every write to ai_settings so the next resolve() sees it immediately. */

@@ -37,7 +37,7 @@ const SETTLES_QUESTION = {
   },
 };
 
-/** A refusal with something to tell the person, as a message key. */
+/** A refusal with something to tell the person, as a message key: a harvest's, or a chat capture's. */
 export class HarvestRefused extends Error {
   constructor(readonly key: string) {
     super(key);

@@ -45,9 +45,9 @@ import { ConnectorsService } from './connectors.service.js';
 import type { SourceBody } from './source-recipe.js';
 import { SourceRecipesService } from './source-recipes.service.js';
 import { SourceSettingsService } from './source-settings.service.js';
+import { AUTHOR_ID_STUB } from '../activity/actor.js';
 
 /** The system's own actor id, used when a connector's owner was deleted. */
-const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
 
 /**
  * Source-backed pages (#674, phase 1): a page whose body belongs to a `web`

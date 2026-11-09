@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { ChatCompletionFunctionTool } from 'openai/resources/chat/completions';
 import type { AssistantAskSource, AssistantChatSource, DocumentTreeNode } from '@knowledge/contracts';
-import { assistantSourceKey } from '@knowledge/contracts';
+import { assistantSourceKey, UUID_RE } from '@knowledge/contracts';
 import { ChatSearchService } from '../chat/chat-search.service.js';
 import { AccessService } from '../auth/access.service.js';
 import { AnalyticsRecorder, type AnalyticsCaller } from '../analytics/analytics.recorder.js';
@@ -761,7 +761,7 @@ export class AssistantReadToolsService {
    * about it, not even that it is there.
    */
   private async requireVisibleDocument(documentId: string, ctx: AssistantToolContext, scope: AccessScope) {
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(documentId)) return null;
+    if (!UUID_RE.test(documentId)) return null;
     const doc = await this.prisma.document.findUnique({
       where: { id: documentId },
       select: { id: true, workspaceId: true, title: true },

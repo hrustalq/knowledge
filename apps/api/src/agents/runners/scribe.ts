@@ -1,5 +1,5 @@
 import type { AgentRun } from '@prisma/client';
-import type { AgentRunInput, Locale } from '@knowledge/contracts';
+import { type AgentRunInput, type Locale, UUID_RE } from '@knowledge/contracts';
 import { t } from '../../i18n/t.js';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { visibilityWhere } from '../../permissions/access-scope.js';
@@ -7,7 +7,7 @@ import type { ResolvedAgent } from '../agent-registry.service.js';
 import type { Principal } from '../../auth/principal.js';
 import { MAX_SCRIBE_PAGES, SCRIBE_OUTPUT_CONTRACT, readScribeDrafts, scribeCitedIds, scribePrompt } from '../scribe.js';
 import { parseModelJson } from '../../common/model-json.js';
-import { type AgentServices, type AgentRunner, type AgentReporter, type AgentRunResult, UUID, runBrief } from '../agent-services.js';
+import { type AgentServices, type AgentRunner, type AgentReporter, type AgentRunResult, runBrief } from '../agent-services.js';
 
 export const scribeRunner: AgentRunner = { key: 'scribe', run: scribe };
 
@@ -61,7 +61,7 @@ async function scribe(
 
   // A page to rewrite must be one the run may read: one query over whatever
   // the model named, under the same scope its searches ran with.
-  const cited = scribeCitedIds(parsed).filter((id) => UUID.test(id));
+  const cited = scribeCitedIds(parsed).filter((id) => UUID_RE.test(id));
   const scope = await svc.runScope(run, principal);
   const known = new Map(
     cited.length

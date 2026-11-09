@@ -23,14 +23,14 @@ function fakeRedis() {
 }
 
 function cacheWith(redis: ReturnType<typeof fakeRedis>) {
-  const cache = new ReadCache(config({ READ_CACHE_ENABLED: false, READ_CACHE_DEFAULT_TTL_MS: 1000 }));
+  const cache = new ReadCache(config({ READ_CACHE_ENABLED: false, READ_CACHE_DEFAULT_TTL_MS: 1000 }), {} as never);
   (cache as unknown as { redis: unknown }).redis = redis;
   return cache;
 }
 
 describe('ReadCache (#472)', () => {
   it('off: every read goes to the source', async () => {
-    const cache = new ReadCache(config({ READ_CACHE_ENABLED: false, READ_CACHE_DEFAULT_TTL_MS: 1000 }));
+    const cache = new ReadCache(config({ READ_CACHE_ENABLED: false, READ_CACHE_DEFAULT_TTL_MS: 1000 }), {} as never);
     const load = vi.fn(async () => 1);
     await cache.wrap('ws', 'k', load);
     await cache.wrap('ws', 'k', load);

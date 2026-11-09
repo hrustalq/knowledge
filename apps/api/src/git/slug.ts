@@ -1,5 +1,12 @@
 /** Stems Windows refuses as a file name, whatever the extension. */
-const RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/;
+export const RESERVED_STEM = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/i;
+/**
+ * One character no file name may hold, on any system a tree is checked out
+ * on: path separators, Windows' reserved punctuation, control characters.
+ * Not global, so `.test()` keeps no state; build a `/g` copy to replace.
+ */
+// eslint-disable-next-line no-control-regex
+export const FILENAME_FORBIDDEN = /[/\\:*?"<>|\u0000-\u001f\u007f]/;
 const MAX_BYTES = 80;
 
 /**
@@ -15,13 +22,12 @@ export function slugFor(title: string): string {
       .normalize('NFC')
       .toLowerCase()
       .replace(/\s+/g, '-')
-      // eslint-disable-next-line no-control-regex
-      .replace(/[/\\:*?"<>|\u0000-\u001f\u007f]/g, '')
+      .replace(new RegExp(FILENAME_FORBIDDEN.source, 'g'), '')
       .replace(/-{2,}/g, '-'),
   );
   // Cut on a character boundary: Array.from walks code points, not UTF-16 units.
   const chars = Array.from(cleaned);
   while (Buffer.byteLength(chars.join('')) > MAX_BYTES) chars.pop();
   const s = trim(chars.join('')) || 'page';
-  return RESERVED.test(s) ? `${s}-page` : s;
+  return RESERVED_STEM.test(s) ? `${s}-page` : s;
 }

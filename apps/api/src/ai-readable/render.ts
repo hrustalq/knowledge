@@ -1,5 +1,5 @@
-import { createHash } from 'node:crypto';
 import { composeFrontmatter } from '../common/frontmatter.js';
+import { etagOf } from '../common/http-cache.js';
 
 /**
  * Pure renderers for AI-readable output (issue #68): the plain-markdown page,
@@ -76,12 +76,7 @@ export function titledMarkdown(title: string, rawBody: string): string {
  * PG read and no S3 fetch.
  */
 export function etagFor(input: { revisionId: string; title: string; project: string; frontmatter: boolean }): string {
-  const hash = createHash('sha256')
-    .update(
-      JSON.stringify([AI_READABLE_FORMAT_VERSION, input.revisionId, input.title, input.project, input.frontmatter]),
-    )
-    .digest('hex');
-  return `"${hash.slice(0, 32)}"`;
+  return etagOf(AI_READABLE_FORMAT_VERSION, input.revisionId, input.title, input.project, input.frontmatter);
 }
 
 function qualities(accept: string): Map<string, number> {

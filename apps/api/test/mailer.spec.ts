@@ -192,8 +192,7 @@ describe('MailProcessor — one email per inbox row', () => {
 describe('EventsPublisher.announce → mailer', () => {
   it('queues only the directed reasons', async () => {
     const enqueue = vi.fn(async () => undefined);
-    const publisher = new EventsPublisher({ get: () => 'redis://localhost:1' } as never, {} as never, { enqueue } as never);
-    (publisher as unknown as { redis: unknown }).redis = { publish: async () => 1, disconnect: () => undefined };
+    const publisher = new EventsPublisher({ client: { publish: async () => 1 } } as never, {} as never, { enqueue } as never);
     const delivery = (id: string, reason: string) => ({ userId: 'u1', notification: { id, reason } as never });
     await publisher.announce('w1', [
       delivery('n1', 'mention'),

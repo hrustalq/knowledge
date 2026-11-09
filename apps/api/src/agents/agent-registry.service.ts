@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { AiConfigService, type ResolvedAiConfig } from '../ai/ai-config.service.js';
 import { BUILT_IN_AGENT_DEFAULTS, type BuiltInAgentDefault } from './built-in-agents.js';
 import { missingCapabilities } from './model-capabilities.js';
+import { ttlCache } from '../common/ttl-cache.js';
 
 /** One agent, fully resolved: code default ⊕ the workspace's override row ⊕ its model. */
 export interface ResolvedAgent {
@@ -57,7 +58,7 @@ const CACHE_TTL_MS = 30_000;
  */
 @Injectable()
 export class AgentRegistryService {
-  private readonly cache = new Map<string, { at: number; rows: Map<string, AiAgent> }>();
+  private readonly cache = ttlCache<Map<string, AiAgent>>(CACHE_TTL_MS);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -70,12 +71,10 @@ export class AgentRegistryService {
   }
 
   private async rowsFor(workspaceId: string): Promise<Map<string, AiAgent>> {
-    const hit = this.cache.get(workspaceId);
-    if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.rows;
-    const found = await this.prisma.aiAgent.findMany({ where: { workspaceId } });
-    const rows = new Map(found.map((row) => [row.key, row]));
-    this.cache.set(workspaceId, { at: Date.now(), rows });
-    return rows;
+    return this.cache.get(workspaceId, async () => {
+      const found = await this.prisma.aiAgent.findMany({ where: { workspaceId } });
+      return new Map(found.map((row) => [row.key, row]));
+    });
   }
 
   /**

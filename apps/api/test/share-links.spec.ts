@@ -8,7 +8,8 @@ import { activityKindFor, shareExpiryFor, shareNeedsPassword } from '@knowledge/
 import { ApiExceptionFilter } from '../src/common/api-exception.filter.js';
 import { ExportService } from '../src/export/export.service.js';
 import { PublishingSettingsService } from '../src/publishing/publishing-settings.service.js';
-import { ShareLinksService, shareTokenHash } from '../src/publishing/share-links.service.js';
+import { ShareLinksService } from '../src/publishing/share-links.service.js';
+import { hashToken } from '../src/auth/auth-tokens.js';
 import { clientIp, PublicRateLimiter, PublicRateLimitGuard } from '../src/public/public-rate-limit.js';
 import { PublicSharesController } from '../src/public/public-shares.controller.js';
 import { PublicSharesService } from '../src/public/public-shares.service.js';
@@ -224,7 +225,7 @@ function harness(envOverrides: Record<string, unknown> = {}) {
   const settings = new PublishingSettingsService(prisma as never, config as never);
   const shares = new ShareLinksService(prisma as never, settings, activity as never, config as never);
   const kv = new FakeStore();
-  const store = new PublicStore(config as never, kv);
+  const store = new PublicStore({ client: kv } as never);
   const limiter = new PublicRateLimiter(store);
   const unlocks = new ShareUnlockService(store, config as never);
   const documents = {
@@ -310,7 +311,7 @@ describe('ShareLinksService', () => {
     const token = tokenOf(res.url);
     expect(res.url).toMatch(/^https:\/\/kb\.example\.com\/s\/kp_[A-Za-z0-9_-]{43}$/);
     const row = h.prisma.shares[0]!;
-    expect(row.tokenHash).toBe(shareTokenHash(token));
+    expect(row.tokenHash).toBe(hashToken(token));
     expect(JSON.stringify(row)).not.toContain(token);
     expect(row.passwordHash).toMatch(/^scrypt\$/);
     expect(res.share.url).toBe(res.url);

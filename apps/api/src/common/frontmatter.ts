@@ -45,8 +45,8 @@ export function parseMarkdown(raw: string): ParsedMarkdown {
  */
 export function readPageSource(raw: string, kind: string | null | undefined): { data: Record<string, unknown>; content: string } {
   if (isStructuredKind(kind)) return { data: {}, content: raw };
-  const parsed = matter(raw);
-  return { data: (parsed.data ?? {}) as Record<string, unknown>, content: parsed.content };
+  const { data, body } = parseMarkdown(raw);
+  return { data, content: body };
 }
 
 /**

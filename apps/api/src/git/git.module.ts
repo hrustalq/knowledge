@@ -8,7 +8,7 @@ import { PermissionsCoreModule } from '../permissions/permissions-core.module.js
 import { StorageModule } from '../storage/storage.module.js';
 import { DocumentsCoreModule } from '../documents/documents-core.module.js';
 import { MergeRequestsCoreModule } from '../documents/merge-requests-core.module.js';
-import { PublicStore } from '../public/public-store.js';
+import { RedisModule } from '../redis/redis.module.js';
 import { PublicRateLimiter } from '../public/public-rate-limit.js';
 import { GitAccessService } from './git-access.service.js';
 import { GitController } from './git.controller.js';
@@ -26,6 +26,7 @@ import { GitPushService } from './git-push.service.js';
  */
 @Module({
   imports: [
+    RedisModule,
     BootstrapModule,
     PrismaModule,
     AuthCoreModule,
@@ -38,6 +39,6 @@ import { GitPushService } from './git-push.service.js';
     ActivityCoreModule,
   ],
   controllers: [GitController],
-  providers: [GitAccessService, GitRepoService, GitPushService, PublicStore, PublicRateLimiter],
+  providers: [GitAccessService, GitRepoService, GitPushService, PublicRateLimiter],
 })
 export class GitModule {}

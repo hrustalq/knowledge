@@ -19,7 +19,8 @@ import type {
   MergeRequestThread as ThreadRow,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { AUTHOR_ID_STUB, MergeRequestsService } from './merge-requests.service.js';
+import { AUTHOR_ID_STUB } from '../activity/actor.js';
+import { MergeRequestsService } from './merge-requests.service.js';
 import type { CreateThreadDto } from './dto/merge-requests.dto.js';
 import { MentionRepliesService } from './mention-replies.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';

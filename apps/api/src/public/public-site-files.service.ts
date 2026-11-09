@@ -189,7 +189,7 @@ export class PublicSiteFilesService {
   async streamFull(plan: SiteFullPlan, out: TextSink): Promise<void> {
     const maxDocs = this.config.get('LLMS_FULL_MAX_DOCS', { infer: true });
     const maxBytes = this.config.get('LLMS_FULL_MAX_BYTES', { infer: true });
-    const window = Math.max(1, Number(this.config.get('AI_READABLE_FETCH_CONCURRENCY') ?? 8));
+    const window = this.config.get('AI_READABLE_FETCH_CONCURRENCY', { infer: true });
     out.write(plan.header);
     let bytes = 0;
     let written = 0;

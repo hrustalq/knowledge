@@ -8,16 +8,18 @@
  *
  * The plaintext API key is printed ONCE; only its SHA-256 lands in Postgres.
  */
+import { parseArgs } from 'node:util';
 import { createHash, randomBytes } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 
 const DEMO_WORKSPACE_ID = '11111111-1111-4111-8111-111111111111';
 const ROLES = ['viewer', 'editor', 'admin'];
 
-function arg(name: string): string | undefined {
-  const i = process.argv.indexOf(`--${name}`);
-  return i >= 0 ? process.argv[i + 1] : undefined;
-}
+const str = { type: 'string' } as const;
+const { values: args } = parseArgs({
+  options: { email: str, name: str, 'workspace-id': str, 'workspace-name': str, role: str, operator: str, 'platform-admin': str },
+});
+const arg = (name: keyof typeof args): string | undefined => args[name];
 
 const email = arg('email');
 if (!email) {

@@ -166,19 +166,16 @@ export class PublicSitesService {
     private readonly embeds: EmbedsService,
   ) {}
 
-  async resolve(query: ResolveQuery, cookieHeader?: string): Promise<PublicSiteResolveResponse> {
-    return (await this.resolveTagged(query, undefined, cookieHeader)).body!;
-  }
-
   /** Who the request's site cookie says is reading. */
   viewer(site: LiveSite, cookieHeader: string | undefined): Promise<SiteViewer> {
     return this.sessions.viewer(site, cookieHeader);
   }
 
   /**
-   * `resolve` with an ETag, for the reader's render cache (issue #77 phase
-   * 2b-2). The tag covers the whole answer with the page's markdown replaced
-   * by the revision the snapshot pinned, which names it exactly. So it is
+   * The site, page and viewer one request names, with an ETag for the
+   * reader's render cache (issue #77 phase 2b-2). The tag covers the whole
+   * answer with the page's markdown replaced by the revision the snapshot
+   * pinned, which names it exactly. So it is
    * known before the one expensive read, the body from object storage, and a
    * caller whose tag still matches gets `body: null` without that read.
    *

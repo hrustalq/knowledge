@@ -21,6 +21,7 @@ import {
   unavailableMarker,
 } from './llms.js';
 import { WORKSPACE_READER } from '../auth/principal.js';
+import type { Env } from '../config/env.js';
 
 export type TextResult = { status: 304; etag: string } | { status: 200; etag: string; body: string };
 
@@ -63,7 +64,7 @@ export class AiReadableService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly documents: DocumentsService,
-    private readonly config: ConfigService,
+    private readonly config: ConfigService<Env, true>,
     // Optional so the single-page path (phase 1) needs no storage of its own:
     // it reads through DocumentsService. The listings stream bodies directly.
     @Optional() private readonly storage?: StorageService,
@@ -266,9 +267,9 @@ export class AiReadableService {
    * marker, a cap is a marker, and the stream always ends cleanly.
    */
   async streamFull(plan: FullPlan, out: TextSink): Promise<FullStats> {
-    const maxDocs = Number(this.config.get('LLMS_FULL_MAX_DOCS') ?? 2000);
-    const maxBytes = Number(this.config.get('LLMS_FULL_MAX_BYTES') ?? 20_000_000);
-    const window = Math.max(1, Number(this.config.get('AI_READABLE_FETCH_CONCURRENCY') ?? 8));
+    const maxDocs = this.config.get('LLMS_FULL_MAX_DOCS', { infer: true });
+    const maxBytes = this.config.get('LLMS_FULL_MAX_BYTES', { infer: true });
+    const window = this.config.get('AI_READABLE_FETCH_CONCURRENCY', { infer: true });
     const stats: FullStats = { pages: 0, bytes: 0, truncated: 0, unavailable: 0 };
     out.write(plan.header);
 
@@ -378,10 +379,10 @@ export class AiReadableService {
   }
 
   apiBase(): string {
-    return String(this.config.get<string>('API_PUBLIC_URL') ?? '').replace(/\/+$/, '');
+    return this.config.get('API_PUBLIC_URL', { infer: true }).replace(/\/+$/, '');
   }
 
   private webBase(): string {
-    return (this.config.get<string>('WEB_BASE_URL') ?? '').replace(/\/+$/, '');
+    return this.config.get('WEB_BASE_URL', { infer: true }).replace(/\/+$/, '');
   }
 }

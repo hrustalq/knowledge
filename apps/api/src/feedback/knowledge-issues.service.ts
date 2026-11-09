@@ -36,6 +36,7 @@ import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { AgentProducer } from '../agents/agent.producer.js';
 import { MIN_DRAFT_CHARS } from '../agents/archaeology.js';
 import { t } from '../i18n/t.js';
+import type { Env } from '../config/env.js';
 
 /** The agent a report check runs as — the drift check's sentinel, pointed at a report instead of a diff. */
 export const REPORT_AGENT_KEY = 'sentinel';
@@ -92,14 +93,14 @@ export class KnowledgeIssuesService {
     private readonly events: EventsPublisher,
     private readonly registry: AgentRegistryService,
     private readonly producer: AgentProducer,
-    private readonly env: ConfigService,
+    private readonly env: ConfigService<Env, true>,
   ) {}
 
   private get dailyLimit(): number {
-    return this.env.get<number>('KNOWLEDGE_ISSUE_DAILY_LIMIT') ?? 50;
+    return this.env.get('KNOWLEDGE_ISSUE_DAILY_LIMIT', { infer: true });
   }
   private get maxPendingChecks(): number {
-    return this.env.get<number>('KNOWLEDGE_ISSUE_MAX_PENDING_CHECKS') ?? 10;
+    return this.env.get('KNOWLEDGE_ISSUE_MAX_PENDING_CHECKS', { infer: true });
   }
 
   /** File a report, folding it into an open issue for the same page and kind when one exists. */

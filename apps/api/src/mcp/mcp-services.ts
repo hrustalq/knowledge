@@ -58,6 +58,7 @@ import { CommunitiesService } from '../communities/communities.service.js';
 import { ChatSearchService } from '../chat/chat-search.service.js';
 import { AnalyticsRecorder } from '../analytics/analytics.recorder.js';
 import { AnalyticsQueryService } from '../analytics/analytics-query.service.js';
+import type { Env } from '../config/env.js';
 
 /**
  * The collaborators every MCP tool reaches, and the per-tool guard (#822).
@@ -89,7 +90,7 @@ export class McpServices {
     readonly agents: AgentRegistryService,
     readonly access: AccessService,
     readonly features: FeaturesService,
-    readonly config: ConfigService,
+    readonly config: ConfigService<Env, true>,
     readonly aiReadable: AiReadableService,
     readonly provenance: ProvenanceService,
     readonly feedback: AnswerFeedbackService,
@@ -128,7 +129,7 @@ export class McpServices {
   ) {}
 
   webUrl(): string {
-    return String(this.config.get('WEB_BASE_URL') ?? 'http://localhost:5173').replace(/\/+$/, '');
+    return this.config.get('WEB_BASE_URL', { infer: true }).replace(/\/+$/, '');
   }
 
   /**

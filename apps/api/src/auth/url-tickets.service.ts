@@ -43,7 +43,7 @@ export class UrlTicketsService implements OnModuleDestroy {
     config: ConfigService<Env, true>,
     @Optional() @Inject(URL_TICKET_STORE) store?: TicketStore,
   ) {
-    this.ttlSec = config.get('AUTH_URL_TICKET_TTL_SEC', { infer: true }) ?? 60;
+    this.ttlSec = config.get('AUTH_URL_TICKET_TTL_SEC', { infer: true });
     this.store =
       store ??
       new Redis(config.get('REDIS_URL', { infer: true }), {

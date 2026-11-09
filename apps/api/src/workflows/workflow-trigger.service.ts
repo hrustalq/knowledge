@@ -51,9 +51,9 @@ export class WorkflowTriggerService implements OnModuleInit {
     private readonly producer: WorkflowProducer,
     config: ConfigService<Env, true>,
     ) {
-    this.maxActive = Number(config.get('WORKFLOW_AUTOSTART_MAX_ACTIVE', { infer: true }) ?? 5);
+    this.maxActive = config.get('WORKFLOW_AUTOSTART_MAX_ACTIVE', { infer: true });
     this.repoCooldownMs =
-      Number(config.get('WORKFLOW_REPO_RETRIGGER_COOLDOWN_MINUTES', { infer: true }) ?? 60) * 60_000;
+      config.get('WORKFLOW_REPO_RETRIGGER_COOLDOWN_MINUTES', { infer: true }) * 60_000;
   }
 
   onModuleInit(): void {

@@ -1,3 +1,4 @@
+import { parseArgs } from 'node:util';
 import { Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { BootstrapModule } from '../config/bootstrap.module.js';
@@ -36,15 +37,11 @@ import { revisionStamps } from '../graph/temporal.js';
 @Module({ imports: [BootstrapModule, PrismaModule, GraphModule, FulltextModule] })
 class BackfillModule {}
 
-const args = process.argv.slice(2);
-const option = (name: string): string | undefined => {
-  const i = args.indexOf(name);
-  return i >= 0 ? args[i + 1] : undefined;
-};
+const { values } = parseArgs({ options: { workspace: { type: 'string' }, 'dry-run': { type: 'boolean' } } });
 
 async function main(): Promise<void> {
-  const workspaceId = option('--workspace');
-  const dryRun = args.includes('--dry-run');
+  const workspaceId = values.workspace;
+  const dryRun = values['dry-run'] === true;
 
   const app = await NestFactory.createApplicationContext(BackfillModule, { logger: ['error', 'warn'] });
   const prisma = app.get(PrismaService);

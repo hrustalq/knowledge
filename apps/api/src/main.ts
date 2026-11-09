@@ -2,6 +2,7 @@ import { NestFactory, Reflector } from '@nestjs/core';
 import { WsAdapter } from '@nestjs/platform-ws';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { Env } from './config/env.js';
 import { SwaggerModule } from '@nestjs/swagger';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module.js';
@@ -46,10 +47,7 @@ async function bootstrap() {
   // reattaches the verify hook the connector webhook HMAC depends on. Registered
   // after traceMiddleware so an oversize body is rejected inside a trace scope
   // and its 413 carries a requestId that correlates.
-  //
-  // The ?? is unreachable — env.ts defaults it — but ConfigService cannot prove
-  // that to the compiler.
-  const bodyLimit = app.get(ConfigService).get<string>('HTTP_BODY_LIMIT') ?? '2mb';
+  const bodyLimit = app.get<ConfigService<Env, true>>(ConfigService).get('HTTP_BODY_LIMIT', { infer: true });
   // SCIM clients (#75) send `application/scim+json`, which is JSON by another name.
   app.useBodyParser('json', { limit: bodyLimit, type: ['application/json', SCIM_CONTENT_TYPE] });
   app.useBodyParser('urlencoded', { limit: bodyLimit, extended: true });

@@ -1,3 +1,4 @@
+import { parseArgs } from 'node:util';
 import { Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
@@ -31,15 +32,11 @@ import { pageLinkTargets, replacePageLinks } from '../ingestion/page-links.js';
 @Module({ imports: [BootstrapModule, PrismaModule, StorageModule] })
 class BackfillModule {}
 
-const args = process.argv.slice(2);
-const option = (name: string): string | undefined => {
-  const i = args.indexOf(name);
-  return i >= 0 ? args[i + 1] : undefined;
-};
+const { values } = parseArgs({ options: { workspace: { type: 'string' }, 'dry-run': { type: 'boolean' } } });
 
 async function main(): Promise<void> {
-  const workspaceId = option('--workspace');
-  const dryRun = args.includes('--dry-run');
+  const workspaceId = values.workspace;
+  const dryRun = values['dry-run'] === true;
 
   const app = await NestFactory.createApplicationContext(BackfillModule, { logger: ['error', 'warn'] });
   const prisma = app.get(PrismaService);

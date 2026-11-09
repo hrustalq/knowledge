@@ -16,20 +16,15 @@ import type { Env } from '../config/env.js';
  * the TTL is only the backstop.
  */
 export const READ_CACHE_FAMILIES = {
-  /** A finalized revision's raw bytes. Immutable: a revision never changes. */
-  content: { key: (revisionId: string) => `content:${revisionId}`, ttlMs: 24 * 3_600_000, invalidatedBy: 'nothing (immutable)' },
-  /** A query's embedding in one embedding space. Immutable for that space. */
+  /** A finalized revision's raw bytes. Immutable: a revision never changes, so nothing invalidates it. */
+  content: { key: (revisionId: string) => `content:${revisionId}`, ttlMs: 24 * 3_600_000 },
+  /** A query's embedding in one embedding space. Immutable: the signature names the space. */
   embedding: {
     key: (signature: string, text: string) => `embedding:${signature}:${createHash('sha256').update(text).digest('hex')}`,
     ttlMs: 24 * 3_600_000,
-    invalidatedBy: 'nothing (the signature names the space)',
   },
-  /** The sparse knowledge-health settings row. */
-  healthSettings: {
-    key: () => 'health-settings',
-    ttlMs: null,
-    invalidatedBy: 'VerificationPolicyService.update',
-  },
+  /** The sparse knowledge-health settings row. Invalidated by `VerificationPolicyService.update`. */
+  healthSettings: { key: () => 'health-settings', ttlMs: null },
 } as const;
 
 /** `global` for an answer no workspace owns (an embedding of a query text). */

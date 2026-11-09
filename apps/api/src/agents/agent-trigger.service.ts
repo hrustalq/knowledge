@@ -123,7 +123,7 @@ export class AgentTriggerService {
     private readonly access: AccessService,
     private readonly permissions: PermissionService,
   ) {
-    this.maxActive = Number(config.get('AGENT_TRIGGER_MAX_ACTIVE', { infer: true }) ?? 5);
+    this.maxActive = config.get('AGENT_TRIGGER_MAX_ACTIVE', { infer: true });
   }
 
   async fire(

@@ -273,7 +273,7 @@ export class McpService extends McpServices {
 
   /** `$API_PUBLIC_URL/v1/mcp` — what every generated config points at. */
   publicUrl(): string {
-    const base = String(this.config.get('API_PUBLIC_URL') ?? 'http://localhost:3000').replace(/\/+$/, '');
+    const base = this.config.get('API_PUBLIC_URL', { infer: true }).replace(/\/+$/, '');
     return `${base}/v1/mcp`;
   }
 

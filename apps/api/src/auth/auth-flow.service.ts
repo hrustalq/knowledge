@@ -31,6 +31,7 @@ import { hashToken, mintToken } from './auth-tokens.js';
 import { toMeResponse } from './me-response.js';
 import { asLocale } from '../i18n/locale.js';
 import { currentLocale, t } from '../i18n/t.js';
+import type { Env } from '../config/env.js';
 
 /** Floor between two verification mails to one person — a resend button is easy to hold down. */
 const RESEND_COOLDOWN_MS = 60_000;
@@ -56,7 +57,7 @@ export class AuthFlowService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
+    private readonly config: ConfigService<Env, true>,
     private readonly sessions: SessionsService,
     private readonly mail: MailProducer,
     private readonly audit: AuditService,
@@ -106,7 +107,7 @@ export class AuthFlowService {
           await this.prisma.workspaceMember.upsert({
             where: { workspaceId_userId: { workspaceId, userId: user.id } },
             update: {},
-            create: { workspaceId, userId: user.id, role: this.config.get<string>('AUTH_DEFAULT_ROLE') ?? 'viewer' },
+            create: { workspaceId, userId: user.id, role: this.config.get('AUTH_DEFAULT_ROLE', { infer: true }) },
           });
         }
       }
@@ -222,7 +223,7 @@ export class AuthFlowService {
     if (enforced && !(enforced.allowPasswordForAdmins && user.isAdmin)) return { ok: true };
 
     const { token, tokenHash } = mintToken('kr_');
-    const ttlMin = this.config.get<number>('AUTH_RESET_TTL_MIN') ?? 30;
+    const ttlMin = this.config.get('AUTH_RESET_TTL_MIN', { infer: true });
     // Opportunistic cleanup, as sessions do: an expired link is refused anyway.
     await this.prisma.passwordResetToken.deleteMany({ where: { expiresAt: { lt: new Date() } } });
     await this.prisma.passwordResetToken.create({
@@ -338,7 +339,7 @@ export class AuthFlowService {
 
   private async sendVerification(user: User): Promise<string> {
     const { token, tokenHash } = mintToken('kv_');
-    const hours = this.config.get<number>('AUTH_VERIFY_TTL_HOURS') ?? 48;
+    const hours = this.config.get('AUTH_VERIFY_TTL_HOURS', { infer: true });
     await this.prisma.emailVerificationToken.create({
       data: { userId: user.id, email: user.email, tokenHash, expiresAt: new Date(Date.now() + hours * 3_600_000) },
     });

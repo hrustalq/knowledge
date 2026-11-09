@@ -4,6 +4,7 @@ import type { Prisma } from '@prisma/client';
 import { lockSubject } from '../common/subject-lock.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { slugFor } from './slug.js';
+import type { Env } from '../config/env.js';
 
 /** One page's tree state after a commit (`project_commit_changes`). */
 export interface CommitChange {
@@ -69,7 +70,7 @@ const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
 export class ProjectCommitsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
+    private readonly config: ConfigService<Env, true>,
   ) {}
 
   /**
@@ -348,7 +349,7 @@ export class ProjectCommitsService {
       select: { id: true, displayName: true },
     });
     const names = new Map(users.map((u) => [u.id, u.displayName.replace(/[<>\r\n]/g, '').trim()]));
-    const domain = this.config.get<string>('GIT_NOREPLY_DOMAIN') ?? 'knowledge';
+    const domain = this.config.get('GIT_NOREPLY_DOMAIN', { infer: true });
     const ident = (id: string) => `${names.get(id) || `user-${id.slice(0, 8)}`} <${id}@users.noreply.${domain}>`;
     const when = `${Math.floor(input.at.getTime() / 1000)} +0000`;
     let text = `author ${ident(input.authorId)} ${when}\ncommitter ${ident(input.authorId)} ${when}\n\n${input.message.trimEnd()}\n`;

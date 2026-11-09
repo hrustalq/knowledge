@@ -167,7 +167,7 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
     getTree: vi.fn(async () => ({ nodes: [] })),
     getContent: vi.fn(async () => ({ revisionId: 'rev-1', markdown: 'Body', frontmatter: {} })),
   };
-  const config = { get: (key: string) => ({ AUTH_MODE: 'api-key', API_PUBLIC_URL: 'https://kb.example.com/api' })[key] };
+  const config = { get: (key: string) => ({ AUTH_MODE: 'api-key', API_PUBLIC_URL: 'https://kb.example.com/api', WEB_BASE_URL: 'http://localhost:5173' })[key] };
   const deps = {
     prisma: {},
     storage: {},

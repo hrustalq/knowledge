@@ -70,14 +70,13 @@ export class ConnectorWebhookController {
     // The secret only: nothing is decrypted or minted for a delivery not yet verified (GHSA-pc42).
     const ctx = this.connectors.webhookContextFor(row);
     const rawBody = req.rawBody?.toString('utf8') ?? '';
-    const lower = lowercaseKeys(headers);
 
     // A harvest connector (#382, doc 59): a resolved item is claimed, and the
     // API-side sweeper reads and harvests it. Nothing else to do here — a
     // harvest kind moves no content.
     const adapter = this.connectors.adapterFor(row);
     if (adapter.verifyHarvestDelivery) {
-      const delivery = adapter.verifyHarvestDelivery(ctx, lower, rawBody);
+      const delivery = adapter.verifyHarvestDelivery(ctx, headers, rawBody);
       if (delivery === null) throw new UnauthorizedException(t('error.connector.webhookInvalidSignature'));
       if (delivery.item) await this.harvests.claim(row, delivery.item);
       return { accepted: true, runId: null };
@@ -89,7 +88,7 @@ export class ConnectorWebhookController {
     // tracker only, so neither goes on to start a sync.
     const tracker = this.trackers.trackerFor(row);
     if (tracker?.verifyWebhook && ctx.webhookSecret) {
-      const delivery = tracker.verifyWebhook(row, ctx.webhookSecret, lower, rawBody);
+      const delivery = tracker.verifyWebhook(row, ctx.webhookSecret, headers, rawBody);
       if (delivery === null) throw new UnauthorizedException(t('error.connector.webhookInvalidSignature'));
       if (delivery.item) {
         await this.workItems.applyTrackerDelivery(row, delivery.item, delivery.actorId, await this.workItems.watchLabels(row));
@@ -107,15 +106,15 @@ export class ConnectorWebhookController {
     // which does its own bounded work and never starts a sync.
     if (REPO_CONNECTOR_KINDS.has(row.kind)) {
       const payload = safeJson(rawBody);
-      if (isPullRequestEvent(lower, payload)) {
-        if (!ctx.webhookSecret || !verifyRepoDelivery(lower, rawBody, ctx.webhookSecret)) {
+      if (isPullRequestEvent(headers, payload)) {
+        if (!ctx.webhookSecret || !verifyRepoDelivery(headers, rawBody, ctx.webhookSecret)) {
           throw new UnauthorizedException(t('error.connector.webhookInvalidSignature'));
         }
-        const delivery = readPullRequestDelivery(lower, payload);
+        const delivery = readPullRequestDelivery(headers, payload);
         if (delivery) return { accepted: true, runId: await this.drift.request(row, delivery) };
         // A merge is not a change to check but a fact about pages already
         // checked (docs/features/39): it starts no run, it moves their flags.
-        const merged = readMergedDelivery(lower, payload);
+        const merged = readMergedDelivery(headers, payload);
         if (merged) await this.drift.merged(row, merged);
         return { accepted: true, runId: null };
       }
@@ -127,10 +126,10 @@ export class ConnectorWebhookController {
     // push was to another branch. The adapter is not asked to name units,
     // because a push names files and units are not knowable from files.
     if (row.kind === 'codebase') {
-      if (!ctx.webhookSecret || !verifyRepoDelivery(lower, rawBody, ctx.webhookSecret)) {
+      if (!ctx.webhookSecret || !verifyRepoDelivery(headers, rawBody, ctx.webhookSecret)) {
         throw new UnauthorizedException(t('error.connector.webhookInvalidSignature'));
       }
-      const push = readRepoPushDelivery(lower, safeJson(rawBody));
+      const push = readRepoPushDelivery(headers, safeJson(rawBody));
       const run = push ? await this.connectors.queueRepoPush(row, push) : null;
       if (run) await this.producer.enqueue(run.id, { delayMs: this.debounceMs });
       return { accepted: true, runId: run?.id ?? null };
@@ -138,7 +137,7 @@ export class ConnectorWebhookController {
 
     if (!adapter.verifyWebhook) throw new UnauthorizedException(t('error.connector.webhookNotConfigured'));
 
-    const refs = adapter.verifyWebhook(ctx, lower, rawBody);
+    const refs = adapter.verifyWebhook(ctx, headers, rawBody);
 
     // null = the signature did not verify. Answering 401 without touching
     // anything else is the whole point of doing verification first.
@@ -154,9 +153,4 @@ export class ConnectorWebhookController {
     await this.producer.enqueue(run.id);
     return { accepted: true, runId: run.id };
   }
-}
-
-/** Node lowercases incoming header names, but a signature check should not bet on it. */
-function lowercaseKeys(headers: Record<string, string>): Record<string, string> {
-  return Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]));
 }

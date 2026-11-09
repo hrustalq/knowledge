@@ -234,7 +234,6 @@ export class AiController {
     @CurrentPrincipal() principal: Principal,
   ): Promise<AiProviderSummary> {
     const provider = await this.providers.update(id, dto);
-    this.aiConfig.invalidate(provider.workspaceId);
     await this.activity.record({
       workspaceId: provider.workspaceId,
       actor: principal?.userId,
@@ -254,7 +253,6 @@ export class AiController {
   ): Promise<{ ok: true }> {
     const provider = await this.providers.get(id);
     await this.providers.remove(id);
-    this.aiConfig.invalidate(provider.workspaceId);
     await this.activity.record({
       workspaceId: provider.workspaceId,
       actor: principal?.userId,

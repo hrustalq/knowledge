@@ -90,7 +90,7 @@ export class ApiSpecReadService {
     const { doc, revision } = await this.revisionOf(documentId, revisionId);
     if (!revision) throw new NotFoundException(t('error.document.noRevisions', { id: documentId }));
     if (revision.status === 'draft') throw new BadRequestException(t('error.document.contentIsDraft', { id: revision.id }));
-    const raw = await this.storage.getObjectText(revision.s3Key);
+    const raw = await this.storage.getObjectText(revision.s3Key, revision.s3VersionId);
     const { document, specVersion } = readApiSpecDocument(raw, doc.kind);
     const info = (document.info ?? {}) as Record<string, unknown>;
     return {
@@ -204,7 +204,7 @@ export class ApiSpecReadService {
       const revision = await this.prisma.documentRevision.findUnique({ where: { id: hit.revisionId } });
       const doc = await this.prisma.document.findUnique({ where: { id: hit.documentId }, select: { kind: true } });
       if (!revision || !doc || !isApiSpecKind(doc.kind)) continue;
-      const spec = await this.specs.parse(await this.storage.getObjectText(revision.s3Key), doc.kind);
+      const spec = await this.specs.parse(await this.storage.getObjectText(revision.s3Key, revision.s3VersionId), doc.kind);
       // The pointer is stable within a revision, so it finds the operation
       // without re-deriving a key under a slug that may have been re-pinned.
       const op = spec.operations.find((o) => o.pointer === hit.pointer && o.method === hit.method);

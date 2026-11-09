@@ -581,7 +581,7 @@ export class WebSourcesService {
       where: { id: revisionId, documentId, status: { not: 'draft' } },
     });
     if (!revision) throw new BadRequestException(t('error.source.revisionNotOfPage', { id: revisionId }));
-    const markdown = await this.storage.getObjectText(revision.s3Key);
+    const markdown = await this.storage.getObjectText(revision.s3Key, revision.s3VersionId);
 
     // The pause and the restored revision commit together (#811): a refused
     // restore must not leave the source paused with nothing restored.

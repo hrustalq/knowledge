@@ -57,14 +57,14 @@ async function main(): Promise<void> {
   for (const doc of docs) {
     const headId = doc.branches.find((b) => b.name === doc.defaultBranch)?.headRevisionId;
     const head = headId
-      ? await prisma.documentRevision.findUnique({ where: { id: headId }, select: { id: true, status: true, s3Key: true } })
+      ? await prisma.documentRevision.findUnique({ where: { id: headId }, select: { id: true, status: true, s3Key: true, s3VersionId: true } })
       : null;
     if (!head || head.status !== 'indexed' || isApiSpecKind(doc.kind) || isTestFixtureKind(doc.kind)) {
       skipped += 1;
       continue;
     }
     try {
-      const found = pageLinkTargets(matter(await storage.getObjectText(head.s3Key)).content, webBaseUrl, doc.id);
+      const found = pageLinkTargets(matter(await storage.getObjectText(head.s3Key, head.s3VersionId)).content, webBaseUrl, doc.id);
       links += found.length;
       if (dryRun) continue;
       if (await replacePageLinks(prisma, { workspaceId: doc.workspaceId, documentId: doc.id, revisionId: head.id, links: found })) {

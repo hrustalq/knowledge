@@ -180,7 +180,7 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
 
     try {
       // 1. Fetch raw bytes
-      const raw = await this.storage.getObjectText(revision.s3Key);
+      const raw = await this.storage.getObjectText(revision.s3Key, revision.s3VersionId);
       mark('fetch', raw.length);
 
       // 2. Parse. A spec document (#78) is parsed by its kind, not its content

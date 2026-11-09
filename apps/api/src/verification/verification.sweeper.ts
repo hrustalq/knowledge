@@ -182,8 +182,8 @@ export class VerificationSweeper implements OnModuleInit, OnModuleDestroy {
    * value.
    */
   async fillBodyChars(): Promise<number> {
-    const rows = await this.prisma.$queryRaw<Array<{ id: string; s3_key: string; kind: string }>>`
-      SELECT r.id, r.s3_key, d.kind
+    const rows = await this.prisma.$queryRaw<Array<{ id: string; s3_key: string; s3_version_id: string | null; kind: string }>>`
+      SELECT r.id, r.s3_key, r.s3_version_id, d.kind
         FROM document_revisions r
         JOIN document_branches b ON b.head_revision_id = r.id
         JOIN documents d ON d.id = r.document_id
@@ -195,7 +195,7 @@ export class VerificationSweeper implements OnModuleInit, OnModuleDestroy {
     let filled = 0;
     for (const row of rows.filter((r) => !this.unreadable.has(r.id)).slice(0, BODY_CHARS_BATCH)) {
       try {
-        const raw = await this.storage.getObjectText(row.s3_key);
+        const raw = await this.storage.getObjectText(row.s3_key, row.s3_version_id);
         const bodyChars = readPageSource(raw, row.kind).content.trim().length;
         await this.prisma.documentRevision.updateMany({ where: { id: row.id, bodyChars: null }, data: { bodyChars } });
         filled += 1;

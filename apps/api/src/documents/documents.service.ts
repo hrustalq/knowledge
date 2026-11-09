@@ -572,12 +572,12 @@ export class DocumentsService {
       return { revisionId: revision.id, status: revision.status as RevisionStatus, ingestionJobId: null, deduplicated: false };
     }
 
-    const head = await this.storage.headObject(revision.s3Key);
-    if (!head) {
+    // One read (#818): the hashed bytes and the stored version are the same object.
+    const stored = await this.storage.getObjectVersion(revision.s3Key);
+    if (!stored) {
       throw new BadRequestException(t('error.document.uploadMissing', { key: revision.s3Key }));
     }
-
-    const text = await this.storage.getObjectText(revision.s3Key);
+    const { text } = stored;
     // #78: a spec that will not parse is refused here, with the validator's
     // messages, rather than queued to fail in the worker. The draft stays, so
     // the caller can upload a corrected body to the same revision.
@@ -610,7 +610,7 @@ export class DocumentsService {
         data: {
           status: 'finalized',
           contentHash,
-          s3VersionId: head.versionId,
+          s3VersionId: stored.versionId,
           finalizedAt: new Date(),
         },
       });
@@ -1355,7 +1355,7 @@ export class DocumentsService {
   }): Promise<DocumentContentResponse> {
     // A finalized revision's bytes never change (contentRevision refuses a draft).
     const family = READ_CACHE_FAMILIES.content;
-    const raw = await this.cache.wrap(workspaceId, family.key(revision.id), () => this.storage.getObjectText(revision.s3Key), family.ttlMs);
+    const raw = await this.cache.wrap(workspaceId, family.key(revision.id), () => this.storage.getObjectText(revision.s3Key, revision.s3VersionId), family.ttlMs);
     const parsed = readPageSource(raw, kind);
     return {
       documentId: revision.documentId,

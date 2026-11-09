@@ -70,13 +70,13 @@ export class SiteSearchTextService implements OnApplicationBootstrap {
     if (!missing.length) return out;
     const revisions = await this.prisma.documentRevision.findMany({
       where: { id: { in: missing } },
-      select: { id: true, s3Key: true, document: { select: { kind: true } } },
+      select: { id: true, s3Key: true, s3VersionId: true, document: { select: { kind: true } } },
     });
     for (let i = 0; i < revisions.length; i += READ_CONCURRENCY) {
       const batch = revisions.slice(i, i + READ_CONCURRENCY);
       const texts = await Promise.all(
         batch.map((r) =>
-          this.storage.getObjectText(r.s3Key).then(
+          this.storage.getObjectText(r.s3Key, r.s3VersionId).then(
             (raw) => {
               const { content, data } = readPageSource(raw, r.document.kind);
               return { ...searchTextOf(content), tags: searchTagsOf(data) };

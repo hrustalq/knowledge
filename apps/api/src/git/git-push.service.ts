@@ -602,7 +602,7 @@ export class GitPushService {
       await this.prisma.revisionParent.create({ data: { revisionId: draft.revisionId, parentRevisionId: rev(ch.secondParent), parentOrder: hasFirst ? 2 : 1 } });
     }
     const row = await this.prisma.documentRevision.findUniqueOrThrow({ where: { id: draft.revisionId }, select: { s3Key: true, contentType: true } });
-    const body = source ? Buffer.from(await this.storage.getObjectBytes(source.s3Key)) : (ch.content as { body: Buffer }).body;
+    const body = source ? Buffer.from(await this.storage.getObjectBytes(source.s3Key, source.s3VersionId)) : (ch.content as { body: Buffer }).body;
     const idLine = source ? source.idLine : (ch.content as { idLine: IdLine | null }).idLine;
     await this.storage.putObjectBytes(row.s3Key, new Uint8Array(body), row.contentType);
     if (idLine) await this.prisma.documentRevision.update({ where: { id: draft.revisionId }, data: { idLine: idLine as object } });

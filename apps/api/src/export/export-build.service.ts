@@ -211,15 +211,18 @@ export class ExportBuildService {
     });
     const revisionRows = await this.prisma.documentRevision.findMany({
       where: { id: { in: plan.pages.map((p) => p.revisionId) } },
-      select: { id: true, s3Key: true },
+      select: { id: true, s3Key: true, s3VersionId: true },
     });
     // Attachments are what makes an export large; the sources are checked
     // with the finished file.
     if (attachments.reduce((n, a) => n + a.sizeBytes, 0) > this.maxBytes) throw this.tooLarge();
 
-    const keyOf = new Map(revisionRows.map((r) => [r.id, r.s3Key]));
+    const revisionOf = new Map(revisionRows.map((r) => [r.id, r]));
     const docOf = new Map(documents.map((d) => [d.id, d]));
-    const sources = await mapLimit(plan.pages, READ_CONCURRENCY, (p) => this.storage.getObjectText(keyOf.get(p.revisionId)!));
+    const sources = await mapLimit(plan.pages, READ_CONCURRENCY, (p) => {
+      const r = revisionOf.get(p.revisionId)!;
+      return this.storage.getObjectText(r.s3Key, r.s3VersionId);
+    });
     // Embedded designs (#470): an export never carries a Figma link, and shows
     // the snapshots — always for a member, and for a share link's reader only
     // while the workspace shows embeds publicly. A snapshot travels as an

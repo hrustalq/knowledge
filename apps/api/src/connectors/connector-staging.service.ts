@@ -666,11 +666,11 @@ export class ConnectorStagingService {
   private async revisionHash(revisionId: string): Promise<string | null> {
     const revision = await this.prisma.documentRevision.findUnique({
       where: { id: revisionId },
-      select: { s3Key: true, status: true },
+      select: { s3Key: true, s3VersionId: true, status: true },
     });
     if (!revision || revision.status === 'draft') return null;
     try {
-      return sha256(await this.storage.getObjectText(revision.s3Key));
+      return sha256(await this.storage.getObjectText(revision.s3Key, revision.s3VersionId));
     } catch {
       return null;
     }

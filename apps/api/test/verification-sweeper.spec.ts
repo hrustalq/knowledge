@@ -142,9 +142,9 @@ describe('VerificationSweeper.expire', () => {
 describe('VerificationSweeper.fillBodyChars', () => {
   it('measures the body without frontmatter and writes it only where still null', async () => {
     const { sweeper, prisma, storage } = harness({ source: '---\ntitle: x\n---\n\nhello world\n' });
-    prisma.$queryRaw.mockResolvedValueOnce([{ id: 'r-1', s3_key: 'workspaces/ws/documents/d/revisions/r-1/source.md' }]);
+    prisma.$queryRaw.mockResolvedValueOnce([{ id: 'r-1', s3_key: 'workspaces/ws/documents/d/revisions/r-1/source.md', s3_version_id: 'v1' }]);
     expect(await sweeper.fillBodyChars()).toBe(1);
-    expect(storage.getObjectText).toHaveBeenCalledWith('workspaces/ws/documents/d/revisions/r-1/source.md');
+    expect(storage.getObjectText).toHaveBeenCalledWith('workspaces/ws/documents/d/revisions/r-1/source.md', 'v1');
     expect(prisma.documentRevision.updateMany).toHaveBeenCalledWith({
       where: { id: 'r-1', bodyChars: null },
       data: { bodyChars: 'hello world'.length },

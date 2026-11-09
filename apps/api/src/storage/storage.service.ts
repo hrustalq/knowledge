@@ -17,6 +17,12 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { Env } from '../config/env.js';
 
+/** The two columns that locate a revision's stored body: the key and the version finalize hashed. */
+export interface StoredRevision {
+  s3Key: string;
+  s3VersionId: string | null;
+}
+
 export interface HeadResult {
   contentLength: number;
   versionId: string | null;
@@ -183,8 +189,8 @@ export class StorageService {
     );
   }
 
-  async getObjectBytes(objectKey: string): Promise<Uint8Array> {
-    const res = await this.s3.send(new GetObjectCommand({ Bucket: this.bucket, Key: objectKey }));
+  async getObjectBytes(objectKey: string, versionId?: string | null): Promise<Uint8Array> {
+    const res = await this.s3.send(new GetObjectCommand({ Bucket: this.bucket, Key: objectKey, VersionId: versionId ?? undefined }));
     return (await res.Body?.transformToByteArray()) ?? new Uint8Array();
   }
 
@@ -283,9 +289,29 @@ export class StorageService {
     }
   }
 
-  async getObjectText(objectKey: string): Promise<string> {
-    const res = await this.s3.send(new GetObjectCommand({ Bucket: this.bucket, Key: objectKey }));
+  /**
+   * `versionId` pins a finalized revision's read to the version finalize hashed
+   * (#818): the draft's presigned PUT outlives finalize, so the key's latest
+   * version is whatever its holder last wrote. A row without one (a draft, a
+   * legacy row) reads the latest.
+   */
+  async getObjectText(objectKey: string, versionId?: string | null): Promise<string> {
+    const res = await this.s3.send(new GetObjectCommand({ Bucket: this.bucket, Key: objectKey, VersionId: versionId ?? undefined }));
     return (await res.Body?.transformToString('utf-8')) ?? '';
+  }
+
+  /**
+   * One GetObject: the bytes and the version they came from, so finalize
+   * hashes exactly the version it records (#818). `null` when the key is absent.
+   */
+  async getObjectVersion(objectKey: string): Promise<{ text: string; versionId: string | null } | null> {
+    try {
+      const res = await this.s3.send(new GetObjectCommand({ Bucket: this.bucket, Key: objectKey }));
+      return { text: (await res.Body?.transformToString('utf-8')) ?? '', versionId: res.VersionId ?? null };
+    } catch (e: unknown) {
+      if ((e as { name?: string }).name === 'NoSuchKey') return null;
+      throw e;
+    }
   }
 
   async putObjectText(objectKey: string, body: string, contentType: string): Promise<string | null> {

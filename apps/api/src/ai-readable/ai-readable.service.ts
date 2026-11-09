@@ -3,7 +3,7 @@ import { BadRequestException, Injectable, Logger, NotFoundException, Optional } 
 import { ConfigService } from '@nestjs/config';
 import { DocumentsService } from '../documents/documents.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { StorageService } from '../storage/storage.service.js';
+import { StorageService, type StoredRevision } from '../storage/storage.service.js';
 import { readPageSource } from '../common/frontmatter.js';
 import { t } from '../i18n/t.js';
 import { type AiReadableScope, isReadableRevisionStatus, listedProjectsWhere, readableDocumentsWhere } from './ai-readable-scope.js';
@@ -168,7 +168,7 @@ export class AiReadableService {
     if (headOf.size === 0) return [];
     const heads = await this.prisma.documentRevision.findMany({
       where: { id: { in: [...headOf.values()] } },
-      select: { id: true, status: true, s3Key: true, origin: true },
+      select: { id: true, status: true, s3Key: true, s3VersionId: true, origin: true },
     });
     // A scaffold stub (#716) is a skeleton, not content an agent should read.
     const readable = new Map(
@@ -187,6 +187,7 @@ export class AiReadableService {
         projectId: d.projectId,
         headRevisionId: rev.id,
         s3Key: rev.s3Key,
+        s3VersionId: rev.s3VersionId,
         kind: d.kind,
       });
     }
@@ -277,7 +278,7 @@ export class AiReadableService {
       const batch = pages.slice(i, i + window);
       const bodies = await Promise.all(
         batch.map((p) =>
-          this.readBody(p.s3Key, p.kind).catch((e: unknown) => {
+          this.readBody(p, p.kind).catch((e: unknown) => {
             this.logger.warn(`llms-full: page ${p.id} unavailable: ${(e as Error).message}`);
             return null;
           }),
@@ -341,9 +342,9 @@ export class AiReadableService {
     );
   }
 
-  private async readBody(s3Key: string, kind: string): Promise<string> {
+  private async readBody(revision: StoredRevision, kind: string): Promise<string> {
     if (!this.storage) throw new Error('storage unavailable');
-    return readPageSource(await this.storage.getObjectText(s3Key), kind).content;
+    return readPageSource(await this.storage.getObjectText(revision.s3Key, revision.s3VersionId), kind).content;
   }
 
   private links(pages: IndexPage[]) {

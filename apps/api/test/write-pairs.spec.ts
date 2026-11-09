@@ -647,7 +647,7 @@ describe('#806 finalize decides under the lock', () => {
       },
       'ingestionJob.create': { id: 'j1' },
     });
-    const storage = { headObject: async () => ({ versionId: 'v1' }), getObjectText: async () => 'body' };
+    const storage = { getObjectVersion: async () => ({ text: 'body', versionId: 'v1' }) };
     const commits = { lock: vi.fn(async () => undefined), recordRevisions: vi.fn(async () => undefined) };
     const ingestion = { enqueue: vi.fn(async () => undefined) };
     const activity = { record: vi.fn(async () => undefined) };

@@ -21,6 +21,13 @@ in the pull request that introduces them — see
   content went into the prompt with only a workspace check, so a member who knew the id of a restricted page could
   get answers drawn from it. Such a page is now dropped unread. The assistant is told only that some applied pages are
   unavailable, never which ones. (#813)
+- **A finalized revision can no longer be changed through its upload link.** The presigned upload URL stays valid for
+  15 minutes, and anyone holding it could overwrite the revision's stored file after it was finalized, even after it
+  had been reviewed and merged. The page then showed bytes nobody reviewed, which disagreed with its content hash and
+  its search index. Every read of a finalized revision (the page view, indexing, compare, merge, export, llms.txt,
+  the git remote, connectors) now fetches the exact object version finalize hashed. Finalize also hashes and records
+  one read, so the recorded version is the one that was hashed. Revisions finalized before this release already carry
+  their version and are protected too. (#818)
 
 ### Fixed
 

@@ -1,14 +1,15 @@
 name: images
 
-# Builds the three production images for linux/amd64 on GitHub-hosted runners
-# and pushes them to GHCR, tagged with the ref and the commit SHA:
+# Builds the three production images for linux/amd64 on the homelab's
+# self-hosted runners and pushes them to GHCR, tagged with the ref and the commit SHA:
 #   ghcr.io/hrustalq/knowledge-api       (Dockerfile.api, target runtime)
 #   ghcr.io/hrustalq/knowledge-api-git   (Dockerfile.api, target git-runtime)
 #   ghcr.io/hrustalq/knowledge-web       (Dockerfile.web)
 # The homelab k3s cluster runs these (hrustalq/homelab, k8s/apps/knowledge).
 #
-# GitHub-hosted, so no self-hosted runner is exposed by this public repository.
-# Nothing here is triggered by a pull request.
+# Nothing here is triggered by a pull request (only deploy.yml's tag/dispatch),
+# so it may use the homelab's shared BuildKit daemon, whose layer cache persists
+# across releases (hrustalq/homelab docs/ci-runners.md).
 on:
   workflow_call:
     inputs:
@@ -29,7 +30,7 @@ permissions:
 jobs:
   build:
     if: github.repository == 'hrustalq/knowledge'
-    runs-on: ubuntu-latest
+    runs-on: homelab
     timeout-minutes: 45
     strategy:
       fail-fast: true
@@ -49,6 +50,9 @@ jobs:
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@v3
+        with:
+          driver: remote
+          endpoint: tcp://buildkitd.arc-runners.svc.cluster.local:1234
 
       - uses: docker/login-action@v3
         with:
@@ -70,5 +74,3 @@ jobs:
             org.opencontainers.image.source=https://github.com/hrustalq/knowledge
             org.opencontainers.image.revision=${{ steps.meta.outputs.sha }}
             org.opencontainers.image.version=${{ env.REF }}
-          cache-from: type=gha,scope=${{ matrix.image }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.image }}

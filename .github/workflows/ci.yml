@@ -1,9 +1,10 @@
 name: ci
 
-# Runs on GitHub-hosted runners, ALWAYS — never on the self-hosted runner.
-# This is the job untrusted fork PRs can reach, and the self-hosted runner is a
-# box with docker-group access to the production stack. Keeping this split is
-# the whole reason the deploy workflow is a separate file.
+# Runs on the homelab's self-hosted runners (`runs-on: homelab`: ephemeral pods
+# on the k3s cluster, hrustalq/homelab docs/ci-runners.md), EXCEPT pull requests
+# from forks: those are the jobs untrusted code can reach, and a runner pod has a
+# privileged Docker daemon on a homelab node, so fork PRs stay on GitHub-hosted
+# runners. The runners hold no production access (deploys go through GitOps).
 #
 # `pull_request` is deliberately unfiltered, so it already gates PRs based on
 # `dev` (where features integrate) as well as the promotion PR into `main`. The
@@ -23,7 +24,7 @@ permissions:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'homelab' }}
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v5
@@ -74,7 +75,7 @@ jobs:
   # the compose infra, the worker, the API (COLLAB_ENABLED=true, AUTH_MODE=none)
   # and the web dev server, then runs Playwright against the runner's Chrome.
   coedit-e2e:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'homelab' }}
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v5

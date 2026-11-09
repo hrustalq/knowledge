@@ -154,7 +154,7 @@ describe('a chat thread belongs to its asker', () => {
 
   it('the guard holds both sources to it', async () => {
     const requireOwnThread = vi.fn(async () => undefined);
-    const guardAccess = { workspaceOfAssistantThread: async () => WS, workspaceOfAssistantMessage: async () => WS, requireRole: async () => undefined, requireOwnThread };
+    const guardAccess = { workspaceOf: async () => WS, requireRole: async () => undefined, requireOwnThread };
     const reflectorFor = (source: string) => ({ getAllAndOverride: () => false, get: () => ({ role: 'viewer', source, operator: false }) });
     const run = (source: string, id: string) =>
       new AclGuard(reflectorFor(source) as never, guardAccess as never, {} as never).canActivate({

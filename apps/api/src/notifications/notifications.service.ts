@@ -24,6 +24,7 @@ import { isDevActor } from '../activity/actor.js';
 import { parseUserMentions } from '../documents/mentions.js';
 import { t } from '../i18n/t.js';
 import { WORKSPACE_READER } from '../auth/principal.js';
+import { workspaceOwnerOf } from '../auth/workspace-sources.js';
 import { canSee, canSeeProject, type AccessScope } from '../permissions/access-scope.js';
 import { whoCanOpen, type AccessResource } from '../permissions/acl-read.js';
 
@@ -789,35 +790,10 @@ export class NotificationsService {
     subjectType: NotificationSubjectType,
     subjectId: string,
   ): Promise<void> {
-    const owner = await this.workspaceOfSubject(subjectType, subjectId);
+    const owner = await workspaceOwnerOf(this.prisma, subjectType, subjectId);
     if (owner !== workspaceId) {
       throw new BadRequestException(t('error.notification.subjectNotInWorkspace'));
     }
-  }
-
-  private async workspaceOfSubject(
-    subjectType: NotificationSubjectType,
-    subjectId: string,
-  ): Promise<string | null> {
-    if (subjectType === 'document') {
-      const row = await this.prisma.document.findUnique({
-        where: { id: subjectId },
-        select: { workspaceId: true },
-      });
-      return row?.workspaceId ?? null;
-    }
-    if (subjectType === 'project') {
-      const row = await this.prisma.project.findUnique({
-        where: { id: subjectId },
-        select: { workspaceId: true },
-      });
-      return row?.workspaceId ?? null;
-    }
-    const row = await this.prisma.mergeRequest.findUnique({
-      where: { id: subjectId },
-      select: { document: { select: { workspaceId: true } } },
-    });
-    return row?.document.workspaceId ?? null;
   }
 
   // ------------------------------------------------------------ inbox

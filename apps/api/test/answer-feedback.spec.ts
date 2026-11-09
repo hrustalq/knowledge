@@ -341,7 +341,7 @@ describe('vote DTO', () => {
   });
 });
 
-describe('AccessService.workspaceOfAssistantMessage', () => {
+describe("AccessService.workspaceOf('assistant-message')", () => {
   it('resolves the message through its thread and 404s an unknown id', async () => {
     const prisma = {
       assistantMessage: {
@@ -351,7 +351,7 @@ describe('AccessService.workspaceOfAssistantMessage', () => {
       },
     };
     const access = new AccessService(prisma as never, noAuthPolicy);
-    expect(await access.workspaceOfAssistantMessage(REPLY)).toBe(WS);
-    await expect(access.workspaceOfAssistantMessage(QUESTION)).rejects.toBeInstanceOf(NotFoundException);
+    expect(await access.workspaceOf('assistant-message', REPLY)).toBe(WS);
+    await expect(access.workspaceOf('assistant-message', QUESTION)).rejects.toBeInstanceOf(NotFoundException);
   });
 });

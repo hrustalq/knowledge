@@ -61,7 +61,7 @@ export class GroupsController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentPrincipal() principal: Principal,
   ): Promise<{ deleted: true }> {
-    const workspaceId = await this.access.workspaceOfGroup(id);
+    const workspaceId = await this.access.workspaceOf('group', id);
     const result = await this.groups.remove(id);
     // Its grants went with it: whoever held them through it may see less now.
     await this.aclEvents.changed(workspaceId, principal?.userId);
@@ -88,7 +88,7 @@ export class GroupsController {
     @CurrentPrincipal() principal: Principal,
   ): Promise<ListUserGroupMembersResponse> {
     const result = await this.groups.updateMembers(id, dto);
-    await this.aclEvents.changed(await this.access.workspaceOfGroup(id), principal?.userId);
+    await this.aclEvents.changed(await this.access.workspaceOf('group', id), principal?.userId);
     return result;
   }
 }

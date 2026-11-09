@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module.js';
+import { RedisModule } from '../redis/redis.module.js';
 import { SessionsService } from './sessions.service.js';
 import { TokenAuthService } from './token-auth.service.js';
 import { UrlTicketsService } from './url-tickets.service.js';
@@ -11,7 +12,7 @@ import { UrlTicketsService } from './url-tickets.service.js';
  * `AuthModule` re-exports it, so nothing that already injected these changes.
  */
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, RedisModule],
   providers: [SessionsService, TokenAuthService, UrlTicketsService],
   exports: [SessionsService, TokenAuthService, UrlTicketsService],
 })

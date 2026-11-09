@@ -14,7 +14,7 @@ import { AuthRateLimitGuard } from './auth-rate-limit.guard.js';
 import { MeController } from './me.controller.js';
 import { AuthTokensModule } from './auth-tokens.module.js';
 import { PublicRateLimiter } from '../public/public-rate-limit.js';
-import { PublicStore } from '../public/public-store.js';
+import { RedisModule } from '../redis/redis.module.js';
 
 /**
  * Phase 5 governance (plan.md §11). Global: AuthGuard resolves the caller on
@@ -25,14 +25,13 @@ import { PublicStore } from '../public/public-store.js';
 @Global()
 @Module({
   // PermissionsCoreModule: AclGuard asks it about the page behind a `:id` (#76).
-  imports: [PrismaModule, AuthCoreModule, AuthTokensModule, PermissionsCoreModule, MailQueueModule],
+  imports: [PrismaModule, AuthCoreModule, AuthTokensModule, PermissionsCoreModule, MailQueueModule, RedisModule],
   controllers: [AuthController, AuthFlowController, MeController],
   providers: [
     ApiKeysService,
     AuthFlowService,
     // The anonymous auth routes' budgets (#75): the same Redis fixed window the
     // public routes count with, registered here as api-specs registers it.
-    PublicStore,
     PublicRateLimiter,
     AuthRateLimitGuard,
     { provide: APP_GUARD, useClass: AuthGuard },

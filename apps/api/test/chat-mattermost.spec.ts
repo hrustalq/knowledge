@@ -395,6 +395,7 @@ describe.each(PLATFORMS)('$kind', ({ kind, server }) => {
       { context: () => ({ ...ctx }) } as never,
       { receive } as never,
       config as never,
+      {} as never,
       (url, token) => {
         const s = new FakeSocket(url, token);
         sockets.push(s);
@@ -660,6 +661,7 @@ describe('one supervisor, both kinds (#343)', () => {
       { context: (r: { serverUrl: string }) => ({ token: TOKEN, botUsername: BOT, serverUrl: r.serverUrl, actionUrl: '' }) } as never,
       { receive } as never,
       config as never,
+      {} as never,
       (url) => {
         const socket = {
           on: (event: string, listener: (data: unknown) => void) => {

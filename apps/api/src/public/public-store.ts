@@ -1,10 +1,5 @@
-import { Inject, Injectable, OnModuleDestroy, Optional } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { Redis } from 'ioredis';
-import type { Env } from '../config/env.js';
-
-/** DI token for a substitute store (specs); production builds its own Redis client. */
-export const PUBLIC_STORE = Symbol('PUBLIC_STORE');
+import { Injectable } from '@nestjs/common';
+import { SharedRedis } from '../redis/shared-redis.js';
 
 /**
  * The Redis surface the anonymous routes need, small enough for a spec to fake:
@@ -22,25 +17,14 @@ export interface PublicKeyValueStore {
 }
 
 /**
- * One Redis client for everything under /v1/public (docs/features/43), opened
- * lazily for the reason `UrlTicketsService` gives: the OpenAPI generator boots
- * AppModule with no Redis running.
+ * The shared Redis client, narrowed to what everything under /v1/public
+ * (docs/features/43) uses. Provided by `RedisModule` only.
  */
 @Injectable()
-export class PublicStore implements OnModuleDestroy {
-  readonly kv: PublicKeyValueStore & { disconnect?: () => void };
+export class PublicStore {
+  readonly kv: PublicKeyValueStore;
 
-  constructor(config: ConfigService<Env, true>, @Optional() @Inject(PUBLIC_STORE) store?: PublicKeyValueStore) {
-    this.kv =
-      store ??
-      new Redis(config.get('REDIS_URL', { infer: true }), {
-        lazyConnect: true,
-        maxRetriesPerRequest: 1,
-        connectTimeout: 2_000,
-      });
-  }
-
-  onModuleDestroy(): void {
-    this.kv.disconnect?.();
+  constructor(redis: SharedRedis) {
+    this.kv = redis.client;
   }
 }

@@ -21,6 +21,7 @@ import {
   type ScimUserFields,
   type ScimUserRecord,
 } from './scim-resources.js';
+import { UUID_RE } from '@knowledge/contracts';
 
 /** Who is calling: the workspace a `kscim_` token belongs to, and which token. */
 export interface ScimCaller {
@@ -37,7 +38,6 @@ export interface ScimPageQuery {
 
 type Doc = Record<string, unknown>;
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const USER_INCLUDE = { user: { select: { email: true, displayName: true, createdAt: true } } } as const;
 const GROUP_INCLUDE = { members: { include: { user: { select: { displayName: true } } } } } as const;
 
@@ -86,7 +86,7 @@ export class ScimService {
     if (query.filter) {
       const f = parseUserFilter(query.filter);
       if (!f) throw new ScimError(HttpStatus.BAD_REQUEST, t('error.scim.invalidFilter'), 'invalidFilter');
-      if (f.attribute === 'id') where.userId = UUID.test(f.value) ? f.value : '00000000-0000-0000-0000-000000000000';
+      if (f.attribute === 'id') where.userId = UUID_RE.test(f.value) ? f.value : '00000000-0000-0000-0000-000000000000';
       else if (f.attribute === 'userName') where.userName = f.value.toLowerCase();
       else if (f.attribute === 'externalId') where.externalId = f.value;
       else where.user = { email: f.value.toLowerCase() };
@@ -295,7 +295,7 @@ export class ScimService {
   }
 
   private async loadUser(workspaceId: string, id: string): Promise<ScimUserRecord> {
-    const rec = UUID.test(id)
+    const rec = UUID_RE.test(id)
       ? await this.prisma.scimUser.findUnique({ where: { workspaceId_userId: { workspaceId, userId: id } }, include: USER_INCLUDE })
       : null;
     if (!rec) throw notFound('user', id);
@@ -325,7 +325,7 @@ export class ScimService {
     if (query.filter) {
       const f = parseGroupFilter(query.filter);
       if (!f) throw new ScimError(HttpStatus.BAD_REQUEST, t('error.scim.invalidFilter'), 'invalidFilter');
-      if (f.attribute === 'id') where.id = UUID.test(f.value) ? f.value : '00000000-0000-0000-0000-000000000000';
+      if (f.attribute === 'id') where.id = UUID_RE.test(f.value) ? f.value : '00000000-0000-0000-0000-000000000000';
       else if (f.attribute === 'displayName') where.displayName = { equals: f.value, mode: 'insensitive' };
       else where.externalId = f.value;
     }
@@ -450,7 +450,7 @@ export class ScimService {
     current: Set<string>,
     wanted: Set<string>,
   ): Promise<{ added: string[]; removed: string[]; skipped: number }> {
-    const candidates = [...wanted].filter((id) => UUID.test(id) && !current.has(id));
+    const candidates = [...wanted].filter((id) => UUID_RE.test(id) && !current.has(id));
     const provisioned = candidates.length
       ? await this.prisma.scimUser.findMany({ where: { workspaceId, userId: { in: candidates } }, select: { userId: true } })
       : [];
@@ -464,7 +464,7 @@ export class ScimService {
   }
 
   private async loadGroup(workspaceId: string, id: string) {
-    const group = UUID.test(id) ? await this.prisma.scimGroup.findFirst({ where: { id, workspaceId }, include: GROUP_INCLUDE }) : null;
+    const group = UUID_RE.test(id) ? await this.prisma.scimGroup.findFirst({ where: { id, workspaceId }, include: GROUP_INCLUDE }) : null;
     if (!group) throw notFound('group', id);
     return group;
   }

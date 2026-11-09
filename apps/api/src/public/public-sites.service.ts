@@ -32,8 +32,8 @@ import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PublishingSettingsService } from '../publishing/publishing-settings.service.js';
 import { SiteSessionService } from './site-session.service.js';
+import { UUID_RE } from '@knowledge/contracts';
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Longest path a resolve will look at; anything longer is no page of ours. */
 const MAX_PATH_CHARS = 2000;

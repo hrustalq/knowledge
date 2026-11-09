@@ -18,7 +18,7 @@ import {
 import { WORKSPACE_SOURCES } from './workspace-sources.js';
 import { AccessService } from './access.service.js';
 import { FeaturesService } from './features.service.js';
-import type { WorkspaceFeature } from '@knowledge/contracts';
+import { type WorkspaceFeature, UUID_RE } from '@knowledge/contracts';
 import { PermissionService, type AccessResource, type BranchRefs } from '../permissions/permission.service.js';
 import type { Principal } from './principal.js';
 import { t } from '../i18n/t.js';
@@ -26,7 +26,6 @@ import { bindTrace } from '@knowledge/observability';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Where a page route names one of its branches or revisions (#474). The guard

@@ -10,6 +10,7 @@ import type { ApiSpecDiff } from '@knowledge/contracts/api/diff';
 import type { AuthorableRelationType, EntityLayer, FactExtractor, ResolvedAsOf } from '@knowledge/contracts/graph';
 import type { DeleteReviewCommentResponse, ReviewComment, ReviewThread, SemanticDiff, StructuralDiff } from '@knowledge/contracts/reviews';
 import type { MentionAccessNote } from '@knowledge/contracts/identity';
+import { UUID_RE } from '@knowledge/contracts/ids';
 
 // rich editor. Two-step by design (presign → confirm), mirroring the revision
 // upload flow: the API never streams file bodies, and a row only becomes
@@ -670,7 +671,6 @@ export function collabDocName(workspaceId: string, documentId: string, branchId:
   return `collab:${workspaceId}:${documentId}:${branchId}`;
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * The inverse, or `null` for anything malformed. The workspace part is a

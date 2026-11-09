@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
-import { AGENT_LEARNING_STATUSES, AGENT_RECIPE_KEYS } from '@knowledge/contracts';
+import { AGENT_LEARNING_STATUSES, AGENT_RECIPE_KEYS, UUID_RE } from '@knowledge/contracts';
 import type {
   AgentLearningStatus,
   AgentLearningSummary,
@@ -104,7 +104,6 @@ import {
 } from './ai.dto.js';
 import { Returns } from '../common/returns.decorator.js';
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * AI settings surface (docs/features/12): provider configuration, skills and

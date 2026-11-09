@@ -43,6 +43,7 @@ import { identityFromSamlProfile, samlConfigOf } from './saml-profile.js';
 import { LDAP_DEFAULT_GROUPS_ATTRIBUTE, LdapService } from './ldap.service.js';
 import { identityFromLdapEntry, ldapConfigOf } from './ldap-profile.js';
 import { LOGOUT_TOKEN_MAX_AGE_SEC } from './oidc.service.js';
+import { UUID_RE } from '@knowledge/contracts';
 
 /** The fragment code's lifetime: long enough for one page load, short enough to be useless later. */
 const EXCHANGE_TTL_MS = 60_000;
@@ -50,7 +51,6 @@ const EXCHANGE_TTL_MS = 60_000;
 const DEFAULT_RETURN = '/documents';
 
 const sha256 = (value: string): string => createHash('sha256').update(value).digest('hex');
-const isUuid = (v: string): boolean => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 
 
 const toLoginProvider = (p: IdentityProvider): SsoLoginProvider => ({
@@ -102,7 +102,7 @@ export class SsoFlowService {
         enabled: true,
         showOnLogin: true,
         kind: { in: liveIdpKinds(this.config) },
-        OR: [{ platformWide: true }, ...(workspaceId && isUuid(workspaceId) ? [{ workspaceId }] : [])],
+        OR: [{ platformWide: true }, ...(workspaceId && UUID_RE.test(workspaceId) ? [{ workspaceId }] : [])],
       },
       orderBy: [{ name: 'asc' }, { id: 'asc' }],
     });
@@ -185,7 +185,7 @@ export class SsoFlowService {
   /** The IdP's redirect back. Always answers a URL to redirect to, success or not. */
   async callback(providerId: string, query: URLSearchParams, meta: RequestMeta): Promise<string> {
     const state = query.get('state');
-    const row = state && isUuid(providerId)
+    const row = state && UUID_RE.test(providerId)
       ? await this.prisma.ssoAuthRequest.findUnique({ where: { stateHash: sha256(state) }, include: { provider: true } })
       : null;
     const provider = row?.provider ?? null;
@@ -448,7 +448,7 @@ export class SsoFlowService {
 
   /** A SAML provider by id, enabled or not: the ACS audits a disabled one's refusals under its name. */
   private samlProvider(providerId: string): Promise<IdentityProvider | null> {
-    return isUuid(providerId) ? this.prisma.identityProvider.findFirst({ where: { id: providerId, kind: 'saml' } }) : Promise.resolve(null);
+    return UUID_RE.test(providerId) ? this.prisma.identityProvider.findFirst({ where: { id: providerId, kind: 'saml' } }) : Promise.resolve(null);
   }
 
   /**
@@ -524,7 +524,7 @@ export class SsoFlowService {
   }
 
   private async liveProvider(providerId: string, kind: IdpKind): Promise<IdentityProvider | null> {
-    if (!isUuid(providerId)) return null;
+    if (!UUID_RE.test(providerId)) return null;
     return this.prisma.identityProvider.findFirst({ where: { id: providerId, enabled: true, kind } });
   }
 

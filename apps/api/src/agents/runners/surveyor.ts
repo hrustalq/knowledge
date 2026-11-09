@@ -1,5 +1,5 @@
 import type { AgentRun } from '@prisma/client';
-import type { AgentFinding, AgentRunInput, AnswerSignalKind, AnswerSurface, Locale } from '@knowledge/contracts';
+import { type AgentFinding, type AgentRunInput, type AnswerSignalKind, type AnswerSurface, type Locale, UUID_RE } from '@knowledge/contracts';
 import { t } from '../../i18n/t.js';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { visibilityWhere } from '../../permissions/access-scope.js';
@@ -7,7 +7,7 @@ import type { ResolvedAgent } from '../agent-registry.service.js';
 import type { Principal } from '../../auth/principal.js';
 import { COVERAGE_OUTPUT_CONTRACT, EMBED_BATCH, MAX_CLUSTERS, citedIdsOf, clusterSignals, coverageOf, coveragePrompt, normalizeQuestion, questionKey, readCoverageVerdict, type CoverageSignal } from '../coverage.js';
 import { parseModelJson } from '../../common/model-json.js';
-import { type AgentServices, type AgentRunner, type AgentReporter, type AgentRunResult, UUID, MAX_FINDINGS, reasonOf, runBrief } from '../agent-services.js';
+import { type AgentServices, type AgentRunner, type AgentReporter, type AgentRunResult, MAX_FINDINGS, reasonOf, runBrief } from '../agent-services.js';
 
 export const surveyorRunner: AgentRunner = { key: 'surveyor', run: surveyCoverage };
 
@@ -135,7 +135,7 @@ async function surveyCoverage(
       const parsed = parseModelJson(raw);
       // A cited page must exist here: one query over whatever the model
       // named, and `readCoverageVerdict` keeps only what came back.
-      const cited = citedIdsOf(parsed).filter((id) => UUID.test(id));
+      const cited = citedIdsOf(parsed).filter((id) => UUID_RE.test(id));
       const known = new Map(
         cited.length
           ? (

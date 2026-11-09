@@ -26,6 +26,7 @@ import { PublishingSettingsService } from '../publishing/publishing-settings.ser
 import { shareTokenHash } from '../publishing/share-links.service.js';
 import { clientIp, PublicRateLimiter, RateLimitedException } from './public-rate-limit.js';
 import { ShareUnlockService } from './share-unlock.service.js';
+import { UUID_RE } from '@knowledge/contracts';
 
 /** `kp_` + 32 bytes base64url. Anything else is a 404 before the database is asked. */
 const TOKEN_RE = /^kp_[A-Za-z0-9_-]{43}$/;
@@ -66,7 +67,6 @@ const SCOPE_SELECT = {
  * reader gets a title, a body and a tree, never authors, revisions or history.
  */
 
-const UUID_ITEM = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 @Injectable()
 export class PublicSharesService {
   private readonly unlockAttempts: number;
@@ -147,7 +147,7 @@ export class PublicSharesService {
    */
   async embedUrl(token: string, itemId: string, cookieHeader: string | undefined): Promise<string> {
     const live = await this.resolveOpen(token, cookieHeader);
-    const item = UUID_ITEM.test(itemId) ? await this.embeds.publicItem(itemId) : null;
+    const item = UUID_RE.test(itemId) ? await this.embeds.publicItem(itemId) : null;
     if (!item?.fileKey || !item.version || item.nodeId === null) throw this.notFound();
     await this.inScope(live, item.documentId);
     if (!(await this.settings.effective(live.root.workspaceId)).allowPublicEmbeds) throw this.notFound();

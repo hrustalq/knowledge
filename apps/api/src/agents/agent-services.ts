@@ -75,8 +75,6 @@ export interface AgentRunner {
   run(svc: AgentServices, run: AgentRun, agent: ResolvedAgent, principal: Principal, report: AgentReporter): Promise<AgentRunResult>;
 }
 
-/** A page id the model named is checked against the database only if it could be one. */
-export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Findings kept from one run. A wall of findings is not a review, it is noise. */
 export const MAX_FINDINGS = 20;

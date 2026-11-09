@@ -1,4 +1,5 @@
 import type { Locale } from '@knowledge/contracts/core';
+import { UUID_RE } from '@knowledge/contracts/ids';
 import type { DocumentCategory } from '@knowledge/contracts/documents';
 import { FRONTMATTER_KEY_ALIASES, normalizeEntityKey } from '@knowledge/contracts/graph';
 
@@ -103,7 +104,6 @@ export function builtInTemplateRef(key: BuiltInTemplateKey): TemplateRef {
   return `${BUILT_IN_TEMPLATE_REF_PREFIX}${key}`;
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type ParsedTemplateRef =
   | { kind: 'builtin'; key: BuiltInTemplateKey }

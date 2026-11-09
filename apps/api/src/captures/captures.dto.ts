@@ -33,9 +33,8 @@ import {
   type CreateCaptureRequest,
 } from '@knowledge/contracts';
 import { vmsg } from '../common/validation.js';
+import { UUID_RE } from '@knowledge/contracts';
 
-/** Mirrors UUID_RE in acl.guard.ts (any version digit, nil allowed). */
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** The long text fields, the same ceilings the MCP tools declare; CAPTURE_MAX_CHARS caps the whole capture after. */
 const LONG_TEXT_MAX = 20_000;
 

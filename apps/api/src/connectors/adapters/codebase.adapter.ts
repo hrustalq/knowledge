@@ -21,6 +21,7 @@ import { runCodeReadingLoop, withoutConnectorParam } from '../../agents/code-rea
 import { AiUsageService } from '../../ai/ai-usage.service.js';
 import { AssistantClient } from '../../assistant/assistant.client.js';
 import { wrapUntrusted } from '../../common/untrusted.js';
+import { formatBytes } from '../../common/format-bytes.js';
 import type { Env } from '../../config/env.js';
 import { t } from '../../i18n/t.js';
 import { codeToolDefinitions, SnapshotCodeTools, type CodeToolSnapshot } from '../code-research/code-tools.js';
@@ -1625,10 +1626,6 @@ function positiveInt(value: string | undefined): number | null {
   if (!value) return null;
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-}
-
-function formatBytes(bytes: number): string {
-  return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
 /** A signature containing a pipe would otherwise end the table cell it sits in. */

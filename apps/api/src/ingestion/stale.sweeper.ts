@@ -8,6 +8,7 @@ import { GraphService } from '../graph/graph.service.js';
 import { FULLTEXT_PROVIDER, type FulltextProvider } from '../fulltext/fulltext.provider.js';
 import { IngestionProducer } from './ingestion.producer.js';
 import { loadRevisionStamps } from '../graph/revision-stamps.js';
+import { Ticker } from '../common/ticker.js';
 
 /** Revisions re-mirrored into the BM25 index per sweep; the next sweep continues. */
 const FULLTEXT_REPAIR_BATCH = 25;
@@ -25,8 +26,7 @@ const FULLTEXT_REPAIR_BATCH = 25;
 @Injectable()
 export class StaleSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(StaleSweeper.name);
-  private timer?: NodeJS.Timeout;
-  private running = false;
+  private readonly ticker = new Ticker(this.logger);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -41,29 +41,22 @@ export class StaleSweeper implements OnModuleInit, OnModuleDestroy {
       this.logger.log('Stale sweeper disabled (STALE_SWEEP_ENABLED=false)');
       return;
     }
-    this.timer = setInterval(() => void this.sweep(), 5 * 60_000);
-    this.timer.unref();
+    this.ticker.every(5 * 60_000, () => this.sweep());
   }
 
   onModuleDestroy() {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   async sweep(): Promise<void> {
     // Reindexes up to 10 documents a tick; overlapping sweeps would re-queue
     // the same drifted heads twice before the first pass had updated any.
-    if (this.running) return;
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       await this.requeueStuck();
       await this.retryFailed();
       await this.reindexDrifted();
       await this.repairFulltext();
-    } catch (e) {
-      this.logger.warn(`Stale sweep failed: ${(e as Error).message}`);
-    } finally {
-      this.running = false;
-    }
+    });
   }
 
   /**

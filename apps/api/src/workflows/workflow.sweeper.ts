@@ -6,6 +6,7 @@ import { WorkflowRunnerService } from './workflow-runner.service.js';
 import { WORKFLOW_MAX_ATTEMPTS } from './workflow.constants.js';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.js';
+import { Ticker } from '../common/ticker.js';
 
 const SWEEP_INTERVAL_MS = 5 * 60_000;
 const BATCH = 20;
@@ -21,8 +22,7 @@ const BATCH = 20;
 @Injectable()
 export class WorkflowSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(WorkflowSweeper.name);
-  private timer?: NodeJS.Timeout;
-  private running = false;
+  private readonly ticker = new Ticker(this.logger);
 
   private readonly staleMs: number;
 
@@ -39,18 +39,15 @@ export class WorkflowSweeper implements OnModuleInit, OnModuleDestroy {
     // One sweep shortly after boot, because the most likely reason this process
     // just started is that the last one died holding claimed nodes.
     setTimeout(() => void this.sweep(), 20_000).unref();
-    this.timer = setInterval(() => void this.sweep(), Math.min(SWEEP_INTERVAL_MS, this.staleMs));
-    this.timer.unref();
+    this.ticker.every(Math.min(SWEEP_INTERVAL_MS, this.staleMs), () => this.sweep());
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   async sweep(): Promise<void> {
-    if (this.running) return;
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       // Nodes claimed by a worker that never came back. Returning them to
       // `pending` is safe because a step is only ever *read* before it writes.
       // One out of attempts fails, and `reconcileRun` below settles its run.
@@ -94,10 +91,6 @@ export class WorkflowSweeper implements OnModuleInit, OnModuleDestroy {
           `Workflow sweep re-queued ${requeued.length} stalled and ${orphaned.length} orphaned node(s), failed ${failed.length}`,
         );
       }
-    } catch (e) {
-      this.logger.warn(`Workflow sweep failed (non-fatal): ${(e as Error).message}`);
-    } finally {
-      this.running = false;
-    }
+    });
   }
 }

@@ -10,6 +10,7 @@ import { AgentProducer } from './agent.producer.js';
 import { AGENT_MAX_ATTEMPTS, agentRunLockKey } from './agent.constants.js';
 import { RUNNABLE_AGENTS } from './agent.executor.js';
 import { scheduleOf } from './agent-schedule.js';
+import { Ticker } from '../common/ticker.js';
 
 /** One tick; a schedule's own interval or slot is checked inside it. */
 const SWEEP_INTERVAL_MS = AGENT_SCHEDULE_TICK_MINUTES * 60_000;
@@ -42,8 +43,7 @@ const STALE_PENDING_MS = 10 * 60_000;
 @Injectable()
 export class AgentScheduleSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(AgentScheduleSweeper.name);
-  private timer?: NodeJS.Timeout;
-  private running = false;
+  private readonly ticker = new Ticker(this.logger);
   private schedulesEnabled = false;
 
   constructor(
@@ -55,26 +55,19 @@ export class AgentScheduleSweeper implements OnModuleInit, OnModuleDestroy {
   onModuleInit(): void {
     this.schedulesEnabled = this.config.get('AGENT_SCHEDULE_ENABLED', { infer: true });
     if (!this.schedulesEnabled) this.logger.log('Agent schedules disabled (AGENT_SCHEDULE_ENABLED=false); run recovery stays on');
-    this.timer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS);
-    this.timer.unref();
+    this.ticker.every(SWEEP_INTERVAL_MS, () => this.sweep());
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   async sweep(): Promise<void> {
-    if (this.running) return;
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       await this.requeueStuck();
       await this.relayPending();
       if (this.schedulesEnabled) await this.startDue();
-    } catch (error) {
-      this.logger.warn(`Agent schedule sweep failed: ${String(error)}`);
-    } finally {
-      this.running = false;
-    }
+    });
   }
 
   /**

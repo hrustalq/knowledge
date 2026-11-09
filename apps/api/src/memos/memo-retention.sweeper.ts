@@ -6,6 +6,7 @@ import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { MemosProducer } from './memos.producer.js';
+import { Ticker } from '../common/ticker.js';
 
 const SWEEP_INTERVAL_MS = 10 * 60_000;
 const BATCH = 50;
@@ -35,9 +36,8 @@ const STALE_TRANSCRIBING_MS = 30 * 60_000;
 @Injectable()
 export class MemoRetentionSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(MemoRetentionSweeper.name);
+  private readonly ticker = new Ticker(this.logger);
   private readonly retentionDays: number;
-  private timer?: NodeJS.Timeout;
-  private running = false;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -49,18 +49,15 @@ export class MemoRetentionSweeper implements OnModuleInit, OnModuleDestroy {
   }
 
   onModuleInit(): void {
-    this.timer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS);
-    this.timer.unref();
+    this.ticker.every(SWEEP_INTERVAL_MS, () => this.sweep());
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   async sweep(now = new Date()): Promise<void> {
-    if (this.running) return;
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       const stale = await this.prisma.memo.findMany({
         where: {
           status: { in: ['uploaded', 'transcribed'] },
@@ -112,10 +109,6 @@ export class MemoRetentionSweeper implements OnModuleInit, OnModuleDestroy {
           data: { status: 'failed', stage: 'transcribing', error: t('error.memo.interrupted', undefined, asLocale(memo.locale)) },
         });
       }
-    } catch (error) {
-      this.logger.warn(`Memo retention sweep failed (non-fatal): ${(error as Error).message}`);
-    } finally {
-      this.running = false;
-    }
+    });
   }
 }

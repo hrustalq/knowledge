@@ -17,6 +17,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { LintChecksService } from './lint-checks.service.js';
 import { LINT_AGENT_KEY } from './lint-check.js';
 import { sourcePages } from '../mr-pages.js';
+import { Ticker } from '../../common/ticker.js';
 
 const SWEEP_INTERVAL_MS = 30_000;
 /** Heads looked at per tick. */
@@ -56,8 +57,7 @@ export interface LintCandidate {
 @Injectable()
 export class LintTriggerSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(LintTriggerSweeper.name);
-  private timer?: NodeJS.Timeout;
-  private running = false;
+  private readonly ticker = new Ticker(this.logger);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -71,20 +71,17 @@ export class LintTriggerSweeper implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit(): void {
-    this.timer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS);
-    this.timer.unref();
+    this.ticker.every(SWEEP_INTERVAL_MS, () => this.sweep());
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   async sweep(): Promise<void> {
-    if (this.running) return;
     // A deployment that lints nothing pays nothing, not even the query.
     if (this.checks.ceiling === 'off') return;
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       for (const candidate of await this.candidates()) {
         try {
           await this.check(candidate);
@@ -92,11 +89,7 @@ export class LintTriggerSweeper implements OnModuleInit, OnModuleDestroy {
           this.logger.warn(`Lint check of merge request ${candidate.mergeRequestId} failed to start: ${(error as Error).message}`);
         }
       }
-    } catch (error) {
-      this.logger.warn(`Lint trigger sweep failed (non-fatal): ${(error as Error).message}`);
-    } finally {
-      this.running = false;
-    }
+    });
   }
 
   /**

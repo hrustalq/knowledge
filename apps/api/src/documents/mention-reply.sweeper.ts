@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { MentionRepliesService } from './mention-replies.service.js';
+import { Ticker } from '../common/ticker.js';
 
 /** Nothing here is urgent — a stranded placeholder is rare and already stale. */
 const SWEEP_INTERVAL_MS = 60_000;
@@ -21,35 +22,26 @@ const SWEEP_INTERVAL_MS = 60_000;
 @Injectable()
 export class MentionReplySweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(MentionReplySweeper.name);
-  private timer?: NodeJS.Timeout;
-  private running = false;
+  private readonly ticker = new Ticker(this.logger);
 
   constructor(private readonly mentions: MentionRepliesService) {}
 
   onModuleInit(): void {
-    this.timer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS);
-    // Unreffed so a sweep pending in the event loop never holds the process up.
-    this.timer.unref();
+    this.ticker.every(SWEEP_INTERVAL_MS, () => this.sweep());
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   async sweep(): Promise<void> {
-    if (this.running) return; // a slow sweep must not stack on itself
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       // Run replies first: a run that finished just inside the backstop is an
       // answer, not a timeout.
       const answered = await this.mentions.sweepRunReplies();
       if (answered > 0) this.logger.log(`posted ${answered} agent run replies`);
       const closed = await this.mentions.sweepStale();
       if (closed > 0) this.logger.warn(`timed out ${closed} unanswered agent replies`);
-    } catch (e: unknown) {
-      this.logger.warn(`mention reply sweep failed: ${String(e)}`);
-    } finally {
-      this.running = false;
-    }
+    });
   }
 }

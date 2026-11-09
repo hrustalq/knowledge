@@ -4,6 +4,7 @@ import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SiteBuildProducer } from './site-build.producer.js';
 import { SiteDomainsService } from './site-domains.service.js';
+import { Ticker } from '../common/ticker.js';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -39,8 +40,7 @@ const STUCK_BUILDS_PER_TICK = 50;
 @Injectable()
 export class PublishingSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PublishingSweeper.name);
-  private timer?: NodeJS.Timeout;
-  private running = false;
+  private readonly ticker = new Ticker(this.logger);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -50,18 +50,15 @@ export class PublishingSweeper implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit(): void {
-    this.timer = setInterval(() => void this.sweep(), this.config.get('PUBLISHING_SWEEP_INTERVAL_MS', { infer: true }));
-    this.timer.unref();
+    this.ticker.every(this.config.get('PUBLISHING_SWEEP_INTERVAL_MS', { infer: true }), () => this.sweep());
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   async sweep(now = new Date()): Promise<{ domainsChecked: number; buildsRequeued: number }> {
-    if (this.running) return { domainsChecked: 0, buildsRequeued: 0 };
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       const domainsChecked = await this.checkPendingDomains(now).catch((e: unknown) => {
         this.logger.warn(`domain sweep failed: ${String(e)}`);
         return 0;
@@ -72,9 +69,7 @@ export class PublishingSweeper implements OnModuleInit, OnModuleDestroy {
       });
       if (buildsRequeued > 0) this.logger.warn(`requeued ${buildsRequeued} site builds that lost their job`);
       return { domainsChecked, buildsRequeued };
-    } finally {
-      this.running = false;
-    }
+    }, { domainsChecked: 0, buildsRequeued: 0 });
   }
 
   private async checkPendingDomains(now: Date): Promise<number> {

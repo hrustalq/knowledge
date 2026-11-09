@@ -6,6 +6,7 @@ import { asLocale } from '../../i18n/locale.js';
 import { withLocale } from '../../i18n/t.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { LINT_AGENT_KEY, countsOf, lintThreadBody, planLintThreads, type PriorLintThread } from './lint-check.js';
+import { Ticker } from '../../common/ticker.js';
 
 const SWEEP_INTERVAL_MS = 15_000;
 const BATCH = 10;
@@ -35,8 +36,7 @@ type Settled = { id: string; runStatus: string; finishedAt: Date | null };
 @Injectable()
 export class LintPublishSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(LintPublishSweeper.name);
-  private timer?: NodeJS.Timeout;
-  private running = false;
+  private readonly ticker = new Ticker(this.logger);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -44,18 +44,15 @@ export class LintPublishSweeper implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit(): void {
-    this.timer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS);
-    this.timer.unref();
+    this.ticker.every(SWEEP_INTERVAL_MS, () => this.sweep());
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   async sweep(): Promise<void> {
-    if (this.running) return;
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       const due = await this.prisma.$queryRaw<Settled[]>`
         SELECT c.id, r.status AS "runStatus", r.finished_at AS "finishedAt"
           FROM merge_request_checks c
@@ -76,11 +73,7 @@ export class LintPublishSweeper implements OnModuleInit, OnModuleDestroy {
           await this.finish(settled.id, { status: 'error', reason: 'run-failed' });
         }
       }
-    } catch (error) {
-      this.logger.warn(`Lint publish sweep failed (non-fatal): ${(error as Error).message}`);
-    } finally {
-      this.running = false;
-    }
+    });
   }
 
   /** Stamp `publishedAt` if nobody has. One statement, so two sweeps cannot both win. */

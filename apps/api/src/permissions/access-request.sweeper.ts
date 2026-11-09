@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { AccessRequestsService } from './access-requests.service.js';
+import { Ticker } from '../common/ticker.js';
 
 /** A request lives for days; minutes of slack on when it lapses cost nothing. */
 const SWEEP_INTERVAL_MS = 5 * 60_000;
@@ -16,30 +17,22 @@ const SWEEP_INTERVAL_MS = 5 * 60_000;
 @Injectable()
 export class AccessRequestSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(AccessRequestSweeper.name);
-  private timer?: NodeJS.Timeout;
-  private running = false;
+  private readonly ticker = new Ticker(this.logger);
 
   constructor(private readonly requests: AccessRequestsService) {}
 
   onModuleInit(): void {
-    this.timer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS);
-    this.timer.unref();
+    this.ticker.every(SWEEP_INTERVAL_MS, () => this.sweep());
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   async sweep(): Promise<void> {
-    if (this.running) return;
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       const expired = await this.requests.expireDue();
       if (expired > 0) this.logger.log(`expired ${expired} access requests`);
-    } catch (e: unknown) {
-      this.logger.warn(`access request sweep failed: ${String(e)}`);
-    } finally {
-      this.running = false;
-    }
+    });
   }
 }

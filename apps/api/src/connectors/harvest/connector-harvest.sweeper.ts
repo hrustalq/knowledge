@@ -12,6 +12,7 @@ import { HarvestRefused, HarvestService } from '../../chat/harvest.service.js';
 import { ConnectorsService } from '../connectors.service.js';
 import { ConnectorAclService } from '../connector-acl.service.js';
 import type { HarvestDelivery, HarvestItem } from '../adapters/connector.types.js';
+import { Ticker } from '../../common/ticker.js';
 
 const SWEEP_INTERVAL_MS = 30_000;
 /** Claimed rows finished per tick: one model call each. */
@@ -60,10 +61,9 @@ export function capMessages<T>(messages: T[], max: number): { kept: T[]; truncat
 @Injectable()
 export class ConnectorHarvestSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ConnectorHarvestSweeper.name);
+  private readonly ticker = new Ticker(this.logger);
   private readonly enabled: boolean;
   private readonly harvestMax: number;
-  private timer?: NodeJS.Timeout;
-  private running = false;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -81,12 +81,11 @@ export class ConnectorHarvestSweeper implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit(): void {
     if (!this.enabled) return;
-    this.timer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS);
-    this.timer.unref();
+    this.ticker.every(SWEEP_INTERVAL_MS, () => this.sweep());
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   /**
@@ -106,9 +105,7 @@ export class ConnectorHarvestSweeper implements OnModuleInit, OnModuleDestroy {
 
   /** One tick: the oldest claimed rows, each finished at most once. Returns how many were harvested. */
   async sweep(now = Date.now()): Promise<number> {
-    if (this.running) return 0; // a tick of model calls must not stack on itself
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       const due = await this.prisma.connectorHarvest.findMany({
         where: { harvestedAt: null, OR: [{ lockedAt: null }, { lockedAt: { lt: new Date(now - LEASE_MS) } }] },
         orderBy: { createdAt: 'asc' },
@@ -119,12 +116,7 @@ export class ConnectorHarvestSweeper implements OnModuleInit, OnModuleDestroy {
       for (const row of due) if ((await this.finish(row, now)) === 'harvested') harvested++;
       if (harvested) this.logger.log(`harvested ${harvested} resolved connector items`);
       return harvested;
-    } catch (e: unknown) {
-      this.logger.warn(`connector harvest sweep failed: ${String(e)}`);
-      return 0;
-    } finally {
-      this.running = false;
-    }
+    }, 0);
   }
 
   async finish(row: ConnectorHarvest & { connector: Connector }, now = Date.now()): Promise<ConnectorHarvestResult> {

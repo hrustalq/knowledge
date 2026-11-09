@@ -31,6 +31,11 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- **A database blip during the Figma change check no longer takes the API down.** That background check had no error
+  handler of its own. A failed query in it, such as Postgres restarting mid-tick, became an unhandled rejection and
+  ended the API process. It is now logged and retried on the next tick, like every other background sweep. All
+  background sweeps now share one timer helper, with the same intervals as before and still never two passes at
+  once. (#820)
 - **An AI answer wrapped in a sentence or a code fence is no longer thrown away by some agents.** Models asked for
   JSON often add "Here is the result:" or a ```` ```json ```` fence. Most AI features already looked past that, but the
   workflow builder, workflow steps, the learner's coach, the glossary suggestions, blueprint generation, chat harvest,

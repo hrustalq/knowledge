@@ -7,6 +7,7 @@ import { asLocale } from '../i18n/locale.js';
 import { withLocale } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { COMPONENT_DRAFT_AGENT_KEY, COMPONENT_DRAFT_MAX_AGE_MS } from './component-drafts.service.js';
+import { Ticker } from '../common/ticker.js';
 
 const SWEEP_INTERVAL_MS = 15_000;
 const BATCH = 5;
@@ -32,8 +33,7 @@ const BATCH = 5;
 @Injectable()
 export class ComponentDraftSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ComponentDraftSweeper.name);
-  private timer?: NodeJS.Timeout;
-  private running = false;
+  private readonly ticker = new Ticker(this.logger);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -42,19 +42,15 @@ export class ComponentDraftSweeper implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit(): void {
-    this.timer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS);
-    this.timer.unref();
+    this.ticker.every(SWEEP_INTERVAL_MS, () => this.sweep());
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   async sweep(): Promise<void> {
-    // Back-pressure: never a second sweep while one is in flight.
-    if (this.running) return;
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       const since = new Date(Date.now() - COMPONENT_DRAFT_MAX_AGE_MS);
       const due = await this.prisma.$queryRaw<Array<{ id: string }>>`
         SELECT id FROM agent_runs
@@ -76,11 +72,7 @@ export class ComponentDraftSweeper implements OnModuleInit, OnModuleDestroy {
           this.logger.warn(`Opening component draft ${id} failed: ${(error as Error).message}`);
         }
       }
-    } catch (error) {
-      this.logger.warn(`Component draft sweep failed (non-fatal): ${(error as Error).message}`);
-    } finally {
-      this.running = false;
-    }
+    });
   }
 
   async publish(run: AgentRun): Promise<void> {

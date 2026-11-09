@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { GraphService } from '../graph/graph.service.js';
 import { FULLTEXT_PROVIDER, type FulltextProvider } from '../fulltext/fulltext.provider.js';
 import { SiteAudienceStamper } from '../publishing/site-audience.stamper.js';
+import { Ticker } from '../common/ticker.js';
 
 /**
  * Copies a page's restrictions onto its search-store stamps (#76).
@@ -28,8 +29,7 @@ import { SiteAudienceStamper } from '../publishing/site-audience.stamper.js';
 @Injectable()
 export class AclRestampSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(AclRestampSweeper.name);
-  private timer?: NodeJS.Timeout;
-  private running = false;
+  private readonly ticker = new Ticker(this.logger);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -40,20 +40,17 @@ export class AclRestampSweeper implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit() {
-    this.timer = setInterval(() => void this.sweep(), this.config.get('ACL_RESTAMP_TICK_MS', { infer: true }));
-    this.timer.unref();
+    this.ticker.every(this.config.get('ACL_RESTAMP_TICK_MS', { infer: true }), () => this.sweep());
   }
 
   onModuleDestroy() {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   /** One tick. Returns how many pages it stamped. */
   async sweep(): Promise<number> {
-    if (this.running) return 0;
-    this.running = true;
     let stamped = 0;
-    try {
+    await this.ticker.exclusive(async () => {
       const batch = this.config.get('ACL_RESTAMP_BATCH', { infer: true });
       const due = await this.prisma.$queryRaw<
         Array<{ id: string; workspace_id: string; restricted_by: string[]; acl_version: number }>
@@ -79,11 +76,7 @@ export class AclRestampSweeper implements OnModuleInit, OnModuleDestroy {
           this.logger.warn(`ACL re-stamp failed for document ${doc.id}; retrying next tick: ${(e as Error).message}`);
         }
       }
-    } catch (e) {
-      this.logger.warn(`ACL re-stamp sweep failed: ${(e as Error).message}`);
-    } finally {
-      this.running = false;
-    }
+    });
     return stamped;
   }
 }

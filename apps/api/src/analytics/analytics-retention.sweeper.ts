@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { Ticker } from '../common/ticker.js';
 
 const TICK_MS = 60 * 60 * 1000;
 const BATCH = 5000;
@@ -25,8 +26,7 @@ const TABLES = ['page_views', 'search_queries', 'mcp_tool_calls'] as const;
 @Injectable()
 export class AnalyticsRetentionSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(AnalyticsRetentionSweeper.name);
-  private timer?: NodeJS.Timeout;
-  private running = false;
+  private readonly ticker = new Ticker(this.logger);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -34,20 +34,16 @@ export class AnalyticsRetentionSweeper implements OnModuleInit, OnModuleDestroy 
   ) {}
 
   onModuleInit(): void {
-    this.timer = setInterval(() => void this.sweep(), TICK_MS);
-    this.timer.unref();
+    this.ticker.every(TICK_MS, () => this.sweep());
     void this.sweep();
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.ticker.stop();
   }
 
   async sweep(): Promise<void> {
-    // Back-pressure: never a second sweep while one is in flight.
-    if (this.running) return;
-    this.running = true;
-    try {
+    return this.ticker.exclusive(async () => {
       const ceiling = this.config.get('ANALYTICS_RETENTION_DAYS', { infer: true });
       const textDays = this.config.get('ANALYTICS_QUERY_TEXT_DAYS', { infer: true });
       let removed = 0;
@@ -66,11 +62,7 @@ export class AnalyticsRetentionSweeper implements OnModuleInit, OnModuleDestroy 
            WHERE query_text IS NOT NULL AND created_at < now() - make_interval(days => ${textDays}::int)
            LIMIT ${BATCH})`);
       if (removed || redacted) this.logger.log(`Analytics retention: ${removed} rows deleted, ${redacted} query texts redacted`);
-    } catch (e) {
-      this.logger.warn(`Analytics retention sweep failed (non-fatal): ${(e as Error).message}`);
-    } finally {
-      this.running = false;
-    }
+    });
   }
 
   private async batched(statement: Prisma.Sql): Promise<number> {

@@ -77,7 +77,7 @@ function fakePrisma(state: { refs?: unknown[]; ref?: unknown; node?: unknown; fi
   return {
     $transaction: vi.fn(async (ops: unknown[]) => ops),
     $queryRaw: vi.fn(async () => state.heads ?? []),
-    ingestionJob: { create: vi.fn(async () => ({ id: 'job-1' })) },
+    ingestionJob: { findFirst: vi.fn(async () => null), create: vi.fn(async () => ({ id: 'job-1' })) },
     revisionEmbed: {
       deleteMany: vi.fn(() => 'delete'),
       createMany: vi.fn((args: unknown) => args),

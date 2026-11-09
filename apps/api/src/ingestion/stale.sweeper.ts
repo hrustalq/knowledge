@@ -9,6 +9,7 @@ import { FULLTEXT_PROVIDER, type FulltextProvider } from '../fulltext/fulltext.p
 import { IngestionProducer } from './ingestion.producer.js';
 import { loadRevisionStamps } from '../graph/revision-stamps.js';
 import { Ticker } from '../common/ticker.js';
+import { queueReindex } from './reindex.js';
 
 /** Revisions re-mirrored into the BM25 index per sweep; the next sweep continues. */
 const FULLTEXT_REPAIR_BATCH = 25;
@@ -131,29 +132,23 @@ export class StaleSweeper implements OnModuleInit, OnModuleDestroy {
       take: 10, // cap churn per sweep; the next sweep continues the rollout
     });
     for (const rev of drifted) {
-      const pending = await this.prisma.ingestionJob.findFirst({
-        where: { revisionId: rev.id, status: { in: ['queued', 'running'] } },
-      });
-      if (pending) continue;
-      const job = await this.prisma.ingestionJob.create({
-        data: {
+      const jobId = await queueReindex(
+        this.prisma,
+        this.producer,
+        {
           workspaceId: rev.document.workspaceId,
+          documentId: rev.documentId,
           revisionId: rev.id,
-          type: 'reindex',
-          status: 'queued',
-          payload: {
-            documentId: rev.documentId,
-            revisionId: rev.id,
-            s3Key: rev.s3Key,
-            title: rev.document.title,
-            reason: `embedding drift: ${rev.embeddingModel ?? 'unknown'} -> ${sig}`,
-          },
+          s3Key: rev.s3Key,
+          title: rev.document.title,
+          reason: `embedding drift: ${rev.embeddingModel ?? 'unknown'} -> ${sig}`,
         },
-      });
-      this.logger.log(
-        `Embedding drift on revision ${rev.id} (${rev.embeddingModel ?? 'unknown'} -> ${sig}) — reindex job ${job.id}`,
+        { skipPending: true },
       );
-      await this.producer.enqueue(job.id);
+      if (!jobId) continue;
+      this.logger.log(
+        `Embedding drift on revision ${rev.id} (${rev.embeddingModel ?? 'unknown'} -> ${sig}) — reindex job ${jobId}`,
+      );
     }
   }
 

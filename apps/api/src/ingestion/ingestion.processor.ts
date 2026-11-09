@@ -29,6 +29,7 @@ import { ApiSpecsService, type ApiSpecProjection } from '../api-specs/api-specs.
 import { ApiFixturesService, type ApiFixtureProjection } from '../api-specs/api-fixtures.service.js';
 import { isApiSpecKind, isTestFixtureKind } from '@knowledge/contracts';
 import { bindTrace, currentTrace, emitBacktest, startTrace, withTrace } from '@knowledge/observability';
+import { queueReindex } from './reindex.js';
 
 interface IngestionJobData {
   ingestionJobId: string;
@@ -667,41 +668,13 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       if (!headId) continue;
       const head = await this.prisma.documentRevision.findUnique({ where: { id: headId } });
       if (!head || head.status !== 'indexed') continue;
-      const pending = await this.prisma.ingestionJob.findFirst({
-        where: { revisionId: headId, status: { in: ['queued', 'running'] } },
-      });
-      if (pending) continue;
-
-      const job = await this.prisma.ingestionJob.create({
-        data: {
-          workspaceId,
-          revisionId: headId,
-          type: 'reindex',
-          status: 'queued',
-          payload: {
-            documentId: depId,
-            revisionId: headId,
-            s3Key: head.s3Key,
-            title: doc.title,
-            reason: 'dependent-reindex',
-            triggeredBy: documentId,
-          },
-        },
-      });
-      await this.producer.enqueue(job.id).catch((err: unknown) => {
-        // Still non-fatal: OutboxSweeper re-enqueues anything left `queued`,
-        // which is the entire point of the outbox. Logged because "the sweeper
-        // will pick it up in a moment" and "every enqueue is failing" are
-        // indistinguishable from here — the second presents only as unexplained
-        // indexing latency, with nothing to grep for.
-        this.logger.warn({
-          msg: 'Dependent reindex enqueue failed (outbox sweeper will retry)',
-          code: 'JOB_ENQUEUE_FAILED',
-          ingestionJobId: job.id,
-          documentId: depId,
-          err,
-        });
-      });
+      const queued = await queueReindex(
+        this.prisma,
+        this.producer,
+        { workspaceId, documentId: depId, revisionId: headId, s3Key: head.s3Key, title: doc.title, reason: 'dependent-reindex', triggeredBy: documentId },
+        { skipPending: true },
+      );
+      if (!queued) continue;
       await this.events.publish({
         type: 'revision.dependent-reindex',
         workspaceId,

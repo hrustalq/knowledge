@@ -24,6 +24,14 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- **A graph store hiccup during indexing now fails the job and retries, rather than leaving duplicate or stale
+  relations.** When ArcadeDB failed briefly while a page was being re-indexed, the indexer read that as "no relations
+  yet" and wrote a second copy of each one, and a failure while moving a page's live version still marked the job
+  done with search serving the old version's relations. The only error still ignored is a relation type the graph
+  has not created yet. A failed write of the model-inferred relations now retries the same way; a model that fails
+  still leaves the job alone and the previous inferred relations in place. Re-indexing a page also replaces its
+  chunks in one transaction, so search no longer loses the page for the moment between dropping the old chunks and
+  writing the new ones, and a write that fails keeps the old chunks instead of a partial set. (#817)
 - **A failure halfway through an action no longer leaves half of it behind.** Inviting someone without a password could
   create an account with no invite link, which nobody could sign into and which a second invite refused as taken; the
   account and its link are now written together. "Link a source" with a new credential left a stray saved connection

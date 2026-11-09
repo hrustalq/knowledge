@@ -6,7 +6,7 @@ import {
   normalizeEntityKey,
 } from '@knowledge/contracts';
 import { aclAdmits, UNFILTERED, type DocumentAclFilter } from '../common/document-acl.js';
-import { ArcadeClient } from './arcade.client.js';
+import { ArcadeClient, ignoreMissingType } from './arcade.client.js';
 import { EntityAliasService } from './entity-alias.service.js';
 import {
   asOfChunkClause,
@@ -531,72 +531,39 @@ export class GraphService {
     aclNodes: string[];
   }): Promise<void> {
     const { workspaceId, documentId, revisionId, title, chunks, live, aclNodes } = input;
-    const aclRestricted = aclNodes.length > 0;
-
-    await this.arcade.command('sql', 'DELETE FROM Chunk WHERE revisionId = :revisionId', { revisionId });
-    await this.arcade.command('sql', 'DELETE FROM DocumentRevision WHERE revisionId = :revisionId', { revisionId });
-
-    await this.arcade.command(
-      'sql',
+    // #817: one transaction, so a reader sees the old chunks or the new ones,
+    // never the page missing between the DELETE and the last CREATE. Each
+    // chunk's values are bound under its index; nothing is inlined.
+    const params: Record<string, unknown> = { workspaceId, documentId, revisionId, title, live, aclNodes, aclRestricted: aclNodes.length > 0 };
+    const statements = [
+      'BEGIN',
+      'DELETE FROM Chunk WHERE revisionId = :revisionId',
+      'DELETE FROM DocumentRevision WHERE revisionId = :revisionId',
       'UPDATE Document SET documentId = :documentId, workspaceId = :workspaceId, title = :title, aclNodes = :aclNodes, aclRestricted = :aclRestricted UPSERT WHERE documentId = :documentId',
-      { documentId, workspaceId, title, aclNodes, aclRestricted },
-    );
-    await this.arcade.command(
-      'sql',
       'CREATE VERTEX DocumentRevision SET revisionId = :revisionId, documentId = :documentId, workspaceId = :workspaceId',
-      { revisionId, documentId, workspaceId },
-    );
-    await this.arcade.command(
-      'sql',
       'CREATE EDGE HAS_REVISION FROM (SELECT FROM Document WHERE documentId = :documentId) TO (SELECT FROM DocumentRevision WHERE revisionId = :revisionId)',
-      { documentId, revisionId },
-    );
-
-    for (const chunk of chunks) {
-      await this.arcade.command(
-        'sql',
-        `CREATE VERTEX Chunk SET chunkId = :chunkId, idx = :idx, workspaceId = :workspaceId,
-         documentId = :documentId, revisionId = :revisionId, live = :live, text = :text,
-         headingPath = :headingPath, embedding = :embedding, aclNodes = :aclNodes, aclRestricted = :aclRestricted`,
-        {
-          chunkId: chunk.chunkId,
-          idx: chunk.index,
-          workspaceId,
-          documentId,
-          revisionId,
-          live,
-          text: chunk.text,
-          headingPath: chunk.headingPath,
-          embedding: chunk.embedding,
-          aclNodes,
-          aclRestricted,
-        },
+    ];
+    chunks.forEach((chunk, i) => {
+      Object.assign(params, {
+        [`chunkId${i}`]: chunk.chunkId,
+        [`idx${i}`]: chunk.index,
+        [`text${i}`]: chunk.text,
+        [`headingPath${i}`]: chunk.headingPath,
+        [`embedding${i}`]: chunk.embedding,
+      });
+      statements.push(
+        `CREATE VERTEX Chunk SET chunkId = :chunkId${i}, idx = :idx${i}, workspaceId = :workspaceId, documentId = :documentId, revisionId = :revisionId, live = :live, text = :text${i}, headingPath = :headingPath${i}, embedding = :embedding${i}, aclNodes = :aclNodes, aclRestricted = :aclRestricted`,
+        `CREATE EDGE HAS_CHUNK FROM (SELECT FROM DocumentRevision WHERE revisionId = :revisionId) TO (SELECT FROM Chunk WHERE chunkId = :chunkId${i})`,
       );
-      await this.arcade.command(
-        'sql',
-        'CREATE EDGE HAS_CHUNK FROM (SELECT FROM DocumentRevision WHERE revisionId = :revisionId) TO (SELECT FROM Chunk WHERE chunkId = :chunkId)',
-        { revisionId, chunkId: chunk.chunkId },
-      );
-    }
-  }
-
-  /** Chunk summaries for a revision (document detail page). */
-  async getRevisionChunks(workspaceId: string, revisionId: string): Promise<Array<{ chunkId: string; headingPath: string[]; snippet: string }>> {
-    const rows = await this.arcade.query<{ chunkId: string; headingPath: string[]; text: string; idx: number }>(
-      'sql',
-      'SELECT chunkId, headingPath, text, idx FROM Chunk WHERE workspaceId = :workspaceId AND revisionId = :revisionId ORDER BY idx',
-      { workspaceId, revisionId },
-    );
-    return rows.map((r) => ({
-      chunkId: r.chunkId,
-      headingPath: r.headingPath ?? [],
-      snippet: (r.text ?? '').slice(0, 200),
-    }));
+    });
+    statements.push('COMMIT');
+    await this.arcade.command('sqlscript', statements.join(';\n'), params);
   }
 
   /**
-   * A revision's chunks in full, as written, for re-mirroring them into the
-   * BM25 index after a failed write (#173). Reading what the graph holds rather
+   * A revision's chunks in full, as written, in order: the document detail
+   * page's chunk list, and the re-mirror into the BM25 index after a failed
+   * write (#173). Reading what the graph holds rather
    * than re-chunking the source keeps the chunk ids the two stores fuse on in
    * step, whatever the chunker has become since.
    */
@@ -628,26 +595,12 @@ export class GraphService {
     fromRevisionId: string,
     toRevisionId: string,
   ): Promise<{ score: number; meaningful: boolean } | null> {
-    const [a, b] = await Promise.all([
-      this.meanRevisionEmbedding(workspaceId, fromRevisionId),
-      this.meanRevisionEmbedding(workspaceId, toRevisionId),
-    ]);
+    const means = await this.meanRevisionEmbeddings(workspaceId, [fromRevisionId, toRevisionId]);
+    const a = means.get(fromRevisionId);
+    const b = means.get(toRevisionId);
     if (!a || !b || a.length !== b.length) return null;
     const score = Math.max(0, 1 - cosine(a, b));
     return { score: Number(score.toFixed(4)), meaningful: score >= 0.1 };
-  }
-
-  private async meanRevisionEmbedding(workspaceId: string, revisionId: string): Promise<number[] | null> {
-    const rows = await this.arcade.query<{ embedding: number[] }>(
-      'sql',
-      'SELECT embedding FROM Chunk WHERE workspaceId = :workspaceId AND revisionId = :revisionId',
-      { workspaceId, revisionId },
-    );
-    const vecs = rows.map((r) => r.embedding).filter((e) => Array.isArray(e) && e.length > 0);
-    if (vecs.length === 0) return null;
-    const mean = Array.from({ length: vecs[0].length }, () => 0);
-    for (const v of vecs) for (let i = 0; i < mean.length; i++) mean[i] += v[i] / vecs.length;
-    return mean;
   }
 
   /**
@@ -852,7 +805,7 @@ export class GraphService {
           revisionId,
           extractor,
         })
-        .catch(() => []);
+        .catch(ignoreMissingType([]));
       for (const r of rows) existing.push({ type, targetKey: r.targetKey, expiredAt: r.expiredAt ?? null });
     }
     const { keep, expire, create } = diffRevisionFacts(existing, facts);
@@ -904,9 +857,7 @@ export class GraphService {
       const params = { workspaceId, documentId, ...stamp };
       await this.arcade.command('sql', `UPDATE Chunk ${set} WHERE ${scope}`, params);
       for (const type of RELATION_EDGE_TYPES) {
-        await this.arcade.command('sql', `UPDATE ${type} ${set} WHERE ${scope} AND ${SCOPED_SQL}`, params).catch(() => {
-          /* edge type may hold no rows yet */
-        });
+        await this.arcade.command('sql', `UPDATE ${type} ${set} WHERE ${scope} AND ${SCOPED_SQL}`, params).catch(ignoreMissingType(undefined));
       }
     }
   }
@@ -939,18 +890,14 @@ export class GraphService {
       await this.arcade
         // An expired row (#81) is history even on the live revision.
         .command('sql', `UPDATE ${type} SET live = true WHERE ${scope} AND ${SCOPED_SQL} AND revisionId = :revisionId AND expiredAt IS NULL`, params)
-        .catch(() => {
-          /* edge type may hold no rows yet */
-        });
+        .catch(ignoreMissingType(undefined));
     }
 
     await this.arcade.command('sql', `UPDATE Chunk SET live = false WHERE ${scope} AND revisionId <> :revisionId`, params);
     for (const type of RELATION_EDGE_TYPES) {
       await this.arcade
         .command('sql', `UPDATE ${type} SET live = false WHERE ${scope} AND ${SCOPED_SQL} AND revisionId <> :revisionId`, params)
-        .catch(() => {
-          /* edge type may hold no rows yet */
-        });
+        .catch(ignoreMissingType(undefined));
     }
   }
 
@@ -989,9 +936,7 @@ export class GraphService {
     );
     await this.arcade
       .command('sql', `DELETE FROM DEPENDS_ON WHERE workspaceId = :workspaceId AND extractor = 'code'`, { workspaceId })
-      .catch(() => {
-        /* the edge type may hold no rows yet */
-      });
+      .catch(ignoreMissingType(undefined));
     const titled = new Set<string>();
     for (const [i, fact] of facts.entries()) {
       const { documentId, title } = input.edges[i];
@@ -1055,14 +1000,10 @@ export class GraphService {
     const where = `workspaceId = :workspaceId AND documentId = :documentId AND targetKey = :targetKey AND expiredAt IS NULL${extractors ? ' AND extractor IN :extractors' : ''}`;
     await this.arcade
       .command('sql', `UPDATE ${type} SET validTo = :now WHERE ${where} AND NOT (${SCOPED_SQL})`, params)
-      .catch(() => {
-        /* edge type may hold no rows yet */
-      });
+      .catch(ignoreMissingType(undefined));
     await this.arcade
       .command('sql', `UPDATE ${type} SET expiredAt = :now, retractedBy = :retractedBy, live = false WHERE ${where}`, params)
-      .catch(() => {
-        /* edge type may hold no rows yet */
-      });
+      .catch(ignoreMissingType(undefined));
   }
 
   /**
@@ -1083,7 +1024,7 @@ export class GraphService {
             `SELECT documentId, targetKey FROM ${type} WHERE workspaceId = :workspaceId AND documentId IN :documentIds${pushed?.sql ?? ''} AND ${asOf?.sql ?? LIVE} LIMIT 20000`,
             { workspaceId, documentIds, ...pushed?.params, ...asOf?.params },
           )
-          .catch(() => []),
+          .catch(ignoreMissingType([])),
       ),
     );
     for (const r of rows.flat()) {
@@ -1108,7 +1049,7 @@ export class GraphService {
             `SELECT targetKey FROM ${type} WHERE workspaceId = :workspaceId AND documentId = :documentId AND revisionId = :revisionId AND extractor IN ['frontmatter', 'spec'] AND expiredAt IS NULL AND retractedBy IS NULL LIMIT 20000`,
             { workspaceId, documentId, revisionId },
           )
-          .catch(() => []),
+          .catch(ignoreMissingType([])),
       ),
     );
     return new Set(rows.flat().map((r) => r.targetKey));
@@ -1127,7 +1068,7 @@ export class GraphService {
             `SELECT documentId, targetKey FROM ${type} WHERE workspaceId = :workspaceId AND targetKey IN :keys AND ${LIVE}${pushed?.sql ?? ''} LIMIT 20000`,
             { workspaceId, keys, ...pushed?.params },
           )
-          .catch(() => []),
+          .catch(ignoreMissingType([])),
       ),
     );
     for (const r of rows.flat()) {
@@ -1159,7 +1100,7 @@ export class GraphService {
           `SELECT targetKey, revisionId, extractor, confidence, sourceChunkId, snippet, live, ${TEMPORAL_COLUMNS} FROM ${type} WHERE workspaceId = :workspaceId AND documentId = :documentId${liveClause}`,
           { workspaceId, documentId },
         )
-        .catch(() => []);
+        .catch(ignoreMissingType([]));
       for (const r of rows) {
         const temporal = temporalOf(r);
         // Expired rows (#81) are what we stopped believing: only the facts
@@ -1223,7 +1164,7 @@ export class GraphService {
           `SELECT documentId, revisionId, extractor, confidence, sourceChunkId, snippet, live, ${TEMPORAL_COLUMNS} FROM ${type} WHERE workspaceId = :workspaceId AND targetKey = :targetKey`,
           { workspaceId, targetKey: from },
         )
-        .catch(() => []);
+        .catch(ignoreMissingType([]));
       if (rows.length === 0) continue;
 
       await this.arcade
@@ -1231,9 +1172,7 @@ export class GraphService {
           workspaceId,
           targetKey: from,
         })
-        .catch(() => {
-          /* nothing to move */
-        });
+        .catch(ignoreMissingType(undefined));
 
       for (const r of rows) {
         await this.createRelationEdge(workspaceId, r.documentId, r.revisionId ?? null, {
@@ -1257,9 +1196,7 @@ export class GraphService {
         workspaceId,
         entityKey: from,
       })
-      .catch(() => {
-        /* the vertex may never have existed */
-      });
+      .catch(ignoreMissingType(undefined));
     return moved;
   }
 
@@ -1432,9 +1369,8 @@ export class GraphService {
         `SELECT documentId FROM TAGGED_WITH WHERE workspaceId = :workspaceId AND targetKey IN :keys AND ${asOf?.sql ?? LIVE}${pushed?.sql ?? ''} LIMIT 20000`,
         { workspaceId, keys: tagKeys, ...pushed?.params, ...asOf?.params },
       )
-      // ArcadeDB throws when the edge type holds no rows yet; "no tag edges"
-      // must mean "no matches", not a 500.
-      .catch(() => []);
+      // A TAGGED_WITH type not created yet means "no matches", not a 500.
+      .catch(ignoreMissingType([]));
     return new Set(rows.map((r) => r.documentId).filter((id) => aclAdmits(acl, id)));
   }
 
@@ -1467,7 +1403,7 @@ export class GraphService {
           `SELECT documentId, targetKey, extractor, confidence FROM ${type} WHERE ${where} AND ${asOf?.sql ?? LIVE} LIMIT 20000`,
           { ...params, ...asOf?.params },
         )
-        .catch(() => []);
+        .catch(ignoreMissingType([]));
       for (const r of rows) {
         if (!aclAdmits(acl, r.documentId)) continue;
         edges.push({ type, documentId: r.documentId, targetKey: r.targetKey, extractor: r.extractor, confidence: r.confidence });
@@ -1511,9 +1447,7 @@ export class GraphService {
     communities: ReadonlyArray<StoredCommunity & { embedding: number[] }>,
     fingerprint: string,
   ): Promise<void> {
-    await this.arcade.command('sql', 'DELETE FROM Community WHERE workspaceId = :workspaceId', { workspaceId }).catch(() => {
-      /* the type may hold no rows yet */
-    });
+    await this.arcade.command('sql', 'DELETE FROM Community WHERE workspaceId = :workspaceId', { workspaceId }).catch(ignoreMissingType(undefined));
     const builtAt = Date.now();
     for (const c of communities) {
       await this.arcade.command(
@@ -1528,7 +1462,7 @@ export class GraphService {
   async communityFingerprint(workspaceId: string): Promise<string | null> {
     const rows = await this.arcade
       .query<{ fingerprint: string }>('sql', 'SELECT fingerprint FROM Community WHERE workspaceId = :workspaceId LIMIT 1', { workspaceId })
-      .catch(() => []);
+      .catch(ignoreMissingType([]));
     return rows[0]?.fingerprint ?? null;
   }
 
@@ -1549,7 +1483,7 @@ export class GraphService {
         'SELECT communityId, level, parentId, title, summary, members, embedding, builtAt FROM Community WHERE workspaceId = :workspaceId LIMIT 1000',
         { workspaceId },
       )
-      .catch(() => []);
+      .catch(ignoreMissingType([]));
     return rows
       .filter((r) => admit(r.members ?? []))
       .map((r) => ({
@@ -1581,7 +1515,7 @@ export class GraphService {
           `SELECT documentId, targetKey, validFrom, validTo FROM ${type} WHERE workspaceId = :workspaceId${pushed?.sql ?? ''} AND lineage = 'default' AND ((validFrom >= :from AND validFrom < :to) OR (validTo >= :from AND validTo < :to)) LIMIT 20000`,
           { workspaceId, from, to, ...pushed?.params },
         )
-        .catch(() => []);
+        .catch(ignoreMissingType([]));
       for (const r of rows) {
         if (!aclAdmits(acl, r.documentId)) continue;
         out.push({ documentId: r.documentId, type, targetKey: r.targetKey, validFrom: r.validFrom ?? null, validTo: r.validTo ?? null });

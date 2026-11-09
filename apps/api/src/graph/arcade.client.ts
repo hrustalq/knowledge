@@ -8,6 +8,22 @@ interface ArcadeResponse<T = Record<string, unknown>> {
   result: T[];
 }
 
+/** ArcadeDB's SchemaException for a type that was never created (26.10.2). */
+const MISSING_TYPE = /Type with name '[^']*' was not found/;
+
+/**
+ * A `.catch` handler that answers `fallback` for the one error a read or write
+ * of a relation type may shrug off — the type does not exist yet (the API can
+ * run before the worker's `ensureSchema`) — and rethrows anything else (#817).
+ * An empty type is not an error: ArcadeDB answers `[]` / `count: 0`.
+ */
+export function ignoreMissingType<T>(fallback: T): (e: unknown) => T {
+  return (e) => {
+    if (e instanceof Error && MISSING_TYPE.test(e.message)) return fallback;
+    throw e;
+  };
+}
+
 /**
  * Minimal HTTP client for ArcadeDB (no official JS driver).
  * POST /api/v1/command/{db} for writes/DDL, /api/v1/query/{db} for reads.

@@ -235,6 +235,13 @@ function toolErrorEnvelope(e: unknown): { content: { type: 'text'; text: string 
   };
 }
 
+/** Whether `principal`'s key is offered the tool `name` — the one rule `settleTools` applies (#822). */
+export function isOffered(name: string, principal: Principal): boolean {
+  const scope = principal.apiKey?.scope ?? 'write';
+  const readOnly = !WRITE_TOOLS.has(name) && !CAPTURE_TOOLS.has(name);
+  return readOnly || scope === 'write' || (scope === 'capture' && CAPTURE_TOOLS.has(name));
+}
+
 /**
  * Annotate every tool read-only or not, and drop the writes a narrowed key
  * could never run — offering a tool that always 403s spends the model's
@@ -243,12 +250,10 @@ function toolErrorEnvelope(e: unknown): { content: { type: 'text'; text: string 
  * `requireRole`, which refuses the key on its own.
  */
 export function settleTools(handles: Map<string, RegisteredTool>, principal: Principal): McpToolSummary[] {
-  const scope = principal.apiKey?.scope ?? 'write';
   const offered: McpToolSummary[] = [];
   for (const [name, handle] of handles) {
     const readOnly = !WRITE_TOOLS.has(name) && !CAPTURE_TOOLS.has(name);
-    const kept = readOnly || scope === 'write' || (scope === 'capture' && CAPTURE_TOOLS.has(name));
-    if (!kept) {
+    if (!isOffered(name, principal)) {
       handle.remove();
       continue;
     }

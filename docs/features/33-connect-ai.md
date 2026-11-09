@@ -49,7 +49,10 @@ request back), so the question flows of [61](61-question-flows.md) answer
 stdio client that declares `elicitation` gets a form.
 
 **Two transports, one tool set, one guard.** `McpService.buildServer(principal)`
-is the only place tools are registered. Every tool resolves its target to a
+is the only place tools are registered: it builds the caller's guards and hands
+them, with the server, to one registrar per section (`src/mcp/tools/*.ts`,
+`registerSearchTools`, `registerDocumentsTools`, …), plus the capture and draft
+tools. Every tool resolves its target to a
 workspace in PostgreSQL and runs `AccessService.requireRole` with the same role
 its REST twin's `@Access` declares — so a tool is exactly as permissive as the
 route it mirrors, and a new tool without a guard stands out in review because

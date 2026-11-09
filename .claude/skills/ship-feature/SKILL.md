@@ -355,23 +355,23 @@ markers added since the last tag
 Each one is a shortcut this release ships with a known ceiling. List them in
 the release PR body; a marker tagged `no-trigger`, or one whose ceiling a
 production workload will hit, gets an issue now rather than "later". This only
-reports — the release branch still carries the three edits below and nothing
+reports — the release branch still carries the two edits below and nothing
 else.
 
 ```bash
 git switch -c chore/release-vX.Y.Z origin/dev
 ```
 
-Three edits, and only these three:
+Two edits, and only these two:
 
 1. `CHANGELOG.md` — `## [Unreleased]` becomes `## [X.Y.Z] — YYYY-MM-DD`. Do not
    leave an empty `[Unreleased]` heading behind. Update the link block at the
    bottom: point `[unreleased]` at `compare/vX.Y.Z...HEAD` and add
    `[X.Y.Z]: compare/v<prev>...vX.Y.Z`.
-2. `apps/api/src/config/swagger.ts` — `.setVersion('X.Y.Z')`.
-3. `apps/api/src/mcp/mcp.service.ts` — `export const MCP_SERVER_VERSION = 'X.Y.Z'`.
+2. `apps/api/src/config/version.ts` — `export const PRODUCT_VERSION = 'X.Y.Z'`
+   (Swagger and the MCP server both read it).
 
-Those two source files are the known drift listed in
+That source file is the known drift listed in
 `docs/versioning.md#known-drift`; every other package stays at `0.0.0` on
 purpose, because nothing here is published and per-package semver would be
 bookkeeping nobody reads. The authoritative version is the git tag.
@@ -508,8 +508,8 @@ tail -2` reports the exit status of `tail`, so a refused checkout sails past
   differs between branches. Use `git fetch origin main:main` to fast-forward a
   ref without touching the working tree, and branch with an explicit
   `git switch -c <new> origin/<base>` rather than checking the base out first.
-- **Do not regenerate `openapi.json` during a release.** The runbook bumps two
-  source files and nothing else; `make api-client` regenerates from the _current
+- **Do not regenerate `openapi.json` during a release.** The runbook bumps one
+  source file and the changelog, nothing else; `make api-client` regenerates from the _current
   tree_, so it will sweep in any unrelated uncommitted DTO changes.
 - **Never run the API from the repo root.** `i18n.config.ts` writes its types to
   `join(process.cwd(), 'src/i18n/i18n.generated.ts')`, so a root-cwd run emits a

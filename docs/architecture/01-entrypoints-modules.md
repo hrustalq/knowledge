@@ -99,7 +99,7 @@ when a later phase stages work for the worker.
 
 ## MCP is the third entrypoint
 
-`src/mcp.main.ts`, run by `make dev-mcp`. Three things about it are load-bearing:
+`src/mcp.main.ts`, run by `make dev-mcp`. Four things about it are load-bearing:
 
 - **stdio belongs to JSON-RPC.** Nest logging is disabled, because anything
   written to stdout corrupts the protocol stream. `abortOnError: false` so boot
@@ -109,7 +109,13 @@ when a later phase stages work for the worker.
   names in [plan.md §9](../../plan.md). Without this note plan.md reads as simply
   wrong against the code.
 - **Any service injected into `McpService` must be exported by its module.**
-  `SearchModule` exports `SearchService` for exactly this reason.
+  `SearchCoreModule` exports `SearchService` for exactly this reason.
+- **`McpCoreModule` imports `*CoreModule`s only** (#822). The tool set it
+  provides loads in the stdio process as well as the API, so a controller-bearing
+  module there builds HTTP controllers and starts API sweepers in every agent
+  client's process. `mcp-core-loads-no-controller` in `.dependency-cruiser.cjs`
+  fails the build if it reaches a controller; the fix is the module's core twin
+  (`DocumentsCoreModule`, `MergeRequestThreadsCoreModule`, `ProjectScaffoldCoreModule`, …).
 
 ## Buildless workspace packages
 

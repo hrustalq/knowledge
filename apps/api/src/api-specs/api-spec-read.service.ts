@@ -24,6 +24,7 @@ import { StorageService } from '../storage/storage.service.js';
 import { readApiSpecDocument } from './api-spec.parser.js';
 import { renderOperation } from './api-spec.projection.js';
 import { ApiSpecsService } from './api-specs.service.js';
+import { escapeLike } from '../common/like.js';
 
 const SPEC_KINDS: ApiSpecKind[] = ['openapi', 'asyncapi'];
 const SEARCH_LIMIT = 50;
@@ -132,7 +133,7 @@ export class ApiSpecReadService {
   ): Promise<SearchApiOperationsResponse> {
     const limit = Math.min(Math.max(opts.limit ?? SEARCH_LIMIT, 1), 200);
     const q = opts.q?.trim();
-    const like = q ? `%${q.replace(/[\\%_]/gu, (c) => `\\${c}`)}%` : null;
+    const like = q ? `%${escapeLike(q)}%` : null;
     const rows = await this.prisma.$queryRaw<Array<OperationRow & { specTitle: string }>>`
       SELECT o.id, o.workspace_id AS "workspaceId", o.document_id AS "documentId", o.revision_id AS "revisionId",
              o.protocol, o.method, o.path, o.operation_id AS "operationId", o.entity_key AS "entityKey",

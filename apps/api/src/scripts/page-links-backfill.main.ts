@@ -2,7 +2,6 @@ import { parseArgs } from 'node:util';
 import { Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
-import matter from 'gray-matter';
 import { isApiSpecKind, isTestFixtureKind } from '@knowledge/contracts';
 import { BootstrapModule } from '../config/bootstrap.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
@@ -11,6 +10,7 @@ import { StorageModule } from '../storage/storage.module.js';
 import { StorageService } from '../storage/storage.service.js';
 import type { Env } from '../config/env.js';
 import { pageLinkTargets, replacePageLinks } from '../ingestion/page-links.js';
+import { parseMarkdown } from '../common/frontmatter.js';
 
 /**
  * One-time fill of `page_links` (#673) for pages indexed before it existed.
@@ -61,7 +61,7 @@ async function main(): Promise<void> {
       continue;
     }
     try {
-      const found = pageLinkTargets(matter(await storage.getObjectText(head.s3Key, head.s3VersionId)).content, webBaseUrl, doc.id);
+      const found = pageLinkTargets(parseMarkdown(await storage.getObjectText(head.s3Key, head.s3VersionId)).body, webBaseUrl, doc.id);
       links += found.length;
       if (dryRun) continue;
       if (await replacePageLinks(prisma, { workspaceId: doc.workspaceId, documentId: doc.id, revisionId: head.id, links: found })) {

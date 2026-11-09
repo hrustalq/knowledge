@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import matter from 'gray-matter';
 import type { ImportParserId } from '@knowledge/contracts';
 import {
   countSections,
@@ -11,6 +10,7 @@ import {
   type ParseResult,
 } from './parser.types.js';
 import { t } from '../../i18n/t.js';
+import { parseMarkdown } from '../../common/frontmatter.js';
 
 /**
  * Markdown and plain text.
@@ -36,16 +36,16 @@ export class PlaintextParser implements DocumentParser {
     const warnings: string[] = [];
 
     if (isMarkdown) {
-      const parsed = matter(text);
+      const parsed = parseMarkdown(text);
       const frontTitle = typeof parsed.data?.title === 'string' ? parsed.data.title.trim() : '';
       if (Object.keys(parsed.data ?? {}).length > 0) {
         warnings.push(t('import.warning.frontmatterKept'));
       }
       return {
         markdown: text.trim(),
-        title: frontTitle || inferTitle(parsed.content, ctx.filename),
+        title: frontTitle || inferTitle(parsed.body, ctx.filename),
         warnings,
-        meta: { sections: countSections(parsed.content), words: countWords(parsed.content) },
+        meta: { sections: countSections(parsed.body), words: countWords(parsed.body) },
       };
     }
 

@@ -6,6 +6,7 @@ import {
   type ExportManifestPage,
   type ExportScope,
 } from '@knowledge/contracts';
+import { FILENAME_FORBIDDEN } from '../git/slug.js';
 
 /**
  * How an export is laid out on disk (docs/features/45), decided without
@@ -41,8 +42,7 @@ export interface PackagedAttachment {
 
 /** A path segment that cannot climb out of its folder or name a device. */
 export function safeFilename(name: string): string {
-  // eslint-disable-next-line no-control-regex
-  const cleaned = name.replace(/[\u0000-\u001f\u007f/\\:*?"<>|]+/g, '_').replace(/^\.+/, '').trim();
+  const cleaned = name.replace(new RegExp(`${FILENAME_FORBIDDEN.source}+`, 'g'), '_').replace(/^\.+/, '').trim();
   return cleaned.slice(0, 120) || 'file';
 }
 

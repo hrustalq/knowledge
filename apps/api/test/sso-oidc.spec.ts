@@ -554,7 +554,7 @@ describe('claims', () => {
 describe('helpers', () => {
   it('safeReturnTo keeps own paths only', () => {
     expect(safeReturnTo('/a?b=1', '/x')).toBe('/a?b=1');
-    for (const bad of [undefined, '', 'https://e.x', '//e.x', '/\\e.x', 'a']) expect(safeReturnTo(bad, '/x')).toBe('/x');
+    for (const bad of [undefined, '', 'https://e.x', '//e.x', '/\\e.x', '/a\\..\\/e.x', '/\t/e.x', '/\n/e.x', 'a']) expect(safeReturnTo(bad, '/x')).toBe('/x');
   });
 
   it('normalizeDomain folds case, a leading @ and IDN to punycode; refuses what is no domain', () => {

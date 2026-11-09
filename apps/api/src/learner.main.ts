@@ -1,7 +1,5 @@
-import { NestFactory } from '@nestjs/core';
 import { LearnerModule } from './learner/learner.module.js';
-import { createRootLogger, envLogLevel } from '@knowledge/observability';
-import { PinoNestLogger } from './observability/nest-logger.js';
+import { bootContext } from './observability/boot-context.js';
 
 /**
  * The fifth entrypoint (#305): the learner. An application context like the
@@ -11,10 +9,7 @@ import { PinoNestLogger } from './observability/nest-logger.js';
  * crash-loops.
  */
 async function bootstrap() {
-  const logger = createRootLogger({ service: 'learner', level: envLogLevel() });
-  const app = await NestFactory.createApplicationContext(LearnerModule, { bufferLogs: true });
-  app.useLogger(new PinoNestLogger(logger));
-  app.enableShutdownHooks();
+  const { logger } = await bootContext(LearnerModule, 'learner');
   logger.info('Learner started');
 }
 await bootstrap();

@@ -1,7 +1,6 @@
 import { Inject, Logger, OnModuleInit } from '@nestjs/common';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
-import matter from 'gray-matter';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -30,6 +29,7 @@ import { ApiFixturesService, type ApiFixtureProjection } from '../api-specs/api-
 import { isApiSpecKind, isTestFixtureKind } from '@knowledge/contracts';
 import { bindTrace, currentTrace, emitBacktest, startTrace, withTrace } from '@knowledge/observability';
 import { queueReindex } from './reindex.js';
+import { parseMarkdown } from '../common/frontmatter.js';
 
 interface IngestionJobData {
   ingestionJobId: string;
@@ -219,7 +219,8 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
         if (!revision.contentType.includes('markdown') && !revision.contentType.startsWith('text/')) {
           throw new Error(`Unsupported content type for Phase 1 ingestion: ${revision.contentType}`);
         }
-        parsed = matter(raw);
+        const md = parseMarkdown(raw);
+        parsed = { content: md.body, data: md.data };
       }
 
       // 3. Normalize → persist normalized.json next to the source (plan.md §4 layout)

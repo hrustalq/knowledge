@@ -12806,6 +12806,12 @@
           "$ref": "#/components/schemas/GithubInstallationSummary"
         }
       },
+      "available": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/GithubInstallationSummary"
+        }
+      },
       "error": {
         "type": "string"
       },
@@ -12821,7 +12827,8 @@
       "connected",
       "authorizeUrl",
       "installUrl",
-      "installations"
+      "installations",
+      "available"
     ]
   },
   "GithubPermissionRow": {

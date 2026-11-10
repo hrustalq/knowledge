@@ -4502,7 +4502,8 @@ export interface paths {
         /** GitHub accounts and orgs this workspace can pick repositories from */
         get: operations["GithubController_installations"];
         put?: never;
-        post?: never;
+        /** Add an installation the caller's GitHub account reaches to this workspace */
+        post: operations["GithubController_addInstallation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9596,6 +9597,12 @@ export interface components {
              */
             documentId?: string;
         };
+        AddGithubInstallationDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /** @description The GitHub App installation id */
+            installationId: string;
+        };
         PutWorkItemRulesDto: {
             workspaceId: string;
             /**
@@ -13589,6 +13596,7 @@ export interface components {
             authorizeUrl: string | null;
             installUrl: string | null;
             installations: components["schemas"]["GithubInstallationSummary"][];
+            available: components["schemas"]["GithubInstallationSummary"][];
             error?: string;
             missing?: string[];
         };
@@ -31469,6 +31477,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GithubInstallationsResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    GithubController_addInstallation: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddGithubInstallationDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

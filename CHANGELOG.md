@@ -13,6 +13,17 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Fixed
+
+- **A second workspace can now add a GitHub account the App is already installed on.** After connecting a repository
+  through the GitHub App in one workspace, the connect dialog in any other workspace offered only **Install**, and
+  GitHub's install page for an App that is already installed never sends you back, so the flow dead-ended. The GitHub
+  step now lists the accounts your GitHub sign-in reaches that this workspace has not added yet, and **Add** connects
+  one with no trip to GitHub. An account your own GitHub sign-in cannot see is refused. `POST
+  /v1/connectors/github/installations` (admin). (#855)
+
 ## [0.46.2] — 2026-11-09
 
 ### Changed

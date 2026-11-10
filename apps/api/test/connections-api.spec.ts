@@ -186,11 +186,64 @@ describe('an App installation is a connection', () => {
       installation: vi.fn(async () => ({ accountLogin: 'acme', accountType: 'Organization', accountAvatarUrl: 'a.png', repositorySelection: 'all', suspended: false })),
     };
     const browse = new GithubBrowseService(prisma as never, app as never, {} as never);
-    await expect(browse.recordInstallation(WS, '42', 'u1')).resolves.toBe(true);
+    await expect(browse.recordInstallation(WS, '42', 'u1')).resolves.toBe('conn-1');
     expect(prisma.connection.upsert).toHaveBeenCalledWith({
       where: { workspaceId_provider_method_externalRef: { workspaceId: WS, provider: 'github', method: 'app', externalRef: '42' } },
       create: { workspaceId: WS, provider: 'github', method: 'app', externalRef: '42', accountId: '42', accountLabel: 'acme', accountAvatarUrl: 'a.png', createdBy: 'u1' },
       update: { accountId: '42', accountLabel: 'acme', accountAvatarUrl: 'a.png' },
+      select: { id: true },
     });
+  });
+});
+
+describe('a second workspace adds an installation it already has (#855)', () => {
+  const raw = (id: number, login: string) => ({ id, account: { login, type: 'User', avatar_url: null }, repository_selection: 'all', suspended_at: null });
+
+  async function setup(recorded: number[]) {
+    const { GithubBrowseService } = await import('../src/connectors/github/github-browse.service.js');
+    const { toAccount } = await import('../src/connectors/github/github-app.service.js');
+    const prisma = {
+      githubInstallation: {
+        findMany: vi.fn(async () => recorded.map((installationId) => ({ installationId: BigInt(installationId) }))),
+        upsert: vi.fn(async () => ({})),
+      },
+      connection: { upsert: vi.fn(async () => ({ id: 'conn-7' })) },
+    };
+    const app = {
+      apiUrl: 'https://api.github.com',
+      installation: vi.fn(async () => ({ accountLogin: 'me', accountType: 'User', accountAvatarUrl: null, repositorySelection: 'all', suspended: false })),
+    };
+    const oauth = { tokenFor: vi.fn(async () => 'user-token') };
+    const browse = new GithubBrowseService(prisma as never, app as never, oauth as never);
+    // What the caller's own `/user/installations` answers.
+    Object.assign(browse, { userInstallations: async () => [raw(1, 'me'), raw(2, 'acme')].map(toAccount) });
+    return { browse, prisma, oauth };
+  }
+
+  it('lists reachable installations the workspace has not added as available', async () => {
+    const { browse } = await setup([1]);
+    const res = await browse.installations(WS, 'u1');
+    expect(res.installations.map((a) => a.installationId)).toEqual(['1']);
+    expect(res.available.map((a) => a.installationId)).toEqual(['2']);
+  });
+
+  it('adds a reachable installation as the workspace app connection', async () => {
+    const { browse, prisma } = await setup([]);
+    await expect(browse.addInstallation(WS, 'u1', '2')).resolves.toEqual({ connectionId: 'conn-7' });
+    expect(prisma.githubInstallation.upsert).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses an installation the caller cannot see, writing nothing', async () => {
+    const { browse, prisma } = await setup([]);
+    await expect(browse.addInstallation(WS, 'u1', '99')).resolves.toEqual({ error: 'notVisible' });
+    expect(prisma.githubInstallation.upsert).not.toHaveBeenCalled();
+    expect(prisma.connection.upsert).not.toHaveBeenCalled();
+  });
+
+  it('refuses without a GitHub sign-in', async () => {
+    const { browse, oauth, prisma } = await setup([]);
+    oauth.tokenFor.mockResolvedValueOnce(null as never);
+    await expect(browse.addInstallation(WS, 'u1', '2')).resolves.toEqual({ error: 'notConnected' });
+    expect(prisma.githubInstallation.upsert).not.toHaveBeenCalled();
   });
 });

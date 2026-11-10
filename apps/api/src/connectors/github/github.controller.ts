@@ -1,9 +1,10 @@
-import { Controller, Delete, Get, Query, Res } from '@nestjs/common';
+import { BadGatewayException, BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Post, Query, Res } from '@nestjs/common';
 import { ApiExcludeEndpoint, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
 import {
   oauthLandingPath,
+  type ConnectionResponse,
   type GithubBranchesResponse,
   type GithubInstallationsResponse,
   type GithubReposResponse,
@@ -17,6 +18,9 @@ import { GithubAppService } from './github-app.service.js';
 import { GithubBrowseService } from './github-browse.service.js';
 import { GithubOauthService } from './github-oauth.service.js';
 import { Returns } from '../../common/returns.decorator.js';
+import { t } from '../../i18n/t.js';
+import { AddGithubInstallationDto } from '../connections.dto.js';
+import { ConnectionsService } from '../connections.service.js';
 
 /**
  * The repository picker's own surface (docs/features/30).
@@ -41,6 +45,7 @@ export class GithubController {
     private readonly oauth: GithubOauthService,
     private readonly browse: GithubBrowseService,
     private readonly config: ConfigService<Env, true>,
+    private readonly connections: ConnectionsService,
   ) {}
 
   /**
@@ -63,7 +68,7 @@ export class GithubController {
     @CurrentPrincipal() principal: Principal,
     @Query('returnTo') returnTo?: string,
   ): Promise<GithubInstallationsResponse> {
-    const empty = { installations: [], authorizeUrl: null, installUrl: null };
+    const empty = { installations: [], available: [], authorizeUrl: null, installUrl: null };
     if (!this.app.configured || !this.oauth.configured) {
       return { configured: false, connected: false, ...empty, ...this.partial() };
     }
@@ -82,6 +87,7 @@ export class GithubController {
         authorizeUrl: this.oauth.authorizeUrl(state, this.redirectUri()),
         installUrl: null,
         installations: [],
+        available: [],
       };
     }
 
@@ -91,8 +97,30 @@ export class GithubController {
       authorizeUrl: null,
       // Offered even when installations exist — "add another org" is the same URL.
       installUrl: this.app.installUrl(state),
-      installations: await this.browse.installations(workspaceId, userId),
+      ...(await this.browse.installations(workspaceId, userId)),
     };
+  }
+
+  /**
+   * Adds an installation the caller's GitHub account already reaches to this
+   * workspace (#855). GitHub's install page never redirects for an App that is
+   * already installed, so a second workspace has no other way in.
+   */
+  @Post('installations')
+  @Returns('ConnectionResponse')
+  @Access('admin', 'body')
+  @ApiOperation({ summary: "Add an installation the caller's GitHub account reaches to this workspace" })
+  async addInstallation(
+    @Body() dto: AddGithubInstallationDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<ConnectionResponse> {
+    const added = await this.browse.addInstallation(dto.workspaceId, principal.userId, dto.installationId);
+    if ('error' in added) {
+      if (added.error === 'notConnected') throw new BadRequestException(t('error.connection.githubNotConnected'));
+      if (added.error === 'notVisible') throw new ForbiddenException(t('error.connection.githubNotVisible'));
+      throw new BadGatewayException(t('error.connection.githubUnreadable'));
+    }
+    return { connection: await this.connections.get(added.connectionId) };
   }
 
   @Get('repos')

@@ -1456,6 +1456,12 @@ export interface GithubInstallationsResponse {
   /** Where to send the browser to add another account or org. */
   installUrl: string | null;
   installations: GithubInstallationSummary[];
+  /**
+   * Installations this person's GitHub account reaches that this workspace has
+   * not added (#855). GitHub never sends an already-installed App back through
+   * the install URL, so these are added with `POST …/installations` instead.
+   */
+  available: GithubInstallationSummary[];
   error?: string;
   /**
    * Env keys a half-configured deployment still needs (#552). Absent when the

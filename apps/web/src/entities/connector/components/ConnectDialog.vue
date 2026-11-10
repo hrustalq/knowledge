@@ -213,6 +213,27 @@ const connectFigma = () =>
 const signInGithub = () => openProvider(async () => githubState.value?.authorizeUrl)
 const installGithub = () => openProvider(async () => githubState.value?.installUrl)
 
+/**
+ * An installation the person's GitHub account already reaches, added here
+ * without a trip to GitHub (#855): its install page never sends an
+ * already-installed App back, so a second workspace had no way in.
+ */
+const addingInstallation = ref<string | null>(null)
+async function addInstallation(installationId: string) {
+  wait.stop()
+  tabError.value = null
+  addingInstallation.value = installationId
+  try {
+    const res = await api.post('/v1/connectors/github/installations', { body: { workspaceId, installationId } })
+    await queryClient.invalidateQueries({ queryKey: ['/v1/connections'] })
+    finish(res.connection)
+  } catch (e) {
+    tabError.value = errorMessage(e, t)
+  } finally {
+    addingInstallation.value = null
+  }
+}
+
 const projects = useProjectsStore()
 const projectNameOf = (id: string) => projects.items.find((p) => p.projectId === id)?.name ?? id
 
@@ -350,8 +371,25 @@ function close() {
             <p class="text-muted-foreground text-xs">{{ t('connectors.github.connectHint') }}</p>
           </template>
           <template v-else>
+            <section v-if="githubState.available?.length" class="space-y-2">
+              <h3 class="text-sm font-medium">{{ t('connectors.connections.onYourGithub') }}</h3>
+              <ul class="divide-y rounded-lg border">
+                <li v-for="a in githubState.available" :key="a.installationId" class="flex items-center gap-3 p-2.5">
+                  <ConnectionAccount
+                    :connection="{ provider: 'github', method: 'app', site: null, accountLabel: a.accountLogin, accountAvatarUrl: a.accountAvatarUrl, credentialHint: null }"
+                    class="min-w-0 flex-1"
+                  />
+                  <Button size="sm" variant="outline" :disabled="addingInstallation !== null" @click="addInstallation(a.installationId)">
+                    <Loader2 v-if="addingInstallation === a.installationId" class="size-4 animate-spin" aria-hidden="true" />
+                    {{ t('connectors.connections.addToWorkspace') }}
+                  </Button>
+                </li>
+              </ul>
+              <p class="text-muted-foreground text-xs">{{ t('connectors.connections.onYourGithubHint') }}</p>
+            </section>
             <Button class="w-full" variant="outline" :disabled="opening" @click="installGithub">
-              <Plus class="size-4" aria-hidden="true" /> {{ t('connectors.github.install') }}
+              <Plus class="size-4" aria-hidden="true" />
+              {{ githubState.available?.length ? t('connectors.connections.installElsewhere') : t('connectors.github.install') }}
             </Button>
             <p class="text-muted-foreground text-xs">{{ t('connectors.connections.installHint') }}</p>
           </template>

@@ -993,6 +993,10 @@
       "alreadyConnected": "Already connected to {provider}",
       "use": "Use",
       "orAnother": "Or connect another account below.",
+      "onYourGithub": "Already on your GitHub",
+      "onYourGithubHint": "The App is installed on these accounts, but this workspace has not added them yet. Adding one needs no trip to GitHub.",
+      "addToWorkspace": "Add",
+      "installElsewhere": "Install on another account",
       "methodLabel": "How to connect",
       "methodChoice": {
         "token": "Paste a token",

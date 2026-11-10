@@ -361,7 +361,10 @@
     "otherAccount": "That token belongs to {account}, not {expected}. Add it as a new connection instead",
     "inUse": "Still used by {connectors}. Move or delete those connectors first",
     "siteRequired": "Say which site this connection is for",
-    "refused": "The token was not accepted: {reason}"
+    "refused": "The token was not accepted: {reason}",
+    "githubNotConnected": "Connect a GitHub account first",
+    "githubNotVisible": "Your GitHub account cannot reach that installation",
+    "githubUnreadable": "GitHub would not describe that installation. Try again in a moment"
   },
   "connector": {
     "notFound": "Connector {id} not found",

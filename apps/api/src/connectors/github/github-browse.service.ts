@@ -47,31 +47,55 @@ export class GithubBrowseService {
   ) {}
 
   /**
-   * The accounts this person can pick from, in this workspace.
+   * The accounts this person can pick from, in this workspace, and the ones
+   * their GitHub account reaches that the workspace has not added (#855).
    *
    * An installation recorded for the workspace but not visible to this user is
    * dropped: they cannot browse it, so offering it would produce an empty
    * repository list and no explanation.
    */
-  async installations(workspaceId: string, userId: string): Promise<GithubInstallationSummary[]> {
+  async installations(
+    workspaceId: string,
+    userId: string,
+  ): Promise<{ installations: GithubInstallationSummary[]; available: GithubInstallationSummary[] }> {
     const token = await this.oauth.tokenFor(userId);
-    if (!token) return [];
+    if (!token) return { installations: [], available: [] };
 
-    const rows = await this.prisma.githubInstallation.findMany({ where: { workspaceId } });
-    if (rows.length === 0) return [];
+    const rows = await this.prisma.githubInstallation.findMany({ where: { workspaceId }, select: { installationId: true } });
     const inWorkspace = new Set(rows.map((r) => String(r.installationId)));
 
+    const visible = (await this.userInstallations(token)).map((account) => ({
+      installationId: account.installationId,
+      accountLogin: account.accountLogin,
+      accountType: account.accountType,
+      accountAvatarUrl: account.accountAvatarUrl,
+      repositorySelection: account.repositorySelection,
+      suspended: account.suspended,
+    }));
+    return {
+      installations: visible.filter((a) => inWorkspace.has(a.installationId)),
+      available: visible.filter((a) => !inWorkspace.has(a.installationId)),
+    };
+  }
+
+  /**
+   * Adds an installation this person's GitHub account reaches to a workspace
+   * (#855) — the second workspace's way in, since GitHub's install page never
+   * redirects for an App already installed. The caller's own
+   * `/user/installations` is the gate: an id they cannot see is refused before
+   * anything is written. Returns the `app` connection id.
+   */
+  async addInstallation(
+    workspaceId: string,
+    userId: string,
+    installationId: string,
+  ): Promise<{ connectionId: string } | { error: 'notConnected' | 'notVisible' | 'unreadable' }> {
+    const token = await this.oauth.tokenFor(userId);
+    if (!token) return { error: 'notConnected' };
     const visible = await this.userInstallations(token);
-    return visible
-      .filter((account) => inWorkspace.has(account.installationId))
-      .map((account) => ({
-        installationId: account.installationId,
-        accountLogin: account.accountLogin,
-        accountType: account.accountType,
-        accountAvatarUrl: account.accountAvatarUrl,
-        repositorySelection: account.repositorySelection,
-        suspended: account.suspended,
-      }));
+    if (!visible.some((a) => a.installationId === installationId)) return { error: 'notVisible' };
+    const connectionId = await this.recordInstallation(workspaceId, installationId, userId);
+    return connectionId ? { connectionId } : { error: 'unreadable' };
   }
 
   /**
@@ -180,11 +204,12 @@ export class GithubBrowseService {
    *
    * Upsert rather than insert: GitHub sends the setup callback again whenever
    * someone changes the repository selection, and the second visit must update
-   * the row rather than collide with it.
+   * the row rather than collide with it. Returns the `app` connection id, null
+   * when GitHub would not describe the installation.
    */
-  async recordInstallation(workspaceId: string, installationId: string, userId: string | null): Promise<boolean> {
+  async recordInstallation(workspaceId: string, installationId: string, userId: string | null): Promise<string | null> {
     const account = await this.app.installation(installationId);
-    if (!account) return false;
+    if (!account) return null;
 
     const data = {
       accountLogin: account.accountLogin,
@@ -201,12 +226,13 @@ export class GithubBrowseService {
     // The installation is the workspace's `app` connection (#564): it syncs as the installation and browses as the person.
     const ref = { workspaceId, provider: 'github', method: 'app', externalRef: installationId };
     const owner = { accountId: installationId, accountLabel: account.accountLogin, accountAvatarUrl: account.accountAvatarUrl };
-    await this.prisma.connection.upsert({
+    const connection = await this.prisma.connection.upsert({
       where: { workspaceId_provider_method_externalRef: ref },
       create: { ...ref, ...owner, createdBy: userId },
       update: owner,
+      select: { id: true },
     });
-    return true;
+    return connection.id;
   }
 
   // --- internals ---

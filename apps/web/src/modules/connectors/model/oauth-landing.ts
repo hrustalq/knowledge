@@ -1,10 +1,10 @@
 import { OAUTH_OUTCOMES, type OauthOutcome } from '@knowledge/contracts'
 
 /** Providers whose callback lands on /oauth/:provider (#564), by display name. */
-const PROVIDERS: Record<string, string> = { github: 'GitHub', figma: 'Figma' }
+const PROVIDERS: Record<string, string> = { github: 'GitHub', figma: 'Figma', plaud: 'Plaud' }
 
 export interface OauthLanding {
-  provider: 'github' | 'figma' | null
+  provider: 'github' | 'figma' | 'plaud' | null
   /** The display name, for messages. */
   name: string
   outcome: OauthOutcome
@@ -19,7 +19,7 @@ export interface OauthLanding {
  * it, but the query is still text anyone can type.
  */
 export function readOauthLanding(provider: unknown, outcome: unknown, returnTo: unknown): OauthLanding {
-  const known = typeof provider === 'string' && provider in PROVIDERS ? (provider as 'github' | 'figma') : null
+  const known = typeof provider === 'string' && provider in PROVIDERS ? (provider as 'github' | 'figma' | 'plaud') : null
   const said = (OAUTH_OUTCOMES as readonly unknown[]).includes(outcome) ? (outcome as OauthOutcome) : 'error'
   const result = known ? said : 'error'
   const safe = typeof returnTo === 'string' && /^\/(?![/\\])/.test(returnTo)

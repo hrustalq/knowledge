@@ -257,6 +257,8 @@ import type {
   NotificationPreferences,
   NotificationUnreadCountResponse,
   PageInsightsResponse,
+  PlaudAuthorizeResponse,
+  PlaudLinkResponse,
   PostAssistantMessageResponse,
   ProjectAnalyticsResponse,
   ProjectDeletionPreview,
@@ -614,6 +616,8 @@ export interface ContractResponses {
   NotificationPreferences: NotificationPreferences;
   NotificationUnreadCountResponse: NotificationUnreadCountResponse;
   PageInsightsResponse: PageInsightsResponse;
+  PlaudAuthorizeResponse: PlaudAuthorizeResponse;
+  PlaudLinkResponse: PlaudLinkResponse;
   PostAssistantMessageResponse: PostAssistantMessageResponse;
   ProjectAnalyticsResponse: ProjectAnalyticsResponse;
   ProjectDeletionPreview: ProjectDeletionPreview;

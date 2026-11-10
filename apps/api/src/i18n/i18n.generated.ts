@@ -903,6 +903,7 @@ export type I18nTranslations = {
         };
         "memo": {
             "notFound": string;
+            "plaudOff": string;
             "disabled": string;
             "unsupportedFormat": string;
             "tooLarge": string;

@@ -2,6 +2,7 @@ import { ConflictException, ForbiddenException, Injectable, NotFoundException } 
 import { ConfigService } from '@nestjs/config';
 import type { Credential } from '@prisma/client';
 import {
+  CONNECTION_PROVIDERS,
   credentialBindable,
   type ConnectionMethod,
   type ConnectionProvider,
@@ -86,7 +87,8 @@ export class CredentialsService {
   }
 
   async list(userId: string): Promise<CredentialSummary[]> {
-    const rows = await this.prisma.credential.findMany({ where: { userId }, orderBy: [{ provider: 'asc' }, { createdAt: 'asc' }] });
+    // A sign-in that backs no connector (Plaud, #864) is shown where it is used, not here.
+    const rows = await this.prisma.credential.findMany({ where: { userId, provider: { in: [...CONNECTION_PROVIDERS] } }, orderBy: [{ provider: 'asc' }, { createdAt: 'asc' }] });
     const usage = await this.usage(rows.map((r) => r.id));
     return rows.map((r) => toCredentialSummary(r, usage.get(r.id) ?? []));
   }

@@ -13,6 +13,26 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Added
+
+- **A person can link their Plaud account.** `GET /v1/plaud/authorize?workspaceId=` (editor) returns the Plaud
+  sign-in URL, and the callback stores the sign-in as that person's own credential, sealed like every other.
+  `GET /v1/plaud/link?workspaceId=` says whether linking is offered on this server, whether the caller is linked,
+  the account's name and whether the sign-in lapsed (Plaud keeps one seven days without use).
+  `DELETE /v1/plaud/link?workspaceId=` forgets it. A Plaud sign-in belongs to one person, is never a workspace
+  connection and is not listed under `GET /v1/me/credentials`. This is the first step of importing Plaud recordings
+  as memos (#864): nothing is imported yet and the web app has no control for it. (#864)
+
+### Operations
+
+- New optional variable `PLAUD_OAUTH_CLIENT_ID`, empty by default, which leaves every Plaud route answering "not set
+  up". To turn linking on, register a public client once with `POST https://mcp.plaud.ai/register` (redirect URI
+  `$API_PUBLIC_URL/v1/plaud/callback`, `token_endpoint_auth_method` `none`; the exact request is in `.env.example`)
+  and set the `client_id` it returns as a GitHub `production` variable. There is no secret. It needs
+  `SETTINGS_ENCRYPTION_KEY`, as Figma sign-in does. No migration.
+
 ## [0.47.0] — 2026-11-10
 
 ### Added

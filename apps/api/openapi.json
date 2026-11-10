@@ -24113,6 +24113,70 @@
         "tags": [
           "connectors"
         ]
+      },
+      "post": {
+        "operationId": "GithubController_addInstallation",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddGithubInstallationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Add an installation the caller's GitHub account reaches to this workspace",
+        "tags": [
+          "connectors"
+        ]
       }
     },
     "/v1/connectors/github/repos": {
@@ -40994,7 +41058,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.45.2",
+    "version": "0.46.2",
     "contact": {}
   },
   "tags": [],
@@ -45938,6 +46002,23 @@
             "description": "A crawled page of this connector to read the last version of. Omitted: the root page"
           }
         }
+      },
+      "AddGithubInstallationDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "installationId": {
+            "type": "string",
+            "description": "The GitHub App installation id"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "installationId"
+        ]
       },
       "PutWorkItemRulesDto": {
         "type": "object",
@@ -61494,6 +61575,12 @@
               "$ref": "#/components/schemas/GithubInstallationSummary"
             }
           },
+          "available": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GithubInstallationSummary"
+            }
+          },
           "error": {
             "type": "string"
           },
@@ -61509,7 +61596,8 @@
           "connected",
           "authorizeUrl",
           "installUrl",
-          "installations"
+          "installations",
+          "available"
         ]
       },
       "GithubPermissionRow": {

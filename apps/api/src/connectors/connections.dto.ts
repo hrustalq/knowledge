@@ -10,6 +10,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   MaxLength,
   ValidateNested,
 } from 'class-validator';
@@ -81,4 +82,17 @@ export class CreateConnectionLinksDto {
   @ValidateNested({ each: true })
   @Type(() => ConnectionLinkDto)
   links!: ConnectionLinkDto[];
+}
+
+/** Adds an installation the caller's GitHub account reaches to a workspace (#855). */
+export class AddGithubInstallationDto {
+  // Field name must stay `workspaceId`: @Access('admin','body') resolves it.
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  // GitHub ids are 64-bit integers; anything else must not reach BigInt().
+  @ApiProperty({ description: 'The GitHub App installation id' })
+  @Matches(/^\d{1,19}$/)
+  installationId!: string;
 }

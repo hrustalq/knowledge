@@ -26807,6 +26807,72 @@
         ]
       }
     },
+    "/v1/memos/plaud": {
+      "post": {
+        "operationId": "MemosController_importPlaud",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportPlaudMemoDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Import one of my Plaud recordings as a memo, from the transcript Plaud made (409 until it has one)",
+        "tags": [
+          "memos"
+        ]
+      }
+    },
     "/v1/memos/{id}/finalize": {
       "post": {
         "operationId": "MemosController_finalize",
@@ -27049,6 +27115,604 @@
           }
         },
         "summary": "A memo with its transcript and summary",
+        "tags": [
+          "memos"
+        ]
+      }
+    },
+    "/v1/plaud/link": {
+      "get": {
+        "operationId": "PlaudController_status",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaudLinkResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Whether Plaud import is offered here and whether I have linked my Plaud account",
+        "tags": [
+          "memos"
+        ]
+      },
+      "delete": {
+        "operationId": "PlaudController_unlink",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Unlink my Plaud account",
+        "tags": [
+          "memos"
+        ]
+      }
+    },
+    "/v1/plaud/authorize": {
+      "get": {
+        "operationId": "PlaudController_authorize",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "returnTo",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaudAuthorizeResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The Plaud authorization URL to link (or re-link) my account",
+        "tags": [
+          "memos"
+        ]
+      }
+    },
+    "/v1/plaud/settings": {
+      "get": {
+        "operationId": "PlaudController_settings",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaudSettingsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "My Plaud auto-import settings in this workspace: the destination project and the pick rules",
+        "tags": [
+          "memos"
+        ]
+      },
+      "put": {
+        "operationId": "PlaudController_saveSettings",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SavePlaudSettingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaudSettingsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Save my Plaud auto-import settings; a null project switches auto-import off here",
+        "tags": [
+          "memos"
+        ]
+      }
+    },
+    "/v1/plaud/imports": {
+      "get": {
+        "operationId": "PlaudController_listImports",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "waiting",
+                "pending",
+                "confirmed",
+                "skipped",
+                "imported",
+                "failed"
+              ]
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaudImportsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The Plaud recordings my rules picked, newest first",
+        "tags": [
+          "memos"
+        ]
+      }
+    },
+    "/v1/plaud/imports/confirm": {
+      "post": {
+        "operationId": "PlaudController_confirm",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaudImportIdsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaudImportsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Import these recordings: now if Plaud has transcribed them, otherwise as soon as it has",
+        "tags": [
+          "memos"
+        ]
+      }
+    },
+    "/v1/plaud/imports/transcribe": {
+      "post": {
+        "operationId": "PlaudController_transcribe",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaudTranscribeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaudImportsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Transcribe one recording here instead of waiting for Plaud: spends speech-to-text, within my allowance",
+        "tags": [
+          "memos"
+        ]
+      }
+    },
+    "/v1/plaud/imports/skip": {
+      "post": {
+        "operationId": "PlaudController_skip",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaudImportIdsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaudImportsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Never import these recordings; a skipped recording is not offered again",
         "tags": [
           "memos"
         ]
@@ -41243,7 +41907,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.46.2",
+    "version": "0.47.0",
     "contact": {}
   },
   "tags": [],
@@ -46725,6 +47389,123 @@
           "filename",
           "contentType",
           "sizeBytes"
+        ]
+      },
+      "ImportPlaudMemoDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The project the memo belongs to; its proposals are filed there"
+          },
+          "fileId": {
+            "type": "string",
+            "description": "The recording's id in the caller's Plaud account"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "projectId",
+          "fileId"
+        ]
+      },
+      "PlaudRulesDto": {
+        "type": "object",
+        "properties": {
+          "since": {
+            "type": "string",
+            "description": "Only recordings started on or after this day, YYYY-MM-DD. Unset = the day the settings were first saved"
+          },
+          "minSeconds": {
+            "type": "number",
+            "description": "Only recordings at least this long, in seconds. Unset = 120"
+          },
+          "nameIncludes": {
+            "type": "string",
+            "description": "Only recordings whose Plaud name contains this"
+          },
+          "nameExcludes": {
+            "type": "string",
+            "description": "Never recordings whose Plaud name contains this"
+          },
+          "serial": {
+            "type": "string",
+            "description": "Only recordings from the device with this serial number"
+          },
+          "confirm": {
+            "type": "string",
+            "enum": [
+              "ask",
+              "auto"
+            ],
+            "description": "ask: each recording waits for a yes. auto: imported once Plaud has transcribed it. Unset = ask"
+          }
+        }
+      },
+      "SavePlaudSettingsDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Where picked recordings go; null switches auto-import off here"
+          },
+          "rules": {
+            "$ref": "#/components/schemas/PlaudRulesDto"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "projectId",
+          "rules"
+        ]
+      },
+      "PlaudImportIdsDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "ids": {
+            "description": "One or many; ids that are not my open recordings are ignored",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "workspaceId",
+          "ids"
+        ]
+      },
+      "PlaudTranscribeDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "One of my recordings that is waiting for a Plaud transcript"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "id"
         ]
       },
       "WorkflowDraftMessageDto": {
@@ -65649,6 +66430,9 @@
           "audioAvailable": {
             "type": "boolean"
           },
+          "source": {
+            "$ref": "#/components/schemas/MemoSource"
+          },
           "createdAt": {
             "type": "string"
           },
@@ -65670,6 +66454,7 @@
           "stage",
           "error",
           "audioAvailable",
+          "source",
           "createdAt",
           "updatedAt"
         ]
@@ -65778,6 +66563,9 @@
           },
           "text": {
             "type": "string"
+          },
+          "speaker": {
+            "type": "string"
           }
         },
         "required": [
@@ -65785,6 +66573,13 @@
           "start",
           "end",
           "text"
+        ]
+      },
+      "MemoSource": {
+        "type": "string",
+        "enum": [
+          "upload",
+          "plaud"
         ]
       },
       "MemoStatus": {
@@ -66888,6 +67683,193 @@
           "to",
           "uniqueReaders",
           "views"
+        ]
+      },
+      "PlaudAuthorizeResponse": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ]
+      },
+      "PlaudConfirmMode": {
+        "type": "string",
+        "enum": [
+          "ask",
+          "auto"
+        ]
+      },
+      "PlaudImportEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "startAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "durationSeconds": {
+            "type": "number"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PlaudImportStatus"
+          },
+          "memoId": {
+            "type": "string",
+            "nullable": true
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "startAt",
+          "durationSeconds",
+          "status",
+          "memoId",
+          "error",
+          "createdAt"
+        ]
+      },
+      "PlaudImportStatus": {
+        "type": "string",
+        "enum": [
+          "waiting",
+          "pending",
+          "confirmed",
+          "skipped",
+          "imported",
+          "failed"
+        ]
+      },
+      "PlaudImportsResponse": {
+        "type": "object",
+        "properties": {
+          "imports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlaudImportEntry"
+            }
+          }
+        },
+        "required": [
+          "imports"
+        ]
+      },
+      "PlaudLinkResponse": {
+        "type": "object",
+        "properties": {
+          "configured": {
+            "type": "boolean"
+          },
+          "linked": {
+            "type": "boolean"
+          },
+          "accountLabel": {
+            "type": "string",
+            "nullable": true
+          },
+          "needsReconnect": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "configured",
+          "linked",
+          "accountLabel",
+          "needsReconnect"
+        ]
+      },
+      "PlaudRules": {
+        "type": "object",
+        "properties": {
+          "since": {
+            "type": "string"
+          },
+          "minSeconds": {
+            "type": "number"
+          },
+          "nameIncludes": {
+            "type": "string"
+          },
+          "nameExcludes": {
+            "type": "string"
+          },
+          "serial": {
+            "type": "string"
+          },
+          "confirm": {
+            "$ref": "#/components/schemas/PlaudConfirmMode"
+          }
+        }
+      },
+      "PlaudSettingsResponse": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "nullable": true
+          },
+          "rules": {
+            "$ref": "#/components/schemas/PlaudRules"
+          },
+          "effective": {
+            "type": "object",
+            "properties": {
+              "since": {
+                "type": "string"
+              },
+              "minSeconds": {
+                "type": "number"
+              },
+              "confirm": {
+                "$ref": "#/components/schemas/PlaudConfirmMode"
+              }
+            }
+          },
+          "maxPerDay": {
+            "type": "number"
+          },
+          "transcribe": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "limitSeconds": {
+                "type": "number"
+              },
+              "remainingSeconds": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "enabled",
+              "limitSeconds",
+              "remainingSeconds"
+            ]
+          }
+        },
+        "required": [
+          "projectId",
+          "rules",
+          "effective",
+          "maxPerDay",
+          "transcribe"
         ]
       },
       "PostAssistantMessageResponse": {

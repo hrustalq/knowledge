@@ -7436,7 +7436,85 @@
       "retry": "Retry",
       "delete": "Delete",
       "deleteTitle": "Delete this memo?",
-      "deleteBody": "The recording and its transcript are deleted for good. Merge requests it opened stay open for review."
+      "deleteBody": "The recording and its transcript are deleted for good. Merge requests it opened stay open for review.",
+      "audioPlaud": "Imported from Plaud's transcript. The audio stays in Plaud."
+    },
+    "plaud": {
+      "title": "Plaud",
+      "notLinked": "Link your Plaud account to import its recordings as memos, from the transcripts Plaud makes.",
+      "lapsed": "Your Plaud sign-in lapsed. Link the account again to keep importing.",
+      "off": "Linked. Choose a project to start picking up recordings.",
+      "linkedAs": "Linked as {account}",
+      "linked": "Linked",
+      "link": "Link Plaud account",
+      "linkAgain": "Link again",
+      "cancel": "Cancel",
+      "ready": "{count} recording waits for you | {count} recordings wait for you",
+      "waiting": "{count} recording waits for Plaud's transcript | {count} recordings wait for Plaud's transcript",
+      "waitingHint": "Plaud transcribes a recording when you ask it to. Generate the transcript in the Plaud app and the recording moves up on its own.",
+      "confirmedAhead": "imports once transcribed",
+      "empty": "Nothing is waiting. New recordings that match your rules appear here within about ten minutes.",
+      "failed": "The import failed.",
+      "select": "Select {name}",
+      "selectAll": "Select all recordings waiting for you",
+      "import": "Import",
+      "importAll": "Import all",
+      "importSelected": "Import {count} | Import {count}",
+      "importWhenReady": "Import when ready",
+      "skip": "Skip",
+      "skipAll": "Skip all",
+      "skipSelected": "Skip {count} | Skip {count}",
+      "tryAgain": "Try again",
+      "toast": {
+        "imported": "{count} recording imported. It is being read now. | {count} recordings imported. They are being read now.",
+        "later": "{count} recording will import once Plaud has transcribed it. | {count} recordings will import once Plaud has transcribed them.",
+        "failed": "{count} recording could not be imported; the reason is on its row. | {count} recordings could not be imported; the reasons are on their rows.",
+        "transcribing": "Queued for transcription here."
+      },
+      "transcribe": {
+        "action": "Transcribe here",
+        "title": "Transcribe this recording here?",
+        "body": "It is {minutes} min long, and you have {left} min of transcription left this month. This spends on speech-to-text instead of waiting for Plaud.",
+        "noSpeakers": "A transcript made here has no speaker names.",
+        "over": "That is more than you have left this month. Generate the transcript in the Plaud app instead.",
+        "confirm": "Transcribe"
+      },
+      "unlink": {
+        "action": "Unlink Plaud",
+        "title": "Unlink your Plaud account?",
+        "body": "Your rules and the waiting recordings are removed in every workspace. Memos already imported stay."
+      },
+      "rules": {
+        "open": "Rules",
+        "setUp": "Set up import",
+        "title": "Plaud import rules",
+        "desc": "Which of your Plaud recordings are picked up, and where they go. Nothing is imported before Plaud has transcribed it.",
+        "project": "Import into",
+        "projectOff": "Nowhere: auto-import is off",
+        "projectHint": "A memo's proposals are filed in this project.",
+        "since": "Recorded on or after",
+        "sinceHint": "Recordings older than two weeks are not looked for, whatever the date.",
+        "minLength": "Shortest recording, minutes",
+        "minLengthInvalid": "Enter a number of minutes, 0 or more.",
+        "nameIncludes": "Name contains",
+        "nameExcludes": "Name does not contain",
+        "anyName": "Any name",
+        "nothing": "Nothing excluded",
+        "serial": "Device serial number",
+        "anyDevice": "Any device",
+        "confirm": "When a recording is transcribed",
+        "mode": {
+          "ask": {
+            "label": "Ask me",
+            "desc": "It waits here for your yes or no."
+          },
+          "auto": {
+            "label": "Import it",
+            "desc": "Up to {count} a day without asking. More than that waits for the next day."
+          }
+        },
+        "save": "Save rules"
+      }
     }
   },
   "features": {

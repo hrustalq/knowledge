@@ -856,6 +856,8 @@ export const envSchema = z.object({
    * switch: linking a Plaud account is not offered.
    */
   PLAUD_OAUTH_CLIENT_ID: z.string().optional().default(''),
+  /** Auto mode imports nothing more for a person once this many of their Plaud recordings were imported in a day; a recording they confirm still goes through. */
+  PLAUD_AUTO_IMPORT_MAX_PER_DAY: z.coerce.number().int().min(0).max(1_000).default(10),
 
   /**
    * GitHub App backing the repository picker (docs/features/30).

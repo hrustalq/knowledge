@@ -34,6 +34,24 @@ describe('PlaudService', () => {
     expect(tool.mock.calls.map((c) => c[2])).toEqual([{ file_id: 'f1', limit: 500 }, { file_id: 'f1', limit: 500, cursor: 'c2' }]);
   });
 
+  it('lists recordings from a day on, page by page, and stops when paging is ignored', async () => {
+    tool.mockReset();
+    const page = (from: number, n: number) => ({ data: Array.from({ length: n }, (_, i) => ({ id: `f${from + i}`, name: 'x', start_at: null, duration: 1000, serial_number: 'SN1' })) });
+    tool.mockResolvedValueOnce(page(0, 100)).mockResolvedValueOnce(page(100, 3));
+    const plaud = new PlaudService({ tokenFor: async () => 'tok' } as never);
+    expect((await plaud.list('u1', '2026-11-01'))!.map((r) => r.id)).toHaveLength(103);
+    expect(tool.mock.calls[0][2]).toEqual({ date_from: '2026-11-01', page: 1, page_size: 100 });
+    // The same full page twice: Plaud ignored `page`, so the loop ends instead of spinning.
+    tool.mockReset();
+    tool.mockResolvedValue(page(0, 100));
+    expect(await plaud.list('u1', '2026-11-01')).toHaveLength(100);
+    expect(tool).toHaveBeenCalledTimes(2);
+    tool.mockReset();
+    tool.mockResolvedValueOnce({ segments: [{ content: 'a', start_time: 0 }] }).mockResolvedValueOnce([]);
+    expect(await plaud.transcribed('u1', 'f1')).toBe(true);
+    expect(await plaud.transcribed('u1', 'f2')).toBe(false);
+  });
+
   it('reads an untranscribed recording as an empty transcript, and no sign-in as null', async () => {
     tool.mockReset();
     tool.mockResolvedValueOnce([]);
@@ -47,7 +65,7 @@ describe('PlaudService', () => {
     tool.mockRejectedValueOnce(new PlaudError('refused', true)).mockResolvedValueOnce({ id: 'f1', name: 'Sync', start_at: '2026-10-28T15:43:09', duration: 610_000 });
     const tokenFor = vi.fn().mockResolvedValueOnce('old').mockResolvedValueOnce('new');
     const plaud = new PlaudService({ tokenFor } as never);
-    expect(await plaud.recording('u1', 'f1')).toEqual({ id: 'f1', name: 'Sync', startAt: '2026-10-28T15:43:09', durationSeconds: 610 });
+    expect(await plaud.recording('u1', 'f1')).toEqual({ id: 'f1', name: 'Sync', startAt: '2026-10-28T15:43:09', durationSeconds: 610, serial: null });
     expect(tokenFor).toHaveBeenLastCalledWith('u1', 'old');
     expect(tool.mock.calls[1][0]).toBe('new');
   });

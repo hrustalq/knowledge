@@ -446,6 +446,11 @@ export const KNOWN_EVENT_TYPES = [
   // the uploader alone; `title` is their own memo's, metadata carries counts.
   'memo.done',
   'memo.failed',
+  // Plaud auto-import (#864), directed to the account's owner alone: picked
+  // recordings wait for a yes (metadata carries a count, never a name), or the
+  // Plaud sign-in lapsed and needs linking again.
+  'plaud.pending',
+  'plaud.reconnect',
   // A source-backed page took a new version from its source (#674), told to
   // the connector's owner; an alert is directed at them (reason `alert`).
   'source.updated',

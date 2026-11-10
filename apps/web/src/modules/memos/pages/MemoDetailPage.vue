@@ -20,7 +20,7 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
-import { ArrowLeft, FilePlus2, FilePen, GitPullRequestArrow, Lock, RotateCcw, Trash2 } from 'lucide-vue-next'
+import { FilePlus2, FilePen, GitPullRequestArrow, Lock, RotateCcw, Trash2 } from 'lucide-vue-next'
 import { memoClock, type MemoDetailResponse, type MemoProposal } from '@knowledge/contracts'
 import { request } from '@/shared/api/client'
 import { errorMessage } from '@/shared/api/errors'
@@ -165,9 +165,6 @@ async function remove() {
     </template>
     <template #meta>
       <p class="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-      <RouterLink to="/memos" class="text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
-        <ArrowLeft class="size-3.5" aria-hidden="true" />{{ t('memos.detail.back') }}
-      </RouterLink>
       <span class="text-muted-foreground">{{ formatDateTime(memo.createdAt) }}</span>
       <span v-if="memo.durationSeconds" class="text-muted-foreground tabular-nums">{{ formatDuration(memo.durationSeconds * 1000) }}</span>
       <span class="text-muted-foreground inline-flex items-center gap-1"><Lock class="size-3" aria-hidden="true" />{{ t('memos.detail.private') }}</span>
@@ -197,7 +194,7 @@ async function remove() {
               class="pt-0.5 font-mono text-xs tabular-nums"
               :class="playing === s.i ? 'text-primary font-semibold' : 'text-muted-foreground group-hover:text-foreground'"
             >{{ memoClock(s.start) }}</span>
-            <span class="kn-measure text-[0.95rem] leading-relaxed" :class="playing === s.i ? 'text-foreground' : ''">
+            <span class="leading-relaxed" :class="playing === s.i ? 'text-foreground' : ''">
               <span v-if="s.speaker" class="font-medium">{{ s.speaker }}: </span>{{ s.text }}
             </span>
           </button>

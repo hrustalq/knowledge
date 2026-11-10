@@ -22,11 +22,36 @@ const KEY = randomBytes(32);
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
 type Grant = { figmaUserId: string; accessToken: string; refreshToken: string; expiresAt: Date; refreshingUntil: Date | null; handle: string };
+/** A Figma sign-in's credential (#857), keyed here by its Figma account. */
+type Cred = { id: string; userId: string | null; provider: string; method: string; accountId: string; secret: string; refreshSecret: string; expiresAt: Date; refreshingUntil: Date | null };
 
 function setup(env: Record<string, unknown> = {}) {
   const grants = new Map<string, Grant>();
+  const creds = new Map<string, Cred>();
+  const byId = (id: string) => [...creds.values()].find((c) => c.id === id);
   const connectors = new Map<string, { id: string; workspaceId: string; kind: string; config: Record<string, unknown>; credential: string | null }>();
   const prisma = {
+    credential: {
+      findFirst: async ({ where }: { where: { accountId: string } }) => {
+        const c = creds.get(where.accountId);
+        return c ? { ...c } : null;
+      },
+      create: async ({ data }: { data: Omit<Cred, 'id'> }) => {
+        const row = { ...data, id: `cred-${data.accountId}` } as Cred;
+        creds.set(row.accountId, row);
+        return row;
+      },
+      update: async ({ where, data }: { where: { id: string }; data: Partial<Cred> }) => Object.assign(byId(where.id)!, data),
+      // The guarded statement: token unchanged and no live lease, or nothing.
+      updateMany: async ({ where, data }: { where: { id: string; secret?: string; OR?: { refreshingUntil: { lt: Date } | null }[] }; data: Partial<Cred> }) => {
+        const c = byId(where.id);
+        if (!c || (where.secret && c.secret !== where.secret)) return { count: 0 };
+        const lt = (where.OR?.[1]?.refreshingUntil as { lt: Date } | undefined)?.lt;
+        if (lt && c.refreshingUntil && c.refreshingUntil >= lt) return { count: 0 };
+        Object.assign(c, data);
+        return { count: 1 };
+      },
+    },
     figmaOauthGrant: {
       findUnique: async ({ where }: { where: { figmaUserId: string } }) => {
         const g = grants.get(where.figmaUserId);
@@ -69,7 +94,7 @@ function setup(env: Record<string, unknown> = {}) {
   };
   const config = { get: (k: string) => settings[k] };
   const service = new FigmaOauthService(config as never, prisma as never);
-  return { service, grants, connectors, config, prisma };
+  return { service, grants, creds, connectors, config, prisma };
 }
 
 const stateOf = (url: string) => new URL(url).searchParams;
@@ -78,8 +103,8 @@ afterEach(() => mockFetch.mockReset());
 
 describe('FigmaOauthService', () => {
   it('is off with the client id unset, and then offers nothing', async () => {
-    const { service, grants } = setup({ FIGMA_OAUTH_CLIENT_ID: '' });
-    grants.set('u1', { figmaUserId: 'u1', accessToken: 'x', refreshToken: 'y', expiresAt: new Date(0), refreshingUntil: null, handle: 'ada' });
+    const { service, creds } = setup({ FIGMA_OAUTH_CLIENT_ID: '' });
+    creds.set('u1', { id: 'c', userId: null, provider: 'figma', method: 'oauth', accountId: 'u1', secret: 'x', refreshSecret: 'y', expiresAt: new Date(0), refreshingUntil: null });
     expect(service.configured).toBe(false);
     expect(service.authorizeUrl('ws', 'user', 'c1', '/x')).toBeNull();
     await expect(service.tokenFor('u1')).resolves.toBeNull();
@@ -111,14 +136,14 @@ describe('FigmaOauthService', () => {
   });
 
   it('exchanges the code with Basic auth, a form body and the verifier, then binds the connector', async () => {
-    const { service, grants, connectors } = setup();
+    const { service, grants, creds, connectors } = setup();
     connectors.set('c1', { id: 'c1', workspaceId: 'ws', kind: 'figma', config: { allowlist: 'team:1', [FIGMA_TOKEN_EXPIRES_CONFIG_KEY]: '2027-01-01' }, credential: 'old' });
     const state = service.verify(stateOf(service.authorizeUrl('ws', 'user', 'c1', '/x')!).get('state')!)!;
     mockFetch
       .mockResolvedValueOnce(json({ access_token: 'at', refresh_token: 'rt', expires_in: 7_776_000, user_id_string: 'fig-1' }))
       .mockResolvedValueOnce(json({ handle: 'ada' }));
 
-    await expect(service.completeAuthorization(state, 'code-1')).resolves.toBe(true);
+    await expect(service.completeAuthorization(state, 'code-1')).resolves.toBe('connected');
 
     const [url, init] = mockFetch.mock.calls[0]!;
     expect(url).toBe('https://api.figma.com/v1/oauth/token');
@@ -131,6 +156,9 @@ describe('FigmaOauthService', () => {
     expect(form.get('code_verifier')).toBe(decryptSecret(state.pkce, KEY));
     expect((mockFetch.mock.calls[1]![1]!.headers as Record<string, string>).authorization).toBe('Bearer at');
 
+    expect(decryptSecret(creds.get('fig-1')!.secret, KEY)).toBe('at');
+    expect(creds.get('fig-1')!.userId).toBe('user');
+    // The previous release still reads the grant (expand/contract).
     expect(decryptSecret(grants.get('fig-1')!.accessToken, KEY)).toBe('at');
     expect(connectors.get('c1')).toMatchObject({
       credential: null,
@@ -147,41 +175,60 @@ describe('FigmaOauthService', () => {
     mockFetch
       .mockResolvedValueOnce(json({ access_token: 'at', refresh_token: 'rt', expires_in: 7_776_000, user_id_string: 'fig-1' }))
       .mockResolvedValueOnce(json({ handle: 'ada' }));
-    await expect(service.completeAuthorization(state, 'code-1')).resolves.toBe(true);
+    await expect(service.completeAuthorization(state, 'code-1')).resolves.toBe('connected');
     expect(grants.has('fig-1')).toBe(true);
     expect(prisma.connection.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { workspaceId_provider_method_externalRef: { workspaceId: 'ws', provider: 'figma', method: 'oauth', externalRef: 'fig-1' } },
-        update: { accountId: 'fig-1', accountLabel: 'ada' },
+        update: { accountId: 'fig-1', accountLabel: 'ada', credentialId: 'cred-fig-1' },
       }),
     );
   });
 
   it('stores nothing when Figma refuses the code (a replayed state)', async () => {
-    const { service, grants } = setup();
+    const { service, grants, creds } = setup();
     const state = service.verify(stateOf(service.authorizeUrl('ws', 'user', 'c1', '/x')!).get('state')!)!;
     mockFetch.mockResolvedValueOnce(json({ error: 'invalid_grant' }, 400));
-    await expect(service.completeAuthorization(state, 'spent')).resolves.toBe(false);
+    await expect(service.completeAuthorization(state, 'spent')).resolves.toBe('auth-failed');
+    expect(grants.size).toBe(0);
+    expect(creds.size).toBe(0);
+  });
+
+  it("refuses a second person's sign-in to a Figma account someone else connected", async () => {
+    const { service, creds, grants } = setup();
+    creds.set('fig-1', { id: 'cred-1', userId: 'someone-else', provider: 'figma', method: 'oauth', accountId: 'fig-1', secret: 'x', refreshSecret: 'y', expiresAt: new Date(0), refreshingUntil: null });
+    const state = service.verify(stateOf(service.authorizeUrl('ws', 'user', null, '/x')!).get('state')!)!;
+    mockFetch
+      .mockResolvedValueOnce(json({ access_token: 'at', refresh_token: 'rt', expires_in: 7_776_000, user_id_string: 'fig-1' }))
+      .mockResolvedValueOnce(json({ handle: 'ada' }));
+    await expect(service.completeAuthorization(state, 'code-1')).resolves.toBe('account-in-use');
+    expect(creds.get('fig-1')).toMatchObject({ userId: 'someone-else', secret: 'x' });
     expect(grants.size).toBe(0);
   });
 
   it('makes one refresh call for two concurrent callers, and both get the new token', async () => {
-    const { service, grants } = setup();
-    grants.set('fig-1', {
-      figmaUserId: 'fig-1',
-      handle: 'ada',
-      accessToken: encryptSecret('old', KEY),
-      refreshToken: encryptSecret('rt', KEY),
+    const { service, grants, creds } = setup();
+    creds.set('fig-1', {
+      id: 'cred-1',
+      userId: 'user',
+      provider: 'figma',
+      method: 'oauth',
+      accountId: 'fig-1',
+      secret: encryptSecret('old', KEY),
+      refreshSecret: encryptSecret('rt', KEY),
       expiresAt: new Date(Date.now() - 1000),
       refreshingUntil: null,
     });
+    grants.set('fig-1', { figmaUserId: 'fig-1', handle: 'ada', accessToken: 'stale', refreshToken: 'rt', expiresAt: new Date(0), refreshingUntil: null });
     mockFetch.mockImplementation(async () => json({ access_token: 'new', expires_in: 7_776_000 }));
 
     await expect(Promise.all([service.tokenFor('fig-1'), service.tokenFor('fig-1')])).resolves.toEqual(['new', 'new']);
     expect(mockFetch).toHaveBeenCalledTimes(1);
     expect(mockFetch.mock.calls[0]![0]).toBe('https://api.figma.com/v1/oauth/refresh');
     expect(new URLSearchParams(String(mockFetch.mock.calls[0]![1]!.body)).get('refresh_token')).toBe('rt');
-    expect(grants.get('fig-1')!.refreshingUntil).toBeNull();
+    expect(creds.get('fig-1')!.refreshingUntil).toBeNull();
+    // Figma revoked the old token, so the previous release's copy follows.
+    expect(decryptSecret(grants.get('fig-1')!.accessToken, KEY)).toBe('new');
 
     // A fresh token is returned as is; one Figma just refused is renewed.
     await expect(service.tokenFor('fig-1')).resolves.toBe('new');
@@ -206,7 +253,7 @@ describe('the callback', () => {
 
   it('lands a completed flow on /oauth/figma with the signed return path', async () => {
     const { service, config } = setup();
-    vi.spyOn(service, 'completeAuthorization').mockResolvedValue(true);
+    vi.spyOn(service, 'completeAuthorization').mockResolvedValue('connected');
     const controller = new FigmaOauthController(service, {} as never, config as never);
     const redirect = vi.fn();
     const state = stateOf(service.authorizeUrl('ws', 'user', null, '/settings/connectors?add=1')!).get('state')!;

@@ -1,6 +1,7 @@
-import type { Connector, Prisma, PrismaClient } from '@prisma/client';
+import type { Connection, Connector, Credential, Prisma, PrismaClient } from '@prisma/client';
 import {
   connectionProviderFor,
+  credentialSiteFor,
   FIGMA_GRANT_CONFIG_KEY,
   FIGMA_HANDLE_CONFIG_KEY,
   GITHUB_INSTALLATION_CONFIG_KEY,
@@ -9,8 +10,9 @@ import {
   type ConnectorKind,
 } from '@knowledge/contracts';
 import { decryptSecret } from '../ai/secret-box.js';
+import type { ProviderAccount } from './adapters/connection-providers.js';
 
-type Db = Pick<PrismaClient, 'connection' | 'connector' | 'githubInstallation'>;
+type Db = Pick<PrismaClient, 'connection' | 'connector' | 'githubInstallation' | 'credential'>;
 export type BindableConnector = Pick<
   Connector,
   'id' | 'workspaceId' | 'kind' | 'config' | 'credential' | 'credentialHint' | 'createdBy'
@@ -61,15 +63,24 @@ async function connectionFor(db: Db, row: BindableConnector, key: Buffer | null)
   });
   const same = tokens.find((c) => decryptSecret(c.credential, key) === secret);
   if (same) return same.id;
+  // The connector's own envelope: the same key sealed it, so no re-encrypt.
+  const credential = await tokenCredential(
+    db,
+    { userId: row.createdBy, provider, site, envelope: row.credential!, secret, hint: row.credentialHint, account: null },
+    key,
+  );
   const created = await db.connection.create({
     data: {
       workspaceId: row.workspaceId,
       provider,
       site,
       method: 'token',
-      // The connector's own envelope: the same key sealed it, so no re-encrypt.
       credential: row.credential,
       credentialHint: row.credentialHint,
+      credentialId: credential.id,
+      accountId: credential.accountId,
+      accountLabel: credential.accountLabel,
+      accountAvatarUrl: credential.accountAvatarUrl,
       createdBy: row.createdBy,
     },
   });
@@ -96,4 +107,60 @@ async function byRef(
 
 function text(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+export interface TokenCredentialInput {
+  userId: string | null;
+  provider: string;
+  /** The connection's site; `credentialSiteFor` decides what the credential keeps. */
+  site: string | null;
+  /** The secret-box envelope to store, and its plaintext to match by. */
+  envelope: string;
+  secret: string;
+  hint: string | null;
+  account: ProviderAccount | null;
+}
+
+/**
+ * One owner's credential for a pasted secret (#857): the same secret for the
+ * same provider and host is the same row, compared decrypted because two
+ * envelopes of one secret never match. Never matched by account — two
+ * fine-grained tokens for one account reach different repositories. The one
+ * matcher for the boot backfill, `bindConnection` and the connect dialog.
+ */
+export async function tokenCredential(db: Pick<PrismaClient, 'credential'>, input: TokenCredentialInput, key: Buffer | null): Promise<Credential> {
+  const site = credentialSiteFor(input.provider as ConnectionProvider, input.site);
+  const mine = await db.credential.findMany({
+    where: { userId: input.userId, provider: input.provider, method: 'token', site },
+    orderBy: { createdAt: 'asc' },
+  });
+  const same = mine.find((c) => decryptSecret(c.secret, key) === input.secret);
+  const account = input.account
+    ? { accountId: input.account.id, accountLabel: input.account.label, accountAvatarUrl: input.account.avatarUrl }
+    : {};
+  if (same) return input.account ? db.credential.update({ where: { id: same.id }, data: account }) : same;
+  return db.credential.create({
+    data: {
+      userId: input.userId,
+      provider: input.provider,
+      method: 'token',
+      site,
+      ...account,
+      secret: input.envelope,
+      secretHint: input.hint,
+    },
+  });
+}
+
+/** What a token connection dials with (#857): its credential, else the inline copy the boot backfill has not moved yet. */
+export async function connectionSecret(
+  db: Pick<PrismaClient, 'credential'>,
+  connection: Pick<Connection, 'credentialId' | 'credential'>,
+  key: Buffer | null,
+): Promise<string | null> {
+  if (connection.credentialId) {
+    const row = await db.credential.findUnique({ where: { id: connection.credentialId }, select: { secret: true } });
+    if (row) return decryptSecret(row.secret, key);
+  }
+  return decryptSecret(connection.credential, key);
 }

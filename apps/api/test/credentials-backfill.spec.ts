@@ -92,7 +92,7 @@ describe('backfillCredentials: pasted tokens', () => {
     const a = tokenConnection({ token: 'glpat-same' });
     const b = tokenConnection({ token: 'glpat-same', workspaceId: WS_B });
     const db = fakeDb({ connections: [a, b] });
-    expect(await run(db)).toBe(1);
+    expect(await run(db)).toBe(2);
     expect(db.credentials).toHaveLength(1);
     expect(a.credentialId).toBe(db.credentials[0].id);
     expect(b.credentialId).toBe(db.credentials[0].id);

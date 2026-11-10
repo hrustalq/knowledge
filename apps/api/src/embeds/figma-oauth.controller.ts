@@ -98,7 +98,7 @@ export class FigmaOauthController {
       return;
     }
     // No code: the person pressed Cancel on figma.com.
-    const ok = code ? await this.oauth.completeAuthorization(state, code) : false;
-    res.redirect(`${web}${oauthLandingPath('figma', ok ? 'connected' : 'auth-failed', state.returnTo)}`);
+    const outcome = code ? await this.oauth.completeAuthorization(state, code) : 'auth-failed';
+    res.redirect(`${web}${oauthLandingPath('figma', outcome, state.returnTo)}`);
   }
 }

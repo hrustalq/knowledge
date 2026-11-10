@@ -8329,6 +8329,17 @@
         "type": "string",
         "nullable": true
       },
+      "credentialId": {
+        "type": "string",
+        "nullable": true
+      },
+      "ownerId": {
+        "type": "string",
+        "nullable": true
+      },
+      "ownerLeft": {
+        "type": "boolean"
+      },
       "connectors": {
         "type": "array",
         "items": {
@@ -8372,6 +8383,9 @@
       "accountLabel",
       "accountAvatarUrl",
       "credentialHint",
+      "credentialId",
+      "ownerId",
+      "ownerLeft",
       "connectors",
       "createdAt",
       "updatedAt"
@@ -9836,6 +9850,125 @@
     "required": [
       "workspaceId",
       "name"
+    ]
+  },
+  "CredentialResponse": {
+    "type": "object",
+    "properties": {
+      "credential": {
+        "$ref": "#/components/schemas/CredentialSummary"
+      }
+    },
+    "required": [
+      "credential"
+    ]
+  },
+  "CredentialSummary": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "provider": {
+        "$ref": "#/components/schemas/ConnectionProvider"
+      },
+      "method": {
+        "$ref": "#/components/schemas/ConnectionMethod"
+      },
+      "site": {
+        "type": "string",
+        "nullable": true
+      },
+      "accountId": {
+        "type": "string",
+        "nullable": true
+      },
+      "accountLabel": {
+        "type": "string",
+        "nullable": true
+      },
+      "accountAvatarUrl": {
+        "type": "string",
+        "nullable": true
+      },
+      "secretHint": {
+        "type": "string",
+        "nullable": true
+      },
+      "expiresAt": {
+        "type": "string",
+        "nullable": true
+      },
+      "bindable": {
+        "type": "boolean"
+      },
+      "usedBy": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/CredentialUsage"
+        }
+      },
+      "createdAt": {
+        "type": "string"
+      },
+      "updatedAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "provider",
+      "method",
+      "site",
+      "accountId",
+      "accountLabel",
+      "accountAvatarUrl",
+      "secretHint",
+      "expiresAt",
+      "bindable",
+      "usedBy",
+      "createdAt",
+      "updatedAt"
+    ]
+  },
+  "CredentialUsage": {
+    "type": "object",
+    "properties": {
+      "workspaceId": {
+        "type": "string"
+      },
+      "workspaceName": {
+        "type": "string"
+      },
+      "connectionId": {
+        "type": "string"
+      },
+      "connectors": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "workspaceId",
+      "workspaceName",
+      "connectionId",
+      "connectors"
+    ]
+  },
+  "CredentialsResponse": {
+    "type": "object",
+    "properties": {
+      "credentials": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/CredentialSummary"
+        }
+      }
+    },
+    "required": [
+      "credentials"
     ]
   },
   "DecisionCapturePayload": {

@@ -768,7 +768,7 @@ export function credentialSiteFor(provider: ConnectionProvider, site: string | n
  * How an OAuth or App round trip ended (#564). Every callback lands on the web
  * page `/oauth/:provider?outcome=…&returnTo=…`, which says it in words.
  */
-export const OAUTH_OUTCOMES = ['connected', 'installed', 'auth-failed', 'install-failed', 'error'] as const;
+export const OAUTH_OUTCOMES = ['connected', 'installed', 'auth-failed', 'install-failed', 'account-in-use', 'error'] as const;
 export type OauthOutcome = (typeof OAUTH_OUTCOMES)[number];
 
 /** The landing URL a callback redirects to. `returnTo` is already a signed, same-origin path, or absent for a forged state. */
@@ -845,6 +845,16 @@ export interface ConnectionSummary {
   accountAvatarUrl: string | null;
   /** Last-4 hint of a `token` connection. */
   credentialHint: string | null;
+  /** The person's sign-in it dials with (#857); null for an `app` connection. */
+  credentialId: string | null;
+  /** Whose sign-in that is; null for an `app` connection, or a sign-in with no known owner. */
+  ownerId: string | null;
+  /**
+   * The sign-in's owner is no longer a member here (or was never known). It
+   * keeps syncing; an admin should reconnect it with their own account.
+   * Derived from membership on every read, never stored.
+   */
+  ownerLeft: boolean;
   /** The connectors dialing through it — what a delete would strand. */
   connectors: Array<{ id: string; name: string; kind: ConnectorKind; projectId: string }>;
   createdAt: string;
@@ -862,17 +872,74 @@ export interface ConnectionResponse {
   connection: ConnectionSummary;
 }
 
-// POST /v1/connections — identify the token's account; the same account again rotates it.
+// POST /v1/connections — a pasted token (identified, then kept as the caller's
+// credential), or one of the caller's credentials (#857). The same account
+// already connected here moves onto it rather than being added twice.
 export interface CreateTokenConnectionRequest {
   workspaceId: string;
   provider: ConnectionProvider;
   /** Required for providers that are not one fixed host (an Atlassian site, a GitLab instance). */
   site?: string | null;
+  /** A pasted secret. Exactly one of `credential` and `credentialId`. */
+  credential?: string;
+  /** One of the caller's own credentials; anyone else's is refused (403). */
+  credentialId?: string;
+}
+// PATCH /v1/connections/:id — the owner's new token rotates the credential in
+// every workspace using it; anyone else's token, or `credentialId`, moves this
+// connection onto the caller's own sign-in. A token for another account is refused.
+export interface UpdateConnectionRequest {
+  credential?: string;
+  credentialId?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Credentials (#857): one person's sign-in to one upstream account, reused by
+// every workspace they bind it into. Secrets never leave the API.
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether a credential can back a workspace connection. A GitHub sign-in is
+ * who the person browses the App as (doc 30); syncs dial an installation.
+ */
+export function credentialBindable(provider: ConnectionProvider, method: ConnectionMethod): boolean {
+  return !(provider === 'github' && method === 'oauth');
+}
+
+export interface CredentialUsage {
+  workspaceId: string;
+  workspaceName: string;
+  connectionId: string;
+  connectors: string[];
+}
+export interface CredentialSummary {
+  id: string;
+  provider: ConnectionProvider;
+  method: ConnectionMethod;
+  /** The host it works on; null for a fixed host, and for Atlassian, whose token reaches every site. */
+  site: string | null;
+  accountId: string | null;
+  accountLabel: string | null;
+  accountAvatarUrl: string | null;
+  /** Last-4 hint of a pasted token. */
+  secretHint: string | null;
+  expiresAt: string | null;
+  bindable: boolean;
+  /** Where it is in use. A disconnect is refused (409) while any remain. */
+  usedBy: CredentialUsage[];
+  createdAt: string;
+  updatedAt: string;
+}
+// GET /v1/me/credentials
+export interface CredentialsResponse {
+  credentials: CredentialSummary[];
+}
+// PATCH /v1/me/credentials/:id — a new token for the same account, everywhere it is used.
+export interface UpdateCredentialRequest {
   credential: string;
 }
-// PATCH /v1/connections/:id — rotate. A token for another account is refused.
-export interface UpdateConnectionRequest {
-  credential: string;
+export interface CredentialResponse {
+  credential: CredentialSummary;
 }
 
 // GET /v1/connections/wait?workspaceId=&since=

@@ -37,7 +37,7 @@ import { ProjectsService } from '../projects/projects.service.js';
 import { withVisibleWarnings } from './run-visibility.js';
 import { ConnectorRegistry } from './adapters/connector.registry.js';
 import { releaseMirroredAccess } from './connector-acl-release.js';
-import { bindConnection } from './connection-binding.js';
+import { bindConnection, connectionSecret } from './connection-binding.js';
 import { GithubAppService } from './github/github-app.service.js';
 import { FigmaOauthService, pruneFigmaGrants } from '../embeds/figma-oauth.service.js';
 import { SourceSettingsService } from './source-settings.service.js';
@@ -336,7 +336,7 @@ export class ConnectorsService {
    * token, and the 404 classifier in `repo-archive.ts` says so in words.
    */
   private async credentialFor(row: Connector): Promise<Pick<ConnectorContext, 'credential' | 'bearer' | 'renewCredential'>> {
-    // The connection (#564) wins; the inline fallbacks below stay for one
+    // The connection (#564) wins, dialing with its credential (#857); the inline fallbacks below stay for one
     // release, for a connector the boot backfill has not reached yet.
     if (row.connectionId) {
       const connection = await this.prisma.connection.findUnique({ where: { id: row.connectionId } });
@@ -349,7 +349,7 @@ export class ConnectorsService {
         return { credential: connection.externalRef ? await this.githubApp.installationToken(connection.externalRef) : null };
       }
       if (connection.method === 'oauth') return this.figmaGrant(connection.externalRef ?? '');
-      return { credential: decryptSecret(connection.credential, this.key) };
+      return { credential: await connectionSecret(this.prisma, connection, this.key) };
     }
 
     const config = (row.config ?? {}) as Record<string, unknown>;

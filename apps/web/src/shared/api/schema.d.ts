@@ -4642,7 +4642,7 @@ export interface paths {
         /** List the workspace's connections and the connectors using each */
         get: operations["ConnectionsController_list"];
         put?: never;
-        /** Save a token as a connection; the same account again rotates it */
+        /** Connect a pasted token, or one of the caller's credentials; the same account again moves onto it */
         post: operations["ConnectionsController_create"];
         delete?: never;
         options?: never;
@@ -4681,7 +4681,7 @@ export interface paths {
         delete: operations["ConnectionsController_remove"];
         options?: never;
         head?: never;
-        /** Rotate a token connection's token (same account only) */
+        /** Rotate a token connection (same account only), or move it onto the caller's own credential */
         patch: operations["ConnectionsController_update"];
         trace?: never;
     };
@@ -4734,6 +4734,41 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/v1/me/credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** My connected accounts, and the workspaces using each */
+        get: operations["CredentialsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/credentials/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Disconnect one of my credentials (409 while a workspace uses it) */
+        delete: operations["CredentialsController_remove"];
+        options?: never;
+        head?: never;
+        /** Rotate one of my credentials (same account only), in every workspace using it */
+        patch: operations["CredentialsController_rotate"];
         trace?: never;
     };
     "/v1/lint-policy": {
@@ -9649,12 +9684,22 @@ export interface components {
             provider: "github" | "gitlab" | "git" | "atlassian" | "confluence-server" | "notion" | "google" | "linear" | "zendesk" | "intercom" | "figma" | "web";
             /** @description The site for providers that are not one fixed host: an Atlassian site, a GitLab instance (gitlab.com when empty) */
             site?: string | null;
-            /** @description Write-only. Encrypted at rest; never returned. */
-            credential: string;
+            /** @description A pasted secret. Write-only; encrypted at rest, never returned. Exactly one of credential and credentialId. */
+            credential?: string;
+            /**
+             * Format: uuid
+             * @description One of the caller's own credentials (#857); anyone else's is refused
+             */
+            credentialId?: string;
         };
         UpdateConnectionDto: {
-            /** @description A new token for the same account. Write-only. */
-            credential: string;
+            /** @description A new token for the same account. The owner's rotates the credential everywhere; anyone else's moves this connection onto their own. Write-only. */
+            credential?: string;
+            /**
+             * Format: uuid
+             * @description Move this connection onto one of the caller's own credentials (#857)
+             */
+            credentialId?: string;
         };
         ConnectionLinkDto: {
             /** @enum {string} */
@@ -9669,6 +9714,10 @@ export interface components {
         };
         CreateConnectionLinksDto: {
             links: components["schemas"]["ConnectionLinkDto"][];
+        };
+        UpdateCredentialDto: {
+            /** @description A new token for the same account, in every workspace using it. Write-only. */
+            credential: string;
         };
         UpdateLintPolicyDto: {
             /** Format: uuid */
@@ -12567,6 +12616,9 @@ export interface components {
             accountLabel: string | null;
             accountAvatarUrl: string | null;
             credentialHint: string | null;
+            credentialId: string | null;
+            ownerId: string | null;
+            ownerLeft: boolean;
             connectors: {
                 id: string;
                 name: string;
@@ -12921,6 +12973,33 @@ export interface components {
         CreateWorkspaceResponse: {
             workspaceId: string;
             name: string;
+        };
+        CredentialResponse: {
+            credential: components["schemas"]["CredentialSummary"];
+        };
+        CredentialSummary: {
+            id: string;
+            provider: components["schemas"]["ConnectionProvider"];
+            method: components["schemas"]["ConnectionMethod"];
+            site: string | null;
+            accountId: string | null;
+            accountLabel: string | null;
+            accountAvatarUrl: string | null;
+            secretHint: string | null;
+            expiresAt: string | null;
+            bindable: boolean;
+            usedBy: components["schemas"]["CredentialUsage"][];
+            createdAt: string;
+            updatedAt: string;
+        };
+        CredentialUsage: {
+            workspaceId: string;
+            workspaceName: string;
+            connectionId: string;
+            connectors: string[];
+        };
+        CredentialsResponse: {
+            credentials: components["schemas"]["CredentialSummary"][];
         };
         DecisionCapturePayload: {
             context: string;
@@ -32302,6 +32381,132 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConnectionLinksResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    CredentialsController_list: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CredentialsResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    CredentialsController_remove: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    CredentialsController_rotate: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCredentialDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CredentialResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

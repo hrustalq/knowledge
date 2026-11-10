@@ -35,6 +35,20 @@ in the pull request that introduces them — see
   has no audio (`audioAvailable: false`), its `source` is `plaud`, and its title is `Plaud · <start time>`; the name
   Plaud gave the recording is kept as its `filename`. (#864)
 
+- **Plaud recordings can be picked up automatically, by rules, with a yes or no on each.**
+  `PUT /v1/plaud/settings { workspaceId, projectId, rules }` (editor) saves where a person's picked recordings go and
+  which ones are picked: `since` (defaults to the day the settings were first saved, so linking imports no backlog),
+  `minSeconds` (default 120), `nameIncludes`, `nameExcludes`, `serial`, and `confirm`: `ask` (default) or `auto`. A
+  null `projectId` switches auto-import off and keeps the rules. `GET /v1/plaud/settings` returns them with what
+  applies once defaults are filled in. About every ten minutes the API lists each person's recent recordings as that
+  person and records the ones their rules pick; `GET /v1/plaud/imports` lists them. A picked recording is `waiting`
+  until Plaud has transcribed it, which the person starts in the Plaud app. Then, under `ask`, it becomes `pending`
+  and its owner gets one notification with a count and no recording name; under `auto` it is imported.
+  `POST /v1/plaud/imports/confirm { workspaceId, ids }` imports now, or as soon as Plaud has a transcript.
+  `POST /v1/plaud/imports/skip` is final: a skipped recording is never offered again. Nothing of a recording's speech
+  is read or stored before it becomes a memo. The sweep only looks 14 days back. Whether the person is still an
+  editor is checked on every pass, and a lapsed Plaud sign-in is reported to them once. (#864)
+
 ### Operations
 
 - New optional variable `PLAUD_OAUTH_CLIENT_ID`, empty by default, which leaves every Plaud route answering "not set
@@ -44,6 +58,10 @@ in the pull request that introduces them — see
   `SETTINGS_ENCRYPTION_KEY`, as Figma sign-in does.
 - Migration `20270105100000_memo_source` adds `memos.source` (default `upload`), nullable `memos.external_id` and a
   unique index over them. It is additive and survives a rollback to the previous release.
+- New optional variable `PLAUD_AUTO_IMPORT_MAX_PER_DAY` (default 10): auto mode imports nothing more for a person once
+  that many of their Plaud recordings were imported in a day. A recording they confirm still goes through.
+- Migration `20270106100000_plaud_queue` adds the `plaud_links` and `plaud_imports` tables. New tables only, so it
+  survives a rollback. Unlinking a Plaud account or deleting a workspace removes their rows.
 
 ## [0.47.0] — 2026-11-10
 

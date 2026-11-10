@@ -139,6 +139,68 @@ export interface PlaudLinkResponse {
   needsReconnect: boolean;
 }
 
+/**
+ * Which recordings auto-import picks. Sparse: an absent key takes
+ * `PLAUD_RULE_DEFAULTS`, and `since` defaults to the day the settings were
+ * first saved, so linking never imports a backlog.
+ */
+export interface PlaudRules {
+  /** Only recordings started on or after this day (`YYYY-MM-DD`). */
+  since?: string;
+  /** Only recordings at least this long. */
+  minSeconds?: number;
+  /** Only recordings whose Plaud name contains this, ignoring case. */
+  nameIncludes?: string;
+  /** Never recordings whose Plaud name contains this, ignoring case. */
+  nameExcludes?: string;
+  /** Only recordings from the device with this serial number. */
+  serial?: string;
+  /** `ask`: each picked recording waits for the person. `auto`: it is imported as soon as Plaud has transcribed it. */
+  confirm?: PlaudConfirmMode;
+}
+export const PLAUD_CONFIRM_MODES = ['ask', 'auto'] as const;
+export type PlaudConfirmMode = (typeof PLAUD_CONFIRM_MODES)[number];
+export const PLAUD_RULE_DEFAULTS = { minSeconds: 120, confirm: 'ask' } as const satisfies PlaudRules;
+
+/**
+ * `waiting`: picked, but Plaud has not transcribed it (the person does that in
+ * the Plaud app). `pending`: transcribed, waiting for the person. `confirmed`:
+ * the person said yes ahead of the transcript. `skipped` is final: it is never
+ * offered again. `failed` can be confirmed again.
+ */
+export const PLAUD_IMPORT_STATUSES = ['waiting', 'pending', 'confirmed', 'skipped', 'imported', 'failed'] as const;
+export type PlaudImportStatus = (typeof PLAUD_IMPORT_STATUSES)[number];
+
+// GET / PUT /v1/plaud/settings
+export interface PlaudSettingsResponse {
+  /** Where picked recordings go; null = auto-import is off in this workspace. */
+  projectId: string | null;
+  /** As saved: sparse. */
+  rules: PlaudRules;
+  /** What applies once the defaults are filled in. */
+  effective: Required<Pick<PlaudRules, 'since' | 'minSeconds' | 'confirm'>>;
+  /** The most auto mode imports for one person in a day on this server. */
+  maxPerDay: number;
+}
+
+export interface PlaudImportEntry {
+  id: string;
+  /** Plaud's name for the recording. */
+  name: string;
+  startAt: string | null;
+  durationSeconds: number;
+  status: PlaudImportStatus;
+  /** The memo it became. */
+  memoId: string | null;
+  error: string | null;
+  createdAt: string;
+}
+
+// GET /v1/plaud/imports, POST /v1/plaud/imports/confirm | skip
+export interface PlaudImportsResponse {
+  imports: PlaudImportEntry[];
+}
+
 // GET /v1/plaud/authorize
 export interface PlaudAuthorizeResponse {
   url: string;

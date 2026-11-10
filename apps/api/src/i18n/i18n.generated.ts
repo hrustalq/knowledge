@@ -907,6 +907,7 @@ export type I18nTranslations = {
             "plaudNotLinked": string;
             "plaudNotTranscribed": string;
             "plaudFailed": string;
+            "plaudNoProject": string;
             "disabled": string;
             "unsupportedFormat": string;
             "tooLarge": string;

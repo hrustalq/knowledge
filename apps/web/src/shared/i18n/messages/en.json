@@ -4649,6 +4649,8 @@
       "connector.harvest.proposed": "a resolved item you closed was harvested into captures for review",
       "memo.done": "your memo was read and its proposals opened for review",
       "memo.failed": "your memo could not be analysed",
+      "plaud.pending": "Plaud recordings are waiting for your confirmation",
+      "plaud.reconnect": "your Plaud sign-in lapsed: link the account again",
       "source.updated": "took a new version from its source",
       "source.alert": "needs attention: its source"
     },

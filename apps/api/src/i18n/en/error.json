@@ -213,6 +213,7 @@
     "plaudNotLinked": "Link your Plaud account first, or link it again if the sign-in lapsed.",
     "plaudNotTranscribed": "Plaud has not transcribed this recording yet. Generate its transcript in the Plaud app, then import it.",
     "plaudFailed": "Plaud could not be read just now. Try again.",
+    "plaudNoProject": "Choose the project Plaud recordings go to first.",
     "disabled": "Memos are off on this server: set {variable} to turn on transcription.",
     "unsupportedFormat": "{filename} is not a recording memos take. Accepted: {accepted}.",
     "tooLarge": "That recording is {size}; the limit is {limit}.",

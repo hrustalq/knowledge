@@ -9,6 +9,8 @@ export interface PlaudRecording {
   /** When the recording started, ISO without a zone; `created_at` is when it reached Plaud. */
   startAt: string | null;
   durationSeconds: number;
+  /** The device it was recorded on, when Plaud says. */
+  serial: string | null;
 }
 
 /** One utterance of Plaud's transcript, in seconds. */
@@ -23,6 +25,9 @@ export interface PlaudUtterance {
 const PAGE = 500;
 // ponytail: 40 pages = 20,000 utterances, far past MEMO_MAX_MINUTES of speech; raise with that limit.
 const MAX_PAGES = 40;
+const LIST_PAGE = 100;
+// ponytail: 5 pages = 500 recordings inside the lookback window; more than that in two weeks is not a person's device.
+const MAX_LIST_PAGES = 5;
 
 /**
  * Reads a person's Plaud recordings as that person (#864). Every call dials
@@ -35,10 +40,35 @@ export class PlaudService {
 
   /** Null when the person has no usable Plaud sign-in. */
   async recording(userId: string, fileId: string): Promise<PlaudRecording | null> {
-    const file = await this.call<{ id?: string; name?: string; start_at?: string | null; duration?: number }>(userId, 'get_file', { file_id: fileId });
+    const file = await this.call<RawFile>(userId, 'get_file', { file_id: fileId });
     if (file === null) return null;
-    if (typeof file.id !== 'string' || typeof file.duration !== 'number') throw new PlaudError('Plaud answered in a shape this version does not read');
-    return { id: file.id, name: typeof file.name === 'string' ? file.name : '', startAt: file.start_at ?? null, durationSeconds: Math.round(file.duration / 1000) };
+    return toRecording(file);
+  }
+
+  /**
+   * The person's recordings started on or after `from` (`YYYY-MM-DD`), newest
+   * first. Null when they have no usable sign-in.
+   */
+  async list(userId: string, from: string): Promise<PlaudRecording[] | null> {
+    const out = new Map<string, PlaudRecording>();
+    for (let page = 1; page <= MAX_LIST_PAGES; page += 1) {
+      const answer = await this.call<{ data?: RawFile[] }>(userId, 'list_files', { date_from: from, page, page_size: LIST_PAGE });
+      if (answer === null) return null;
+      if (!Array.isArray(answer.data)) throw new PlaudError('Plaud answered in a shape this version does not read');
+      const before = out.size;
+      for (const file of answer.data) out.set(String(file.id), toRecording(file));
+      // A short page is the last one; a page that adds nothing means paging was ignored.
+      if (answer.data.length < LIST_PAGE || out.size === before) break;
+    }
+    return [...out.values()];
+  }
+
+  /** Whether Plaud has a transcript for it yet: one utterance is asked for, not the transcript. Null = no usable sign-in. */
+  async transcribed(userId: string, fileId: string): Promise<boolean | null> {
+    const answer = await this.call<TranscriptPage>(userId, 'get_transcript', { file_id: fileId, limit: 1 });
+    if (answer === null) return null;
+    const segments = Array.isArray(answer) ? answer : answer.segments;
+    return Array.isArray(segments) && segments.length > 0;
   }
 
   /**
@@ -80,6 +110,25 @@ export class PlaudService {
       return renewed ? plaudTool<T>(renewed, tool, args) : null;
     }
   }
+}
+
+interface RawFile {
+  id?: string;
+  name?: string;
+  start_at?: string | null;
+  duration?: number;
+  serial_number?: string | null;
+}
+
+function toRecording(file: RawFile): PlaudRecording {
+  if (typeof file?.id !== 'string' || typeof file.duration !== 'number') throw new PlaudError('Plaud answered in a shape this version does not read');
+  return {
+    id: file.id,
+    name: typeof file.name === 'string' ? file.name : '',
+    startAt: file.start_at ?? null,
+    durationSeconds: Math.round(file.duration / 1000),
+    serial: file.serial_number ?? null,
+  };
 }
 
 interface RawSegment {

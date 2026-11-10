@@ -2344,6 +2344,12 @@ model Connection {
   /// Installation id (`app`) or Figma grant id (`oauth`).
   externalRef    String? @map("external_ref")
 
+  /// The person's sign-in this connection dials with (#857), for `token` and
+  /// `oauth`; null for `app`, which belongs to an installation, not a person.
+  /// RESTRICT: a credential in use is refused, not cascaded away.
+  credentialId  String?     @map("credential_id") @db.Uuid
+  credentialRow Credential? @relation(fields: [credentialId], references: [id], onDelete: Restrict)
+
   createdBy String?  @map("created_by") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
@@ -2353,6 +2359,7 @@ model Connection {
   /// One row per installation or grant in a workspace. Token rows carry a
   /// null external_ref, which Postgres never counts as a duplicate.
   @@unique([workspaceId, provider, method, externalRef])
+  @@index([credentialId])
   @@map("connections")
 }
 
@@ -3178,6 +3185,63 @@ model FigmaOauthGrant {
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   @@map("figma_oauth_grants")
+}
+
+/// One person's sign-in to one upstream account (#857), shared by every
+/// workspace connection that names it, so one rotation reaches them all.
+///
+/// Belongs to a person, not a workspace: a workspace deletion removes its
+/// connections and keeps this. Replaces `github_user_tokens`,
+/// `figma_oauth_grants` and `connections.credential`, which stay readable for
+/// one release (expand/contract).
+///
+/// No unique key, on purpose: `site`, `account_id` and `user_id` are nullable,
+/// and Postgres never counts two NULLs as a duplicate. The one writer matches
+/// instead — a pasted token by its decrypted secret (two fine-grained tokens
+/// for one account reach different repositories, so they are never merged),
+/// a sign-in by its account (Figma's across every owner: one token per app
+/// per Figma user).
+model Credential {
+  id     String  @id @default(uuid()) @db.Uuid
+  /// The owner, the only person who may bind it into a workspace. No FK, per
+  /// house policy; null for a row backfilled with no known owner.
+  userId String? @map("user_id") @db.Uuid
+
+  /// ConnectionProvider.
+  provider String
+  /// 'token' | 'oauth'.
+  method   String
+  /// The host the secret works on (a GitLab instance, a Zendesk site); null
+  /// for a fixed host, and for `atlassian`, whose token reaches every site the
+  /// account can (`credentialSiteFor`).
+  site     String?
+
+  /// Who it is upstream, from the identify probe or the OAuth answer. Null
+  /// for a host with no account API (git, web) or a row never probed.
+  accountId        String? @map("account_id")
+  accountLabel     String? @map("account_label")
+  accountAvatarUrl String? @map("account_avatar_url")
+
+  /// secret-box envelopes ("gcm$iv$tag$ct"). Never leave the API.
+  secret        String
+  /// Last-4 hint, as on connections.
+  secretHint    String? @map("secret_hint")
+  refreshSecret String? @map("refresh_secret")
+
+  expiresAt        DateTime? @map("expires_at") @db.Timestamptz
+  refreshExpiresAt DateTime? @map("refresh_expires_at") @db.Timestamptz
+  /// The refresh lease, as on `figma_oauth_grants`: the API and the worker
+  /// never refresh the same sign-in at once.
+  refreshingUntil  DateTime? @map("refreshing_until") @db.Timestamptz
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  connections Connection[]
+
+  @@index([userId, provider])
+  @@index([provider, method, accountId])
+  @@map("credentials")
 }
 
 /// A workspace's canonical spelling for an entity key: `сервис:биллинг` →

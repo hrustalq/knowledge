@@ -4,10 +4,12 @@ import { parseKey } from '../ai/secret-box.js';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { bindConnection } from './connection-binding.js';
+import { backfillCredentials } from './credentials.backfill.js';
 
 /**
  * Gives every connector that has none its connection, and every recorded
- * GitHub App installation its `app` connection (#564), at API boot.
+ * GitHub App installation its `app` connection (#564), then moves every
+ * sign-in into `credentials` (#857), at API boot.
  *
  * Here rather than in the migration: the provider comes from
  * `connectionProviderFor` and equal tokens are found by decrypting, and SQL
@@ -52,6 +54,9 @@ export class ConnectionsBackfill implements OnApplicationBootstrap {
         update: {},
       });
     }
+    // Last: it reads the token connections the binding above just created.
+    const moved = await backfillCredentials(this.prisma, key);
+    if (moved) this.logger.log(`moved ${moved} sign-in(s) into credentials`);
     return bound;
   }
 }

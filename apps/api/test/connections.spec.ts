@@ -61,6 +61,9 @@ function fakeDb(connectors: Row[], installations: Array<Record<string, unknown>>
       findUnique: vi.fn(async () => ({ accountLogin: 'acme', accountAvatarUrl: null })),
       findMany: vi.fn(async () => installations),
     },
+    // The credentials step (#857) has its own spec; nothing to move here.
+    githubUserToken: { findMany: vi.fn(async () => []) },
+    figmaOauthGrant: { findMany: vi.fn(async () => []) },
   };
   return db;
 }

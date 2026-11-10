@@ -7424,12 +7424,30 @@
         "analysing": "reading the transcript",
         "publishing": "opening merge requests"
       },
-      "inFlight": {
-        "pending": "The recording is still uploading.",
-        "uploaded": "Waiting for a worker to transcribe it.",
-        "transcribing": "Transcribing the recording. This takes a fraction of its length.",
-        "transcribed": "Transcribed. Reading it against the knowledge base next.",
-        "analysing": "Reading the transcript against the knowledge base."
+      "step": {
+        "upload": "Upload",
+        "transcribe": "Transcription",
+        "analyse": "Reading against the knowledge base",
+        "publish": "Merge requests"
+      },
+      "progress": {
+        "title": "Progress",
+        "since": "Since {when}",
+        "slow": "longer than usual; nothing has picked it up yet",
+        "upload": {
+          "running": "The recording is still uploading."
+        },
+        "transcribe": {
+          "waiting": "Waiting for a worker to transcribe it.",
+          "running": "Transcribing the recording. This takes a fraction of its length."
+        },
+        "analyse": {
+          "waiting": "Transcribed. Waiting for the agent to pick it up.",
+          "running": "The agent is reading the transcript against the knowledge base."
+        },
+        "publish": {
+          "waiting": "The agent has finished. Its proposals are being opened as merge requests."
+        }
       },
       "noTranscript": "The transcript appears here once the recording is transcribed.",
       "dropReason": {

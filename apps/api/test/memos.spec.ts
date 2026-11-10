@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ConflictException, NotFoundException, PayloadTooLargeException, ServiceUnavailableException } from '@nestjs/common';
-import { memoExtensionFor } from '@knowledge/contracts';
+import { memoExtensionFor, memoProgressFor } from '@knowledge/contracts';
 import { MemosService, transcriptionState } from '../src/memos/memos.service.js';
 import type { Principal } from '../src/auth/principal.js';
 import { stitchTranscript } from '../src/memos/transcript.js';
@@ -59,6 +59,27 @@ describe('memo chunk cuts (#584)', () => {
   it('keeps ten-minute pieces for a server that times its own segments', () => {
     expect(fixedCuts(599)).toEqual([]);
     expect(fixedCuts(1300)).toEqual([600, 1200]);
+  });
+});
+
+describe('memoProgressFor (#876)', () => {
+  const at = '2026-11-10T10:00:00.000Z';
+  const run = (status: string) => ({ status, createdAt: '2026-11-10T10:01:00.000Z', startedAt: status === 'pending' ? null : '2026-11-10T10:02:00.000Z', finishedAt: status === 'succeeded' ? '2026-11-10T10:03:00.000Z' : null });
+  const of = (status: string, r: ReturnType<typeof run> | null = null) => memoProgressFor({ status: status as never, updatedAt: at }, r);
+
+  it('names the step and whether anything has picked it up', () => {
+    expect(of('uploaded')).toEqual({ step: 'transcribe', state: 'waiting', since: at });
+    expect(of('transcribing')?.state).toBe('running');
+    // A Plaud memo arrives here: a transcript, and no run yet.
+    expect(of('transcribed')).toEqual({ step: 'analyse', state: 'waiting', since: at });
+    expect(of('analysing', run('pending'))).toEqual({ step: 'analyse', state: 'waiting', since: '2026-11-10T10:01:00.000Z' });
+    expect(of('analysing', run('running'))).toEqual({ step: 'analyse', state: 'running', since: '2026-11-10T10:02:00.000Z' });
+  });
+
+  it('says a finished run is waiting for its merge requests, and nothing once the memo has settled', () => {
+    expect(of('analysing', run('succeeded'))).toEqual({ step: 'publish', state: 'waiting', since: '2026-11-10T10:03:00.000Z' });
+    expect(of('done', run('succeeded'))).toBeNull();
+    expect(of('failed')).toBeNull();
   });
 });
 

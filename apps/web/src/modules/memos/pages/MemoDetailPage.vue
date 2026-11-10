@@ -20,14 +20,15 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
-import { FilePlus2, FilePen, GitPullRequestArrow, Lock, RotateCcw } from 'lucide-vue-next'
-import { memoClock, type MemoDetailResponse, type MemoProposal } from '@knowledge/contracts'
+import { useNow } from '@vueuse/core'
+import { Check, Circle, FilePlus2, FilePen, GitPullRequestArrow, Loader2, Lock, RotateCcw } from 'lucide-vue-next'
+import { MEMO_STEPS, memoClock, type MemoDetailResponse, type MemoProposal } from '@knowledge/contracts'
 import { request } from '@/shared/api/client'
 import { errorMessage } from '@/shared/api/errors'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { Button } from '@/shared/ui/button'
 import { apiUrl } from '@/shared/api/api'
-import { formatDateTime, formatDuration } from '@/shared/utils/format'
+import { formatDateTime, formatDuration, formatRelative } from '@/shared/utils/format'
 import { PageLayout, PageState } from '@/shared/layout'
 import MemoActions from '@/modules/memos/components/MemoActions.vue'
 import { MEMO_STATUS_CLASS, MEMO_STATUS_ICON, isMemoInFlight, segmentAt } from '@/modules/memos/model/memo-ui'
@@ -48,6 +49,27 @@ const memoQuery = useQuery(
 const data = computed(() => memoQuery.data.value as MemoDetailResponse | undefined)
 const memo = computed(() => data.value?.memo)
 const transcript = computed(() => data.value?.transcript ?? [])
+
+/**
+ * Where the memo is on its way (#876): the steps behind it, the one it is in
+ * and the ones ahead. A Plaud memo never uploads, and is transcribed here
+ * only when its owner asked for that.
+ */
+const SLOW_MS = 5 * 60_000
+const now = useNow({ interval: 30_000 })
+const steps = computed(() => {
+  const progress = data.value?.progress
+  if (!progress || !memo.value) return []
+  const plaud = memo.value.source === 'plaud'
+  const shown = MEMO_STEPS.filter((s) => !plaud || (s !== 'upload' && (s !== 'transcribe' || progress.step === 'transcribe')))
+  const at = shown.indexOf(progress.step)
+  return shown.map((step, i) => ({ step, at: i < at ? ('done' as const) : i === at ? ('current' as const) : ('ahead' as const) }))
+})
+/** Nothing has picked the step up for a while: said plainly, since the page cannot fix it. */
+const slow = computed(() => {
+  const progress = data.value?.progress
+  return Boolean(progress && progress.state === 'waiting' && now.value.getTime() - new Date(progress.since).getTime() > SLOW_MS)
+})
 
 const player = ref<HTMLAudioElement | null>(null)
 const lines = ref<HTMLElement | null>(null)
@@ -207,9 +229,24 @@ const retry = () => act(() => request('post', '/v1/memos/{id}/retry', { path: { 
           <p v-if="memo.language" class="text-muted-foreground text-xs">{{ t('memos.detail.language', { language: memo.language }) }}</p>
         </div>
 
-        <p v-if="isMemoInFlight(memo.status)" role="status" class="text-muted-foreground text-sm">
-          {{ t(`memos.detail.inFlight.${memo.status}`) }}
-        </p>
+        <section v-if="data.progress" role="status" :aria-label="t('memos.detail.progress.title')">
+          <ol class="space-y-2 text-sm">
+            <li v-for="s in steps" :key="s.step" class="flex items-start gap-2.5" :aria-current="s.at === 'current' ? 'step' : undefined">
+              <Check v-if="s.at === 'done'" class="text-muted-foreground mt-0.5 size-4 shrink-0" aria-hidden="true" />
+              <Loader2 v-else-if="s.at === 'current' && data.progress.state === 'running'" class="text-primary mt-0.5 size-4 shrink-0 motion-safe:animate-spin" aria-hidden="true" />
+              <Circle v-else class="mt-0.5 size-4 shrink-0" :class="s.at === 'current' ? 'text-primary' : 'text-muted-foreground/50'" aria-hidden="true" />
+              <div class="min-w-0">
+                <p :class="s.at === 'current' ? 'font-medium' : 'text-muted-foreground'">{{ t(`memos.detail.step.${s.step}`) }}</p>
+                <template v-if="s.at === 'current'">
+                  <p class="text-muted-foreground">{{ t(`memos.detail.progress.${s.step}.${data.progress.state}`) }}</p>
+                  <p class="text-muted-foreground text-xs" :title="formatDateTime(data.progress.since)">
+                    {{ t('memos.detail.progress.since', { when: formatRelative(data.progress.since) }) }}<template v-if="slow"> · {{ t('memos.detail.progress.slow') }}</template>
+                  </p>
+                </template>
+              </div>
+            </li>
+          </ol>
+        </section>
         <div v-else-if="memo.status === 'failed'" role="alert" class="border-destructive/40 rounded-md border px-3 py-2 text-sm">
           <p class="text-destructive font-medium">{{ t('memos.detail.failed', { stage: t(`memos.detail.stage.${memo.stage ?? 'transcribing'}`) }) }}</p>
           <p v-if="memo.error" class="text-muted-foreground mt-1">{{ memo.error }}</p>

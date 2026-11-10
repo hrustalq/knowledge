@@ -5120,6 +5120,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/plaud/imports/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Look at my Plaud account now instead of waiting for the next pass; at most once in 30 seconds */
+        post: operations["PlaudController_refresh"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/plaud/imports/confirm": {
         parameters: {
             query?: never;
@@ -10023,6 +10040,10 @@ export interface components {
              */
             projectId: string | null;
             rules: components["schemas"]["PlaudRulesDto"];
+        };
+        PlaudRefreshDto: {
+            /** Format: uuid */
+            workspaceId: string;
         };
         PlaudImportIdsDto: {
             /** Format: uuid */
@@ -33985,6 +34006,50 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaudImportsResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    PlaudController_refresh: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlaudRefreshDto"];
+            };
+        };
+        responses: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };

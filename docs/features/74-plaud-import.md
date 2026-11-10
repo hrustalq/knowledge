@@ -205,6 +205,7 @@ REST, all `@Feature('memos')`, each `@Access` + `@Returns` except the callback:
 | `GET /v1/plaud/settings`               | viewer | project, rules saved and applied, `transcribe: { enabled, limitSeconds, remainingSeconds }` |
 | `PUT /v1/plaud/settings`               | editor | `{ workspaceId, projectId, rules }`                                    |
 | `GET /v1/plaud/imports`                | viewer | my queue                                                               |
+| `POST /v1/plaud/imports/refresh`       | editor | `{ workspaceId }`: my own pass now, at most once in 30 s (#873)        |
 | `POST /v1/plaud/imports/confirm`       | editor | `{ workspaceId, ids }`: import now, or when Plaud has a transcript     |
 | `POST /v1/plaud/imports/skip`          | editor | `{ workspaceId, ids }`: final                                          |
 | `POST /v1/plaud/imports/transcribe`    | editor | `{ workspaceId, id }`: "Transcribe here"                               |

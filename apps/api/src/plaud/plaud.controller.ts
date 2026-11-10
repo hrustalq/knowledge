@@ -18,7 +18,7 @@ import type { Env } from '../config/env.js';
 import { t } from '../i18n/t.js';
 import { PlaudImportsService } from './plaud-imports.service.js';
 import { PlaudOauthService } from './plaud-oauth.service.js';
-import { PlaudImportIdsDto, PlaudImportsQueryDto, PlaudTranscribeDto, SavePlaudSettingsDto } from './plaud.dto.js';
+import { PlaudImportIdsDto, PlaudImportsQueryDto, PlaudRefreshDto, PlaudTranscribeDto, SavePlaudSettingsDto } from './plaud.dto.js';
 
 /**
  * A person's Plaud account (#864). The sign-in is the caller's own: every
@@ -97,6 +97,15 @@ export class PlaudController {
   @ApiOperation({ summary: 'The Plaud recordings my rules picked, newest first' })
   async listImports(@Query() query: PlaudImportsQueryDto, @CurrentPrincipal() principal: Principal): Promise<PlaudImportsResponse> {
     return { imports: await this.imports.list(principal.userId, query.workspaceId, query.status) };
+  }
+
+  /** Editor, like the sweep it stands in for: a pass can import under `auto`. */
+  @Post('imports/refresh')
+  @Returns('PlaudImportsResponse')
+  @Access('editor', 'body')
+  @ApiOperation({ summary: 'Look at my Plaud account now instead of waiting for the next pass; at most once in 30 seconds' })
+  async refresh(@Body() dto: PlaudRefreshDto, @CurrentPrincipal() principal: Principal): Promise<PlaudImportsResponse> {
+    return { imports: await this.imports.refresh(principal, dto.workspaceId) };
   }
 
   @Post('imports/confirm')

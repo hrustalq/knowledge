@@ -20,16 +20,16 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
-import { FilePlus2, FilePen, GitPullRequestArrow, Lock, RotateCcw, Trash2 } from 'lucide-vue-next'
+import { FilePlus2, FilePen, GitPullRequestArrow, Lock, RotateCcw } from 'lucide-vue-next'
 import { memoClock, type MemoDetailResponse, type MemoProposal } from '@knowledge/contracts'
 import { request } from '@/shared/api/client'
 import { errorMessage } from '@/shared/api/errors'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { Button } from '@/shared/ui/button'
-import { confirm } from '@/shared/ui/confirm'
 import { apiUrl } from '@/shared/api/api'
 import { formatDateTime, formatDuration } from '@/shared/utils/format'
 import { PageLayout, PageState } from '@/shared/layout'
+import MemoActions from '@/modules/memos/components/MemoActions.vue'
 import { MEMO_STATUS_CLASS, MEMO_STATUS_ICON, isMemoInFlight, segmentAt } from '@/modules/memos/model/memo-ui'
 
 const { t } = useI18n()
@@ -123,20 +123,6 @@ async function act(run: () => Promise<unknown>) {
 }
 
 const retry = () => act(() => request('post', '/v1/memos/{id}/retry', { path: { id: id.value } }))
-
-async function remove() {
-  const ok = await confirm({
-    title: t('memos.detail.deleteTitle'),
-    description: t('memos.detail.deleteBody'),
-    action: t('memos.detail.delete'),
-    destructive: true,
-  })
-  if (!ok) return
-  await act(async () => {
-    await request('delete', '/v1/memos/{id}', { path: { id: id.value } })
-    await router.push('/memos')
-  })
-}
 </script>
 
 <template>
@@ -159,9 +145,7 @@ async function remove() {
       <Button v-if="memo.status === 'failed'" size="sm" :disabled="acting" @click="retry">
         <RotateCcw class="size-4" aria-hidden="true" />{{ t('memos.detail.retry') }}
       </Button>
-      <Button size="sm" variant="ghost" :disabled="acting" @click="remove">
-        <Trash2 class="size-4" aria-hidden="true" />{{ t('memos.detail.delete') }}
-      </Button>
+      <MemoActions :memo-id="memo.memoId" :title="memo.title" @deleted="router.push('/memos')" />
     </template>
     <template #meta>
       <p class="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">

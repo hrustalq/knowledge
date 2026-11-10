@@ -19,6 +19,7 @@ import { getWorkspaceId } from '@/shared/api/api'
 import { formatDateTime, formatDuration, formatRelative } from '@/shared/utils/format'
 import { useProjectsStore } from '@/stores/projects'
 import { PageLayout, PageState } from '@/shared/layout'
+import MemoActions from '@/modules/memos/components/MemoActions.vue'
 import MemoUpload from '@/modules/memos/components/MemoUpload.vue'
 import PlaudPanel from '@/modules/memos/components/PlaudPanel.vue'
 import { MEMO_STATUS_CLASS, MEMO_STATUS_ICON, isMemoInFlight } from '@/modules/memos/model/memo-ui'
@@ -68,10 +69,10 @@ const memos = computed(() => data.value?.memos ?? [])
       <p v-if="!memos.length" class="text-muted-foreground kn-measure text-sm">{{ t('memos.empty') }}</p>
 
       <ul v-else class="divide-y rounded-lg border bg-card">
-        <li v-for="m in memos" :key="m.memoId">
+        <li v-for="m in memos" :key="m.memoId" class="hover:bg-muted/50 flex items-center pr-2">
           <RouterLink
             :to="`/memos/${m.memoId}`"
-            class="hover:bg-muted/50 focus-visible:ring-ring flex items-center gap-3 px-4 py-3 outline-none focus-visible:ring-2 focus-visible:ring-inset"
+            class="focus-visible:ring-ring flex min-w-0 flex-1 items-center gap-3 py-3 pr-2 pl-4 outline-none focus-visible:ring-2 focus-visible:ring-inset"
           >
             <component
               :is="MEMO_STATUS_ICON[m.status]"
@@ -88,6 +89,7 @@ const memos = computed(() => data.value?.memos ?? [])
               </p>
             </div>
           </RouterLink>
+          <MemoActions :memo-id="m.memoId" :title="m.title" />
         </li>
       </ul>
     </template>

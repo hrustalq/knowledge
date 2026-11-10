@@ -15,7 +15,7 @@ import { useI18n } from 'vue-i18n'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { useDocumentVisibility } from '@vueuse/core'
 import { toast } from 'vue-sonner'
-import { AudioLines, ChevronRight, Hourglass, RefreshCw, SlidersHorizontal, TriangleAlert } from 'lucide-vue-next'
+import { AudioLines, ChevronRight, Hourglass, MoreVertical, RefreshCw, SlidersHorizontal, TriangleAlert } from 'lucide-vue-next'
 import type { PlaudImportEntry, PlaudImportsResponse, PlaudLinkResponse, PlaudSettingsResponse } from '@knowledge/contracts'
 import { openOauthTab } from '@/entities/connector'
 import { api, request } from '@/shared/api/client'
@@ -25,6 +25,7 @@ import { formatDateTime, formatDuration } from '@/shared/utils/format'
 import { Button } from '@/shared/ui/button'
 import { Checkbox } from '@/shared/ui/checkbox'
 import { Collapse } from '@/shared/ui/collapse'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/shared/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/ui/dialog'
 import PlaudRulesDialog from './PlaudRulesDialog.vue'
 import { groupPlaudImports } from '../model/plaud-ui'
@@ -270,15 +271,19 @@ const meta = (row: PlaudImportEntry) =>
                     {{ meta(row) }}<template v-if="row.status === 'confirmed'"> · {{ t('memos.plaud.confirmedAhead') }}</template>
                   </p>
                 </div>
-                <div class="flex flex-wrap gap-1">
-                  <Button v-if="settings.transcribe.enabled" size="sm" variant="ghost" class="h-7" :disabled="acting" @click="toTranscribe = row">
-                    {{ t('memos.plaud.transcribe.action') }}
-                  </Button>
-                  <Button v-if="row.status === 'waiting'" size="sm" variant="ghost" class="h-7" :disabled="acting" @click="act('confirm', [row])">
-                    {{ t('memos.plaud.importWhenReady') }}
-                  </Button>
-                  <Button size="sm" variant="ghost" class="h-7" :disabled="acting" @click="act('skip', [row])">{{ t('memos.plaud.skip') }}</Button>
-                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger as-child>
+                    <Button variant="ghost" size="icon-sm" class="text-muted-foreground shrink-0" :disabled="acting" :aria-label="t('memos.plaud.actionsFor', { name: row.name })">
+                      <MoreVertical class="size-4" aria-hidden="true" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" class="w-56">
+                    <DropdownMenuItem v-if="settings.transcribe.enabled" @select="toTranscribe = row">{{ t('memos.plaud.transcribe.action') }}</DropdownMenuItem>
+                    <DropdownMenuItem v-if="row.status === 'waiting'" @select="act('confirm', [row])">{{ t('memos.plaud.importWhenReady') }}</DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem variant="destructive" @select="act('skip', [row])">{{ t('memos.plaud.skip') }}</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </li>
             </ul>
           </div>

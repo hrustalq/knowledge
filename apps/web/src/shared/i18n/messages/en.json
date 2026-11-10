@@ -7368,6 +7368,13 @@
     "offlineDescription": "Pages already open stay readable. Anything that needs the server will fail until the connection returns."
   },
   "memos": {
+    "actions": {
+      "for": "Actions for {title}",
+      "rename": "Rename",
+      "renameTitle": "Rename memo",
+      "titleLabel": "Title",
+      "save": "Save"
+    },
     "title": "Memos",
     "subtitle": "Recordings you uploaded, transcribed and read against the knowledge base. Only you can see them.",
     "disabled": {
@@ -7451,6 +7458,7 @@
       "ready": "{count} recording waits for you | {count} recordings wait for you",
       "waiting": "{count} recording waits for Plaud's transcript | {count} recordings wait for Plaud's transcript",
       "waitingHint": "Plaud transcribes a recording when you ask it to. Generate the transcript in the Plaud app; it moves up when you come back to this page, or press Check now.",
+      "actionsFor": "Actions for {name}",
       "checkNow": "Check now",
       "checking": "Checking…",
       "confirmedAhead": "imports once transcribed",

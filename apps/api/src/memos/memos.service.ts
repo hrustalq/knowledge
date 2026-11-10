@@ -306,6 +306,12 @@ export class MemosService {
     return toInfo({ ...row, status, stage: null, error: null });
   }
 
+  /** The uploader's own name for it (#875). Anyone else gets the same bare 404 as on a read. */
+  async rename(principal: Principal, memoId: string, title: string): Promise<MemoInfo> {
+    const row = await this.require(principal, memoId);
+    return toInfo(await this.prisma.memo.update({ where: { id: row.id }, data: { title } }));
+  }
+
   /**
    * The audio — every version of it, since the bucket is versioned — and the
    * row with its transcript. Merge requests it opened are ordinary merge

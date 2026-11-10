@@ -5047,7 +5047,8 @@ export interface paths {
         delete: operations["MemosController_remove"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Rename a memo */
+        patch: operations["MemosController_rename"];
         trace?: never;
     };
     "/v1/plaud/link": {
@@ -10013,6 +10014,10 @@ export interface components {
             projectId: string;
             /** @description The recording's id in the caller's Plaud account */
             fileId: string;
+        };
+        RenameMemoDto: {
+            /** @description Shown in the list and on the memo; a Plaud memo keeps Plaud's own name as its filename */
+            title: string;
         };
         PlaudRulesDto: {
             /** @description Only recordings started on or after this day, YYYY-MM-DD. Unset = the day the settings were first saved */
@@ -33758,6 +33763,52 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MemosController_rename: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameMemoDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {

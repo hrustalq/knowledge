@@ -28,8 +28,8 @@ in the pull request that introduces them — see
 
 - **Migration `20270104100000_credentials` adds the `credentials` table and `connections.credential_id`.** It only
   adds a table and a nullable column, so the previous release's image keeps running against a migrated database and a
-  rollback by retag is safe. At boot the API copies GitHub sign-ins, Figma sign-ins and pasted connection tokens into
-  `credentials`, logging `moved N sign-in(s) into credentials`. Nothing reads the new table yet. Running it again is
+  rollback by retag is safe. The migration copies GitHub and Figma sign-ins into `credentials`; at boot the API copies
+  pasted connection tokens, logging `moved N sign-in(s) into credentials`. Nothing reads the new table yet. Running it again is
   safe: a later rotation of an old column, including one made by a rolled-back image, is copied over on the next
   boot. (#857)
 

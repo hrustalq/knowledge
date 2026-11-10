@@ -13,6 +13,18 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Fixed
+
+- **A Plaud recording you have just transcribed in the Plaud app no longer sits under "waiting" on `/memos`.** The
+  server looked at each person's Plaud account once in ten minutes and the page never looked again on its own, so a
+  recording could read as untranscribed long after Plaud had finished. The page now checks Plaud when you open it or
+  come back to its tab with recordings still waiting, and the waiting list has a "Check now" button.
+  `POST /v1/plaud/imports/refresh { workspaceId }` (editor) does the same over the API and answers the current list;
+  asked twice within 30 seconds it makes no second call to Plaud. A check never imports past the daily cap in auto
+  mode, never starts speech-to-text here and sends no notification. (#873)
+
 ## [0.48.0] — 2026-11-10
 
 ### Added

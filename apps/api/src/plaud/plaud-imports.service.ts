@@ -20,6 +20,8 @@ const OPEN: PlaudImportStatus[] = ['waiting', 'pending', 'confirmed', 'failed'];
 /** How many waiting recordings one pass asks Plaud about, oldest first. */
 const CHECK_BATCH = 20;
 const DAY_MS = 86_400_000;
+/** The least time between two looks at one account that a person can ask for. */
+const REFRESH_FLOOR_MS = 30_000;
 
 /**
  * Plaud auto-import (#864): a person's pick rules, the recordings those rules
@@ -111,6 +113,27 @@ export class PlaudImportsService {
     if (!row.link.projectId) throw new ConflictException(t('error.memo.plaudNoProject'));
     const memo = await this.memos.transcribePlaud(principal, { workspaceId, projectId: row.link.projectId, fileId: row.externalId });
     return toEntry(await this.prisma.plaudImport.update({ where: { id: row.id }, data: { status: 'imported', memoId: memo.memoId, error: null } }));
+  }
+
+  /**
+   * "Check now" (#873): the caller's own pass, without waiting for the
+   * sweeper's turn. It takes the link through the same `checked_at` claim, so
+   * it never runs beside a sweep and cannot be used to hammer Plaud; inside
+   * the floor it only answers the list as it stands. Nobody is notified: the
+   * person is looking at the queue.
+   */
+  async refresh(principal: Principal, workspaceId: string, now = new Date()): Promise<PlaudImportEntry[]> {
+    const userId = principal.userId;
+    const floor = new Date(now.getTime() - REFRESH_FLOOR_MS);
+    const claimed = await this.prisma.plaudLink.updateMany({
+      where: { workspaceId, userId, OR: [{ checkedAt: null }, { checkedAt: { lt: floor } }] },
+      data: { checkedAt: now },
+    });
+    const link = claimed.count ? await this.prisma.plaudLink.findUnique({ where: { workspaceId_userId: { workspaceId, userId } } }) : null;
+    if (link) {
+      await this.sweepLink(principal, link, now).catch((err: unknown) => this.logger.warn(`Plaud link ${link.id} was not refreshed: ${(err as Error).message}`));
+    }
+    return this.list(userId, workspaceId);
   }
 
   /** No to these recordings, for good: a skipped recording is never offered again. */

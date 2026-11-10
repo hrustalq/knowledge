@@ -70,7 +70,17 @@ function setup(over: { rules?: object; projectId?: string | null; maxPerDay?: nu
       return r ? { ...r, link } : null;
     }),
   };
-  const prisma = { plaudImport, plaudLink: { deleteMany: vi.fn() } };
+  const plaudLink = {
+    deleteMany: vi.fn(),
+    // The claim: only a link nobody looked at since `lt` is taken.
+    updateMany: vi.fn(async ({ where, data }: { where: { OR: [unknown, { checkedAt: { lt: Date } }] }; data: { checkedAt: Date } }) => {
+      if (link.checkedAt && link.checkedAt >= where.OR[1].checkedAt.lt) return { count: 0 };
+      link.checkedAt = data.checkedAt;
+      return { count: 1 };
+    }),
+    findUnique: vi.fn(async () => link),
+  };
+  const prisma = { plaudImport, plaudLink };
   const transcribed = new Set<string>();
   const plaud = {
     list: vi.fn(async (): Promise<unknown[] | null> => []),
@@ -181,6 +191,25 @@ describe('PlaudImportsService.sweepLink', () => {
     transcribed.add('b');
     await sweep();
     expect(statuses(rows).b).toBe('imported');
+  });
+
+  it('looks again when the person asks, but not twice inside the floor', async () => {
+    const { service, sweep, rows, plaud, memos, transcribed } = setup();
+    plaud.list.mockResolvedValue([rec('a')]);
+    await sweep();
+    transcribed.add('a');
+
+    expect((await service.refresh(me, WS, NOW)).map((r) => r.status)).toEqual(['pending']);
+    expect(statuses(rows)).toEqual({ a: 'pending' });
+    // Asking is not a yes: nothing was imported, and nothing transcribed here.
+    expect(memos.importPlaud).not.toHaveBeenCalled();
+    expect(memos.transcribePlaud).not.toHaveBeenCalled();
+
+    const calls = plaud.list.mock.calls.length;
+    await service.refresh(me, WS, new Date(NOW.getTime() + 5_000));
+    expect(plaud.list).toHaveBeenCalledTimes(calls);
+    await service.refresh(me, WS, new Date(NOW.getTime() + 31_000));
+    expect(plaud.list).toHaveBeenCalledTimes(calls + 1);
   });
 
   it('does nothing with auto-import off, and stops when the sign-in is gone', async () => {

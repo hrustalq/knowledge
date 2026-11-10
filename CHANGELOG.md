@@ -30,6 +30,13 @@ in the pull request that introduces them — see
   still use it. Connections now report `ownerId` and `ownerLeft`: a connection whose owner is no longer a member
   keeps syncing, and `PATCH /v1/connections/:id` with your own token or `credentialId` moves it onto your account.
   No route returns a secret. (#857)
+- **The connect dialog offers your accounts from other workspaces, and Settings → Profile lists every account you
+  have connected.** In the sign-in step, **Your accounts** lists the tokens and sign-ins you already connected
+  elsewhere, and **Use** adds one to this workspace with nothing to paste or sign in again (an Atlassian account first
+  asks for this workspace's site). **Connected accounts** on your profile shows where each account is used, and
+  offers **Replace token**, which updates every workspace at once, and **Disconnect**, which is disabled while a
+  workspace still uses the account. On the Connections tab each row names who signed it in. When that person has left
+  the workspace, the row says so and **Reconnect** moves it onto your own token. (#857)
 
 ### Changed
 

@@ -38,6 +38,7 @@ import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { UserAvatar } from '@/entities/person'
 import { AvatarPicker } from '@/entities/person'
+import ConnectedAccounts from '@/modules/access/components/ConnectedAccounts.vue'
 import LinkedChatAccounts from '@/modules/access/components/LinkedChatAccounts.vue'
 import ActiveSessions from '@/modules/access/components/ActiveSessions.vue'
 
@@ -290,6 +291,10 @@ async function savePassword() {
                 <RouterLink to="/settings/ai/connect">{{ t('profileSettings.apiKey.manage') }}</RouterLink>
               </Button>
             </div>
+          </li>
+
+          <li class="px-5 py-4">
+            <ConnectedAccounts />
           </li>
 
           <li class="px-5 py-4">

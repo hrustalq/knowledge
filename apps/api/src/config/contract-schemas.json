@@ -16677,6 +16677,9 @@
       "audioAvailable": {
         "type": "boolean"
       },
+      "source": {
+        "$ref": "#/components/schemas/MemoSource"
+      },
       "createdAt": {
         "type": "string"
       },
@@ -16698,6 +16701,7 @@
       "stage",
       "error",
       "audioAvailable",
+      "source",
       "createdAt",
       "updatedAt"
     ]
@@ -16806,6 +16810,9 @@
       },
       "text": {
         "type": "string"
+      },
+      "speaker": {
+        "type": "string"
       }
     },
     "required": [
@@ -16813,6 +16820,13 @@
       "start",
       "end",
       "text"
+    ]
+  },
+  "MemoSource": {
+    "type": "string",
+    "enum": [
+      "upload",
+      "plaud"
     ]
   },
   "MemoStatus": {
@@ -17916,6 +17930,193 @@
       "to",
       "uniqueReaders",
       "views"
+    ]
+  },
+  "PlaudAuthorizeResponse": {
+    "type": "object",
+    "properties": {
+      "url": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "url"
+    ]
+  },
+  "PlaudConfirmMode": {
+    "type": "string",
+    "enum": [
+      "ask",
+      "auto"
+    ]
+  },
+  "PlaudImportEntry": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "startAt": {
+        "type": "string",
+        "nullable": true
+      },
+      "durationSeconds": {
+        "type": "number"
+      },
+      "status": {
+        "$ref": "#/components/schemas/PlaudImportStatus"
+      },
+      "memoId": {
+        "type": "string",
+        "nullable": true
+      },
+      "error": {
+        "type": "string",
+        "nullable": true
+      },
+      "createdAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "name",
+      "startAt",
+      "durationSeconds",
+      "status",
+      "memoId",
+      "error",
+      "createdAt"
+    ]
+  },
+  "PlaudImportStatus": {
+    "type": "string",
+    "enum": [
+      "waiting",
+      "pending",
+      "confirmed",
+      "skipped",
+      "imported",
+      "failed"
+    ]
+  },
+  "PlaudImportsResponse": {
+    "type": "object",
+    "properties": {
+      "imports": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/PlaudImportEntry"
+        }
+      }
+    },
+    "required": [
+      "imports"
+    ]
+  },
+  "PlaudLinkResponse": {
+    "type": "object",
+    "properties": {
+      "configured": {
+        "type": "boolean"
+      },
+      "linked": {
+        "type": "boolean"
+      },
+      "accountLabel": {
+        "type": "string",
+        "nullable": true
+      },
+      "needsReconnect": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "configured",
+      "linked",
+      "accountLabel",
+      "needsReconnect"
+    ]
+  },
+  "PlaudRules": {
+    "type": "object",
+    "properties": {
+      "since": {
+        "type": "string"
+      },
+      "minSeconds": {
+        "type": "number"
+      },
+      "nameIncludes": {
+        "type": "string"
+      },
+      "nameExcludes": {
+        "type": "string"
+      },
+      "serial": {
+        "type": "string"
+      },
+      "confirm": {
+        "$ref": "#/components/schemas/PlaudConfirmMode"
+      }
+    }
+  },
+  "PlaudSettingsResponse": {
+    "type": "object",
+    "properties": {
+      "projectId": {
+        "type": "string",
+        "nullable": true
+      },
+      "rules": {
+        "$ref": "#/components/schemas/PlaudRules"
+      },
+      "effective": {
+        "type": "object",
+        "properties": {
+          "since": {
+            "type": "string"
+          },
+          "minSeconds": {
+            "type": "number"
+          },
+          "confirm": {
+            "$ref": "#/components/schemas/PlaudConfirmMode"
+          }
+        }
+      },
+      "maxPerDay": {
+        "type": "number"
+      },
+      "transcribe": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "limitSeconds": {
+            "type": "number"
+          },
+          "remainingSeconds": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "enabled",
+          "limitSeconds",
+          "remainingSeconds"
+        ]
+      }
+    },
+    "required": [
+      "projectId",
+      "rules",
+      "effective",
+      "maxPerDay",
+      "transcribe"
     ]
   },
   "PostAssistantMessageResponse": {

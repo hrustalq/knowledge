@@ -4981,6 +4981,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/memos/plaud": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import one of my Plaud recordings as a memo, from the transcript Plaud made (409 until it has one) */
+        post: operations["MemosController_importPlaud"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/memos/{id}/finalize": {
         parameters: {
             query?: never;
@@ -5028,6 +5045,127 @@ export interface paths {
         post?: never;
         /** Delete a memo: its audio and transcript; merge requests it opened stay */
         delete: operations["MemosController_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/plaud/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether Plaud import is offered here and whether I have linked my Plaud account */
+        get: operations["PlaudController_status"];
+        put?: never;
+        post?: never;
+        /** Unlink my Plaud account */
+        delete: operations["PlaudController_unlink"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/plaud/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The Plaud authorization URL to link (or re-link) my account */
+        get: operations["PlaudController_authorize"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/plaud/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** My Plaud auto-import settings in this workspace: the destination project and the pick rules */
+        get: operations["PlaudController_settings"];
+        /** Save my Plaud auto-import settings; a null project switches auto-import off here */
+        put: operations["PlaudController_saveSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/plaud/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The Plaud recordings my rules picked, newest first */
+        get: operations["PlaudController_listImports"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/plaud/imports/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import these recordings: now if Plaud has transcribed them, otherwise as soon as it has */
+        post: operations["PlaudController_confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/plaud/imports/transcribe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Transcribe one recording here instead of waiting for Plaud: spends speech-to-text, within my allowance */
+        post: operations["PlaudController_transcribe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/plaud/imports/skip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Never import these recordings; a skipped recording is not offered again */
+        post: operations["PlaudController_skip"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -9848,6 +9986,59 @@ export interface components {
             /** @description Length the browser read from the file, refused early when over the ceiling */
             durationSeconds?: number;
         };
+        ImportPlaudMemoDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /**
+             * Format: uuid
+             * @description The project the memo belongs to; its proposals are filed there
+             */
+            projectId: string;
+            /** @description The recording's id in the caller's Plaud account */
+            fileId: string;
+        };
+        PlaudRulesDto: {
+            /** @description Only recordings started on or after this day, YYYY-MM-DD. Unset = the day the settings were first saved */
+            since?: string;
+            /** @description Only recordings at least this long, in seconds. Unset = 120 */
+            minSeconds?: number;
+            /** @description Only recordings whose Plaud name contains this */
+            nameIncludes?: string;
+            /** @description Never recordings whose Plaud name contains this */
+            nameExcludes?: string;
+            /** @description Only recordings from the device with this serial number */
+            serial?: string;
+            /**
+             * @description ask: each recording waits for a yes. auto: imported once Plaud has transcribed it. Unset = ask
+             * @enum {string}
+             */
+            confirm?: "ask" | "auto";
+        };
+        SavePlaudSettingsDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /**
+             * Format: uuid
+             * @description Where picked recordings go; null switches auto-import off here
+             */
+            projectId: string | null;
+            rules: components["schemas"]["PlaudRulesDto"];
+        };
+        PlaudImportIdsDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /** @description One or many; ids that are not my open recordings are ignored */
+            ids: string[];
+        };
+        PlaudTranscribeDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /**
+             * Format: uuid
+             * @description One of my recordings that is waiting for a Plaud transcript
+             */
+            id: string;
+        };
         WorkflowDraftMessageDto: {
             /** @enum {string} */
             role: "user" | "assistant";
@@ -14521,6 +14712,7 @@ export interface components {
             stage: string | null;
             error: string | null;
             audioAvailable: boolean;
+            source: components["schemas"]["MemoSource"];
             createdAt: string;
             updatedAt: string;
         };
@@ -14550,7 +14742,10 @@ export interface components {
             start: number;
             end: number;
             text: string;
+            speaker?: string;
         };
+        /** @enum {string} */
+        MemoSource: "upload" | "plaud";
         /** @enum {string} */
         MemoStatus: "pending" | "uploaded" | "transcribing" | "transcribed" | "analysing" | "done" | "failed";
         MemoTranscriptionState: {
@@ -14798,6 +14993,55 @@ export interface components {
             to: string;
             lastHumanViewAt: string | null;
             collectingSince: string | null;
+        };
+        PlaudAuthorizeResponse: {
+            url: string;
+        };
+        /** @enum {string} */
+        PlaudConfirmMode: "ask" | "auto";
+        PlaudImportEntry: {
+            id: string;
+            name: string;
+            startAt: string | null;
+            durationSeconds: number;
+            status: components["schemas"]["PlaudImportStatus"];
+            memoId: string | null;
+            error: string | null;
+            createdAt: string;
+        };
+        /** @enum {string} */
+        PlaudImportStatus: "waiting" | "pending" | "confirmed" | "skipped" | "imported" | "failed";
+        PlaudImportsResponse: {
+            imports: components["schemas"]["PlaudImportEntry"][];
+        };
+        PlaudLinkResponse: {
+            configured: boolean;
+            linked: boolean;
+            accountLabel: string | null;
+            needsReconnect: boolean;
+        };
+        PlaudRules: {
+            since?: string;
+            minSeconds?: number;
+            nameIncludes?: string;
+            nameExcludes?: string;
+            serial?: string;
+            confirm?: components["schemas"]["PlaudConfirmMode"];
+        };
+        PlaudSettingsResponse: {
+            projectId: string | null;
+            rules: components["schemas"]["PlaudRules"];
+            effective: {
+                since?: string;
+                minSeconds?: number;
+                confirm?: components["schemas"]["PlaudConfirmMode"];
+            };
+            maxPerDay: number;
+            transcribe: {
+                enabled: boolean;
+                limitSeconds: number;
+                remainingSeconds: number;
+            };
         };
         PostAssistantMessageResponse: {
             enabled: boolean;
@@ -33304,6 +33548,50 @@ export interface operations {
             };
         };
     };
+    MemosController_importPlaud: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportPlaudMemoDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     MemosController_finalize: {
         parameters: {
             query?: never;
@@ -33449,6 +33737,392 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    PlaudController_status: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaudLinkResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    PlaudController_unlink: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    PlaudController_authorize: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                returnTo?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaudAuthorizeResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    PlaudController_settings: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaudSettingsResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    PlaudController_saveSettings: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavePlaudSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaudSettingsResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    PlaudController_listImports: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                status?: "waiting" | "pending" | "confirmed" | "skipped" | "imported" | "failed";
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaudImportsResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    PlaudController_confirm: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlaudImportIdsDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaudImportsResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    PlaudController_transcribe: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlaudTranscribeDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaudImportsResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    PlaudController_skip: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlaudImportIdsDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaudImportsResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {

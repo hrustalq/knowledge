@@ -13,6 +13,78 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.48.0] — 2026-11-10
+
+### Added
+
+- **A person can link their Plaud account.** `GET /v1/plaud/authorize?workspaceId=` (editor) returns the Plaud
+  sign-in URL, and the callback stores the sign-in as that person's own credential, sealed like every other.
+  `GET /v1/plaud/link?workspaceId=` says whether linking is offered on this server, whether the caller is linked,
+  the account's name and whether the sign-in lapsed (Plaud keeps one seven days without use).
+  `DELETE /v1/plaud/link?workspaceId=` forgets it. A Plaud sign-in belongs to one person, is never a workspace
+  connection and is not listed under `GET /v1/me/credentials`. This is the first step of importing Plaud recordings
+  as memos (#864): nothing is imported yet and the web app has no control for it. (#864)
+
+- **A Plaud recording can be imported as a memo, from the transcript Plaud already made.** `POST /v1/memos/plaud
+  { workspaceId, projectId, fileId }` (editor) reads the recording as the caller, from their linked Plaud account, and
+  creates a memo that goes straight to analysis. Our speech-to-text never runs for it, so this works with
+  `TRANSCRIPTION_PROVIDER=none` and writes no `transcription` usage. Segments carry the speaker names set in Plaud, and
+  the secretary reads them. The transcript is masked before it is stored, like any memo's. Importing the same recording
+  again returns the same memo. A recording Plaud has not transcribed yet answers 409 `plaud-not-transcribed`: generate
+  its transcript in the Plaud app first. With no usable Plaud sign-in the answer is 409 `plaud-not-linked`. Such a memo
+  has no audio (`audioAvailable: false`), its `source` is `plaud`, and its title is `Plaud · <start time>`; the name
+  Plaud gave the recording is kept as its `filename`. (#864)
+
+- **Plaud recordings can be picked up automatically, by rules, with a yes or no on each.**
+  `PUT /v1/plaud/settings { workspaceId, projectId, rules }` (editor) saves where a person's picked recordings go and
+  which ones are picked: `since` (defaults to the day the settings were first saved, so linking imports no backlog),
+  `minSeconds` (default 120), `nameIncludes`, `nameExcludes`, `serial`, and `confirm`: `ask` (default) or `auto`. A
+  null `projectId` switches auto-import off and keeps the rules. `GET /v1/plaud/settings` returns them with what
+  applies once defaults are filled in. About every ten minutes the API lists each person's recent recordings as that
+  person and records the ones their rules pick; `GET /v1/plaud/imports` lists them. A picked recording is `waiting`
+  until Plaud has transcribed it, which the person starts in the Plaud app. Then, under `ask`, it becomes `pending`
+  and its owner gets one notification with a count and no recording name; under `auto` it is imported.
+  `POST /v1/plaud/imports/confirm { workspaceId, ids }` imports now, or as soon as Plaud has a transcript.
+  `POST /v1/plaud/imports/skip` is final: a skipped recording is never offered again. Nothing of a recording's speech
+  is read or stored before it becomes a memo. The sweep only looks 14 days back. Whether the person is still an
+  editor is checked on every pass, and a lapsed Plaud sign-in is reported to them once. (#864)
+
+- **A Plaud recording that is still waiting for Plaud's transcript can be transcribed here instead, when its owner
+  asks.** `POST /v1/plaud/imports/transcribe { workspaceId, id }` (editor) queues our own speech-to-text for one
+  waiting recording; the worker reads the audio from Plaud as that person and keeps no copy. It is never done
+  automatically: neither `auto` mode nor the sweep spends on it. It is refused with 503 while this server cannot
+  transcribe, with 413 over `MEMO_MAX_MINUTES`, over the workspace's model budget, and with 409
+  `plaud-transcribe-allowance` (carrying `remainingSeconds`) once the person's allowance would be passed. Such a memo
+  has no speaker names. `GET /v1/plaud/settings` now returns `transcribe: { enabled, limitSeconds, remainingSeconds }`
+  so a client can say what is left before asking. (#864)
+
+- **Plaud in the web app.** `/memos` has a Plaud panel between Upload and the memo list, on servers where Plaud is
+  set up. It links your Plaud account in a new tab and says when the sign-in lapsed. Once a project is chosen it
+  lists the recordings waiting for your yes, with Import and Skip for one, for the ticked ones or for all; imports
+  that were refused, with the reason and Try again; and, folded away, the recordings waiting for Plaud's transcript,
+  where "Import when ready" says yes ahead of time. Rules opens the pick rules and the choice between asking and
+  importing automatically, and holds Unlink. "Transcribe here" on a waiting recording states its length, the minutes
+  left in your allowance and that speaker names will be missing before it spends anything. A memo's transcript shows
+  who is speaking when the source names them, and a Plaud memo says its audio stays in Plaud. Plaud notifications
+  lead to `/memos`. English and Russian. (#864)
+
+### Operations
+
+- New optional variable `PLAUD_OAUTH_CLIENT_ID`, empty by default, which leaves every Plaud route answering "not set
+  up". To turn linking on, register a public client once with `POST https://mcp.plaud.ai/register` (redirect URI
+  `$API_PUBLIC_URL/v1/plaud/callback`, `token_endpoint_auth_method` `none`; the exact request is in `.env.example`)
+  and set the `client_id` it returns as a GitHub `production` variable. There is no secret. It needs
+  `SETTINGS_ENCRYPTION_KEY`, as Figma sign-in does.
+- Migration `20270105100000_memo_source` adds `memos.source` (default `upload`), nullable `memos.external_id` and a
+  unique index over them. It is additive and survives a rollback to the previous release.
+- New optional variable `PLAUD_AUTO_IMPORT_MAX_PER_DAY` (default 10): auto mode imports nothing more for a person once
+  that many of their Plaud recordings were imported in a day. A recording they confirm still goes through.
+- New optional variable `PLAUD_TRANSCRIBE_MINUTES_PER_MONTH` (default 120, 0 = off): the most speech, in minutes, that
+  may be transcribed for one person in a workspace over 30 days before "Transcribe here" is refused. Uploaded memos
+  count toward it; it never stops an upload.
+- Migration `20270106100000_plaud_queue` adds the `plaud_links` and `plaud_imports` tables. New tables only, so it
+  survives a rollback. Unlinking a Plaud account or deleting a workspace removes their rows.
+
 ## [0.47.0] — 2026-11-10
 
 ### Added
@@ -6439,7 +6511,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.47.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.48.0...HEAD
+[0.48.0]: https://github.com/hrustalq/knowledge/compare/v0.47.0...v0.48.0
 [0.47.0]: https://github.com/hrustalq/knowledge/compare/v0.46.2...v0.47.0
 [0.46.2]: https://github.com/hrustalq/knowledge/compare/v0.46.1...v0.46.2
 [0.46.1]: https://github.com/hrustalq/knowledge/compare/v0.46.0...v0.46.1

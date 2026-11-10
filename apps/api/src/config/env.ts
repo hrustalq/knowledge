@@ -850,6 +850,21 @@ export const envSchema = z.object({
   FIGMA_OAUTH_CLIENT_SECRET: z.string().optional().default(''),
 
   /**
+   * Plaud import (#864): the public OAuth client this deployment registered
+   * once with `POST https://mcp.plaud.ai/register`, redirect URI
+   * `${API_PUBLIC_URL}/v1/plaud/callback`. There is no secret. Empty is the off
+   * switch: linking a Plaud account is not offered.
+   */
+  PLAUD_OAUTH_CLIENT_ID: z.string().optional().default(''),
+  /** Auto mode imports nothing more for a person once this many of their Plaud recordings were imported in a day; a recording they confirm still goes through. */
+  PLAUD_AUTO_IMPORT_MAX_PER_DAY: z.coerce.number().int().min(0).max(1_000).default(10),
+  /**
+   * "Transcribe here" on a Plaud recording is refused once a person's transcribed speech in the workspace over the
+   * last 30 days, uploads included, plus the recording, would pass this many minutes. 0 switches it off.
+   */
+  PLAUD_TRANSCRIBE_MINUTES_PER_MONTH: z.coerce.number().int().min(0).max(100_000).default(120),
+
+  /**
    * GitHub App backing the repository picker (docs/features/30).
    *
    * Empty GITHUB_APP_ID is the off switch, and it is fail-soft in the same

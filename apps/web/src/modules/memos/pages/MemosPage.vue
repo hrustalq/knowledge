@@ -20,6 +20,7 @@ import { formatDateTime, formatDuration, formatRelative } from '@/shared/utils/f
 import { useProjectsStore } from '@/stores/projects'
 import { PageLayout, PageState } from '@/shared/layout'
 import MemoUpload from '@/modules/memos/components/MemoUpload.vue'
+import PlaudPanel from '@/modules/memos/components/PlaudPanel.vue'
 import { MEMO_STATUS_CLASS, MEMO_STATUS_ICON, isMemoInFlight } from '@/modules/memos/model/memo-ui'
 
 const { t } = useI18n()
@@ -58,6 +59,9 @@ const memos = computed(() => data.value?.memos ?? [])
         :max-bytes="data.limits.maxBytes"
         :max-minutes="data.limits.maxMinutes"
       />
+
+      <!-- A second source of memos (#864); it draws nothing where Plaud is not offered. -->
+      <PlaudPanel :workspace-id="workspaceId" />
 
       <!-- The upload above is already the call to action; a second framed
            "nothing here" box would only repeat it. -->

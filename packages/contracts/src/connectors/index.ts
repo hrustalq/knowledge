@@ -772,7 +772,7 @@ export const OAUTH_OUTCOMES = ['connected', 'installed', 'auth-failed', 'install
 export type OauthOutcome = (typeof OAUTH_OUTCOMES)[number];
 
 /** The landing URL a callback redirects to. `returnTo` is already a signed, same-origin path, or absent for a forged state. */
-export function oauthLandingPath(provider: 'github' | 'figma', outcome: OauthOutcome, returnTo?: string): string {
+export function oauthLandingPath(provider: 'github' | 'figma' | 'plaud', outcome: OauthOutcome, returnTo?: string): string {
   const params = new URLSearchParams({ outcome, ...(returnTo ? { returnTo } : {}) });
   return `/oauth/${provider}?${params.toString()}`;
 }

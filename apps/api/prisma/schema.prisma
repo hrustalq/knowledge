@@ -4725,10 +4725,74 @@ model Memo {
   /// The uploader's language, frozen for the worker and the sweeper.
   locale       String    @default("en")
 
+  /// MemoSource: 'upload' | 'plaud' (#864). A Plaud memo is built from Plaud's
+  /// transcript and has no audio: `audio_key` is empty and `audio_purged_at` set.
+  source     String  @default("upload")
+  /// The recording's id at its source; null for an upload.
+  externalId String? @map("external_id")
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
+  /// One memo per source recording per person per workspace; NULLs never collide.
+  @@unique([workspaceId, createdBy, source, externalId])
   @@index([workspaceId, createdBy, createdAt])
   @@index([status])
   @@map("memos")
+}
+
+/// A person's Plaud auto-import settings in one workspace (#864): where picked
+/// recordings go and which ones are picked. The sign-in itself is their
+/// `credentials` row; this row exists once they save settings.
+model PlaudLink {
+  id          String  @id @default(uuid()) @db.Uuid
+  workspaceId String  @map("workspace_id") @db.Uuid
+  userId      String  @map("user_id") @db.Uuid
+  /// The destination project; null = auto-import is off here.
+  projectId   String? @map("project_id") @db.Uuid
+  /// PlaudRules — a sparse override of `PLAUD_RULE_DEFAULTS`.
+  rules       Json    @default("{}")
+  /// The person's language, frozen for the sweeper.
+  locale      String  @default("en")
+
+  /// The sweeper's due check and its claim.
+  checkedAt           DateTime? @map("checked_at") @db.Timestamptz
+  /// Set when "link again" was sent, so it is sent once per lapse.
+  reconnectNotifiedAt DateTime? @map("reconnect_notified_at") @db.Timestamptz
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  imports PlaudImport[]
+
+  @@unique([workspaceId, userId])
+  @@index([checkedAt])
+  @@map("plaud_links")
+}
+
+/// One Plaud recording a person's rules picked (#864). It holds no transcript:
+/// nothing of the recording's speech is stored until it becomes a memo.
+model PlaudImport {
+  id          String    @id @default(uuid()) @db.Uuid
+  linkId      String    @map("link_id") @db.Uuid
+  link        PlaudLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  workspaceId String    @map("workspace_id") @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  /// The recording's id at Plaud.
+  externalId  String    @map("external_id")
+  /// Plaud's name for it: shown to its owner, never sent to a model.
+  name            String
+  startAt         DateTime? @map("start_at") @db.Timestamptz
+  durationSeconds Int       @default(0) @map("duration_seconds")
+  /// PlaudImportStatus: waiting → pending → imported, with confirmed, skipped and failed.
+  status String  @default("waiting")
+  memoId String? @map("memo_id") @db.Uuid
+  error  String?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@unique([linkId, externalId])
+  @@index([workspaceId, userId, status])
+  @@map("plaud_imports")
 }

@@ -111,6 +111,9 @@ export const WORKSPACE_TEARDOWN = {
   ExportJob: 'workspace',
   ImportJob: 'workspace',
   Memo: 'workspace',
+  // Imports cascade from their link; listed first for the ones a link outlived.
+  PlaudImport: 'workspace',
+  PlaudLink: 'workspace',
   KnowledgeCapture: 'workspace',
   KnowledgeConflict: 'workspace',
   KnowledgeHealthSettings: 'workspace',

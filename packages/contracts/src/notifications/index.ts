@@ -167,6 +167,9 @@ const NOTIFIED_JOB_TYPES: readonly string[] = [
   // Your memo was read and its proposals opened, or it failed (#551).
   'memo.done',
   'memo.failed',
+  // Plaud recordings are waiting for a yes, or the Plaud sign-in lapsed (#864).
+  'plaud.pending',
+  'plaud.reconnect',
 ];
 
 /**

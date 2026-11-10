@@ -49,3 +49,19 @@ export class ListMemosQueryDto {
   @IsUUID()
   projectId?: string;
 }
+
+export class ImportPlaudMemoDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiProperty({ format: 'uuid', description: 'The project the memo belongs to; its proposals are filed there' })
+  @IsUUID()
+  projectId!: string;
+
+  @ApiProperty({ description: 'The recording\'s id in the caller\'s Plaud account' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(200, { message: vmsg('maxLength') })
+  fileId!: string;
+}

@@ -5,7 +5,7 @@ import { Access, CurrentPrincipal, Feature } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { Returns } from '../common/returns.decorator.js';
-import { CreateMemoDto, ListMemosQueryDto } from './dto/memos.dto.js';
+import { CreateMemoDto, ImportPlaudMemoDto, ListMemosQueryDto } from './dto/memos.dto.js';
 import { MemosService } from './memos.service.js';
 
 /**
@@ -33,6 +33,14 @@ export class MemosController {
   @ApiOperation({ summary: 'Reserve a memo and get a presigned upload URL' })
   create(@Body() dto: CreateMemoDto, @CurrentPrincipal() principal: Principal): Promise<CreateMemoResponse> {
     return this.memos.create(principal, dto);
+  }
+
+  @Post('plaud')
+  @Returns('MemoResponse')
+  @Access('editor', 'body')
+  @ApiOperation({ summary: 'Import one of my Plaud recordings as a memo, from the transcript Plaud made (409 until it has one)' })
+  async importPlaud(@Body() dto: ImportPlaudMemoDto, @CurrentPrincipal() principal: Principal): Promise<MemoResponse> {
+    return { memo: await this.memos.importPlaud(principal, dto) };
   }
 
   @Post(':id/finalize')

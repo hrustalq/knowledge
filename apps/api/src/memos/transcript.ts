@@ -8,7 +8,7 @@ export interface ChunkTranscript {
   /** The chunk's own length, for a server that answers without segments. */
   duration: number;
   language: string | null;
-  segments: Array<{ start: number; end: number; text: string }>;
+  segments: Array<{ start: number; end: number; text: string; speaker?: string }>;
   /** The whole chunk's text — the fallback when `segments` is empty. */
   text: string;
   /** What the server billed for this chunk, when it says (gen-api does). */
@@ -28,7 +28,7 @@ export function stitchTranscript(chunks: ChunkTranscript[]): { segments: MemoSeg
   for (const chunk of chunks) {
     const parts = chunk.segments.length
       ? chunk.segments
-      : [{ start: 0, end: chunk.duration, text: chunk.text }];
+      : [{ start: 0, end: chunk.duration, text: chunk.text, speaker: undefined }];
     for (const part of parts) {
       const text = part.text.trim();
       if (!text) continue;
@@ -37,6 +37,8 @@ export function stitchTranscript(chunks: ChunkTranscript[]): { segments: MemoSeg
         start: round(chunk.offset + part.start),
         end: round(chunk.offset + Math.max(part.end, part.start)),
         text: mask(text),
+        // A name can be an address or a number as easily as speech can.
+        ...(part.speaker?.trim() ? { speaker: mask(part.speaker.trim()) } : {}),
       });
     }
   }

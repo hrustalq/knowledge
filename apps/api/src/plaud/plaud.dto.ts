@@ -80,3 +80,13 @@ export class PlaudImportIdsDto {
   @IsUUID(undefined, { each: true })
   ids!: string[];
 }
+
+export class PlaudTranscribeDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiProperty({ format: 'uuid', description: 'One of my recordings that is waiting for a Plaud transcript' })
+  @IsUUID()
+  id!: string;
+}

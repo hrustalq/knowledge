@@ -18090,13 +18090,33 @@
       },
       "maxPerDay": {
         "type": "number"
+      },
+      "transcribe": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "limitSeconds": {
+            "type": "number"
+          },
+          "remainingSeconds": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "enabled",
+          "limitSeconds",
+          "remainingSeconds"
+        ]
       }
     },
     "required": [
       "projectId",
       "rules",
       "effective",
-      "maxPerDay"
+      "maxPerDay",
+      "transcribe"
     ]
   },
   "PostAssistantMessageResponse": {

@@ -858,6 +858,11 @@ export const envSchema = z.object({
   PLAUD_OAUTH_CLIENT_ID: z.string().optional().default(''),
   /** Auto mode imports nothing more for a person once this many of their Plaud recordings were imported in a day; a recording they confirm still goes through. */
   PLAUD_AUTO_IMPORT_MAX_PER_DAY: z.coerce.number().int().min(0).max(1_000).default(10),
+  /**
+   * "Transcribe here" on a Plaud recording is refused once a person's transcribed speech in the workspace over the
+   * last 30 days, uploads included, plus the recording, would pass this many minutes. 0 switches it off.
+   */
+  PLAUD_TRANSCRIBE_MINUTES_PER_MONTH: z.coerce.number().int().min(0).max(100_000).default(120),
 
   /**
    * GitHub App backing the repository picker (docs/features/30).

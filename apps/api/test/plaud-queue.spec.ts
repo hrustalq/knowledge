@@ -65,6 +65,10 @@ function setup(over: { rules?: object; projectId?: string | null; maxPerDay?: nu
       return { count: hit.length };
     }),
     count: vi.fn(async ({ where }: { where: Record<string, unknown> }) => rows.filter((r) => match(r, where)).length),
+    findFirst: vi.fn(async ({ where }: { where: Record<string, unknown> }) => {
+      const r = rows.find((x) => match(x, where));
+      return r ? { ...r, link } : null;
+    }),
   };
   const prisma = { plaudImport, plaudLink: { deleteMany: vi.fn() } };
   const transcribed = new Set<string>();
@@ -73,6 +77,8 @@ function setup(over: { rules?: object; projectId?: string | null; maxPerDay?: nu
     transcribed: vi.fn(async (_user: string, id: string): Promise<boolean | null> => transcribed.has(id)),
   };
   const memos = {
+    plaudTranscribeAllowance: vi.fn(async () => ({ enabled: true, limitSeconds: 7200, remainingSeconds: 7200 })),
+    transcribePlaud: vi.fn(async (_p: Principal, input: { fileId: string }) => ({ memoId: `memo-${input.fileId}` })),
     importPlaud: vi.fn(async (_p: Principal, input: { fileId: string }) => {
       if (!transcribed.has(input.fileId)) throw new ConflictException({ statusCode: 409, message: 'not yet', reason: 'plaud-not-transcribed' });
       return { memoId: `memo-${input.fileId}` };
@@ -152,6 +158,29 @@ describe('PlaudImportsService.sweepLink', () => {
     expect((await service.confirm(me, WS, ['i-a']))[0].error).not.toContain('10.0.0.5');
     expect((await service.confirm(me, WS, ['i-a']))[0]).toMatchObject({ status: 'imported' });
     expect(rows).toHaveLength(1);
+  });
+
+  it('transcribes here only when the person asks, only what is theirs and still waiting, and never from a sweep', async () => {
+    const { service, sweep, rows, plaud, memos, transcribed } = setup({ rules: { confirm: 'auto' } });
+    plaud.list.mockResolvedValue([rec('a'), rec('b')]);
+    await sweep();
+    await sweep();
+    expect(memos.transcribePlaud).not.toHaveBeenCalled();
+
+    expect(await service.transcribe(me, WS, 'i-a')).toMatchObject({ status: 'imported', memoId: 'memo-a' });
+    expect(memos.transcribePlaud).toHaveBeenCalledWith(me, { workspaceId: WS, projectId: 'p1', fileId: 'a' });
+    // Already a memo: not again. Someone else's, or another workspace's: not found.
+    await expect(service.transcribe(me, WS, 'i-a')).rejects.toThrow();
+    await expect(service.transcribe({ userId: 'u2', isAdmin: false } as Principal, WS, 'i-b')).rejects.toThrow();
+    await expect(service.transcribe(me, 'other-ws', 'i-b')).rejects.toThrow();
+
+    // A refusal reaches the person as it is and leaves the row waiting.
+    memos.transcribePlaud.mockRejectedValueOnce(new ConflictException({ statusCode: 409, message: 'no minutes left', reason: 'plaud-transcribe-allowance' }));
+    await expect(service.transcribe(me, WS, 'i-b')).rejects.toMatchObject({ response: { reason: 'plaud-transcribe-allowance' } });
+    expect(statuses(rows).b).toBe('waiting');
+    transcribed.add('b');
+    await sweep();
+    expect(statuses(rows).b).toBe('imported');
   });
 
   it('does nothing with auto-import off, and stops when the sign-in is gone', async () => {

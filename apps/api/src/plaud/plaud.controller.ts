@@ -18,7 +18,7 @@ import type { Env } from '../config/env.js';
 import { t } from '../i18n/t.js';
 import { PlaudImportsService } from './plaud-imports.service.js';
 import { PlaudOauthService } from './plaud-oauth.service.js';
-import { PlaudImportIdsDto, PlaudImportsQueryDto, SavePlaudSettingsDto } from './plaud.dto.js';
+import { PlaudImportIdsDto, PlaudImportsQueryDto, PlaudTranscribeDto, SavePlaudSettingsDto } from './plaud.dto.js';
 
 /**
  * A person's Plaud account (#864). The sign-in is the caller's own: every
@@ -105,6 +105,14 @@ export class PlaudController {
   @ApiOperation({ summary: 'Import these recordings: now if Plaud has transcribed them, otherwise as soon as it has' })
   async confirm(@Body() dto: PlaudImportIdsDto, @CurrentPrincipal() principal: Principal): Promise<PlaudImportsResponse> {
     return { imports: await this.imports.confirm(principal, dto.workspaceId, dto.ids) };
+  }
+
+  @Post('imports/transcribe')
+  @Returns('PlaudImportsResponse')
+  @Access('editor', 'body')
+  @ApiOperation({ summary: 'Transcribe one recording here instead of waiting for Plaud: spends speech-to-text, within my allowance' })
+  async transcribe(@Body() dto: PlaudTranscribeDto, @CurrentPrincipal() principal: Principal): Promise<PlaudImportsResponse> {
+    return { imports: [await this.imports.transcribe(principal, dto.workspaceId, dto.id)] };
   }
 
   @Post('imports/skip')

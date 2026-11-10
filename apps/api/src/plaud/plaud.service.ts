@@ -72,6 +72,17 @@ export class PlaudService {
   }
 
   /**
+   * Where the recording's audio can be fetched for the next 24 hours. `url` is
+   * null when Plaud has none to give just now; the whole answer is null when
+   * the person has no usable sign-in. The URL is a capability: never stored.
+   */
+  async audioUrl(userId: string, fileId: string): Promise<{ url: string | null } | null> {
+    const file = await this.call<{ presigned_url?: string | null }>(userId, 'get_file', { file_id: fileId });
+    if (file === null) return null;
+    return { url: typeof file.presigned_url === 'string' && file.presigned_url.startsWith('https://') ? file.presigned_url : null };
+  }
+
+  /**
    * The raw transcript, every page of it. Empty when Plaud has not transcribed
    * the recording: that is the person's act in the Plaud app, never ours.
    */

@@ -181,6 +181,11 @@ export interface PlaudSettingsResponse {
   effective: Required<Pick<PlaudRules, 'since' | 'minSeconds' | 'confirm'>>;
   /** The most auto mode imports for one person in a day on this server. */
   maxPerDay: number;
+  /**
+   * "Transcribe here": our own speech-to-text on a recording Plaud has not transcribed. Off when this server cannot
+   * transcribe or the allowance is 0. `remainingSeconds` is what is left of the caller's 30-day allowance.
+   */
+  transcribe: { enabled: boolean; limitSeconds: number; remainingSeconds: number };
 }
 
 export interface PlaudImportEntry {

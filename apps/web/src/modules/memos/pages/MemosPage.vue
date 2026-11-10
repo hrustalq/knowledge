@@ -20,8 +20,10 @@ import { formatDateTime, formatDuration, formatRelative } from '@/shared/utils/f
 import { useProjectsStore } from '@/stores/projects'
 import { PageLayout, PageState } from '@/shared/layout'
 import MemoActions from '@/modules/memos/components/MemoActions.vue'
+import MemoListPlayer from '@/modules/memos/components/MemoListPlayer.vue'
 import MemoUpload from '@/modules/memos/components/MemoUpload.vue'
 import PlaudPanel from '@/modules/memos/components/PlaudPanel.vue'
+import { useMemoListPlayer } from '@/modules/memos/model/memo-player'
 import { MEMO_STATUS_CLASS, MEMO_STATUS_ICON, isMemoInFlight } from '@/modules/memos/model/memo-ui'
 
 const { t } = useI18n()
@@ -39,6 +41,7 @@ const listQuery = useQuery(
 )
 const data = computed(() => listQuery.data.value as MemoListResponse | undefined)
 const memos = computed(() => data.value?.memos ?? [])
+const player = useMemoListPlayer()
 </script>
 
 <template>
@@ -89,6 +92,15 @@ const memos = computed(() => data.value?.memos ?? [])
               </p>
             </div>
           </RouterLink>
+          <!-- Only where there is audio to play: a Plaud memo's stays in Plaud, and retention purges the rest. -->
+          <MemoListPlayer
+            v-if="m.audioAvailable && m.status !== 'pending'"
+            class="mr-2"
+            :memo-id="m.memoId"
+            :title="m.title"
+            :duration-seconds="m.durationSeconds"
+            :player="player"
+          />
           <MemoActions :memo-id="m.memoId" :title="m.title" />
         </li>
       </ul>

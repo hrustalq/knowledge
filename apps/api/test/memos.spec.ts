@@ -89,6 +89,15 @@ describe('MemosService', () => {
     expect(prisma.memo.findFirst).toHaveBeenLastCalledWith({ where: { id: 'm1' } });
   });
 
+  it('renames a memo for its uploader only (#875)', async () => {
+    const { prisma, memos } = service();
+    const update = vi.fn();
+    Object.assign(prisma.memo, { update });
+    await expect(memos.rename(member, 'm1', 'Retro')).rejects.toBeInstanceOf(NotFoundException);
+    expect(prisma.memo.findFirst).toHaveBeenCalledWith({ where: { id: 'm1', createdBy: 'u1' } });
+    expect(update).not.toHaveBeenCalled();
+  });
+
   it('refuses to reserve when this server cannot transcribe, naming what to set', async () => {
     const { memos } = service({ TRANSCRIPTION_PROVIDER: 'none' });
     const refused = await memos

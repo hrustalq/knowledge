@@ -1,6 +1,16 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { IsInt, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, IsUUID, MaxLength } from 'class-validator';
 import { vmsg } from '../../common/validation.js';
+
+export class RenameMemoDto {
+  @ApiProperty({ description: 'Shown in the list and on the memo; a Plaud memo keeps Plaud\'s own name as its filename' })
+  @IsString()
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
+  @IsNotEmpty()
+  @MaxLength(300, { message: vmsg('maxLength') })
+  title!: string;
+}
 
 export class CreateMemoDto {
   @ApiProperty({ format: 'uuid' })

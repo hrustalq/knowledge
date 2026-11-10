@@ -15,6 +15,16 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Added
+
+- **A memo can be renamed and deleted from its row on `/memos`, and a waiting Plaud recording's actions sit in one
+  menu.** Each memo row has a ⋮ menu with Rename and Delete; the memo's own page has the same menu in place of its
+  Delete button. A Plaud memo no longer has to stay `Plaud · <start time>`. `PATCH /v1/memos/:id { title }` (editor)
+  renames over the API: the title is trimmed, must not be empty and takes up to 300 characters; anyone but the
+  uploader gets the same 404 as on a read. The name Plaud gave the recording stays as the memo's `filename`. On a
+  recording waiting for Plaud's transcript, "Transcribe here", "Import when ready" and "Skip" moved from three
+  buttons into a ⋮ menu. (#875)
+
 ### Fixed
 
 - **A Plaud recording you have just transcribed in the Plaud app no longer sits under "waiting" on `/memos`.** The

@@ -1,11 +1,11 @@
-import { Body, Controller, Delete, Get, Param, Post, Query, Redirect } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Redirect } from '@nestjs/common';
 import { ApiExcludeEndpoint, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { CreateMemoResponse, MemoDetailResponse, MemoListResponse, MemoResponse } from '@knowledge/contracts';
 import { Access, CurrentPrincipal, Feature } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { Returns } from '../common/returns.decorator.js';
-import { CreateMemoDto, ImportPlaudMemoDto, ListMemosQueryDto } from './dto/memos.dto.js';
+import { CreateMemoDto, ImportPlaudMemoDto, ListMemosQueryDto, RenameMemoDto } from './dto/memos.dto.js';
 import { MemosService } from './memos.service.js';
 
 /**
@@ -57,6 +57,14 @@ export class MemosController {
   @ApiOperation({ summary: 'Resume a failed memo from the step it failed in' })
   async retry(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<MemoResponse> {
     return { memo: await this.memos.retry(principal, id) };
+  }
+
+  @Patch(':id')
+  @Returns('MemoResponse')
+  @Access('editor', 'memo')
+  @ApiOperation({ summary: 'Rename a memo' })
+  async rename(@Param('id', ParseUUIDPipe) id: string, @Body() dto: RenameMemoDto, @CurrentPrincipal() principal: Principal): Promise<MemoResponse> {
+    return { memo: await this.memos.rename(principal, id, dto.title) };
   }
 
   @Delete(':id')

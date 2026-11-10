@@ -4725,9 +4725,17 @@ model Memo {
   /// The uploader's language, frozen for the worker and the sweeper.
   locale       String    @default("en")
 
+  /// MemoSource: 'upload' | 'plaud' (#864). A Plaud memo is built from Plaud's
+  /// transcript and has no audio: `audio_key` is empty and `audio_purged_at` set.
+  source     String  @default("upload")
+  /// The recording's id at its source; null for an upload.
+  externalId String? @map("external_id")
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
+  /// One memo per source recording per person per workspace; NULLs never collide.
+  @@unique([workspaceId, createdBy, source, externalId])
   @@index([workspaceId, createdBy, createdAt])
   @@index([status])
   @@map("memos")

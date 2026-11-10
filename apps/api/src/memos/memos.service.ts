@@ -1,4 +1,5 @@
 import {
+  BadGatewayException,
   BadRequestException,
   ConflictException,
   GoneException,
@@ -9,7 +10,7 @@ import {
   UnsupportedMediaTypeException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { Memo } from '@prisma/client';
+import { Prisma, type Memo } from '@prisma/client';
 import {
   MEMO_FORMATS,
   memoExtensionFor,
@@ -20,6 +21,7 @@ import {
   type MemoInfo,
   type MemoListResponse,
   type MemoSegment,
+  type MemoSource,
   type MemoStatus,
   type MemoTranscriptionState,
 } from '@knowledge/contracts';
@@ -27,9 +29,12 @@ import type { Env } from '../config/env.js';
 import type { Principal } from '../auth/principal.js';
 import { AiUsageService } from '../ai/ai-usage.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
+import { PlaudError } from '../plaud/plaud.client.js';
+import { PlaudService } from '../plaud/plaud.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { MemosProducer } from './memos.producer.js';
+import { stitchTranscript } from './transcript.js';
 import { formatBytes } from '../common/format-bytes.js';
 import { currentLocale, t } from '../i18n/t.js';
 
@@ -66,6 +71,7 @@ export class MemosService {
     private readonly usage: AiUsageService,
     private readonly producer: MemosProducer,
     config: ConfigService<Env, true>,
+    private readonly plaud: PlaudService,
   ) {
     this.maxBytes = config.get('MEMO_MAX_BYTES', { infer: true });
     this.maxMinutes = config.get('MEMO_MAX_MINUTES', { infer: true });
@@ -123,14 +129,7 @@ export class MemosService {
         t('error.memo.tooLong', { minutes: Math.ceil(input.durationSeconds / 60), limit: this.maxMinutes }),
       );
     }
-    const project = await this.prisma.project.findFirst({
-      where: { id: input.projectId, workspaceId: input.workspaceId },
-      select: { id: true },
-    });
-    if (!project) throw new BadRequestException(t('error.project.notFound', { id: input.projectId }));
-    const scope = await this.permissions.scopeFor(principal, input.workspaceId);
-    await this.permissions.requireLevel(scope, { type: 'project', id: project.id }, 'view');
-    await this.usage.assertWithinBudget(input.workspaceId, principal.userId);
+    const project = await this.projectFor(principal, input.workspaceId, input.projectId);
 
     // The stored type is the format's own, never the client's: the audio
     // route serves it inline, and a claimed `text/html` must not render.
@@ -189,6 +188,76 @@ export class MemosService {
     if (claimed.count === 0) throw new ConflictException(t('error.memo.alreadyUploaded'));
     await this.producer.enqueue(row.id);
     return toInfo({ ...row, status: 'uploaded', sizeBytes: head.contentLength });
+  }
+
+  /**
+   * A Plaud recording as a memo (#864), built from Plaud's own transcript: no
+   * audio is copied and our speech-to-text never runs, so this works with
+   * transcription off. The recording is read as the caller, from their own
+   * Plaud sign-in. Importing one twice is one memo — the unique index decides,
+   * so two racing imports cannot both insert.
+   *
+   * The transcript is masked by `stitchTranscript` before the one write, like
+   * a transcribed memo's. The memo's title is ours, never Plaud's: the title
+   * reaches the secretary outside the untrusted wrapper, and a Plaud name can
+   * be text Plaud's model wrote from the recording. Plaud's name is kept as
+   * the filename, which is only ever displayed.
+   */
+  async importPlaud(principal: Principal, input: { workspaceId: string; projectId: string; fileId: string }): Promise<MemoInfo> {
+    const project = await this.projectFor(principal, input.workspaceId, input.projectId);
+    const same = { workspaceId: input.workspaceId, createdBy: principal.userId, source: 'plaud', externalId: input.fileId };
+    const existing = await this.prisma.memo.findFirst({ where: same });
+    if (existing) return toInfo(existing);
+
+    let recording, utterances;
+    try {
+      recording = await this.plaud.recording(principal.userId, input.fileId);
+      utterances = recording && (await this.plaud.transcript(principal.userId, input.fileId));
+    } catch (err) {
+      if (!(err instanceof PlaudError)) throw err;
+      throw new BadGatewayException({ statusCode: 502, message: t('error.memo.plaudFailed'), reason: 'plaud-failed' });
+    }
+    if (!recording || !utterances) {
+      throw new ConflictException({ statusCode: 409, message: t('error.memo.plaudNotLinked'), reason: 'plaud-not-linked' });
+    }
+    if (recording.durationSeconds > this.maxMinutes * 60) {
+      throw new PayloadTooLargeException(
+        t('error.memo.tooLong', { minutes: Math.ceil(recording.durationSeconds / 60), limit: this.maxMinutes }),
+      );
+    }
+    const { segments } = stitchTranscript([
+      { offset: 0, duration: recording.durationSeconds, language: null, segments: utterances, text: '' },
+    ]);
+    // Plaud transcribes when the person asks it to. Until then there is nothing to import.
+    if (!segments.length) {
+      throw new ConflictException({ statusCode: 409, message: t('error.memo.plaudNotTranscribed'), reason: 'plaud-not-transcribed' });
+    }
+
+    let row: Memo;
+    try {
+      row = await this.prisma.memo.create({
+        data: {
+          ...same,
+          projectId: project.id,
+          title: `Plaud · ${(recording.startAt ?? new Date().toISOString()).slice(0, 16).replace('T', ' ')}`,
+          filename: recording.name.slice(0, 255),
+          contentType: '',
+          durationSeconds: recording.durationSeconds,
+          // No audio: the same state retention leaves a memo in.
+          audioKey: '',
+          audioPurgedAt: new Date(),
+          status: 'transcribed',
+          transcript: segments as unknown as Prisma.InputJsonValue,
+          locale: currentLocale(),
+        },
+      });
+    } catch (err) {
+      if (!(err instanceof Prisma.PrismaClientKnownRequestError) || err.code !== 'P2002') throw err;
+      return toInfo((await this.prisma.memo.findFirst({ where: same }))!);
+    }
+    // The memo job sends a transcribed memo straight to its analysis.
+    await this.producer.enqueue(row.id);
+    return toInfo(row);
   }
 
   async get(principal: Principal, memoId: string): Promise<MemoDetailResponse> {
@@ -265,6 +334,16 @@ export class MemosService {
     });
   }
 
+  /** The project a memo goes into: in this workspace, visible to the caller, and within the model budget. */
+  private async projectFor(principal: Principal, workspaceId: string, projectId: string): Promise<{ id: string }> {
+    const project = await this.prisma.project.findFirst({ where: { id: projectId, workspaceId }, select: { id: true } });
+    if (!project) throw new BadRequestException(t('error.project.notFound', { id: projectId }));
+    const scope = await this.permissions.scopeFor(principal, workspaceId);
+    await this.permissions.requireLevel(scope, { type: 'project', id: project.id }, 'view');
+    await this.usage.assertWithinBudget(workspaceId, principal.userId);
+    return project;
+  }
+
   private async require(principal: Principal, memoId: string): Promise<Memo> {
     const row = await this.prisma.memo.findFirst({
       where: { id: memoId, ...(principal.isAdmin ? {} : { createdBy: principal.userId }) },
@@ -297,6 +376,7 @@ function toInfo(row: Omit<Memo, 'transcript' | 'dropped' | 'summary'>): MemoInfo
     stage: row.stage,
     error: row.error,
     audioAvailable: !row.audioPurgedAt && row.status !== 'pending',
+    source: row.source as MemoSource,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

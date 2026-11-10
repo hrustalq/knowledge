@@ -904,6 +904,9 @@ export type I18nTranslations = {
         "memo": {
             "notFound": string;
             "plaudOff": string;
+            "plaudNotLinked": string;
+            "plaudNotTranscribed": string;
+            "plaudFailed": string;
             "disabled": string;
             "unsupportedFormat": string;
             "tooLarge": string;

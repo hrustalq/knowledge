@@ -25,13 +25,25 @@ in the pull request that introduces them — see
   connection and is not listed under `GET /v1/me/credentials`. This is the first step of importing Plaud recordings
   as memos (#864): nothing is imported yet and the web app has no control for it. (#864)
 
+- **A Plaud recording can be imported as a memo, from the transcript Plaud already made.** `POST /v1/memos/plaud
+  { workspaceId, projectId, fileId }` (editor) reads the recording as the caller, from their linked Plaud account, and
+  creates a memo that goes straight to analysis. Our speech-to-text never runs for it, so this works with
+  `TRANSCRIPTION_PROVIDER=none` and writes no `transcription` usage. Segments carry the speaker names set in Plaud, and
+  the secretary reads them. The transcript is masked before it is stored, like any memo's. Importing the same recording
+  again returns the same memo. A recording Plaud has not transcribed yet answers 409 `plaud-not-transcribed`: generate
+  its transcript in the Plaud app first. With no usable Plaud sign-in the answer is 409 `plaud-not-linked`. Such a memo
+  has no audio (`audioAvailable: false`), its `source` is `plaud`, and its title is `Plaud · <start time>`; the name
+  Plaud gave the recording is kept as its `filename`. (#864)
+
 ### Operations
 
 - New optional variable `PLAUD_OAUTH_CLIENT_ID`, empty by default, which leaves every Plaud route answering "not set
   up". To turn linking on, register a public client once with `POST https://mcp.plaud.ai/register` (redirect URI
   `$API_PUBLIC_URL/v1/plaud/callback`, `token_endpoint_auth_method` `none`; the exact request is in `.env.example`)
   and set the `client_id` it returns as a GitHub `production` variable. There is no secret. It needs
-  `SETTINGS_ENCRYPTION_KEY`, as Figma sign-in does. No migration.
+  `SETTINGS_ENCRYPTION_KEY`, as Figma sign-in does.
+- Migration `20270105100000_memo_source` adds `memos.source` (default `upload`), nullable `memos.external_id` and a
+  unique index over them. It is additive and survives a rollback to the previous release.
 
 ## [0.47.0] — 2026-11-10
 

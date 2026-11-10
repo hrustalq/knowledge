@@ -43,7 +43,7 @@ export function memoOutputContract(max: number): string {
 export function memoPrompt(title: string, segments: MemoSegment[]): string {
   let text = '';
   for (const s of segments) {
-    const line = `[${s.i}] ${clock(s.start)}–${clock(s.end)} ${s.text}\n`;
+    const line = `[${s.i}] ${clock(s.start)}–${clock(s.end)} ${s.speaker ? `${s.speaker}: ` : ''}${s.text}\n`;
     if (text.length + line.length > MAX_TRANSCRIPT_CHARS) {
       text += '[…the rest of the recording is not shown]\n';
       break;

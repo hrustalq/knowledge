@@ -8,6 +8,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Pause, Play } from 'lucide-vue-next'
 import { memoClock } from '@knowledge/contracts'
+import { Button } from '@/shared/ui/button'
 import { memoBars, type MemoListPlayer } from '../model/memo-player'
 
 const props = defineProps<{ memoId: string; title: string; durationSeconds: number | null; player: MemoListPlayer }>()
@@ -29,20 +30,23 @@ const nudge = (seconds: number) => props.player.seek(props.memoId, Math.min(leng
 </script>
 
 <template>
-  <div class="flex shrink-0 items-center gap-2.5">
-    <button
-      type="button"
-      class="bg-foreground text-background hover:bg-foreground/85 focus-visible:ring-ring focus-visible:ring-offset-background grid size-8 shrink-0 place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+  <!-- DESIGN.md: a control is a round-rectangle, never a pill, and the accent is not spent on decoration:
+       the played part is ink, the rest is muted. -->
+  <div class="flex items-center gap-2">
+    <Button
+      variant="outline"
+      size="icon-xs"
+      class="shrink-0"
       :aria-label="t(playing ? 'memos.player.pause' : 'memos.player.play', { title })"
       :aria-pressed="playing"
       @click="player.toggle(memoId)"
     >
-      <Pause v-if="playing" class="size-3.5" aria-hidden="true" />
-      <Play v-else class="ml-0.5 size-3.5" aria-hidden="true" />
-    </button>
+      <Pause v-if="playing" aria-hidden="true" />
+      <Play v-else aria-hidden="true" />
+    </Button>
     <!-- A slider once this memo is the one loaded; before that, a picture of one that starts it. -->
     <div
-      class="focus-visible:ring-ring hidden h-8 w-40 cursor-pointer items-center gap-[3px] rounded-sm outline-none focus-visible:ring-2 sm:flex"
+      class="focus-visible:ring-ring flex h-4 w-32 cursor-pointer items-center gap-0.5 rounded-sm outline-none focus-visible:ring-2"
       :role="mine ? 'slider' : undefined"
       :tabindex="mine ? 0 : undefined"
       :aria-hidden="mine ? undefined : true"
@@ -58,11 +62,11 @@ const nudge = (seconds: number) => props.player.seek(props.memoId, Math.min(leng
       <span
         v-for="(h, i) in bars"
         :key="i"
-        class="w-[2px] flex-1 rounded-full"
-        :class="(i + 0.5) / bars.length <= played ? 'bg-foreground' : 'bg-muted-foreground/35'"
+        class="min-w-px flex-1 rounded-full"
+        :class="(i + 0.5) / bars.length <= played ? 'bg-foreground' : 'bg-muted-foreground/40'"
         :style="{ height: `${Math.round(h * 100)}%` }"
       />
     </div>
-    <span v-if="length" class="text-muted-foreground w-11 text-right font-mono text-xs tabular-nums">{{ memoClock(mine && at ? at : length) }}</span>
+    <span v-if="mine && at" class="text-muted-foreground font-mono text-xs tabular-nums">{{ memoClock(at) }}</span>
   </div>
 </template>

@@ -2,7 +2,7 @@ import { computed, type ComputedRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
-import type { MergeRequestInfo } from '@knowledge/contracts'
+import type { MemoDetailResponse, MergeRequestInfo } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
@@ -53,6 +53,7 @@ const STATIC: Record<string, string> = {
   '/qa': 'nav.qa',
   '/analytics': 'nav.analytics',
   '/captures': 'nav.captures',
+  '/memos': 'nav.memos',
   '/conflicts': 'nav.conflicts',
   '/assistant': 'nav.assistant',
   '/notifications': 'nav.notifications',
@@ -88,6 +89,15 @@ export function useCrumbs(): ComputedRef<Crumb[]> {
     computed(() => ({
       ...apiQueryOptions('/v1/merge-requests/{id}', { path: { id: mrId.value ?? '' } }),
       enabled: mrId.value !== null,
+    })),
+  )
+
+  /** A memo's crumb is its title (#874), from the memo page's own query like a merge request's. */
+  const memoId = computed(() => (route.path.startsWith('/memos/') ? String(route.params.id) : null))
+  const memoQuery = useQuery(
+    computed(() => ({
+      ...apiQueryOptions('/v1/memos/{id}', { path: { id: memoId.value ?? '' } }),
+      enabled: memoId.value !== null,
     })),
   )
 
@@ -147,6 +157,10 @@ export function useCrumbs(): ComputedRef<Crumb[]> {
         { label: t('nav.mergeRequests'), to: '/merge-requests' },
         { label: mr?.title ?? (route.params.id as string).slice(0, 8) },
       ]
+    }
+    if (path.startsWith('/memos/')) {
+      const memo = (memoQuery.data.value as MemoDetailResponse | undefined)?.memo
+      return [{ label: t('nav.memos'), to: '/memos' }, { label: memo?.title ?? (route.params.id as string).slice(0, 8) }]
     }
     if (path.startsWith('/settings')) {
       // Docs stop at the section rather than naming the article. Resolving the

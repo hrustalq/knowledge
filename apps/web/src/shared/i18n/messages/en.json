@@ -7397,7 +7397,6 @@
       "failed": "Failed"
     },
     "detail": {
-      "back": "All memos",
       "private": "Only you can see this memo.",
       "transcript": "Transcript",
       "summary": "Summary",

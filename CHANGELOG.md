@@ -25,6 +25,12 @@ in the pull request that introduces them — see
   asked twice within 30 seconds it makes no second call to Plaud. A check never imports past the daily cap in auto
   mode, never starts speech-to-text here and sends no notification. (#873)
 
+- **The memo list and a memo's page have their trail under the top bar again, and a transcript is easier to read.**
+  Both pages were missing from the breadcrumb strip, so they began right under the top bar while every other page
+  began under a trail, and the memo page carried its own "All memos" arrow to make up for it. `/memos` now shows
+  `Memos`, a memo shows `Memos › <its title>`, the arrow is gone, and the browser tab is named after the memo. A
+  transcript line now runs the full width of its column at body text size; it was held to 65 characters. (#874)
+
 ## [0.48.0] — 2026-11-10
 
 ### Added

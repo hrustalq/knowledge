@@ -64,7 +64,10 @@ closes itself; this card rereads itself through the connections long poll
 **Disconnect is per-person.** `DELETE /v1/connectors/github/identity` has no
 `@Access`: the identity row is keyed by user, so there is no workspace to check
 and nothing anybody else can be refused. It forgets the caller's token only —
-installations are the workspace's, and syncs keep running on them.
+installations are the workspace's, and syncs keep running on them. Since #857
+the identity is the caller's GitHub sign-in credential, so **Disconnect** under
+Settings → Profile → Connected accounts does the same
+([69 § Credentials](69-connections.md#credentials-857)).
 
 **No caching.** Both reads happen when an admin opens the card; a cached copy
 would hide the permission they have just accepted. The card refetches when the

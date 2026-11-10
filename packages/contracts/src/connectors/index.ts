@@ -755,6 +755,16 @@ export function connectionProviderFor(kind: ConnectorKind, config: Record<string
 }
 
 /**
+ * The host a credential (#857) is valid on, from its connection's site. An
+ * Atlassian token belongs to the account and works on every site it can
+ * reach, so its credential has none and only the workspace connection names
+ * one; every other provider's secret is tied to the host it was issued by.
+ */
+export function credentialSiteFor(provider: ConnectionProvider, site: string | null): string | null {
+  return provider === 'atlassian' ? null : site;
+}
+
+/**
  * How an OAuth or App round trip ended (#564). Every callback lands on the web
  * page `/oauth/:provider?outcome=…&returnTo=…`, which says it in words.
  */

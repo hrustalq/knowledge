@@ -197,7 +197,9 @@ async function remove() {
               class="pt-0.5 font-mono text-xs tabular-nums"
               :class="playing === s.i ? 'text-primary font-semibold' : 'text-muted-foreground group-hover:text-foreground'"
             >{{ memoClock(s.start) }}</span>
-            <span class="kn-measure text-[0.95rem] leading-relaxed" :class="playing === s.i ? 'text-foreground' : ''">{{ s.text }}</span>
+            <span class="kn-measure text-[0.95rem] leading-relaxed" :class="playing === s.i ? 'text-foreground' : ''">
+              <span v-if="s.speaker" class="font-medium">{{ s.speaker }}: </span>{{ s.text }}
+            </span>
           </button>
         </li>
       </ol>
@@ -219,7 +221,7 @@ async function remove() {
             @timeupdate="onTime"
           />
           <p v-else-if="memo.status !== 'pending'" class="text-muted-foreground rounded-md border px-3 py-2 text-sm">
-            {{ t('memos.detail.audioGone') }}
+            {{ memo.source === 'plaud' ? t('memos.detail.audioPlaud') : t('memos.detail.audioGone') }}
           </p>
           <p v-if="memo.language" class="text-muted-foreground text-xs">{{ t('memos.detail.language', { language: memo.language }) }}</p>
         </div>

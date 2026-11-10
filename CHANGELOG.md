@@ -58,6 +58,16 @@ in the pull request that introduces them — see
   has no speaker names. `GET /v1/plaud/settings` now returns `transcribe: { enabled, limitSeconds, remainingSeconds }`
   so a client can say what is left before asking. (#864)
 
+- **Plaud in the web app.** `/memos` has a Plaud panel between Upload and the memo list, on servers where Plaud is
+  set up. It links your Plaud account in a new tab and says when the sign-in lapsed. Once a project is chosen it
+  lists the recordings waiting for your yes, with Import and Skip for one, for the ticked ones or for all; imports
+  that were refused, with the reason and Try again; and, folded away, the recordings waiting for Plaud's transcript,
+  where "Import when ready" says yes ahead of time. Rules opens the pick rules and the choice between asking and
+  importing automatically, and holds Unlink. "Transcribe here" on a waiting recording states its length, the minutes
+  left in your allowance and that speaker names will be missing before it spends anything. A memo's transcript shows
+  who is speaking when the source names them, and a Plaud memo says its audio stays in Plaud. Plaud notifications
+  lead to `/memos`. English and Russian. (#864)
+
 ### Operations
 
 - New optional variable `PLAUD_OAUTH_CLIENT_ID`, empty by default, which leaves every Plaud route answering "not set

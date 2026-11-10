@@ -84,6 +84,8 @@ export function notificationLink(entry: NotificationEntry): string | null {
   if (entry.type.startsWith('connector.run.')) return '/settings/connectors?tab=runs'
   if (entry.type.startsWith('import.')) return entry.documentId ? `/documents/${entry.documentId}` : '/upload'
   if (entry.type.startsWith('export.')) return '/settings/exports'
+  // Plaud's queue lives on the memos page (#864).
+  if (entry.type.startsWith('plaud.')) return '/memos'
   if (entry.type.startsWith('memo.')) {
     return typeof entry.metadata.memoId === 'string' ? `/memos/${entry.metadata.memoId}` : '/memos'
   }

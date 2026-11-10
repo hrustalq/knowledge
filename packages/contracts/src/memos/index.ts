@@ -34,7 +34,13 @@ export interface MemoSegment {
   start: number;
   end: number;
   text: string;
+  /** Who is speaking, when the source names them (a Plaud transcript does; our own speech-to-text does not). */
+  speaker?: string;
 }
+
+/** Where a memo came from: an uploaded recording, or a Plaud recording's own transcript (#864). */
+export const MEMO_SOURCES = ['upload', 'plaud'] as const;
+export type MemoSource = (typeof MEMO_SOURCES)[number];
 
 /**
  * A moment in a recording as people read it: `12:03`, or `1:02:03` past the
@@ -68,8 +74,9 @@ export interface MemoInfo {
   status: MemoStatus;
   stage: string | null;
   error: string | null;
-  /** False once the audio was purged (retention) — the transcript stays. */
+  /** False once the audio was purged (retention), and always for a Plaud memo — the transcript stays. */
   audioAvailable: boolean;
+  source: MemoSource;
   createdAt: string;
   updatedAt: string;
 }

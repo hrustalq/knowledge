@@ -210,6 +210,9 @@
   "memo": {
     "notFound": "Memo not found",
     "plaudOff": "Plaud import is not set up on this server.",
+    "plaudNotLinked": "Link your Plaud account first, or link it again if the sign-in lapsed.",
+    "plaudNotTranscribed": "Plaud has not transcribed this recording yet. Generate its transcript in the Plaud app, then import it.",
+    "plaudFailed": "Plaud could not be read just now. Try again.",
     "disabled": "Memos are off on this server: set {variable} to turn on transcription.",
     "unsupportedFormat": "{filename} is not a recording memos take. Accepted: {accepted}.",
     "tooLarge": "That recording is {size}; the limit is {limit}.",

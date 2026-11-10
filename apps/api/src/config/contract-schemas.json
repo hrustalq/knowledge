@@ -16677,6 +16677,9 @@
       "audioAvailable": {
         "type": "boolean"
       },
+      "source": {
+        "$ref": "#/components/schemas/MemoSource"
+      },
       "createdAt": {
         "type": "string"
       },
@@ -16698,6 +16701,7 @@
       "stage",
       "error",
       "audioAvailable",
+      "source",
       "createdAt",
       "updatedAt"
     ]
@@ -16806,6 +16810,9 @@
       },
       "text": {
         "type": "string"
+      },
+      "speaker": {
+        "type": "string"
       }
     },
     "required": [
@@ -16813,6 +16820,13 @@
       "start",
       "end",
       "text"
+    ]
+  },
+  "MemoSource": {
+    "type": "string",
+    "enum": [
+      "upload",
+      "plaud"
     ]
   },
   "MemoStatus": {

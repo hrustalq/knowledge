@@ -10,11 +10,12 @@
  * recording Plaud has not transcribed) an explicit "transcribe here", whose
  * dialog says what it spends before it spends it.
  */
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
+import { useDocumentVisibility } from '@vueuse/core'
 import { toast } from 'vue-sonner'
-import { AudioLines, ChevronRight, Hourglass, SlidersHorizontal, TriangleAlert } from 'lucide-vue-next'
+import { AudioLines, ChevronRight, Hourglass, RefreshCw, SlidersHorizontal, TriangleAlert } from 'lucide-vue-next'
 import type { PlaudImportEntry, PlaudImportsResponse, PlaudLinkResponse, PlaudSettingsResponse } from '@knowledge/contracts'
 import { openOauthTab } from '@/entities/connector'
 import { api, request } from '@/shared/api/client'
@@ -111,6 +112,33 @@ async function act(action: 'confirm' | 'skip', rows: readonly PlaudImportEntry[]
     await refresh()
   }
 }
+
+/**
+ * Looks at Plaud now (#873) rather than at the sweeper's next turn, which can
+ * be ten minutes off. Asked for by the button, and quietly whenever the
+ * person comes (back) to a page with recordings still waiting: that is the
+ * moment they have just generated a transcript in the Plaud app. The server
+ * answers the list as it stands when asked twice within its floor.
+ */
+const checking = ref(false)
+async function checkNow(quiet = false) {
+  if (checking.value) return
+  checking.value = true
+  try {
+    await request('post', '/v1/plaud/imports/refresh', { body: { workspaceId: props.workspaceId } })
+    await refresh()
+  } catch (e) {
+    if (!quiet) toast.error(errorMessage(e, t))
+  } finally {
+    checking.value = false
+  }
+}
+const visibility = useDocumentVisibility()
+watch(
+  () => visibility.value === 'visible' && queue.value.waiting.length > 0,
+  (due) => due && void checkNow(true),
+  { immediate: true },
+)
 
 const minutes = (seconds: number) => Math.max(1, Math.round(seconds / 60))
 const overAllowance = computed(() =>
@@ -226,7 +254,13 @@ const meta = (row: PlaudImportEntry) =>
         </button>
         <Collapse :open="waitingOpen">
           <div id="plaud-waiting">
-            <p class="text-muted-foreground kn-measure px-4 pb-2.5 text-xs">{{ t('memos.plaud.waitingHint') }}</p>
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 pb-2.5">
+              <p class="text-muted-foreground kn-measure min-w-0 flex-1 basis-56 text-xs">{{ t('memos.plaud.waitingHint') }}</p>
+              <Button size="sm" variant="outline" class="h-7" :disabled="checking" @click="checkNow()">
+                <RefreshCw class="size-3.5" :class="checking ? 'motion-safe:animate-spin' : ''" aria-hidden="true" />
+                {{ checking ? t('memos.plaud.checking') : t('memos.plaud.checkNow') }}
+              </Button>
+            </div>
             <ul class="divide-y border-t">
               <li v-for="row in queue.waiting" :key="row.id" class="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2.5">
                 <Hourglass class="text-muted-foreground size-4 shrink-0" aria-hidden="true" />

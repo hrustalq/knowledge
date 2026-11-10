@@ -27520,6 +27520,72 @@
         ]
       }
     },
+    "/v1/plaud/imports/refresh": {
+      "post": {
+        "operationId": "PlaudController_refresh",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaudRefreshDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaudImportsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Look at my Plaud account now instead of waiting for the next pass; at most once in 30 seconds",
+        "tags": [
+          "memos"
+        ]
+      }
+    },
     "/v1/plaud/imports/confirm": {
       "post": {
         "operationId": "PlaudController_confirm",
@@ -41907,7 +41973,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.47.0",
+    "version": "0.48.0",
     "contact": {}
   },
   "tags": [],
@@ -47468,6 +47534,18 @@
           "workspaceId",
           "projectId",
           "rules"
+        ]
+      },
+      "PlaudRefreshDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "workspaceId"
         ]
       },
       "PlaudImportIdsDto": {

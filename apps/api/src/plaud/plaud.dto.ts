@@ -68,6 +68,12 @@ export class PlaudImportsQueryDto {
   status?: PlaudImportStatus;
 }
 
+export class PlaudRefreshDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+}
+
 export class PlaudImportIdsDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()

@@ -939,6 +939,9 @@
         "figma": {
           "connected": "Figma is now a connection in this workspace."
         },
+        "plaud": {
+          "connected": "Your Plaud account is linked. Only you can import its recordings."
+        },
         "auth-failed": "{provider} did not complete the authorisation. Go back and try again.",
         "install-failed": "{provider} did not confirm the installation. Go back and try again.",
         "account-in-use": "Someone else has already connected this {provider} account, so nothing was saved. Paste a personal access token instead.",

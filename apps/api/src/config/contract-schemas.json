@@ -17918,6 +17918,41 @@
       "views"
     ]
   },
+  "PlaudAuthorizeResponse": {
+    "type": "object",
+    "properties": {
+      "url": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "url"
+    ]
+  },
+  "PlaudLinkResponse": {
+    "type": "object",
+    "properties": {
+      "configured": {
+        "type": "boolean"
+      },
+      "linked": {
+        "type": "boolean"
+      },
+      "accountLabel": {
+        "type": "string",
+        "nullable": true
+      },
+      "needsReconnect": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "configured",
+      "linked",
+      "accountLabel",
+      "needsReconnect"
+    ]
+  },
   "PostAssistantMessageResponse": {
     "type": "object",
     "properties": {

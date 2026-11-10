@@ -209,6 +209,7 @@
   },
   "memo": {
     "notFound": "Memo not found",
+    "plaudOff": "Plaud import is not set up on this server.",
     "disabled": "Memos are off on this server: set {variable} to turn on transcription.",
     "unsupportedFormat": "{filename} is not a recording memos take. Accepted: {accepted}.",
     "tooLarge": "That recording is {size}; the limit is {limit}.",

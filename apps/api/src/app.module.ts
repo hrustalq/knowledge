@@ -31,6 +31,7 @@ import { AiModule } from './ai/ai.module.js';
 import { GlossaryModule } from './glossary/glossary.module.js';
 import { ImportModule } from './import/import.module.js';
 import { MemosModule } from './memos/memos.module.js';
+import { PlaudModule } from './plaud/plaud.module.js';
 import { WorkflowsModule } from './workflows/workflows.module.js';
 import { WorkflowMaterializeModule } from './workflows/workflow-materialize.module.js';
 import { TemplatesModule } from './templates/templates.module.js';
@@ -89,6 +90,7 @@ import { ChatModule } from './chat/chat.module.js';
     GlossaryModule,
     ImportModule,
     MemosModule,
+    PlaudModule,
     WorkflowsModule,
     // API-only: materialisation writes pages, so it runs here and not in the
     // MCP process, which imports WorkflowCoreModule for its read/start tools.

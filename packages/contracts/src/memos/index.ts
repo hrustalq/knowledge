@@ -115,3 +115,24 @@ export interface MemoDetailResponse {
   proposals: MemoProposal[];
   dropped: MemoDropped[];
 }
+
+// ---------------------------------------------------------------------------
+// Plaud import (#864): a person's own Plaud sign-in, the source of memos built
+// from Plaud's transcripts.
+// ---------------------------------------------------------------------------
+
+// GET /v1/plaud/link
+export interface PlaudLinkResponse {
+  /** False with `PLAUD_OAUTH_CLIENT_ID` unset or no encryption key: linking is not offered. */
+  configured: boolean;
+  linked: boolean;
+  /** The Plaud account's name as Plaud reports it; shown to its owner only. */
+  accountLabel: string | null;
+  /** The sign-in lapsed (Plaud keeps it seven days without use): link again. */
+  needsReconnect: boolean;
+}
+
+// GET /v1/plaud/authorize
+export interface PlaudAuthorizeResponse {
+  url: string;
+}

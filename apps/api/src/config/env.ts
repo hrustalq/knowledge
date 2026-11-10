@@ -850,6 +850,14 @@ export const envSchema = z.object({
   FIGMA_OAUTH_CLIENT_SECRET: z.string().optional().default(''),
 
   /**
+   * Plaud import (#864): the public OAuth client this deployment registered
+   * once with `POST https://mcp.plaud.ai/register`, redirect URI
+   * `${API_PUBLIC_URL}/v1/plaud/callback`. There is no secret. Empty is the off
+   * switch: linking a Plaud account is not offered.
+   */
+  PLAUD_OAUTH_CLIENT_ID: z.string().optional().default(''),
+
+  /**
    * GitHub App backing the repository picker (docs/features/30).
    *
    * Empty GITHUB_APP_ID is the off switch, and it is fail-soft in the same

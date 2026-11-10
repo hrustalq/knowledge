@@ -13,7 +13,7 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
-## [Unreleased]
+## [0.47.0] — 2026-11-10
 
 ### Added
 
@@ -59,9 +59,9 @@ in the pull request that introduces them — see
 - **Migration `20270104100000_credentials` adds the `credentials` table and `connections.credential_id`.** It only
   adds a table and a nullable column, so the previous release's image keeps running against a migrated database and a
   rollback by retag is safe. The migration copies GitHub and Figma sign-ins into `credentials`; at boot the API copies
-  pasted connection tokens, logging `moved N sign-in(s) into credentials`. Nothing reads the new table yet. Running it again is
-  safe: a later rotation of an old column, including one made by a rolled-back image, is copied over on the next
-  boot. (#857)
+  pasted connection tokens, logging `moved N sign-in(s) into credentials`. Every write also updates the old
+  `credential` columns, so v0.46.2 still dials after a retag. Running the copy again is safe: a later rotation of an
+  old column, including one made by a rolled-back image, is copied over on the next boot. (#857)
 
 ## [0.46.2] — 2026-11-09
 
@@ -6439,7 +6439,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.46.2...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.47.0...HEAD
+[0.47.0]: https://github.com/hrustalq/knowledge/compare/v0.46.2...v0.47.0
 [0.46.2]: https://github.com/hrustalq/knowledge/compare/v0.46.1...v0.46.2
 [0.46.1]: https://github.com/hrustalq/knowledge/compare/v0.46.0...v0.46.1
 [0.46.0]: https://github.com/hrustalq/knowledge/compare/v0.45.2...v0.46.0

@@ -62,6 +62,7 @@ export interface CreateMemoInput {
 export class MemosService {
   private readonly maxBytes: number;
   private readonly maxMinutes: number;
+  private readonly plaudTranscribeSeconds: number;
   private readonly transcription: MemoTranscriptionState;
 
   constructor(
@@ -75,6 +76,7 @@ export class MemosService {
   ) {
     this.maxBytes = config.get('MEMO_MAX_BYTES', { infer: true });
     this.maxMinutes = config.get('MEMO_MAX_MINUTES', { infer: true });
+    this.plaudTranscribeSeconds = config.get('PLAUD_TRANSCRIBE_MINUTES_PER_MONTH', { infer: true }) * 60;
     this.transcription = transcriptionState(
       config.get('TRANSCRIPTION_PROVIDER', { infer: true }),
       config.get('TRANSCRIPTION_BASE_URL', { infer: true }),
@@ -102,14 +104,7 @@ export class MemosService {
    * type once it has finished uploading is the rudest thing a form can do.
    */
   async create(principal: Principal, input: CreateMemoInput): Promise<CreateMemoResponse> {
-    if (!this.transcription.enabled) {
-      throw new ServiceUnavailableException({
-        statusCode: 503,
-        message: t('error.memo.disabled', { variable: this.transcription.missing }),
-        reason: 'transcription-disabled',
-        missing: this.transcription.missing,
-      });
-    }
+    this.assertTranscription();
     const ext = memoExtensionFor(input.filename, input.contentType);
     if (!ext) {
       throw new UnsupportedMediaTypeException(
@@ -239,7 +234,7 @@ export class MemosService {
         data: {
           ...same,
           projectId: project.id,
-          title: `Plaud · ${(recording.startAt ?? new Date().toISOString()).slice(0, 16).replace('T', ' ')}`,
+          title: plaudTitle(recording.startAt),
           filename: recording.name.slice(0, 255),
           contentType: '',
           durationSeconds: recording.durationSeconds,
@@ -334,6 +329,99 @@ export class MemosService {
     });
   }
 
+  /**
+   * "Transcribe here" (#864): our speech-to-text on a Plaud recording Plaud
+   * has not transcribed. It is the one way that spend happens for a Plaud
+   * recording, always the person's explicit act and never the sweeper's, and
+   * everything that can refuse it is checked now: transcription on, the
+   * project, the model budget, the length, and the person's allowance.
+   *
+   * The memo is queued like an upload with no copy of the audio; the worker
+   * reads it from Plaud as the person. It has no speaker names.
+   */
+  async transcribePlaud(principal: Principal, input: { workspaceId: string; projectId: string; fileId: string }): Promise<MemoInfo> {
+    this.assertTranscription();
+    const project = await this.projectFor(principal, input.workspaceId, input.projectId);
+    const same = { workspaceId: input.workspaceId, createdBy: principal.userId, source: 'plaud', externalId: input.fileId };
+    const existing = await this.prisma.memo.findFirst({ where: same });
+    if (existing) return toInfo(existing);
+
+    let recording;
+    try {
+      recording = await this.plaud.recording(principal.userId, input.fileId);
+    } catch (err) {
+      if (!(err instanceof PlaudError)) throw err;
+      throw new BadGatewayException({ statusCode: 502, message: t('error.memo.plaudFailed'), reason: 'plaud-failed' });
+    }
+    if (!recording) throw new ConflictException({ statusCode: 409, message: t('error.memo.plaudNotLinked'), reason: 'plaud-not-linked' });
+    if (recording.durationSeconds > this.maxMinutes * 60) {
+      throw new PayloadTooLargeException(
+        t('error.memo.tooLong', { minutes: Math.ceil(recording.durationSeconds / 60), limit: this.maxMinutes }),
+      );
+    }
+    const { remainingSeconds } = await this.plaudTranscribeAllowance(principal.userId, input.workspaceId);
+    if (recording.durationSeconds > remainingSeconds) {
+      throw new ConflictException({
+        statusCode: 409,
+        message: t('error.memo.plaudAllowance', { minutes: Math.floor(remainingSeconds / 60), needed: Math.ceil(recording.durationSeconds / 60) }),
+        reason: 'plaud-transcribe-allowance',
+        remainingSeconds,
+      });
+    }
+
+    let row: Memo;
+    try {
+      row = await this.prisma.memo.create({
+        data: {
+          ...same,
+          projectId: project.id,
+          title: plaudTitle(recording.startAt),
+          filename: recording.name.slice(0, 255),
+          contentType: 'audio/mpeg',
+          durationSeconds: recording.durationSeconds,
+          audioKey: '',
+          audioPurgedAt: new Date(),
+          status: 'uploaded',
+          locale: currentLocale(),
+        },
+      });
+    } catch (err) {
+      if (!(err instanceof Prisma.PrismaClientKnownRequestError) || err.code !== 'P2002') throw err;
+      return toInfo((await this.prisma.memo.findFirst({ where: same }))!);
+    }
+    await this.producer.enqueue(row.id);
+    return toInfo(row);
+  }
+
+  /**
+   * What is left of a person's allowance for "Transcribe here": the ceiling
+   * less every second of speech transcribed for them in this workspace over
+   * the last 30 days, uploads included. Read from `ai_usage`, not a counter.
+   */
+  // ponytail: a memo still being transcribed is not in ai_usage yet, so two quick presses can overshoot by one recording; count queued memos if that matters.
+  async plaudTranscribeAllowance(userId: string, workspaceId: string): Promise<{ enabled: boolean; limitSeconds: number; remainingSeconds: number }> {
+    const used = await this.prisma.aiUsage.aggregate({
+      where: { workspaceId, userId, operation: 'transcription', createdAt: { gte: new Date(Date.now() - 30 * 86_400_000) } },
+      _sum: { audioSeconds: true },
+    });
+    const limitSeconds = this.plaudTranscribeSeconds;
+    return {
+      enabled: this.transcription.enabled && limitSeconds > 0,
+      limitSeconds,
+      remainingSeconds: Math.max(0, limitSeconds - (used._sum.audioSeconds ?? 0)),
+    };
+  }
+
+  private assertTranscription(): void {
+    if (this.transcription.enabled) return;
+    throw new ServiceUnavailableException({
+      statusCode: 503,
+      message: t('error.memo.disabled', { variable: this.transcription.missing }),
+      reason: 'transcription-disabled',
+      missing: this.transcription.missing,
+    });
+  }
+
   /** The project a memo goes into: in this workspace, visible to the caller, and within the model budget. */
   private async projectFor(principal: Principal, workspaceId: string, projectId: string): Promise<{ id: string }> {
     const project = await this.prisma.project.findFirst({ where: { id: projectId, workspaceId }, select: { id: true } });
@@ -351,6 +439,11 @@ export class MemosService {
     if (!row) throw new NotFoundException(t('error.memo.notFound'));
     return row;
   }
+}
+
+/** Ours, never Plaud's name: the title reaches the secretary outside the untrusted wrapper. */
+function plaudTitle(startAt: string | null): string {
+  return `Plaud · ${(startAt ?? new Date().toISOString()).slice(0, 16).replace('T', ' ')}`;
 }
 
 export function transcriptionState(provider: string, baseUrl: string, apiKey: string): MemoTranscriptionState {

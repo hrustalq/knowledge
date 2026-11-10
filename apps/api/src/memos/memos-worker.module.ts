@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AgentQueueModule } from '../agents/agent-queue.module.js';
 import { AiCoreModule } from '../ai/ai-core.module.js';
+import { PlaudCoreModule } from '../plaud/plaud-core.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { MemosQueueModule } from './memos-queue.module.js';
@@ -13,7 +14,7 @@ import { TranscriptionClient } from './transcription.client.js';
  * would make the API process start transcribing.
  */
 @Module({
-  imports: [PrismaModule, StorageModule, AiCoreModule, AgentQueueModule, MemosQueueModule],
+  imports: [PrismaModule, StorageModule, AiCoreModule, AgentQueueModule, MemosQueueModule, PlaudCoreModule],
   providers: [MemosProcessor, TranscriptionClient, MemoRetentionSweeper],
 })
 export class MemosWorkerModule {}

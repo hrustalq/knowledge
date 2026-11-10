@@ -96,10 +96,11 @@ describe('MemosService.importPlaud', () => {
     { start: 4, end: 9, text: 'Решили перенести релиз' },
   ];
 
-  function setup(over: { transcript?: unknown; recording?: unknown; env?: Record<string, unknown> } = {}) {
+  function setup(over: { transcript?: unknown; recording?: unknown; env?: Record<string, unknown>; usedSeconds?: number } = {}) {
     const rows: Array<Record<string, unknown>> = [];
     const prisma = {
       project: { findFirst: vi.fn().mockResolvedValue({ id: 'p1' }) },
+      aiUsage: { aggregate: vi.fn(async () => ({ _sum: { audioSeconds: over.usedSeconds ?? 0 } })) },
       memo: {
         findFirst: vi.fn(async ({ where }: { where: Record<string, unknown> }) => rows.find((r) => r.externalId === where.externalId && r.createdBy === where.createdBy) ?? null),
         create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
@@ -120,7 +121,7 @@ describe('MemosService.importPlaud', () => {
       transcript: vi.fn().mockResolvedValue('transcript' in over ? over.transcript : said),
     };
     // Transcription is off: importing must not need it.
-    const env: Record<string, unknown> = { MEMO_MAX_BYTES: 1000, MEMO_MAX_MINUTES: 1, TRANSCRIPTION_PROVIDER: 'none', TRANSCRIPTION_BASE_URL: '', TRANSCRIPTION_API_KEY: '', ...over.env };
+    const env: Record<string, unknown> = { MEMO_MAX_BYTES: 1000, MEMO_MAX_MINUTES: 1, TRANSCRIPTION_PROVIDER: 'none', TRANSCRIPTION_BASE_URL: '', TRANSCRIPTION_API_KEY: '', PLAUD_TRANSCRIBE_MINUTES_PER_MONTH: 2, ...over.env };
     const memos = new MemosService(prisma as never, {} as never, permissions as never, usage as never, producer as never, { get: (k: string) => env[k] } as never, plaud as never);
     return { memos, rows, prisma, producer, plaud, usage, permissions };
   }
@@ -168,5 +169,44 @@ describe('MemosService.importPlaud', () => {
     const { memos, plaud } = setup();
     plaud.recording.mockRejectedValueOnce(new PlaudError('Plaud tool get_file failed'));
     await expect(memos.importPlaud(member, input)).rejects.toMatchObject({ response: { reason: 'plaud-failed', statusCode: 502 } });
+  });
+
+  describe('transcribePlaud ("Transcribe here")', () => {
+    const on = { TRANSCRIPTION_PROVIDER: 'openai-compatible', TRANSCRIPTION_BASE_URL: 'http://stt' };
+
+    it('is refused while this server cannot transcribe, before Plaud is asked anything', async () => {
+      const { memos, plaud } = setup();
+      await expect(memos.transcribePlaud(member, input)).rejects.toMatchObject({ response: { reason: 'transcription-disabled' } });
+      expect(plaud.recording).not.toHaveBeenCalled();
+      expect(await memos.plaudTranscribeAllowance('u1', WS)).toMatchObject({ enabled: false });
+    });
+
+    it('queues the recording like an upload with no audio of ours and no transcript read', async () => {
+      const { memos, rows, producer, plaud, usage } = setup({ env: on });
+      const memo = await memos.transcribePlaud(member, input);
+      expect(usage.assertWithinBudget).toHaveBeenCalledWith(WS, 'u1');
+      expect(memo).toMatchObject({ status: 'uploaded', source: 'plaud', audioAvailable: false, title: 'Plaud · 2026-10-28 15:43' });
+      expect(rows[0]).toMatchObject({ externalId: 'f1', audioKey: '', contentType: 'audio/mpeg' });
+      expect(rows[0].transcript).toBeUndefined();
+      expect(plaud.transcript).not.toHaveBeenCalled();
+      expect(producer.enqueue).toHaveBeenCalledWith('m0');
+      // A second press is the same memo.
+      expect((await memos.transcribePlaud(member, input)).memoId).toBe(memo.memoId);
+      expect(producer.enqueue).toHaveBeenCalledTimes(1);
+    });
+
+    it('is refused past the allowance, saying what is left, and past the length limit', async () => {
+      // 2 minutes allowed, 80 s already used, the recording is 50 s.
+      const over = setup({ env: on, usedSeconds: 80 });
+      await expect(over.memos.transcribePlaud(member, input)).rejects.toMatchObject({ response: { reason: 'plaud-transcribe-allowance', remainingSeconds: 40 } });
+      expect(over.rows).toHaveLength(0);
+      expect(over.producer.enqueue).not.toHaveBeenCalled();
+      expect(await over.memos.plaudTranscribeAllowance('u1', WS)).toEqual({ enabled: true, limitSeconds: 120, remainingSeconds: 40 });
+
+      await expect(setup({ env: on, recording: { ...recording, durationSeconds: 61 } }).memos.transcribePlaud(member, input)).rejects.toBeInstanceOf(PayloadTooLargeException);
+      const off = setup({ env: { ...on, PLAUD_TRANSCRIBE_MINUTES_PER_MONTH: 0 } });
+      expect(await off.memos.plaudTranscribeAllowance('u1', WS)).toMatchObject({ enabled: false, remainingSeconds: 0 });
+      await expect(off.memos.transcribePlaud(member, input)).rejects.toMatchObject({ response: { reason: 'plaud-transcribe-allowance' } });
+    });
   });
 });

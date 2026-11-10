@@ -908,6 +908,10 @@ export type I18nTranslations = {
             "plaudNotTranscribed": string;
             "plaudFailed": string;
             "plaudNoProject": string;
+            "plaudNoAudio": string;
+            "plaudAudioTooLarge": string;
+            "plaudAllowance": string;
+            "plaudImportNotFound": string;
             "disabled": string;
             "unsupportedFormat": string;
             "tooLarge": string;

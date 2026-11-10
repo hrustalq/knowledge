@@ -1,6 +1,9 @@
+import { createWriteStream } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Readable, Transform } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { Logger } from '@nestjs/common';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { ConfigService } from '@nestjs/config';
@@ -10,6 +13,8 @@ import { AgentProducer } from '../agents/agent.producer.js';
 import { Job } from 'bullmq';
 import type { Env } from '../config/env.js';
 import { AiUsageService } from '../ai/ai-usage.service.js';
+import { safeFetch } from '../common/safe-fetch.js';
+import { PlaudService } from '../plaud/plaud.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { asLocale } from '../i18n/locale.js';
@@ -31,6 +36,7 @@ import { stitchTranscript, type ChunkTranscript } from './transcript.js';
 export class MemosProcessor extends WorkerHost {
   private readonly logger = new Logger(MemosProcessor.name);
   private readonly maxMinutes: number;
+  private readonly maxBytes: number;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -39,9 +45,11 @@ export class MemosProcessor extends WorkerHost {
     private readonly usage: AiUsageService,
     private readonly agents: AgentProducer,
     config: ConfigService<Env, true>,
+    private readonly plaud: PlaudService,
   ) {
     super();
     this.maxMinutes = config.get('MEMO_MAX_MINUTES', { infer: true });
+    this.maxBytes = config.get('MEMO_MAX_BYTES', { infer: true });
   }
 
   async process(job: Job<{ memoId: string }>): Promise<void> {
@@ -79,7 +87,9 @@ export class MemosProcessor extends WorkerHost {
     let failure: string | undefined;
     try {
       const source = join(dir, 'source');
-      await this.storage.downloadToFile(audioKey, source);
+      // A Plaud recording the person asked us to transcribe (#864) has no copy here: it is read from Plaud, as them.
+      if (row.source === 'plaud' && row.externalId) await this.downloadFromPlaud(userId, row.externalId, source);
+      else await this.storage.downloadToFile(audioKey, source);
       seconds = await probeSeconds(source);
       if (seconds > this.maxMinutes * 60) {
         throw new Error(t('error.memo.tooLong', { minutes: Math.ceil(seconds / 60), limit: this.maxMinutes }));
@@ -127,6 +137,28 @@ export class MemosProcessor extends WorkerHost {
     }
     if (failure) return this.fail(memoId, 'transcribing', failure);
     await this.analyse(row).catch((error: unknown) => this.fail(memoId, 'analysing', (error as Error).message));
+  }
+
+  /**
+   * Streams a Plaud recording's audio to a temp file, as its owner. The link
+   * is asked for now and used once, never stored. The size ceiling is enforced
+   * on the bytes as they arrive: Plaud's word on the length is not trusted.
+   */
+  private async downloadFromPlaud(userId: string, fileId: string, path: string): Promise<void> {
+    const audio = await this.plaud.audioUrl(userId, fileId);
+    if (!audio) throw new Error(t('error.memo.plaudNotLinked'));
+    if (!audio.url) throw new Error(t('error.memo.plaudNoAudio'));
+    const res = await safeFetch(audio.url, { signal: AbortSignal.timeout(10 * 60_000) });
+    if (!res.ok || !res.body) throw new Error(t('error.memo.plaudNoAudio'));
+    let bytes = 0;
+    const max = this.maxBytes;
+    const cap = new Transform({
+      transform(chunk: Buffer, _encoding, done) {
+        bytes += chunk.length;
+        done(bytes > max ? new Error(t('error.memo.plaudAudioTooLarge')) : null, chunk);
+      },
+    });
+    await pipeline(Readable.fromWeb(res.body as never), cap, createWriteStream(path));
   }
 
   /**

@@ -49,6 +49,15 @@ in the pull request that introduces them — see
   is read or stored before it becomes a memo. The sweep only looks 14 days back. Whether the person is still an
   editor is checked on every pass, and a lapsed Plaud sign-in is reported to them once. (#864)
 
+- **A Plaud recording that is still waiting for Plaud's transcript can be transcribed here instead, when its owner
+  asks.** `POST /v1/plaud/imports/transcribe { workspaceId, id }` (editor) queues our own speech-to-text for one
+  waiting recording; the worker reads the audio from Plaud as that person and keeps no copy. It is never done
+  automatically: neither `auto` mode nor the sweep spends on it. It is refused with 503 while this server cannot
+  transcribe, with 413 over `MEMO_MAX_MINUTES`, over the workspace's model budget, and with 409
+  `plaud-transcribe-allowance` (carrying `remainingSeconds`) once the person's allowance would be passed. Such a memo
+  has no speaker names. `GET /v1/plaud/settings` now returns `transcribe: { enabled, limitSeconds, remainingSeconds }`
+  so a client can say what is left before asking. (#864)
+
 ### Operations
 
 - New optional variable `PLAUD_OAUTH_CLIENT_ID`, empty by default, which leaves every Plaud route answering "not set
@@ -60,6 +69,9 @@ in the pull request that introduces them — see
   unique index over them. It is additive and survives a rollback to the previous release.
 - New optional variable `PLAUD_AUTO_IMPORT_MAX_PER_DAY` (default 10): auto mode imports nothing more for a person once
   that many of their Plaud recordings were imported in a day. A recording they confirm still goes through.
+- New optional variable `PLAUD_TRANSCRIBE_MINUTES_PER_MONTH` (default 120, 0 = off): the most speech, in minutes, that
+  may be transcribed for one person in a workspace over 30 days before "Transcribe here" is refused. Uploaded memos
+  count toward it; it never stops an upload.
 - Migration `20270106100000_plaud_queue` adds the `plaud_links` and `plaud_imports` tables. New tables only, so it
   survives a rollback. Unlinking a Plaud account or deleting a workspace removes their rows.
 

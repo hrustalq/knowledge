@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, HttpException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, ConflictException, HttpException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { PlaudImport, PlaudLink, Prisma } from '@prisma/client';
 import {
@@ -45,7 +45,7 @@ export class PlaudImportsService {
 
   async settings(userId: string, workspaceId: string): Promise<PlaudSettingsResponse> {
     const link = await this.prisma.plaudLink.findUnique({ where: { workspaceId_userId: { workspaceId, userId } } });
-    return this.toSettings(link);
+    return this.toSettings(link, userId, workspaceId);
   }
 
   /** `projectId: null` switches auto-import off here and keeps the rules. */
@@ -60,7 +60,7 @@ export class PlaudImportsService {
       create: { workspaceId, userId, ...data },
       update: data,
     });
-    return this.toSettings(link);
+    return this.toSettings(link, userId, workspaceId);
   }
 
   /** The row the sweeper keeps the sign-in alive through, from the moment of linking; settings already saved are left alone. */
@@ -94,6 +94,23 @@ export class PlaudImportsService {
     const out: PlaudImportEntry[] = [];
     for (const row of rows) out.push(toEntry(await this.import(principal, row.link, row, 'confirmed')));
     return out;
+  }
+
+  /**
+   * "Transcribe here" for one recording Plaud has not transcribed: the
+   * person's explicit yes to our own speech-to-text, never taken by the
+   * sweeper. A refusal (allowance, budget, length, transcription off) goes
+   * back to the person as it is and leaves the row where it was.
+   */
+  async transcribe(principal: Principal, workspaceId: string, id: string): Promise<PlaudImportEntry> {
+    const row = await this.prisma.plaudImport.findFirst({
+      where: { id, workspaceId, userId: principal.userId, status: { in: ['waiting', 'confirmed', 'failed'] } },
+      include: { link: true },
+    });
+    if (!row) throw new NotFoundException(t('error.memo.plaudImportNotFound'));
+    if (!row.link.projectId) throw new ConflictException(t('error.memo.plaudNoProject'));
+    const memo = await this.memos.transcribePlaud(principal, { workspaceId, projectId: row.link.projectId, fileId: row.externalId });
+    return toEntry(await this.prisma.plaudImport.update({ where: { id: row.id }, data: { status: 'imported', memoId: memo.memoId, error: null } }));
   }
 
   /** No to these recordings, for good: a skipped recording is never offered again. */
@@ -199,10 +216,16 @@ export class PlaudImportsService {
     });
   }
 
-  private toSettings(link: PlaudLink | null): PlaudSettingsResponse {
+  private async toSettings(link: PlaudLink | null, userId: string, workspaceId: string): Promise<PlaudSettingsResponse> {
     const rules = (link?.rules ?? {}) as PlaudRules;
     const { since, minSeconds, confirm } = effectiveRules(rules, link?.createdAt ?? new Date());
-    return { projectId: link?.projectId ?? null, rules, effective: { since, minSeconds, confirm }, maxPerDay: this.maxPerDay };
+    return {
+      projectId: link?.projectId ?? null,
+      rules,
+      effective: { since, minSeconds, confirm },
+      maxPerDay: this.maxPerDay,
+      transcribe: await this.memos.plaudTranscribeAllowance(userId, workspaceId),
+    };
   }
 }
 

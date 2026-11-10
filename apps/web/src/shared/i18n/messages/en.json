@@ -941,6 +941,7 @@
         },
         "auth-failed": "{provider} did not complete the authorisation. Go back and try again.",
         "install-failed": "{provider} did not confirm the installation. Go back and try again.",
+        "account-in-use": "Someone else has already connected this {provider} account, so nothing was saved. Paste a personal access token instead.",
         "error": "This link had expired or was not ours, so nothing was saved. Start again from the page you came from."
       },
       "closing": "This tab closes on its own.",

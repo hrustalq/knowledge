@@ -15,6 +15,8 @@ import { ConnectorConflictSweeper } from './connector-conflict.sweeper.js';
 import { ConnectionsBackfill } from './connections.backfill.js';
 import { ConnectionsController } from './connections.controller.js';
 import { ConnectionsService } from './connections.service.js';
+import { CredentialsController } from './credentials.controller.js';
+import { CredentialsService } from './credentials.service.js';
 import { ConnectorItemAiService } from './connector-item-ai.service.js';
 import { ConnectorItemsService } from './connector-items.service.js';
 import { ConnectorQueueModule } from './connector-queue.module.js';
@@ -90,6 +92,7 @@ import { RepoGuidanceService } from './guidance/repo-guidance.service.js';
     TrackerRoutesController,
     // #564: workspace connections and the link screen.
     ConnectionsController,
+    CredentialsController,
   ],
   providers: [
     ConnectorConflictSweeper,
@@ -113,6 +116,7 @@ import { RepoGuidanceService } from './guidance/repo-guidance.service.js';
     // #564: binds existing connectors to connections once per boot, in one process.
     ConnectionsBackfill,
     ConnectionsService,
+    CredentialsService,
   ],
   exports: [ConnectorsCoreModule, ConnectorWorkItemsModule],
 })

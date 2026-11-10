@@ -68,7 +68,7 @@ export class ConnectionsController {
   @Post()
   @Returns('ConnectionResponse')
   @Access('admin', 'body')
-  @ApiOperation({ summary: 'Save a token as a connection; the same account again rotates it' })
+  @ApiOperation({ summary: "Connect a pasted token, or one of the caller's credentials; the same account again moves onto it" })
   async create(@Body() dto: CreateTokenConnectionDto, @CurrentPrincipal() principal?: Principal): Promise<ConnectionResponse> {
     return { connection: await this.connections.saveToken(dto, principal?.userId ?? null) };
   }
@@ -76,9 +76,13 @@ export class ConnectionsController {
   @Patch(':id')
   @Returns('ConnectionResponse')
   @Access('admin', 'connection')
-  @ApiOperation({ summary: "Rotate a token connection's token (same account only)" })
-  async update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateConnectionDto): Promise<ConnectionResponse> {
-    return { connection: await this.connections.rotate(id, dto.credential) };
+  @ApiOperation({ summary: "Rotate a token connection (same account only), or move it onto the caller's own credential" })
+  async update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateConnectionDto,
+    @CurrentPrincipal() principal?: Principal,
+  ): Promise<ConnectionResponse> {
+    return { connection: await this.connections.rotate(id, dto, principal?.userId ?? null) };
   }
 
   @Delete(':id')

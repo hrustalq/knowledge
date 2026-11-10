@@ -374,11 +374,12 @@ export class ConnectorAclService {
     if (GITHUB_KINDS.has(row.kind)) {
       const numeric = rows.map((r) => r.externalId).filter((id) => /^\d{1,19}$/.test(id));
       if (numeric.length > 0) {
-        const tokens = await this.prisma.githubUserToken.findMany({
-          where: { githubUserId: { in: numeric.map((id) => BigInt(id)) } },
-          select: { userId: true, githubUserId: true },
+        // A member's own GitHub sign-in (#857) says which GitHub user they are.
+        const signIns = await this.prisma.credential.findMany({
+          where: { provider: 'github', method: 'oauth', accountId: { in: numeric } },
+          select: { userId: true, accountId: true },
         });
-        for (const tok of tokens) if (memberIds.has(tok.userId)) byProvider.set(String(tok.githubUserId), tok.userId);
+        for (const c of signIns) if (c.userId && c.accountId && memberIds.has(c.userId)) byProvider.set(c.accountId, c.userId);
       }
     }
 

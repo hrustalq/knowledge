@@ -61,7 +61,16 @@ function fakeDb(connectors: Row[], installations: Array<Record<string, unknown>>
       findUnique: vi.fn(async () => ({ accountLogin: 'acme', accountAvatarUrl: null })),
       findMany: vi.fn(async () => installations),
     },
-    // The credentials step (#857) has its own spec; nothing to move here.
+    // A new token connection gets its owner's credential (#857); its own spec covers the matching.
+    credentials: [] as Array<{ id: string; secret: string; accountId: null; accountLabel: null; accountAvatarUrl: null }>,
+    credential: {
+      findMany: vi.fn(async () => []),
+      create: vi.fn(async ({ data }: { data: { secret: string } }) => {
+        const row = { ...data, id: randomUUID(), accountId: null, accountLabel: null, accountAvatarUrl: null };
+        db.credentials.push(row);
+        return row;
+      }),
+    },
     githubUserToken: { findMany: vi.fn(async () => []) },
     figmaOauthGrant: { findMany: vi.fn(async () => []) },
   };

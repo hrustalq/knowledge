@@ -15,6 +15,29 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Added
+
+- **A token you paste or an account you sign in to is now kept as yours and can be reused in your other
+  workspaces.** Pasting a token in the connect dialog, or signing in to GitHub or Figma, now stores the secret as one
+  of your credentials, and the workspace connection dials with it. `POST /v1/connections { workspaceId, provider,
+  credentialId }` connects another workspace with no second paste and no OAuth round trip. Only the credential's
+  owner may do that; anyone else gets 403. An Atlassian token is one credential for every Atlassian site it reaches;
+  GitLab, Confluence Server, Zendesk, Intercom, git and web tokens stay tied to their host. Pasting the same token
+  again reuses the credential. A different token for the same account is a separate credential, because two
+  fine-grained tokens can reach different repositories. `GET /v1/me/credentials` lists your credentials and where
+  each is used. `PATCH /v1/me/credentials/:id` rotates one in every workspace at once (same account only).
+  `DELETE /v1/me/credentials/:id` disconnects one, and answers 409 naming the workspaces and connectors while any
+  still use it. Connections now report `ownerId` and `ownerLeft`: a connection whose owner is no longer a member
+  keeps syncing, and `PATCH /v1/connections/:id` with your own token or `credentialId` moves it onto your account.
+  No route returns a secret. (#857)
+
+### Changed
+
+- **A second person can no longer sign in to a Figma account someone else already connected.** Figma allows one
+  token per app per Figma user, so two sign-ins would keep revoking each other's tokens. The second sign-in now lands
+  on "Someone else has already connected this Figma account" and nothing is saved; a personal access token still
+  works. (#857)
+
 ### Fixed
 
 - **A second workspace can now add a GitHub account the App is already installed on.** After connecting a repository

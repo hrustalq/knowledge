@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
-import { credentialSiteFor, type ConnectionProvider } from '@knowledge/contracts';
 import { decryptSecret } from '../ai/secret-box.js';
+import { tokenCredential } from './connection-binding.js';
 
 type Db = Pick<PrismaClient, 'credential' | 'connection' | 'githubUserToken' | 'figmaOauthGrant'>;
 type Fields = Omit<Prisma.CredentialUncheckedCreateInput, 'id' | 'createdAt' | 'updatedAt'>;
@@ -22,7 +22,7 @@ type Fields = Omit<Prisma.CredentialUncheckedCreateInput, 'id' | 'createdAt' | '
  *   never by account — two fine-grained tokens for one account reach
  *   different repositories, and merging them would change what one dials.
  *
- * Returns how many credentials it created or refreshed.
+ * Returns how many sign-ins it moved or refreshed, and token connections it bound.
  */
 export async function backfillCredentials(db: Db, key: Buffer | null): Promise<number> {
   let written = 0;
@@ -81,30 +81,21 @@ export async function backfillCredentials(db: Db, key: Buffer | null): Promise<n
     const secret = decryptSecret(c.credential, key);
     // A token sealed with another key cannot be matched or used; it stays put.
     if (!secret) continue;
-    const site = credentialSiteFor(c.provider as ConnectionProvider, c.site);
-    const mine = await db.credential.findMany({
-      where: { userId: c.createdBy, provider: c.provider, method: 'token', site },
-      orderBy: { createdAt: 'asc' },
-    });
-    let id = mine.find((m) => decryptSecret(m.secret, key) === secret)?.id;
-    if (!id) {
-      ({ id } = await db.credential.create({
-        data: {
-          userId: c.createdBy,
-          provider: c.provider,
-          method: 'token',
-          site,
-          accountId: c.accountId,
-          accountLabel: c.accountLabel,
-          accountAvatarUrl: c.accountAvatarUrl,
-          secret: c.credential!,
-          secretHint: c.credentialHint,
-        },
-        select: { id: true },
-      }));
-      written++;
-    }
+    const { id } = await tokenCredential(
+      db,
+      {
+        userId: c.createdBy,
+        provider: c.provider,
+        site: c.site,
+        envelope: c.credential!,
+        secret,
+        hint: c.credentialHint,
+        account: c.accountId ? { id: c.accountId, label: c.accountLabel ?? c.accountId, avatarUrl: c.accountAvatarUrl } : null,
+      },
+      key,
+    );
     await db.connection.update({ where: { id: c.id }, data: { credentialId: id } });
+    written++;
   }
 
   return written;

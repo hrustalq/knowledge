@@ -12,6 +12,9 @@ and every change it proposes (a page to create or a page to update) opens as an 
 attributed to the uploader. Nothing is published silently, and a memo that settles nothing ends with zero
 proposals and says so.
 
+A memo can also start from a recording in a person's linked Plaud account (doc 74). That memo is built from
+Plaud's transcript, skips everything below up to the secretary run, and has `source: 'plaud'`.
+
 ```
 POST /v1/memos (reserve, presigned PUT) → PUT to MinIO → POST :id/finalize
   → memo job (worker): download → ffprobe → ffmpeg 10-min mp3 chunks → STT per chunk → stitch → mask → write
@@ -92,7 +95,8 @@ first memo.
 
 ### The transcript is a JSON column, masked before it is written
 
-`memos.transcript` is `jsonb`: `[{ i, start, end, text }]`, seconds. A table would earn its keep only if
+`memos.transcript` is `jsonb`: `[{ i, start, end, text }]`, seconds, plus an optional `speaker` on a
+segment whose source names one (a Plaud transcript, doc 74). A table would earn its keep only if
 segments were queried one by one; nothing does. The list route never selects it (`omit`).
 
 `stitchTranscript` (`memos/transcript.ts`, pure) offsets each chunk's segments, drops silence and runs
@@ -109,7 +113,7 @@ letter in it, still reaches the transcript.
 
 ### A memo is a row, private to its uploader
 
-`memos`: workspace, project, `created_by`, title, filename, content type, size, `audio_key`,
+`memos`: workspace, project, `created_by`, `source` (`upload` | `plaud`), `external_id`, title, filename, content type, size, `audio_key`,
 `audio_purged_at`, duration, language, status, stage, error, transcript, summary, dropped, `agent_run_id`,
 `published_at`, locale. There is no FK on `workspace_id` / `created_by`. Audio lives at
 `workspaces/{ws}/memos/{id}/source.<ext>`, under the workspace prefix teardown purges, and `Memo` is filed
@@ -232,8 +236,10 @@ Web (`/memos` after Captures in the sidebar; design brief on #551):
 
 ## Deliberate deferrals
 
-- Recording in the browser, meeting bots, Telegram voice notes: upload only.
-- Speaker diarization: segments carry time, not speakers.
+- Recording in the browser, meeting bots, Telegram voice notes: upload, or a linked Plaud account
+  (doc 74).
+- Speaker diarization: our speech-to-text gives time, not speakers. A memo imported from Plaud's
+  transcript carries the names set in Plaud.
 - Searchable or citable transcripts; shared or project-visible memos.
 - Video files; captures other than pages (glossary terms, relations).
 - A per-workspace transcription route, and a configured per-minute price (only a cost the speech server

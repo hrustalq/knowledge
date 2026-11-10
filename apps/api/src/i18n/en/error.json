@@ -361,7 +361,17 @@
     "otherAccount": "That token belongs to {account}, not {expected}. Add it as a new connection instead",
     "inUse": "Still used by {connectors}. Move or delete those connectors first",
     "siteRequired": "Say which site this connection is for",
-    "refused": "The token was not accepted: {reason}"
+    "refused": "The token was not accepted: {reason}",
+    "githubNotConnected": "Connect a GitHub account first",
+    "githubNotVisible": "Your GitHub account cannot reach that installation",
+    "githubUnreadable": "GitHub would not describe that installation. Try again in a moment"
+  },
+  "credential": {
+    "notFound": "Credential {id} not found",
+    "notYours": "That credential belongs to someone else. Connect with your own account",
+    "notBindable": "A GitHub sign-in is only used for browsing. Connect the GitHub App or paste a token instead",
+    "inUse": "Still used in {workspaces}. Move those connections to another account first",
+    "oneOf": "Send either a token or one of your credentials, not both"
   },
   "connector": {
     "notFound": "Connector {id} not found",

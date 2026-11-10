@@ -30,6 +30,9 @@ const RENEW_MARGIN_MS = 120_000;
 /** A state parameter is a round trip through a browser, not a session. Ten minutes is generous. */
 const STATE_TTL_SECONDS = 600;
 
+/** Who a person browses the App as (#857): never bound to a workspace connection. */
+const GITHUB_SIGN_IN = { provider: 'github', method: 'oauth' } as const;
+
 export interface GithubIdentity {
   githubLogin: string;
   githubAvatarUrl: string | null;
@@ -177,16 +180,16 @@ export class GithubOauthService {
    */
   async tokenFor(userId: string): Promise<string | null> {
     if (!this.key) return null;
-    const row = await this.prisma.githubUserToken.findUnique({ where: { userId } });
+    const row = await this.signIn(userId);
     if (!row) return null;
 
     const fresh = !row.expiresAt || row.expiresAt.getTime() - RENEW_MARGIN_MS > Date.now();
-    if (fresh) return decryptSecret(row.accessToken, this.key);
+    if (fresh) return decryptSecret(row.secret, this.key);
 
     // Expired, and a refresh token is the only way back. Without one the App
     // does not have expiring tokens switched on, in which case `expiresAt` is
     // null and we never reach here.
-    const refresh = decryptSecret(row.refreshToken, this.key);
+    const refresh = decryptSecret(row.refreshSecret, this.key);
     if (!refresh || (row.refreshExpiresAt && row.refreshExpiresAt.getTime() < Date.now())) {
       return null;
     }
@@ -194,13 +197,21 @@ export class GithubOauthService {
   }
 
   async identityFor(userId: string): Promise<GithubIdentity | null> {
-    const row = await this.prisma.githubUserToken.findUnique({ where: { userId } });
-    return row ? { githubLogin: row.githubLogin, githubAvatarUrl: row.githubAvatarUrl } : null;
+    const row = await this.signIn(userId);
+    return row ? { githubLogin: row.accountLabel ?? '', githubAvatarUrl: row.accountAvatarUrl } : null;
   }
 
   /** Forgetting the identity, for a disconnect. The installations stay: they are the workspace's. */
   async disconnect(userId: string): Promise<void> {
-    await this.prisma.githubUserToken.deleteMany({ where: { userId } });
+    await this.prisma.$transaction([
+      this.prisma.credential.deleteMany({ where: { userId, ...GITHUB_SIGN_IN } }),
+      this.prisma.githubUserToken.deleteMany({ where: { userId } }),
+    ]);
+  }
+
+  /** The person's GitHub sign-in (#857): a `credentials` row, one per person. */
+  private signIn(userId: string) {
+    return this.prisma.credential.findFirst({ where: { userId, ...GITHUB_SIGN_IN }, orderBy: { updatedAt: 'desc' } });
   }
 
   // --- internals ---
@@ -266,7 +277,24 @@ export class GithubOauthService {
         ? new Date(now + token.refresh_token_expires_in * 1000)
         : null,
     };
-    await this.prisma.githubUserToken.upsert({ where: { userId }, create: { userId, ...data }, update: data });
+    const signIn = {
+      accountId: String(identity.id),
+      accountLabel: data.githubLogin,
+      accountAvatarUrl: data.githubAvatarUrl,
+      secret: data.accessToken,
+      refreshSecret: data.refreshToken,
+      expiresAt: data.expiresAt,
+      refreshExpiresAt: data.refreshExpiresAt,
+    };
+    await this.prisma.$transaction(async (tx) => {
+      // One per person: signing in as another GitHub account replaces it.
+      const [kept, ...stale] = await tx.credential.findMany({ where: { userId, ...GITHUB_SIGN_IN }, orderBy: { updatedAt: 'desc' } });
+      if (stale.length) await tx.credential.deleteMany({ where: { id: { in: stale.map((c) => c.id) } } });
+      if (kept) await tx.credential.update({ where: { id: kept.id }, data: signIn });
+      else await tx.credential.create({ data: { userId, ...GITHUB_SIGN_IN, site: null, ...signIn } });
+      // The row the previous release reads (expand/contract).
+      await tx.githubUserToken.upsert({ where: { userId }, create: { userId, ...data }, update: data });
+    });
   }
 }
 

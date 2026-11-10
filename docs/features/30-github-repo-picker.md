@@ -51,6 +51,10 @@ reasons that do not overlap:
   whoever configured the connector, so a scheduled sync keeps working after that
   person's OAuth token expires, their account is deactivated, or they leave.
 
+> **Since #857** the person's GitHub OAuth identity is a `credentials` row (`provider: github`,
+> `method: oauth`), one per person, listed under **Connected accounts**; `github_user_tokens` is only
+> written for the previous release until phase 4 drops it. See [69 § Credentials](69-connections.md#credentials-857).
+
 Using one for both would break something real in either direction: sync as the
 user and a departure breaks the connector; browse as the App and the switcher
 leaks org names.

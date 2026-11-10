@@ -8,12 +8,14 @@
  * this dialog learns of it from the connections long poll, so it moves on
  * whether or not it has focus. An account the workspace already connected is
  * offered first: the point of a connection is not pasting the token twice.
+ * Then your own accounts from other workspaces (#857): Use connects this one
+ * with no trip to the provider and nothing to paste.
  */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ArrowLeft, CircleAlert, CircleCheck, Figma, Github, Link2, Loader2, Plus } from 'lucide-vue-next'
-import { connectionKindsFor, connectorKindInfo, type ConnectionLinkResult, type ConnectionMethod, type ConnectionProvider, type ConnectionSummary, type GithubInstallationsResponse, type ListConnectionsResponse } from '@knowledge/contracts'
+import { connectionKindsFor, connectorKindInfo, type ConnectionLinkResult, type ConnectionMethod, type ConnectionProvider, type ConnectionSummary, type CredentialSummary, type CredentialsResponse, type GithubInstallationsResponse, type ListConnectionsResponse } from '@knowledge/contracts'
 import { api } from '@/shared/api/client'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
@@ -133,6 +135,7 @@ function resetToken() {
   region.value = 'us'
   secret.value = ''
   tokenError.value = null
+  useError.value = null
 }
 
 /** The kind whose credential help describes this provider's token. */
@@ -161,6 +164,42 @@ async function saveToken() {
     tokenError.value = errorMessage(e, t)
   } finally {
     saving.value = false
+  }
+}
+
+// --- your accounts from other workspaces (#857) ---
+
+const credentialsQuery = useQuery({
+  ...apiQueryOptions('/v1/me/credentials'),
+  enabled: computed(() => props.open && step.value === 'signin'),
+})
+/** Yours, for this service, that a connection can dial with and this workspace does not use yet. */
+const yours = computed(() =>
+  ((credentialsQuery.data.value as CredentialsResponse | undefined)?.credentials ?? []).filter(
+    (c) => c.provider === provider.value && c.bindable && !c.usedBy.some((u) => u.workspaceId === workspaceId),
+  ),
+)
+/** An Atlassian token reaches every site its account can, so the site is this workspace's to say. */
+const needsSite = (c: CredentialSummary) => c.site === null && meta.value?.site?.kind === 'url'
+const usedIn = (c: CredentialSummary) => [...new Set(c.usedBy.map((u) => u.workspaceName))].join(', ')
+
+const using = ref<string | null>(null)
+const useError = ref<string | null>(null)
+async function useCredential(c: CredentialSummary) {
+  if (!provider.value) return
+  using.value = c.id
+  useError.value = null
+  try {
+    const res = await api.post('/v1/connections', {
+      body: { workspaceId, provider: provider.value, credentialId: c.id, site: needsSite(c) ? site.value.trim() || null : null },
+    })
+    await queryClient.invalidateQueries({ queryKey: ['/v1/connections'] })
+    void queryClient.invalidateQueries({ queryKey: ['/v1/me/credentials'] })
+    finish(res.connection)
+  } catch (e) {
+    useError.value = errorMessage(e, t)
+  } finally {
+    using.value = null
   }
 }
 
@@ -212,6 +251,27 @@ const connectFigma = () =>
   openProvider(async () => (await api.get('/v1/connectors/figma/authorize', { query: { workspaceId, returnTo: RETURN_TO } })).url)
 const signInGithub = () => openProvider(async () => githubState.value?.authorizeUrl)
 const installGithub = () => openProvider(async () => githubState.value?.installUrl)
+
+/**
+ * An installation the person's GitHub account already reaches, added here
+ * without a trip to GitHub (#855): its install page never sends an
+ * already-installed App back, so a second workspace had no way in.
+ */
+const addingInstallation = ref<string | null>(null)
+async function addInstallation(installationId: string) {
+  wait.stop()
+  tabError.value = null
+  addingInstallation.value = installationId
+  try {
+    const res = await api.post('/v1/connectors/github/installations', { body: { workspaceId, installationId } })
+    await queryClient.invalidateQueries({ queryKey: ['/v1/connections'] })
+    finish(res.connection)
+  } catch (e) {
+    tabError.value = errorMessage(e, t)
+  } finally {
+    addingInstallation.value = null
+  }
+}
 
 const projects = useProjectsStore()
 const projectNameOf = (id: string) => projects.items.find((p) => p.projectId === id)?.name ?? id
@@ -272,6 +332,42 @@ function close() {
           <p class="text-muted-foreground text-xs">{{ t('connectors.connections.orAnother') }}</p>
         </section>
 
+        <!-- First, so it serves both a reused account (Atlassian names no site) and a pasted token. -->
+        <label v-if="meta?.site?.kind === 'url'" class="block space-y-1.5">
+          <span class="text-sm font-medium">{{ t('connectors.connections.site') }}</span>
+          <Input v-model="site" type="url" inputmode="url" autocomplete="off" :placeholder="meta.site.placeholder" />
+          <span v-if="meta.site.optional" class="text-muted-foreground block text-xs">{{ t('connectors.connections.siteOptional', { site: meta.site.placeholder }) }}</span>
+        </label>
+
+        <section v-if="yours.length" class="space-y-2">
+          <h3 class="text-sm font-medium">{{ t('connectors.connections.yourAccounts') }}</h3>
+          <ul class="divide-y rounded-lg border">
+            <li v-for="c in yours" :key="c.id" class="flex flex-wrap items-center gap-x-3 gap-y-1.5 p-2.5">
+              <div class="min-w-0 flex-1 basis-72">
+                <ConnectionAccount :connection="{ ...c, credentialHint: c.secretHint }" />
+                <p v-if="c.usedBy.length" class="text-muted-foreground mt-1 truncate ps-11 text-xs" :title="usedIn(c)">
+                  {{ t('connectors.connections.usedIn', { workspaces: usedIn(c) }) }}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                class="ms-auto"
+                :disabled="using !== null || (needsSite(c) && !site.trim())"
+                :title="needsSite(c) && !site.trim() ? t('connectors.connections.siteFirst') : undefined"
+                @click="useCredential(c)"
+              >
+                <Loader2 v-if="using === c.id" class="size-4 animate-spin" aria-hidden="true" />
+                {{ t('connectors.connections.use') }}
+              </Button>
+            </li>
+          </ul>
+          <p v-if="useError" class="text-destructive text-xs" role="alert">{{ useError }}</p>
+          <p v-else class="text-muted-foreground text-xs">
+            {{ yours.some(needsSite) && !site.trim() ? t('connectors.connections.siteFirst') : t('connectors.connections.yourAccountsHint') }}
+          </p>
+        </section>
+
         <!-- Shown only when there is a choice: with every App/OAuth key empty, a token is the whole flow. -->
         <div v-if="offered.length > 1" role="group" :aria-label="t('connectors.connections.methodLabel')" class="bg-muted inline-flex rounded-lg p-0.5">
           <button
@@ -289,12 +385,7 @@ function close() {
 
         <!-- Token -->
         <form v-if="method === 'token'" class="space-y-3" @submit.prevent="saveToken">
-          <label v-if="meta?.site?.kind === 'url'" class="block space-y-1.5">
-            <span class="text-sm font-medium">{{ t('connectors.connections.site') }}</span>
-            <Input v-model="site" type="url" inputmode="url" autocomplete="off" :placeholder="meta.site.placeholder" />
-            <span v-if="meta.site.optional" class="text-muted-foreground block text-xs">{{ t('connectors.connections.siteOptional', { site: meta.site.placeholder }) }}</span>
-          </label>
-          <label v-else-if="meta?.site?.kind === 'region'" class="block space-y-1.5">
+          <label v-if="meta?.site?.kind === 'region'" class="block space-y-1.5">
             <span class="text-sm font-medium">{{ t('connectors.connections.region') }}</span>
             <Select v-model="region">
               <SelectTrigger class="w-full"><SelectValue /></SelectTrigger>
@@ -350,8 +441,25 @@ function close() {
             <p class="text-muted-foreground text-xs">{{ t('connectors.github.connectHint') }}</p>
           </template>
           <template v-else>
+            <section v-if="githubState.available?.length" class="space-y-2">
+              <h3 class="text-sm font-medium">{{ t('connectors.connections.onYourGithub') }}</h3>
+              <ul class="divide-y rounded-lg border">
+                <li v-for="a in githubState.available" :key="a.installationId" class="flex items-center gap-3 p-2.5">
+                  <ConnectionAccount
+                    :connection="{ provider: 'github', method: 'app', site: null, accountLabel: a.accountLogin, accountAvatarUrl: a.accountAvatarUrl, credentialHint: null }"
+                    class="min-w-0 flex-1"
+                  />
+                  <Button size="sm" variant="outline" :disabled="addingInstallation !== null" @click="addInstallation(a.installationId)">
+                    <Loader2 v-if="addingInstallation === a.installationId" class="size-4 animate-spin" aria-hidden="true" />
+                    {{ t('connectors.connections.addToWorkspace') }}
+                  </Button>
+                </li>
+              </ul>
+              <p class="text-muted-foreground text-xs">{{ t('connectors.connections.onYourGithubHint') }}</p>
+            </section>
             <Button class="w-full" variant="outline" :disabled="opening" @click="installGithub">
-              <Plus class="size-4" aria-hidden="true" /> {{ t('connectors.github.install') }}
+              <Plus class="size-4" aria-hidden="true" />
+              {{ githubState.available?.length ? t('connectors.connections.installElsewhere') : t('connectors.github.install') }}
             </Button>
             <p class="text-muted-foreground text-xs">{{ t('connectors.connections.installHint') }}</p>
           </template>

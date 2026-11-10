@@ -941,6 +941,7 @@
         },
         "auth-failed": "{provider} did not complete the authorisation. Go back and try again.",
         "install-failed": "{provider} did not confirm the installation. Go back and try again.",
+        "account-in-use": "Someone else has already connected this {provider} account, so nothing was saved. Paste a personal access token instead.",
         "error": "This link had expired or was not ours, so nothing was saved. Start again from the page you came from."
       },
       "closing": "This tab closes on its own.",
@@ -993,6 +994,10 @@
       "alreadyConnected": "Already connected to {provider}",
       "use": "Use",
       "orAnother": "Or connect another account below.",
+      "onYourGithub": "Already on your GitHub",
+      "onYourGithubHint": "The App is installed on these accounts, but this workspace has not added them yet. Adding one needs no trip to GitHub.",
+      "addToWorkspace": "Add",
+      "installElsewhere": "Install on another account",
       "methodLabel": "How to connect",
       "methodChoice": {
         "token": "Paste a token",
@@ -1020,7 +1025,17 @@
       "methodUnavailable": "This way of connecting is not available on this server.",
       "pickerLabel": "Connection",
       "pickerPaste": "Paste a token for this connector instead",
-      "pickerHint": "The account this connector signs in with. Switching takes effect from its next sync."
+      "pickerHint": "The account this connector signs in with. Switching takes effect from its next sync.",
+      "ownerLeft": "Signed in by someone who has left this workspace. It keeps syncing; reconnect it with your own account.",
+      "signedInBy": "Signed in by",
+      "you": "you",
+      "reconnect": "Reconnect",
+      "reconnectBody": "Paste your own token for this service. The connection and its connectors switch to your account from their next sync.",
+      "rotateEverywhere": "Paste a new token for the same account. Every workspace that uses this account switches to it, here and elsewhere.",
+      "yourAccounts": "Your accounts",
+      "yourAccountsHint": "Connected in your other workspaces. Use one here without signing in or pasting anything again.",
+      "usedIn": "Used in {workspaces}",
+      "siteFirst": "Enter this workspace's site above first: an Atlassian token works on every site its account can reach."
     },
     "link": {
       "kindLabel": "What to read",
@@ -4471,6 +4486,23 @@
         "saml": "Single sign-on (SAML)",
         "ldap": "Directory (LDAP)"
       }
+    },
+    "accounts": {
+      "title": "Connected accounts",
+      "hint": "The services you have signed in to or pasted a token for. They are yours, not the workspace's: use one in any workspace you administer from its connect dialog.",
+      "usedIn": "Used in {workspaces} | Used in {workspaces} by {count} connector | Used in {workspaces} by {count} connectors",
+      "unused": "Not used in any workspace",
+      "browseOnly": "Lets you browse the repositories your GitHub account can reach",
+      "rotate": "Replace token",
+      "rotateBody": "Paste a new token for the same account. | Paste a new token for the same account. {workspaces} switches to it from the next sync. | Paste a new token for the same account. {workspaces} switch to it from the next sync.",
+      "rotated": "Token replaced everywhere it is used",
+      "disconnect": "Disconnect",
+      "disconnectNamed": "Disconnect {account}",
+      "disconnectTitle": "Disconnect this account?",
+      "disconnectBody": "{account} will be forgotten here. Nothing changes at the service itself.",
+      "disconnected": "Account disconnected",
+      "inUse": "Still used in {workspaces}. Move those connections to another account first.",
+      "none": "No connected accounts yet. Connect one from a workspace's Connectors settings."
     }
   },
   "mention": {

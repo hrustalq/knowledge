@@ -13,6 +13,56 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.47.0] — 2026-11-10
+
+### Added
+
+- **A token you paste or an account you sign in to is now kept as yours and can be reused in your other
+  workspaces.** Pasting a token in the connect dialog, or signing in to GitHub or Figma, now stores the secret as one
+  of your credentials, and the workspace connection dials with it. `POST /v1/connections { workspaceId, provider,
+  credentialId }` connects another workspace with no second paste and no OAuth round trip. Only the credential's
+  owner may do that; anyone else gets 403. An Atlassian token is one credential for every Atlassian site it reaches;
+  GitLab, Confluence Server, Zendesk, Intercom, git and web tokens stay tied to their host. Pasting the same token
+  again reuses the credential. A different token for the same account is a separate credential, because two
+  fine-grained tokens can reach different repositories. `GET /v1/me/credentials` lists your credentials and where
+  each is used. `PATCH /v1/me/credentials/:id` rotates one in every workspace at once (same account only).
+  `DELETE /v1/me/credentials/:id` disconnects one, and answers 409 naming the workspaces and connectors while any
+  still use it. Connections now report `ownerId` and `ownerLeft`: a connection whose owner is no longer a member
+  keeps syncing, and `PATCH /v1/connections/:id` with your own token or `credentialId` moves it onto your account.
+  No route returns a secret. (#857)
+- **The connect dialog offers your accounts from other workspaces, and Settings → Profile lists every account you
+  have connected.** In the sign-in step, **Your accounts** lists the tokens and sign-ins you already connected
+  elsewhere, and **Use** adds one to this workspace with nothing to paste or sign in again (an Atlassian account first
+  asks for this workspace's site). **Connected accounts** on your profile shows where each account is used, and
+  offers **Replace token**, which updates every workspace at once, and **Disconnect**, which is disabled while a
+  workspace still uses the account. On the Connections tab each row names who signed it in. When that person has left
+  the workspace, the row says so and **Reconnect** moves it onto your own token. (#857)
+
+### Changed
+
+- **A second person can no longer sign in to a Figma account someone else already connected.** Figma allows one
+  token per app per Figma user, so two sign-ins would keep revoking each other's tokens. The second sign-in now lands
+  on "Someone else has already connected this Figma account" and nothing is saved; a personal access token still
+  works. (#857)
+
+### Fixed
+
+- **A second workspace can now add a GitHub account the App is already installed on.** After connecting a repository
+  through the GitHub App in one workspace, the connect dialog in any other workspace offered only **Install**, and
+  GitHub's install page for an App that is already installed never sends you back, so the flow dead-ended. The GitHub
+  step now lists the accounts your GitHub sign-in reaches that this workspace has not added yet, and **Add** connects
+  one with no trip to GitHub. An account your own GitHub sign-in cannot see is refused. `POST
+  /v1/connectors/github/installations` (admin). (#855)
+
+### Operations
+
+- **Migration `20270104100000_credentials` adds the `credentials` table and `connections.credential_id`.** It only
+  adds a table and a nullable column, so the previous release's image keeps running against a migrated database and a
+  rollback by retag is safe. The migration copies GitHub and Figma sign-ins into `credentials`; at boot the API copies
+  pasted connection tokens, logging `moved N sign-in(s) into credentials`. Every write also updates the old
+  `credential` columns, so v0.46.2 still dials after a retag. Running the copy again is safe: a later rotation of an
+  old column, including one made by a rolled-back image, is copied over on the next boot. (#857)
+
 ## [0.46.2] — 2026-11-09
 
 ### Changed
@@ -6389,7 +6439,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.46.2...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.47.0...HEAD
+[0.47.0]: https://github.com/hrustalq/knowledge/compare/v0.46.2...v0.47.0
 [0.46.2]: https://github.com/hrustalq/knowledge/compare/v0.46.1...v0.46.2
 [0.46.1]: https://github.com/hrustalq/knowledge/compare/v0.46.0...v0.46.1
 [0.46.0]: https://github.com/hrustalq/knowledge/compare/v0.45.2...v0.46.0

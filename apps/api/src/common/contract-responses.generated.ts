@@ -101,6 +101,8 @@ import type {
   CreateSourcePageResponse,
   CreateUploadResponse,
   CreateWorkspaceResponse,
+  CredentialResponse,
+  CredentialsResponse,
   DeleteAnswerFeedbackResponse,
   DeleteAssistantThreadResponse,
   DeleteDocumentCommentResponse,
@@ -456,6 +458,8 @@ export interface ContractResponses {
   CreateSourcePageResponse: CreateSourcePageResponse;
   CreateUploadResponse: CreateUploadResponse;
   CreateWorkspaceResponse: CreateWorkspaceResponse;
+  CredentialResponse: CredentialResponse;
+  CredentialsResponse: CredentialsResponse;
   DeleteAnswerFeedbackResponse: DeleteAnswerFeedbackResponse;
   DeleteAssistantThreadResponse: DeleteAssistantThreadResponse;
   DeleteDocumentCommentResponse: DeleteDocumentCommentResponse;

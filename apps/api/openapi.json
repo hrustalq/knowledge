@@ -24113,6 +24113,70 @@
         "tags": [
           "connectors"
         ]
+      },
+      "post": {
+        "operationId": "GithubController_addInstallation",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddGithubInstallationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Add an installation the caller's GitHub account reaches to this workspace",
+        "tags": [
+          "connectors"
+        ]
       }
     },
     "/v1/connectors/github/repos": {
@@ -24925,7 +24989,7 @@
             }
           }
         },
-        "summary": "Save a token as a connection; the same account again rotates it",
+        "summary": "Connect a pasted token, or one of the caller's credentials; the same account again moves onto it",
         "tags": [
           "connections"
         ]
@@ -25070,7 +25134,7 @@
             }
           }
         },
-        "summary": "Rotate a token connection's token (same account only)",
+        "summary": "Rotate a token connection (same account only), or move it onto the caller's own credential",
         "tags": [
           "connections"
         ]
@@ -25367,6 +25431,191 @@
         "summary": "Link resources to projects: one connector per pair, duplicates reported, never deletes",
         "tags": [
           "connections"
+        ]
+      }
+    },
+    "/v1/me/credentials": {
+      "get": {
+        "operationId": "CredentialsController_list",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CredentialsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "My connected accounts, and the workspaces using each",
+        "tags": [
+          "credentials"
+        ]
+      }
+    },
+    "/v1/me/credentials/{id}": {
+      "patch": {
+        "operationId": "CredentialsController_rotate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCredentialDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CredentialResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Rotate one of my credentials (same account only), in every workspace using it",
+        "tags": [
+          "credentials"
+        ]
+      },
+      "delete": {
+        "operationId": "CredentialsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Disconnect one of my credentials (409 while a workspace uses it)",
+        "tags": [
+          "credentials"
         ]
       }
     },
@@ -40994,7 +41243,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.45.2",
+    "version": "0.46.2",
     "contact": {}
   },
   "tags": [],
@@ -45939,6 +46188,23 @@
           }
         }
       },
+      "AddGithubInstallationDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "installationId": {
+            "type": "string",
+            "description": "The GitHub App installation id"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "installationId"
+        ]
+      },
       "PutWorkItemRulesDto": {
         "type": "object",
         "properties": {
@@ -46072,13 +46338,17 @@
           },
           "credential": {
             "type": "string",
-            "description": "Write-only. Encrypted at rest; never returned."
+            "description": "A pasted secret. Write-only; encrypted at rest, never returned. Exactly one of credential and credentialId."
+          },
+          "credentialId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "One of the caller's own credentials (#857); anyone else's is refused"
           }
         },
         "required": [
           "workspaceId",
-          "provider",
-          "credential"
+          "provider"
         ]
       },
       "UpdateConnectionDto": {
@@ -46086,12 +46356,14 @@
         "properties": {
           "credential": {
             "type": "string",
-            "description": "A new token for the same account. Write-only."
+            "description": "A new token for the same account. The owner's rotates the credential everywhere; anyone else's moves this connection onto their own. Write-only."
+          },
+          "credentialId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Move this connection onto one of the caller's own credentials (#857)"
           }
-        },
-        "required": [
-          "credential"
-        ]
+        }
       },
       "ConnectionLinkDto": {
         "type": "object",
@@ -46147,6 +46419,18 @@
         },
         "required": [
           "links"
+        ]
+      },
+      "UpdateCredentialDto": {
+        "type": "object",
+        "properties": {
+          "credential": {
+            "type": "string",
+            "description": "A new token for the same account, in every workspace using it. Write-only."
+          }
+        },
+        "required": [
+          "credential"
         ]
       },
       "UpdateLintPolicyDto": {
@@ -57017,6 +57301,17 @@
             "type": "string",
             "nullable": true
           },
+          "credentialId": {
+            "type": "string",
+            "nullable": true
+          },
+          "ownerId": {
+            "type": "string",
+            "nullable": true
+          },
+          "ownerLeft": {
+            "type": "boolean"
+          },
           "connectors": {
             "type": "array",
             "items": {
@@ -57060,6 +57355,9 @@
           "accountLabel",
           "accountAvatarUrl",
           "credentialHint",
+          "credentialId",
+          "ownerId",
+          "ownerLeft",
           "connectors",
           "createdAt",
           "updatedAt"
@@ -58524,6 +58822,125 @@
         "required": [
           "workspaceId",
           "name"
+        ]
+      },
+      "CredentialResponse": {
+        "type": "object",
+        "properties": {
+          "credential": {
+            "$ref": "#/components/schemas/CredentialSummary"
+          }
+        },
+        "required": [
+          "credential"
+        ]
+      },
+      "CredentialSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/ConnectionProvider"
+          },
+          "method": {
+            "$ref": "#/components/schemas/ConnectionMethod"
+          },
+          "site": {
+            "type": "string",
+            "nullable": true
+          },
+          "accountId": {
+            "type": "string",
+            "nullable": true
+          },
+          "accountLabel": {
+            "type": "string",
+            "nullable": true
+          },
+          "accountAvatarUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "secretHint": {
+            "type": "string",
+            "nullable": true
+          },
+          "expiresAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "bindable": {
+            "type": "boolean"
+          },
+          "usedBy": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CredentialUsage"
+            }
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "method",
+          "site",
+          "accountId",
+          "accountLabel",
+          "accountAvatarUrl",
+          "secretHint",
+          "expiresAt",
+          "bindable",
+          "usedBy",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "CredentialUsage": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string"
+          },
+          "workspaceName": {
+            "type": "string"
+          },
+          "connectionId": {
+            "type": "string"
+          },
+          "connectors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "workspaceId",
+          "workspaceName",
+          "connectionId",
+          "connectors"
+        ]
+      },
+      "CredentialsResponse": {
+        "type": "object",
+        "properties": {
+          "credentials": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CredentialSummary"
+            }
+          }
+        },
+        "required": [
+          "credentials"
         ]
       },
       "DecisionCapturePayload": {
@@ -61494,6 +61911,12 @@
               "$ref": "#/components/schemas/GithubInstallationSummary"
             }
           },
+          "available": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GithubInstallationSummary"
+            }
+          },
           "error": {
             "type": "string"
           },
@@ -61509,7 +61932,8 @@
           "connected",
           "authorizeUrl",
           "installUrl",
-          "installations"
+          "installations",
+          "available"
         ]
       },
       "GithubPermissionRow": {

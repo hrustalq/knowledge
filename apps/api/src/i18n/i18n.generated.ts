@@ -1058,6 +1058,16 @@ export type I18nTranslations = {
             "inUse": string;
             "siteRequired": string;
             "refused": string;
+            "githubNotConnected": string;
+            "githubNotVisible": string;
+            "githubUnreadable": string;
+        };
+        "credential": {
+            "notFound": string;
+            "notYours": string;
+            "notBindable": string;
+            "inUse": string;
+            "oneOf": string;
         };
         "connector": {
             "notFound": string;

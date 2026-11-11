@@ -1528,6 +1528,44 @@ describe('renderSkill', () => {
     expect(renderSkill(skillInputFor(scope))).toMatchSnapshot();
   });
 
+  it('renders a toolset section only when its tools are offered (#945)', () => {
+    const full = skillInputFor('write');
+    const without = (...toolsets: string[]) => renderSkill({ ...full, tools: full.tools.filter((t) => !toolsets.includes(t.toolset)) });
+    const noQa = without('qa');
+    expect(noQa).not.toContain('API tests');
+    for (const name of MCP_TOOLSETS.qa.tools) expect(noQa, name).not.toContain(name);
+    expect(without('embeds')).not.toContain('Designs embedded in pages');
+    expect(without('chat')).not.toContain('team chat');
+    // A section that reads as another's continuation opens with its own heading without it.
+    expect(without('quality')).toContain('### How pages are read\n\n- `knowledge_get_page_insights`');
+    expect(renderSkill(full)).not.toContain('How pages are read');
+  });
+
+  it('names no tool the caller is not offered, whatever the tool list (#945)', () => {
+    const sectionsOff = ['qa', 'memos', 'captures', 'analytics', 'conflicts', 'workflows', 'git'] as const;
+    const full = skillInputFor('write');
+    const only = (...toolsets: string[]) => ({ ...full, tools: full.tools.filter((t) => toolsets.includes(t.toolset)) });
+    const inputs = [
+      full,
+      skillInputFor('read'),
+      skillInputFor('capture'),
+      skillInputFor('write', sectionsOff),
+      skillInputFor('read', sectionsOff),
+      only('core', 'graph'),
+      only('core', 'authoring'),
+      only('core', 'code'),
+      only('core', 'review', 'insights', 'chat'),
+    ];
+    for (const input of inputs) {
+      const offered = new Set(input.tools.map((t) => t.name));
+      // The playbooks, not the tool table: its cells quote each tool's registered description.
+      const [playbooks] = renderSkill(input).split('## Tools offered to this connection');
+      // `mcp__knowledge__knowledge_search` is how a client prefixes a name, not another tool.
+      const named = new Set(playbooks.replaceAll('mcp__knowledge__', '').match(/knowledge_[a-z_]+/g));
+      expect([...named].filter((name) => !offered.has(name))).toEqual([]);
+    }
+  });
+
   it('is a skill with frontmatter, the caller workspaces, and escaped cells', () => {
     const md = renderSkill(base);
     expect(md.startsWith('---\nname: knowledge-platform\ndescription: ')).toBe(true);

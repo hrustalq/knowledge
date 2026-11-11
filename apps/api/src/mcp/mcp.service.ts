@@ -239,7 +239,7 @@ export class McpService extends McpServices {
       whoami,
       tools: this.toolsFor(principal, { ...extras, offSections }),
       learnings: await this.learningsFor(whoami),
-      git: this.config.get('GIT_REMOTE_ENABLED') === true,
+      git: this.config.get('GIT_REMOTE_ENABLED') === true && !offSections.includes('git'),
     });
   }
 

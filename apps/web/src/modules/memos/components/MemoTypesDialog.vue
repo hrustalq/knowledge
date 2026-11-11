@@ -9,7 +9,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
-import { MEMO_TYPE_KEY_RE, type MemoType } from '@knowledge/contracts'
+import type { MemoType } from '@knowledge/contracts'
 import { request } from '@/shared/api/client'
 import { errorMessage } from '@/shared/api/errors'
 import { Button } from '@/shared/ui/button'
@@ -20,7 +20,7 @@ import { Label } from '@/shared/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import { Textarea } from '@/shared/ui/textarea'
 import { useProjectsStore } from '@/stores/projects'
-import { useMemoTypes } from '../model/memo-types'
+import { newMemoTypeKey, useMemoTypes } from '../model/memo-types'
 
 const props = defineProps<{ workspaceId: string }>()
 const open = defineModel<boolean>('open', { required: true })
@@ -58,17 +58,7 @@ watch(open, (now) => {
 })
 watch(selected, load)
 
-/** A key from the name: latin letters, digits and dashes; anything else needs the person to rename. */
-const newKey = computed(() =>
-  name.value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40),
-)
-const keyOk = computed(() => selected.value !== NEW || (MEMO_TYPE_KEY_RE.test(newKey.value) && !types.value.some((type) => type.key === newKey.value)))
-const canSave = computed(() => !saving.value && keyOk.value && (current.value?.builtIn || name.value.trim().length > 0))
+const canSave = computed(() => !saving.value && (current.value?.builtIn || name.value.trim().length > 0))
 
 async function run(call: () => Promise<unknown>, after?: () => void) {
   saving.value = true
@@ -84,7 +74,7 @@ async function run(call: () => Promise<unknown>, after?: () => void) {
 }
 
 function save() {
-  const key = selected.value === NEW ? newKey.value : selected.value
+  const key = selected.value === NEW ? newMemoTypeKey(name.value, types.value.map((type) => type.key)) : selected.value
   return run(
     () =>
       request('put', '/v1/memos/types/{key}', {
@@ -133,7 +123,6 @@ function reset() {
         <div class="space-y-1.5">
           <Label for="memo-type-name">{{ t('memos.types.name') }}</Label>
           <Input id="memo-type-name" v-model="name" maxlength="80" autocomplete="off" :placeholder="current?.builtIn ? nameOf({ ...current, overridden: false }) : ''" />
-          <p v-if="selected === NEW && name.trim() && !keyOk" role="alert" class="text-destructive text-xs">{{ t('memos.types.keyTaken') }}</p>
         </div>
         <div class="space-y-1.5">
           <Label for="memo-type-guidance">{{ t('memos.types.guidance') }}</Label>

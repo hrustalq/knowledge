@@ -7404,7 +7404,6 @@
       "add": "Add a type…",
       "hiddenTag": "hidden",
       "name": "Name",
-      "keyTaken": "Use a name with Latin letters that no other type has.",
       "guidance": "How the agent treats it",
       "guidanceHint": "This text becomes part of the agent's instructions. Leave it empty on a built-in type to use the text it ships with.",
       "project": "Where its memos go",

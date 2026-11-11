@@ -32,6 +32,9 @@ in the pull request that introduces them — see
   tools (`knowledge_get_draft`, `knowledge_suggest_draft_edit`). The reference generator had stopped finding any
   tool once their registration moved into per-section files, so `make api-client` failed at its last step and the
   table was not refreshed. (#861)
+- On a memo with no recording (a Plaud import, or one past audio retention), the time chips under a proposal no
+  longer tell a screen reader they play the recording. They are announced as showing the passage at that time,
+  which is what they do. (#900)
 
 ### Operations
 

@@ -25,10 +25,10 @@ import type {
 import { useQueryClient } from '@tanstack/vue-query'
 import { api, fetchApi } from '@/shared/api/queries'
 import { useAuthStore } from '@/stores/auth'
-import { Badge } from '@/shared/ui/badge'
+import { Badge } from '@knowledge/ui/badge'
 import { UserChip } from '@/entities/person'
 import AccountSessions from './AccountSessions.vue'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -36,20 +36,20 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
+} from '@knowledge/ui/dialog'
 import {
   FilterBar,
   filterRows,
   type ActiveFilter,
   type FilterAccessors,
   type FilterField,
-} from '@/shared/ui/filter-bar'
-import { Input } from '@/shared/ui/input'
-import { Label } from '@/shared/ui/label'
+} from '@knowledge/ui/filter-bar'
+import { Input } from '@knowledge/ui/input'
+import { Label } from '@knowledge/ui/label'
 import { Skeleton } from '@knowledge/ui/skeleton'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/shared/ui/table'
+} from '@knowledge/ui/table'
 
 const { t } = useI18n()
 

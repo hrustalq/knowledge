@@ -12,7 +12,7 @@ import { ExternalLink, Plug, Upload } from 'lucide-vue-next'
 import { connectorKindInfo } from '@knowledge/contracts'
 import type { DocumentConnectorResponse } from '@knowledge/contracts'
 import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 import { relativeTime } from '@/shared/api/api'
 import { ApiDriftCheck } from '@/entities/api-operation'
 

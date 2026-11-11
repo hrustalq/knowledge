@@ -30,7 +30,11 @@ module.exports = {
       name: 'no-circular',
       comment: 'Runtime cycles only: a cycle between SFCs is an undefined component at render time.',
       severity: 'error',
-      from: {},
+      // badge, button and select declare their variants in index.ts and the
+      // component imports them back: that is how `shadcn-vue add` writes a
+      // component, and a later `add` would restore it. The index only holds a
+      // `cva()` table, so nothing is undefined at render.
+      from: { pathNot: '^src/(badge|button|select)/' },
       to: { circular: true, via: { dependencyTypesNot: ['type-only'] } },
     },
     {

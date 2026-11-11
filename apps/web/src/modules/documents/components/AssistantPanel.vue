@@ -10,9 +10,9 @@ import type {
 } from '@knowledge/contracts'
 import { api } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
-import { Button } from '@/shared/ui/button'
-import { Badge } from '@/shared/ui/badge'
-import { Input } from '@/shared/ui/input'
+import { Button } from '@knowledge/ui/button'
+import { Badge } from '@knowledge/ui/badge'
+import { Input } from '@knowledge/ui/input'
 
 const { t } = useI18n()
 

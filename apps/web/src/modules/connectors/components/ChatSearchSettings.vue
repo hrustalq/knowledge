@@ -13,8 +13,8 @@ import type { ChatSearchSettings } from '@knowledge/contracts'
 import { api } from '@/shared/api/client'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
+import { Button } from '@knowledge/ui/button'
+import { Input } from '@knowledge/ui/input'
 import { PageState } from '@/shared/layout'
 
 const props = defineProps<{ workspaceId: string }>()

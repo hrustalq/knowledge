@@ -9,7 +9,7 @@
 import { nextTick, ref, watch } from 'vue'
 import { watchDebounced } from '@vueuse/core'
 import { createFocusReturn } from '@/shared/utils/search-shortcut'
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/shared/ui/sheet'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@knowledge/ui/sheet'
 import SearchPanel from './SearchPanel.vue'
 import type { UseSearch } from '../model/use-search'
 

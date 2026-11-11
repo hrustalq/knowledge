@@ -25,7 +25,7 @@ import { resolveAssetUrl } from '@/shared/api/api'
 import { useTheme } from '@/shared/utils/theme'
 import { mermaidConfig, mermaidSvg } from '@/shared/utils/mermaid'
 import { createRevealTracker, wrapRuns } from '@/shared/utils/stream-reveal'
-import { DiagramLightbox, ImageLightbox, markDiagrams, markZoomable } from '@/shared/ui/lightbox'
+import { DiagramLightbox, ImageLightbox, markDiagrams, markZoomable } from '@knowledge/ui/lightbox'
 
 // Several roots (the body and the lightboxes), so a parent's class lands on the body by hand.
 defineOptions({ inheritAttrs: false })

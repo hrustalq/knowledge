@@ -85,12 +85,12 @@ module.exports = {
     {
       name: 'kit-imports-no-app',
       comment:
-        'Temporary, until the kit and the page chrome move to @knowledge/ui (#941): they import ' +
-        'npm packages, each other and the package, nothing else in src/. What the app must supply reaches them by prop, slot or inject (RAIL_MEMORY, ' +
+        'Temporary, until the page chrome follows the kit into @knowledge/ui (#941): it imports ' +
+        'npm packages, its own files and the package, nothing else in src/. What the app must supply reaches them by prop, slot or inject (RAIL_MEMORY, ' +
         'ERROR_TEXT in shared/layout/page-chrome.ts).',
       severity: 'error',
-      from: { path: '^src/shared/(ui|layout)/', pathNot: '\\.spec\\.ts$' },
-      to: { path: '^src/', pathNot: '^src/shared/(ui|layout)/' },
+      from: { path: '^src/shared/layout/' },
+      to: { path: '^src/', pathNot: '^src/shared/layout/' },
     },
     {
       name: 'core-is-pure',
@@ -162,7 +162,8 @@ module.exports = {
         'are ignored. In a Vue SFC a real cycle shows up as an undefined component at render ' +
         'time, which is a far worse error message than this one.',
       severity: 'error',
-      from: {},
+      // @knowledge/ui is followed from here but checked by its own config.
+      from: { pathNot: '^\\.\\./\\.\\./packages/ui/' },
       to: { circular: true, via: { dependencyTypesNot: ['type-only'] } },
     },
     {

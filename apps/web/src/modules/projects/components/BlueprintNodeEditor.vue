@@ -21,11 +21,11 @@ import {
   type TemplateRef,
   type TemplateSummary,
 } from '@knowledge/contracts'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
-import { Textarea } from '@/shared/ui/textarea'
-import { Checkbox } from '@/shared/ui/checkbox'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
+import { Button } from '@knowledge/ui/button'
+import { Input } from '@knowledge/ui/input'
+import { Textarea } from '@knowledge/ui/textarea'
+import { Checkbox } from '@knowledge/ui/checkbox'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
 import { itemTitles, typedText } from '@/modules/projects/model/blueprint-tree'
 
 const props = defineProps<{

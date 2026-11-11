@@ -29,9 +29,9 @@ import { useCopy } from '@/shared/composables/use-copy'
 import { CopyBlock, KEY_ENV } from '@/entities/access'
 import { useAuthStore } from '@/stores/auth'
 import { useFeaturesStore } from '@/stores/features'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
-import { ResponsivePopover } from '@/shared/ui/popover'
+import { Button } from '@knowledge/ui/button'
+import { Input } from '@knowledge/ui/input'
+import { ResponsivePopover } from '@knowledge/ui/popover'
 
 const props = defineProps<{ projectId: string; projectName: string }>()
 

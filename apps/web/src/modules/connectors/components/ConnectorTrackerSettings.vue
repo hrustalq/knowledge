@@ -26,9 +26,9 @@ import { api } from '@/shared/api/client'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
 import { useProjectsStore } from '@/stores/projects'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
-import { Label } from '@/shared/ui/label'
+import { Button } from '@knowledge/ui/button'
+import { Input } from '@knowledge/ui/input'
+import { Label } from '@knowledge/ui/label'
 import { OwnerPicker } from '@/entities/document'
 
 const props = defineProps<{ connector: ConnectorSummary }>()

@@ -20,7 +20,7 @@
 import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import { FileUp, X } from 'lucide-vue-next'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 import { ACCEPT_ATTR, PARSER_ICONS, inspectFile, type Message } from '../model/formats'
 import { formatBytes } from '@/shared/utils/format'
 import { IMPORT_FORMATS } from '@knowledge/contracts'

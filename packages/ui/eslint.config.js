@@ -1,5 +1,5 @@
 // The kit's half of apps/web/eslint.config.js: copy stays in the `ui` catalogue
-// (src/messages, once the kit lands here), and nothing formats a date or a
+// (src/messages), and nothing formats a date or a
 // number by the host's locale — a component takes the formatted text or a
 // formatter from its caller.
 import vueI18n from '@intlify/eslint-plugin-vue-i18n'
@@ -26,11 +26,15 @@ export default [
       parserOptions: { parser: tseslint.parser, sourceType: 'module', extraFileExtensions: ['.vue'] },
     },
     plugins: { '@intlify/vue-i18n': vueI18n },
+    settings: { 'vue-i18n': { localeDir: './src/messages/*.json', messageSyntaxVersion: '^11.0.0' } },
     rules: {
+      '@intlify/vue-i18n/no-missing-keys': 'error',
       '@intlify/vue-i18n/no-raw-text': [
         'error',
         {
           ignorePattern: '^[\\s\\d.,:;!?·→←—–×/…•|()+\\-#@%&*=<>\\[\\]{}"\'`]*$',
+          // Typographic quotes and a keycap: the same in every language.
+          ignoreText: ['“', '”', 'Esc'],
           attributes: { '/.+/': ['title', 'aria-label', 'placeholder', 'alt'] },
         },
       ],
@@ -41,6 +45,8 @@ export default [
     files: ['src/**/*.ts'],
     ignores: ['src/**/*.spec.ts'],
     languageOptions: { parser: tseslint.parser, sourceType: 'module' },
-    rules: { 'no-restricted-syntax': LOCALE_FORMATTING },
+    plugins: { '@intlify/vue-i18n': vueI18n },
+    settings: { 'vue-i18n': { localeDir: './src/messages/*.json', messageSyntaxVersion: '^11.0.0' } },
+    rules: { '@intlify/vue-i18n/no-missing-keys': 'error', 'no-restricted-syntax': LOCALE_FORMATTING },
   },
 ]

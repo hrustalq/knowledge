@@ -61,7 +61,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
+} from '@knowledge/ui/dropdown-menu'
 import { PANEL_META, PANEL_TYPES, STATUS_COLORS, type PanelType, type StatusColor } from '@/core/markdown/nodes'
 import { useObservable } from '@/shared/composables/rx-vue'
 import { indent, outdent } from './extensions/list-indent'

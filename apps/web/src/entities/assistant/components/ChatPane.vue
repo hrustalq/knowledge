@@ -15,13 +15,13 @@ import type {
 } from '@knowledge/contracts'
 import { useAssistantStore } from '@/entities/assistant/model/assistant.store'
 import { useAuthStore } from '@/stores/auth'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
+} from '@knowledge/ui/dropdown-menu'
 import {
   Dialog,
   DialogContent,
@@ -29,7 +29,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
+} from '@knowledge/ui/dialog'
 import ChatTranscript from './ChatTranscript.vue'
 import ChatComposer from './ChatComposer.vue'
 import { assistantMode } from '../model/use-mode'

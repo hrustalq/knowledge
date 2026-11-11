@@ -15,15 +15,15 @@ import { MoreHorizontal, Pencil, Plus, Search, Trash2, X } from 'lucide-vue-next
 import type { AssistantThreadSummary } from '@knowledge/contracts'
 import { relativeTime } from '@/shared/api/api'
 import { useAssistantStore } from '@/entities/assistant/model/assistant.store'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
+import { Button } from '@knowledge/ui/button'
+import { Input } from '@knowledge/ui/input'
 import { Skeleton } from '@knowledge/ui/skeleton'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
+} from '@knowledge/ui/dropdown-menu'
 import { threadLabel } from '../model/thread-label'
 
 const { t } = useI18n()

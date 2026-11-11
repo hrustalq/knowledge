@@ -22,7 +22,7 @@ import type {
 } from '@knowledge/contracts'
 import { apiQueryOptions, fetchApi } from '@/shared/api/queries'
 import { getFilterRailOpen, getWorkspaceId, setFilterRailOpen } from '@/shared/api/api'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 import {
   PageLayout,
   PageState,
@@ -32,7 +32,7 @@ import {
   tabId,
   type PageTab,
 } from '@/shared/layout'
-import type { ActiveFilter } from '@/shared/ui/filter-bar'
+import type { ActiveFilter } from '@knowledge/ui/filter-bar'
 import { MergeRequestList } from '@/entities/merge-request'
 import MergeRequestSearchBar from '@/modules/merge-requests/components/MergeRequestSearchBar.vue'
 import SavedFilterRail from '@/modules/merge-requests/components/SavedFilterRail.vue'

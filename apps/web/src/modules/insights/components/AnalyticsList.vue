@@ -16,7 +16,7 @@ import type { AnalyticsReport, AnalyticsTrafficFilter } from '@knowledge/contrac
 import { errorMessage } from '@/shared/api/errors'
 import { requestFile } from '@/shared/api/client'
 import { saveFile } from '@/shared/api/api'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 
 export interface AnalyticsListRow {
   key: string

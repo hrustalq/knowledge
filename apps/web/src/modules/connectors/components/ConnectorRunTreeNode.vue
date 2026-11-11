@@ -23,8 +23,8 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronRight, Loader2, MoreHorizontal, Sparkles } from 'lucide-vue-next'
 import { allowedItemEvents, type ConnectorItemEventType } from '@knowledge/contracts'
-import { Collapse } from '@/shared/ui/collapse'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/shared/ui/dropdown-menu'
+import { Collapse } from '@knowledge/ui/collapse'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@knowledge/ui/dropdown-menu'
 import {
   ACTION_CLASS,
   ACTION_ICON,

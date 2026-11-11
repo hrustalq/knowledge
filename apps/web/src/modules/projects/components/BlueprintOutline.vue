@@ -23,7 +23,7 @@ import {
   Trash2,
 } from 'lucide-vue-next'
 import { blueprintText, type BlueprintNode, type Locale } from '@knowledge/contracts'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 import { itemTitles, moveNode, removeNode, shiftNode, type NodePath } from '@/modules/projects/model/blueprint-tree'
 
 const props = defineProps<{ tree: BlueprintNode[]; selected: NodePath | null; locale: Locale }>()

@@ -14,11 +14,11 @@ import { X } from 'lucide-vue-next'
 import { fetchApi } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
 import { formatDate } from '@/shared/utils/format'
-import { Input } from '@/shared/ui/input'
+import { Input } from '@knowledge/ui/input'
 import { useWorkspacesStore } from '@/stores/workspaces'
-import { Autocomplete, type AutocompleteOption } from '@/shared/ui/autocomplete'
-import { Checkbox } from '@/shared/ui/checkbox'
-import { Label } from '@/shared/ui/label'
+import { Autocomplete, type AutocompleteOption } from '@knowledge/ui/autocomplete'
+import { Checkbox } from '@knowledge/ui/checkbox'
+import { Label } from '@knowledge/ui/label'
 import DocumentFacets from './DocumentFacets.vue'
 import {
   Select,
@@ -26,7 +26,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/shared/ui/select'
+} from '@knowledge/ui/select'
 import type { UseSearch } from '../model/use-search'
 
 const { t } = useI18n()

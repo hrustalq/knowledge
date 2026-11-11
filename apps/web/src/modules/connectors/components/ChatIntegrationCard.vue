@@ -27,8 +27,8 @@ import { apiQueryOptions } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
 import { formatDate } from '@/shared/utils/format'
 import { useCopy } from '@/shared/composables/use-copy'
-import { Badge } from '@/shared/ui/badge'
-import { Button } from '@/shared/ui/button'
+import { Badge } from '@knowledge/ui/badge'
+import { Button } from '@knowledge/ui/button'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,7 +38,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/shared/ui/alert-dialog'
+} from '@knowledge/ui/alert-dialog'
 import { PageTabs, panelId, tabId, type PageTab } from '@/shared/layout'
 import AgentSelect from './AgentSelect.vue'
 import ChatBindingTable from './ChatBindingTable.vue'

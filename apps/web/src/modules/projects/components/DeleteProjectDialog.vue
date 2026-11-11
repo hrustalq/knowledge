@@ -63,10 +63,10 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/shared/ui/alert-dialog'
-import { Input } from '@/shared/ui/input'
-import { RadioGroup, RadioGroupItem } from '@/shared/ui/radio-group'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
+} from '@knowledge/ui/alert-dialog'
+import { Input } from '@knowledge/ui/input'
+import { RadioGroup, RadioGroupItem } from '@knowledge/ui/radio-group'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
 
 const { t } = useI18n()
 

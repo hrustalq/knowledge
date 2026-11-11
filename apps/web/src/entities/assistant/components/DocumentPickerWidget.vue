@@ -16,9 +16,9 @@ import { useI18n } from 'vue-i18n'
 import { computed, nextTick, ref, watch } from 'vue'
 import { Check, FileText, FolderOpen } from 'lucide-vue-next'
 import { useDocumentsStore } from '@/stores/documents'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
-import { ResponsivePopover } from '@/shared/ui/popover'
+import { Button } from '@knowledge/ui/button'
+import { Input } from '@knowledge/ui/input'
+import { ResponsivePopover } from '@knowledge/ui/popover'
 
 const { t } = useI18n()
 

@@ -20,13 +20,13 @@
 import { useI18n } from 'vue-i18n'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { ChevronDown, MessageSquare, MessagesSquare, Paperclip } from 'lucide-vue-next'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
+} from '@knowledge/ui/dropdown-menu'
 import { useQuery } from '@tanstack/vue-query'
 import type { ListAiAgentChoicesResponse } from '@knowledge/contracts'
 import { RichEditor } from '@/entities/rich-editor'

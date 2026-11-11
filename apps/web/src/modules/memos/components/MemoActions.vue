@@ -11,12 +11,12 @@ import { toast } from 'vue-sonner'
 import { MoreVertical, Pencil, Tags, Trash2 } from 'lucide-vue-next'
 import { request } from '@/shared/api/client'
 import { errorMessage } from '@/shared/api/errors'
-import { Button } from '@/shared/ui/button'
-import { confirm } from '@/shared/ui/confirm'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/shared/ui/dialog'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/shared/ui/dropdown-menu'
-import { Input } from '@/shared/ui/input'
-import { Label } from '@/shared/ui/label'
+import { Button } from '@knowledge/ui/button'
+import { confirm } from '@knowledge/ui/confirm'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@knowledge/ui/dialog'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@knowledge/ui/dropdown-menu'
+import { Input } from '@knowledge/ui/input'
+import { Label } from '@knowledge/ui/label'
 
 const props = defineProps<{ memoId: string; title: string; tags: readonly string[] }>()
 const emit = defineEmits<{ deleted: [] }>()

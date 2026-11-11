@@ -11,7 +11,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { TRAFFIC_CLASSES, type PageInsightsResponse } from '@knowledge/contracts'
 import { formatDuration, formatNumber, formatRelative, formatDate, formatDateTime, formatDayMonth } from '@/shared/utils/format'
-import { DailyBars } from '@/shared/ui/daily-bars'
+import { DailyBars } from '@knowledge/ui/daily-bars'
 import { TRAFFIC_BAR, TRAFFIC_SEGMENTS, trafficPoints } from '../model/traffic'
 
 const props = defineProps<{ insights: PageInsightsResponse }>()

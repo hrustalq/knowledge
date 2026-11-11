@@ -13,7 +13,7 @@ import { Download } from 'lucide-vue-next'
 import { GUIDANCE_FILE_PATTERNS, type ListAiSkillsResponse, type RepoGuidanceImportResponse } from '@knowledge/contracts'
 import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 
 const props = defineProps<{ connectorId: string }>()
 const { t } = useI18n()

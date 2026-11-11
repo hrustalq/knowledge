@@ -32,11 +32,11 @@ import {
   X,
 } from 'lucide-vue-next'
 import type { ListSavedFiltersResponse, SavedFilter } from '@knowledge/contracts'
-import type { ActiveFilter } from '@/shared/ui/filter-bar'
+import type { ActiveFilter } from '@knowledge/ui/filter-bar'
 import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
+import { Button } from '@knowledge/ui/button'
+import { Input } from '@knowledge/ui/input'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -46,13 +46,13 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/shared/ui/alert-dialog'
+} from '@knowledge/ui/alert-dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
+} from '@knowledge/ui/dropdown-menu'
 import {
   sameQuery,
   toSavedQuery,

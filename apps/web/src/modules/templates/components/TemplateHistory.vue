@@ -27,7 +27,7 @@ import { lineDiff } from '@/core/line-diff'
 import { useTemplatesStore } from '@/entities/template'
 import { useMembers } from '@/entities/person'
 import { Skeleton } from '@knowledge/ui/skeleton'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
 import { DiffView } from '@/entities/document'
 
 const props = defineProps<{ template: TemplateSummary }>()

@@ -10,7 +10,7 @@
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Autocomplete, type AutocompleteOption } from '@/shared/ui/autocomplete'
+import { Autocomplete, type AutocompleteOption } from '@knowledge/ui/autocomplete'
 
 const { t } = useI18n()
 

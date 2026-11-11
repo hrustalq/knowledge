@@ -23,8 +23,8 @@ import {
 } from '@knowledge/contracts'
 import { publicShareExportPath, publicShareExportsPath } from '@knowledge/contracts/publishing'
 import { exportFormatAvailable } from '@/core/export-formats'
-import { Button } from '@/shared/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/ui/dialog'
+import { Button } from '@knowledge/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@knowledge/ui/dialog'
 import { ExportFormatPicker } from '@/entities/document'
 
 const props = defineProps<{

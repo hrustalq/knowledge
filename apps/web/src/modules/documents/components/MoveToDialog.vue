@@ -15,7 +15,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronRight, Home, Search } from 'lucide-vue-next'
 import type { DocumentTreeNode } from '@knowledge/contracts'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -23,8 +23,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
-import { Input } from '@/shared/ui/input'
+} from '@knowledge/ui/dialog'
+import { Input } from '@knowledge/ui/input'
 import { useDocumentsStore } from '@/stores/documents'
 
 const props = defineProps<{ documentId: string; title: string }>()

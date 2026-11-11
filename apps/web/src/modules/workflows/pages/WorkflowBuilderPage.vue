@@ -62,18 +62,18 @@ import { api } from '@/shared/api/client'
 import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { useAuthStore } from '@/stores/auth'
 import { useWorkflowsStore } from '@/entities/workflow'
-import { Button, buttonVariants } from '@/shared/ui/button'
-import { confirm } from '@/shared/ui/confirm'
-import { Checkbox } from '@/shared/ui/checkbox'
-import { Input } from '@/shared/ui/input'
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/shared/ui/sheet'
+import { Button, buttonVariants } from '@knowledge/ui/button'
+import { confirm } from '@knowledge/ui/confirm'
+import { Checkbox } from '@knowledge/ui/checkbox'
+import { Input } from '@knowledge/ui/input'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@knowledge/ui/sheet'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
+} from '@knowledge/ui/dropdown-menu'
 import { Skeleton } from '@knowledge/ui/skeleton'
 import {
   AlertDialog,
@@ -84,7 +84,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/shared/ui/alert-dialog'
+} from '@knowledge/ui/alert-dialog'
 import WorkflowGraphEditor from '@/modules/workflows/components/WorkflowGraphEditor.vue'
 import WorkflowStepForm from '@/modules/workflows/components/WorkflowStepForm.vue'
 import WorkflowStepPalette from '@/modules/workflows/components/WorkflowStepPalette.vue'

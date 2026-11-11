@@ -17,13 +17,13 @@ import {
   type ActiveFilter,
   type FilterAccessors,
   type FilterField,
-} from '@/shared/ui/filter-bar'
-import { Autocomplete } from '@/shared/ui/autocomplete'
+} from '@knowledge/ui/filter-bar'
+import { Autocomplete } from '@knowledge/ui/autocomplete'
 import { PageState } from '@/shared/layout'
-import { Button } from '@/shared/ui/button'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/shared/ui/dialog'
+import { Button } from '@knowledge/ui/button'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@knowledge/ui/dialog'
 import { Skeleton } from '@knowledge/ui/skeleton'
-import { Textarea } from '@/shared/ui/textarea'
+import { Textarea } from '@knowledge/ui/textarea'
 import WorkflowRunCard from '@/modules/workflows/components/WorkflowRunCard.vue'
 
 const { t } = useI18n()

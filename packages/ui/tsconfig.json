@@ -6,6 +6,8 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
+    // vite/client: a stylesheet import and `import.meta.env.DEV`; node: the specs.
+    "types": ["vite/client", "node"],
     // For `shadcn-vue add` only (components.json resolves its aliases through
     // here). Source files import each other relatively, never by this name.
     "paths": { "@knowledge/ui/*": ["./src/*"] }

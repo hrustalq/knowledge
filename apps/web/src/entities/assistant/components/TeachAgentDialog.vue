@@ -20,10 +20,10 @@ import { getWorkspaceId } from '@/shared/api/api'
 import { useAuthStore } from '@/stores/auth'
 import { useProjectsStore } from '@/stores/projects'
 import { useAgentNames } from '@/entities/person'
-import { Button } from '@/shared/ui/button'
-import { Checkbox } from '@/shared/ui/checkbox'
-import { Textarea } from '@/shared/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
+import { Button } from '@knowledge/ui/button'
+import { Checkbox } from '@knowledge/ui/checkbox'
+import { Textarea } from '@knowledge/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
 import {
   Dialog,
   DialogContent,
@@ -31,7 +31,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
+} from '@knowledge/ui/dialog'
 
 const props = withDefaults(
   defineProps<{

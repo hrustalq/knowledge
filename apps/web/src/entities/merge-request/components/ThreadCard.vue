@@ -37,8 +37,8 @@ import {
   X,
 } from 'lucide-vue-next'
 import type { ReviewComment, ReviewThread } from '@knowledge/contracts'
-import { Button } from '@/shared/ui/button'
-import { Collapse } from '@/shared/ui/collapse'
+import { Button } from '@knowledge/ui/button'
+import { Collapse } from '@knowledge/ui/collapse'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,7 +48,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/shared/ui/alert-dialog'
+} from '@knowledge/ui/alert-dialog'
 import { MarkdownView } from '@/entities/document'
 import { excerpt } from '@/core/markdown/plain'
 import CommentComposer from './CommentComposer.vue'

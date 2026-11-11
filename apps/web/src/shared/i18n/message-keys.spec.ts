@@ -3,7 +3,7 @@ import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import app from './messages/en.json'
 import reader from './reader/en.json'
-import ui from '../ui/messages/en.json'
+import ui from '@knowledge/ui/messages/en.json'
 
 /**
  * Every static `t('…')` key in the web source must resolve to a message in
@@ -27,8 +27,9 @@ for (const [ns, keys] of Object.entries(reader)) {
   en[ns] = { ...((en[ns] as object | undefined) ?? {}), ...keys }
 }
 
-// The kit and the page chrome own their strings: they read `ui.*` and nothing else (#941).
-const KIT = /^shared\/(ui|layout)\//
+// The page chrome reads the kit's strings, `ui.*`, and nothing else (#941). The kit
+// checks its own files (packages/ui/src/messages/messages.spec.ts).
+const KIT = /^shared\/layout\//
 
 // `t(`, `$t(`, `te(`, `tm(` — but not `emit(`, `split(`, or `x.t(` on some other object.
 const CALL = /(?<![\w$.])\$?(?:t|te|tm)\(\s*(['"])([^'"`\n]+?)\1/g
@@ -94,7 +95,7 @@ describe('web i18n message keys', () => {
       ...Array.from(source.matchAll(/labelFor\([^,]*,\s*'([^']+)'/g), (m) => `${m[1]!}.`),
     ]
 
-    const unused = leafKeys({ ...app, ...ui }).filter(
+    const unused = leafKeys(app).filter(
       (key) =>
         !literals.has(key) &&
         !prefixes.some((prefix) => key.startsWith(prefix)) &&

@@ -24,7 +24,7 @@ import type {
 } from '@knowledge/contracts'
 import { useQueryClient } from '@tanstack/vue-query'
 import { api, fetchApi } from '@/shared/api/queries'
-import { Autocomplete, type AutocompleteOption } from '@/shared/ui/autocomplete'
+import { Autocomplete, type AutocompleteOption } from '@knowledge/ui/autocomplete'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,9 +34,9 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/shared/ui/alert-dialog'
-import { Badge } from '@/shared/ui/badge'
-import { Button } from '@/shared/ui/button'
+} from '@knowledge/ui/alert-dialog'
+import { Badge } from '@knowledge/ui/badge'
+import { Button } from '@knowledge/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -44,11 +44,11 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
-import { Input } from '@/shared/ui/input'
-import { Label } from '@/shared/ui/label'
+} from '@knowledge/ui/dialog'
+import { Input } from '@knowledge/ui/input'
+import { Label } from '@knowledge/ui/label'
 import { Skeleton } from '@knowledge/ui/skeleton'
-import { Textarea } from '@/shared/ui/textarea'
+import { Textarea } from '@knowledge/ui/textarea'
 import { UserChip } from '@/entities/person'
 
 const { t } = useI18n()

@@ -10,8 +10,8 @@ import { useI18n } from 'vue-i18n'
 import { useHydratedMediaQuery } from '@knowledge/ui/use-hydrated'
 import { ShieldCheck, ShieldAlert, ShieldQuestion, ShieldOff } from 'lucide-vue-next'
 import type { AnswerConfidence } from '@knowledge/contracts'
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/shared/ui/hover-card'
-import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@knowledge/ui/hover-card'
+import { Popover, PopoverContent, PopoverTrigger } from '@knowledge/ui/popover'
 
 const props = defineProps<{ confidence: AnswerConfidence }>()
 

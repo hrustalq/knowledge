@@ -32,11 +32,11 @@ import { apiQueryOptions } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
 import { formatDate, formatDuration, formatNumber, formatPercent, formatRelative, formatDayMonth } from '@/shared/utils/format'
 import { useAuthStore } from '@/stores/auth'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 import { PageLayout, PageState, PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@/shared/layout'
 import AnalyticsList, { type AnalyticsListRow } from '@/modules/insights/components/AnalyticsList.vue'
 import AnalyticsSettings from '@/modules/insights/components/AnalyticsSettings.vue'
-import { DailyBars } from '@/shared/ui/daily-bars'
+import { DailyBars } from '@knowledge/ui/daily-bars'
 import { TRAFFIC_BAR, TRAFFIC_SEGMENTS, trafficPoints } from '@/entities/insight'
 
 const { t } = useI18n()

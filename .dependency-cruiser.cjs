@@ -37,14 +37,7 @@ module.exports = {
       // was added the same week — a new buildless package would have silently
       // escaped the one rule that catches a fault nothing else can. `tsconfig`
       // has no src/ and drops out on its own.
-      //
-      // `@knowledge/ui` is the one exemption (#941): it is Vue components, its
-      // only consumer is Vite, which resolves a relative import into source,
-      // and `shadcn-vue add` writes files that import each other relatively.
-      // No Node process may ever import it. Its own rules (no app, no other
-      // @knowledge/* package) are in packages/ui/.dependency-cruiser.cjs,
-      // because only a workspace with `vue` installed can parse a .vue file.
-      from: { path: '^packages/[^/]+/src', pathNot: '^packages/ui/' },
+      from: { path: '^packages/[^/]+/src' },
       to: { dependencyTypes: ['local'] },
     },
     {
@@ -86,6 +79,13 @@ module.exports = {
   ],
 
   options: {
+    // `@knowledge/ui` is the one package these rules do not cover (#941): it is
+    // Vue components, its only consumer is Vite, which resolves a relative
+    // import into source, and `shadcn-vue add` writes files that import each
+    // other relatively. No Node process may ever import it. Its own rules (no
+    // app, no other @knowledge/* package, cycles) are in
+    // packages/ui/.dependency-cruiser.cjs, run by `make deps` like these.
+    exclude: { path: '^packages/ui/' },
     doNotFollow: { path: 'node_modules' },
     tsPreCompilationDeps: true,
     enhancedResolveOptions: {

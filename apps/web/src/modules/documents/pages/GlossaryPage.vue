@@ -34,19 +34,19 @@ import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
 import { useGlossaryStore } from '@/entities/document'
 import { MAX_LINKS_PER_TERM, buildMatcher } from '@/entities/document'
-import { Badge } from '@/shared/ui/badge'
-import { Button } from '@/shared/ui/button'
-import { Checkbox } from '@/shared/ui/checkbox'
-import { Input } from '@/shared/ui/input'
+import { Badge } from '@knowledge/ui/badge'
+import { Button } from '@knowledge/ui/button'
+import { Checkbox } from '@knowledge/ui/checkbox'
+import { Input } from '@knowledge/ui/input'
 import { Skeleton } from '@knowledge/ui/skeleton'
-import { Autocomplete } from '@/shared/ui/autocomplete'
+import { Autocomplete } from '@knowledge/ui/autocomplete'
 import {
   FilterBar,
   filterRows,
   type ActiveFilter,
   type FilterAccessors,
   type FilterField,
-} from '@/shared/ui/filter-bar'
+} from '@knowledge/ui/filter-bar'
 import {
   Dialog,
   DialogContent,
@@ -54,8 +54,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
+} from '@knowledge/ui/dialog'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@knowledge/ui/table'
 import { RichEditor } from '@/entities/rich-editor'
 import { MarkdownView } from '@/entities/document'
 

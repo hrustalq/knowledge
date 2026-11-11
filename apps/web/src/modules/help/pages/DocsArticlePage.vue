@@ -21,7 +21,7 @@ import McpToolTable from '@/modules/help/components/McpToolTable.vue'
 import SkillPanel from '@/modules/help/components/SkillPanel.vue'
 import { articles, findArticle } from '@/modules/help/docs/registry'
 import { articleMarkdown } from '@/modules/help/docs/bundle'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 import { useCopy } from '@/shared/composables/use-copy'
 
 interface Heading {

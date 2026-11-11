@@ -11,10 +11,10 @@ import type { AiPluginSummary, ListAiPluginsResponse } from '@knowledge/contract
 import { api } from '@/shared/api/client'
 import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { getWorkspaceId, relativeTime } from '@/shared/api/api'
-import { Badge } from '@/shared/ui/badge'
-import { Button } from '@/shared/ui/button'
-import { Checkbox } from '@/shared/ui/checkbox'
-import { Input } from '@/shared/ui/input'
+import { Badge } from '@knowledge/ui/badge'
+import { Button } from '@knowledge/ui/button'
+import { Checkbox } from '@knowledge/ui/checkbox'
+import { Input } from '@knowledge/ui/input'
 import { Skeleton } from '@knowledge/ui/skeleton'
 import {
   Dialog,
@@ -23,15 +23,15 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
+} from '@knowledge/ui/dialog'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/shared/ui/select'
-import { AiEmptyState } from '@/shared/ui/empty-state'
+} from '@knowledge/ui/select'
+import { AiEmptyState } from '@knowledge/ui/empty-state'
 import AiWebAccessSection from './AiWebAccessSection.vue'
 
 const { t } = useI18n()

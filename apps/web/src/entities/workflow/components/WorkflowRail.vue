@@ -9,7 +9,7 @@ import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { getWorkspaceId, relativeTime } from '@/shared/api/api'
 import { useAuthStore } from '@/stores/auth'
 import { useWorkflowsStore } from '@/entities/workflow/model/workflows.store'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 import { Skeleton } from '@knowledge/ui/skeleton'
 import { isBusyStatus, RUN_STATUS_CLASS, RUN_STATUS_ICON, RUN_STATUS_LABEL } from '../model/workflow-ui'
 

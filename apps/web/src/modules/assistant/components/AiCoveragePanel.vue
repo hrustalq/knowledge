@@ -13,10 +13,10 @@ import type { AgentFinding, AgentRunSummary, ListAgentRunsResponse, ListConnecto
 import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { getWorkspaceId, relativeTime } from '@/shared/api/api'
 import { labelFor } from '@/shared/i18n/labels'
-import { Badge } from '@/shared/ui/badge'
-import { Button } from '@/shared/ui/button'
+import { Badge } from '@knowledge/ui/badge'
+import { Button } from '@knowledge/ui/button'
 import { Skeleton } from '@knowledge/ui/skeleton'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
 import {
   Dialog,
   DialogContent,
@@ -24,8 +24,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
-import { AiEmptyState } from '@/shared/ui/empty-state'
+} from '@knowledge/ui/dialog'
+import { AiEmptyState } from '@knowledge/ui/empty-state'
 
 const { t } = useI18n()
 

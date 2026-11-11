@@ -7,8 +7,8 @@ import { russianPluralRule } from './shared/i18n/plural'
 import en from './shared/i18n/reader/en.json'
 import ruCatalog from './shared/i18n/reader/ru.json'
 // The UI kit's own strings (`ui.*`): the sheet's close label, the lightboxes, the filter inputs.
-import uiEn from './shared/ui/messages/en.json'
-import uiRuCatalog from './shared/ui/messages/ru.json'
+import uiEn from '@knowledge/ui/messages/en.json'
+import uiRuCatalog from '@knowledge/ui/messages/ru.json'
 import { SharePage, SitePage, SiteWidget, type PublicReaderState } from './modules/reader'
 import './assets/style.css'
 

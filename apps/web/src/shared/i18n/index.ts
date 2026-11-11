@@ -14,7 +14,7 @@ import { russianPluralRule } from '@/shared/i18n/plural'
  * `vue-tsc` rather than falling back silently in front of a user.
  *
  * A catalogue is the app's messages plus the UI kit's own (`ui.*`, in
- * shared/ui/messages), merged per language in catalog.<locale>.ts.
+ * packages/ui/src/messages), merged per language in catalog.<locale>.ts.
  */
 export type MessageSchema = typeof en
 

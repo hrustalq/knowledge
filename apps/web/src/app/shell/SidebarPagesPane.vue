@@ -29,7 +29,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
+} from '@knowledge/ui/dropdown-menu'
 import SidebarTreeNode from './SidebarTreeNode.vue'
 import { TreeDragLayer } from '@/modules/documents'
 import { provideTreeDnd } from '@/modules/documents'

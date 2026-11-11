@@ -27,8 +27,8 @@ import type {
 } from '@knowledge/contracts'
 import { apiInfiniteQueryOptions, apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
-import { Badge } from '@/shared/ui/badge'
-import { Button } from '@/shared/ui/button'
+import { Badge } from '@knowledge/ui/badge'
+import { Button } from '@knowledge/ui/button'
 import { Skeleton } from '@knowledge/ui/skeleton'
 import {
   PageLayout,

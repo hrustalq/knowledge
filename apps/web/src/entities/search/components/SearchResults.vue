@@ -7,7 +7,7 @@
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { History, SearchX } from 'lucide-vue-next'
-import { Badge } from '@/shared/ui/badge'
+import { Badge } from '@knowledge/ui/badge'
 import { Skeleton } from '@knowledge/ui/skeleton'
 import { formatDate, formatDateTime } from '@/shared/utils/format'
 import { VerificationBadge } from '@/entities/document'

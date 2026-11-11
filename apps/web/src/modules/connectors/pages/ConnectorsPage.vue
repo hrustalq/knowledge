@@ -7,7 +7,7 @@
 // prop rather than a route guard (the API enforces the real thing).
 import { useI18n } from 'vue-i18n'
 import { computed } from 'vue'
-import { Badge } from '@/shared/ui/badge'
+import { Badge } from '@knowledge/ui/badge'
 import { PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@/shared/layout'
 import { useAuthStore } from '@/stores/auth'
 import { ConnectorList } from '@/entities/connector'

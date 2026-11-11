@@ -26,7 +26,7 @@ import {
   type ApiSpecChange,
   type ApiSpecDiff,
 } from '@knowledge/contracts'
-import { Collapse } from '@/shared/ui/collapse'
+import { Collapse } from '@knowledge/ui/collapse'
 import ApiEndpoint from './ApiEndpoint.vue'
 import ApiTone from './ApiTone.vue'
 import type { ApiTone as Tone } from '@/entities/api-operation/model/api-spec'

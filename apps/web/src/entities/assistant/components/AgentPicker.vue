@@ -10,8 +10,8 @@ import { Bot, Check } from 'lucide-vue-next'
 import type { ListAiAgentChoicesResponse } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
-import { Button } from '@/shared/ui/button'
-import { ResponsivePopover } from '@/shared/ui/popover'
+import { Button } from '@knowledge/ui/button'
+import { ResponsivePopover } from '@knowledge/ui/popover'
 
 const { t } = useI18n()
 

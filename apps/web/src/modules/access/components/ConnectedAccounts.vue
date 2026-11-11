@@ -16,9 +16,9 @@ import type { CredentialSummary, CredentialsResponse } from '@knowledge/contract
 import { api } from '@/shared/api/client'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
-import { Button } from '@/shared/ui/button'
-import { confirm } from '@/shared/ui/confirm'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/ui/tooltip'
+import { Button } from '@knowledge/ui/button'
+import { confirm } from '@knowledge/ui/confirm'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@knowledge/ui/tooltip'
 import { ConnectionAccount, TokenDialog, providerMeta } from '@/entities/connector'
 
 const { t } = useI18n()

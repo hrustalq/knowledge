@@ -13,8 +13,8 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { api } from '@/shared/api/queries'
 import { useAuthStore } from '@/stores/auth'
-import { Button } from '@/shared/ui/button'
-import { Card, CardContent, CardDescription, CardHeader } from '@/shared/ui/card'
+import { Button } from '@knowledge/ui/button'
+import { Card, CardContent, CardDescription, CardHeader } from '@knowledge/ui/card'
 
 const { t } = useI18n()
 const route = useRoute()

@@ -28,10 +28,10 @@ import { connectorKindInfo } from '@knowledge/contracts'
 import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
 import { getWorkspaceId } from '@/shared/api/api'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
-import { Label } from '@/shared/ui/label'
-import { ResponsivePopover } from '@/shared/ui/popover'
+import { Button } from '@knowledge/ui/button'
+import { Input } from '@knowledge/ui/input'
+import { Label } from '@knowledge/ui/label'
+import { ResponsivePopover } from '@knowledge/ui/popover'
 
 const props = defineProps<{
   sourceKind: WorkItemSourceKind

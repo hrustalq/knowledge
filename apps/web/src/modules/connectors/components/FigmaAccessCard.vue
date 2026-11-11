@@ -18,7 +18,7 @@ import { FIGMA_HANDLE_CONFIG_KEY, type ConnectorSummary, type FigmaOauthStatusRe
 import { api } from '@/shared/api/client'
 import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 import { openOauthTab } from '@/entities/connector'
 import { useConnectionsWait } from '@/entities/connector'
 

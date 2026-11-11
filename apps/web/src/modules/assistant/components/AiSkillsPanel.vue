@@ -13,12 +13,12 @@ import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
 import { lineDiff } from '@/core/line-diff'
 import { DiffView } from '@/entities/document'
-import { Badge } from '@/shared/ui/badge'
-import { Button } from '@/shared/ui/button'
-import { Checkbox } from '@/shared/ui/checkbox'
-import { Input } from '@/shared/ui/input'
+import { Badge } from '@knowledge/ui/badge'
+import { Button } from '@knowledge/ui/button'
+import { Checkbox } from '@knowledge/ui/checkbox'
+import { Input } from '@knowledge/ui/input'
 import { Skeleton } from '@knowledge/ui/skeleton'
-import { Textarea } from '@/shared/ui/textarea'
+import { Textarea } from '@knowledge/ui/textarea'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,7 +28,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/shared/ui/alert-dialog'
+} from '@knowledge/ui/alert-dialog'
 import {
   Dialog,
   DialogContent,
@@ -36,9 +36,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
-import { AiEmptyState } from '@/shared/ui/empty-state'
+} from '@knowledge/ui/dialog'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@knowledge/ui/table'
+import { AiEmptyState } from '@knowledge/ui/empty-state'
 
 const { t } = useI18n()
 

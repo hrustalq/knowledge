@@ -9,9 +9,9 @@ import { Sparkles } from 'lucide-vue-next'
 import type { ListAiSkillsResponse } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
-import { Button } from '@/shared/ui/button'
-import { Checkbox } from '@/shared/ui/checkbox'
-import { ResponsivePopover } from '@/shared/ui/popover'
+import { Button } from '@knowledge/ui/button'
+import { Checkbox } from '@knowledge/ui/checkbox'
+import { ResponsivePopover } from '@knowledge/ui/popover'
 
 const { t } = useI18n()
 

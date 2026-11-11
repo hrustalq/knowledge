@@ -31,7 +31,7 @@ import type {
 import { useQueryClient } from '@tanstack/vue-query'
 import { api, fetchApi } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 import { lintCheckView, useLintChecks } from '../model/lint-check'
 
 const { t } = useI18n()

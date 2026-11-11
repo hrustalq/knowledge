@@ -13,7 +13,7 @@ import DOMPurify from 'dompurify'
 import { KN, carryDiagramLayout } from '@/core/markdown/nodes'
 import { useTheme } from '@/shared/utils/theme'
 import { mermaidConfig, mermaidSvg } from '@/shared/utils/mermaid'
-import { DiagramLightbox, ImageLightbox, markDiagrams, markZoomable } from '@/shared/ui/lightbox'
+import { DiagramLightbox, ImageLightbox, markDiagrams, markZoomable } from '@knowledge/ui/lightbox'
 
 defineOptions({ inheritAttrs: false })
 

@@ -10,7 +10,7 @@
 import { useI18n } from 'vue-i18n'
 import { computed } from 'vue'
 import { DOCUMENT_CATEGORIES, type DocumentCategory } from '@knowledge/contracts'
-import { Autocomplete, type AutocompleteOption } from '@/shared/ui/autocomplete'
+import { Autocomplete, type AutocompleteOption } from '@knowledge/ui/autocomplete'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
 

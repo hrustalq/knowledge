@@ -25,9 +25,9 @@ import { useAuthStore } from '@/stores/auth'
 import { isApiRequestError } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
 import { ownPath, reauthKindOf, ssoErrorOf, ssoStartUrl } from '@/modules/auth/model/sso'
-import { Button } from '@/shared/ui/button'
-import { Card, CardContent, CardDescription, CardHeader } from '@/shared/ui/card'
-import { Input } from '@/shared/ui/input'
+import { Button } from '@knowledge/ui/button'
+import { Card, CardContent, CardDescription, CardHeader } from '@knowledge/ui/card'
+import { Input } from '@knowledge/ui/input'
 
 const { t } = useI18n()
 const auth = useAuthStore()

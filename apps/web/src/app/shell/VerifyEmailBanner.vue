@@ -11,7 +11,7 @@ import { toast } from 'vue-sonner'
 import { MailWarning, X } from 'lucide-vue-next'
 import { api } from '@/shared/api/queries'
 import { useAuthStore } from '@/stores/auth'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 
 defineProps<{ email: string }>()
 const emit = defineEmits<{ dismiss: [] }>()

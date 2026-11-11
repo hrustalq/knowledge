@@ -26,6 +26,14 @@ in the pull request that introduces them — see
   than v0.50.0 still declares these fields and fails against the migrated database. Chat bot tokens
   (`chat_integrations.credential`) are untouched. After deploying, run **Test connection** on one token connector
   and on the Figma OAuth connector. (#908)
+- **Migration `20270113100000_drop_retired_provider_columns` deletes data and cannot be undone. It holds the same
+  rollback floor, v0.50.0.** It drops the provider columns that v0.46.0 replaced with per-provider models and that
+  v0.50.0 stopped declaring: `ai_settings.chat_provider_id` / `review_provider_id` / `extraction_provider_id` /
+  `decision_provider_id`, `ai_agents.provider_id`, `assistant_threads.provider_id`, and `ai_providers.model`,
+  `price_prompt_per_mtok`, `price_completion_per_mtok`, `price_cached_per_mtok`, `price_currency` and
+  `capabilities`. Routes, agent and thread pins, prices and capabilities already live in `ai_models`, so nothing
+  changes for a reader. Attribution columns (`provider_id` on `ai_usage`, `agent_runs`, `answer_feedback`) stay.
+  (#803)
 
 ## [0.50.0] — 2026-11-11
 

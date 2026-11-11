@@ -13,19 +13,43 @@ export const MCP_SERVER_NAME = 'knowledge';
  * does) give the model this before it has called anything — so it is the
  * orientation a model needs to avoid the two mistakes it would otherwise make
  * first: guessing a workspaceId, and writing to a default branch.
+ *
+ * Composed from the offered tools (#945): a line renders only when the tools
+ * it names are offered, so a read-only key is not told to rate, edit or capture.
  */
-export const MCP_INSTRUCTIONS = [
-  'Knowledge platform: a versioned documentation store with semantic search and a relation graph.',
-  'Workspace > Project > Document. Every content tool takes a workspaceId — call knowledge_whoami first to get yours.',
-  'Answer from the knowledge base with knowledge_search, and cite the document ids and titles it returns.',
-  'Rate an answer you built from knowledge_search with knowledge_feedback (quote its traceId). If a page you read is wrong or out of date, call knowledge_report_issue with the evidence — a report is checked and may become a merge request, never a silent edit.',
-  'Every search hit carries trust.status (verified | expired | edited | requested | outdated | flagged | unverified). Prefer verified pages; say so when you rely on an outdated, expired or edited one. knowledge_flag_document marks a page requested (please check) or outdated (known wrong) — verifying is a person\'s act and has no tool.',
-  'To change an existing page: knowledge_create_branch → knowledge_create_revision → knowledge_create_merge_request. Do not merge your own merge request unless asked to.',
-  'When the session settles something durable — a decision and why, a non-obvious gotcha, a team convention — record it with knowledge_capture_decision / knowledge_capture_note (check knowledge_find_similar first). Captures become merge requests a person reviews.',
-  'A tool that returns status "needs_input" is asking the person, not you: put its question to them with your own question tool, offer its options with the recommended one marked, then call the same tool again with the same arguments and answers. "cancelled" means the person declined and nothing was written.',
-  'Graph tools take asOf (an ISO date, rev:<revisionId> or tag:<release tag>) to answer as the knowledge base stood then; knowledge_list_release_tags lists the tags.',
-  'Read the knowledge://skill resource (or the "guide" prompt) for the full playbook.',
-].join('\n');
+export function mcpInstructions(has: (tool: string) => boolean): string {
+  const all = (...tools: string[]) => tools.every(has);
+  return [
+    'Knowledge platform: a versioned documentation store with semantic search and a relation graph.',
+    'Workspace > Project > Document. Every content tool takes a workspaceId — call knowledge_whoami first to get yours.',
+    'Answer from the knowledge base with knowledge_search, and cite the document ids and titles it returns.',
+    [
+      has('knowledge_feedback') && 'Rate an answer you built from knowledge_search with knowledge_feedback (quote its traceId).',
+      has('knowledge_report_issue') &&
+        'If a page you read is wrong or out of date, call knowledge_report_issue with the evidence — a report is checked and may become a merge request, never a silent edit.',
+    ]
+      .filter(Boolean)
+      .join(' '),
+    'Every search hit carries trust.status (verified | expired | edited | requested | outdated | flagged | unverified). Prefer verified pages; say so when you rely on an outdated, expired or edited one.' +
+      (has('knowledge_flag_document')
+        ? " knowledge_flag_document marks a page requested (please check) or outdated (known wrong) — verifying is a person's act and has no tool."
+        : ''),
+    all('knowledge_create_branch', 'knowledge_create_revision', 'knowledge_create_merge_request') &&
+      'To change an existing page: knowledge_create_branch → knowledge_create_revision → knowledge_create_merge_request. Do not merge your own merge request unless asked to.',
+    all('knowledge_capture_decision', 'knowledge_capture_note') &&
+      'When the session settles something durable — a decision and why, a non-obvious gotcha, a team convention — record it with knowledge_capture_decision / knowledge_capture_note (check knowledge_find_similar first). Captures become merge requests a person reviews.',
+    (has('knowledge_capture_decision') || has('knowledge_flag_document')) &&
+      'A tool that returns status "needs_input" is asking the person, not you: put its question to them with your own question tool, offer its options with the recommended one marked, then call the same tool again with the same arguments and answers. "cancelled" means the person declined and nothing was written.',
+    has('knowledge_list_release_tags') &&
+      'Graph tools take asOf (an ISO date, rev:<revisionId> or tag:<release tag>) to answer as the knowledge base stood then; knowledge_list_release_tags lists the tags.',
+    'Read the knowledge://skill resource (or the "guide" prompt) for the full playbook.',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+/** What a caller offered every tool is sent. */
+export const MCP_INSTRUCTIONS = mcpInstructions(() => true);
 
 /** The `asOf` / `knownAt` arguments of the graph tools (#81), described once. */
 export const MCP_AS_OF =
@@ -223,11 +247,25 @@ function toolErrorEnvelope(e: unknown): { content: { type: 'text'; text: string 
   };
 }
 
-/** Whether `principal`'s key is offered the tool `name` — the one rule `settleTools` applies (#822). */
-export function isOffered(name: string, principal: Principal): boolean {
+/**
+ * Whether `principal` is offered the tool `name` — the one rule `settleTools`
+ * applies (#822), and what the instructions are composed from before a tool is
+ * registered: filed in a toolset, within the key's scope, and its section not
+ * in `offSections` (off in every workspace the connection reaches, #945).
+ */
+export function isOffered(name: string, principal: Principal, offSections: readonly WorkspaceFeature[] = []): boolean {
+  const toolset = toolsetOf(name);
+  if (!toolset) return false;
+  const feature = featureOfToolset(toolset);
+  if (feature && offSections.includes(feature)) return false;
   const scope = principal.apiKey?.scope ?? 'write';
   const readOnly = !WRITE_TOOLS.has(name) && !CAPTURE_TOOLS.has(name);
   return readOnly || scope === 'write' || (scope === 'capture' && CAPTURE_TOOLS.has(name));
+}
+
+/** The server instructions for `principal` (the draft tools, HTTP only, are named in none of them). */
+export function instructionsFor(principal: Principal, offSections?: readonly WorkspaceFeature[]): string {
+  return mcpInstructions((name) => isOffered(name, principal, offSections));
 }
 
 /**
@@ -249,8 +287,7 @@ export function settleTools(
     const readOnly = !WRITE_TOOLS.has(name) && !CAPTURE_TOOLS.has(name);
     // A tool filed in no toolset is not offered (#945); the spec fails before that ships.
     const toolset = toolsetOf(name);
-    const feature = toolset && featureOfToolset(toolset);
-    if (!toolset || !isOffered(name, principal) || (feature && offSections.includes(feature))) {
+    if (!toolset || !isOffered(name, principal, offSections)) {
       handle.remove();
       continue;
     }

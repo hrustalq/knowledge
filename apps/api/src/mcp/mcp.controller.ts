@@ -53,17 +53,17 @@ export class McpController {
   })
   async handle(@CurrentPrincipal() principal: Principal, @Req() req: Request, @Res() res: Response): Promise<void> {
     const asks = (method: string) => [req.body as unknown].flat().some((m) => (m as { method?: unknown } | null)?.method === method);
-    // Only `initialize` carries the instructions, so only it pays for the learnings read (#305).
     const initialize = asks('initialize');
-    // Guidance is advisory: a failed read falls back to the static instructions rather than refusing the client.
+    // Only a listing is cut by section (#945): a call to a switched-off section's tool meets the per-call gate either way.
+    const offSections = initialize || asks('tools/list') ? await this.offSections(principal) : undefined;
+    // Only `initialize` carries the instructions, so only it pays for the learnings read (#305). Guidance is
+    // advisory: a failed read falls back to this caller's instructions without it rather than refusing the client.
     const instructions = initialize
-      ? await this.mcp.instructionsFor(principal).catch((err: unknown) => {
-          this.logger.warn({ err }, 'MCP learnings unavailable; static instructions sent');
+      ? await this.mcp.instructionsFor(principal, offSections).catch((err: unknown) => {
+          this.logger.warn({ err }, 'MCP learnings unavailable; instructions sent without team guidance');
           return undefined;
         })
       : undefined;
-    // Only a listing is cut by section (#945): a call to a switched-off section's tool meets the per-call gate either way.
-    const offSections = initialize || asks('tools/list') ? await this.offSections(principal) : undefined;
     const { server } = this.mcp.buildServer(principal, { ...this.extras, noTrack: noTrackOf(req.headers), instructions, offSections });
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     res.on('close', () => {

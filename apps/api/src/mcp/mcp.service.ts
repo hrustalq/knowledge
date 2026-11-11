@@ -5,7 +5,7 @@ import { CAPTURE_KIT_CLIENTS, MCP_LEARNING_TARGET, type CaptureKitClient } from 
 import type { CaptureKitResponse, McpToolSummary, WorkspaceFeature, WorkspaceRole } from '@knowledge/contracts';
 import { t } from '../i18n/t.js';
 import { DEV_PRINCIPAL, type Principal } from '../auth/principal.js';
-import { CAPTURE_TOOLS, MCP_INSTRUCTIONS, MCP_SERVER_NAME, featureOfTool, isOffered, settleTools, trackTools } from './mcp-tools.js';
+import { CAPTURE_TOOLS, MCP_SERVER_NAME, featureOfTool, instructionsFor, isOffered, settleTools, trackTools } from './mcp-tools.js';
 import { renderCaptureKit, renderCaptureKitInstaller } from './capture-kit.js';
 import { renderMcpLearnings, renderSkill, type McpLearningGroup, type McpWhoami } from './skill.js';
 import { registerCaptureTools } from './capture-tools.js';
@@ -130,15 +130,15 @@ export interface McpExtras {
 export class McpService extends McpServices {
   async serveStdio(): Promise<void> {
     // ponytail: learnings read once at startup; a learning approved later reaches a restarted stdio server.
-    const instructions = await this.instructionsFor(DEV_PRINCIPAL);
     // Likewise the sections: one switched off later is refused per call until a restart drops its tools.
     const offSections = await this.sectionsOffFor(DEV_PRINCIPAL);
+    const instructions = await this.instructionsFor(DEV_PRINCIPAL, offSections);
     await this.buildServer(DEV_PRINCIPAL, { instructions, offSections }).server.connect(new StdioServerTransport());
   }
 
-  /** MCP_INSTRUCTIONS plus the team guidance this caller is given (#305). */
-  async instructionsFor(principal: Principal): Promise<string> {
-    return MCP_INSTRUCTIONS + renderMcpLearnings(await this.learningsFor(await this.whoami(principal)), 'text');
+  /** The instructions for the tools this caller is offered, plus the team guidance it is given (#305). */
+  async instructionsFor(principal: Principal, offSections?: readonly WorkspaceFeature[]): Promise<string> {
+    return instructionsFor(principal, offSections) + renderMcpLearnings(await this.learningsFor(await this.whoami(principal)), 'text');
   }
 
   /**
@@ -179,7 +179,7 @@ export class McpService extends McpServices {
   buildServer(principal: Principal, extras: McpExtras = {}): { server: McpServer; tools: McpToolSummary[] } {
     const server = new McpServer(
       { name: MCP_SERVER_NAME, version: PRODUCT_VERSION },
-      { instructions: extras.instructions ?? MCP_INSTRUCTIONS },
+      { instructions: extras.instructions ?? instructionsFor(principal, extras.offSections) },
     );
     // Every call is filed as `mcp` traffic (#79), whoever the principal is.
     const caller: AnalyticsCaller = { principal, channel: 'mcp', ...(extras.noTrack ? { noTrack: true } : {}) };

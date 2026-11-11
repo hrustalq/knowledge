@@ -14,7 +14,7 @@ import { DEV_PRINCIPAL, type Principal } from '../src/auth/principal.js';
 import { GraphQueryService } from '../src/graph/graph-query.service.js';
 import { McpService, type McpExtras } from '../src/mcp/mcp.service.js';
 import type { AgentLearning } from '@prisma/client';
-import { CAPTURE_TOOLS, FEATURE_TOOLS, MCP_INSTRUCTIONS, WRITE_TOOLS, settleTools } from '../src/mcp/mcp-tools.js';
+import { CAPTURE_TOOLS, FEATURE_TOOLS, MCP_INSTRUCTIONS, WRITE_TOOLS, instructionsFor, settleTools } from '../src/mcp/mcp-tools.js';
 import { choosePromptLearnings } from '../src/ai/agent-learnings.service.js';
 import { renderSkill } from '../src/mcp/skill.js';
 import { AiReadableService } from '../src/ai-readable/ai-readable.service.js';
@@ -1739,7 +1739,7 @@ describe('mcp learnings (#305, phase 3)', () => {
     s.learnings.forPrompt.mockImplementation(async (audience: Parameters<typeof choosePromptLearnings>[1]) =>
       choosePromptLearnings(rows, audience, 20),
     );
-    const principal = keyPrincipal({ id: 'k', scope: 'read', workspaceId: WS_A, projectIds });
+    const principal = keyPrincipal({ id: 'k', scope: 'write', workspaceId: WS_A, projectIds });
     vi.spyOn(s.mcp, 'whoami').mockResolvedValue({
       userId: principal.userId,
       email: principal.email,
@@ -1786,7 +1786,7 @@ describe('mcp learnings (#305, phase 3)', () => {
 
   it('leave the instructions and the skill exactly as before when none applies', async () => {
     const s = service(accessWith('viewer'));
-    const principal = keyPrincipal({ id: 'k', scope: 'read', workspaceId: WS_A });
+    const principal = keyPrincipal({ id: 'k', scope: 'write', workspaceId: WS_A });
     vi.spyOn(s.mcp, 'whoami').mockResolvedValue({
       userId: principal.userId,
       email: principal.email,
@@ -1797,6 +1797,36 @@ describe('mcp learnings (#305, phase 3)', () => {
     });
     expect(await s.mcp.instructionsFor(principal)).toBe(MCP_INSTRUCTIONS);
     expect(await s.mcp.skillFor(principal)).not.toContain('Team guidance');
+  });
+});
+
+describe('server instructions follow the offer (#945)', () => {
+  const key = (scope: 'read' | 'capture' | 'write') => keyPrincipal({ id: 'k', scope, workspaceId: null });
+  const namedIn = (text: string) => [...new Set(text.match(/knowledge_[a-z_]+/g))];
+
+  it.each(['read', 'capture', 'write'] as const)('a %s key is told of no tool missing from its tools/list', async (scope) => {
+    const client = await connect(service(accessWith('editor')).mcp, key(scope));
+    const offered = (await client.listTools()).tools.map((t) => t.name);
+    const named = namedIn(client.getInstructions() ?? '');
+    expect(named).toContain('knowledge_search');
+    expect(named.filter((name) => !offered.includes(name))).toEqual([]);
+  });
+
+  it('sends a write key with nothing switched off the whole text, and a read key no write flow', () => {
+    expect(instructionsFor(key('write'))).toBe(MCP_INSTRUCTIONS);
+    const read = instructionsFor(key('read'));
+    expect(read).not.toMatch(/knowledge_feedback|knowledge_create_branch|knowledge_capture_decision|needs_input/);
+    expect(read).toContain('Prefer verified pages; say so when you rely on an outdated, expired or edited one.\n');
+    expect(read).toContain('knowledge_list_release_tags');
+  });
+
+  it('leaves the capture line out where captures are off everywhere', async () => {
+    const off = ['captures'] as const;
+    const text = instructionsFor(key('write'), off);
+    expect(text).not.toContain('knowledge_capture_decision');
+    expect(text).toContain('needs_input');
+    const client = await connect(service(accessWith('editor')).mcp, key('write'), { offSections: off });
+    expect(client.getInstructions()).toBe(text);
   });
 });
 

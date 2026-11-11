@@ -250,14 +250,18 @@ function toolErrorEnvelope(e: unknown): { content: { type: 'text'; text: string 
 /**
  * Whether `principal` is offered the tool `name` — the one rule `settleTools`
  * applies (#822), and what the instructions are composed from before a tool is
- * registered: filed in a toolset, within the key's scope, and its section not
- * in `offSections` (off in every workspace the connection reaches, #945).
+ * registered: filed in a toolset, within the key's scope and its toolset list,
+ * and its section not in `offSections` (off in every workspace the connection
+ * reaches, #945).
  */
 export function isOffered(name: string, principal: Principal, offSections: readonly WorkspaceFeature[] = []): boolean {
   const toolset = toolsetOf(name);
   if (!toolset) return false;
   const feature = featureOfToolset(toolset);
   if (feature && offSections.includes(feature)) return false;
+  // A key limited to toolsets is offered those alone (#945).
+  const list = principal.apiKey?.toolsets;
+  if (list && !list.includes(toolset)) return false;
   const scope = principal.apiKey?.scope ?? 'write';
   const readOnly = !WRITE_TOOLS.has(name) && !CAPTURE_TOOLS.has(name);
   return readOnly || scope === 'write' || (scope === 'capture' && CAPTURE_TOOLS.has(name));

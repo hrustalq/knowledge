@@ -9,7 +9,7 @@ import type { AddressInfo } from 'node:net';
 import { McpController } from '../src/mcp/mcp.controller.js';
 import { AccessService } from '../src/auth/access.service.js';
 import { AclGuard } from '../src/auth/acl.guard.js';
-import { READ_KEY_OK_META, type AccessSpec } from '../src/auth/access.decorator.js';
+import { MCP_KEY_OK_META, READ_KEY_OK_META, type AccessSpec } from '../src/auth/access.decorator.js';
 import { DEV_PRINCIPAL, type Principal } from '../src/auth/principal.js';
 import { GraphQueryService } from '../src/graph/graph-query.service.js';
 import { McpService, type McpExtras } from '../src/mcp/mcp.service.js';
@@ -21,9 +21,16 @@ import { AiReadableService } from '../src/ai-readable/ai-readable.service.js';
 import { AiReadableController } from '../src/ai-readable/ai-readable.controller.js';
 import { ENFORCING_PROVIDER, enforcingPolicy, noAuthPolicy } from './auth-policy-fakes.js';
 import { ElicitRequestSchema, type ElicitRequest, type ElicitResult } from '@modelcontextprotocol/sdk/types.js';
-import { FLOW_NO_LINK, FLOW_OTHER_KEY, FLOW_SCOPE_SUBTREE, MCP_TOOLSETS, MCP_TOOLSET_KEYS } from '@knowledge/contracts';
+import { FLOW_NO_LINK, FLOW_OTHER_KEY, FLOW_SCOPE_SUBTREE, MCP_TOOLSETS, MCP_TOOLSET_KEYS, keyToolsetsOf, toolsetOf, type McpToolset } from '@knowledge/contracts';
 import { FlowsService } from '../src/flows/flows.service.js';
 import { FeaturesService } from '../src/auth/features.service.js';
+import { TokenAuthService } from '../src/auth/token-auth.service.js';
+import { AuthGuard } from '../src/auth/auth.guard.js';
+import { ApiKeysService } from '../src/auth/api-keys.service.js';
+import { CreateApiKeyDto } from '../src/auth/api-keys.dto.js';
+import { GitAccessService } from '../src/git/git-access.service.js';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
 
 /**
  * MCP over HTTP and named API keys (docs/features/33).
@@ -1797,6 +1804,108 @@ describe('mcp learnings (#305, phase 3)', () => {
     });
     expect(await s.mcp.instructionsFor(principal)).toBe(MCP_INSTRUCTIONS);
     expect(await s.mcp.skillFor(principal)).not.toContain('Team guidance');
+  });
+});
+
+describe('a key limited to toolsets (#945)', () => {
+  const limited = (scope: 'read' | 'write' = 'write', toolsets: McpToolset[] = ['core', 'graph']) =>
+    keyPrincipal({ id: 'k', scope, workspaceId: null, toolsets });
+  /** A real TokenAuthService over one stored key. */
+  function resolver(toolsets: unknown) {
+    const row = { id: 'k', scope: 'write', workspaceId: null, projectIds: null, toolsets, revokedAt: null, expiresAt: null };
+    const user = { id: 'u', email: 'a@example.com', displayName: 'Ada', isAdmin: false, locale: 'en', disabledAt: null, emailVerifiedAt: new Date() };
+    const prisma = { apiKey: { findUnique: vi.fn(async () => ({ ...row, user })), updateMany: vi.fn(async () => ({ count: 0 })) } };
+    return new TokenAuthService({ get: () => 'api-key' } as never, prisma as never, {} as never, {} as never);
+  }
+
+  it('stores core with the chosen toolsets, and refuses an unknown one before anything is written', async () => {
+    const create = vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'k', createdAt: new Date(), expiresAt: null, lastUsedAt: null, ...data }));
+    const keys = new ApiKeysService({ apiKey: { count: vi.fn(async () => 0), create } } as never);
+    const session = keyPrincipal(undefined as never, { mode: 'session', apiKey: undefined });
+    const made = await keys.create(session, { name: 'Graph agent', toolsets: ['graph'] });
+    expect(create.mock.calls[0][0].data.toolsets).toEqual(['core', 'graph']);
+    expect(made.key.toolsets).toEqual(['core', 'graph']);
+    expect((await keys.create(session, { name: 'Everything' })).key.toolsets).toBeNull();
+
+    const errors = await validate(plainToInstance(CreateApiKeyDto, { name: 'x', toolsets: ['graph', 'everything'] }));
+    expect(errors.map((e) => e.property)).toEqual(['toolsets']);
+  });
+
+  it('reads a stored value the catalogue dropped as absent from the list, never as every toolset', () => {
+    expect(keyToolsetsOf(null)).toBeNull();
+    expect(keyToolsetsOf(['graph', 'retired'])).toEqual(['core', 'graph']);
+    expect(keyToolsetsOf(['retired'])).toEqual(['core']);
+    expect(keyToolsetsOf([])).toEqual(['core']);
+  });
+
+  it('is offered only its toolsets, cut again by scope, and a tool outside them never reaches its service', async () => {
+    const { mcp, documents } = service(accessWith('editor'));
+    const client = await connect(mcp, limited(), { drafts: fakeDrafts() });
+    const { tools } = await client.listTools();
+    expect(new Set(tools.map((t) => toolsetOf(t.name)))).toEqual(new Set(['core', 'graph']));
+    expect(tools.map((t) => t.name)).toContain('knowledge_create_release_tag');
+    const refused = await client.callTool({ name: 'knowledge_create_document', arguments: { workspaceId: WS_A, projectId: WS_B, title: 'T', content: 'x' } }).catch((e: Error) => ({ isError: true, content: e.message }));
+    expect(refused.isError).toBe(true);
+    expect(documents.createDocument).not.toHaveBeenCalled();
+
+    const reader = mcp.toolsFor(limited('read')).map((t) => t.name);
+    expect(reader).toContain('knowledge_find_relations');
+    expect(reader).not.toContain('knowledge_create_release_tag');
+    expect(reader).not.toContain('knowledge_feedback');
+  });
+
+  it('the call gate refuses a tool outside the list even where it is registered', async () => {
+    const { mcp, documents } = service(accessWith('editor'));
+    const gate = (mcp as unknown as { featureGate: (p: Principal, tool: string, args: object) => Promise<void> }).featureGate.bind(mcp);
+    await expect(gate(limited(), 'knowledge_create_document', { workspaceId: WS_A })).rejects.toMatchObject({ status: 403 });
+    await expect(gate(limited(), 'knowledge_find_relations', {})).resolves.toBeUndefined();
+    expect(documents.createDocument).not.toHaveBeenCalled();
+  });
+
+  it('cuts the skill and the instructions the same way, and is refused the capture kit without captures', async () => {
+    const { mcp } = service(accessWith('editor'));
+    const principal = limited();
+    vi.spyOn(mcp, 'whoami').mockResolvedValue({
+      userId: 'u',
+      email: 'a@example.com',
+      displayName: 'Ada',
+      mode: 'api-key',
+      apiKey: { scope: 'write', workspaceId: null, projectIds: null },
+      workspaces: [{ workspaceId: WS_A, name: 'Eng', role: 'editor', projects: [] }],
+    });
+    const [playbooks] = (await mcp.skillFor(principal)).split('## Tools offered to this connection');
+    expect(playbooks).toContain('### Dependencies and impact');
+    expect(playbooks).not.toMatch(/knowledge_create_document|knowledge_qa_overview|knowledge_capture_decision|API tests/);
+    expect(instructionsFor(principal)).not.toMatch(/knowledge_create_branch|knowledge_capture_decision/);
+    await expect(mcp.captureKitFor(principal, 'claude-code')).rejects.toMatchObject({ status: 403, response: { reason: 'capture-not-offered' } });
+  });
+
+  it('is MCP-only: refused wherever a bearer is resolved, unless the route is the MCP endpoint', async () => {
+    const auth = resolver(['core', 'graph']);
+    await expect(auth.resolve('kn_x')).rejects.toMatchObject({ status: 403, response: { reason: 'apiKeyMcpOnly' } });
+    await expect(auth.resolve('kn_x', { mcp: true })).resolves.toMatchObject({ apiKey: { toolsets: ['core', 'graph'] } });
+    // A key from before the column: no list, every door as before.
+    await expect(resolver(null).resolve('kn_x')).resolves.toMatchObject({ apiKey: { toolsets: null } });
+  });
+
+  it('AuthGuard says mcp only on a route marked @McpKeyOk, so a REST route and a page .md URL answer 403', async () => {
+    const through = (mcpRoute: boolean) => {
+      const reflector = { getAllAndOverride: (meta: string) => (meta === MCP_KEY_OK_META ? mcpRoute : false) };
+      const request: Record<string, unknown> = { headers: { authorization: 'Bearer kn_x' }, query: {} };
+      const guard = new AuthGuard(reflector as never, resolver(['core', 'graph']));
+      return guard.canActivate({ getHandler: () => undefined, getClass: () => undefined, switchToHttp: () => ({ getRequest: () => request }) } as never);
+    };
+    await expect(through(false)).rejects.toMatchObject({ status: 403 });
+    await expect(through(true)).resolves.toBe(true);
+    // The whole MCP controller is marked: connection, skill and the capture-kit routes with it.
+    expect(Reflect.getMetadata(MCP_KEY_OK_META, McpController)).toBe(true);
+  });
+
+  it('is refused by the git remote', async () => {
+    const config = { get: (key: string) => ({ GIT_REMOTE_ENABLED: true, PUBLIC_RATE_LIMIT_PER_MIN: 60, AUTH_MODE: 'api-key' })[key] };
+    const git = new GitAccessService({} as never, resolver(['core', 'graph']), {} as never, {} as never, { hit: async () => true } as never, config as never);
+    const req = { headers: { authorization: `Basic ${Buffer.from('knowledge:kn_x').toString('base64')}` }, socket: {}, ip: '127.0.0.1' };
+    await expect(git.authorize(req as never, WS_A, `${WS_B}.git`)).rejects.toMatchObject({ status: 403 });
   });
 });
 

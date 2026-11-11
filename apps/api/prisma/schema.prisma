@@ -825,6 +825,9 @@ model ApiKey {
   /// string[] — a `capture` key's project pin (issue #73); null for every
   /// project. Json, not uuid[]: the schema uses no Postgres arrays.
   projectIds  Json?     @map("project_ids")
+  /// string[] — the MCP toolsets the key is limited to (#945, MCP_TOOLSETS in
+  /// contracts); null for every toolset. A key with a list works over MCP only.
+  toolsets    Json?
   expiresAt   DateTime? @map("expires_at") @db.Timestamptz
   lastUsedAt  DateTime? @map("last_used_at") @db.Timestamptz
   revokedAt   DateTime? @map("revoked_at") @db.Timestamptz

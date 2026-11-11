@@ -4,7 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { Request, Response } from 'express';
 import { CAPTURE_KIT_CLIENTS, type CaptureKitResponse, type McpConnectionInfo } from '@knowledge/contracts';
-import { CurrentPrincipal, ReadKeyOk } from '../auth/access.decorator.js';
+import { CurrentPrincipal, McpKeyOk, ReadKeyOk } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { MCP_SERVER_NAME } from './mcp-tools.js';
 import { noTrackOf } from '../analytics/analytics.recorder.js';
@@ -29,8 +29,12 @@ import { Returns } from '../common/returns.decorator.js';
  * tool, inside McpService — this route has no `@Access` because a JSON-RPC
  * POST has no single workspace to check. That is also why it is `@ReadKeyOk`:
  * for a read-only key, POST here is transport, not intent.
+ *
+ * `@McpKeyOk` on the whole controller: these are the only routes a key limited
+ * to toolsets may call (#945).
  */
 @ApiTags('mcp')
+@McpKeyOk()
 @Controller('v1/mcp')
 export class McpController {
   private readonly logger = new Logger(McpController.name);

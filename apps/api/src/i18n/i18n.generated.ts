@@ -728,6 +728,8 @@ export type I18nTranslations = {
             "apiKeyWorkspace": string;
             "apiKeyReadOnly": string;
             "apiKeyCaptureOnly": string;
+            "apiKeyMcpOnly": string;
+            "apiKeyToolNotOffered": string;
             "apiKeyNeedsSession": string;
             "apiKeyNotFound": string;
             "apiKeyWorkspaceNotMember": string;

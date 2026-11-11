@@ -34,6 +34,8 @@
     "apiKeyWorkspace": "This API key is limited to another workspace ({workspaceId} is outside it).",
     "apiKeyReadOnly": "This API key is read-only; {role} access needs a key with write scope.",
     "apiKeyCaptureOnly": "This API key may only read and propose captures; {role} access needs a key with write scope.",
+    "apiKeyMcpOnly": "This API key is limited to MCP toolsets, so it works only at the MCP endpoint (/v1/mcp). Use a key without a toolset list here.",
+    "apiKeyToolNotOffered": "This connection is not offered {tool}: it is outside the API key's scope or toolsets.",
     "apiKeyNeedsSession": "API keys are managed from a signed-in session, not with another API key.",
     "apiKeyNotFound": "API key {id} not found.",
     "apiKeyWorkspaceNotMember": "You can only pin a key to a workspace you belong to ({workspaceId}).",

@@ -1,4 +1,4 @@
-import type { ApiKeyScope, AuthMethod, AvatarUrl, Locale, WorkspaceRole } from '@knowledge/contracts';
+import type { ApiKeyScope, AuthMethod, AvatarUrl, Locale, McpToolset, WorkspaceRole } from '@knowledge/contracts';
 import { AUTHOR_ID_STUB } from '../activity/actor.js';
 
 /**
@@ -53,7 +53,18 @@ export interface Principal {
    * narrows the person down to. Enforced in AccessService.requireRole, so every
    * `@Access` route and every MCP tool applies it without knowing it exists.
    */
-  apiKey?: { id: string; scope: ApiKeyScope; workspaceId: string | null; projectIds?: string[] | null };
+  apiKey?: {
+    id: string;
+    scope: ApiKeyScope;
+    workspaceId: string | null;
+    projectIds?: string[] | null;
+    /**
+     * The MCP toolsets the key is limited to (#945); absent or null for every
+     * toolset. A key with a list is MCP-only: `TokenAuthService.resolve`
+     * refuses it at every door that does not say it is the MCP endpoint.
+     */
+    toolsets?: McpToolset[] | null;
+  };
 }
 
 /** AUTH_MODE=none principal. Matches the Phase 1 author stub id on purpose. */

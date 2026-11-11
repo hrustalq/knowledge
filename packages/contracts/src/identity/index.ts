@@ -905,6 +905,12 @@ export interface ApiKeyInfo {
    * other (issue #73). Null for every project. Reads are not narrowed by it.
    */
   projectIds: string[] | null;
+  /**
+   * The MCP toolsets the key is limited to (#945), `core` always among them;
+   * null for every toolset. A key with a list is MCP-only: refused on REST,
+   * the git remote and the plain-markdown URLs.
+   */
+  toolsets: McpToolset[] | null;
   expiresAt: string | null;
   /** Coarse — refreshed at most once a minute, so it answers "is this still in use", not "when exactly". */
   lastUsedAt: string | null;
@@ -1740,6 +1746,16 @@ export function isMcpToolset(value: unknown): value is McpToolset {
 const TOOLSET_OF_TOOL = new Map<string, McpToolset>(
   MCP_TOOLSET_KEYS.flatMap((key) => MCP_TOOLSETS[key].tools.map((tool) => [tool, key] as const)),
 );
+
+/**
+ * `api_keys.toolsets` as a key's list: null (no list, every toolset) unless an
+ * array was stored. A stored value the catalogue no longer holds reads as
+ * absent from the list, never as "all"; `core` is always in a list.
+ */
+export function keyToolsetsOf(stored: unknown): McpToolset[] | null {
+  if (!Array.isArray(stored)) return null;
+  return [...new Set<McpToolset>(['core', ...stored.filter(isMcpToolset)])];
+}
 
 /** The toolset a tool is filed in; null for a name the catalogue does not hold. */
 export function toolsetOf(tool: string): McpToolset | null {

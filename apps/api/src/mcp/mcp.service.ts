@@ -356,11 +356,14 @@ export class McpService extends McpServices {
   }
 
   /**
+   * The gate every call passes. First the offer rule. Then
    * #604: refuse a tool of a section its workspace switched off, as `@Feature`
    * refuses the REST twin. Membership first, as AclGuard orders it, so the 404
    * tells only a member that the section is off.
    */
   private async featureGate(principal: Principal, tool: string, args: Record<string, unknown>): Promise<void> {
+    // A tool outside the key's scope or toolset list is not registered for it (#945); refused here as well.
+    if (!isOffered(tool, principal)) throw new ForbiddenException({ statusCode: 403, message: t('error.auth.apiKeyToolNotOffered', { tool }), tool });
     const feature = featureOfTool(tool);
     if (!feature) return;
     const id = (key: string) => (typeof args[key] === 'string' ? (args[key] as string) : null);

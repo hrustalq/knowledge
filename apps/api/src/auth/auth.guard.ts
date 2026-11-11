@@ -1,7 +1,7 @@
 import { ForbiddenException, HttpStatus, Injectable, type CanActivate, type ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { SESSION_COOKIE } from '@knowledge/contracts';
-import { PUBLIC_META, QUERY_TOKEN_OK_META, UNVERIFIED_OK_META } from './access.decorator.js';
+import { MCP_KEY_OK_META, PUBLIC_META, QUERY_TOKEN_OK_META, UNVERIFIED_OK_META } from './access.decorator.js';
 import { readCookie } from '../common/cookies.js';
 import { t } from '../i18n/t.js';
 import { TokenAuthService } from './token-auth.service.js';
@@ -48,8 +48,10 @@ export class AuthGuard implements CanActivate {
       throw new ForbiddenException({ statusCode: HttpStatus.FORBIDDEN, message: t('error.auth.csrf'), reason: 'csrf' });
     }
 
+    // Only the MCP controller admits a key limited to toolsets (#945).
+    const mcp = this.reflector.getAllAndOverride<boolean>(MCP_KEY_OK_META, [ctx.getHandler(), ctx.getClass()]) === true;
     req.principal = bearer
-      ? await this.tokenAuth.resolve(bearer)
+      ? await this.tokenAuth.resolve(bearer, { mcp })
       : queryToken
         ? await this.tokenAuth.resolveTicket(queryToken)
         : cookieToken

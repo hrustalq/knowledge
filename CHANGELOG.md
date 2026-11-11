@@ -81,6 +81,15 @@ in the pull request that introduces them — see
   `POST /v1/memos/:id/confirm { type, projectId, tags }`, `PATCH /v1/memos/:id { tags }`, and `projectId` and
   `auto` on `PUT /v1/memos/types/:key` do the same over the API; `GET /v1/memos/:id` returns `triage`. (#879)
 
+- **Tags on the memo list, and three smaller things around sorting.** Each memo row on `/memos` shows its type
+  and its tags, and the list can be filtered by a tag (`GET /v1/memos?tag=`). "Edit tags" under a memo's ⋮ menu
+  changes them. When sorting finds no fitting type and proposes a new one, a workspace admin sees what it would
+  tell the agent and can add it with one button on the confirm panel. The uploader is notified when their memo
+  starts waiting for a confirm. And sorting may now suggest who a speaker is from what is said in the recording,
+  when the conversation makes it clear and exactly one member has that name: it appears as a guess with
+  Confirm on the memo's Speakers list, numbered voices included, and counts for nothing until confirmed.
+  (#879, #880)
+
 ### Changed
 
 - **The agent that reads a memo may now name people.** It is told who the speakers you matched are, and may say

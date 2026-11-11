@@ -207,6 +207,7 @@ REST, each route `@Access` + `@Returns`:
 | `GET /v1/memos/:id/audio`             | viewer | 302 to a presigned GET (session cookie, `<audio>` sends no header)        |
 | `POST /v1/memos/:id/retry`            | editor | resume a failed memo                                                     |
 | `PATCH /v1/memos/:id`                 | editor | `{ title }`: rename (#875)                                               |
+| `PUT /v1/memos/:id/speakers`          | editor | `{ label, userId \| null }`: who a speaker is (#880)                      |
 | `DELETE /v1/memos/:id`                | editor | purge audio + row                                                        |
 
 MCP: `knowledge_list_memos` (`guard.ws`, viewer) and `knowledge_get_memo` (`guard.memo`, viewer; the memo
@@ -307,4 +308,31 @@ network's size and duration limits, and what `cost` is per minute (that call was
 - Usage is still one `transcription` row per attempt, with model `speech-to-text`.
 - `GET /v1/plaud/settings` says `transcribe.speakers`, so the "Transcribe here" dialog tells the truth about
   what the transcript will have.
+
+## Who the speakers are (#880)
+
+`memos.speakers` is `{ "<speaker label>": userId | null }`, written only by the memo's uploader through
+`PUT /v1/memos/:id/speakers`. The label must be one the transcript uses and the person a member of the memo's
+workspace; anything else is a 400. `null` means "nobody here" and also silences a remembered match.
+
+`GET /v1/memos/:id` answers `speakers: [{ label, userId, source, suggestedUserId }]`, resolved on read by
+`resolveSpeakers` (`memos/speakers.ts`, pure):
+
+- `confirmed`: chosen on this memo.
+- `remembered`: the same label in the uploader's newest earlier memo of the same project that has a choice for
+  it. Derived from those memos, never stored again, so deleting them forgets it.
+- otherwise no match, and `suggestedUserId` is a guess from the label: the one member whose name is the label,
+  or whose first name is and nobody else's. A guess is shown as one and used for nothing until confirmed.
+- A voice this server numbered (`Speaker 1`, `Участник 1`) is neither remembered nor guessed: it is someone
+  else in the next recording. It can still be matched on its own memo.
+- A user who is no longer a member is dropped wherever they came from.
+
+The secretary is told only matches that hold when its run starts, as `"<label>" is "<display name>"`, outside
+the untrusted wrapper: it is the uploader's statement about workspace members. Its contract changed from "never
+name who said what" to naming only an identified speaker, and only where a decision or an action is theirs. A
+match made after the run changes the page, not the proposals already written.
+
+A memo stays private to its uploader: a matched person gains no access to it and is not notified.
+
+Not built: a model's suggestion from what is said ("thanks, Anna"). Suggestions come from the label only.
 

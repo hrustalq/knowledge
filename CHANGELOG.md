@@ -13,6 +13,19 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.49.1] — 2026-11-11
+
+### Fixed
+
+- **A memo type can be named in any language.** "Add this type" on a memo waiting for your confirm failed with
+  "Use a name with Latin letters" whenever the proposed type was named in Russian, and Memo types refused such a
+  name for a new type. Both now save it. "Add this type" also no longer replaces an existing type when the
+  proposed name matches that type's key: it is added as a new one. (#896)
+
+- **`/memos` stays in place when you change a filter.** Choosing a type or a tag replaced the whole page, the
+  upload box and the Plaud panel included, with a loading placeholder, and the Plaud panel forgot which recordings
+  were ticked and which projects were picked. Now only the list's rows change. (#896)
+
 ## [0.49.0] — 2026-11-11
 
 ### Added
@@ -6635,7 +6648,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.49.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.49.1...HEAD
+[0.49.1]: https://github.com/hrustalq/knowledge/compare/v0.49.0...v0.49.1
 [0.49.0]: https://github.com/hrustalq/knowledge/compare/v0.48.0...v0.49.0
 [0.48.0]: https://github.com/hrustalq/knowledge/compare/v0.47.0...v0.48.0
 [0.47.0]: https://github.com/hrustalq/knowledge/compare/v0.46.2...v0.47.0

@@ -59,10 +59,10 @@ const RAW_FETCH_OK = [
   'src/modules/reader/**',
 ]
 
-// The app's catalogs, the public reader's own small one (docs/features/43),
-// kept apart so a reader's bundle never carries the app's whole catalog, and
-// the UI kit's (`ui.*`, #941), which every app instance merges in.
-const I18N_LOCALE_DIR = ['./src/shared/i18n/messages/*.json', './src/shared/i18n/reader/*.json', '../../packages/ui/src/messages/*.json']
+// The app's catalogs, and the public reader's own small one (docs/features/43):
+// kept apart so a reader's bundle never carries the app's whole catalog. The UI
+// kit's `ui.*` keys are its own (packages/ui/src/messages): app code reads none.
+const I18N_LOCALE_DIR = ['./src/shared/i18n/messages/*.json', './src/shared/i18n/reader/*.json']
 
 export default [
   // Pre-existing disable comments belong to no configured rule here.

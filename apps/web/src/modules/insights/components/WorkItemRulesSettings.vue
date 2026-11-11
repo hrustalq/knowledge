@@ -18,7 +18,7 @@ import { errorMessage } from '@/shared/api/errors'
 import { getWorkspaceId } from '@/shared/api/api'
 import { Button } from '@knowledge/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
-import { PageState } from '@/shared/layout'
+import { PageState } from '@knowledge/ui/layout'
 
 const { t } = useI18n()
 const queryClient = useQueryClient()

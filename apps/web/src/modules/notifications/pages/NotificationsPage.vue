@@ -18,7 +18,7 @@ import { Button } from '@knowledge/ui/button'
 import { useNotificationsStore } from '@/modules/notifications/model/notifications.store'
 import NotificationList from '@/modules/notifications/components/NotificationList.vue'
 import { NOTIFICATION_TABS, type NotificationTab } from '@/modules/notifications/model/notification-ui'
-import { PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@/shared/layout'
+import { PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@knowledge/ui/layout'
 
 const { t } = useI18n()
 const store = useNotificationsStore()

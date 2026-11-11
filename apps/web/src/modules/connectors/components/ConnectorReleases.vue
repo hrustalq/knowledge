@@ -16,7 +16,7 @@ import { CircleAlert } from 'lucide-vue-next'
 import type { ListReleasesResponse } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { Badge } from '@knowledge/ui/badge'
-import { PageState } from '@/shared/layout'
+import { PageState } from '@knowledge/ui/layout'
 import { formatDate } from '@/shared/utils/format'
 
 const props = defineProps<{ connectorId: string }>()

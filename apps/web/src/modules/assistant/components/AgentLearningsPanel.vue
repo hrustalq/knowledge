@@ -36,7 +36,7 @@ import { useAgentNames } from '@/entities/person'
 import { Badge } from '@knowledge/ui/badge'
 import { Button } from '@knowledge/ui/button'
 import { Skeleton } from '@knowledge/ui/skeleton'
-import { PageTabs, panelId, tabId, type PageTab } from '@/shared/layout'
+import { PageTabs, panelId, tabId, type PageTab } from '@knowledge/ui/layout'
 import { AiEmptyState } from '@knowledge/ui/empty-state'
 import { TeachAgentDialog } from '@/entities/assistant'
 

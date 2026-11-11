@@ -31,7 +31,7 @@ import {
   panelId,
   tabId,
   type PageTab,
-} from '@/shared/layout'
+} from '@knowledge/ui/layout'
 import type { ActiveFilter } from '@knowledge/ui/filter-bar'
 import { MergeRequestList } from '@/entities/merge-request'
 import MergeRequestSearchBar from '@/modules/merge-requests/components/MergeRequestSearchBar.vue'

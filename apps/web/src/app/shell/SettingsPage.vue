@@ -25,7 +25,7 @@ import {
   UserRound,
   Workflow,
 } from 'lucide-vue-next'
-import { PageLayout, PageSubRail } from '@/shared/layout'
+import { PageLayout, PageSubRail } from '@knowledge/ui/layout'
 import { useAuthStore } from '@/stores/auth'
 import { useFeaturesStore } from '@/stores/features'
 

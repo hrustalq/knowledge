@@ -92,7 +92,7 @@ import { Input } from '@knowledge/ui/input'
 import { Label } from '@knowledge/ui/label'
 import { Checkbox } from '@knowledge/ui/checkbox'
 import { Skeleton } from '@knowledge/ui/skeleton'
-import { PageState } from '@/shared/layout'
+import { PageState } from '@knowledge/ui/layout'
 import { Autocomplete, type AutocompleteOption } from '@knowledge/ui/autocomplete'
 import {
   Sheet,

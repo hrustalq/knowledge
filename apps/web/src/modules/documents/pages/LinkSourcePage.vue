@@ -23,7 +23,7 @@ import { Checkbox } from '@knowledge/ui/checkbox'
 import { Input } from '@knowledge/ui/input'
 import { Label } from '@knowledge/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
-import { PageLayout } from '@/shared/layout'
+import { PageLayout } from '@knowledge/ui/layout'
 import { SOURCE_INTERVAL_OPTIONS, intervalValue, toInterval } from '../model/source-intervals'
 
 const { t } = useI18n()

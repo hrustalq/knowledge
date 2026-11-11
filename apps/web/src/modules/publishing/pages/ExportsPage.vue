@@ -22,7 +22,7 @@ import { formatBytes, formatDateTime, formatRelative } from '@/shared/utils/form
 import { useAuthStore } from '@/stores/auth'
 import { Badge } from '@knowledge/ui/badge'
 import { Button } from '@knowledge/ui/button'
-import { PageState } from '@/shared/layout'
+import { PageState } from '@knowledge/ui/layout'
 import { UserChip } from '@/entities/person'
 
 const { t } = useI18n()

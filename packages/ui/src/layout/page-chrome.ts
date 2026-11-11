@@ -1,6 +1,26 @@
 import { computed, toValue, type Component, type InjectionKey, type MaybeRefOrGetter, type WritableComputedRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+/*
+ * What the chrome asks of the app that mounts it (#941). It imports nothing
+ * from an app; these four are the whole contract:
+ *
+ * - a `vue-router` instance: `usePageTabs` binds a tab to the `tab` query
+ *   parameter and `PageRail` opens the widget the URL names;
+ * - `meta.fill` on the route of every `canvas` page, typed below, which
+ *   `PageLayout` asserts in dev;
+ * - `RAIL_MEMORY` and `ERROR_TEXT`, provided at the app root (both optional:
+ *   without them the rail forgets and an error shows its own message);
+ * - the `ui` message catalogue (`@knowledge/ui/messages/<locale>.json`) merged
+ *   into the app's vue-i18n instance.
+ */
+declare module 'vue-router' {
+  interface RouteMeta {
+    /** The page owns the viewport and scrolls inside itself: a `canvas` page, and only one. */
+    fill?: boolean
+  }
+}
+
 /**
  * The page layer's vocabulary: four shapes.
  *

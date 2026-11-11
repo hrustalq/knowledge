@@ -20,7 +20,7 @@ import type { DocumentContentResponse, DocumentDetailResponse, KnowledgeHealthRo
 import { apiQueryOptions } from '@/shared/api/queries'
 import { Button } from '@knowledge/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@knowledge/ui/sheet'
-import { PageState } from '@/shared/layout'
+import { PageState } from '@knowledge/ui/layout'
 import { MarkdownView } from '@/entities/document'
 import { VerificationBar } from '@/entities/document'
 

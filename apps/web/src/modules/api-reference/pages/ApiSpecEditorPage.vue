@@ -31,7 +31,7 @@ import { Input } from '@knowledge/ui/input'
 import { Label } from '@knowledge/ui/label'
 import { Textarea } from '@knowledge/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
-import { PageLayout, PageState } from '@/shared/layout'
+import { PageLayout, PageState } from '@knowledge/ui/layout'
 
 const { t } = useI18n()
 const route = useRoute()

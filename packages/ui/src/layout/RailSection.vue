@@ -16,7 +16,7 @@
 import type { Component } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronRight, Maximize2 } from 'lucide-vue-next'
-import { Collapse } from '@knowledge/ui/collapse'
+import { Collapse } from '../collapse'
 
 defineProps<{
   icon: Component

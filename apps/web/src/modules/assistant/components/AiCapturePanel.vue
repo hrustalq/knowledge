@@ -29,7 +29,7 @@ import { Button } from '@knowledge/ui/button'
 import { Input } from '@knowledge/ui/input'
 import { Combobox, type ComboboxOption } from '@knowledge/ui/combobox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
-import { PageState } from '@/shared/layout'
+import { PageState } from '@knowledge/ui/layout'
 
 const props = defineProps<{ canManage: boolean }>()
 

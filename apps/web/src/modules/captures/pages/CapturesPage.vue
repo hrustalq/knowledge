@@ -53,7 +53,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@knowledge/ui/alert-dialog'
-import { PageLayout, PageState, PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@/shared/layout'
+import { PageLayout, PageState, PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@knowledge/ui/layout'
 import CaptureRow from '@/modules/captures/components/CaptureRow.vue'
 import { CAPTURE_TABS, type CaptureTab } from '@/entities/capture'
 

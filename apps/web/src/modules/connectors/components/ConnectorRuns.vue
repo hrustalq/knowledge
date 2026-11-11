@@ -11,7 +11,7 @@ import { Badge } from '@knowledge/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
 import { Skeleton } from '@knowledge/ui/skeleton'
 import { AiEmptyState } from '@knowledge/ui/empty-state'
-import { PageScrollList } from '@/shared/layout'
+import { PageScrollList } from '@knowledge/ui/layout'
 import { getWorkspaceId, relativeTime } from '@/shared/api/api'
 import { PHASE_LABEL, RUN_STATUS_CLASS, RUN_STATUS_ICON, RUN_STATUS_LABEL } from '../model/connector-ui'
 

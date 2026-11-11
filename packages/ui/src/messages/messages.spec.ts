@@ -6,7 +6,8 @@ import ru from './ru.json'
 
 /**
  * The kit owns its strings (#941): every key a file here reads is a `ui.*` key
- * of this catalogue, and Russian has exactly the keys English has. An app
+ * of this catalogue, every key of the catalogue is read, and Russian has
+ * exactly the keys English has. An app
  * merges the catalogue into its own vue-i18n instance and never has to know
  * a key.
  *
@@ -33,21 +34,25 @@ describe('ui message catalogue', () => {
     expect(leafKeys(ru)).toEqual(leafKeys(en))
   })
 
-  it('every key the kit reads is a ui.* key of the catalogue', () => {
+  it('the kit reads every key of the catalogue and no other', () => {
     const known = new Set(leafKeys(en))
     // `t('…')`, `keypath="…"`, and a table of keys (`'is': 'ui.filter.operator.is'`).
     const KEY = /(?<![\w$.])\$?(?:t|te|tm)\(\s*(['"])([^'"`\n]+?)\1|keypath="([^"]+)"|(['"])(ui\.[\w.]+)\4/g
     const bad: string[] = []
+    const read = new Set<string>()
     let checked = 0
     for (const file of sourceFiles(SRC)) {
       const text = readFileSync(file, 'utf8')
       for (const match of text.matchAll(KEY)) {
         const key = match[2] ?? match[3] ?? match[5]!
         checked++
+        read.add(key)
         if (!known.has(key)) bad.push(`${relative(SRC, file)}  ${key}`)
       }
     }
     expect(checked).toBeGreaterThan(30)
     expect(bad).toEqual([])
+    // A removed component takes its copy with it.
+    expect([...known].filter((key) => !read.has(key))).toEqual([])
   })
 })

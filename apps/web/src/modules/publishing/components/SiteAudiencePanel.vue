@@ -39,7 +39,7 @@ import { Badge } from '@knowledge/ui/badge'
 import { Button } from '@knowledge/ui/button'
 import { Textarea } from '@knowledge/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
-import { PageState } from '@/shared/layout'
+import { PageState } from '@knowledge/ui/layout'
 
 const props = defineProps<{
   site: PublishedSiteSummary

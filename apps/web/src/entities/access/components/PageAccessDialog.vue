@@ -50,7 +50,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '@knowledge/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
 import { Skeleton } from '@knowledge/ui/skeleton'
-import { PageTabs, panelId, tabId } from '@/shared/layout'
+import { PageTabs, panelId, tabId } from '@knowledge/ui/layout'
 import { UserChip } from '@/entities/person'
 import EffectiveAccess from './EffectiveAccess.vue'
 

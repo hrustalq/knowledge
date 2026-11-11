@@ -20,7 +20,7 @@ import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
 import { Badge } from '@knowledge/ui/badge'
 import { Button } from '@knowledge/ui/button'
-import { PageState } from '@/shared/layout'
+import { PageState } from '@knowledge/ui/layout'
 import { relativeTime } from '@/shared/api/api'
 import { formatDateTime } from '@/shared/utils/format'
 

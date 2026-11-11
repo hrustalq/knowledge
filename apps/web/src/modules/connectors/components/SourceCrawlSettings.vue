@@ -14,7 +14,7 @@ import { api, apiQueryOptions } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
 import { Button } from '@knowledge/ui/button'
 import { Input } from '@knowledge/ui/input'
-import { PageState } from '@/shared/layout'
+import { PageState } from '@knowledge/ui/layout'
 
 const props = defineProps<{ workspaceId: string }>()
 

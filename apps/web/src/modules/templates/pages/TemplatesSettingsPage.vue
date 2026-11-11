@@ -57,7 +57,7 @@ import {
 import { MarkdownView } from '@/entities/document'
 import TemplateEditor from '@/modules/templates/components/TemplateEditor.vue'
 import TemplateHistory from '@/modules/templates/components/TemplateHistory.vue'
-import { PageTabs, panelId, tabId, type PageTab } from '@/shared/layout'
+import { PageTabs, panelId, tabId, type PageTab } from '@knowledge/ui/layout'
 
 const { t } = useI18n()
 const route = useRoute()

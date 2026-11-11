@@ -25,7 +25,7 @@ import { Button } from '@knowledge/ui/button'
 import { Label } from '@knowledge/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
 import { Textarea } from '@knowledge/ui/textarea'
-import { PageState } from '@/shared/layout'
+import { PageState } from '@knowledge/ui/layout'
 
 const { t } = useI18n()
 

@@ -108,7 +108,7 @@ import {
 } from '@knowledge/ui/dropdown-menu'
 import { SaveAsTemplateDialog, type SaveAsTemplatePage } from '@/entities/template'
 import { ExportDialog } from '@/entities/document'
-import { PageLayout, PageRail, PageState } from '@/shared/layout'
+import { PageLayout, PageRail, PageState } from '@knowledge/ui/layout'
 import TocRail from '@/modules/documents/components/TocRail.vue'
 import { DocumentCanvas } from '@/entities/merge-request'
 import { ThreadCard } from '@/entities/merge-request'

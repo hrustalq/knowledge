@@ -9,7 +9,7 @@ import AppShell from '@/app/shell/AppShell.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useEventsStore } from '@/stores/events'
 import { useLayoutStore } from '@/stores/layout'
-import { ERROR_TEXT, RAIL_MEMORY } from '@/shared/layout'
+import { ERROR_TEXT, RAIL_MEMORY } from '@knowledge/ui/layout'
 import { useSearchUiStore } from '@/modules/documents'
 import { startLive } from '@/shared/api'
 import { errorMessage } from '@/shared/api/errors'
@@ -22,9 +22,9 @@ const { t } = useI18n()
 const auth = useAuthStore()
 const events = useEventsStore()
 const searchUi = useSearchUiStore()
-// The page rail's remembered open state (shared/layout cannot import a store).
+// The page rail's remembered open state (@knowledge/ui/layout cannot import a store).
 provide(RAIL_MEMORY, useLayoutStore())
-// What a failed page says (shared/layout cannot import the API client either).
+// What a failed page says (nor can it import the API client).
 provide(ERROR_TEXT, (error) => errorMessage(error, t))
 
 // A workspace switch from inside the search sheet reloads the app; pick the

@@ -83,16 +83,6 @@ module.exports = {
       to: { path: '^src/(app|modules|entities|widgets|stores)/' },
     },
     {
-      name: 'kit-imports-no-app',
-      comment:
-        'Temporary, until the page chrome follows the kit into @knowledge/ui (#941): it imports ' +
-        'npm packages, its own files and the package, nothing else in src/. What the app must supply reaches them by prop, slot or inject (RAIL_MEMORY, ' +
-        'ERROR_TEXT in shared/layout/page-chrome.ts).',
-      severity: 'error',
-      from: { path: '^src/shared/layout/' },
-      to: { path: '^src/', pathNot: '^src/shared/layout/' },
-    },
-    {
       name: 'core-is-pure',
       comment:
         'core/ is plain TypeScript: no Vue, no Pinia, nothing from src/ outside core/ — so it ' +

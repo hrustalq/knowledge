@@ -41,7 +41,7 @@ import { Badge } from '@knowledge/ui/badge'
 import { Button } from '@knowledge/ui/button'
 import { Input } from '@knowledge/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
-import { PageState } from '@/shared/layout'
+import { PageState } from '@knowledge/ui/layout'
 
 const props = defineProps<{ canManage: boolean }>()
 

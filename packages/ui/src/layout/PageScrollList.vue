@@ -27,7 +27,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useVirtualizer } from '@tanstack/vue-virtual'
-import { Button } from '@knowledge/ui/button'
+import { Button } from '../button'
 
 const props = withDefaults(
   defineProps<{

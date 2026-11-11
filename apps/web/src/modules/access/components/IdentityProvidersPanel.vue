@@ -41,7 +41,7 @@ import { Checkbox } from '@knowledge/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@knowledge/ui/dialog'
 import { Input } from '@knowledge/ui/input'
 import { Textarea } from '@knowledge/ui/textarea'
-import { PageState } from '@/shared/layout'
+import { PageState } from '@knowledge/ui/layout'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
 
 const { t } = useI18n()

@@ -53,7 +53,7 @@ import { CommentComposer } from '@/entities/merge-request'
 import { matchAnchoredThreads } from '@/entities/document'
 import { mrIcon } from '@/entities/merge-request'
 import { UserChip } from '@/entities/person'
-import { PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@/shared/layout'
+import { PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@knowledge/ui/layout'
 
 const { t } = useI18n()
 

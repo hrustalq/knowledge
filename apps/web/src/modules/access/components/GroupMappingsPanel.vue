@@ -26,7 +26,7 @@ import { Button } from '@knowledge/ui/button'
 import { confirm } from '@knowledge/ui/confirm'
 import { Checkbox } from '@knowledge/ui/checkbox'
 import { Input } from '@knowledge/ui/input'
-import { PageState } from '@/shared/layout'
+import { PageState } from '@knowledge/ui/layout'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
 
 const { t } = useI18n()

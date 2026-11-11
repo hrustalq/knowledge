@@ -29,7 +29,7 @@ import { useAuthStore } from '@/stores/auth'
 import { Badge } from '@knowledge/ui/badge'
 import { Button } from '@knowledge/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
-import { PageState } from '@/shared/layout'
+import { PageState } from '@knowledge/ui/layout'
 
 const { t } = useI18n()
 const auth = useAuthStore()

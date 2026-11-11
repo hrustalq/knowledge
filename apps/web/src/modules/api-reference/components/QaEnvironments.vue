@@ -33,7 +33,7 @@ import { Button } from '@knowledge/ui/button'
 import { Input } from '@knowledge/ui/input'
 import { Textarea } from '@knowledge/ui/textarea'
 import { confirm } from '@knowledge/ui/confirm'
-import { PageState } from '@/shared/layout'
+import { PageState } from '@knowledge/ui/layout'
 import FixtureRows from '@/modules/api-reference/components/FixtureRows.vue'
 
 const props = defineProps<{ workspaceId: string; runnerOn: boolean }>()

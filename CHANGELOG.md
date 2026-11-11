@@ -13,6 +13,20 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Operations
+
+- **Migration `20270112100000_drop_legacy_credentials` deletes data and cannot be undone. From this release on, a
+  rollback can go no further back than v0.50.0.** It drops the pre-credentials copies of connector and sign-in
+  secrets that v0.50.0 stopped reading and writing: `connectors.credential` / `credential_hint`,
+  `connections.credential` / `credential_hint`, and the tables `github_user_tokens` and `figma_oauth_grants`. Every
+  secret already lives in `credentials`, so no connector loses its token. The drop also stops an image from
+  v0.47.0–v0.49.x from recreating a disconnected GitHub or Figma sign-in out of those stale rows. An image older
+  than v0.50.0 still declares these fields and fails against the migrated database. Chat bot tokens
+  (`chat_integrations.credential`) are untouched. After deploying, run **Test connection** on one token connector
+  and on the Figma OAuth connector. (#908)
+
 ## [0.50.0] — 2026-11-11
 
 ### Changed

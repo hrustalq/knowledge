@@ -115,9 +115,10 @@ installation belongs to a GitHub account or org, not to a person.
   connectors while any connection uses it.
 - **Expand/contract.** Phases 1–3 (v0.47.0) wrote `connections.credential`, `connectors.credential`,
   `github_user_tokens` and `figma_oauth_grants` as well, for the previous release, and moved the old rows
-  in at boot. Phase 4 stopped writing and reading them and took them out of `schema.prisma`; the columns
-  and tables are dropped one release later, because the previous image's Prisma still selects every field
-  its schema declares ([versioning](../versioning.md#rollback-and-the-expandcontract-rule)). Credentials
+  in at boot. Phase 4 stopped writing and reading them and took them out of `schema.prisma` (v0.50.0);
+  `20270112100000_drop_legacy_credentials` (#908) drops the columns and tables one release later, because
+  the previous image's Prisma still selects every field its schema declares
+  ([versioning](../versioning.md#rollback-and-the-expandcontract-rule)). Rollback floor: v0.50.0. Credentials
   are `platform` in the teardown inventory.
 
 Web: the connect dialog's sign-in step lists **Your accounts** (the caller's bindable credentials for the
@@ -161,8 +162,6 @@ teardown deletes `connections` after `connectors`; credentials stay with their o
 
 ## Deliberate deferrals
 
-- The `DROP` of `connectors.credential` / `credential_hint`, `connections.credential` / `credential_hint`,
-  `github_user_tokens` and `figma_oauth_grants`, unread since #857 phase 4, in the release after it.
 - Workspace-owned service accounts that belong to no person, and sharing one credential between people
   (#857, out of scope).
 - OAuth for Atlassian, GitLab, Notion, Google Drive, Linear, Zendesk and Intercom — each needs an app

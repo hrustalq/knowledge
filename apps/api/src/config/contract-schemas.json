@@ -16583,6 +16583,12 @@
         ],
         "nullable": true
       },
+      "speakers": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/MemoSpeaker"
+        }
+      },
       "transcript": {
         "type": "array",
         "items": {
@@ -16609,6 +16615,7 @@
     "required": [
       "memo",
       "progress",
+      "speakers",
       "transcript",
       "summary",
       "proposals",
@@ -16859,6 +16866,51 @@
     "enum": [
       "upload",
       "plaud"
+    ]
+  },
+  "MemoSpeaker": {
+    "type": "object",
+    "properties": {
+      "label": {
+        "type": "string"
+      },
+      "userId": {
+        "type": "string",
+        "nullable": true
+      },
+      "source": {
+        "type": "string",
+        "enum": [
+          "confirmed",
+          "remembered",
+          null
+        ],
+        "nullable": true
+      },
+      "suggestedUserId": {
+        "type": "string",
+        "nullable": true
+      }
+    },
+    "required": [
+      "label",
+      "userId",
+      "source",
+      "suggestedUserId"
+    ]
+  },
+  "MemoSpeakersResponse": {
+    "type": "object",
+    "properties": {
+      "speakers": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/MemoSpeaker"
+        }
+      }
+    },
+    "required": [
+      "speakers"
     ]
   },
   "MemoStatus": {

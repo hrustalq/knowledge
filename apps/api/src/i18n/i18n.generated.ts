@@ -921,6 +921,8 @@ export type I18nTranslations = {
             "audioGone": string;
             "interrupted": string;
             "transcriptionFailed": string;
+            "speakerUnknown": string;
+            "speakerNotMember": string;
             "speaker": string;
             "speechServerDown": string;
             "speechServerRefused": string;

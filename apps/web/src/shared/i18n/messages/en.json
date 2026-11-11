@@ -7429,6 +7429,15 @@
         "analysing": "reading the transcript",
         "publishing": "opening merge requests"
       },
+      "speakers": {
+        "title": "Speakers",
+        "who": "Who {label} is",
+        "nobody": "Nobody here",
+        "remembered": "Remembered from your earlier memo in this project.",
+        "suggested": "Looks like {name}.",
+        "confirm": "Confirm",
+        "hint": "A match is yours alone: it gives that person no access to this memo. The agent names only people matched before it reads the recording."
+      },
       "step": {
         "upload": "Upload",
         "transcribe": "Transcription",

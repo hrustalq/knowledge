@@ -27192,6 +27192,80 @@
         ]
       }
     },
+    "/v1/memos/{id}/speakers": {
+      "put": {
+        "operationId": "MemosController_matchSpeaker",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MatchMemoSpeakerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoSpeakersResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Say who one of the memo's speakers is, or that it is nobody here",
+        "tags": [
+          "memos"
+        ]
+      }
+    },
     "/v1/plaud/link": {
       "get": {
         "operationId": "PlaudController_status",
@@ -47564,6 +47638,25 @@
           "title"
         ]
       },
+      "MatchMemoSpeakerDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "A speaker label exactly as the transcript has it"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "A member of the workspace, or null for nobody here"
+          }
+        },
+        "required": [
+          "label",
+          "userId"
+        ]
+      },
       "PlaudRulesDto": {
         "type": "object",
         "properties": {
@@ -66508,6 +66601,12 @@
             ],
             "nullable": true
           },
+          "speakers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MemoSpeaker"
+            }
+          },
           "transcript": {
             "type": "array",
             "items": {
@@ -66534,6 +66633,7 @@
         "required": [
           "memo",
           "progress",
+          "speakers",
           "transcript",
           "summary",
           "proposals",
@@ -66784,6 +66884,51 @@
         "enum": [
           "upload",
           "plaud"
+        ]
+      },
+      "MemoSpeaker": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string",
+            "nullable": true
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "confirmed",
+              "remembered",
+              null
+            ],
+            "nullable": true
+          },
+          "suggestedUserId": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "label",
+          "userId",
+          "source",
+          "suggestedUserId"
+        ]
+      },
+      "MemoSpeakersResponse": {
+        "type": "object",
+        "properties": {
+          "speakers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MemoSpeaker"
+            }
+          }
+        },
+        "required": [
+          "speakers"
         ]
       },
       "MemoStatus": {

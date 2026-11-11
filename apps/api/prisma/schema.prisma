@@ -4716,6 +4716,8 @@ model Memo {
 
   /// MemoSegment[] — masked before it is written. Never selected by the list.
   transcript   Json?
+  /// SpeakerChoices: { "<speaker label>": userId | null }, the uploader's matches (#880).
+  speakers     Json?
   summary      String?
   /// MemoDropped[] — proposals the analysis made and the code refused, with why.
   dropped      Json?

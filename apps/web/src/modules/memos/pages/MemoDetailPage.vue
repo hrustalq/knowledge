@@ -22,7 +22,7 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 import { useNow } from '@vueuse/core'
 import { Check, Circle, FilePlus2, FilePen, GitPullRequestArrow, Loader2, Lock, RotateCcw } from 'lucide-vue-next'
-import { MEMO_STEPS, memoClock, type MemoDetailResponse, type MemoProposal } from '@knowledge/contracts'
+import { MEMO_STEPS, memoClock, type MemoDetailResponse, type MemoProposal, type MemoSpeaker } from '@knowledge/contracts'
 import { request } from '@/shared/api/client'
 import { errorMessage } from '@/shared/api/errors'
 import { apiQueryOptions } from '@/shared/api/queries'
@@ -30,6 +30,8 @@ import { Button } from '@/shared/ui/button'
 import { apiUrl } from '@/shared/api/api'
 import { formatDateTime, formatDuration, formatRelative } from '@/shared/utils/format'
 import { PageLayout, PageState } from '@/shared/layout'
+import { UserAvatar, useMembers } from '@/entities/person'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import MemoActions from '@/modules/memos/components/MemoActions.vue'
 import { MEMO_STATUS_CLASS, MEMO_STATUS_ICON, isMemoInFlight, segmentAt } from '@/modules/memos/model/memo-ui'
 
@@ -144,6 +146,22 @@ async function act(run: () => Promise<unknown>) {
   }
 }
 
+/**
+ * Who is speaking (#880). A match that holds replaces the label in the
+ * transcript; a guess from the label is offered beside it and counts for
+ * nothing until it is confirmed.
+ */
+const NOBODY = 'nobody'
+const { members, memberOf, nameOf } = useMembers()
+const speakers = computed(() => data.value?.speakers ?? [])
+const speakerOf = computed(() => new Map(speakers.value.map((s) => [s.label, s])))
+const speakerName = (label: string) => {
+  const userId = speakerOf.value.get(label)?.userId
+  return userId ? nameOf(userId) : label
+}
+const matchSpeaker = (speaker: MemoSpeaker, userId: string | null) =>
+  act(() => request('put', '/v1/memos/{id}/speakers', { path: { id: id.value }, body: { label: speaker.label, userId } }))
+
 const retry = () => act(() => request('post', '/v1/memos/{id}/retry', { path: { id: id.value } }))
 </script>
 
@@ -201,7 +219,7 @@ const retry = () => act(() => request('post', '/v1/memos/{id}/retry', { path: { 
               :class="playing === s.i ? 'text-primary font-semibold' : 'text-muted-foreground group-hover:text-foreground'"
             >{{ memoClock(s.start) }}</span>
             <span class="leading-relaxed" :class="playing === s.i ? 'text-foreground' : ''">
-              <span v-if="s.speaker" class="font-medium">{{ s.speaker }}: </span>{{ s.text }}
+              <span v-if="s.speaker" class="font-medium">{{ speakerName(s.speaker) }}: </span>{{ s.text }}
             </span>
           </button>
         </li>
@@ -251,6 +269,41 @@ const retry = () => act(() => request('post', '/v1/memos/{id}/retry', { path: { 
           <p class="text-destructive font-medium">{{ t('memos.detail.failed', { stage: t(`memos.detail.stage.${memo.stage ?? 'transcribing'}`) }) }}</p>
           <p v-if="memo.error" class="text-muted-foreground mt-1">{{ memo.error }}</p>
         </div>
+
+        <section v-if="speakers.length" class="space-y-2">
+          <h2 class="font-display text-base font-semibold">{{ t('memos.detail.speakers.title') }}</h2>
+          <ul class="space-y-2">
+            <li v-for="s in speakers" :key="s.label" class="space-y-1">
+              <div class="flex items-center gap-2">
+                <UserAvatar
+                  v-if="s.userId"
+                  :user-id="s.userId"
+                  :name="nameOf(s.userId)"
+                  :src="memberOf(s.userId)?.avatarUrl"
+                  size="sm"
+                />
+                <span class="min-w-0 flex-1 truncate text-sm" :title="s.label">{{ s.label }}</span>
+                <Select :model-value="s.userId ?? NOBODY" :disabled="acting" @update:model-value="matchSpeaker(s, $event === NOBODY ? null : String($event))">
+                  <SelectTrigger size="sm" class="w-44" :aria-label="t('memos.detail.speakers.who', { label: s.label })">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem :value="NOBODY">{{ t('memos.detail.speakers.nobody') }}</SelectItem>
+                    <SelectItem v-for="m in members" :key="m.userId" :value="m.userId">{{ m.displayName }}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <p v-if="s.source === 'remembered'" class="text-muted-foreground text-xs">{{ t('memos.detail.speakers.remembered') }}</p>
+              <p v-else-if="s.suggestedUserId" class="text-muted-foreground flex flex-wrap items-center gap-x-2 text-xs">
+                {{ t('memos.detail.speakers.suggested', { name: nameOf(s.suggestedUserId) }) }}
+                <Button size="xs" variant="outline" :disabled="acting" @click="matchSpeaker(s, s.suggestedUserId)">
+                  {{ t('memos.detail.speakers.confirm') }}
+                </Button>
+              </p>
+            </li>
+          </ul>
+          <p class="text-muted-foreground text-xs">{{ t('memos.detail.speakers.hint') }}</p>
+        </section>
 
         <section v-if="data.summary" class="space-y-1.5">
           <h2 class="font-display text-base font-semibold">{{ t('memos.detail.summary') }}</h2>

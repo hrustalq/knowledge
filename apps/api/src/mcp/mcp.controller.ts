@@ -6,7 +6,7 @@ import type { Request, Response } from 'express';
 import { CAPTURE_KIT_CLIENTS, type CaptureKitResponse, type McpConnectionInfo } from '@knowledge/contracts';
 import { CurrentPrincipal, McpKeyOk, ReadKeyOk } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
-import { MCP_SERVER_NAME } from './mcp-tools.js';
+import { MCP_SERVER_NAME, toolsetsNotOffered } from './mcp-tools.js';
 import { noTrackOf } from '../analytics/analytics.recorder.js';
 import { CollabDraftToolsService } from '../collab/collab-draft-tools.service.js';
 import { McpService, type McpExtras } from './mcp.service.js';
@@ -98,6 +98,7 @@ export class McpController {
       authMode: this.config.get('AUTH_MODE') === 'api-key' ? 'api-key' : 'none',
       version: PRODUCT_VERSION,
       tools: this.mcp.toolsFor(principal, { ...this.extras, offSections }),
+      notOffered: toolsetsNotOffered(principal, offSections),
     };
   }
 

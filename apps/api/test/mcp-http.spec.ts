@@ -1880,6 +1880,18 @@ describe('a key limited to toolsets (#945)', () => {
     await expect(mcp.captureKitFor(principal, 'claude-code')).rejects.toMatchObject({ status: 403, response: { reason: 'capture-not-offered' } });
   });
 
+  it('GET /v1/mcp/connection names the toolsets not offered and why', async () => {
+    const { mcp } = service(accessWith('editor'));
+    vi.spyOn(mcp, 'sectionsOffFor').mockResolvedValue(['qa']);
+    const controller = new McpController(mcp, { get: () => 'api-key' } as never, fakeDrafts(false) as never);
+    const info = await controller.connection(limited('write', ['core', 'graph', 'qa']));
+    expect(new Set(info.tools.map((t) => t.toolset))).toEqual(new Set(['core', 'graph']));
+    expect(info.notOffered).toContainEqual({ toolset: 'qa', reason: 'section-off' });
+    expect(info.notOffered).toContainEqual({ toolset: 'authoring', reason: 'key-toolsets' });
+    expect(info.notOffered.map((n) => n.toolset)).not.toContain('graph');
+    expect((await controller.connection(keyPrincipal({ id: 'k', scope: 'read', workspaceId: null }))).notOffered).toEqual([{ toolset: 'qa', reason: 'section-off' }]);
+  });
+
   it('is MCP-only: refused wherever a bearer is resolved, unless the route is the MCP endpoint', async () => {
     const auth = resolver(['core', 'graph']);
     await expect(auth.resolve('kn_x')).rejects.toMatchObject({ status: 403, response: { reason: 'apiKeyMcpOnly' } });

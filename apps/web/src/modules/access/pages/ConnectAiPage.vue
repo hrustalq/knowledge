@@ -34,9 +34,10 @@ import type {
   CaptureKitFile,
   CaptureKitResponse,
   McpConnectionInfo,
+  McpToolset,
   ProjectSummary,
 } from '@knowledge/contracts'
-import { API_KEY_SCOPES, CAPTURE_KIT_CLIENTS } from '@knowledge/contracts'
+import { API_KEY_SCOPES, CAPTURE_KIT_CLIENTS, MCP_TOOLSET_KEYS, featureOfToolset } from '@knowledge/contracts'
 import { useQueryClient } from '@tanstack/vue-query'
 import { api, fetchApi, isApiRequestError } from '@/shared/api/queries'
 import { getProjectId, getWorkspaceId, saveFile } from '@/shared/api/api'
@@ -44,6 +45,8 @@ import { formatDate, formatRelative } from '@/shared/utils/format'
 import { KEY_ENV, SKILL_NAME, captureKitFileRole, captureKitInstallCommand, mcpClients, skillInstallCommand } from '@/entities/access'
 import { useWorkspacesStore } from '@/stores/workspaces'
 import { useProjectsStore } from '@/stores/projects'
+import { useFeaturesStore } from '@/stores/features'
+import { useAuthStore } from '@/stores/auth'
 import { Button } from '@knowledge/ui/button'
 import { Input } from '@knowledge/ui/input'
 import { Label } from '@knowledge/ui/label'
@@ -67,6 +70,8 @@ const route = useRoute()
 const router = useRouter()
 const workspaces = useWorkspacesStore()
 const projects = useProjectsStore()
+const features = useFeaturesStore()
+const auth = useAuthStore()
 const queryClient = useQueryClient()
 
 const connection = ref<McpConnectionInfo | null>(null)
@@ -107,7 +112,17 @@ const form = reactive({
   expiry: 'never' as (typeof EXPIRY_CHOICES)[number],
   /** A `capture` key's project pin (issue #73). Empty = every project. */
   projectIds: [] as string[],
+  /** The toolsets the key is limited to (#945). Empty = no list, every toolset; `core` is the server's to add. */
+  toolsets: [] as McpToolset[],
 })
+
+/** Every toolset a key can be limited to; `core` is always part of a list, so it is shown, not chosen. */
+const PICKABLE_TOOLSETS = MCP_TOOLSET_KEYS.filter((key) => key !== 'core')
+const limiting = ref(false)
+
+function toggleToolset(key: McpToolset) {
+  form.toolsets = form.toolsets.includes(key) ? form.toolsets.filter((k) => k !== key) : [...form.toolsets, key]
+}
 
 /*
  * The pin is offered only on a `capture` key — the API refuses it on any other
@@ -159,11 +174,15 @@ async function createKey() {
         ...(form.workspaceId !== ALL_WORKSPACES ? { workspaceId: form.workspaceId } : {}),
         ...(form.expiry !== 'never' ? { expiresInDays: Number(form.expiry) } : {}),
         ...(form.scope === 'capture' && form.projectIds.length ? { projectIds: form.projectIds } : {}),
+        // Untouched sends no list: the key reaches every toolset and every door.
+        ...(form.toolsets.length ? { toolsets: form.toolsets } : {}),
       },
     })
     fresh.value = { key: res.key, apiKey: res.apiKey }
     keys.value = [res.key, ...keys.value]
     form.name = ''
+    form.toolsets = []
+    limiting.value = false
     // The skill names the workspaces and tools of the credential that fetches
     // it — so fetch it as the new key, and a read-only or pinned key gets the
     // skill that describes exactly what it can do.
@@ -341,8 +360,35 @@ const llmsCurl = computed(() =>
     : '',
 )
 
-const readTools = computed(() => connection.value?.tools.filter((tool) => tool.readOnly) ?? [])
-const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool.readOnly) ?? [])
+/* ------------------------------------------------------------------- tools */
+
+/*
+ * The offer by toolset (#945). A toolset with nothing offered is still a row,
+ * with the server's reason, so a missing group of tools is explained rather
+ * than absent. `offHere` is this workspace's own switch: a toolset can be
+ * offered (another workspace has the section on) and still refuse every call
+ * that names this one.
+ */
+const toolGroups = computed(() => {
+  const info = connection.value
+  if (!info) return []
+  const reasons = new Map(info.notOffered.map((n) => [n.toolset, n.reason]))
+  return MCP_TOOLSET_KEYS.map((key) => {
+    const tools = info.tools.filter((tool) => tool.toolset === key)
+    const feature = featureOfToolset(key)
+    return {
+      key,
+      tools,
+      read: tools.filter((tool) => tool.readOnly).length,
+      write: tools.filter((tool) => !tool.readOnly).length,
+      reason: tools.length ? null : (reasons.get(key) ?? null),
+      offHere: feature !== null && !features.isOn(feature),
+    }
+    // Not registered on this server at all (the draft tools without co-editing): nothing to say.
+  }).filter((group) => group.tools.length || group.reason)
+})
+const openToolset = ref<McpToolset | null>(null)
+const canManageFeatures = computed(() => auth.role === 'admin')
 </script>
 
 <template>
@@ -371,22 +417,23 @@ const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool
       </section>
 
       <!-- Step 1 ---------------------------------------------------------- -->
-      <section class="min-w-0 rounded-xl border bg-card">
+      <!-- A container: the card's width, not the viewport's, decides one column or two (the settings shell takes two navs off it). -->
+      <section class="@container min-w-0 rounded-xl border bg-card">
         <h2 class="flex items-center gap-2.5 border-b px-5 py-3.5 font-display text-base font-semibold tracking-tight">
           <span class="kn-step">1</span>{{ t('connect.keys.title') }}
         </h2>
 
         <p v-if="!needsKey" class="px-5 py-4 text-sm text-muted-foreground">{{ t('connect.keys.devMode') }}</p>
 
-        <div v-else class="grid gap-5 px-5 py-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+        <div v-else class="grid gap-5 px-5 py-4 @3xl:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
           <form class="grid content-start gap-3" @submit.prevent="createKey">
             <p class="text-xs text-muted-foreground">{{ t('connect.keys.hint') }}</p>
             <div class="grid gap-1.5">
               <Label for="kn-key-name" class="text-xs">{{ t('connect.keys.name') }}</Label>
               <Input id="kn-key-name" v-model="form.name" :placeholder="t('connect.keys.namePlaceholder')" maxlength="80" />
             </div>
-            <div class="grid gap-3 sm:grid-cols-3">
-              <div class="grid gap-1.5">
+            <div class="grid grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] gap-3">
+              <div class="flex min-w-0 flex-col gap-1.5">
                 <Label for="kn-key-scope" class="text-xs">{{ t('connect.keys.scope') }}</Label>
                 <Select v-model="form.scope">
                   <SelectTrigger id="kn-key-scope" class="w-full"><SelectValue /></SelectTrigger>
@@ -395,7 +442,7 @@ const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool
                   </SelectContent>
                 </Select>
               </div>
-              <div class="grid gap-1.5">
+              <div class="flex min-w-0 flex-col gap-1.5">
                 <Label for="kn-key-ws" class="text-xs">{{ t('connect.keys.workspace') }}</Label>
                 <Select v-model="form.workspaceId">
                   <SelectTrigger id="kn-key-ws" class="w-full"><SelectValue /></SelectTrigger>
@@ -407,7 +454,7 @@ const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool
                   </SelectContent>
                 </Select>
               </div>
-              <div class="grid gap-1.5">
+              <div class="flex min-w-0 flex-col gap-1.5">
                 <Label for="kn-key-exp" class="text-xs">{{ t('connect.keys.expiry') }}</Label>
                 <Select v-model="form.expiry">
                   <SelectTrigger id="kn-key-exp" class="w-full"><SelectValue /></SelectTrigger>
@@ -447,6 +494,47 @@ const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool
                   : t('connect.keys.projectsAll') }}
               </p>
             </fieldset>
+
+            <!-- Which toolsets the key reaches (#945). Closed until asked for: an
+                 untouched picker is a key with no list. -->
+            <fieldset class="grid gap-1.5">
+              <legend class="text-xs font-medium">{{ t('connect.keys.toolsetPicker.legend') }}</legend>
+              <template v-if="limiting">
+                <div class="flex flex-wrap gap-1.5">
+                  <span class="rounded-md border border-dashed px-2.5 py-0.5 text-xs text-muted-foreground">
+                    {{ t('connect.toolsets.core.label') }} · {{ t('connect.keys.toolsetPicker.always') }}
+                  </span>
+                  <button
+                    v-for="key in PICKABLE_TOOLSETS"
+                    :key="key"
+                    type="button"
+                    class="rounded-md border px-2.5 py-0.5 text-xs transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring"
+                    :class="form.toolsets.includes(key)
+                      ? 'border-primary/40 bg-primary/10 text-primary'
+                      : 'text-muted-foreground hover:bg-accent hover:text-foreground'"
+                    :aria-pressed="form.toolsets.includes(key)"
+                    :title="t(`connect.toolsets.${key}.description`)"
+                    @click="toggleToolset(key)"
+                  >
+                    {{ t(`connect.toolsets.${key}.label`) }}
+                  </button>
+                </div>
+                <p v-if="form.toolsets.length" class="flex items-start gap-2 rounded-lg border border-dashed kn-callout-warning px-3 py-2 text-xs text-panel-warning-ink" role="status">
+                  <TriangleAlert class="size-3.5 shrink-0 translate-y-0.5" aria-hidden="true" />
+                  <span>
+                    {{ t('connect.keys.toolsetPicker.chosen', { n: form.toolsets.length }, form.toolsets.length) }}
+                    {{ t('connect.keys.toolsetPicker.mcpOnly') }}
+                  </span>
+                </p>
+                <p v-else class="text-caption text-muted-foreground">{{ t('connect.keys.toolsetPicker.all') }}</p>
+              </template>
+              <div v-else class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <p class="text-caption text-muted-foreground">{{ t('connect.keys.toolsetPicker.all') }}</p>
+                <Button type="button" variant="outline" size="sm" @click="limiting = true">
+                  {{ t('connect.keys.toolsetPicker.limit') }}
+                </Button>
+              </div>
+            </fieldset>
             <div>
               <Button type="submit" size="sm" class="gap-1.5" :disabled="creating || !form.name.trim()">
                 <Plus class="size-3.5" />
@@ -479,7 +567,11 @@ const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool
                     <Badge :variant="k.scope === 'read' ? 'secondary' : 'outline'">{{ t(`connect.keys.scopes.${k.scope}`) }}</Badge>
                     <Badge v-if="k.workspaceId" variant="outline">{{ workspaceName(k.workspaceId) }}</Badge>
                     <Badge v-for="id in k.projectIds ?? []" :key="id" variant="outline" class="font-normal">{{ projectName(id) }}</Badge>
+                    <Badge v-if="k.toolsets" variant="secondary">{{ t('connect.keys.mcpOnly') }}</Badge>
                   </div>
+                  <p v-if="k.toolsets" class="mt-0.5 text-caption text-muted-foreground">
+                    {{ t('connect.keys.toolsets', { list: k.toolsets.map((key) => t(`connect.toolsets.${key}.label`)).join(', ') }) }}
+                  </p>
                   <p class="mt-0.5 text-caption text-muted-foreground">
                     <code class="font-mono">{{ k.prefix }}…</code>
                     · {{ k.lastUsedAt ? t('connect.keys.lastUsed', { when: formatRelative(k.lastUsedAt) }) : t('connect.keys.neverUsed') }}
@@ -675,18 +767,59 @@ const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool
       <section class="min-w-0 rounded-xl border bg-card px-5 py-4">
         <h2 class="font-display text-base font-semibold tracking-tight">{{ t('connect.tools.title') }}</h2>
         <p class="mt-0.5 text-xs text-muted-foreground">{{ t('connect.tools.hint') }}</p>
-        <div class="mt-3 grid gap-4 md:grid-cols-2">
-          <div v-for="group in [{ key: 'read', tools: readTools }, { key: 'write', tools: writeTools }]" :key="group.key" class="min-w-0">
-            <h3 class="text-xs font-medium text-muted-foreground">{{ t(`connect.tools.${group.key}`, { n: group.tools.length }) }}</h3>
-            <ul class="mt-1.5 space-y-1.5">
-              <li v-for="tool in group.tools" :key="tool.name" class="min-w-0 text-xs">
-                <code class="font-mono text-caption font-medium">{{ tool.name }}</code>
-                <p class="line-clamp-2 text-muted-foreground">{{ tool.description }}</p>
-              </li>
-              <li v-if="!group.tools.length" class="text-xs text-muted-foreground">{{ t('connect.tools.noneForKey') }}</li>
-            </ul>
-          </div>
-        </div>
+        <ul class="mt-3 divide-y rounded-lg border">
+          <li v-for="group in toolGroups" :key="group.key" class="min-w-0">
+            <template v-if="group.tools.length">
+              <button
+                type="button"
+                class="flex w-full min-w-0 items-start gap-3 px-3 py-2.5 text-left transition-colors outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring"
+                :aria-expanded="openToolset === group.key"
+                @click="openToolset = openToolset === group.key ? null : group.key"
+              >
+                <span class="min-w-0 flex-1">
+                  <span class="flex flex-wrap items-baseline gap-x-2">
+                    <span class="text-sm font-medium">{{ t(`connect.toolsets.${group.key}.label`) }}</span>
+                    <span class="text-caption tabular-nums text-muted-foreground">
+                      {{ t('connect.tools.counts', { read: group.read, write: group.write }) }}
+                    </span>
+                    <span v-if="group.offHere" class="text-caption text-panel-warning-ink">{{ t('connect.tools.offHere') }}</span>
+                  </span>
+                  <span class="mt-0.5 block text-caption text-muted-foreground">{{ t(`connect.toolsets.${group.key}.description`) }}</span>
+                </span>
+                <ChevronRight
+                  class="mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none"
+                  :class="openToolset === group.key ? 'rotate-90' : ''"
+                  aria-hidden="true"
+                />
+              </button>
+              <div v-if="openToolset === group.key" class="grid gap-2 px-3 pb-3">
+                <p v-if="group.offHere" class="text-caption text-panel-warning-ink">
+                  {{ t('connect.tools.offHereHint') }}
+                  <RouterLink v-if="canManageFeatures" to="/settings/features" class="ml-1 text-primary underline underline-offset-2">{{ t('connect.tools.features') }}</RouterLink>
+                </p>
+                <ul class="space-y-1.5">
+                  <li v-for="tool in group.tools" :key="tool.name" class="min-w-0 text-xs">
+                    <code class="font-mono text-caption font-medium [overflow-wrap:anywhere]">{{ tool.name }}</code>
+                    <span class="ml-1.5 text-caption text-muted-foreground">{{ tool.readOnly ? t('connect.tools.readTag') : t('connect.tools.writeTag') }}</span>
+                    <p class="line-clamp-2 text-muted-foreground">{{ tool.description }}</p>
+                  </li>
+                </ul>
+              </div>
+            </template>
+            <div v-else class="px-3 py-2.5">
+              <p class="text-sm font-medium text-muted-foreground">{{ t(`connect.toolsets.${group.key}.label`) }}</p>
+              <p class="mt-0.5 text-caption text-muted-foreground">
+                {{ t(`connect.tools.offReason.${group.reason}`) }}
+                <RouterLink
+                  v-if="group.reason === 'section-off' && canManageFeatures"
+                  to="/settings/features"
+                  class="ml-1 text-primary underline underline-offset-2"
+                >{{ t('connect.tools.features') }}</RouterLink>
+              </p>
+            </div>
+          </li>
+          <li v-if="!toolGroups.length" class="px-3 py-2.5 text-xs text-muted-foreground">{{ t('connect.tools.noneForKey') }}</li>
+        </ul>
       </section>
     </template>
 

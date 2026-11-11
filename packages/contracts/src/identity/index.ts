@@ -953,7 +953,17 @@ export interface McpConnectionInfo {
   version: string;
   /** Tools the calling credential would be offered. */
   tools: McpToolSummary[];
+  /** The toolsets it is not offered at all, each with why (#945). */
+  notOffered: { toolset: McpToolset; reason: McpToolsetOffReason }[];
 }
+
+/**
+ * Why a whole toolset is missing from an offer: its section is off in every
+ * workspace the caller reaches, or the key's own toolset list leaves it out.
+ * A key's scope hides single write tools, never a whole toolset.
+ */
+export const MCP_TOOLSET_OFF_REASONS = ['section-off', 'key-toolsets'] as const;
+export type McpToolsetOffReason = (typeof MCP_TOOLSET_OFF_REASONS)[number];
 
 
 

@@ -8036,6 +8036,8 @@ export interface components {
             workspaceId?: string;
             /** @description Pin a 'capture' key to these projects (at most 20); omit for every project. Refused on any other scope. */
             projectIds?: string[];
+            /** @description Limit the key to these MCP toolsets ('core' is always added); omit for every toolset. A key with a list works over MCP only: it is refused on REST routes, the git remote and plain-markdown URLs. */
+            toolsets?: ("core" | "authoring" | "quality" | "review" | "graph" | "conflicts" | "captures" | "qa" | "api-reference" | "code" | "connectors" | "workflows" | "agents" | "insights" | "memos" | "sharing" | "embeds" | "chat" | "projects" | "drafts")[];
             /** @description Days until the key stops working (1–365); omit for no expiry. */
             expiresInDays?: number;
         };
@@ -11967,6 +11969,7 @@ export interface components {
             scope: components["schemas"]["ApiKeyScope"];
             workspaceId: string | null;
             projectIds: string[] | null;
+            toolsets: components["schemas"]["McpToolset"][] | null;
             expiresAt: string | null;
             lastUsedAt: string | null;
             createdAt: string;
@@ -14809,12 +14812,21 @@ export interface components {
             authMode: "none" | "api-key";
             version: string;
             tools: components["schemas"]["McpToolSummary"][];
+            notOffered: {
+                toolset: components["schemas"]["McpToolset"];
+                reason: components["schemas"]["McpToolsetOffReason"];
+            }[];
         };
         McpToolSummary: {
             name: string;
             description: string;
+            toolset: components["schemas"]["McpToolset"];
             readOnly: boolean;
         };
+        /** @enum {string} */
+        McpToolset: "core" | "authoring" | "quality" | "review" | "graph" | "conflicts" | "captures" | "qa" | "api-reference" | "code" | "connectors" | "workflows" | "agents" | "insights" | "memos" | "sharing" | "embeds" | "chat" | "projects" | "drafts";
+        /** @enum {string} */
+        McpToolsetOffReason: "section-off" | "key-toolsets";
         MeResponse: {
             userId: string;
             email: string;

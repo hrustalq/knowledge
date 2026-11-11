@@ -4709,7 +4709,17 @@
       "projectsAll": "Proposes into every project. Pick some to narrow it.",
       "projectsPinned": "Proposes into {n} project only. | Proposes into these {n} projects only.",
       "captures": "Its captures",
-      "reviewCaptures": "Review its captures"
+      "reviewCaptures": "Review its captures",
+      "toolsetPicker": {
+        "legend": "Toolsets",
+        "all": "Every toolset. Pick some to limit the key.",
+        "limit": "Limit to toolsets",
+        "always": "always included",
+        "mcpOnly": "A key limited to toolsets works over MCP only. REST routes, git and plain-markdown URLs refuse it.",
+        "chosen": "Limited to {n} toolset besides Core. | Limited to {n} toolsets besides Core."
+      },
+      "mcpOnly": "MCP only",
+      "toolsets": "Toolsets: {list}"
     },
     "clients": {
       "title": "Add the server to your client",
@@ -4771,10 +4781,100 @@
     },
     "tools": {
       "title": "What a connected client gets",
-      "hint": "Tools your current sign-in would be offered. Every call is checked against your role in the workspace it touches, exactly like the web app.",
-      "read": "Read ({n})",
-      "write": "Write ({n})",
-      "noneForKey": "None."
+      "hint": "Tools your current sign-in would be offered, by toolset. Every call is checked against your role in the workspace it touches, exactly like the web app.",
+      "counts": "{read} read · {write} write",
+      "noneForKey": "None.",
+      "offHere": "Off in this workspace",
+      "offReason": {
+        "section-off": "Not offered: this section is switched off.",
+        "key-toolsets": "Not offered: outside this key's toolsets."
+      },
+      "offHereHint": "Switched off in this workspace; offered because another workspace you reach has it on. Calls here are refused.",
+      "features": "Features settings",
+      "readTag": "read",
+      "writeTag": "write"
+    },
+    "toolsets": {
+      "core": {
+        "label": "Core",
+        "description": "Search, read pages and the page tree, rate an answer, report a page."
+      },
+      "authoring": {
+        "label": "Authoring",
+        "description": "Create pages, branches and revisions, upload files, use templates, flag a page."
+      },
+      "quality": {
+        "label": "Style and quality",
+        "description": "Check a draft against the styleguide and read a page's quality score."
+      },
+      "review": {
+        "label": "Merge requests",
+        "description": "Open, read, comment on, approve and merge merge requests."
+      },
+      "graph": {
+        "label": "Graph",
+        "description": "Relations, impact analysis, paths between entities, history and release tags."
+      },
+      "conflicts": {
+        "label": "Conflicts",
+        "description": "Contradictions between pages: list and resolve them."
+      },
+      "captures": {
+        "label": "Agent memory",
+        "description": "Propose what a session learned (decisions, notes, terms, relations) for review."
+      },
+      "qa": {
+        "label": "API tests",
+        "description": "QA suites, fixtures and runs for API operations."
+      },
+      "api-reference": {
+        "label": "API reference",
+        "description": "Operations of the API specs, and what changed between two versions."
+      },
+      "code": {
+        "label": "Code",
+        "description": "Where code is used, component pages, and the repo wiki."
+      },
+      "connectors": {
+        "label": "Connectors",
+        "description": "List and sync connectors, and hand work to a tracker."
+      },
+      "workflows": {
+        "label": "Workflows",
+        "description": "List workflows, start one on a page and follow its run."
+      },
+      "agents": {
+        "label": "Agents",
+        "description": "The workspace's agents and what they were taught."
+      },
+      "insights": {
+        "label": "Insights",
+        "description": "How often a page is read, and searches that found nothing."
+      },
+      "memos": {
+        "label": "Memos",
+        "description": "Your recordings: transcripts, summaries and proposals."
+      },
+      "sharing": {
+        "label": "Sharing and access",
+        "description": "Share links, exports, who can open a page, access requests."
+      },
+      "embeds": {
+        "label": "Design embeds",
+        "description": "Figma frames embedded in pages."
+      },
+      "chat": {
+        "label": "Chat search",
+        "description": "Search the team chats a workspace made searchable."
+      },
+      "projects": {
+        "label": "Projects",
+        "description": "Start a project from a blueprint."
+      },
+      "drafts": {
+        "label": "Shared drafts",
+        "description": "Read a page's shared draft and suggest edits into it."
+      }
     }
   },
   "editorAi": {

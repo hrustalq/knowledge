@@ -1,7 +1,7 @@
 import { HttpException } from '@nestjs/common';
 import type { McpServer, RegisteredTool } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { MCP_TOOLSETS, MCP_TOOLSET_KEYS, featureOfToolset, toolsetOf } from '@knowledge/contracts';
-import type { McpToolSummary, WorkspaceFeature } from '@knowledge/contracts';
+import type { McpConnectionInfo, McpToolSummary, WorkspaceFeature } from '@knowledge/contracts';
 import type { Principal } from '../auth/principal.js';
 import type { RecordedToolCall } from '../analytics/analytics.recorder.js';
 
@@ -265,6 +265,16 @@ export function isOffered(name: string, principal: Principal, offSections: reado
   const scope = principal.apiKey?.scope ?? 'write';
   const readOnly = !WRITE_TOOLS.has(name) && !CAPTURE_TOOLS.has(name);
   return readOnly || scope === 'write' || (scope === 'capture' && CAPTURE_TOOLS.has(name));
+}
+
+/** The toolsets `principal` is offered nothing of, and why: what the Connect page shows as off (#945). */
+export function toolsetsNotOffered(principal: Principal, offSections: readonly WorkspaceFeature[] = []): McpConnectionInfo['notOffered'] {
+  const list = principal.apiKey?.toolsets;
+  return MCP_TOOLSET_KEYS.flatMap((toolset): McpConnectionInfo['notOffered'] => {
+    const feature = featureOfToolset(toolset);
+    if (list && !list.includes(toolset)) return [{ toolset, reason: 'key-toolsets' }];
+    return feature && offSections.includes(feature) ? [{ toolset, reason: 'section-off' }] : [];
+  });
 }
 
 /** The server instructions for `principal` (the draft tools, HTTP only, are named in none of them). */

@@ -26692,6 +26692,24 @@
             }
           },
           {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "description": "Only memos of this type",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tag",
+            "required": false,
+            "in": "query",
+            "description": "Only memos carrying this tag",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "Accept-Language",
             "in": "header",
             "required": false,
@@ -26802,6 +26820,216 @@
           }
         },
         "summary": "Reserve a memo and get a presigned upload URL",
+        "tags": [
+          "memos"
+        ]
+      }
+    },
+    "/v1/memos/types": {
+      "get": {
+        "operationId": "MemosController_types",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoTypesResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The kinds of recording this workspace knows: built-in types and its own",
+        "tags": [
+          "memos"
+        ]
+      }
+    },
+    "/v1/memos/types/{key}": {
+      "put": {
+        "operationId": "MemosController_saveType",
+        "parameters": [
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveMemoTypeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoTypesResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Change a built-in memo type for this workspace, or add or change one of its own",
+        "tags": [
+          "memos"
+        ]
+      },
+      "delete": {
+        "operationId": "MemosController_removeType",
+        "parameters": [
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoTypesResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Put a built-in memo type back as shipped, or delete one of the workspace's own",
         "tags": [
           "memos"
         ]
@@ -26937,6 +27165,80 @@
         ]
       }
     },
+    "/v1/memos/{id}/confirm": {
+      "post": {
+        "operationId": "MemosController_confirm",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmMemoDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Confirm what a memo waiting for review is and where it goes; it is then analysed",
+        "tags": [
+          "memos"
+        ]
+      }
+    },
     "/v1/memos/{id}/retry": {
       "post": {
         "operationId": "MemosController_retry",
@@ -27002,6 +27304,78 @@
       }
     },
     "/v1/memos/{id}": {
+      "patch": {
+        "operationId": "MemosController_rename",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameMemoDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Rename a memo, or say what kind of recording it is",
+        "tags": [
+          "memos"
+        ]
+      },
       "delete": {
         "operationId": "MemosController_remove",
         "parameters": [
@@ -27115,6 +27489,80 @@
           }
         },
         "summary": "A memo with its transcript and summary",
+        "tags": [
+          "memos"
+        ]
+      }
+    },
+    "/v1/memos/{id}/speakers": {
+      "put": {
+        "operationId": "MemosController_matchSpeaker",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MatchMemoSpeakerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoSpeakersResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Say who one of the memo's speakers is, or that it is nobody here",
         "tags": [
           "memos"
         ]
@@ -27515,6 +27963,72 @@
           }
         },
         "summary": "The Plaud recordings my rules picked, newest first",
+        "tags": [
+          "memos"
+        ]
+      }
+    },
+    "/v1/plaud/imports/refresh": {
+      "post": {
+        "operationId": "PlaudController_refresh",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaudRefreshDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaudImportsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Look at my Plaud account now instead of waiting for the next pass; at most once in 30 seconds",
         "tags": [
           "memos"
         ]
@@ -41907,7 +42421,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.47.0",
+    "version": "0.48.0",
     "contact": {}
   },
   "tags": [],
@@ -47351,6 +47865,42 @@
           "markdown"
         ]
       },
+      "SaveMemoTypeDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true,
+            "description": "Null or empty = the built-in name; required for a type of your own"
+          },
+          "guidance": {
+            "type": "string",
+            "nullable": true,
+            "description": "How the agent treats a recording of this kind. Null or empty = the built-in guidance"
+          },
+          "hidden": {
+            "type": "boolean",
+            "description": "Hidden types are not offered; memos already of the type keep it"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Where a memo detected as this type goes; null = the project it arrived in"
+          },
+          "auto": {
+            "type": "boolean",
+            "description": "A memo detected as this type is analysed without waiting for its owner's confirm"
+          }
+        },
+        "required": [
+          "workspaceId"
+        ]
+      },
       "CreateMemoDto": {
         "type": "object",
         "properties": {
@@ -47414,6 +47964,72 @@
           "fileId"
         ]
       },
+      "ConfirmMemoDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true,
+            "description": "A memo type's key, or null for none"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The project the memo is filed into and analysed against"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "type",
+          "projectId",
+          "tags"
+        ]
+      },
+      "RenameMemoDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Shown in the list and on the memo; a Plaud memo keeps Plaud's own name as its filename"
+          },
+          "type": {
+            "type": "string",
+            "nullable": true,
+            "description": "A memo type's key from GET /v1/memos/types, or null for none"
+          },
+          "tags": {
+            "description": "Topic tags: trimmed, lower-cased, at most five kept",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "MatchMemoSpeakerDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "A speaker label exactly as the transcript has it"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "A member of the workspace, or null for nobody here"
+          }
+        },
+        "required": [
+          "label",
+          "userId"
+        ]
+      },
       "PlaudRulesDto": {
         "type": "object",
         "properties": {
@@ -47470,6 +48086,18 @@
           "rules"
         ]
       },
+      "PlaudRefreshDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "workspaceId"
+        ]
+      },
       "PlaudImportIdsDto": {
         "type": "object",
         "properties": {
@@ -47483,6 +48111,11 @@
             "items": {
               "type": "string"
             }
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Where these go instead of my settings' project; remembered for a recording that is imported later"
           }
         },
         "required": [
@@ -47501,6 +48134,11 @@
             "type": "string",
             "format": "uuid",
             "description": "One of my recordings that is waiting for a Plaud transcript"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Where these go instead of my settings' project; remembered for a recording that is imported later"
           }
         },
         "required": [
@@ -52501,6 +53139,7 @@
           "test-fixture-ranking",
           "transcription",
           "memo",
+          "memo-triage",
           "source-recipe",
           "source-judge",
           "blueprint-derive",
@@ -66328,6 +66967,28 @@
           "memo": {
             "$ref": "#/components/schemas/MemoInfo"
           },
+          "progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemoProgress"
+              }
+            ],
+            "nullable": true
+          },
+          "speakers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MemoSpeaker"
+            }
+          },
+          "triage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemoTriage"
+              }
+            ],
+            "nullable": true
+          },
           "transcript": {
             "type": "array",
             "items": {
@@ -66353,6 +67014,9 @@
         },
         "required": [
           "memo",
+          "progress",
+          "speakers",
+          "triage",
           "transcript",
           "summary",
           "proposals",
@@ -66433,6 +67097,16 @@
           "source": {
             "$ref": "#/components/schemas/MemoSource"
           },
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "createdAt": {
             "type": "string"
           },
@@ -66455,6 +67129,8 @@
           "error",
           "audioAvailable",
           "source",
+          "type",
+          "tags",
           "createdAt",
           "updatedAt"
         ]
@@ -66491,6 +67167,29 @@
           "memos",
           "transcription",
           "limits"
+        ]
+      },
+      "MemoProgress": {
+        "type": "object",
+        "properties": {
+          "step": {
+            "$ref": "#/components/schemas/MemoStep"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "waiting",
+              "running"
+            ]
+          },
+          "since": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "step",
+          "state",
+          "since"
         ]
       },
       "MemoProposal": {
@@ -66582,6 +67281,51 @@
           "plaud"
         ]
       },
+      "MemoSpeaker": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string",
+            "nullable": true
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "confirmed",
+              "remembered",
+              null
+            ],
+            "nullable": true
+          },
+          "suggestedUserId": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "label",
+          "userId",
+          "source",
+          "suggestedUserId"
+        ]
+      },
+      "MemoSpeakersResponse": {
+        "type": "object",
+        "properties": {
+          "speakers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MemoSpeaker"
+            }
+          }
+        },
+        "required": [
+          "speakers"
+        ]
+      },
       "MemoStatus": {
         "type": "string",
         "enum": [
@@ -66589,9 +67333,19 @@
           "uploaded",
           "transcribing",
           "transcribed",
+          "review",
           "analysing",
           "done",
           "failed"
+        ]
+      },
+      "MemoStep": {
+        "type": "string",
+        "enum": [
+          "upload",
+          "transcribe",
+          "analyse",
+          "publish"
         ]
       },
       "MemoTranscriptionState": {
@@ -66614,6 +67368,111 @@
         "required": [
           "enabled",
           "missing"
+        ]
+      },
+      "MemoTriage": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "projectId": {
+            "type": "string",
+            "nullable": true
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "newType": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "guidance": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "guidance"
+                ]
+              }
+            ],
+            "nullable": true
+          },
+          "speakers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "type",
+          "projectId",
+          "tags",
+          "newType"
+        ]
+      },
+      "MemoType": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "guidance": {
+            "type": "string"
+          },
+          "builtIn": {
+            "type": "boolean"
+          },
+          "overridden": {
+            "type": "boolean"
+          },
+          "hidden": {
+            "type": "boolean"
+          },
+          "projectId": {
+            "type": "string",
+            "nullable": true
+          },
+          "auto": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "guidance",
+          "builtIn",
+          "overridden",
+          "hidden",
+          "projectId",
+          "auto"
+        ]
+      },
+      "MemoTypesResponse": {
+        "type": "object",
+        "properties": {
+          "types": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MemoType"
+            }
+          }
+        },
+        "required": [
+          "types"
         ]
       },
       "MergeConflictHunk": {
@@ -67722,6 +68581,10 @@
           "status": {
             "$ref": "#/components/schemas/PlaudImportStatus"
           },
+          "projectId": {
+            "type": "string",
+            "nullable": true
+          },
           "memoId": {
             "type": "string",
             "nullable": true
@@ -67740,6 +68603,7 @@
           "startAt",
           "durationSeconds",
           "status",
+          "projectId",
           "memoId",
           "error",
           "createdAt"
@@ -67855,12 +68719,16 @@
               },
               "remainingSeconds": {
                 "type": "number"
+              },
+              "speakers": {
+                "type": "boolean"
               }
             },
             "required": [
               "enabled",
               "limitSeconds",
-              "remainingSeconds"
+              "remainingSeconds",
+              "speakers"
             ]
           }
         },

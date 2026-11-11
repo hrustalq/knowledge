@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ConflictException, NotFoundException, PayloadTooLargeException, ServiceUnavailableException } from '@nestjs/common';
-import { memoExtensionFor } from '@knowledge/contracts';
+import { memoExtensionFor, memoProgressFor } from '@knowledge/contracts';
 import { MemosService, transcriptionState } from '../src/memos/memos.service.js';
 import type { Principal } from '../src/auth/principal.js';
-import { stitchTranscript } from '../src/memos/transcript.js';
+import { scribeSegments, stitchTranscript } from '../src/memos/transcript.js';
 import { fixedCuts, parsePauses, pauseCuts } from '../src/memos/audio.js';
 import { MemoRetentionSweeper } from '../src/memos/memo-retention.sweeper.js';
 
@@ -62,6 +62,27 @@ describe('memo chunk cuts (#584)', () => {
   });
 });
 
+describe('memoProgressFor (#876)', () => {
+  const at = '2026-11-10T10:00:00.000Z';
+  const run = (status: string) => ({ status, createdAt: '2026-11-10T10:01:00.000Z', startedAt: status === 'pending' ? null : '2026-11-10T10:02:00.000Z', finishedAt: status === 'succeeded' ? '2026-11-10T10:03:00.000Z' : null });
+  const of = (status: string, r: ReturnType<typeof run> | null = null) => memoProgressFor({ status: status as never, updatedAt: at }, r);
+
+  it('names the step and whether anything has picked it up', () => {
+    expect(of('uploaded')).toEqual({ step: 'transcribe', state: 'waiting', since: at });
+    expect(of('transcribing')?.state).toBe('running');
+    // A Plaud memo arrives here: a transcript, and no run yet.
+    expect(of('transcribed')).toEqual({ step: 'analyse', state: 'waiting', since: at });
+    expect(of('analysing', run('pending'))).toEqual({ step: 'analyse', state: 'waiting', since: '2026-11-10T10:01:00.000Z' });
+    expect(of('analysing', run('running'))).toEqual({ step: 'analyse', state: 'running', since: '2026-11-10T10:02:00.000Z' });
+  });
+
+  it('says a finished run is waiting for its merge requests, and nothing once the memo has settled', () => {
+    expect(of('analysing', run('succeeded'))).toEqual({ step: 'publish', state: 'waiting', since: '2026-11-10T10:03:00.000Z' });
+    expect(of('done', run('succeeded'))).toBeNull();
+    expect(of('failed')).toBeNull();
+  });
+});
+
 describe('MemosService', () => {
   const env: Record<string, unknown> = {
     MEMO_MAX_BYTES: 1000,
@@ -87,6 +108,25 @@ describe('MemosService', () => {
 
     await memos.get({ userId: 'admin', isAdmin: true } as Principal, 'm1').catch(() => undefined);
     expect(prisma.memo.findFirst).toHaveBeenLastCalledWith({ where: { id: 'm1' } });
+  });
+
+  it('renames a memo for its uploader only (#875)', async () => {
+    const { prisma, memos } = service();
+    const update = vi.fn();
+    Object.assign(prisma.memo, { update });
+    await expect(memos.update(member, 'm1', { title: 'Retro' })).rejects.toBeInstanceOf(NotFoundException);
+    expect(prisma.memo.findFirst).toHaveBeenCalledWith({ where: { id: 'm1', createdBy: 'u1' } });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('keeps a built-in type’s row sparse: text sent back as shipped is stored as inherit (#879)', async () => {
+    const { prisma, memos } = service();
+    const upsert = vi.fn();
+    Object.assign(prisma, { memoType: { findUnique: vi.fn().mockResolvedValue(null), upsert, findMany: vi.fn().mockResolvedValue([]) } });
+    const shipped = (await memos.types('ws')).find((x) => x.key === 'daily')!;
+    await memos.saveType(member, 'ws', 'daily', { name: shipped.name, guidance: shipped.guidance, hidden: true });
+    expect(upsert.mock.calls[0]![0].update).toEqual({ name: null, guidance: null, hidden: true });
+    await expect(memos.saveType(member, 'ws', 'customer-call', { guidance: 'x' })).rejects.toThrow();
   });
 
   it('refuses to reserve when this server cannot transcribe, naming what to set', async () => {
@@ -150,6 +190,43 @@ describe('stitchTranscript', () => {
       'the key is [SECRET_1]',
       'and cc [EMAIL_1] again',
     ]);
+  });
+});
+
+describe('speakers from a Scribe answer (#878)', () => {
+  // The shape gen-api's `speech-to-text` returned on a real call: words and the spacing between them.
+  const say = (speaker: string, at: number, text: string) =>
+    text.split(' ').flatMap((word, i) => [
+      ...(i ? [{ text: ' ', start: at + i * 0.4 - 0.1, end: at + i * 0.4, type: 'spacing', speaker_id: speaker }] : []),
+      { text: word, start: at + i * 0.4, end: at + i * 0.4 + 0.3, type: 'word', speaker_id: speaker },
+    ]);
+
+  it('starts a segment when the voice changes or after a long pause, and drops what is not speech', () => {
+    const segments = scribeSegments([
+      ...say('speaker_0', 0, 'Where are we on billing?'),
+      { text: '(laughter)', start: 2.2, end: 2.6, type: 'audio_event', speaker_id: 'speaker_0' },
+      ...say('speaker_1', 3, 'Next Tuesday.'),
+      ...say('speaker_1', 9, 'And the old queue stays.'),
+    ]);
+    expect(segments.map((s) => [s.speaker, s.text.trim()])).toEqual([
+      ['speaker_0', 'Where are we on billing?'],
+      ['speaker_1', 'Next Tuesday.'],
+      ['speaker_1', 'And the old queue stays.'],
+    ]);
+    expect(segments[0]!.start).toBe(0);
+    expect(segments[0]!.end).toBeCloseTo(1.9);
+  });
+
+  it('numbers voices across the recording, never reusing a number for a later chunk, and leaves a Plaud name alone', () => {
+    const chunk = (offset: number, ids: string[]) => ({
+      offset, duration: 10, language: null, text: '', anonymousSpeakers: true,
+      segments: ids.map((speaker, i) => ({ start: i, end: i + 1, text: `line ${i}`, speaker })),
+    });
+    const { segments } = stitchTranscript([chunk(0, ['speaker_0', 'speaker_1', 'speaker_0']), chunk(3600, ['speaker_0'])], (n) => `Voice ${n}`);
+    expect(segments.map((s) => s.speaker)).toEqual(['Voice 1', 'Voice 2', 'Voice 1', 'Voice 3']);
+
+    const named = stitchTranscript([{ offset: 0, duration: 5, language: null, text: '', segments: [{ start: 0, end: 1, text: 'hi', speaker: 'Eldar' }] }]);
+    expect(named.segments[0]!.speaker).toBe('Eldar');
   });
 });
 

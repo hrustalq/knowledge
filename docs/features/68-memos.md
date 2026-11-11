@@ -203,9 +203,11 @@ REST, each route `@Access` + `@Returns`:
 | `GET /v1/memos?workspaceId&projectId` | viewer | my memos, no transcript; `transcription: { enabled, missing }`, `limits` |
 | `POST /v1/memos`                      | editor | reserve: row + presigned PUT; 503 `transcription-disabled` when off       |
 | `POST /v1/memos/:id/finalize`         | editor | size re-read from the bucket, transcription queued                       |
-| `GET /v1/memos/:id`                   | viewer | memo, transcript, summary, proposals with merge requests, dropped        |
+| `GET /v1/memos/:id`                   | viewer | memo, `progress` (#876), transcript, summary, proposals, dropped         |
 | `GET /v1/memos/:id/audio`             | viewer | 302 to a presigned GET (session cookie, `<audio>` sends no header)        |
 | `POST /v1/memos/:id/retry`            | editor | resume a failed memo                                                     |
+| `PATCH /v1/memos/:id`                 | editor | `{ title }`: rename (#875)                                               |
+| `PUT /v1/memos/:id/speakers`          | editor | `{ label, userId \| null }`: who a speaker is (#880)                      |
 | `DELETE /v1/memos/:id`                | editor | purge audio + row                                                        |
 
 MCP: `knowledge_list_memos` (`guard.ws`, viewer) and `knowledge_get_memo` (`guard.memo`, viewer; the memo
@@ -270,3 +272,121 @@ Web (`/memos` after Captures in the sidebar; design brief on #551):
   - a real model running the secretary (only the paid gen-api was configured locally);
   - the >10-minute multi-chunk path end to end;
   - a second, non-admin member getting 404s (dev mode is a platform admin).
+
+## Progress on the memo page (#876)
+
+`GET /v1/memos/:id` answers `progress: { step, state, since } | null`, where `step` is one of `MEMO_STEPS`
+(`upload`, `transcribe`, `analyse`, `publish`) and `state` is `waiting` or `running`. It is derived on read by
+`memoProgressFor` (`@knowledge/contracts`) from the memo's status and its secretary run's status and timestamps,
+and is never stored. A run that has ended on a memo still `analysing` reads as `publish` / `waiting`: the
+`MemoPublishSweeper` has not opened its merge requests yet. It is null once the memo is `done` or `failed`.
+
+The page draws the steps in its rail: the ones behind, the current one with what is happening and since when,
+the ones ahead. A step nothing has picked up for five minutes says so. A Plaud memo shows no upload step, and a
+transcription step only when its owner chose "Transcribe here".
+
+## Speakers on what this server transcribes (#878)
+
+`TRANSCRIPTION_SPEAKERS=true` with `TRANSCRIPTION_PROVIDER=gen-api` moves transcription from gen-api's `gen-stt`
+to its `speech-to-text` network (ElevenLabs Scribe, `model: v2`, `diarize: true`, `tag_audio_events: false`). It
+is the only gen-api speech network with speaker labels. `openai-compatible` does not read the setting: no
+OpenAI-compatible server we know of serves a diarized format that holds across requests.
+
+What was measured on one real call (17 s, two voices, 2026-11-11): the answer is synchronous,
+`response.words[]` carries `text`, `start`, `end`, `type` (`word` or `spacing`) and `speaker_id` (`speaker_0`,
+…), `response.language_code` is ISO 639-3 (`eng`), and `cost` is a number. Not documented and not measured: the
+network's size and duration limits, and what `cost` is per minute (that call was billed 2).
+
+- `scribeSegments` (`transcript.ts`) turns words into segments: a new one when the voice changes, after a pause
+  of two seconds, or at a sentence end once a segment has run twenty seconds.
+- A voice id means something only inside one request, so the recording is sent whole up to
+  `SPEAKER_CHUNK_SECONDS` (one hour, about 14 MiB of 32 kbit/s mp3) and cut hourly beyond that.
+- `stitchTranscript` numbers the voices (`Speaker 1`, in the memo's language) and masks the label like any
+  text. Numbers are never reused across pieces: a person who speaks in both hours of a two-hour recording gets
+  two numbers. Matching voices across an overlap is the upgrade, marked `ponytail:` in the code; matching a
+  voice to a person is #880.
+- Usage is still one `transcription` row per attempt, with model `speech-to-text`.
+- `GET /v1/plaud/settings` says `transcribe.speakers`, so the "Transcribe here" dialog tells the truth about
+  what the transcript will have.
+
+## Who the speakers are (#880)
+
+`memos.speakers` is `{ "<speaker label>": userId | null }`, written only by the memo's uploader through
+`PUT /v1/memos/:id/speakers`. The label must be one the transcript uses and the person a member of the memo's
+workspace; anything else is a 400. `null` means "nobody here" and also silences a remembered match.
+
+`GET /v1/memos/:id` answers `speakers: [{ label, userId, source, suggestedUserId }]`, resolved on read by
+`resolveSpeakers` (`memos/speakers.ts`, pure):
+
+- `confirmed`: chosen on this memo.
+- `remembered`: the same label in the uploader's newest earlier memo of the same project that has a choice for
+  it. Derived from those memos, never stored again, so deleting them forgets it.
+- otherwise no match, and `suggestedUserId` is a guess from the label: the one member whose name is the label,
+  or whose first name is and nobody else's. A guess is shown as one and used for nothing until confirmed.
+- A voice this server numbered (`Speaker 1`, `Участник 1`) is neither remembered nor guessed: it is someone
+  else in the next recording. It can still be matched on its own memo.
+- A user who is no longer a member is dropped wherever they came from.
+
+The secretary is told only matches that hold when its run starts, as `"<label>" is "<display name>"`, outside
+the untrusted wrapper: it is the uploader's statement about workspace members. Its contract changed from "never
+name who said what" to naming only an identified speaker, and only where a decision or an action is theirs. A
+match made after the run changes the page, not the proposals already written.
+
+A memo stays private to its uploader: a matched person gains no access to it and is not notified.
+
+Not built: a model's suggestion from what is said ("thanks, Anna"). Suggestions come from the label only.
+
+## Memo types (#879, phase 1)
+
+A memo has a `type`: a key from the workspace's catalogue, or null. Built-in types are code
+(`BUILT_IN_MEMO_TYPE_KEYS` in contracts: `daily`, `retro`, `sprint-planning`, `task-planning`; their names and
+guidance in `memos/memo-types.ts`). A workspace's `memo_types` rows are a sparse override: a row renames a
+built-in, replaces its guidance, hides it, or adds a type of the workspace's own. An empty table is exactly the
+built-in catalogue, and text saved back as shipped is stored as null, so a row follows later changes to the
+built-in.
+
+| Route                               | Role   |                                                                  |
+| ----------------------------------- | ------ | ---------------------------------------------------------------- |
+| `GET /v1/memos/types?workspaceId=`  | viewer | the catalogue, hidden types included                             |
+| `PUT /v1/memos/types/:key`          | admin  | `{ workspaceId, name?, guidance?, hidden? }`                     |
+| `DELETE /v1/memos/types/:key`       | admin  | a built-in back as shipped, or a workspace's own type removed    |
+| `PATCH /v1/memos/:id`               | editor | `{ type }`: a key the workspace offers, or null                  |
+| `GET /v1/memos?type=`               | viewer | only memos of that type                                          |
+
+Guidance is **trusted text**: `memoTypeBrief` appends it to the secretary's system instructions for a memo of
+that type. That is why writing a type is an admin's act, like an agent's own instructions. It steers what the
+proposals look like and nothing else: which pages a memo may update is still decided by `readMemoProposals`.
+A hidden type is not offered, and a memo that already has it keeps it; a deleted type's key on a memo reads as
+no type.
+
+Phase 1 sets the type by hand. Detecting it, routing by it and tags are phases 2 and 3 of #879.
+
+## Triage (#879, phase 2)
+
+With `MEMO_TRIAGE_ENABLED=true` a memo is sorted before it is analysed. The status lifecycle gains one state:
+`… → transcribed → (review) → analysing → done`.
+
+- The worker stops at `transcribed` (after its own transcription, and for a Plaud memo that arrives with a
+  transcript) while `memos.triage` is null.
+- `MemoTriageSweeper` (API-only, in `MemosModule`, `Ticker` + `exclusive`, 10 s) claims such a memo by stamping
+  `triaged_at` (a five-minute lease) and asks once: `triageMessages` shows the workspace's offered types, the
+  projects **the uploader may file into now** (read under their own scope, which is why this runs API-side), and
+  the head and tail of the transcript wrapped untrusted. It runs on the secretary's model configuration and is
+  one `memo-triage` usage row.
+- `readTriage` keeps a type or a project only if it was on the list it was shown, and at most five cleaned tags.
+  A `newType` (a name and two sentences of guidance) is kept only when no listed type fit; it does nothing by
+  itself.
+- `triageApplies`: the suggestion is applied without asking **only** for a type whose row has `auto`. Then the
+  memo takes the type, the type's `project_id` when the uploader may file there (otherwise it stays where it
+  arrived), and the tags, and is queued for the secretary. Any other memo moves to `review` with the suggestion
+  stored and nothing applied.
+- `POST /v1/memos/:id/confirm { type, projectId, tags }` is the owner's answer: checked like any memo
+  (`projectFor`, a type the workspace offers), guarded on `review`, then queued.
+- **Fail-open.** No model, no budget, a refused call, an unreadable answer or an uploader who is no longer an
+  editor all send the memo on unsorted (`triage` stored as empty), because a memo stuck behind a sorting step is
+  worse than an unsorted one.
+
+`memo_types.project_id` and `memo_types.auto` are an admin's to set, in the same editor as the guidance.
+`memos.tags` is a string array; `PATCH /v1/memos/:id { tags }` edits it. With the setting off none of this runs
+and a memo goes straight to analysis, as before.
+

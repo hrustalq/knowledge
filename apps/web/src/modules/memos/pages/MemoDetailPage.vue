@@ -20,16 +20,24 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
-import { ArrowLeft, FilePlus2, FilePen, GitPullRequestArrow, Lock, RotateCcw, Trash2 } from 'lucide-vue-next'
-import { memoClock, type MemoDetailResponse, type MemoProposal } from '@knowledge/contracts'
+import { useNow } from '@vueuse/core'
+import { Check, Circle, FilePlus2, FilePen, GitPullRequestArrow, Loader2, Lock, RotateCcw } from 'lucide-vue-next'
+import { MEMO_STEPS, memoClock, type MemoDetailResponse, type MemoProposal, type MemoSpeaker } from '@knowledge/contracts'
 import { request } from '@/shared/api/client'
 import { errorMessage } from '@/shared/api/errors'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { Button } from '@/shared/ui/button'
-import { confirm } from '@/shared/ui/confirm'
-import { apiUrl } from '@/shared/api/api'
-import { formatDateTime, formatDuration } from '@/shared/utils/format'
+import { formatDateTime, formatDuration, formatRelative } from '@/shared/utils/format'
 import { PageLayout, PageState } from '@/shared/layout'
+import { UserAvatar, useMembers } from '@/entities/person'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
+import { Input } from '@/shared/ui/input'
+import { Label } from '@/shared/ui/label'
+import { useAuthStore } from '@/stores/auth'
+import { useProjectsStore } from '@/stores/projects'
+import MemoActions from '@/modules/memos/components/MemoActions.vue'
+import { useMemoTypes } from '@/modules/memos/model/memo-types'
+import { apiUrl, getWorkspaceId } from '@/shared/api/api'
 import { MEMO_STATUS_CLASS, MEMO_STATUS_ICON, isMemoInFlight, segmentAt } from '@/modules/memos/model/memo-ui'
 
 const { t } = useI18n()
@@ -48,6 +56,27 @@ const memoQuery = useQuery(
 const data = computed(() => memoQuery.data.value as MemoDetailResponse | undefined)
 const memo = computed(() => data.value?.memo)
 const transcript = computed(() => data.value?.transcript ?? [])
+
+/**
+ * Where the memo is on its way (#876): the steps behind it, the one it is in
+ * and the ones ahead. A Plaud memo never uploads, and is transcribed here
+ * only when its owner asked for that.
+ */
+const SLOW_MS = 5 * 60_000
+const now = useNow({ interval: 30_000 })
+const steps = computed(() => {
+  const progress = data.value?.progress
+  if (!progress || !memo.value) return []
+  const plaud = memo.value.source === 'plaud'
+  const shown = MEMO_STEPS.filter((s) => !plaud || (s !== 'upload' && (s !== 'transcribe' || progress.step === 'transcribe')))
+  const at = shown.indexOf(progress.step)
+  return shown.map((step, i) => ({ step, at: i < at ? ('done' as const) : i === at ? ('current' as const) : ('ahead' as const) }))
+})
+/** Nothing has picked the step up for a while: said plainly, since the page cannot fix it. */
+const slow = computed(() => {
+  const progress = data.value?.progress
+  return Boolean(progress && progress.state === 'waiting' && now.value.getTime() - new Date(progress.since).getTime() > SLOW_MS)
+})
 
 const player = ref<HTMLAudioElement | null>(null)
 const lines = ref<HTMLElement | null>(null)
@@ -122,21 +151,84 @@ async function act(run: () => Promise<unknown>) {
   }
 }
 
-const retry = () => act(() => request('post', '/v1/memos/{id}/retry', { path: { id: id.value } }))
-
-async function remove() {
-  const ok = await confirm({
-    title: t('memos.detail.deleteTitle'),
-    description: t('memos.detail.deleteBody'),
-    action: t('memos.detail.delete'),
-    destructive: true,
-  })
-  if (!ok) return
-  await act(async () => {
-    await request('delete', '/v1/memos/{id}', { path: { id: id.value } })
-    await router.push('/memos')
-  })
+/**
+ * Who is speaking (#880). A match that holds replaces the label in the
+ * transcript; a guess from the label is offered beside it and counts for
+ * nothing until it is confirmed.
+ */
+const NOBODY = 'nobody'
+const { members, memberOf, nameOf } = useMembers()
+const speakers = computed(() => data.value?.speakers ?? [])
+const speakerOf = computed(() => new Map(speakers.value.map((s) => [s.label, s])))
+const speakerName = (label: string) => {
+  const userId = speakerOf.value.get(label)?.userId
+  return userId ? nameOf(userId) : label
 }
+const matchSpeaker = (speaker: MemoSpeaker, userId: string | null) =>
+  act(() => request('put', '/v1/memos/{id}/speakers', { path: { id: id.value }, body: { label: speaker.label, userId } }))
+
+/** What kind of recording this is (#879). A type the workspace has since hidden stays shown on the memo that has it. */
+const NO_TYPE = 'none'
+const { types, offered, nameOf: typeName } = useMemoTypes(getWorkspaceId())
+const typeChoices = computed(() => types.value.filter((type) => !type.hidden || type.key === memo.value?.type))
+const setType = (key: string) =>
+  act(() => request('patch', '/v1/memos/{id}', { path: { id: id.value }, body: { type: key === NO_TYPE ? null : key } }))
+
+/**
+ * A memo waiting for its owner (#879): what triage suggested, theirs to
+ * change, then on to the agent. The form starts from the suggestion once and
+ * is the person's from then on.
+ */
+const projects = useProjectsStore()
+const review = ref<{ type: string; projectId: string; tags: string } | null>(null)
+watch(
+  () => (memo.value?.status === 'review' ? memo.value.memoId : null),
+  (waiting) => {
+    const m = memo.value
+    review.value =
+      waiting && m
+        ? {
+            type: data.value?.triage?.type ?? m.type ?? NO_TYPE,
+            projectId: data.value?.triage?.projectId ?? m.projectId,
+            tags: (data.value?.triage?.tags ?? m.tags).join(', '),
+          }
+        : null
+  },
+  { immediate: true },
+)
+/**
+ * An admin can take the type triage proposed in one press: it becomes a type
+ * of the workspace's own and this memo's choice. Its guidance is the model's
+ * words, shown first and theirs to rewrite afterwards under Memo types.
+ */
+const auth = useAuthStore()
+const adoptType = () =>
+  act(async () => {
+    const proposed = data.value?.triage?.newType
+    if (!proposed || !review.value) return
+    const key = proposed.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40)
+    if (!key) throw new Error(t('memos.types.keyTaken'))
+    await request('put', '/v1/memos/types/{key}', {
+      path: { key },
+      body: { workspaceId: getWorkspaceId(), name: proposed.name, guidance: proposed.guidance },
+    })
+    await queryClient.invalidateQueries({ queryKey: ['/v1/memos/types'] })
+    review.value.type = key
+  })
+
+const confirmReview = () =>
+  act(() =>
+    request('post', '/v1/memos/{id}/confirm', {
+      path: { id: id.value },
+      body: {
+        type: review.value!.type === NO_TYPE ? null : review.value!.type,
+        projectId: review.value!.projectId,
+        tags: review.value!.tags.split(',').map((tag) => tag.trim()).filter(Boolean),
+      },
+    }),
+  )
+
+const retry = () => act(() => request('post', '/v1/memos/{id}/retry', { path: { id: id.value } }))
 </script>
 
 <template>
@@ -159,18 +251,21 @@ async function remove() {
       <Button v-if="memo.status === 'failed'" size="sm" :disabled="acting" @click="retry">
         <RotateCcw class="size-4" aria-hidden="true" />{{ t('memos.detail.retry') }}
       </Button>
-      <Button size="sm" variant="ghost" :disabled="acting" @click="remove">
-        <Trash2 class="size-4" aria-hidden="true" />{{ t('memos.detail.delete') }}
-      </Button>
+      <MemoActions :memo-id="memo.memoId" :title="memo.title" :tags="memo.tags" @deleted="router.push('/memos')" />
     </template>
     <template #meta>
       <p class="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-      <RouterLink to="/memos" class="text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
-        <ArrowLeft class="size-3.5" aria-hidden="true" />{{ t('memos.detail.back') }}
-      </RouterLink>
       <span class="text-muted-foreground">{{ formatDateTime(memo.createdAt) }}</span>
       <span v-if="memo.durationSeconds" class="text-muted-foreground tabular-nums">{{ formatDuration(memo.durationSeconds * 1000) }}</span>
       <span class="text-muted-foreground inline-flex items-center gap-1"><Lock class="size-3" aria-hidden="true" />{{ t('memos.detail.private') }}</span>
+      <span v-if="memo.tags.length" class="text-muted-foreground">{{ memo.tags.map((tag) => `#${tag}`).join(' ') }}</span>
+      <Select v-if="offered.length && memo.status !== 'review'" :model-value="memo.type ?? NO_TYPE" :disabled="acting" @update:model-value="setType(String($event))">
+        <SelectTrigger size="sm" class="h-7 py-0 data-[size=sm]:h-7" :aria-label="t('memos.types.ofMemo')"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem :value="NO_TYPE">{{ t('memos.types.none') }}</SelectItem>
+          <SelectItem v-for="type in typeChoices" :key="type.key" :value="type.key">{{ typeName(type) }}</SelectItem>
+        </SelectContent>
+      </Select>
       </p>
     </template>
 
@@ -197,8 +292,8 @@ async function remove() {
               class="pt-0.5 font-mono text-xs tabular-nums"
               :class="playing === s.i ? 'text-primary font-semibold' : 'text-muted-foreground group-hover:text-foreground'"
             >{{ memoClock(s.start) }}</span>
-            <span class="kn-measure text-[0.95rem] leading-relaxed" :class="playing === s.i ? 'text-foreground' : ''">
-              <span v-if="s.speaker" class="font-medium">{{ s.speaker }}: </span>{{ s.text }}
+            <span class="leading-relaxed" :class="playing === s.i ? 'text-foreground' : ''">
+              <span v-if="s.speaker" class="font-medium">{{ speakerName(s.speaker) }}: </span>{{ s.text }}
             </span>
           </button>
         </li>
@@ -226,13 +321,102 @@ async function remove() {
           <p v-if="memo.language" class="text-muted-foreground text-xs">{{ t('memos.detail.language', { language: memo.language }) }}</p>
         </div>
 
-        <p v-if="isMemoInFlight(memo.status)" role="status" class="text-muted-foreground text-sm">
-          {{ t(`memos.detail.inFlight.${memo.status}`) }}
-        </p>
+        <section v-if="review" class="bg-card space-y-3 rounded-lg border p-3" :aria-label="t('memos.review.title')">
+          <div>
+            <h2 class="font-display text-base font-semibold">{{ t('memos.review.title') }}</h2>
+            <p class="text-muted-foreground text-sm">{{ t(data.triage ? 'memos.review.suggested' : 'memos.review.plain') }}</p>
+          </div>
+          <div class="space-y-1.5">
+            <Label for="review-type">{{ t('memos.review.type') }}</Label>
+            <Select v-model="review.type">
+              <SelectTrigger id="review-type" size="sm" class="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem :value="NO_TYPE">{{ t('memos.types.none') }}</SelectItem>
+                <SelectItem v-for="type in offered" :key="type.key" :value="type.key">{{ typeName(type) }}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div class="space-y-1.5">
+            <Label for="review-project">{{ t('memos.review.project') }}</Label>
+            <Select v-model="review.projectId">
+              <SelectTrigger id="review-project" size="sm" class="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="p in projects.items" :key="p.projectId" :value="p.projectId">{{ p.name }}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div class="space-y-1.5">
+            <Label for="review-tags">{{ t('memos.review.tags') }}</Label>
+            <Input id="review-tags" v-model="review.tags" autocomplete="off" />
+            <p class="text-muted-foreground text-xs">{{ t('memos.review.tagsHint') }}</p>
+          </div>
+          <div v-if="data.triage?.newType && review.type === NO_TYPE" class="text-muted-foreground space-y-1.5 text-xs">
+            <p>{{ t('memos.review.newType', { name: data.triage.newType.name }) }}</p>
+            <template v-if="auth.canAdminWorkspace">
+              <p class="italic">{{ data.triage.newType.guidance }}</p>
+              <Button size="xs" variant="outline" :disabled="acting" @click="adoptType">{{ t('memos.review.adoptType') }}</Button>
+            </template>
+          </div>
+          <Button size="sm" :disabled="acting" @click="confirmReview">{{ t('memos.review.confirm') }}</Button>
+        </section>
+
+        <section v-if="data.progress" role="status" :aria-label="t('memos.detail.progress.title')">
+          <ol class="space-y-2 text-sm">
+            <li v-for="s in steps" :key="s.step" class="flex items-start gap-2.5" :aria-current="s.at === 'current' ? 'step' : undefined">
+              <Check v-if="s.at === 'done'" class="text-muted-foreground mt-0.5 size-4 shrink-0" aria-hidden="true" />
+              <Loader2 v-else-if="s.at === 'current' && data.progress.state === 'running'" class="text-primary mt-0.5 size-4 shrink-0 motion-safe:animate-spin" aria-hidden="true" />
+              <Circle v-else class="mt-0.5 size-4 shrink-0" :class="s.at === 'current' ? 'text-primary' : 'text-muted-foreground/50'" aria-hidden="true" />
+              <div class="min-w-0">
+                <p :class="s.at === 'current' ? 'font-medium' : 'text-muted-foreground'">{{ t(`memos.detail.step.${s.step}`) }}</p>
+                <template v-if="s.at === 'current'">
+                  <p class="text-muted-foreground">{{ t(`memos.detail.progress.${s.step}.${data.progress.state}`) }}</p>
+                  <p class="text-muted-foreground text-xs" :title="formatDateTime(data.progress.since)">
+                    {{ t('memos.detail.progress.since', { when: formatRelative(data.progress.since) }) }}<template v-if="slow"> · {{ t('memos.detail.progress.slow') }}</template>
+                  </p>
+                </template>
+              </div>
+            </li>
+          </ol>
+        </section>
         <div v-else-if="memo.status === 'failed'" role="alert" class="border-destructive/40 rounded-md border px-3 py-2 text-sm">
           <p class="text-destructive font-medium">{{ t('memos.detail.failed', { stage: t(`memos.detail.stage.${memo.stage ?? 'transcribing'}`) }) }}</p>
           <p v-if="memo.error" class="text-muted-foreground mt-1">{{ memo.error }}</p>
         </div>
+
+        <section v-if="speakers.length" class="space-y-2">
+          <h2 class="font-display text-base font-semibold">{{ t('memos.detail.speakers.title') }}</h2>
+          <ul class="space-y-2">
+            <li v-for="s in speakers" :key="s.label" class="space-y-1">
+              <div class="flex items-center gap-2">
+                <UserAvatar
+                  v-if="s.userId"
+                  :user-id="s.userId"
+                  :name="nameOf(s.userId)"
+                  :src="memberOf(s.userId)?.avatarUrl"
+                  size="sm"
+                />
+                <span class="min-w-0 flex-1 truncate text-sm" :title="s.label">{{ s.label }}</span>
+                <Select :model-value="s.userId ?? NOBODY" :disabled="acting" @update:model-value="matchSpeaker(s, $event === NOBODY ? null : String($event))">
+                  <SelectTrigger size="sm" class="w-44" :aria-label="t('memos.detail.speakers.who', { label: s.label })">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem :value="NOBODY">{{ t('memos.detail.speakers.nobody') }}</SelectItem>
+                    <SelectItem v-for="m in members" :key="m.userId" :value="m.userId">{{ m.displayName }}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <p v-if="s.source === 'remembered'" class="text-muted-foreground text-xs">{{ t('memos.detail.speakers.remembered') }}</p>
+              <p v-else-if="s.suggestedUserId" class="text-muted-foreground flex flex-wrap items-center gap-x-2 text-xs">
+                {{ t('memos.detail.speakers.suggested', { name: nameOf(s.suggestedUserId) }) }}
+                <Button size="xs" variant="outline" :disabled="acting" @click="matchSpeaker(s, s.suggestedUserId)">
+                  {{ t('memos.detail.speakers.confirm') }}
+                </Button>
+              </p>
+            </li>
+          </ul>
+          <p class="text-muted-foreground text-xs">{{ t('memos.detail.speakers.hint') }}</p>
+        </section>
 
         <section v-if="data.summary" class="space-y-1.5">
           <h2 class="font-display text-base font-semibold">{{ t('memos.detail.summary') }}</h2>

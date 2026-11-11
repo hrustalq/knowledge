@@ -10,21 +10,25 @@
  * recording Plaud has not transcribed) an explicit "transcribe here", whose
  * dialog says what it spends before it spends it.
  */
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
+import { useDocumentVisibility } from '@vueuse/core'
 import { toast } from 'vue-sonner'
-import { AudioLines, ChevronRight, Hourglass, SlidersHorizontal, TriangleAlert } from 'lucide-vue-next'
+import { AudioLines, ChevronRight, Hourglass, MoreVertical, RefreshCw, SlidersHorizontal, TriangleAlert } from 'lucide-vue-next'
 import type { PlaudImportEntry, PlaudImportsResponse, PlaudLinkResponse, PlaudSettingsResponse } from '@knowledge/contracts'
 import { openOauthTab } from '@/entities/connector'
 import { api, request } from '@/shared/api/client'
 import { errorMessage } from '@/shared/api/errors'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { formatDateTime, formatDuration } from '@/shared/utils/format'
+import { useProjectsStore } from '@/stores/projects'
 import { Button } from '@/shared/ui/button'
 import { Checkbox } from '@/shared/ui/checkbox'
 import { Collapse } from '@/shared/ui/collapse'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/shared/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import PlaudRulesDialog from './PlaudRulesDialog.vue'
 import { groupPlaudImports } from '../model/plaud-ui'
 
@@ -56,6 +60,20 @@ const chosen = computed(() => {
   return ticked.length ? ticked : queue.value.ready
 })
 const allTicked = computed(() => queue.value.ready.length > 0 && queue.value.ready.every((r) => selected.value.has(r.id)))
+
+/**
+ * Where each recording goes (#877): the person's pick here, else what the row
+ * already remembers, else the settings' project. Always sent with a yes, so a
+ * recording confirmed ahead keeps the project it was confirmed for.
+ */
+const projects = useProjectsStore()
+const picked = ref(new Map<string, string>())
+const projectOf = (row: PlaudImportEntry) => picked.value.get(row.id) ?? row.projectId ?? settings.value?.projectId ?? undefined
+function pick(rows: readonly PlaudImportEntry[], projectId: string) {
+  const next = new Map(picked.value)
+  for (const row of rows) next.set(row.id, projectId)
+  picked.value = next
+}
 
 function refresh() {
   return Promise.all([
@@ -92,8 +110,17 @@ async function act(action: 'confirm' | 'skip', rows: readonly PlaudImportEntry[]
   if (!rows.length || acting.value) return
   acting.value = true
   try {
-    const res = await request('post', `/v1/plaud/imports/${action}`, { body: { workspaceId: props.workspaceId, ids: rows.map((r) => r.id) } })
-    const done = (res as PlaudImportsResponse).imports
+    // One call per destination: a yes carries one project.
+    const groups = new Map<string | undefined, string[]>()
+    for (const row of rows) {
+      const key = action === 'confirm' ? projectOf(row) : undefined
+      groups.set(key, [...(groups.get(key) ?? []), row.id])
+    }
+    const done: PlaudImportEntry[] = []
+    for (const [projectId, ids] of groups) {
+      const res = await request('post', `/v1/plaud/imports/${action}`, { body: { workspaceId: props.workspaceId, ids, ...(projectId ? { projectId } : {}) } })
+      done.push(...(res as PlaudImportsResponse).imports)
+    }
     const failed = done.filter((r) => r.status === 'failed')
     // A refused import says why on its own row; the toast only points there.
     if (failed.length) toast.error(t('memos.plaud.toast.failed', failed.length))
@@ -112,6 +139,33 @@ async function act(action: 'confirm' | 'skip', rows: readonly PlaudImportEntry[]
   }
 }
 
+/**
+ * Looks at Plaud now (#873) rather than at the sweeper's next turn, which can
+ * be ten minutes off. Asked for by the button, and quietly whenever the
+ * person comes (back) to a page with recordings still waiting: that is the
+ * moment they have just generated a transcript in the Plaud app. The server
+ * answers the list as it stands when asked twice within its floor.
+ */
+const checking = ref(false)
+async function checkNow(quiet = false) {
+  if (checking.value) return
+  checking.value = true
+  try {
+    await request('post', '/v1/plaud/imports/refresh', { body: { workspaceId: props.workspaceId } })
+    await refresh()
+  } catch (e) {
+    if (!quiet) toast.error(errorMessage(e, t))
+  } finally {
+    checking.value = false
+  }
+}
+const visibility = useDocumentVisibility()
+watch(
+  () => visibility.value === 'visible' && queue.value.waiting.length > 0,
+  (due) => due && void checkNow(true),
+  { immediate: true },
+)
+
 const minutes = (seconds: number) => Math.max(1, Math.round(seconds / 60))
 const overAllowance = computed(() =>
   Boolean(toTranscribe.value && settings.value && toTranscribe.value.durationSeconds > settings.value.transcribe.remainingSeconds),
@@ -122,7 +176,7 @@ async function transcribe() {
   if (!row || acting.value) return
   acting.value = true
   try {
-    await request('post', '/v1/plaud/imports/transcribe', { body: { workspaceId: props.workspaceId, id: row.id } })
+    await request('post', '/v1/plaud/imports/transcribe', { body: { workspaceId: props.workspaceId, id: row.id, ...(projectOf(row) ? { projectId: projectOf(row) } : {}) } })
     toast.success(t('memos.plaud.toast.transcribing'))
     toTranscribe.value = null
   } catch (e) {
@@ -170,7 +224,15 @@ const meta = (row: PlaudImportEntry) =>
             {{ t('memos.plaud.ready', queue.ready.length) }}
           </label>
           <!-- One group, so the pair wraps together under a long Russian heading instead of splitting. -->
-          <div class="flex gap-1">
+          <div class="flex flex-wrap items-center gap-1">
+            <Select v-if="projects.items.length > 1" :model-value="undefined" @update:model-value="pick(chosen, String($event))">
+              <SelectTrigger size="sm" class="max-w-44" :aria-label="t('memos.plaud.projectForAll')">
+                <SelectValue :placeholder="t('memos.plaud.projectForAll')" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="p in projects.items" :key="p.projectId" :value="p.projectId">{{ p.name }}</SelectItem>
+              </SelectContent>
+            </Select>
             <Button size="sm" :disabled="acting" @click="act('confirm', chosen)">
               {{ selected.size ? t('memos.plaud.importSelected', chosen.length) : t('memos.plaud.importAll') }}
             </Button>
@@ -189,7 +251,15 @@ const meta = (row: PlaudImportEntry) =>
               <p class="truncate text-sm">{{ row.name }}</p>
               <p class="text-muted-foreground text-xs tabular-nums">{{ meta(row) }}</p>
             </div>
-            <div class="flex gap-1">
+            <div class="flex flex-wrap items-center gap-1">
+              <Select v-if="projects.items.length > 1" :model-value="projectOf(row)" @update:model-value="pick([row], String($event))">
+                <SelectTrigger size="sm" class="h-7 max-w-44 py-0 data-[size=sm]:h-7" :aria-label="t('memos.plaud.projectFor', { name: row.name })">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="p in projects.items" :key="p.projectId" :value="p.projectId">{{ p.name }}</SelectItem>
+                </SelectContent>
+              </Select>
               <Button size="sm" variant="outline" class="h-7" :disabled="acting" @click="act('confirm', [row])">{{ t('memos.plaud.import') }}</Button>
               <Button size="sm" variant="ghost" class="h-7" :disabled="acting" @click="act('skip', [row])">{{ t('memos.plaud.skip') }}</Button>
             </div>
@@ -226,7 +296,13 @@ const meta = (row: PlaudImportEntry) =>
         </button>
         <Collapse :open="waitingOpen">
           <div id="plaud-waiting">
-            <p class="text-muted-foreground kn-measure px-4 pb-2.5 text-xs">{{ t('memos.plaud.waitingHint') }}</p>
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 pb-2.5">
+              <p class="text-muted-foreground kn-measure min-w-0 flex-1 basis-56 text-xs">{{ t('memos.plaud.waitingHint') }}</p>
+              <Button size="sm" variant="outline" class="h-7" :disabled="checking" @click="checkNow()">
+                <RefreshCw class="size-3.5" :class="checking ? 'motion-safe:animate-spin' : ''" aria-hidden="true" />
+                {{ checking ? t('memos.plaud.checking') : t('memos.plaud.checkNow') }}
+              </Button>
+            </div>
             <ul class="divide-y border-t">
               <li v-for="row in queue.waiting" :key="row.id" class="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2.5">
                 <Hourglass class="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
@@ -236,15 +312,19 @@ const meta = (row: PlaudImportEntry) =>
                     {{ meta(row) }}<template v-if="row.status === 'confirmed'"> · {{ t('memos.plaud.confirmedAhead') }}</template>
                   </p>
                 </div>
-                <div class="flex flex-wrap gap-1">
-                  <Button v-if="settings.transcribe.enabled" size="sm" variant="ghost" class="h-7" :disabled="acting" @click="toTranscribe = row">
-                    {{ t('memos.plaud.transcribe.action') }}
-                  </Button>
-                  <Button v-if="row.status === 'waiting'" size="sm" variant="ghost" class="h-7" :disabled="acting" @click="act('confirm', [row])">
-                    {{ t('memos.plaud.importWhenReady') }}
-                  </Button>
-                  <Button size="sm" variant="ghost" class="h-7" :disabled="acting" @click="act('skip', [row])">{{ t('memos.plaud.skip') }}</Button>
-                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger as-child>
+                    <Button variant="ghost" size="icon-sm" class="text-muted-foreground shrink-0" :disabled="acting" :aria-label="t('memos.plaud.actionsFor', { name: row.name })">
+                      <MoreVertical class="size-4" aria-hidden="true" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" class="w-56">
+                    <DropdownMenuItem v-if="settings.transcribe.enabled" @select="toTranscribe = row">{{ t('memos.plaud.transcribe.action') }}</DropdownMenuItem>
+                    <DropdownMenuItem v-if="row.status === 'waiting'" @select="act('confirm', [row])">{{ t('memos.plaud.importWhenReady') }}</DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem variant="destructive" @select="act('skip', [row])">{{ t('memos.plaud.skip') }}</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </li>
             </ul>
           </div>
@@ -278,7 +358,9 @@ const meta = (row: PlaudImportEntry) =>
           </DialogDescription>
         </DialogHeader>
         <p v-if="overAllowance" role="alert" class="text-destructive text-sm">{{ t('memos.plaud.transcribe.over') }}</p>
-        <p v-else class="text-muted-foreground text-sm">{{ t('memos.plaud.transcribe.noSpeakers') }}</p>
+        <p v-else class="text-muted-foreground text-sm">
+          {{ t(settings?.transcribe.speakers ? 'memos.plaud.transcribe.numberedSpeakers' : 'memos.plaud.transcribe.noSpeakers') }}
+        </p>
         <DialogFooter>
           <Button variant="outline" @click="toTranscribe = null">{{ t('memos.plaud.cancel') }}</Button>
           <Button :disabled="acting || overAllowance" @click="transcribe">{{ t('memos.plaud.transcribe.confirm') }}</Button>

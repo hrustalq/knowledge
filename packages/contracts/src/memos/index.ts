@@ -26,7 +26,7 @@ export function memoExtensionFor(filename: string, contentType: string): string 
  * `pending` is the reserved row before the bucket confirms the bytes; `failed`
  * keeps the `stage` it failed in, which is what Retry resumes from.
  */
-export type MemoStatus = 'pending' | 'uploaded' | 'transcribing' | 'transcribed' | 'analysing' | 'done' | 'failed';
+export type MemoStatus = 'pending' | 'uploaded' | 'transcribing' | 'transcribed' | 'review' | 'analysing' | 'done' | 'failed';
 
 /** One stretch of speech; times in seconds from the start of the recording. */
 export interface MemoSegment {
@@ -34,8 +34,50 @@ export interface MemoSegment {
   start: number;
   end: number;
   text: string;
-  /** Who is speaking, when the source names them (a Plaud transcript does; our own speech-to-text does not). */
+  /** Who is speaking: a name from a Plaud transcript, or a numbered voice when this server's speech-to-text tells voices apart (#878). */
   speaker?: string;
+}
+
+/** The kinds of recording the product knows without being told (#879). A workspace can rename, hide or add to them. */
+export const BUILT_IN_MEMO_TYPE_KEYS = ['daily', 'retro', 'sprint-planning', 'task-planning'] as const;
+export type BuiltInMemoTypeKey = (typeof BUILT_IN_MEMO_TYPE_KEYS)[number];
+/** A workspace's own type key. */
+export const MEMO_TYPE_KEY_RE = /^[a-z][a-z0-9-]{0,39}$/;
+
+export interface MemoType {
+  key: string;
+  name: string;
+  /** How the agent treats a recording of this kind. Trusted text, written by a workspace admin. */
+  guidance: string;
+  builtIn: boolean;
+  /** A built-in whose name or guidance this workspace changed. */
+  overridden: boolean;
+  /** Not offered when classifying; memos already of this type keep it. */
+  hidden: boolean;
+  /** Where a memo detected as this type goes; null = the project it arrived in. */
+  projectId: string | null;
+  /** A memo detected as this type is analysed without waiting for its owner's confirm. */
+  auto: boolean;
+}
+
+/**
+ * What a model suggested for a memo before it is analysed (#879). A
+ * suggestion only: `type` and `projectId` are ones the uploader may use, and
+ * nothing here is applied without them unless the type is set to `auto`.
+ */
+export interface MemoTriage {
+  type: string | null;
+  projectId: string | null;
+  tags: string[];
+  /** A kind of recording no listed type covers, proposed for the workspace; it does nothing until an admin adds it. */
+  newType: { name: string; guidance: string } | null;
+  /** Who a speaker might be, from what is said: `{ label: userId }`. A guess, shown as one (#880). */
+  speakers?: Record<string, string>;
+}
+
+// GET /v1/memos/types
+export interface MemoTypesResponse {
+  types: MemoType[];
 }
 
 /** Where a memo came from: an uploaded recording, or a Plaud recording's own transcript (#864). */
@@ -77,6 +119,9 @@ export interface MemoInfo {
   /** False once the audio was purged (retention), and always for a Plaud memo — the transcript stays. */
   audioAvailable: boolean;
   source: MemoSource;
+  /** A memo type's key (#879), or null while unclassified. */
+  type: string | null;
+  tags: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -115,8 +160,73 @@ export interface MemoProposal {
   mergeRequestId: string | null;
 }
 
+/**
+ * Who one of a memo's speakers is (#880). `userId` is a match that holds:
+ * `confirmed` on this memo by its uploader, or `remembered` from their earlier
+ * memo in the same project. `suggestedUserId` is only a guess from the label.
+ */
+export interface MemoSpeaker {
+  label: string;
+  userId: string | null;
+  source: 'confirmed' | 'remembered' | null;
+  suggestedUserId: string | null;
+}
+
+/** The steps a memo moves through; a Plaud memo arrives with the first two behind it. */
+export const MEMO_STEPS = ['upload', 'transcribe', 'analyse', 'publish'] as const;
+export type MemoStep = (typeof MEMO_STEPS)[number];
+
+/** What is happening to a memo right now (#876): the step, whether anything has picked it up, and since when. */
+export interface MemoProgress {
+  step: MemoStep;
+  state: 'waiting' | 'running';
+  since: string;
+}
+
+/**
+ * Derived on read from the memo's status and its secretary run, never stored.
+ * Null once the memo is done or failed: the status says the rest. A run that
+ * has ended on a memo still `analysing` is waiting for the publisher, which
+ * opens its merge requests.
+ */
+export function memoProgressFor(
+  memo: { status: MemoStatus; updatedAt: string },
+  run: { status: string; createdAt: string; startedAt: string | null; finishedAt: string | null } | null,
+): MemoProgress | null {
+  switch (memo.status) {
+    case 'pending':
+      return { step: 'upload', state: 'running', since: memo.updatedAt };
+    case 'uploaded':
+      return { step: 'transcribe', state: 'waiting', since: memo.updatedAt };
+    case 'transcribing':
+      return { step: 'transcribe', state: 'running', since: memo.updatedAt };
+    case 'transcribed':
+      return { step: 'analyse', state: 'waiting', since: memo.updatedAt };
+    // Waiting for its owner, not for a machine: the page asks them instead of showing a step.
+    case 'review':
+      return null;
+    case 'analysing':
+      if (!run || run.status === 'pending') return { step: 'analyse', state: 'waiting', since: run?.createdAt ?? memo.updatedAt };
+      if (run.status === 'running') return { step: 'analyse', state: 'running', since: run.startedAt ?? run.createdAt };
+      return { step: 'publish', state: 'waiting', since: run.finishedAt ?? memo.updatedAt };
+    default:
+      return null;
+  }
+}
+
+// PUT /v1/memos/:id/speakers
+export interface MemoSpeakersResponse {
+  speakers: MemoSpeaker[];
+}
+
 export interface MemoDetailResponse {
   memo: MemoInfo;
+  /** Null once the memo is done or failed. */
+  progress: MemoProgress | null;
+  /** One entry per speaker label in the transcript, in the order they first speak. */
+  speakers: MemoSpeaker[];
+  /** The suggestion a memo in `review` is waiting on; null when triage did not run or suggested nothing. */
+  triage: MemoTriage | null;
   transcript: MemoSegment[];
   summary: string | null;
   proposals: MemoProposal[];
@@ -185,7 +295,8 @@ export interface PlaudSettingsResponse {
    * "Transcribe here": our own speech-to-text on a recording Plaud has not transcribed. Off when this server cannot
    * transcribe or the allowance is 0. `remainingSeconds` is what is left of the caller's 30-day allowance.
    */
-  transcribe: { enabled: boolean; limitSeconds: number; remainingSeconds: number };
+  /** `speakers`: whether a transcript made here tells voices apart (#878). */
+  transcribe: { enabled: boolean; limitSeconds: number; remainingSeconds: number; speakers: boolean };
 }
 
 export interface PlaudImportEntry {
@@ -195,6 +306,8 @@ export interface PlaudImportEntry {
   startAt: string | null;
   durationSeconds: number;
   status: PlaudImportStatus;
+  /** The project chosen for this recording; null = the settings' project when it is imported. */
+  projectId: string | null;
   /** The memo it became. */
   memoId: string | null;
   error: string | null;

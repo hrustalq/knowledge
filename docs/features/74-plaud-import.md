@@ -205,7 +205,8 @@ REST, all `@Feature('memos')`, each `@Access` + `@Returns` except the callback:
 | `GET /v1/plaud/settings`               | viewer | project, rules saved and applied, `transcribe: { enabled, limitSeconds, remainingSeconds }` |
 | `PUT /v1/plaud/settings`               | editor | `{ workspaceId, projectId, rules }`                                    |
 | `GET /v1/plaud/imports`                | viewer | my queue                                                               |
-| `POST /v1/plaud/imports/confirm`       | editor | `{ workspaceId, ids }`: import now, or when Plaud has a transcript     |
+| `POST /v1/plaud/imports/refresh`       | editor | `{ workspaceId }`: my own pass now, at most once in 30 s (#873)        |
+| `POST /v1/plaud/imports/confirm`       | editor | `{ workspaceId, ids, projectId? }`: import now, or when Plaud has one   |
 | `POST /v1/plaud/imports/skip`          | editor | `{ workspaceId, ids }`: final                                          |
 | `POST /v1/plaud/imports/transcribe`    | editor | `{ workspaceId, id }`: "Transcribe here"                               |
 | `POST /v1/memos/plaud`                 | editor | `{ workspaceId, projectId, fileId }`: import one recording directly    |
@@ -286,3 +287,17 @@ Web (`/memos`, design brief on #864):
   - "Transcribe here" on a worker (download → ffmpeg → speech server);
   - a notification reaching the inbox;
   - the acceptance criteria as a set against a non-admin person (dev mode is a platform admin).
+
+## The project is per recording (#877)
+
+`plaud_links.project_id` is the default, no longer the only destination. `plaud_imports.project_id` (nullable)
+holds a person's choice for one recording; an import reads `row.projectId ?? link.projectId`. `confirm` and
+`transcribe` take an optional `projectId` and write it onto the caller's open rows before anything else, so a
+recording confirmed ahead lands in the project it was confirmed for even if the default changes meanwhile.
+
+Only that the project belongs to the workspace is checked when the choice is written. Whether the person may
+file into it is checked when the import runs (`MemosService.projectFor`), which can be days later: permission on
+execution, not on offer. `auto` mode has no chooser, so it keeps using the default.
+
+The panel shows a project select on each recording waiting for a yes and one for all of them, and always sends
+the project a row shows.

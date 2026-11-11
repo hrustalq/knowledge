@@ -4716,6 +4716,16 @@ model Memo {
 
   /// MemoSegment[] — masked before it is written. Never selected by the list.
   transcript   Json?
+  /// A memo type's key (#879): built-in or the workspace's own. Null = unclassified.
+  type         String?
+  /// Topic tags, string[]: suggested by triage, the uploader's to edit.
+  tags         Json      @default("[]")
+  /// MemoTriage: what the model suggested before analysis. Null = not triaged (yet, or triage is off).
+  triage       Json?
+  /// The triage sweeper's claim, a lease like `published_at`.
+  triagedAt    DateTime? @map("triaged_at") @db.Timestamptz
+  /// SpeakerChoices: { "<speaker label>": userId | null }, the uploader's matches (#880).
+  speakers     Json?
   summary      String?
   /// MemoDropped[] — proposals the analysis made and the code refused, with why.
   dropped      Json?
@@ -4744,6 +4754,30 @@ model Memo {
 /// A person's Plaud auto-import settings in one workspace (#864): where picked
 /// recordings go and which ones are picked. The sign-in itself is their
 /// `credentials` row; this row exists once they save settings.
+/// A workspace's edit to the memo type catalogue (#879): overrides or hides a
+/// built-in type, or adds its own. Built-ins themselves are code.
+model MemoType {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  /// A built-in key, or the workspace's own (MEMO_TYPE_KEY_RE).
+  key         String
+  /// Null = the built-in's name.
+  name        String?
+  /// Trusted text for the secretary, admin-written. Null = the built-in's guidance.
+  guidance    String?
+  /// Where a memo detected as this type goes. Null = it stays in the project it arrived in.
+  projectId   String?  @map("project_id") @db.Uuid
+  /// A memo detected as this type is analysed without waiting for its owner's confirm.
+  auto        Boolean  @default(false)
+  hidden      Boolean  @default(false)
+  createdBy   String   @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@unique([workspaceId, key])
+  @@map("memo_types")
+}
+
 model PlaudLink {
   id          String  @id @default(uuid()) @db.Uuid
   workspaceId String  @map("workspace_id") @db.Uuid
@@ -4780,6 +4814,8 @@ model PlaudImport {
   userId      String    @map("user_id") @db.Uuid
   /// The recording's id at Plaud.
   externalId  String    @map("external_id")
+  /// Where this recording goes, when its owner chose (#877). Null = the link's project at import time.
+  projectId  String?   @map("project_id") @db.Uuid
   /// Plaud's name for it: shown to its owner, never sent to a model.
   name            String
   startAt         DateTime? @map("start_at") @db.Timestamptz

@@ -13,6 +13,130 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.49.0] — 2026-11-11
+
+### Added
+
+- **A memo can be renamed and deleted from its row on `/memos`, and a waiting Plaud recording's actions sit in one
+  menu.** Each memo row has a ⋮ menu with Rename and Delete; the memo's own page has the same menu in place of its
+  Delete button. A Plaud memo no longer has to stay `Plaud · <start time>`. `PATCH /v1/memos/:id { title }` (editor)
+  renames over the API: the title is trimmed, must not be empty and takes up to 300 characters; anyone but the
+  uploader gets the same 404 as on a read. The name Plaud gave the recording stays as the memo's `filename`. On a
+  recording waiting for Plaud's transcript, "Transcribe here", "Import when ready" and "Skip" moved from three
+  buttons into a ⋮ menu. (#875)
+
+- **A memo's page says what is happening to it while it is being processed.** In place of one line of status, the
+  page lists the steps (upload, transcription, reading against the knowledge base, merge requests) with the ones
+  behind ticked, what the current one is doing and since when. It tells "waiting for the agent" from "the agent is
+  reading" and from "the agent has finished, its proposals are being opened", and says so when nothing has picked
+  a step up for five minutes. A Plaud memo, which arrives with its transcript, starts at the reading step.
+  `GET /v1/memos/:id` returns it as `progress: { step, state, since }`, null once the memo is done or failed. (#876)
+
+- **A memo can be listened to from its row on `/memos`.** A row whose audio is still kept has a small player under
+  its title: play or pause, a strip that shows how far playback is and takes a click or the arrow keys to seek, and
+  the time. Starting another memo stops the one playing. Nothing is downloaded until play is pressed. The strip's
+  bars identify the memo and show progress; they are not the recording's loudness. A memo with no audio here, such
+  as one built from Plaud's transcript or one past audio retention, has no player. (#884)
+
+- **Each Plaud recording can go to its own project.** A recording waiting for your yes on `/memos` has a project
+  select that starts at the project from your rules, and "Project for all" sets it for the ticked recordings or
+  for all of them. A recording you say yes to ahead of Plaud's transcript keeps the project you chose, even if you
+  change the default later. `POST /v1/plaud/imports/confirm` and `/transcribe` take an optional `projectId`, and
+  each entry of `GET /v1/plaud/imports` carries `projectId` (null = the default). A project from another workspace
+  is refused with 400; whether you may file into the project is checked when the import runs. Automatic import
+  still uses the project from your rules. (#877)
+
+- **A recording this server transcribes can come back with its speakers told apart.** With
+  `TRANSCRIPTION_SPEAKERS=true` on a gen-api server, an uploaded memo and a Plaud recording transcribed here both
+  show who is speaking as numbered voices (Speaker 1, Speaker 2), each line carries its real start time, and the
+  secretary reads the voices like it reads the names in a Plaud transcript. The voices are numbers, not names.
+  In a recording longer than an hour the numbering starts again for each hour, so one person can appear under
+  two numbers. `GET /v1/plaud/settings` returns `transcribe.speakers`, and the "Transcribe here" dialog says
+  which kind of transcript you will get. (#878)
+
+- **You can say who a memo's speakers are.** A memo's page lists its speakers, each with a choice of workspace
+  members or "Nobody here". A matched speaker is shown by name in the transcript. A speaker name seen before in
+  the same project starts matched, from your earlier memo; a name that fits exactly one member is offered as a
+  guess with a Confirm button and counts for nothing until you press it. A numbered voice (Speaker 1) can be
+  matched on its own memo but is never carried to the next one. `PUT /v1/memos/:id/speakers { label, userId }`
+  (editor, the uploader only) writes a match and `GET /v1/memos/:id` returns `speakers`. Being matched gives that
+  person no access to the memo and sends them nothing. (#880)
+
+- **A memo can have a type, and the agent treats each type its own way.** Four types are built in: Daily,
+  Retrospective, Sprint planning and Task planning. Set a memo's type on its page; the memo list shows it and can
+  be filtered by it. Each type carries guidance for the agent that reads the recording: a daily keeps only what was
+  decided or newly blocked, a retrospective becomes one page with the agreed actions. A workspace admin can rename
+  a built-in type, rewrite its guidance, hide it, or add types of the workspace's own, under "Memo types" on
+  `/memos`. `GET /v1/memos/types`, `PUT` and `DELETE /v1/memos/types/:key` (admin), `PATCH /v1/memos/:id { type }`
+  and `GET /v1/memos?type=` do the same over the API. The type is set by hand for now; a memo already analysed is
+  not read again when its type changes. (#879)
+
+- **A memo can be sorted before the agent reads it.** With `MEMO_TRIAGE_ENABLED=true`, a memo that has a
+  transcript is first shown to a model that suggests its type, the project it is about and up to five topic tags.
+  The memo then waits as "Needs your confirm": its page shows the suggestion, you change anything you like and
+  press Confirm, and the agent reads it in the project you chose. A workspace admin can instead mark a type to be
+  analysed right away and give it a project its memos go to, under "Memo types"; a memo detected as such a type
+  skips the wait. The suggestion only ever names a project you may file into. If sorting cannot run (no model,
+  no budget, an error), the memo is analysed unsorted rather than left waiting. A memo's tags show on its page.
+  `POST /v1/memos/:id/confirm { type, projectId, tags }`, `PATCH /v1/memos/:id { tags }`, and `projectId` and
+  `auto` on `PUT /v1/memos/types/:key` do the same over the API; `GET /v1/memos/:id` returns `triage`. (#879)
+
+- **Tags on the memo list, and three smaller things around sorting.** Each memo row on `/memos` shows its type
+  and its tags, and the list can be filtered by a tag (`GET /v1/memos?tag=`). "Edit tags" under a memo's ⋮ menu
+  changes them. When sorting finds no fitting type and proposes a new one, a workspace admin sees what it would
+  tell the agent and can add it with one button on the confirm panel. The uploader is notified when their memo
+  starts waiting for a confirm. And sorting may now suggest who a speaker is from what is said in the recording,
+  when the conversation makes it clear and exactly one member has that name: it appears as a guess with
+  Confirm on the memo's Speakers list, numbered voices included, and counts for nothing until confirmed.
+  (#879, #880)
+
+### Changed
+
+- **The agent that reads a memo may now name people.** It is told who the speakers you matched are, and may say
+  whose decision or action something is in the pages it proposes. It still names nobody you have not matched.
+  Only matches that exist when it starts reading count, so for a first recording with new speaker names its
+  proposals stay unattributed. Until now it was told never to name who said what. (#880)
+
+### Fixed
+
+- **A Plaud recording you have just transcribed in the Plaud app no longer sits under "waiting" on `/memos`.** The
+  server looked at each person's Plaud account once in ten minutes and the page never looked again on its own, so a
+  recording could read as untranscribed long after Plaud had finished. The page now checks Plaud when you open it or
+  come back to its tab with recordings still waiting, and the waiting list has a "Check now" button.
+  `POST /v1/plaud/imports/refresh { workspaceId }` (editor) does the same over the API and answers the current list;
+  asked twice within 30 seconds it makes no second call to Plaud. A check never imports past the daily cap in auto
+  mode, never starts speech-to-text here and sends no notification. (#873)
+
+- **The memo list and a memo's page have their trail under the top bar again, and a transcript is easier to read.**
+  Both pages were missing from the breadcrumb strip, so they began right under the top bar while every other page
+  began under a trail, and the memo page carried its own "All memos" arrow to make up for it. `/memos` now shows
+  `Memos`, a memo shows `Memos › <its title>`, the arrow is gone, and the browser tab is named after the memo. A
+  transcript line now runs the full width of its column at body text size; it was held to 65 characters. (#874)
+
+### Operations
+
+- New optional variable `MEMO_TRIAGE_ENABLED` (default `false`). On, every memo costs one extra model call on the
+  secretary's model before analysis, recorded as `memo-triage` usage, and memos wait for their owner's confirm
+  unless their type is set to auto. Both the API and the worker read it, so set it for both.
+- Migration `20270110100000_memo_triage` adds `memos.tags` (default `[]`), nullable `memos.triage` and
+  `memos.triaged_at`, and `memo_types.project_id` and `memo_types.auto` (default `false`). Nullable columns and
+  columns with a default, so it survives a rollback to the previous release.
+
+- Migration `20270109100000_memo_types` adds the `memo_types` table and the nullable column `memos.type`. A new
+  table and a nullable column, so it survives a rollback to the previous release.
+
+- Migration `20270108100000_memo_speakers` adds the nullable column `memos.speakers`. It is additive and survives a
+  rollback to the previous release.
+
+- New optional variable `TRANSCRIPTION_SPEAKERS` (default `false`). It is read only with
+  `TRANSCRIPTION_PROVIDER=gen-api`, where it switches transcription from gen-api's `gen-stt` to its
+  `speech-to-text` network. **That network costs several times more per minute**: gen-api lists about 2 ₽
+  against 0.45 ₽, and a 17-second test call was billed 2. Recordings then go to gen-api whole, up to an hour a
+  request, instead of in one-minute pieces. Turning it off again changes nothing for memos already transcribed.
+
+- Migration `20270107100000_plaud_import_project` adds the nullable column `plaud_imports.project_id`. It is
+  additive and survives a rollback to the previous release.
+
 ## [0.48.0] — 2026-11-10
 
 ### Added
@@ -6511,7 +6635,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.48.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.49.0...HEAD
+[0.49.0]: https://github.com/hrustalq/knowledge/compare/v0.48.0...v0.49.0
 [0.48.0]: https://github.com/hrustalq/knowledge/compare/v0.47.0...v0.48.0
 [0.47.0]: https://github.com/hrustalq/knowledge/compare/v0.46.2...v0.47.0
 [0.46.2]: https://github.com/hrustalq/knowledge/compare/v0.46.1...v0.46.2

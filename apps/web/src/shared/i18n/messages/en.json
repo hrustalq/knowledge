@@ -4649,6 +4649,7 @@
       "connector.harvest.proposed": "a resolved item you closed was harvested into captures for review",
       "memo.done": "your memo was read and its proposals opened for review",
       "memo.failed": "your memo could not be analysed",
+      "memo.review": "your memo is sorted and waits for your confirm",
       "plaud.pending": "Plaud recordings are waiting for your confirmation",
       "plaud.reconnect": "your Plaud sign-in lapsed: link the account again",
       "source.updated": "took a new version from its source",
@@ -7368,6 +7369,66 @@
     "offlineDescription": "Pages already open stay readable. Anything that needs the server will fail until the connection returns."
   },
   "memos": {
+    "tags": {
+      "all": "All tags",
+      "filter": "Filter by tag"
+    },
+    "review": {
+      "title": "Confirm this memo",
+      "suggested": "Suggested from the recording. Change anything, then let the agent read it.",
+      "plain": "Say what this recording is and where it goes, then let the agent read it.",
+      "type": "Type",
+      "project": "Project",
+      "tags": "Tags",
+      "tagsHint": "Separated by commas; up to five are kept.",
+      "newType": "No type quite fits. The recording looks like a “{name}”; an admin can add it under Memo types.",
+      "adoptType": "Add this type",
+      "confirm": "Confirm and analyse"
+    },
+    "types": {
+      "builtin": {
+        "daily": "Daily",
+        "retro": "Retrospective",
+        "sprint-planning": "Sprint planning",
+        "task-planning": "Task planning"
+      },
+      "all": "All types",
+      "filter": "Filter by type",
+      "none": "No type",
+      "ofMemo": "Type of this memo",
+      "noneOfType": "No memos of this type yet.",
+      "manage": "Memo types",
+      "title": "Memo types",
+      "description": "What kinds of recording this workspace has, and how the agent treats each. Changes apply to every member's memos from now on.",
+      "pick": "Type",
+      "add": "Add a type…",
+      "hiddenTag": "hidden",
+      "name": "Name",
+      "keyTaken": "Use a name with Latin letters that no other type has.",
+      "guidance": "How the agent treats it",
+      "guidanceHint": "This text becomes part of the agent's instructions. Leave it empty on a built-in type to use the text it ships with.",
+      "project": "Where its memos go",
+      "projectHere": "The project the memo arrived in",
+      "auto": "Analyse a memo detected as this type right away, without waiting for its owner's confirm",
+      "hide": "Hide this type: it is not offered any more, and memos that have it keep it",
+      "reset": "Back to built-in",
+      "remove": "Delete type",
+      "saved": "Memo type saved"
+    },
+    "player": {
+      "play": "Play {title}",
+      "pause": "Pause {title}",
+      "position": "Position in {title}"
+    },
+    "actions": {
+      "for": "Actions for {title}",
+      "tags": "Edit tags",
+      "tagsTitle": "Tags",
+      "rename": "Rename",
+      "renameTitle": "Rename memo",
+      "titleLabel": "Title",
+      "save": "Save"
+    },
     "title": "Memos",
     "subtitle": "Recordings you uploaded, transcribed and read against the knowledge base. Only you can see them.",
     "disabled": {
@@ -7392,12 +7453,12 @@
       "uploaded": "Queued",
       "transcribing": "Transcribing",
       "transcribed": "Transcribed",
+      "review": "Needs your confirm",
       "analysing": "Reading",
       "done": "Done",
       "failed": "Failed"
     },
     "detail": {
-      "back": "All memos",
       "private": "Only you can see this memo.",
       "transcript": "Transcript",
       "summary": "Summary",
@@ -7418,12 +7479,39 @@
         "analysing": "reading the transcript",
         "publishing": "opening merge requests"
       },
-      "inFlight": {
-        "pending": "The recording is still uploading.",
-        "uploaded": "Waiting for a worker to transcribe it.",
-        "transcribing": "Transcribing the recording. This takes a fraction of its length.",
-        "transcribed": "Transcribed. Reading it against the knowledge base next.",
-        "analysing": "Reading the transcript against the knowledge base."
+      "speakers": {
+        "title": "Speakers",
+        "who": "Who {label} is",
+        "nobody": "Nobody here",
+        "remembered": "Remembered from your earlier memo in this project.",
+        "suggested": "Looks like {name}.",
+        "confirm": "Confirm",
+        "hint": "A match is yours alone: it gives that person no access to this memo. The agent names only people matched before it reads the recording."
+      },
+      "step": {
+        "upload": "Upload",
+        "transcribe": "Transcription",
+        "analyse": "Reading against the knowledge base",
+        "publish": "Merge requests"
+      },
+      "progress": {
+        "title": "Progress",
+        "since": "Since {when}",
+        "slow": "longer than usual; nothing has picked it up yet",
+        "upload": {
+          "running": "The recording is still uploading."
+        },
+        "transcribe": {
+          "waiting": "Waiting for a worker to transcribe it.",
+          "running": "Transcribing the recording. This takes a fraction of its length."
+        },
+        "analyse": {
+          "waiting": "Transcribed. Waiting for the agent to pick it up.",
+          "running": "The agent is reading the transcript against the knowledge base."
+        },
+        "publish": {
+          "waiting": "The agent has finished. Its proposals are being opened as merge requests."
+        }
       },
       "noTranscript": "The transcript appears here once the recording is transcribed.",
       "dropReason": {
@@ -7451,7 +7539,12 @@
       "cancel": "Cancel",
       "ready": "{count} recording waits for you | {count} recordings wait for you",
       "waiting": "{count} recording waits for Plaud's transcript | {count} recordings wait for Plaud's transcript",
-      "waitingHint": "Plaud transcribes a recording when you ask it to. Generate the transcript in the Plaud app and the recording moves up on its own.",
+      "waitingHint": "Plaud transcribes a recording when you ask it to. Generate the transcript in the Plaud app; it moves up when you come back to this page, or press Check now.",
+      "actionsFor": "Actions for {name}",
+      "projectForAll": "Project for all",
+      "projectFor": "Project for {name}",
+      "checkNow": "Check now",
+      "checking": "Checking…",
       "confirmedAhead": "imports once transcribed",
       "empty": "Nothing is waiting. New recordings that match your rules appear here within about ten minutes.",
       "failed": "The import failed.",
@@ -7475,6 +7568,7 @@
         "action": "Transcribe here",
         "title": "Transcribe this recording here?",
         "body": "It is {minutes} min long, and you have {left} min of transcription left this month. This spends on speech-to-text instead of waiting for Plaud.",
+        "numberedSpeakers": "A transcript made here numbers the speakers (Speaker 1, Speaker 2). It does not know their names.",
         "noSpeakers": "A transcript made here has no speaker names.",
         "over": "That is more than you have left this month. Generate the transcript in the Plaud app instead.",
         "confirm": "Transcribe"

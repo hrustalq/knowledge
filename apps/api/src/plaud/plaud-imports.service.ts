@@ -20,6 +20,8 @@ const OPEN: PlaudImportStatus[] = ['waiting', 'pending', 'confirmed', 'failed'];
 /** How many waiting recordings one pass asks Plaud about, oldest first. */
 const CHECK_BATCH = 20;
 const DAY_MS = 86_400_000;
+/** The least time between two looks at one account that a person can ask for. */
+const REFRESH_FLOOR_MS = 30_000;
 
 /**
  * Plaud auto-import (#864): a person's pick rules, the recordings those rules
@@ -86,7 +88,8 @@ export class PlaudImportsService {
    * not transcribed is marked `confirmed` and imported by the sweeper when it
    * has. Ids that are not the caller's open rows are ignored.
    */
-  async confirm(principal: Principal, workspaceId: string, ids: string[]): Promise<PlaudImportEntry[]> {
+  async confirm(principal: Principal, workspaceId: string, ids: string[], projectId?: string): Promise<PlaudImportEntry[]> {
+    await this.choose(principal.userId, workspaceId, ids, projectId);
     const rows = await this.prisma.plaudImport.findMany({
       where: { id: { in: ids }, workspaceId, userId: principal.userId, status: { in: OPEN } },
       include: { link: true },
@@ -102,15 +105,52 @@ export class PlaudImportsService {
    * sweeper. A refusal (allowance, budget, length, transcription off) goes
    * back to the person as it is and leaves the row where it was.
    */
-  async transcribe(principal: Principal, workspaceId: string, id: string): Promise<PlaudImportEntry> {
+  async transcribe(principal: Principal, workspaceId: string, id: string, projectId?: string): Promise<PlaudImportEntry> {
+    await this.choose(principal.userId, workspaceId, [id], projectId);
     const row = await this.prisma.plaudImport.findFirst({
       where: { id, workspaceId, userId: principal.userId, status: { in: ['waiting', 'confirmed', 'failed'] } },
       include: { link: true },
     });
     if (!row) throw new NotFoundException(t('error.memo.plaudImportNotFound'));
-    if (!row.link.projectId) throw new ConflictException(t('error.memo.plaudNoProject'));
-    const memo = await this.memos.transcribePlaud(principal, { workspaceId, projectId: row.link.projectId, fileId: row.externalId });
+    const target = row.projectId ?? row.link.projectId;
+    if (!target) throw new ConflictException(t('error.memo.plaudNoProject'));
+    const memo = await this.memos.transcribePlaud(principal, { workspaceId, projectId: target, fileId: row.externalId });
     return toEntry(await this.prisma.plaudImport.update({ where: { id: row.id }, data: { status: 'imported', memoId: memo.memoId, error: null } }));
+  }
+
+  /**
+   * "Check now" (#873): the caller's own pass, without waiting for the
+   * sweeper's turn. It takes the link through the same `checked_at` claim, so
+   * it never runs beside a sweep and cannot be used to hammer Plaud; inside
+   * the floor it only answers the list as it stands. Nobody is notified: the
+   * person is looking at the queue.
+   */
+  async refresh(principal: Principal, workspaceId: string, now = new Date()): Promise<PlaudImportEntry[]> {
+    const userId = principal.userId;
+    const floor = new Date(now.getTime() - REFRESH_FLOOR_MS);
+    const claimed = await this.prisma.plaudLink.updateMany({
+      where: { workspaceId, userId, OR: [{ checkedAt: null }, { checkedAt: { lt: floor } }] },
+      data: { checkedAt: now },
+    });
+    const link = claimed.count ? await this.prisma.plaudLink.findUnique({ where: { workspaceId_userId: { workspaceId, userId } } }) : null;
+    if (link) {
+      await this.sweepLink(principal, link, now).catch((err: unknown) => this.logger.warn(`Plaud link ${link.id} was not refreshed: ${(err as Error).message}`));
+    }
+    return this.list(userId, workspaceId);
+  }
+
+  /**
+   * Writes the person's choice of project onto their open rows (#877), so a
+   * recording confirmed ahead lands where it was confirmed for. Only that the
+   * project is this workspace's is checked here; whether the person may file
+   * into it is checked when the import runs (`MemosService.projectFor`), which
+   * can be days later.
+   */
+  private async choose(userId: string, workspaceId: string, ids: string[], projectId?: string): Promise<void> {
+    if (!projectId) return;
+    const project = await this.prisma.project.findFirst({ where: { id: projectId, workspaceId }, select: { id: true } });
+    if (!project) throw new BadRequestException(t('error.project.notFound', { id: projectId }));
+    await this.prisma.plaudImport.updateMany({ where: { id: { in: ids }, workspaceId, userId, status: { in: OPEN } }, data: { projectId } });
   }
 
   /** No to these recordings, for good: a skipped recording is never offered again. */
@@ -194,8 +234,9 @@ export class PlaudImportsService {
   private async import(principal: Principal, link: PlaudLink, row: PlaudImport, unready: 'waiting' | 'confirmed'): Promise<PlaudImport> {
     let data: Prisma.PlaudImportUpdateInput;
     try {
-      if (!link.projectId) throw new ConflictException(t('error.memo.plaudNoProject'));
-      const memo = await this.memos.importPlaud(principal, { workspaceId: link.workspaceId, projectId: link.projectId, fileId: row.externalId });
+      const target = row.projectId ?? link.projectId;
+      if (!target) throw new ConflictException(t('error.memo.plaudNoProject'));
+      const memo = await this.memos.importPlaud(principal, { workspaceId: link.workspaceId, projectId: target, fileId: row.externalId });
       data = { status: 'imported', memoId: memo.memoId, error: null };
     } catch (err) {
       const reason = err instanceof HttpException ? (err.getResponse() as { reason?: string }).reason : undefined;
@@ -246,6 +287,7 @@ function toEntry(row: PlaudImport): PlaudImportEntry {
     startAt: row.startAt?.toISOString() ?? null,
     durationSeconds: row.durationSeconds,
     status: row.status as PlaudImportStatus,
+    projectId: row.projectId,
     memoId: row.memoId,
     error: row.error,
     createdAt: row.createdAt.toISOString(),

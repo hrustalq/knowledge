@@ -14,6 +14,7 @@ import { Prisma, type Memo } from '@prisma/client';
 import {
   MEMO_FORMATS,
   memoExtensionFor,
+  memoProgressFor,
   type AgentFinding,
   type CreateMemoResponse,
   type MemoDetailResponse,
@@ -22,6 +23,9 @@ import {
   type MemoListResponse,
   type MemoSegment,
   type MemoSource,
+  type MemoSpeaker,
+  type MemoTriage,
+  type MemoType,
   type MemoStatus,
   type MemoTranscriptionState,
 } from '@knowledge/contracts';
@@ -30,6 +34,9 @@ import type { Principal } from '../auth/principal.js';
 import { AiUsageService } from '../ai/ai-usage.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { PlaudError } from '../plaud/plaud.client.js';
+import { effectiveMemoTypes, shippedMemoType } from './memo-types.js';
+import { cleanTags } from './triage.js';
+import { loadSpeakers, readChoices, speakerLabels } from './speakers.js';
 import { PlaudService } from '../plaud/plaud.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
@@ -64,6 +71,8 @@ export class MemosService {
   private readonly maxMinutes: number;
   private readonly plaudTranscribeSeconds: number;
   private readonly transcription: MemoTranscriptionState;
+  /** Mirrors `TranscriptionClient.speakers`, which lives in the worker's module. */
+  private readonly speakers: boolean;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -82,11 +91,12 @@ export class MemosService {
       config.get('TRANSCRIPTION_BASE_URL', { infer: true }),
       config.get('TRANSCRIPTION_API_KEY', { infer: true }),
     );
+    this.speakers = config.get('TRANSCRIPTION_PROVIDER', { infer: true }) === 'gen-api' && config.get('TRANSCRIPTION_SPEAKERS', { infer: true });
   }
 
-  async list(principal: Principal, workspaceId: string, projectId?: string): Promise<MemoListResponse> {
+  async list(principal: Principal, workspaceId: string, projectId?: string, type?: string, tag?: string): Promise<MemoListResponse> {
     const rows = await this.prisma.memo.findMany({
-      where: { workspaceId, createdBy: principal.userId, ...(projectId ? { projectId } : {}) },
+      where: { workspaceId, createdBy: principal.userId, ...(projectId ? { projectId } : {}), ...(type ? { type } : {}), ...(tag ? { tags: { array_contains: [tag] } } : {}) },
       orderBy: { createdAt: 'desc' },
       take: 200,
       omit: { transcript: true, dropped: true, summary: true },
@@ -260,11 +270,23 @@ export class MemosService {
     // The kept proposals are the run's findings — the one copy the publisher
     // writes merge request ids into.
     const run = row.agentRunId
-      ? await this.prisma.agentRun.findFirst({ where: { id: row.agentRunId, workspaceId: row.workspaceId }, select: { findings: true } })
+      ? await this.prisma.agentRun.findFirst({ where: { id: row.agentRunId, workspaceId: row.workspaceId }, select: { findings: true, status: true, createdAt: true, startedAt: true, finishedAt: true } })
       : null;
     const findings = Array.isArray(run?.findings) ? (run.findings as unknown as AgentFinding[]) : [];
+    const memo = toInfo(row);
     return {
-      memo: toInfo(row),
+      memo,
+      speakers: (await loadSpeakers(this.prisma, row)).speakers,
+      triage: row.triage && typeof row.triage === 'object' ? (row.triage as unknown as MemoTriage) : null,
+      progress: memoProgressFor(
+        memo,
+        run && {
+          status: run.status,
+          createdAt: run.createdAt.toISOString(),
+          startedAt: run.startedAt?.toISOString() ?? null,
+          finishedAt: run.finishedAt?.toISOString() ?? null,
+        },
+      ),
       transcript: Array.isArray(row.transcript) ? (row.transcript as unknown as MemoSegment[]) : [],
       summary: row.summary,
       proposals: findings.map((f) => ({
@@ -304,6 +326,112 @@ export class MemosService {
     if (claimed.count === 0) throw new ConflictException(t('error.memo.notRetryable'));
     await this.producer.enqueue(row.id);
     return toInfo({ ...row, status, stage: null, error: null });
+  }
+
+  /**
+   * The uploader's own name for it (#875) and what kind of recording it is
+   * (#879). Anyone else gets the same bare 404 as on a read. A type must be
+   * one the workspace offers; null takes it away.
+   */
+  async update(principal: Principal, memoId: string, input: { title?: string; type?: string | null; tags?: string[] }): Promise<MemoInfo> {
+    const row = await this.require(principal, memoId);
+    if (input.type) {
+      const offered = (await this.types(row.workspaceId)).some((t) => t.key === input.type && !t.hidden);
+      if (!offered) throw new BadRequestException(t('error.memo.typeUnknown'));
+    }
+    const data = {
+      ...(input.title ? { title: input.title } : {}),
+      ...(input.type !== undefined ? { type: input.type } : {}),
+      ...(input.tags ? { tags: cleanTags(input.tags) } : {}),
+    };
+    return toInfo(await this.prisma.memo.update({ where: { id: row.id }, data }));
+  }
+
+  /**
+   * The owner's answer to a memo waiting in `review` (#879): what it is, where
+   * it goes and its tags, theirs to change from what triage suggested. Then
+   * on to the secretary. Guarded on `review`, so a double press queues once.
+   * The project is checked like any memo's (`projectFor`): theirs to file into.
+   */
+  async confirm(principal: Principal, memoId: string, input: { type: string | null; projectId: string; tags: string[] }): Promise<MemoInfo> {
+    const row = await this.require(principal, memoId);
+    if (input.type) {
+      const offered = (await this.types(row.workspaceId)).some((t) => t.key === input.type && !t.hidden);
+      if (!offered) throw new BadRequestException(t('error.memo.typeUnknown'));
+    }
+    const project = await this.projectFor(principal, row.workspaceId, input.projectId);
+    const data = { status: 'transcribed', type: input.type, projectId: project.id, tags: cleanTags(input.tags) };
+    const claimed = await this.prisma.memo.updateMany({ where: { id: row.id, status: 'review' }, data });
+    if (claimed.count === 0) throw new ConflictException(t('error.memo.notInReview'));
+    await this.producer.enqueue(row.id);
+    return toInfo({ ...row, ...data });
+  }
+
+  /** The workspace's catalogue of memo types (#879): built-ins as its rows left them, then its own. */
+  async types(workspaceId: string): Promise<MemoType[]> {
+    return effectiveMemoTypes(await this.prisma.memoType.findMany({ where: { workspaceId } }));
+  }
+
+  /**
+   * An admin's edit to one type: a built-in's override, or a type of the
+   * workspace's own, which needs a name. Guidance written here becomes part
+   * of the secretary's instructions for every member's memos of that type.
+   */
+  async saveType(
+    principal: Principal,
+    workspaceId: string,
+    key: string,
+    input: { name?: string | null; guidance?: string | null; hidden?: boolean; projectId?: string | null; auto?: boolean },
+  ): Promise<MemoType[]> {
+    const shipped = shippedMemoType(key);
+    const builtIn = Boolean(shipped);
+    // Sent back as shipped is "inherit", not an override: the row stays sparse and follows a later change to the built-in.
+    const own = (value: string | null | undefined, original: string | undefined) => (value?.trim() && value.trim() !== original ? value.trim() : null);
+    const existing = await this.prisma.memoType.findUnique({ where: { workspaceId_key: { workspaceId, key } } });
+    const name = input.name === undefined ? existing?.name : own(input.name, shipped?.name);
+    if (!builtIn && !name) throw new BadRequestException(t('error.memo.typeNeedsName'));
+    const data = {
+      name: name ?? null,
+      ...(input.guidance !== undefined ? { guidance: own(input.guidance, shipped?.guidance) } : {}),
+      ...(input.hidden !== undefined ? { hidden: input.hidden } : {}),
+      ...(input.auto !== undefined ? { auto: input.auto } : {}),
+      ...(input.projectId !== undefined ? { projectId: input.projectId } : {}),
+    };
+    if (input.projectId) {
+      const project = await this.prisma.project.findFirst({ where: { id: input.projectId, workspaceId }, select: { id: true } });
+      if (!project) throw new BadRequestException(t('error.project.notFound', { id: input.projectId }));
+    }
+    await this.prisma.memoType.upsert({
+      where: { workspaceId_key: { workspaceId, key } },
+      create: { workspaceId, key, createdBy: principal.userId, ...data },
+      update: data,
+    });
+    return this.types(workspaceId);
+  }
+
+  /** Back to the built-in, or gone if it was the workspace's own. Memos keep the key; an unknown key reads as no type. */
+  async removeType(workspaceId: string, key: string): Promise<MemoType[]> {
+    await this.prisma.memoType.deleteMany({ where: { workspaceId, key } });
+    return this.types(workspaceId);
+  }
+
+  /**
+   * The uploader says who a speaker is, or that it is nobody here (#880).
+   * The label must be one the transcript uses and the person a member of the
+   * memo's workspace: a match names someone to the secretary, so neither is
+   * taken on trust. Matching gives that person no access to the memo.
+   */
+  async matchSpeaker(principal: Principal, memoId: string, label: string, userId: string | null): Promise<MemoSpeaker[]> {
+    const row = await this.require(principal, memoId);
+    const labels = speakerLabels(Array.isArray(row.transcript) ? (row.transcript as unknown as MemoSegment[]) : []);
+    if (!labels.includes(label)) throw new BadRequestException(t('error.memo.speakerUnknown'));
+    if (userId) {
+      const member = await this.prisma.workspaceMember.findFirst({ where: { workspaceId: row.workspaceId, userId }, select: { userId: true } });
+      if (!member) throw new BadRequestException(t('error.memo.speakerNotMember'));
+    }
+    const speakers = { ...readChoices(row.speakers), [label]: userId };
+    await this.prisma.memo.update({ where: { id: row.id }, data: { speakers } });
+    return (await loadSpeakers(this.prisma, { ...row, speakers })).speakers;
   }
 
   /**
@@ -399,7 +527,7 @@ export class MemosService {
    * the last 30 days, uploads included. Read from `ai_usage`, not a counter.
    */
   // ponytail: a memo still being transcribed is not in ai_usage yet, so two quick presses can overshoot by one recording; count queued memos if that matters.
-  async plaudTranscribeAllowance(userId: string, workspaceId: string): Promise<{ enabled: boolean; limitSeconds: number; remainingSeconds: number }> {
+  async plaudTranscribeAllowance(userId: string, workspaceId: string): Promise<{ enabled: boolean; limitSeconds: number; remainingSeconds: number; speakers: boolean }> {
     const used = await this.prisma.aiUsage.aggregate({
       where: { workspaceId, userId, operation: 'transcription', createdAt: { gte: new Date(Date.now() - 30 * 86_400_000) } },
       _sum: { audioSeconds: true },
@@ -409,6 +537,7 @@ export class MemosService {
       enabled: this.transcription.enabled && limitSeconds > 0,
       limitSeconds,
       remainingSeconds: Math.max(0, limitSeconds - (used._sum.audioSeconds ?? 0)),
+      speakers: this.speakers,
     };
   }
 
@@ -470,6 +599,8 @@ function toInfo(row: Omit<Memo, 'transcript' | 'dropped' | 'summary'>): MemoInfo
     error: row.error,
     audioAvailable: !row.audioPurgedAt && row.status !== 'pending',
     source: row.source as MemoSource,
+    type: row.type,
+    tags: Array.isArray(row.tags) ? (row.tags as string[]) : [],
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

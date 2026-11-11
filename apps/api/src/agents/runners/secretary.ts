@@ -6,6 +6,8 @@ import { visibilityWhere } from '../../permissions/access-scope.js';
 import type { ResolvedAgent } from '../agent-registry.service.js';
 import type { Principal } from '../../auth/principal.js';
 import { memoCitedIds, memoOutputContract, memoPrompt, readMemoProposals } from '../memo.js';
+import { identifiedSpeakers, loadSpeakers } from '../../memos/speakers.js';
+import { effectiveMemoTypes, memoTypeBrief } from '../../memos/memo-types.js';
 import { parseModelJson } from '../../common/model-json.js';
 import { type AgentServices, type AgentRunner, type AgentReporter, type AgentRunResult, runBrief } from '../agent-services.js';
 
@@ -45,9 +47,13 @@ async function minute(
 
   await report({ stage: 'thinking', progress: 0.2 });
   const call = { config: agent.config, userId: run.createdBy, operation: 'memo' as const, locale: run.locale as Locale };
+  // Matches that hold when the run starts (#880): chosen on this memo, or remembered from the uploader's earlier ones.
+  const who = await loadSpeakers(svc.prisma, memo);
+  // What kind of recording this is (#879): the workspace's own words for it, admin-written, so trusted.
+  const kind = memo.type ? memoTypeBrief(effectiveMemoTypes(await svc.prisma.memoType.findMany({ where: { workspaceId: run.workspaceId } })), memo.type) : '';
   const messages: ChatCompletionMessageParam[] = [
-    { role: 'system', content: `${agent.instructions}\n\n${memoOutputContract(max)}${await svc.guidance(run, agent)}` },
-    { role: 'user', content: runBrief((run.input ?? {}) as AgentRunInput) + memoPrompt(memo.title, segments) },
+    { role: 'system', content: `${agent.instructions}\n\n${memoOutputContract(max)}${kind}${await svc.guidance(run, agent)}` },
+    { role: 'user', content: runBrief((run.input ?? {}) as AgentRunInput) + memoPrompt(memo.title, segments, identifiedSpeakers(who.speakers, who.members)) },
   ];
   // Every page a tool result carried, as the run saw it: the only pages an
   // update may name.

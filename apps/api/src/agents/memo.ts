@@ -29,8 +29,9 @@ export function memoOutputContract(max: number): string {
     'proposals, the most consequential first; an empty list when the recording settles nothing the knowledge ' +
     'base should hold — small talk, status updates and open questions are not decisions. Write only what the ' +
     'recording and the pages you read state, in the language of the page you update (or of the recording, for a ' +
-    'new page). Never invent behaviour, never name who said what, and never copy a [EMAIL_1]-style placeholder ' +
-    'into a page.'
+    'new page). Never invent behaviour. Name who said or owns something only for a speaker the request ' +
+    'identifies by name, and only where a decision or an action is theirs; never guess who anyone else is. Never ' +
+    'copy a [EMAIL_1]-style placeholder into a page.'
   );
 }
 
@@ -40,7 +41,7 @@ export function memoOutputContract(max: number): string {
  * is a thing somebody will say. The memo's title is the uploader's and stays
  * outside the wrapper.
  */
-export function memoPrompt(title: string, segments: MemoSegment[]): string {
+export function memoPrompt(title: string, segments: MemoSegment[], identified: ReadonlyArray<{ label: string; name: string }> = []): string {
   let text = '';
   for (const s of segments) {
     const line = `[${s.i}] ${clock(s.start)}–${clock(s.end)} ${s.speaker ? `${s.speaker}: ` : ''}${s.text}\n`;
@@ -53,6 +54,10 @@ export function memoPrompt(title: string, segments: MemoSegment[]): string {
   return (
     `A team member recorded a conversation and asks what it changes in the knowledge base. Their title for it: ` +
     `${JSON.stringify(title)}.\n\n` +
+    // Who is who (#880) is the uploader's own statement about workspace members, so it stays outside the wrapper.
+    (identified.length
+      ? `They identified these speakers: ${identified.map((s) => `${JSON.stringify(s.label)} is ${JSON.stringify(s.name)}`).join('; ')}.\n\n`
+      : '') +
     wrapUntrusted(text, 'memo', 'memo')
   );
 }

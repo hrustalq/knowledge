@@ -4981,6 +4981,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/memos/types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The kinds of recording this workspace knows: built-in types and its own */
+        get: operations["MemosController_types"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/memos/types/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Change a built-in memo type for this workspace, or add or change one of its own */
+        put: operations["MemosController_saveType"];
+        post?: never;
+        /** Put a built-in memo type back as shipped, or delete one of the workspace's own */
+        delete: operations["MemosController_removeType"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/memos/plaud": {
         parameters: {
             query?: never;
@@ -5009,6 +5044,23 @@ export interface paths {
         put?: never;
         /** Confirm the recording landed and queue its transcription */
         post: operations["MemosController_finalize"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/memos/{id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm what a memo waiting for review is and where it goes; it is then analysed */
+        post: operations["MemosController_confirm"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5045,6 +5097,24 @@ export interface paths {
         post?: never;
         /** Delete a memo: its audio and transcript; merge requests it opened stay */
         delete: operations["MemosController_remove"];
+        options?: never;
+        head?: never;
+        /** Rename a memo, or say what kind of recording it is */
+        patch: operations["MemosController_rename"];
+        trace?: never;
+    };
+    "/v1/memos/{id}/speakers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Say who one of the memo's speakers is, or that it is nobody here */
+        put: operations["MemosController_matchSpeaker"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -5114,6 +5184,23 @@ export interface paths {
         get: operations["PlaudController_listImports"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/plaud/imports/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Look at my Plaud account now instead of waiting for the next pass; at most once in 30 seconds */
+        post: operations["PlaudController_refresh"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9968,6 +10055,23 @@ export interface components {
              */
             templateRef?: string;
         };
+        SaveMemoTypeDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /** @description Null or empty = the built-in name; required for a type of your own */
+            name?: string | null;
+            /** @description How the agent treats a recording of this kind. Null or empty = the built-in guidance */
+            guidance?: string | null;
+            /** @description Hidden types are not offered; memos already of the type keep it */
+            hidden?: boolean;
+            /**
+             * Format: uuid
+             * @description Where a memo detected as this type goes; null = the project it arrived in
+             */
+            projectId?: string | null;
+            /** @description A memo detected as this type is analysed without waiting for its owner's confirm */
+            auto?: boolean;
+        };
         CreateMemoDto: {
             /** Format: uuid */
             workspaceId: string;
@@ -9997,6 +10101,33 @@ export interface components {
             /** @description The recording's id in the caller's Plaud account */
             fileId: string;
         };
+        ConfirmMemoDto: {
+            /** @description A memo type's key, or null for none */
+            type: string | null;
+            /**
+             * Format: uuid
+             * @description The project the memo is filed into and analysed against
+             */
+            projectId: string;
+            tags: string[];
+        };
+        RenameMemoDto: {
+            /** @description Shown in the list and on the memo; a Plaud memo keeps Plaud's own name as its filename */
+            title?: string;
+            /** @description A memo type's key from GET /v1/memos/types, or null for none */
+            type?: string | null;
+            /** @description Topic tags: trimmed, lower-cased, at most five kept */
+            tags?: string[];
+        };
+        MatchMemoSpeakerDto: {
+            /** @description A speaker label exactly as the transcript has it */
+            label: string;
+            /**
+             * Format: uuid
+             * @description A member of the workspace, or null for nobody here
+             */
+            userId: string | null;
+        };
         PlaudRulesDto: {
             /** @description Only recordings started on or after this day, YYYY-MM-DD. Unset = the day the settings were first saved */
             since?: string;
@@ -10024,11 +10155,20 @@ export interface components {
             projectId: string | null;
             rules: components["schemas"]["PlaudRulesDto"];
         };
+        PlaudRefreshDto: {
+            /** Format: uuid */
+            workspaceId: string;
+        };
         PlaudImportIdsDto: {
             /** Format: uuid */
             workspaceId: string;
             /** @description One or many; ids that are not my open recordings are ignored */
             ids: string[];
+            /**
+             * Format: uuid
+             * @description Where these go instead of my settings' project; remembered for a recording that is imported later
+             */
+            projectId?: string;
         };
         PlaudTranscribeDto: {
             /** Format: uuid */
@@ -10038,6 +10178,11 @@ export interface components {
              * @description One of my recordings that is waiting for a Plaud transcript
              */
             id: string;
+            /**
+             * Format: uuid
+             * @description Where these go instead of my settings' project; remembered for a recording that is imported later
+             */
+            projectId?: string;
         };
         WorkflowDraftMessageDto: {
             /** @enum {string} */
@@ -11521,7 +11666,7 @@ export interface components {
             createdAt: string;
         };
         /** @enum {string} */
-        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "source-recipe" | "source-judge" | "blueprint-derive" | "blueprint-generate" | "blueprint-interview";
+        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "memo-triage" | "source-recipe" | "source-judge" | "blueprint-derive" | "blueprint-generate" | "blueprint-interview";
         AiUsageResponse: {
             from: string;
             to: string;
@@ -14687,6 +14832,9 @@ export interface components {
         MembershipSource: "manual" | "jit" | "group" | "scim";
         MemoDetailResponse: {
             memo: components["schemas"]["MemoInfo"];
+            progress: components["schemas"]["MemoProgress"] | null;
+            speakers: components["schemas"]["MemoSpeaker"][];
+            triage: components["schemas"]["MemoTriage"] | null;
             transcript: components["schemas"]["MemoSegment"][];
             summary: string | null;
             proposals: components["schemas"]["MemoProposal"][];
@@ -14713,6 +14861,8 @@ export interface components {
             error: string | null;
             audioAvailable: boolean;
             source: components["schemas"]["MemoSource"];
+            type: string | null;
+            tags: string[];
             createdAt: string;
             updatedAt: string;
         };
@@ -14723,6 +14873,12 @@ export interface components {
                 maxBytes: number;
                 maxMinutes: number;
             };
+        };
+        MemoProgress: {
+            step: components["schemas"]["MemoStep"];
+            /** @enum {string} */
+            state: "waiting" | "running";
+            since: string;
         };
         MemoProposal: {
             /** @enum {string} */
@@ -14746,12 +14902,49 @@ export interface components {
         };
         /** @enum {string} */
         MemoSource: "upload" | "plaud";
+        MemoSpeaker: {
+            label: string;
+            userId: string | null;
+            /** @enum {string|null} */
+            source: "confirmed" | "remembered" | null;
+            suggestedUserId: string | null;
+        };
+        MemoSpeakersResponse: {
+            speakers: components["schemas"]["MemoSpeaker"][];
+        };
         /** @enum {string} */
-        MemoStatus: "pending" | "uploaded" | "transcribing" | "transcribed" | "analysing" | "done" | "failed";
+        MemoStatus: "pending" | "uploaded" | "transcribing" | "transcribed" | "review" | "analysing" | "done" | "failed";
+        /** @enum {string} */
+        MemoStep: "upload" | "transcribe" | "analyse" | "publish";
         MemoTranscriptionState: {
             enabled: boolean;
             /** @enum {string|null} */
             missing: "TRANSCRIPTION_PROVIDER" | "TRANSCRIPTION_BASE_URL" | "TRANSCRIPTION_API_KEY" | null;
+        };
+        MemoTriage: {
+            type: string | null;
+            projectId: string | null;
+            tags: string[];
+            newType: {
+                name: string;
+                guidance: string;
+            } | null;
+            speakers?: {
+                [key: string]: string;
+            };
+        };
+        MemoType: {
+            key: string;
+            name: string;
+            guidance: string;
+            builtIn: boolean;
+            overridden: boolean;
+            hidden: boolean;
+            projectId: string | null;
+            auto: boolean;
+        };
+        MemoTypesResponse: {
+            types: components["schemas"]["MemoType"][];
         };
         MergeConflictHunk: {
             base: components["schemas"]["LineRange"];
@@ -15005,6 +15198,7 @@ export interface components {
             startAt: string | null;
             durationSeconds: number;
             status: components["schemas"]["PlaudImportStatus"];
+            projectId: string | null;
             memoId: string | null;
             error: string | null;
             createdAt: string;
@@ -15041,6 +15235,7 @@ export interface components {
                 enabled: boolean;
                 limitSeconds: number;
                 remainingSeconds: number;
+                speakers: boolean;
             };
         };
         PostAssistantMessageResponse: {
@@ -33466,6 +33661,10 @@ export interface operations {
             query: {
                 workspaceId: string;
                 projectId?: string;
+                /** @description Only memos of this type */
+                type?: string;
+                /** @description Only memos carrying this tag */
+                tag?: string;
             };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
@@ -33548,6 +33747,138 @@ export interface operations {
             };
         };
     };
+    MemosController_types: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoTypesResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MemosController_saveType: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveMemoTypeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoTypesResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MemosController_removeType: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoTypesResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     MemosController_importPlaud: {
         parameters: {
             query?: never;
@@ -33605,6 +33936,52 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MemosController_confirm: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmMemoDto"];
+            };
+        };
         responses: {
             201: {
                 headers: {
@@ -33737,6 +34114,98 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MemosController_rename: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameMemoDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MemosController_matchSpeaker: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MatchMemoSpeakerDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoSpeakersResponse"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -33985,6 +34454,50 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaudImportsResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    PlaudController_refresh: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlaudRefreshDto"];
+            };
+        };
+        responses: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -248,6 +248,8 @@ import type {
   MemoDetailResponse,
   MemoListResponse,
   MemoResponse,
+  MemoSpeakersResponse,
+  MemoTypesResponse,
   MergeMergeRequestResponse,
   MergeRequestApiChangesResponse,
   MergeRequestConflictsResponse,
@@ -609,6 +611,8 @@ export interface ContractResponses {
   MemoDetailResponse: MemoDetailResponse;
   MemoListResponse: MemoListResponse;
   MemoResponse: MemoResponse;
+  MemoSpeakersResponse: MemoSpeakersResponse;
+  MemoTypesResponse: MemoTypesResponse;
   MergeMergeRequestResponse: MergeMergeRequestResponse;
   MergeRequestApiChangesResponse: MergeRequestApiChangesResponse;
   MergeRequestConflictsResponse: MergeRequestConflictsResponse;

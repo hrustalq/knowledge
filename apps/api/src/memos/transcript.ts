@@ -14,6 +14,11 @@ export interface ChunkTranscript {
   /** What the server billed for this chunk, when it says (gen-api does). */
   cost?: number;
   /**
+   * Scribe's words (#878), in place of `segments`: the stitcher segments them
+   * itself, once it has cut what this piece shares with its neighbours (#893).
+   */
+  words?: ScribeWord[];
+  /**
    * `speaker` is the server's own id for a voice (`speaker_0`), good only
    * inside this chunk (#878), not a name: the stitcher numbers such voices
    * across the recording.
@@ -63,12 +68,74 @@ export function scribeSegments(words: ScribeWord[]): ChunkTranscript['segments']
   return out;
 }
 
+/** A piece's spoken words on the recording's clock. */
+function spoken(chunk: ChunkTranscript): Array<{ start: number; end: number; speaker?: string }> {
+  return (chunk.words ?? []).flatMap((w) =>
+    w.type === 'word' && typeof w.start === 'number' && typeof w.end === 'number'
+      ? [{ start: chunk.offset + w.start, end: chunk.offset + w.end, ...(typeof w.speaker_id === 'string' && w.speaker_id ? { speaker: w.speaker_id } : {}) }]
+      : [],
+  );
+}
+
+/**
+ * Where two overlapping pieces hand over (#893): the middle of the longest
+ * pause the earlier one heard in the middle half of their shared stretch, so a
+ * word lands on one side however the two clocks disagree. No pause there: the
+ * stretch's middle.
+ */
+function seamBetween(before: ChunkTranscript, after: ChunkTranscript): number {
+  const [from, to] = [after.offset, before.offset + before.duration];
+  const [lo, hi] = [from + (to - from) / 4, to - (to - from) / 4];
+  let [seam, widest] = [(from + to) / 2, 0];
+  const words = spoken(before);
+  for (let i = 1; i < words.length; i++) {
+    const [end, start] = [words[i - 1]!.end, words[i]!.start];
+    if (start - end > widest && (end + start) / 2 >= lo && (end + start) / 2 <= hi) {
+      [seam, widest] = [(end + start) / 2, start - end];
+    }
+  }
+  return seam;
+}
+
+/**
+ * The later piece's voices onto the earlier piece's (#893): two ids are one
+ * person when they say the same words at the same moment of the shared
+ * stretch. One-to-one, the longest agreement first; a voice silent there
+ * matches nothing.
+ */
+function matchVoices(before: ChunkTranscript, after: ChunkTranscript): Map<string, string> {
+  const to = before.offset + before.duration;
+  const earlier = spoken(before).filter((w) => w.speaker && w.end > after.offset);
+  const together = new Map<string, number>();
+  for (const w of spoken(after)) {
+    if (!w.speaker || w.start >= to) continue;
+    for (const p of earlier) {
+      const both = Math.min(w.end, p.end) - Math.max(w.start, p.start);
+      const pair = `${w.speaker}\n${p.speaker}`;
+      if (both > 0) together.set(pair, (together.get(pair) ?? 0) + both);
+    }
+  }
+  const match = new Map<string, string>();
+  const taken = new Set<string>();
+  for (const [pair] of [...together].sort((a, b) => b[1] - a[1])) {
+    const [later, was] = pair.split('\n') as [string, string];
+    if (match.has(later) || taken.has(was)) continue;
+    match.set(later, was);
+    taken.add(was);
+  }
+  return match;
+}
+
 /**
  * One transcript from the chunks, in order: each segment's times shifted by
  * its chunk's start, empty speech dropped, and every text masked by one
  * masker, so a value spoken twice keeps one placeholder (doc 59's rule). A
  * server that returns text without segments still yields one segment per
  * chunk. The unmasked text never leaves this function.
+ *
+ * Scribe pieces that overlap (#893) are cut at `seamBetween`, so no word is
+ * kept twice, and a later piece's voice takes the earlier one's number when
+ * `matchVoices` pairs them. Any other voice gets a new number.
  */
 export function stitchTranscript(
   chunks: ChunkTranscript[],
@@ -78,19 +145,29 @@ export function stitchTranscript(
   const mask = createMasker();
   const segments: MemoSegment[] = [];
   let voices = 0;
-  for (const chunk of chunks) {
-    // ponytail: a voice is numbered per chunk, so one person in a recording past SPEAKER_CHUNK_SECONDS
-    // gets a second number in the next hour. Match voices across an overlap when long recordings are common.
+  // seams[i]: where chunk i takes over from chunk i - 1, when the two overlap.
+  const seams = chunks.map((chunk, i) => {
+    const before = chunks[i - 1];
+    return before?.words?.length && chunk.words?.length && chunk.offset < before.offset + before.duration
+      ? seamBetween(before, chunk)
+      : undefined;
+  });
+  let previous = new Map<string, string>();
+  for (const [index, chunk] of chunks.entries()) {
     const numbered = new Map<string, string>();
+    const match = seams[index] === undefined ? new Map<string, string>() : matchVoices(chunks[index - 1]!, chunk);
     const speakerOf = (raw: string | undefined): string | undefined => {
       const name = raw?.trim();
       if (!name || !chunk.anonymousSpeakers) return name;
-      if (!numbered.has(name)) numbered.set(name, voice((voices += 1)));
+      if (!numbered.has(name)) numbered.set(name, previous.get(match.get(name) ?? '') ?? voice((voices += 1)));
       return numbered.get(name);
     };
-    const parts = chunk.segments.length
-      ? chunk.segments
-      : [{ start: 0, end: chunk.duration, text: chunk.text, speaker: undefined }];
+    const [from, to] = [seams[index] ?? -Infinity, seams[index + 1] ?? Infinity];
+    const parts = chunk.words?.length
+      ? scribeSegments(chunk.words.filter((w) => typeof w.start !== 'number' || (chunk.offset + w.start >= from && chunk.offset + w.start < to)))
+      : chunk.segments.length
+        ? chunk.segments
+        : [{ start: 0, end: chunk.duration, text: chunk.text, speaker: undefined }];
     for (const part of parts) {
       const text = part.text.trim();
       if (!text) continue;
@@ -103,6 +180,7 @@ export function stitchTranscript(
         ...(speakerOf(part.speaker) ? { speaker: mask(speakerOf(part.speaker)!) } : {}),
       });
     }
+    previous = numbered;
   }
   return { segments, language: chunks.find((c) => c.language)?.language ?? null };
 }

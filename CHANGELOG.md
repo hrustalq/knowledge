@@ -15,6 +15,16 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Changed
+
+- A memo recording longer than an hour, transcribed with speakers (`TRANSCRIPTION_SPEAKERS=true`), keeps one
+  speaker number per person across the whole recording. Before, a person who spoke in both hours of a two-hour
+  recording was "Speaker 1" in the first hour and "Speaker 3" in the second. Each later hourly piece now
+  re-sends the 30 seconds before its cut, and the voices are matched by who speaks at the same moment there.
+  No word from those 30 seconds appears twice. Those seconds are billed twice: about 30 s for each hour after
+  the first. A person who is silent for that whole stretch still gets a new number. Recordings under an hour are
+  transcribed as before. (#893)
+
 ### Fixed
 
 - The MCP tools table on the in-app docs page lists every tool again, including the capture tools

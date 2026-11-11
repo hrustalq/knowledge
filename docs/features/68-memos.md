@@ -298,13 +298,19 @@ What was measured on one real call (17 s, two voices, 2026-11-11): the answer is
 network's size and duration limits, and what `cost` is per minute (that call was billed 2).
 
 - `scribeSegments` (`transcript.ts`) turns words into segments: a new one when the voice changes, after a pause
-  of two seconds, or at a sentence end once a segment has run twenty seconds.
+  of two seconds, or at a sentence end once a segment has run twenty seconds. The client hands the stitcher
+  Scribe's words, not segments, so the overlap below is cut word by word.
 - A voice id means something only inside one request, so the recording is sent whole up to
-  `SPEAKER_CHUNK_SECONDS` (one hour, about 14 MiB of 32 kbit/s mp3) and cut hourly beyond that.
+  `SPEAKER_CHUNK_SECONDS` (one hour, about 14 MiB of 32 kbit/s mp3) and cut hourly beyond that. Each later
+  piece starts `SPEAKER_OVERLAP_SECONDS` (30 s) before its cut (#893), so those seconds are transcribed, and
+  billed, twice.
 - `stitchTranscript` numbers the voices (`Speaker 1`, in the memo's language) and masks the label like any
-  text. Numbers are never reused across pieces: a person who speaks in both hours of a two-hour recording gets
-  two numbers. Matching voices across an overlap is the upgrade, marked `ponytail:` in the code; matching a
-  voice to a person is #880.
+  text. Where two pieces overlap, `matchVoices` pairs the later piece's ids with the earlier one's by how long
+  they speak at the same moment there (one-to-one, the longest agreement first), and a paired voice keeps its
+  number. `seamBetween` picks the hand-over at the longest pause the earlier piece heard in the middle half of
+  the overlap: words before it come from the earlier piece, words after it from the later one, so none is kept
+  twice. A voice that is silent in the overlap gets a new number, so a person who drops out for the whole
+  stretch around the hour is still counted twice. Matching a voice to a person is #880.
 - Usage is still one `transcription` row per attempt, with model `speech-to-text`.
 - `GET /v1/plaud/settings` says `transcribe.speakers`, so the "Transcribe here" dialog tells the truth about
   what the transcript will have.

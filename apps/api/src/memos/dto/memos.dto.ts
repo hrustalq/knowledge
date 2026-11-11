@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsBoolean, IsInt, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, IsUUID, Matches, MaxLength, ValidateIf } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsInt, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, IsUUID, Matches, MaxLength, ValidateIf } from 'class-validator';
 import { MEMO_TYPE_KEY_RE } from '@knowledge/contracts';
 import { vmsg } from '../../common/validation.js';
 
@@ -18,6 +18,32 @@ export class RenameMemoDto {
   @ValidateIf((_, value) => value !== null)
   @Matches(MEMO_TYPE_KEY_RE)
   type?: string | null;
+
+  @ApiPropertyOptional({ type: [String], description: 'Topic tags: trimmed, lower-cased, at most five kept' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  @MaxLength(60, { each: true })
+  tags?: string[];
+}
+
+export class ConfirmMemoDto {
+  @ApiProperty({ type: String, nullable: true, description: 'A memo type\'s key, or null for none' })
+  @ValidateIf((_, value) => value !== null)
+  @Matches(MEMO_TYPE_KEY_RE)
+  type!: string | null;
+
+  @ApiProperty({ format: 'uuid', description: 'The project the memo is filed into and analysed against' })
+  @IsUUID()
+  projectId!: string;
+
+  @ApiProperty({ type: [String] })
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  @MaxLength(60, { each: true })
+  tags!: string[];
 }
 
 export class MemoTypesQueryDto {
@@ -49,6 +75,17 @@ export class SaveMemoTypeDto {
   @IsOptional()
   @IsBoolean()
   hidden?: boolean;
+
+  @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true, description: 'Where a memo detected as this type goes; null = the project it arrived in' })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsUUID()
+  projectId?: string | null;
+
+  @ApiPropertyOptional({ description: 'A memo detected as this type is analysed without waiting for its owner\'s confirm' })
+  @IsOptional()
+  @IsBoolean()
+  auto?: boolean;
 }
 
 export class MatchMemoSpeakerDto {

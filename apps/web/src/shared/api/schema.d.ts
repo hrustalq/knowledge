@@ -5050,6 +5050,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/memos/{id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm what a memo waiting for review is and where it goes; it is then analysed */
+        post: operations["MemosController_confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/memos/{id}/retry": {
         parameters: {
             query?: never;
@@ -10047,6 +10064,13 @@ export interface components {
             guidance?: string | null;
             /** @description Hidden types are not offered; memos already of the type keep it */
             hidden?: boolean;
+            /**
+             * Format: uuid
+             * @description Where a memo detected as this type goes; null = the project it arrived in
+             */
+            projectId?: string | null;
+            /** @description A memo detected as this type is analysed without waiting for its owner's confirm */
+            auto?: boolean;
         };
         CreateMemoDto: {
             /** Format: uuid */
@@ -10077,11 +10101,23 @@ export interface components {
             /** @description The recording's id in the caller's Plaud account */
             fileId: string;
         };
+        ConfirmMemoDto: {
+            /** @description A memo type's key, or null for none */
+            type: string | null;
+            /**
+             * Format: uuid
+             * @description The project the memo is filed into and analysed against
+             */
+            projectId: string;
+            tags: string[];
+        };
         RenameMemoDto: {
             /** @description Shown in the list and on the memo; a Plaud memo keeps Plaud's own name as its filename */
             title?: string;
             /** @description A memo type's key from GET /v1/memos/types, or null for none */
             type?: string | null;
+            /** @description Topic tags: trimmed, lower-cased, at most five kept */
+            tags?: string[];
         };
         MatchMemoSpeakerDto: {
             /** @description A speaker label exactly as the transcript has it */
@@ -11630,7 +11666,7 @@ export interface components {
             createdAt: string;
         };
         /** @enum {string} */
-        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "source-recipe" | "source-judge" | "blueprint-derive" | "blueprint-generate" | "blueprint-interview";
+        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "memo-triage" | "source-recipe" | "source-judge" | "blueprint-derive" | "blueprint-generate" | "blueprint-interview";
         AiUsageResponse: {
             from: string;
             to: string;
@@ -14798,6 +14834,7 @@ export interface components {
             memo: components["schemas"]["MemoInfo"];
             progress: components["schemas"]["MemoProgress"] | null;
             speakers: components["schemas"]["MemoSpeaker"][];
+            triage: components["schemas"]["MemoTriage"] | null;
             transcript: components["schemas"]["MemoSegment"][];
             summary: string | null;
             proposals: components["schemas"]["MemoProposal"][];
@@ -14825,6 +14862,7 @@ export interface components {
             audioAvailable: boolean;
             source: components["schemas"]["MemoSource"];
             type: string | null;
+            tags: string[];
             createdAt: string;
             updatedAt: string;
         };
@@ -14875,13 +14913,22 @@ export interface components {
             speakers: components["schemas"]["MemoSpeaker"][];
         };
         /** @enum {string} */
-        MemoStatus: "pending" | "uploaded" | "transcribing" | "transcribed" | "analysing" | "done" | "failed";
+        MemoStatus: "pending" | "uploaded" | "transcribing" | "transcribed" | "review" | "analysing" | "done" | "failed";
         /** @enum {string} */
         MemoStep: "upload" | "transcribe" | "analyse" | "publish";
         MemoTranscriptionState: {
             enabled: boolean;
             /** @enum {string|null} */
             missing: "TRANSCRIPTION_PROVIDER" | "TRANSCRIPTION_BASE_URL" | "TRANSCRIPTION_API_KEY" | null;
+        };
+        MemoTriage: {
+            type: string | null;
+            projectId: string | null;
+            tags: string[];
+            newType: {
+                name: string;
+                guidance: string;
+            } | null;
         };
         MemoType: {
             key: string;
@@ -14890,6 +14937,8 @@ export interface components {
             builtIn: boolean;
             overridden: boolean;
             hidden: boolean;
+            projectId: string | null;
+            auto: boolean;
         };
         MemoTypesResponse: {
             types: components["schemas"]["MemoType"][];
@@ -33882,6 +33931,52 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MemosController_confirm: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmMemoDto"];
+            };
+        };
         responses: {
             201: {
                 headers: {

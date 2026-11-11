@@ -361,3 +361,32 @@ no type.
 
 Phase 1 sets the type by hand. Detecting it, routing by it and tags are phases 2 and 3 of #879.
 
+## Triage (#879, phase 2)
+
+With `MEMO_TRIAGE_ENABLED=true` a memo is sorted before it is analysed. The status lifecycle gains one state:
+`… → transcribed → (review) → analysing → done`.
+
+- The worker stops at `transcribed` (after its own transcription, and for a Plaud memo that arrives with a
+  transcript) while `memos.triage` is null.
+- `MemoTriageSweeper` (API-only, in `MemosModule`, `Ticker` + `exclusive`, 10 s) claims such a memo by stamping
+  `triaged_at` (a five-minute lease) and asks once: `triageMessages` shows the workspace's offered types, the
+  projects **the uploader may file into now** (read under their own scope, which is why this runs API-side), and
+  the head and tail of the transcript wrapped untrusted. It runs on the secretary's model configuration and is
+  one `memo-triage` usage row.
+- `readTriage` keeps a type or a project only if it was on the list it was shown, and at most five cleaned tags.
+  A `newType` (a name and two sentences of guidance) is kept only when no listed type fit; it does nothing by
+  itself.
+- `triageApplies`: the suggestion is applied without asking **only** for a type whose row has `auto`. Then the
+  memo takes the type, the type's `project_id` when the uploader may file there (otherwise it stays where it
+  arrived), and the tags, and is queued for the secretary. Any other memo moves to `review` with the suggestion
+  stored and nothing applied.
+- `POST /v1/memos/:id/confirm { type, projectId, tags }` is the owner's answer: checked like any memo
+  (`projectFor`, a type the workspace offers), guarded on `review`, then queued.
+- **Fail-open.** No model, no budget, a refused call, an unreadable answer or an uploader who is no longer an
+  editor all send the memo on unsorted (`triage` stored as empty), because a memo stuck behind a sorting step is
+  worse than an unsorted one.
+
+`memo_types.project_id` and `memo_types.auto` are an admin's to set, in the same editor as the guidance.
+`memos.tags` is a string array; `PATCH /v1/memos/:id { tags }` edits it. With the setting off none of this runs
+and a memo goes straight to analysis, as before.
+

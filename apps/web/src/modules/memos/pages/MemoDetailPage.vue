@@ -31,6 +31,9 @@ import { formatDateTime, formatDuration, formatRelative } from '@/shared/utils/f
 import { PageLayout, PageState } from '@/shared/layout'
 import { UserAvatar, useMembers } from '@/entities/person'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
+import { Input } from '@/shared/ui/input'
+import { Label } from '@/shared/ui/label'
+import { useProjectsStore } from '@/stores/projects'
 import MemoActions from '@/modules/memos/components/MemoActions.vue'
 import { useMemoTypes } from '@/modules/memos/model/memo-types'
 import { apiUrl, getWorkspaceId } from '@/shared/api/api'
@@ -170,6 +173,40 @@ const typeChoices = computed(() => types.value.filter((type) => !type.hidden || 
 const setType = (key: string) =>
   act(() => request('patch', '/v1/memos/{id}', { path: { id: id.value }, body: { type: key === NO_TYPE ? null : key } }))
 
+/**
+ * A memo waiting for its owner (#879): what triage suggested, theirs to
+ * change, then on to the agent. The form starts from the suggestion once and
+ * is the person's from then on.
+ */
+const projects = useProjectsStore()
+const review = ref<{ type: string; projectId: string; tags: string } | null>(null)
+watch(
+  () => (memo.value?.status === 'review' ? memo.value.memoId : null),
+  (waiting) => {
+    const m = memo.value
+    review.value =
+      waiting && m
+        ? {
+            type: data.value?.triage?.type ?? m.type ?? NO_TYPE,
+            projectId: data.value?.triage?.projectId ?? m.projectId,
+            tags: (data.value?.triage?.tags ?? m.tags).join(', '),
+          }
+        : null
+  },
+  { immediate: true },
+)
+const confirmReview = () =>
+  act(() =>
+    request('post', '/v1/memos/{id}/confirm', {
+      path: { id: id.value },
+      body: {
+        type: review.value!.type === NO_TYPE ? null : review.value!.type,
+        projectId: review.value!.projectId,
+        tags: review.value!.tags.split(',').map((tag) => tag.trim()).filter(Boolean),
+      },
+    }),
+  )
+
 const retry = () => act(() => request('post', '/v1/memos/{id}/retry', { path: { id: id.value } }))
 </script>
 
@@ -200,7 +237,8 @@ const retry = () => act(() => request('post', '/v1/memos/{id}/retry', { path: { 
       <span class="text-muted-foreground">{{ formatDateTime(memo.createdAt) }}</span>
       <span v-if="memo.durationSeconds" class="text-muted-foreground tabular-nums">{{ formatDuration(memo.durationSeconds * 1000) }}</span>
       <span class="text-muted-foreground inline-flex items-center gap-1"><Lock class="size-3" aria-hidden="true" />{{ t('memos.detail.private') }}</span>
-      <Select v-if="offered.length" :model-value="memo.type ?? NO_TYPE" :disabled="acting" @update:model-value="setType(String($event))">
+      <span v-if="memo.tags.length" class="text-muted-foreground">{{ memo.tags.map((tag) => `#${tag}`).join(' ') }}</span>
+      <Select v-if="offered.length && memo.status !== 'review'" :model-value="memo.type ?? NO_TYPE" :disabled="acting" @update:model-value="setType(String($event))">
         <SelectTrigger size="sm" class="h-7 py-0 data-[size=sm]:h-7" :aria-label="t('memos.types.ofMemo')"><SelectValue /></SelectTrigger>
         <SelectContent>
           <SelectItem :value="NO_TYPE">{{ t('memos.types.none') }}</SelectItem>
@@ -261,6 +299,41 @@ const retry = () => act(() => request('post', '/v1/memos/{id}/retry', { path: { 
           </p>
           <p v-if="memo.language" class="text-muted-foreground text-xs">{{ t('memos.detail.language', { language: memo.language }) }}</p>
         </div>
+
+        <section v-if="review" class="bg-card space-y-3 rounded-lg border p-3" :aria-label="t('memos.review.title')">
+          <div>
+            <h2 class="font-display text-base font-semibold">{{ t('memos.review.title') }}</h2>
+            <p class="text-muted-foreground text-sm">{{ t(data.triage ? 'memos.review.suggested' : 'memos.review.plain') }}</p>
+          </div>
+          <div class="space-y-1.5">
+            <Label for="review-type">{{ t('memos.review.type') }}</Label>
+            <Select v-model="review.type">
+              <SelectTrigger id="review-type" size="sm" class="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem :value="NO_TYPE">{{ t('memos.types.none') }}</SelectItem>
+                <SelectItem v-for="type in offered" :key="type.key" :value="type.key">{{ typeName(type) }}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div class="space-y-1.5">
+            <Label for="review-project">{{ t('memos.review.project') }}</Label>
+            <Select v-model="review.projectId">
+              <SelectTrigger id="review-project" size="sm" class="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="p in projects.items" :key="p.projectId" :value="p.projectId">{{ p.name }}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div class="space-y-1.5">
+            <Label for="review-tags">{{ t('memos.review.tags') }}</Label>
+            <Input id="review-tags" v-model="review.tags" autocomplete="off" />
+            <p class="text-muted-foreground text-xs">{{ t('memos.review.tagsHint') }}</p>
+          </div>
+          <p v-if="data.triage?.newType" class="text-muted-foreground text-xs">
+            {{ t('memos.review.newType', { name: data.triage.newType.name }) }}
+          </p>
+          <Button size="sm" :disabled="acting" @click="confirmReview">{{ t('memos.review.confirm') }}</Button>
+        </section>
 
         <section v-if="data.progress" role="status" :aria-label="t('memos.detail.progress.title')">
           <ol class="space-y-2 text-sm">

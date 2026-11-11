@@ -4718,6 +4718,12 @@ model Memo {
   transcript   Json?
   /// A memo type's key (#879): built-in or the workspace's own. Null = unclassified.
   type         String?
+  /// Topic tags, string[]: suggested by triage, the uploader's to edit.
+  tags         Json      @default("[]")
+  /// MemoTriage: what the model suggested before analysis. Null = not triaged (yet, or triage is off).
+  triage       Json?
+  /// The triage sweeper's claim, a lease like `published_at`.
+  triagedAt    DateTime? @map("triaged_at") @db.Timestamptz
   /// SpeakerChoices: { "<speaker label>": userId | null }, the uploader's matches (#880).
   speakers     Json?
   summary      String?
@@ -4759,6 +4765,10 @@ model MemoType {
   name        String?
   /// Trusted text for the secretary, admin-written. Null = the built-in's guidance.
   guidance    String?
+  /// Where a memo detected as this type goes. Null = it stays in the project it arrived in.
+  projectId   String?  @map("project_id") @db.Uuid
+  /// A memo detected as this type is analysed without waiting for its owner's confirm.
+  auto        Boolean  @default(false)
   hidden      Boolean  @default(false)
   createdBy   String   @map("created_by") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz

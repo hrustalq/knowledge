@@ -7,7 +7,7 @@ import type { Principal } from '../auth/principal.js';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { t } from '../i18n/t.js';
 import { Returns } from '../common/returns.decorator.js';
-import { CreateMemoDto, ImportPlaudMemoDto, ListMemosQueryDto, MatchMemoSpeakerDto, MemoTypesQueryDto, RenameMemoDto, SaveMemoTypeDto } from './dto/memos.dto.js';
+import { ConfirmMemoDto, CreateMemoDto, ImportPlaudMemoDto, ListMemosQueryDto, MatchMemoSpeakerDto, MemoTypesQueryDto, RenameMemoDto, SaveMemoTypeDto } from './dto/memos.dto.js';
 import { MemosService } from './memos.service.js';
 
 /**
@@ -78,6 +78,14 @@ export class MemosController {
   @ApiOperation({ summary: 'Confirm the recording landed and queue its transcription' })
   async finalize(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<MemoResponse> {
     return { memo: await this.memos.finalize(principal, id) };
+  }
+
+  @Post(':id/confirm')
+  @Returns('MemoResponse')
+  @Access('editor', 'memo')
+  @ApiOperation({ summary: 'Confirm what a memo waiting for review is and where it goes; it is then analysed' })
+  async confirm(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ConfirmMemoDto, @CurrentPrincipal() principal: Principal): Promise<MemoResponse> {
+    return { memo: await this.memos.confirm(principal, id, dto) };
   }
 
   @Post(':id/retry')

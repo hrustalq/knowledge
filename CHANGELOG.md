@@ -13,6 +13,42 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Added
+
+- **API keys limited to toolsets.** `POST /v1/me/api-keys` takes `toolsets`, a list of MCP toolset keys (`core` is
+  always added; an unknown one is a 400). Such a key is offered only those toolsets over MCP, and it is **MCP-only**:
+  REST routes, the git remote, the live socket and the plain-markdown URLs answer 403 `apiKeyMcpOnly`. A key without
+  a list, which is every existing key, behaves as before. The Connect AI page has the picker and marks an MCP-only
+  key. (#953, #954)
+- **The skill as a stack.** `GET /v1/mcp/skills` returns the generated skill as several skills, a core one plus one
+  per offered toolset that has a playbook, so a client loads a playbook only when the task matches its description.
+  `GET /v1/mcp/skills/install?dir=claude|agents` is the installer: run it again to update, and it removes a skill the
+  caller is no longer offered and never touches a folder it did not write. Each is also the MCP resource
+  `knowledge://skills/<name>`. The one-file `GET /v1/mcp/skill` is unchanged and stays the default. (#955)
+- `GET /v1/mcp/connection` returns a `toolset` on every tool and `notOffered`, the toolsets the caller is offered
+  nothing of, each with the reason. Connect AI lists tools by toolset and says why one is missing. (#948, #954)
+
+### Changed
+
+- **A switched-off section's MCP tools are no longer listed.** `tools/list`, the generated skill and the server
+  instructions leave out the tools of a section (QA, Memos, Captures, Analytics, Conflicts, Workflows) that is off in
+  every workspace the connection reaches. On in one reachable workspace still lists them, and a call naming a
+  workspace where the section is off is the same 404 as before. A client may keep its old tool list until it
+  reconnects. `MCP` (#949)
+- **The skill and the server instructions describe only what is offered.** A read-only key is no longer told to rate
+  answers, edit through a merge request or record captures, and a caller without the QA, embed, chat, repository or
+  graph tools no longer reads their playbooks. A caller offered everything gets the same `SKILL.md` and the same
+  instructions as before. `MCP` (#950, #951)
+
+### Operations
+
+- Migration `20270115100000_api_key_toolsets` adds the nullable column `api_keys.toolsets`. It is additive and the
+  previous image runs against it. **After a rollback to an older image, a key created with a toolset list stops
+  being limited**: that image does not read the column, so the key works as an ordinary key of its scope on every
+  route. Revoke such keys before rolling back past this release. (#953)
+
 ## [0.50.1] — 2026-11-11
 
 ### Operations

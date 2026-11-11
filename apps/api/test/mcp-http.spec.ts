@@ -1510,10 +1510,23 @@ describe('renderSkill', () => {
       ],
     },
     tools: [
-      { name: 'knowledge_search', description: 'Semantic search. More text.', readOnly: true },
-      { name: 'knowledge_create_branch', description: 'Create a branch.', readOnly: false },
+      { name: 'knowledge_search', description: 'Semantic search. More text.', toolset: 'core' as const, readOnly: true },
+      { name: 'knowledge_create_branch', description: 'Create a branch.', toolset: 'authoring' as const, readOnly: false },
     ],
   };
+
+  /** `base` as each kind of key would get it: the tools that key is really offered, git on. */
+  const skillInputFor = (scope: 'write' | 'read' | 'capture', offSections: McpExtras['offSections'] = []) => ({
+    ...base,
+    git: true,
+    whoami: { ...base.whoami, apiKey: { scope, workspaceId: null, projectIds: null } },
+    tools: service(accessWith('admin')).mcp.toolsFor(keyPrincipal({ id: 'k', scope, workspaceId: null }), { drafts: fakeDrafts(), offSections }),
+  });
+
+  // Taken from the single template before it was split into toolset sections (#945).
+  it.each(['write', 'read', 'capture'] as const)('renders the same document as before the split for a %s key', (scope) => {
+    expect(renderSkill(skillInputFor(scope))).toMatchSnapshot();
+  });
 
   it('is a skill with frontmatter, the caller workspaces, and escaped cells', () => {
     const md = renderSkill(base);
@@ -1548,7 +1561,7 @@ describe('renderSkill', () => {
     const md = renderSkill({
       ...base,
       whoami: { ...base.whoami, apiKey: { scope: 'capture', workspaceId: null, projectIds: [WS_B] } },
-      tools: [...base.tools.filter((t) => t.readOnly), { name: 'knowledge_capture_note', description: 'Capture.', readOnly: false }],
+      tools: [...base.tools.filter((t) => t.readOnly), { name: 'knowledge_capture_note', description: 'Capture.', toolset: 'captures' as const, readOnly: false }],
     });
     expect(md).toContain('capture-only');
     expect(md).toContain(`captures only into \`${WS_B}\``);
@@ -1559,7 +1572,7 @@ describe('renderSkill', () => {
   it('carries the capture playbook and the kit install line only when the capture tools are offered (#73)', () => {
     const capturing = renderSkill({
       ...base,
-      tools: [...base.tools, { name: 'knowledge_capture_decision', description: 'Capture.', readOnly: false }],
+      tools: [...base.tools, { name: 'knowledge_capture_decision', description: 'Capture.', toolset: 'captures' as const, readOnly: false }],
     });
     expect(capturing).toContain('## Capture memory');
     expect(capturing).toContain('knowledge_find_similar');
@@ -1579,7 +1592,7 @@ describe('renderSkill', () => {
   it('teaches the needs_input loop only to a key offered a flow-bearing tool (#425)', () => {
     const asking = renderSkill({
       ...base,
-      tools: [...base.tools, { name: 'knowledge_flag_document', description: 'Flag.', readOnly: false }],
+      tools: [...base.tools, { name: 'knowledge_flag_document', description: 'Flag.', toolset: 'authoring' as const, readOnly: false }],
     });
     expect(asking).toContain('### Questions for the person');
     expect(asking).toContain('`knowledge_flag_document` ask the person');

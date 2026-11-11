@@ -17,7 +17,7 @@ import { apiQueryOptions } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
 import { Button } from '@/shared/ui/button'
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/ui/dialog'
-import { Skeleton } from '@/shared/ui/skeleton'
+import { Skeleton } from '@knowledge/ui/skeleton'
 import SessionList from '@/modules/access/components/SessionList.vue'
 
 const props = defineProps<{ user: UserSummary }>()

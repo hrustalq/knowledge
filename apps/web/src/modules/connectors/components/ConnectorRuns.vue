@@ -9,7 +9,7 @@ import type { ListConnectorRunsResponse, ListConnectorsResponse } from '@knowled
 import { apiInfiniteQueryOptions, apiQueryOptions } from '@/shared/api/queries'
 import { Badge } from '@/shared/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
-import { Skeleton } from '@/shared/ui/skeleton'
+import { Skeleton } from '@knowledge/ui/skeleton'
 import { AiEmptyState } from '@/shared/ui/empty-state'
 import { PageScrollList } from '@/shared/layout'
 import { getWorkspaceId, relativeTime } from '@/shared/api/api'

@@ -22,7 +22,7 @@ import { Autocomplete } from '@/shared/ui/autocomplete'
 import { PageState } from '@/shared/layout'
 import { Button } from '@/shared/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/shared/ui/dialog'
-import { Skeleton } from '@/shared/ui/skeleton'
+import { Skeleton } from '@knowledge/ui/skeleton'
 import { Textarea } from '@/shared/ui/textarea'
 import WorkflowRunCard from '@/modules/workflows/components/WorkflowRunCard.vue'
 

@@ -2,7 +2,7 @@
 import type { DialogOverlayProps } from "reka-ui"
 import type { HTMLAttributes } from "vue"
 import { DialogOverlay } from "reka-ui"
-import { cn } from "@/shared/utils/cn"
+import { cn } from "@knowledge/ui/cn"
 
 const props = defineProps<DialogOverlayProps & { class?: HTMLAttributes["class"] }>()
 </script>

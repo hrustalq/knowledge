@@ -5,7 +5,7 @@ import { reactiveOmit } from "@vueuse/core"
 import {
   DropdownMenuSeparator,
 } from "reka-ui"
-import { cn } from "@/shared/utils/cn"
+import { cn } from "@knowledge/ui/cn"
 
 const props = defineProps<DropdownMenuSeparatorProps & {
   class?: HTMLAttributes["class"]

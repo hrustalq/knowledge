@@ -34,7 +34,7 @@ import { getProjectId, getWorkspaceId, statusDot, statusVariant } from '@/shared
 import { fetchApi } from '@/shared/api/queries'
 import { Button } from '@/shared/ui/button'
 import { Badge } from '@/shared/ui/badge'
-import { Skeleton } from '@/shared/ui/skeleton'
+import { Skeleton } from '@knowledge/ui/skeleton'
 import DocumentTreeNode from '@/modules/documents/components/DocumentTreeNode.vue'
 import TreeDragLayer from '@/modules/documents/components/TreeDragLayer.vue'
 import { provideTreeDnd } from '@/modules/documents/model/tree-dnd'

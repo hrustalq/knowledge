@@ -10,7 +10,7 @@ import {
   useForwardPropsEmits,
 } from "reka-ui"
 import { useI18n } from "vue-i18n"
-import { cn } from "@/shared/utils/cn"
+import { cn } from "@knowledge/ui/cn"
 import SheetOverlay from "./SheetOverlay.vue"
 
 interface SheetContentProps extends DialogContentProps {

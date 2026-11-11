@@ -4,7 +4,7 @@ import type { HTMLAttributes } from "vue"
 import { ChevronUp } from "@lucide/vue"
 import { reactiveOmit } from "@vueuse/core"
 import { SelectScrollUpButton, useForwardProps } from "reka-ui"
-import { cn } from "@/shared/utils/cn"
+import { cn } from "@knowledge/ui/cn"
 
 const props = defineProps<SelectScrollUpButtonProps & { class?: HTMLAttributes["class"] }>()
 

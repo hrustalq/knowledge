@@ -8,7 +8,7 @@ import {
   RadioGroupItem,
   useForwardProps,
 } from "reka-ui"
-import { cn } from "@/shared/utils/cn"
+import { cn } from "@knowledge/ui/cn"
 
 const props = defineProps<RadioGroupItemProps & { class?: HTMLAttributes["class"] }>()
 

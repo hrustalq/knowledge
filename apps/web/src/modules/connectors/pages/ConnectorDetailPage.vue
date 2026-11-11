@@ -29,7 +29,7 @@ import { apiInfiniteQueryOptions, apiQueryOptions, useApiMutation } from '@/shar
 import { errorMessage } from '@/shared/api/errors'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
-import { Skeleton } from '@/shared/ui/skeleton'
+import { Skeleton } from '@knowledge/ui/skeleton'
 import {
   PageLayout,
   PageScrollList,

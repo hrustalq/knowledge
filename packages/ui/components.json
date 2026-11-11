@@ -4,17 +4,17 @@
   "typescript": true,
   "tailwind": {
     "config": "",
-    "css": "src/assets/style.css",
+    "css": "src/styles/theme.css",
     "baseColor": "neutral",
     "cssVariables": true,
     "prefix": ""
   },
   "aliases": {
-    "components": "@/shared",
-    "composables": "@/shared/composables",
-    "utils": "@/shared/utils/cn",
-    "ui": "@/shared/ui",
-    "lib": "@/shared/utils"
+    "components": "@knowledge/ui",
+    "composables": "@knowledge/ui",
+    "utils": "@knowledge/ui/cn",
+    "ui": "@knowledge/ui",
+    "lib": "@knowledge/ui"
   },
   "iconLibrary": "lucide"
 }

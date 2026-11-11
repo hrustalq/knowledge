@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { HTMLAttributes } from "vue"
-import { cn } from "@/shared/utils/cn"
+import { cn } from "../cn"
 
 interface SkeletonProps {
   class?: HTMLAttributes["class"]

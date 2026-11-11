@@ -26,7 +26,7 @@
 import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useHydratedMediaQuery } from '@/shared/composables/use-hydrated'
+import { useHydratedMediaQuery } from '@knowledge/ui/use-hydrated'
 import { ExternalLink, FileText, MessagesSquare } from 'lucide-vue-next'
 import type { AssistantSource } from '@knowledge/contracts'
 import { assistantSourceHref, isChatSource, isPageSource, isWebSource } from '@knowledge/contracts'

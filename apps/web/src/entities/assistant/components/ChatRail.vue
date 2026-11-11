@@ -17,7 +17,7 @@ import { relativeTime } from '@/shared/api/api'
 import { useAssistantStore } from '@/entities/assistant/model/assistant.store'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
-import { Skeleton } from '@/shared/ui/skeleton'
+import { Skeleton } from '@knowledge/ui/skeleton'
 import {
   DropdownMenu,
   DropdownMenuContent,

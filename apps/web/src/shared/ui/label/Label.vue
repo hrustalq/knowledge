@@ -3,7 +3,7 @@ import type { LabelProps } from "reka-ui"
 import type { HTMLAttributes } from "vue"
 import { reactiveOmit } from "@vueuse/core"
 import { Label } from "reka-ui"
-import { cn } from "@/shared/utils/cn"
+import { cn } from "@knowledge/ui/cn"
 
 const props = defineProps<LabelProps & { class?: HTMLAttributes["class"] }>()
 

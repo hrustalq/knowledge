@@ -26,6 +26,7 @@
     "@knowledge/contracts": "workspace:*",
     "@knowledge/editor-schema": "workspace:*",
     "@knowledge/observability": "workspace:*",
+    "@knowledge/ui": "workspace:*",
     "@knowledge/workflow": "workspace:*",
     "@lucide/vue": "^1.38.0",
     "@tanstack/vue-query": "^5.102.8",

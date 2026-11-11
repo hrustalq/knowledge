@@ -46,7 +46,7 @@ import {
 } from '@/shared/ui/filter-bar'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
-import { Skeleton } from '@/shared/ui/skeleton'
+import { Skeleton } from '@knowledge/ui/skeleton'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/shared/ui/table'

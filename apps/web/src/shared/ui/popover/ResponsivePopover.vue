@@ -19,7 +19,7 @@
  * hydration matches and the sheet takes over a tick later, while still closed.
  */
 import { ref } from 'vue'
-import { useHydratedMediaQuery } from '@/shared/composables/use-hydrated'
+import { useHydratedMediaQuery } from '@knowledge/ui/use-hydrated'
 import type { HTMLAttributes } from 'vue'
 import Popover from './Popover.vue'
 import PopoverContent from './PopoverContent.vue'

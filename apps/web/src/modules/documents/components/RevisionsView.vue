@@ -19,7 +19,7 @@ import { confirm } from '@/shared/ui/confirm'
 import { statusVariant } from '@/shared/api/api'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
-import { Skeleton } from '@/shared/ui/skeleton'
+import { Skeleton } from '@knowledge/ui/skeleton'
 import { RadioGroup, RadioGroupItem } from '@/shared/ui/radio-group'
 import {
   Select,

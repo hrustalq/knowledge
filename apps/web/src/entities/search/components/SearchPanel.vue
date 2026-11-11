@@ -9,7 +9,7 @@ import { computed, nextTick, ref, useId, watch } from 'vue'
 import { Search, SlidersHorizontal } from 'lucide-vue-next'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
-import { nativeEl } from '@/shared/utils/cn'
+import { nativeEl } from '@knowledge/ui/cn'
 import SearchResults from './SearchResults.vue'
 import type { SearchCopy, UseSearch } from '../model/use-search'
 

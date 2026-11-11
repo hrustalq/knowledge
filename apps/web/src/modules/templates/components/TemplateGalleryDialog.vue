@@ -41,7 +41,7 @@ import { useMembers } from '@/entities/person'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
-import { Skeleton } from '@/shared/ui/skeleton'
+import { Skeleton } from '@knowledge/ui/skeleton'
 import { Textarea } from '@/shared/ui/textarea'
 import {
   Dialog,

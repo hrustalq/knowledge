@@ -93,7 +93,7 @@ import { useLayoutStore } from '@/stores/layout'
 import { useTemplatesStore } from '@/entities/template'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
-import { Skeleton } from '@/shared/ui/skeleton'
+import { Skeleton } from '@knowledge/ui/skeleton'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/shared/ui/dialog'
 import {
   DropdownMenu,

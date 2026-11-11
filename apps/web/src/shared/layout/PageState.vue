@@ -26,7 +26,7 @@
 import { computed, inject, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { CircleAlert, Inbox, Lock } from 'lucide-vue-next'
-import { Skeleton } from '@/shared/ui/skeleton'
+import { Skeleton } from '@knowledge/ui/skeleton'
 import { ERROR_TEXT } from './page-chrome'
 
 const props = withDefaults(

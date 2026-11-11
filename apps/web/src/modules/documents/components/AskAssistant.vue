@@ -25,7 +25,7 @@ import { useGlossaryStore } from '@/entities/document'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
-import { nativeEl } from '@/shared/utils/cn'
+import { nativeEl } from '@knowledge/ui/cn'
 import { MarkdownView } from '@/entities/document'
 import { AnswerFeedback } from '@/entities/assistant'
 

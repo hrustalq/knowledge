@@ -23,7 +23,7 @@ import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
 import { useTemplatesStore } from '@/entities/template'
 import { useSidebarStore } from '@/stores/sidebar'
-import { Skeleton } from '@/shared/ui/skeleton'
+import { Skeleton } from '@knowledge/ui/skeleton'
 import {
   DropdownMenu,
   DropdownMenuContent,

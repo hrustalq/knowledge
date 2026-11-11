@@ -18,7 +18,7 @@ import { useQueryClient } from '@tanstack/vue-query'
 import { fetchApi } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
 import { Badge } from '@/shared/ui/badge'
-import { Skeleton } from '@/shared/ui/skeleton'
+import { Skeleton } from '@knowledge/ui/skeleton'
 import { UserChip } from '@/entities/person'
 
 const props = defineProps<{ resourceType: AccessResourceType; resourceId: string }>()

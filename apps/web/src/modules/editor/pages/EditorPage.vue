@@ -91,7 +91,7 @@ import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Checkbox } from '@/shared/ui/checkbox'
-import { Skeleton } from '@/shared/ui/skeleton'
+import { Skeleton } from '@knowledge/ui/skeleton'
 import { PageState } from '@/shared/layout'
 import { Autocomplete, type AutocompleteOption } from '@/shared/ui/autocomplete'
 import {

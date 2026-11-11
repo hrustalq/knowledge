@@ -30,7 +30,7 @@ import {
   ComboboxViewport,
 } from 'reka-ui'
 import { Check, Plus, Search } from 'lucide-vue-next'
-import { cn } from '@/shared/utils/cn'
+import { cn } from '@knowledge/ui/cn'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()

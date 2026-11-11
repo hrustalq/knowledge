@@ -4,7 +4,7 @@ import type { HTMLAttributes } from "vue"
 import type { ButtonVariants } from '@/shared/ui/button'
 import { reactiveOmit } from "@vueuse/core"
 import { AlertDialogAction } from "reka-ui"
-import { cn } from "@/shared/utils/cn"
+import { cn } from "@knowledge/ui/cn"
 import { buttonVariants } from '@/shared/ui/button'
 
 // `variant="destructive"` rather than hand-rolled fill classes: the variant is

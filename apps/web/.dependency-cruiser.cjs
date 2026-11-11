@@ -86,15 +86,11 @@ module.exports = {
       name: 'kit-imports-no-app',
       comment:
         'Temporary, until the kit and the page chrome move to @knowledge/ui (#941): they import ' +
-        'npm packages, each other, and the two helpers that move with them, nothing else in ' +
-        'src/. What the app must supply reaches them by prop, slot or inject (RAIL_MEMORY, ' +
+        'npm packages, each other and the package, nothing else in src/. What the app must supply reaches them by prop, slot or inject (RAIL_MEMORY, ' +
         'ERROR_TEXT in shared/layout/page-chrome.ts).',
       severity: 'error',
       from: { path: '^src/shared/(ui|layout)/', pathNot: '\\.spec\\.ts$' },
-      to: {
-        path: '^src/',
-        pathNot: '^src/shared/(ui/|layout/|utils/cn\\.ts$|composables/use-hydrated\\.ts$)',
-      },
+      to: { path: '^src/', pathNot: '^src/shared/(ui|layout)/' },
     },
     {
       name: 'core-is-pure',
@@ -188,7 +184,9 @@ module.exports = {
       severity: 'error',
       from: {},
       // `virtual:*` is a Vite plugin's module, resolved only inside a build (shared/utils/pwa.ts).
-      to: { couldNotResolve: true, pathNot: '^virtual:' },
+      // `@knowledge/ui/tokens.css?raw` (export-render.ts): the resolver does not strip Vite's
+      // query from a package specifier; the build fails if the file is not there.
+      to: { couldNotResolve: true, pathNot: '^virtual:|^@knowledge/ui/[a-z.]+\\.css\\?raw$' },
     },
     {
       name: 'no-deprecated-core',

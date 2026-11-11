@@ -10,7 +10,7 @@ import {
   useForwardPropsEmits,
 } from "reka-ui"
 import { useI18n } from "vue-i18n"
-import { cn } from "@/shared/utils/cn"
+import { cn } from "@knowledge/ui/cn"
 import DialogOverlay from "./DialogOverlay.vue"
 
 const { t } = useI18n()

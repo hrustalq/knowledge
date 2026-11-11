@@ -281,6 +281,9 @@ importers:
       '@knowledge/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@knowledge/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@knowledge/workflow':
         specifier: workspace:*
         version: link:../../packages/workflow
@@ -607,6 +610,58 @@ importers:
         version: 5.9.3
 
   packages/tsconfig: {}
+
+  packages/ui:
+    dependencies:
+      '@vueuse/core':
+        specifier: ^14.4.0
+        version: 14.4.0(vue@3.5.42(typescript@6.0.3))
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      tailwind-merge:
+        specifier: ^3.6.0
+        version: 3.6.0
+      tw-animate-css:
+        specifier: ^1.4.0
+        version: 1.4.0
+    devDependencies:
+      '@intlify/eslint-plugin-vue-i18n':
+        specifier: ^4.5.1
+        version: 4.5.1(eslint@9.39.5(jiti@2.7.0))(jsonc-eslint-parser@3.3.0)(vue-eslint-parser@10.4.1(eslint@9.39.5(jiti@2.7.0)))(yaml-eslint-parser@2.1.0)
+      '@knowledge/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      eslint:
+        specifier: ^9.39.5
+        version: 9.39.5(jiti@2.7.0)
+      shadcn-vue:
+        specifier: ^2.8.2
+        version: 2.8.2(eslint@9.39.5(jiti@2.7.0))(magicast@0.5.4)(vue@3.5.42(typescript@6.0.3))
+      tailwindcss:
+        specifier: ^4.1.0
+        version: 4.3.3
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      typescript-eslint:
+        specifier: ^8.70.1
+        version: 8.70.1(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3)
+      vue:
+        specifier: ^3.5.32
+        version: 3.5.42(typescript@6.0.3)
+      vue-eslint-parser:
+        specifier: ^10.4.1
+        version: 10.4.1(eslint@9.39.5(jiti@2.7.0))
+      vue-i18n:
+        specifier: ^11.4.10
+        version: 11.4.10(vue@3.5.42(typescript@6.0.3))
+      vue-router:
+        specifier: ^4.5.1
+        version: 4.6.4(vue@3.5.42(typescript@6.0.3))
+      vue-tsc:
+        specifier: ^3.2.6
+        version: 3.3.11(typescript@6.0.3)
 
   packages/workflow:
     dependencies:
@@ -10843,7 +10898,7 @@ snapshots:
       obug: 2.1.4
       std-env: 4.2.0
       tinyrainbow: 3.1.1
-      vitest: 4.1.11(@types/node@25.9.5)(@vitest/coverage-v8@4.1.11)(jsdom@30.1.1(@noble/hashes@1.8.0))(vite@8.2.2(@types/node@25.9.5)(jiti@2.7.0)(stylus@0.57.0)(terser@5.51.2)(yaml@2.9.0))
+      vitest: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.11)(jsdom@30.1.1(@noble/hashes@1.8.0))(vite@8.2.2(@types/node@24.13.3)(jiti@2.7.0)(stylus@0.57.0)(terser@5.51.2)(yaml@2.9.0))
 
   '@vitest/expect@4.1.11':
     dependencies:

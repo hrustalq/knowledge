@@ -23,7 +23,7 @@ import {
   ComboboxViewport,
 } from 'reka-ui'
 import { Check, Search } from 'lucide-vue-next'
-import { cn } from '@/shared/utils/cn'
+import { cn } from '@knowledge/ui/cn'
 import type { FilterOption } from './types'
 
 const props = withDefaults(

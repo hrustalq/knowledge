@@ -37,7 +37,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useWorkflowsStore } from '@/entities/workflow'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
-import { Skeleton } from '@/shared/ui/skeleton'
+import { Skeleton } from '@knowledge/ui/skeleton'
 
 const { t } = useI18n()
 const auth = useAuthStore()

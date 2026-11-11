@@ -11,7 +11,7 @@ import type { ListConnectorLinksResponse, ListConnectorsResponse } from '@knowle
 import { apiInfiniteQueryOptions, apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { Button } from '@/shared/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
-import { Skeleton } from '@/shared/ui/skeleton'
+import { Skeleton } from '@knowledge/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
 import { AiEmptyState } from '@/shared/ui/empty-state'
 import { getWorkspaceId, relativeTime } from '@/shared/api/api'

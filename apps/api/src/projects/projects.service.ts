@@ -50,6 +50,7 @@ const ZERO_CASCADE: ProjectCascadeCounts = {
   mergeRequests: 0,
   discussions: 0,
   workflowRuns: 0,
+  memos: 0,
   storedFiles: 0,
 };
 
@@ -60,8 +61,23 @@ const ZERO_COUNTS: ProjectDeletionCounts = {
   workflowDefinitions: 0,
   activeWorkflowRuns: 0,
   pendingImports: 0,
+  memos: 0,
   watchers: 0,
 };
+
+/**
+ * The memo settings that name a project but are not its contents (#901):
+ * where a Plaud link imports to, where one picked recording goes, where a memo
+ * type files its memos. Each is nullable, and null already means something
+ * sensible (auto-import off / the link's project / stays where it arrived), so
+ * a deleted project's pointers follow its contents on a move and are nulled
+ * otherwise — never left naming an id that no longer resolves.
+ */
+async function repointMemoSettings(tx: Prisma.TransactionClient, projectId: string, to: string | null): Promise<void> {
+  await tx.plaudLink.updateMany({ where: { projectId }, data: { projectId: to } });
+  await tx.plaudImport.updateMany({ where: { projectId }, data: { projectId: to } });
+  await tx.memoType.updateMany({ where: { projectId }, data: { projectId: to } });
+}
 
 /**
  * Projects are the organizational layer between a workspace and its documents
@@ -270,6 +286,7 @@ export class ProjectsService {
         await tx.publishedSite.deleteMany({ where: { projectId } });
         // Grants on the project go with it (no FK, house policy).
         await tx.accessGrant.deleteMany({ where: { resourceType: 'project', resourceId: projectId } });
+        await repointMemoSettings(tx, projectId, null);
         await tx.project.delete({ where: { id: projectId } });
       });
       await this.recordDeletion(project, actorId, null, counts, []);
@@ -312,6 +329,7 @@ export class ProjectsService {
         });
         await tx.publishedSite.deleteMany({ where: { projectId } });
         await tx.accessGrant.deleteMany({ where: { resourceType: 'project', resourceId: projectId } });
+        await repointMemoSettings(tx, projectId, null);
         await tx.project.delete({ where: { id: projectId } });
       });
       await this.recordDeletion(project, actorId, null, counts, [], destroyed);
@@ -367,6 +385,9 @@ export class ProjectsService {
       });
       await tx.workflowRun.updateMany({ where: { projectId }, data: { projectId: moveContentsTo } });
       await tx.importJob.updateMany({ where: { projectId }, data: { projectId: moveContentsTo } });
+      // Memos carry no FK either (#901), and a memo left behind is listed by no screen.
+      await tx.memo.updateMany({ where: { projectId }, data: { projectId: moveContentsTo } });
+      await repointMemoSettings(tx, projectId, moveContentsTo);
 
       // The subject is going away, so its watches go with it. Watches on the
       // *documents* are untouched: those pages survive, in a new project.
@@ -418,6 +439,7 @@ export class ProjectsService {
       workflowDefinitions,
       activeWorkflowRuns,
       pendingImports,
+      memos,
       watchers,
     ] = await Promise.all([
       this.prisma.document.count({ where: { projectId } }),
@@ -430,6 +452,7 @@ export class ProjectsService {
       this.prisma.importJob.count({
         where: { projectId, status: { in: ['awaiting-upload', 'queued', 'running'] } },
       }),
+      this.prisma.memo.count({ where: { projectId } }),
       this.prisma.notificationSubscription.count({
         where: { subjectType: 'project', subjectId: projectId, muted: false },
       }),
@@ -441,6 +464,7 @@ export class ProjectsService {
       workflowDefinitions,
       activeWorkflowRuns,
       pendingImports,
+      memos,
       watchers,
     };
   }

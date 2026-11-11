@@ -35,9 +35,23 @@ in the pull request that introduces them — see
 - On a memo with no recording (a Plaud import, or one past audio retention), the time chips under a proposal no
   longer tell a screen reader they play the recording. They are announced as showing the passage at that time,
   which is what they do. (#900)
+- Deleting a project no longer strands its memos. Before, they stayed filed under a project that no longer
+  existed, so `/memos` showed "No memos yet" in every project. The delete dialog now counts memos with the rest
+  of the project's contents: **Move** takes them to the destination project, and **Delete everything** deletes
+  them and their audio. The Plaud auto-import destination, a recording picked for a project, and a memo type's
+  target project follow the move, or are cleared on a delete (auto-import off, the recording goes to the link's
+  project, the memo stays where it arrived). (#901)
 
 ### Operations
 
+- **Migration `20270111100000_memo_orphans` deletes data and cannot be undone.** It deletes every memo whose
+  project no longer exists, transcript included. These are memos stranded by an earlier project delete, which no
+  screen could list. It also clears `project_id` on `plaud_links`, `plaud_imports` and `memo_types` rows that name
+  a missing project. It changes no schema, so rollback by retag still works, but the deleted memos do not come
+  back. The migration cannot reach object storage, so any audio those memos still had stays in the bucket,
+  unreferenced, under `workspaces/{ws}/memos/{memoId}/`. To see what it will remove, run this before deploying:
+  `SELECT id, workspace_id, project_id, title, audio_key FROM memos m WHERE NOT EXISTS (SELECT 1 FROM projects p
+  WHERE p.id = m.project_id);` (#901)
 - **The provider columns that #798 retired are no longer in the Prisma schema, and this release has no migration.**
   Those are `ai_settings.*_provider_id`, `ai_agents.provider_id`, `assistant_threads.provider_id`, and
   `ai_providers.model`, its prices and capabilities. They stay in the database, unread. Rollback by retag still

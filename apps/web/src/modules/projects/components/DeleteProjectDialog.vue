@@ -34,6 +34,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
+  AudioLines,
   BookMarked,
   Eye,
   FileText,
@@ -159,6 +160,7 @@ const rows = computed(() => {
     { key: 'workflowDefinitions', icon: Workflow, n: c.workflowDefinitions },
     { key: 'activeWorkflowRuns', icon: Loader2, n: c.activeWorkflowRuns },
     { key: 'pendingImports', icon: FileUp, n: c.pendingImports },
+    { key: 'memos', icon: AudioLines, n: c.memos },
     { key: 'watchers', icon: Eye, n: c.watchers },
   ]
   return all.filter((r) => r.n > 0)
@@ -189,6 +191,7 @@ const cascadeRows = computed(() => {
       ['mergeRequests', c.mergeRequests],
       ['discussions', c.discussions],
       ['workflowRuns', c.workflowRuns],
+      ['memos', c.memos],
     ] as const
   ).filter(([, n]) => n > 0)
 })

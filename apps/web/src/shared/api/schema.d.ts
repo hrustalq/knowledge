@@ -15300,6 +15300,7 @@ export interface components {
             mergeRequests: number;
             discussions: number;
             workflowRuns: number;
+            memos: number;
             storedFiles: number;
         };
         ProjectContributor: {
@@ -15314,6 +15315,7 @@ export interface components {
             workflowDefinitions: number;
             activeWorkflowRuns: number;
             pendingImports: number;
+            memos: number;
             watchers: number;
         };
         /** @enum {string} */

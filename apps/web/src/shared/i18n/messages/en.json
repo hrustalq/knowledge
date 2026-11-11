@@ -3219,6 +3219,7 @@
         "workflowDefinitions": "{n} workflow | {n} workflows",
         "activeWorkflowRuns": "{n} run in flight | {n} runs in flight",
         "pendingImports": "{n} import in progress | {n} imports in progress",
+        "memos": "{n} memo | {n} memos",
         "watchers": "{n} watcher | {n} watchers"
       },
       "modeMove": "Move the contents to another project",
@@ -3236,7 +3237,8 @@
         "attachments": "{n} attachment | {n} attachments",
         "mergeRequests": "{n} merge request | {n} merge requests",
         "discussions": "{n} discussion | {n} discussions",
-        "workflowRuns": "{n} workflow run | {n} workflow runs"
+        "workflowRuns": "{n} workflow run | {n} workflow runs",
+        "memos": "{n} memo | {n} memos"
       }
     },
     "notFound": "Project not found in this workspace.",

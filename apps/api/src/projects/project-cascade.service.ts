@@ -59,7 +59,7 @@ export class ProjectCascadeService {
    */
   async preview(projectId: string): Promise<ProjectCascadeCounts> {
     const where = { document: { projectId } };
-    const [documents, revisions, attachments, mergeRequests, reviewThreads, pageThreads, workflowRuns] =
+    const [documents, revisions, attachments, mergeRequests, reviewThreads, pageThreads, workflowRuns, memos] =
       await Promise.all([
         this.prisma.document.count({ where: { projectId } }),
         this.prisma.documentRevision.count({ where }),
@@ -68,6 +68,7 @@ export class ProjectCascadeService {
         this.prisma.mergeRequestThread.count({ where: { mergeRequest: { document: { projectId } } } }),
         this.prisma.documentThread.count({ where }),
         this.prisma.workflowRun.count({ where: { projectId } }),
+        this.prisma.memo.count({ where: { projectId } }),
       ]);
     return {
       documents,
@@ -76,6 +77,7 @@ export class ProjectCascadeService {
       mergeRequests,
       discussions: reviewThreads + pageThreads,
       workflowRuns,
+      memos,
       // Each revision stores its source and a normalized JSON beside it; every
       // attachment is one more object.
       storedFiles: revisions * 2 + attachments,
@@ -85,6 +87,7 @@ export class ProjectCascadeService {
   /** Destroy the project's contents. The project row itself is the caller's to delete. */
   async cascade(projectId: string, workspaceId: string): Promise<ProjectCascadeCounts> {
     const counts = await this.preview(projectId);
+    await this.cascadeMemos(projectId);
 
     // Read before deleting: these keys and ids are unreachable afterwards.
     const documents = await this.prisma.document.findMany({
@@ -96,6 +99,23 @@ export class ProjectCascadeService {
 
     await this.cascadeDocuments(documentIds, workspaceId);
     return counts;
+  }
+
+  /**
+   * The project's memos and their recordings (#901), as `MemosService.remove`
+   * does one: the rows, then every version of the audio. Merge requests a memo
+   * opened are ordinary merge requests and go (or stay) with their pages.
+   */
+  private async cascadeMemos(projectId: string): Promise<void> {
+    const memos = await this.prisma.memo.findMany({ where: { projectId }, select: { audioKey: true } });
+    if (memos.length === 0) return;
+    await this.prisma.memo.deleteMany({ where: { projectId } });
+    for (const { audioKey } of memos) {
+      if (!audioKey) continue;
+      await this.storage.purgeObjectVersions(audioKey).catch((e: Error) => {
+        this.logger.warn(`orphaned memo audio ${audioKey}: ${e.message}`);
+      });
+    }
   }
 
   /**

@@ -40,12 +40,13 @@ const ALL = 'all'
 const auth = useAuthStore()
 const { offered, labelOf, nameOf } = useMemoTypes(workspaceId)
 const typeFilter = ref(ALL)
+const tagFilter = ref(ALL)
 const typesOpen = ref(false)
 
 const listQuery = useQuery(
   computed(() => ({
     ...apiQueryOptions('/v1/memos', {
-      query: { workspaceId, ...(projects.activeId ? { projectId: projects.activeId } : {}), ...(typeFilter.value !== ALL ? { type: typeFilter.value } : {}) },
+      query: { workspaceId, ...(projects.activeId ? { projectId: projects.activeId } : {}), ...(typeFilter.value !== ALL ? { type: typeFilter.value } : {}), ...(tagFilter.value !== ALL ? { tag: tagFilter.value } : {}) },
     }),
     refetchInterval: (q: { state: { data: unknown } }) =>
       (q.state.data as MemoListResponse | undefined)?.memos.some((m) => isMemoInFlight(m.status)) ? 3000 : false,
@@ -53,6 +54,8 @@ const listQuery = useQuery(
 )
 const data = computed(() => listQuery.data.value as MemoListResponse | undefined)
 const memos = computed(() => data.value?.memos ?? [])
+/** The tags to filter by are the ones the list in view carries, plus the one already chosen. */
+const tagChoices = computed(() => [...new Set([...memos.value.flatMap((m) => m.tags), ...(tagFilter.value !== ALL ? [tagFilter.value] : [])])].sort())
 const player = useMemoListPlayer()
 /** Only where there is audio to play: a Plaud memo's stays in Plaud, and retention purges the rest. */
 const playable = (m: MemoInfo) => m.audioAvailable && m.status !== 'pending'
@@ -83,7 +86,7 @@ const playable = (m: MemoInfo) => m.audioAvailable && m.status !== 'pending'
 
       <!-- The upload above is already the call to action; a second framed
            "nothing here" box would only repeat it. -->
-      <div v-if="memos.length || typeFilter !== ALL" class="flex flex-wrap items-center gap-2">
+      <div v-if="memos.length || typeFilter !== ALL || tagFilter !== ALL" class="flex flex-wrap items-center gap-2">
         <Select v-model="typeFilter">
           <SelectTrigger size="sm" class="w-52" :aria-label="t('memos.types.filter')"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -91,10 +94,17 @@ const playable = (m: MemoInfo) => m.audioAvailable && m.status !== 'pending'
             <SelectItem v-for="type in offered" :key="type.key" :value="type.key">{{ nameOf(type) }}</SelectItem>
           </SelectContent>
         </Select>
+        <Select v-if="tagChoices.length" v-model="tagFilter">
+          <SelectTrigger size="sm" class="w-44" :aria-label="t('memos.tags.filter')"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem :value="ALL">{{ t('memos.tags.all') }}</SelectItem>
+            <SelectItem v-for="tag in tagChoices" :key="tag" :value="tag">#{{ tag }}</SelectItem>
+          </SelectContent>
+        </Select>
         <Button v-if="auth.canAdminWorkspace" size="sm" variant="ghost" @click="typesOpen = true">{{ t('memos.types.manage') }}</Button>
       </div>
 
-      <p v-if="!memos.length" class="text-muted-foreground kn-measure text-sm">{{ t(typeFilter === ALL ? 'memos.empty' : 'memos.types.noneOfType') }}</p>
+      <p v-if="!memos.length" class="text-muted-foreground kn-measure text-sm">{{ t(typeFilter === ALL && tagFilter === ALL ? 'memos.empty' : 'memos.types.noneOfType') }}</p>
 
       <ul v-else class="divide-y rounded-lg border bg-card">
         <li v-for="m in memos" :key="m.memoId" class="hover:bg-muted/50 flex items-center pr-2">
@@ -117,6 +127,7 @@ const playable = (m: MemoInfo) => m.audioAvailable && m.status !== 'pending'
                 <p class="text-muted-foreground flex flex-wrap gap-x-2 text-xs">
                   <span :class="MEMO_STATUS_CLASS[m.status]">{{ t(`memos.status.${m.status}`) }}</span>
                   <span v-if="labelOf(m.type)">{{ labelOf(m.type) }}</span>
+                  <span v-for="tag in m.tags" :key="tag">#{{ tag }}</span>
                   <span v-if="m.durationSeconds" class="tabular-nums">{{ formatDuration(m.durationSeconds * 1000) }}</span>
                   <span :title="formatDateTime(m.createdAt)">{{ formatRelative(m.createdAt) }}</span>
                 </p>
@@ -131,7 +142,7 @@ const playable = (m: MemoInfo) => m.audioAvailable && m.status !== 'pending'
               :player="player"
             />
           </div>
-          <MemoActions :memo-id="m.memoId" :title="m.title" />
+          <MemoActions :memo-id="m.memoId" :title="m.title" :tags="m.tags" />
         </li>
       </ul>
     </template>

@@ -4649,6 +4649,7 @@
       "connector.harvest.proposed": "a resolved item you closed was harvested into captures for review",
       "memo.done": "your memo was read and its proposals opened for review",
       "memo.failed": "your memo could not be analysed",
+      "memo.review": "your memo is sorted and waits for your confirm",
       "plaud.pending": "Plaud recordings are waiting for your confirmation",
       "plaud.reconnect": "your Plaud sign-in lapsed: link the account again",
       "source.updated": "took a new version from its source",
@@ -7368,6 +7369,10 @@
     "offlineDescription": "Pages already open stay readable. Anything that needs the server will fail until the connection returns."
   },
   "memos": {
+    "tags": {
+      "all": "All tags",
+      "filter": "Filter by tag"
+    },
     "review": {
       "title": "Confirm this memo",
       "suggested": "Suggested from the recording. Change anything, then let the agent read it.",
@@ -7377,6 +7382,7 @@
       "tags": "Tags",
       "tagsHint": "Separated by commas; up to five are kept.",
       "newType": "No type quite fits. The recording looks like a “{name}”; an admin can add it under Memo types.",
+      "adoptType": "Add this type",
       "confirm": "Confirm and analyse"
     },
     "types": {
@@ -7416,6 +7422,8 @@
     },
     "actions": {
       "for": "Actions for {title}",
+      "tags": "Edit tags",
+      "tagsTitle": "Tags",
       "rename": "Rename",
       "renameTitle": "Rename memo",
       "titleLabel": "Title",

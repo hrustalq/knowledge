@@ -26701,6 +26701,15 @@
             }
           },
           {
+            "name": "tag",
+            "required": false,
+            "in": "query",
+            "description": "Only memos carrying this tag",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "Accept-Language",
             "in": "header",
             "required": false,
@@ -67397,6 +67406,12 @@
               }
             ],
             "nullable": true
+          },
+          "speakers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
           }
         },
         "required": [

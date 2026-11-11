@@ -6,6 +6,8 @@ import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { AiUsageService } from '../ai/ai-usage.service.js';
 import { AssistantClient } from '../assistant/assistant.client.js';
 import { AccessService } from '../auth/access.service.js';
+import { EventsPublisher } from '../events/events.publisher.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { parseModelJson } from '../common/model-json.js';
 import { Ticker } from '../common/ticker.js';
 import type { Env } from '../config/env.js';
@@ -15,6 +17,7 @@ import { PermissionService } from '../permissions/permission.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { effectiveMemoTypes } from './memo-types.js';
 import { MemosProducer } from './memos.producer.js';
+import { speakerLabels } from './speakers.js';
 import { readTriage, triageApplies, triageMessages } from './triage.js';
 
 const SWEEP_INTERVAL_MS = 10_000;
@@ -53,6 +56,8 @@ export class MemoTriageSweeper implements OnModuleInit, OnModuleDestroy {
     private readonly client: AssistantClient,
     private readonly usage: AiUsageService,
     private readonly producer: MemosProducer,
+    private readonly notifications: NotificationsService,
+    private readonly events: EventsPublisher,
     config: ConfigService<Env, true>,
   ) {
     this.enabled = config.get('MEMO_TRIAGE_ENABLED', { infer: true });
@@ -107,7 +112,17 @@ export class MemoTriageSweeper implements OnModuleInit, OnModuleDestroy {
       if (allowed) projects.set(project.id, project.name);
     }
 
-    const { system, user } = triageMessages(segments, { types, projects });
+    // Names only, and only when there is a speaker to put one to (#880).
+    const labels = speakerLabels(segments);
+    const members = new Map<string, string>();
+    if (labels.length) {
+      const rows = await this.prisma.workspaceMember.findMany({ where: { workspaceId: memo.workspaceId }, select: { userId: true }, take: 2000 });
+      for (const u of await this.prisma.user.findMany({ where: { id: { in: rows.map((r) => r.userId) } }, select: { id: true, displayName: true } })) {
+        members.set(u.id, u.displayName);
+      }
+    }
+
+    const { system, user } = triageMessages(segments, { types, projects, members });
     const raw = await this.client.chat(
       { config: agent.config, userId: principal.userId, operation: 'memo-triage', locale: principal.locale },
       [
@@ -116,7 +131,7 @@ export class MemoTriageSweeper implements OnModuleInit, OnModuleDestroy {
       ],
       { json: true },
     );
-    const triage = readTriage(parseModelJson(raw), { types, projects });
+    const triage = readTriage(parseModelJson(raw), { types, projects, members }, labels);
     // An auto type's own project, when the uploader may file there; otherwise the memo stays where it arrived.
     const wanted = types.find((t) => t.key === triage.type)?.projectId;
     return { triage, apply: triageApplies(triage, types), projectId: wanted && projects.has(wanted) ? wanted : memo.projectId };
@@ -131,7 +146,20 @@ export class MemoTriageSweeper implements OnModuleInit, OnModuleDestroy {
     const { triage } = outcome;
     const stored = triage as unknown as Prisma.InputJsonValue;
     if (!outcome.apply) {
-      await this.prisma.memo.updateMany({ where: { id: memo.id, status: 'transcribed' }, data: { status: 'review', triage: stored } });
+      const waiting = await this.prisma.memo.updateMany({ where: { id: memo.id, status: 'transcribed' }, data: { status: 'review', triage: stored } });
+      // Said once, to the uploader alone: their memo will not be read until they answer.
+      if (waiting.count) {
+        const delivered = await this.notifications.notify({
+          workspaceId: memo.workspaceId,
+          userIds: [memo.createdBy],
+          type: 'memo.review',
+          reason: 'author',
+          actor: null,
+          title: memo.title,
+          metadata: { memoId: memo.id },
+        });
+        await this.events.announce(memo.workspaceId, delivered);
+      }
       return;
     }
     const moved = await this.prisma.memo.updateMany({

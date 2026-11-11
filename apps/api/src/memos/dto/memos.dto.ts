@@ -152,6 +152,12 @@ export class ListMemosQueryDto {
   @IsOptional()
   @Matches(MEMO_TYPE_KEY_RE)
   type?: string;
+
+  @ApiPropertyOptional({ description: 'Only memos carrying this tag' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  tag?: string;
 }
 
 export class ImportPlaudMemoDto {

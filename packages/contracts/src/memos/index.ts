@@ -71,6 +71,8 @@ export interface MemoTriage {
   tags: string[];
   /** A kind of recording no listed type covers, proposed for the workspace; it does nothing until an admin adds it. */
   newType: { name: string; guidance: string } | null;
+  /** Who a speaker might be, from what is said: `{ label: userId }`. A guess, shown as one (#880). */
+  speakers?: Record<string, string>;
 }
 
 // GET /v1/memos/types

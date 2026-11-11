@@ -41,6 +41,8 @@ export interface SpeakerInput {
   earlier: readonly SpeakerChoices[];
   /** Who may be matched at all: the workspace's members, by id. */
   members: ReadonlyMap<string, string>;
+  /** Triage's guesses from what was said, `{ label: userId }`: only ever a suggestion. */
+  guessed?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -54,11 +56,13 @@ export function resolveSpeakers(input: SpeakerInput): MemoSpeaker[] {
   const member = (id: string | null | undefined) => (id && input.members.has(id) ? id : null);
   return input.labels.map((label) => {
     if (label in input.chosen) return { label, userId: member(input.chosen[label]), source: 'confirmed', suggestedUserId: null };
-    if (isNumberedVoice(label)) return { label, userId: null, source: null, suggestedUserId: null };
+    const guessed = member(input.guessed?.[label]);
+    // A numbered voice is never remembered or read as a name; what was said on this recording can still point at someone.
+    if (isNumberedVoice(label)) return { label, userId: null, source: null, suggestedUserId: guessed };
     const before = input.earlier.find((choices) => label in choices);
     const remembered = member(before?.[label]);
     if (remembered) return { label, userId: remembered, source: 'remembered', suggestedUserId: null };
-    return { label, userId: null, source: null, suggestedUserId: byName(label, input.members) };
+    return { label, userId: null, source: null, suggestedUserId: byName(label, input.members) ?? guessed };
   });
 }
 
@@ -86,7 +90,7 @@ export async function loadSpeakers(
     workspaceMember: { findMany(args: object): Promise<Array<{ userId: string }>> };
     user: { findMany(args: object): Promise<Array<{ id: string; displayName: string }>> };
   },
-  memo: { id: string; workspaceId: string; projectId: string; createdBy: string; speakers: unknown; transcript: unknown },
+  memo: { id: string; workspaceId: string; projectId: string; createdBy: string; speakers: unknown; transcript: unknown; triage?: unknown },
 ): Promise<{ speakers: MemoSpeaker[]; members: Map<string, string> }> {
   const labels = speakerLabels(Array.isArray(memo.transcript) ? (memo.transcript as MemoSegment[]) : []);
   if (!labels.length) return { speakers: [], members: new Map() };
@@ -102,7 +106,13 @@ export async function loadSpeakers(
   const users = await prisma.user.findMany({ where: { id: { in: rows.map((r) => r.userId) } }, select: { id: true, displayName: true } });
   const members = new Map(users.map((u) => [u.id, u.displayName]));
   return {
-    speakers: resolveSpeakers({ labels, chosen: readChoices(memo.speakers), earlier: earlier.map((m) => readChoices(m.speakers)), members }),
+    speakers: resolveSpeakers({
+      labels,
+      chosen: readChoices(memo.speakers),
+      earlier: earlier.map((m) => readChoices(m.speakers)),
+      members,
+      guessed: readChoices((memo.triage as { speakers?: unknown } | null)?.speakers) as Record<string, string>,
+    }),
     members,
   };
 }

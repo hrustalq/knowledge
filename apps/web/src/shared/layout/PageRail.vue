@@ -33,7 +33,7 @@
  */
 import { computed, inject, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import RailSection from '@/shared/layout/RailSection.vue'
+import RailSection from './RailSection.vue'
 import { RAIL_MEMORY, type RailWidget } from './page-chrome'
 
 const props = withDefaults(

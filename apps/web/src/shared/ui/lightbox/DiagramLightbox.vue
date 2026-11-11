@@ -23,7 +23,7 @@ import { useI18n } from 'vue-i18n'
 import { useElementSize, useEventListener, useMutationObserver } from '@vueuse/core'
 import { ChevronLeft, ChevronRight, X, ZoomIn, ZoomOut } from 'lucide-vue-next'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/shared/ui/dialog'
-import { DIAGRAM_ATTR, copyDiagram, diagramAt, diagramsIn, type DiagramCopy } from '@/shared/utils/diagram-gallery'
+import { DIAGRAM_ATTR, copyDiagram, diagramAt, diagramsIn, type DiagramCopy } from './diagram-gallery'
 import { headerButton, navButton, usePanZoom } from './lightbox'
 
 const props = defineProps<{ root: HTMLElement | null }>()

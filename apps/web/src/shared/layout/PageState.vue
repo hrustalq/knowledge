@@ -23,11 +23,11 @@
  * version names *this* page's subject ("No merge requests are open") and the
  * generic one never can. The fallback exists so a page cannot render blank.
  */
-import { computed, type Component } from 'vue'
+import { computed, inject, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { CircleAlert, Inbox, Lock } from 'lucide-vue-next'
 import { Skeleton } from '@/shared/ui/skeleton'
-import { errorMessage } from '@/shared/api/errors'
+import { ERROR_TEXT } from './page-chrome'
 
 const props = withDefaults(
   defineProps<{
@@ -36,7 +36,7 @@ const props = withDefaults(
     description?: string
     /** Empty state only — the page's own subject reads better than a generic tray. */
     icon?: Component
-    /** Anything thrown. Rendered through the shared envelope reader, never raw. */
+    /** Anything thrown. Rendered through the app's `ERROR_TEXT` reader, never raw. */
     error?: unknown
     /** Loading only: how many placeholder rows, and how tall each one is. */
     rows?: number
@@ -53,6 +53,7 @@ const props = withDefaults(
 )
 
 const { t } = useI18n()
+const errorText = inject(ERROR_TEXT, (error) => (error instanceof Error ? error.message : String(error)))
 
 const heading = computed(() => {
   if (props.title) return props.title
@@ -68,7 +69,7 @@ const heading = computed(() => {
 
 const body = computed(() => {
   if (props.description) return props.description
-  if (props.state === 'error' && props.error !== undefined) return errorMessage(props.error, t)
+  if (props.state === 'error' && props.error !== undefined) return errorText(props.error)
   if (props.state === 'forbidden') return t('page.forbiddenHint')
   return ''
 })

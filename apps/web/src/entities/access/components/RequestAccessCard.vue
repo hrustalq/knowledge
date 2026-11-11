@@ -25,7 +25,7 @@ import { Button } from '@/shared/ui/button'
 import { Label } from '@/shared/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import { Textarea } from '@/shared/ui/textarea'
-import PageState from '@/shared/layout/PageState.vue'
+import { PageState } from '@/shared/layout'
 
 const { t } = useI18n()
 

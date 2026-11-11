@@ -22,7 +22,7 @@ import { useI18n } from 'vue-i18n'
 import { useEventListener } from '@vueuse/core'
 import { ChevronLeft, ChevronRight, X, ZoomIn, ZoomOut } from 'lucide-vue-next'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/shared/ui/dialog'
-import { galleryFrom, zoomableAt, type GalleryImage } from '@/shared/utils/image-gallery'
+import { galleryFrom, zoomableAt, type GalleryImage } from './image-gallery'
 import { headerButton, navButton, usePanZoom } from './lightbox'
 
 const props = defineProps<{ root: HTMLElement | null }>()

@@ -5,8 +5,11 @@ export { default as PageRail } from './PageRail.vue'
 export { default as PageSubRail } from './PageSubRail.vue'
 export { default as PageState } from './PageState.vue'
 export { default as PageScrollList } from './PageScrollList.vue'
+export { default as RailSection } from './RailSection.vue'
 
 export {
+  ERROR_TEXT,
+  type ErrorText,
   isCanvas,
   panelId,
   RAIL_MEMORY,

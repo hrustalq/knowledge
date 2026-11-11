@@ -36,7 +36,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu'
-import { confirm } from '@/shared/ui/confirm/use-confirm'
+import { confirm } from '@/shared/ui/confirm'
 import { useSubscription } from '@/shared/composables/rx-vue'
 import { editorStreams } from '../model/editor-streams'
 import {

@@ -105,6 +105,15 @@ export interface RailMemory {
 }
 export const RAIL_MEMORY: InjectionKey<RailMemory> = Symbol('rail-memory')
 
+/**
+ * Turns anything thrown into the sentence `PageState` shows. The app's reader of
+ * the API error envelope lives beside its client, which the chrome may not
+ * import, so the app provides it under this key. With nothing provided
+ * `PageState` shows the error's own message.
+ */
+export type ErrorText = (error: unknown) => string
+export const ERROR_TEXT: InjectionKey<ErrorText> = Symbol('error-text')
+
 export interface RailWidget<K extends string = string> {
   id: K
   /** Already translated. */

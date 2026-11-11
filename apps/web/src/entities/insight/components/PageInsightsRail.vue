@@ -10,7 +10,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { TRAFFIC_CLASSES, type PageInsightsResponse } from '@knowledge/contracts'
-import { formatDuration, formatNumber, formatRelative, formatDate, formatDateTime } from '@/shared/utils/format'
+import { formatDuration, formatNumber, formatRelative, formatDate, formatDateTime, formatDayMonth } from '@/shared/utils/format'
 import { DailyBars } from '@/shared/ui/daily-bars'
 import { TRAFFIC_BAR, TRAFFIC_SEGMENTS, trafficPoints } from '../model/traffic'
 
@@ -47,6 +47,7 @@ const partial = computed(() => !!props.insights.collectingSince && props.insight
       :points="points"
       :segments="TRAFFIC_SEGMENTS"
       :height="40"
+      :day-label="formatDayMonth"
       :label="t('analytics.viewsChartLabel', { n: 30 })"
       :point-title="(date, [human, assisted, agent]) => t('analytics.chartPoint', { date, human, assisted, agent })"
     />

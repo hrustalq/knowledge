@@ -25,7 +25,7 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Github, Loader2, Lock, Plus, RefreshCw } from 'lucide-vue-next'
 import type { GithubInstallationsResponse } from '@knowledge/contracts'
 import { apiQueryOptions, fetchApi } from '@/shared/api/queries'
-import Autocomplete, { type AutocompleteOption } from '@/shared/ui/autocomplete/Autocomplete.vue'
+import { Autocomplete, type AutocompleteOption } from '@/shared/ui/autocomplete'
 import { Button } from '@/shared/ui/button'
 
 const props = defineProps<{

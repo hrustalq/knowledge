@@ -2,7 +2,7 @@
 // Token spend per user, with a daily bar chart (DailyBars).
 import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
-import { formatCosts, formatNumber } from '@/shared/utils/format'
+import { formatCosts, formatNumber, formatDayMonth } from '@/shared/utils/format'
 import { useQuery } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 import type { AiBudgetInfo, AiUsageResponse, ListAiBudgetsResponse } from '@knowledge/contracts'
@@ -170,6 +170,7 @@ function labelFor(userId: string): string {
             :to="data.to"
             :points="chartPoints"
             :segments="[{ class: 'bg-primary/60 hover:bg-primary' }]"
+            :day-label="formatDayMonth"
             :label="t('ai.tokensChartLabel', { n: days, peak: fmtTokens(chartMax) })"
             :point-title="
               (date, [tokens]) =>

@@ -30,7 +30,7 @@ import {
 } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
-import { formatDate, formatDuration, formatNumber, formatPercent, formatRelative } from '@/shared/utils/format'
+import { formatDate, formatDuration, formatNumber, formatPercent, formatRelative, formatDayMonth } from '@/shared/utils/format'
 import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/shared/ui/button'
 import { PageLayout, PageState, PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@/shared/layout'
@@ -257,6 +257,7 @@ const questionPoints = computed(() => (agents.value?.questionSeries ?? []).map((
                 :to="overview.to"
                 :points="points"
                 :segments="TRAFFIC_SEGMENTS"
+                :day-label="formatDayMonth"
                 :label="t('analytics.viewsChartLabel', { n: days })"
                 :point-title="(date, [human, assisted, agent]) => t('analytics.chartPoint', { date, human, assisted, agent })"
               />
@@ -360,6 +361,7 @@ const questionPoints = computed(() => (agents.value?.questionSeries ?? []).map((
               :points="questionPoints"
               :segments="[{ class: TRAFFIC_BAR.assisted }]"
               :height="64"
+              :day-label="formatDayMonth"
               :label="t('analytics.agents.questionsChartLabel', { n: days })"
               :point-title="(date, [n]) => t('analytics.agents.questionsPoint', { date, n })"
             />

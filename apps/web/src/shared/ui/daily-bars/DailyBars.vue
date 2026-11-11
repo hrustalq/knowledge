@@ -12,7 +12,6 @@
  * gets a bar here and a spike reads as a spike.
  */
 import { computed } from 'vue'
-import { formatDayMonth } from '@/shared/utils/format'
 
 export interface BarSegment {
   /** Tailwind background classes for this segment. */
@@ -27,6 +26,8 @@ const props = withDefaults(
     points: Array<{ date: string; values: number[] }>
     segments: BarSegment[]
     label: string
+    /** The text under each end of the axis: the caller's locale-aware day format. */
+    dayLabel: (date: string) => string
     /** The hover text of one day. */
     pointTitle: (date: string, values: number[]) => string
     height?: number
@@ -79,8 +80,8 @@ const bars = computed(() => {
       </div>
     </div>
     <div class="text-muted-foreground mt-1.5 flex justify-between text-xs">
-      <span>{{ formatDayMonth(from) }}</span>
-      <span>{{ formatDayMonth(to) }}</span>
+      <span>{{ dayLabel(from) }}</span>
+      <span>{{ dayLabel(to) }}</span>
     </div>
   </div>
 </template>

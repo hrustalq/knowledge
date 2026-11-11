@@ -13,7 +13,7 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
-## [Unreleased]
+## [0.50.0] — 2026-11-11
 
 ### Changed
 
@@ -52,12 +52,12 @@ in the pull request that introduces them — see
   unreferenced, under `workspaces/{ws}/memos/{memoId}/`. To see what it will remove, run this before deploying:
   `SELECT id, workspace_id, project_id, title, audio_key FROM memos m WHERE NOT EXISTS (SELECT 1 FROM projects p
   WHERE p.id = m.project_id);` (#901)
-- **The provider columns that #798 retired are no longer in the Prisma schema, and this release has no migration.**
+- **The provider columns that #798 retired are no longer in the Prisma schema, and no migration touches them.**
   Those are `ai_settings.*_provider_id`, `ai_agents.provider_id`, `assistant_threads.provider_id`, and
   `ai_providers.model`, its prices and capabilities. They stay in the database, unread. Rollback by retag still
   works to any earlier release. The next release drops the columns, and from then on a rollback can go no further
   back than this one. (#803)
-- **Connector secrets now live only in `credentials`, and this release has no migration.** The copies kept for
+- **Connector secrets now live only in `credentials`, and no migration touches the old copies.** The copies kept for
   rollbacks since v0.47.0 are no longer written or read, and leave the Prisma schema: `connectors.credential` /
   `credential_hint`, `connections.credential` / `credential_hint`, `github_user_tokens` and `figma_oauth_grants`.
   The API no longer runs its boot backfill (no more `moved N sign-in(s) into credentials` or `bound N connector(s)`
@@ -6730,7 +6730,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.49.2...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.50.0...HEAD
+[0.50.0]: https://github.com/hrustalq/knowledge/compare/v0.49.2...v0.50.0
 [0.49.2]: https://github.com/hrustalq/knowledge/compare/v0.49.1...v0.49.2
 [0.49.1]: https://github.com/hrustalq/knowledge/compare/v0.49.0...v0.49.1
 [0.49.0]: https://github.com/hrustalq/knowledge/compare/v0.48.0...v0.49.0

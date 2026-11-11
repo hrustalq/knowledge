@@ -13,6 +13,32 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Security
+
+- **The app no longer connects to Postgres as a superuser.** API, worker and git log in as a role that can only
+  read and write rows: it cannot create, alter or drop a table, truncate one, read the migration history, read
+  server files or run a program through `COPY … FROM PROGRAM`. Migrations run as a separate owner role, and the
+  superuser's password is no longer in any app pod's environment. (#790)
+
+### Operations
+
+- **Two production keys must be set before tagging this release, or the deploy fails before anything reaches the
+  cluster.** In the
+  GitHub `production` environment: add the secret `DATABASE_OWNER_URL` (`postgresql://knowledge_owner:<openssl rand
+  -hex 24>@postgres:5432/knowledge?schema=public`), and change `DATABASE_URL` to log in as `knowledge_app` with its
+  own `openssl rand -hex 24` password. Use three different role names (the superuser stays `POSTGRES_USER`), with
+  hex passwords. Nothing has to be created by hand: before every `prisma migrate deploy`, the migrate Job's role
+  step (`deploy/postgres-roles.sh`) creates both roles, hands the database and every existing table, sequence, type
+  and function to the owner, grants the app row access, and sets default privileges so a table added by a later
+  migration needs no grant. It re-runs on every deploy, so rotating a password means changing the URL and
+  redeploying. The deploy now seals `POSTGRES_PASSWORD` and `DATABASE_OWNER_URL` into a second secret,
+  `knowledge-db-admin`, read only by postgres and the migrate Job. The homelab manifests that read it land first
+  and do nothing until this release fills it. Rollback by retag stays safe: an older release's image runs fine
+  as `knowledge_app`, and the roles and ownership stay as they are. A future migration that needs superuser rights
+  (`CREATE EXTENSION`) fails as the owner and has to be run by hand as the superuser. (#790)
+
 ## [0.49.1] — 2026-11-11
 
 ### Fixed

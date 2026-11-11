@@ -6,10 +6,12 @@ name: deploy
 #   1. builds the images for the tag (images.yml → ghcr.io/hrustalq/knowledge-*);
 #   2. renders the `production` environment, as the old .env was, and seals it
 #      offline with the cluster's public sealed-secrets cert (only the cluster
-#      can decrypt it);
-#   3. commits image tag + sealed config + Caddyfile + searxng settings to the
-#      homelab repo. Argo CD then runs `prisma migrate deploy` (a Sync hook,
-#      after the datastores and before the app) and rolls the app out.
+#      can decrypt it) into two secrets: `knowledge-db-admin` (the Postgres
+#      superuser and migration owner) and `knowledge-env` (everything else);
+#   3. commits image tag + sealed config + Caddyfile + searxng settings +
+#      deploy/postgres-roles.sh to the homelab repo. Argo CD then runs the role
+#      script and `prisma migrate deploy` as the owner (a Sync hook, after the
+#      datastores and before the app) and rolls the app out.
 #
 # TAGS DEPLOY, MERGES DO NOT. `dev` is integration; `main` is the released state
 # and is still not live until `vX.Y.Z` is pushed. The release runbook is in
@@ -125,20 +127,29 @@ jobs:
             echo "$env_json" | jq -e --arg k "$key" 'has($k)' >/dev/null || missing="$missing $key"
           done
           if [ -n "$missing" ]; then echo "::error::missing from the production environment:$missing"; exit 1; fi
-          echo "$env_json" \
-            | jq '{apiVersion: "v1", kind: "Secret", type: "Opaque",
-                   metadata: {name: "knowledge-env", namespace: "knowledge"}, stringData: .}' \
-            | kubeseal --cert homelab/k8s/platform/sealed-secrets/pub-cert.pem --format yaml \
-            > "$APP_DIR/sealedsecret-env.yaml"
-          # datastores (sync-wave -1) read this secret, so it must exist first
-          yq -i '.metadata.annotations["argocd.argoproj.io/sync-wave"] = "-2"' "$APP_DIR/sealedsecret-env.yaml"
-          echo "sealed $(echo "$env_json" | jq 'length') keys"
+          seal() { # secret name, file, jq filter over the environment
+            echo "$env_json" | jq "$3" \
+              | jq --arg n "$1" '{apiVersion: "v1", kind: "Secret", type: "Opaque",
+                     metadata: {name: $n, namespace: "knowledge"}, stringData: .}' \
+              | kubeseal --cert homelab/k8s/platform/sealed-secrets/pub-cert.pem --format yaml \
+              > "$APP_DIR/$2"
+            # datastores (sync-wave -1) read these secrets, so they must exist first
+            yq -i '.metadata.annotations["argocd.argoproj.io/sync-wave"] = "-2"' "$APP_DIR/$2"
+            echo "sealed $1: $(echo "$env_json" | jq "$3 | length") keys"
+          }
+          # Every app pod loads knowledge-env whole, so the superuser's password
+          # and the migration owner's login go to a secret only postgres and the
+          # migrate Job read (#790).
+          admin='["POSTGRES_PASSWORD", "DATABASE_OWNER_URL"]'
+          seal knowledge-env      sealedsecret-env.yaml      "with_entries(select(.key as \$k | $admin | index(\$k) | not))"
+          seal knowledge-db-admin sealedsecret-db-admin.yaml "with_entries(select(.key as \$k | $admin | index(\$k)))"
 
       - name: Sync deployment files and image tag
         run: |
           set -euo pipefail
           install -m 644 knowledge/Caddyfile            "$APP_DIR/files/Caddyfile"
           install -m 644 knowledge/searxng/settings.yml "$APP_DIR/files/searxng-settings.yml"
+          install -m 644 knowledge/deploy/postgres-roles.sh "$APP_DIR/files/postgres-roles.sh"
           for img in knowledge-api knowledge-api-git knowledge-web; do
             yq -i "(.images[] | select(.name == \"$img\") | .newTag) = \"$TAG\"" "$APP_DIR/kustomization.yaml"
           done

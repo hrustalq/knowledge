@@ -19,7 +19,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { asLocale } from '../i18n/locale.js';
 import { t, withLocale } from '../i18n/t.js';
-import { detectPauses, fixedCuts, pauseCuts, probeSeconds, splitAudio } from './audio.js';
+import { SPEAKER_CHUNK_SECONDS, detectPauses, fixedCuts, pauseCuts, probeSeconds, splitAudio } from './audio.js';
 import { MEMO_QUEUE } from './memos.constants.js';
 import { TranscriptionClient } from './transcription.client.js';
 import { stitchTranscript, type ChunkTranscript } from './transcript.js';
@@ -95,7 +95,12 @@ export class MemosProcessor extends WorkerHost {
         throw new Error(t('error.memo.tooLong', { minutes: Math.ceil(seconds / 60), limit: this.maxMinutes }));
       }
       // gen-api returns no timestamps (#584), so its pieces are short and end at pauses.
-      const cuts = this.stt.provider === 'gen-api' ? pauseCuts(await detectPauses(source), seconds) : fixedCuts(seconds);
+      // A server that tells speakers apart gets the recording whole when it can (#878): its labels are per request.
+      const cuts = this.stt.speakers
+        ? fixedCuts(seconds, SPEAKER_CHUNK_SECONDS)
+        : this.stt.provider === 'gen-api'
+          ? pauseCuts(await detectPauses(source), seconds)
+          : fixedCuts(seconds);
       const chunks: ChunkTranscript[] = [];
       for (const chunk of await splitAudio(source, dir, cuts, seconds)) {
         const part = await this.stt.transcribe(chunk.path, chunk.offset, chunk.duration);
@@ -104,7 +109,7 @@ export class MemosProcessor extends WorkerHost {
         // Progress, so the sweeper tells a long recording from a dead worker (#776).
         await this.prisma.memo.update({ where: { id: memoId }, data: { updatedAt: new Date() } });
       }
-      const { segments, language } = stitchTranscript(chunks);
+      const { segments, language } = stitchTranscript(chunks, (n) => t('error.memo.speaker', { n }));
       await this.prisma.memo.update({
         where: { id: memoId },
         data: {

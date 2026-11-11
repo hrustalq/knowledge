@@ -283,3 +283,28 @@ and is never stored. A run that has ended on a memo still `analysing` reads as `
 The page draws the steps in its rail: the ones behind, the current one with what is happening and since when,
 the ones ahead. A step nothing has picked up for five minutes says so. A Plaud memo shows no upload step, and a
 transcription step only when its owner chose "Transcribe here".
+
+## Speakers on what this server transcribes (#878)
+
+`TRANSCRIPTION_SPEAKERS=true` with `TRANSCRIPTION_PROVIDER=gen-api` moves transcription from gen-api's `gen-stt`
+to its `speech-to-text` network (ElevenLabs Scribe, `model: v2`, `diarize: true`, `tag_audio_events: false`). It
+is the only gen-api speech network with speaker labels. `openai-compatible` does not read the setting: no
+OpenAI-compatible server we know of serves a diarized format that holds across requests.
+
+What was measured on one real call (17 s, two voices, 2026-11-11): the answer is synchronous,
+`response.words[]` carries `text`, `start`, `end`, `type` (`word` or `spacing`) and `speaker_id` (`speaker_0`,
+…), `response.language_code` is ISO 639-3 (`eng`), and `cost` is a number. Not documented and not measured: the
+network's size and duration limits, and what `cost` is per minute (that call was billed 2).
+
+- `scribeSegments` (`transcript.ts`) turns words into segments: a new one when the voice changes, after a pause
+  of two seconds, or at a sentence end once a segment has run twenty seconds.
+- A voice id means something only inside one request, so the recording is sent whole up to
+  `SPEAKER_CHUNK_SECONDS` (one hour, about 14 MiB of 32 kbit/s mp3) and cut hourly beyond that.
+- `stitchTranscript` numbers the voices (`Speaker 1`, in the memo's language) and masks the label like any
+  text. Numbers are never reused across pieces: a person who speaks in both hours of a two-hour recording gets
+  two numbers. Matching voices across an overlap is the upgrade, marked `ponytail:` in the code; matching a
+  voice to a person is #880.
+- Usage is still one `transcription` row per attempt, with model `speech-to-text`.
+- `GET /v1/plaud/settings` says `transcribe.speakers`, so the "Transcribe here" dialog tells the truth about
+  what the transcript will have.
+

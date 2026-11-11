@@ -717,6 +717,12 @@ export const envSchema = z.object({
   TRANSCRIPTION_BASE_URL: z.string().optional().default(''),
   TRANSCRIPTION_MODEL: z.string().min(1).default('whisper-1'),
   TRANSCRIPTION_API_KEY: z.string().optional().default(''),
+  /**
+   * Speaker labels on what this server transcribes (#878). Only gen-api can:
+   * its `speech-to-text` network (ElevenLabs Scribe) replaces `gen-stt`, at
+   * several times the price per minute. Unread by `openai-compatible`.
+   */
+  TRANSCRIPTION_SPEAKERS: boolish(false),
   /** Upload ceiling, enforced at reserve and again from the bucket's HEAD. */
   MEMO_MAX_BYTES: z.coerce.number().int().positive().default(209_715_200),
   /** Length ceiling: the browser's claim at reserve, ffprobe's in the worker. */

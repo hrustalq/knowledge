@@ -15087,6 +15087,7 @@ export interface components {
                 enabled: boolean;
                 limitSeconds: number;
                 remainingSeconds: number;
+                speakers: boolean;
             };
         };
         PostAssistantMessageResponse: {

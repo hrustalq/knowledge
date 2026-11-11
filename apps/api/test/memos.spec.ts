@@ -217,7 +217,35 @@ describe('speakers from a Scribe answer (#878)', () => {
     expect(segments[0]!.end).toBeCloseTo(1.9);
   });
 
-  it('numbers voices across the recording, never reusing a number for a later chunk, and leaves a Plaud name alone', () => {
+  it('keeps one number per person across overlapping hourly pieces, and every word once (#893)', () => {
+    const names = ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot', 'golf', 'hotel', 'india', 'juliet'];
+    // Two people taking turns every 8 s around the hour; the second piece reaches back 30 s.
+    const lines = [100, 200, 3540, 3548, 3556, 3564, 3572, 3580, 3588, 3596, 3604, 3612, 5000, 6000].map((at, k) => ({
+      at, who: k % 2 ? 'boris' : 'anna', text: `${k % 2 ? 'Boris' : 'Anna'} ${names[k % names.length]} done.`,
+    }));
+    // Scribe's ids are per request: the second piece calls Anna speaker_1.
+    const piece = (offset: number, duration: number, ids: Record<string, string>, jitter: number) => ({
+      offset, duration, language: 'eng', text: '', segments: [], anonymousSpeakers: true,
+      words: lines
+        .filter((l) => l.at >= offset && l.at < offset + duration)
+        .flatMap((l) => say(ids[l.who]!, l.at - offset + jitter, l.text)),
+    });
+    const { segments } = stitchTranscript(
+      [piece(0, 3600, { anna: 'speaker_0', boris: 'speaker_1' }, 0), piece(3570, 3630, { anna: 'speaker_1', boris: 'speaker_0' }, 0.03)],
+      (n) => `Voice ${n}`,
+    );
+    expect(segments.map((s) => [s.speaker, s.text])).toEqual(lines.map((l) => [l.who === 'anna' ? 'Voice 1' : 'Voice 2', l.text]));
+  });
+
+  it('transcribes a single Scribe piece as its words segment, untouched (#893)', () => {
+    const words = [...say('speaker_0', 0, 'One piece only.'), ...say('speaker_1', 3, 'Same as before.')];
+    const { segments } = stitchTranscript([{ offset: 0, duration: 10, language: null, text: '', segments: [], anonymousSpeakers: true, words }]);
+    expect(segments.map((s) => [s.speaker, s.text, s.start])).toEqual(
+      scribeSegments(words).map((s, i) => [`Speaker ${i + 1}`, s.text.trim(), s.start]),
+    );
+  });
+
+  it('numbers voices across pieces that do not overlap, never reusing a number, and leaves a Plaud name alone', () => {
     const chunk = (offset: number, ids: string[]) => ({
       offset, duration: 10, language: null, text: '', anonymousSpeakers: true,
       segments: ids.map((speaker, i) => ({ start: i, end: i + 1, text: `line ${i}`, speaker })),

@@ -4,7 +4,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.js';
 import { t } from '../i18n/t.js';
-import { scribeSegments, type ChunkTranscript, type ScribeWord } from './transcript.js';
+import type { ChunkTranscript, ScribeWord } from './transcript.js';
 
 /** One chunk is at most ten minutes of audio; a server slower than this is down. */
 const TIMEOUT_MS = 5 * 60_000;
@@ -76,7 +76,9 @@ export class TranscriptionClient {
         duration,
         language: typeof answer.language_code === 'string' && answer.language_code ? answer.language_code : null,
         text: typeof answer.text === 'string' ? answer.text : '',
-        segments: scribeSegments(answer.words as ScribeWord[]),
+        // Segmented by the stitcher, which first cuts the overlap with the neighbouring pieces (#893).
+        segments: [],
+        words: answer.words as ScribeWord[],
         anonymousSpeakers: true,
         ...(typeof body.cost === 'number' ? { cost: body.cost } : {}),
       };

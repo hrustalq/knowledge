@@ -19,7 +19,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { asLocale } from '../i18n/locale.js';
 import { t, withLocale } from '../i18n/t.js';
-import { SPEAKER_CHUNK_SECONDS, detectPauses, fixedCuts, pauseCuts, probeSeconds, splitAudio } from './audio.js';
+import { SPEAKER_CHUNK_SECONDS, SPEAKER_OVERLAP_SECONDS, detectPauses, fixedCuts, pauseCuts, probeSeconds, splitAudio } from './audio.js';
 import { MEMO_QUEUE } from './memos.constants.js';
 import { TranscriptionClient } from './transcription.client.js';
 import { stitchTranscript, type ChunkTranscript } from './transcript.js';
@@ -106,7 +106,8 @@ export class MemosProcessor extends WorkerHost {
           ? pauseCuts(await detectPauses(source), seconds)
           : fixedCuts(seconds);
       const chunks: ChunkTranscript[] = [];
-      for (const chunk of await splitAudio(source, dir, cuts, seconds)) {
+      // Speaker pieces overlap, so one person keeps one number across them (#893).
+      for (const chunk of await splitAudio(source, dir, cuts, seconds, this.stt.speakers ? SPEAKER_OVERLAP_SECONDS : 0)) {
         const part = await this.stt.transcribe(chunk.path, chunk.offset, chunk.duration);
         cost = cost === null || part.cost === undefined ? null : cost + part.cost;
         chunks.push(part);

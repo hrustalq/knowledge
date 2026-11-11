@@ -42421,7 +42421,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.49.2",
+    "version": "0.50.1",
     "contact": {}
   },
   "tags": [],
@@ -48804,6 +48804,13 @@
               "nullable": true
             },
             "description": "Secrets by plan name (secret.qaPassword, TOKEN): a string sets or replaces, null removes. Never returned"
+          },
+          "secretOrigins": {
+            "description": "Origins besides the server's that a run may send a secret to (a login service); replaces the list. A change that adds one, or a new server origin, keeps only the secrets this request sets",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -55031,6 +55038,12 @@
               "type": "string"
             }
           },
+          "secretOrigins": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "updatedAt": {
             "type": "string"
           }
@@ -55041,6 +55054,7 @@
           "server",
           "inputs",
           "secrets",
+          "secretOrigins",
           "updatedAt"
         ]
       },

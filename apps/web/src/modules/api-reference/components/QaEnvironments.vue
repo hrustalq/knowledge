@@ -12,6 +12,10 @@
  * The server is the one a run uses for any step whose spec declares it in
  * `servers` — the proxy's own target rule — so the form says so instead of
  * promising it reaches any host.
+ *
+ * A secret goes only to that server and to the hosts listed under it. Adding
+ * either makes the API drop the saved secrets the request does not set again,
+ * so the form says so before Save instead of after.
  */
 import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -27,6 +31,7 @@ import type { Row } from '@/modules/api-reference/model/test-fixture'
 import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
+import { Textarea } from '@/shared/ui/textarea'
 import { confirm } from '@/shared/ui/confirm'
 import { PageState } from '@/shared/layout'
 import FixtureRows from '@/modules/api-reference/components/FixtureRows.vue'
@@ -46,6 +51,8 @@ const editing = ref<string | 'new' | null>(null)
 const draft = reactive({
   name: '',
   server: '',
+  /** One origin per line. */
+  origins: '',
   inputs: [] as Row[],
   /** Stored secret names, each kept, replaced (a value) or removed. */
   kept: [] as Array<{ name: string; replace: string; remove: boolean }>,
@@ -53,10 +60,27 @@ const draft = reactive({
 })
 const saving = ref(false)
 
+const originOf = (url: string) => {
+  try {
+    return new URL(url).origin
+  } catch {
+    return null
+  }
+}
+const originLines = () => draft.origins.split(/\s+/u).filter(Boolean)
+/** Saving would send secrets somewhere the saved environment does not: the API keeps only the ones typed now. */
+const clearsSecrets = computed(() => {
+  const env = environments.value.find((e) => e.id === editing.value)
+  if (!env || !draft.kept.some((k) => !k.remove && !k.replace)) return false
+  const before = new Set([originOf(env.server ?? ''), ...env.secretOrigins])
+  return [draft.server.trim(), ...originLines()].some((url) => url && !before.has(originOf(url)))
+})
+
 function open(env: ApiTestEnvironment | null) {
   editing.value = env?.id ?? 'new'
   draft.name = env?.name ?? ''
   draft.server = env?.server ?? ''
+  draft.origins = (env?.secretOrigins ?? []).join('\n')
   draft.inputs = Object.entries(env?.inputs ?? {}).map(([name, value]) => ({ name, value }))
   draft.kept = (env?.secrets ?? []).map((name) => ({ name, replace: '', remove: false }))
   draft.added = []
@@ -72,6 +96,7 @@ function body(): SaveApiTestEnvironmentRequest {
   return {
     name: draft.name.trim(),
     server: draft.server.trim() || null,
+    secretOrigins: originLines(),
     inputs: Object.fromEntries(draft.inputs.filter((r) => r.name.trim()).map((r) => [r.name.trim(), r.value])),
     secrets,
   }
@@ -190,6 +215,19 @@ async function remove(env: ApiTestEnvironment) {
               <fieldset class="grid min-w-0 gap-1.5">
                 <legend class="text-caption text-muted-foreground mb-1 font-medium">{{ t('qa.env.secrets') }}</legend>
                 <p class="text-caption text-muted-foreground">{{ t('qa.env.secretsHint') }}</p>
+                <label class="grid gap-1">
+                  <span class="text-caption text-muted-foreground font-medium">{{ t('qa.env.secretOrigins') }}</span>
+                  <Textarea
+                    v-model="draft.origins"
+                    rows="2"
+                    spellcheck="false"
+                    placeholder="https://auth.example.com"
+                    aria-describedby="qa-env-origins-hint"
+                    class="min-h-0 font-mono text-sm"
+                  />
+                  <span id="qa-env-origins-hint" class="text-caption text-muted-foreground">{{ t('qa.env.secretOriginsHint') }}</span>
+                </label>
+                <p v-if="clearsSecrets" role="status" class="text-caption text-destructive">{{ t('qa.env.secretsCleared') }}</p>
                 <div v-for="k in draft.kept" :key="k.name" class="flex min-w-0 items-center gap-1.5">
                   <code class="text-ui w-[38%] min-w-0 truncate font-mono" :class="k.remove && 'text-muted-foreground line-through'">{{ k.name }}</code>
                   <Input

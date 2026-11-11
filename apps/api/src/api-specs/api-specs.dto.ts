@@ -322,4 +322,16 @@ export class SaveApiTestEnvironmentDto {
   @IsOptional()
   @IsObject()
   secrets?: Record<string, string | null>;
+
+  @ApiPropertyOptional({
+    type: [String],
+    description:
+      "Origins besides the server's that a run may send a secret to (a login service); replaces the list. A change that adds one, or a new server origin, keeps only the secrets this request sets",
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  @MaxLength(2000, { each: true, message: vmsg('maxLength') })
+  secretOrigins?: string[];
 }

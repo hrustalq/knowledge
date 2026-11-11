@@ -10422,6 +10422,8 @@ export interface components {
             secrets?: {
                 [key: string]: string | null;
             };
+            /** @description Origins besides the server's that a run may send a secret to (a login service); replaces the list. A change that adds one, or a new server origin, keeps only the secrets this request sets */
+            secretOrigins?: string[];
         };
         UpdateApiSettingsDto: {
             /**
@@ -12097,6 +12099,7 @@ export interface components {
                 [key: string]: string;
             };
             secrets: string[];
+            secretOrigins: string[];
             updatedAt: string;
         };
         ApiTestFixtureCandidate: {

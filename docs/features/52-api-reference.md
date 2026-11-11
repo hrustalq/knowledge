@@ -500,6 +500,17 @@ reaches. The environment's server replaces a step's server only when that
 step's spec declares it in `servers`; otherwise the spec's own server is used.
 Unmetered because a run is bounded by its plan.
 
+**A secret goes only where its environment says.** `runTestPlan` takes the
+environment's secrets as guarded values: they are filled into a request only
+when its final URL is on the environment's own server origin or on one listed
+in `secret_origins` (a login service on another host). A step that needs a
+secret and goes anywhere else is not sent and reads `withheld:<names>`; inputs
+and captures are not restricted. Declaring a server in a spec therefore decides
+where a step may go, never where a stored secret may go. A PATCH that adds a
+destination (a new server origin, a new listed origin) keeps only the secrets
+that request sets itself, so pointing an environment somewhere new takes
+knowing its secrets.
+
 **The worker generates, the API stores the ask.** `POST
 /v1/api-specs/:id/test-runs` resolves the plan under the person's scope and
 inserts a `queued` `api_test_runs` row holding it (placeholders, never a value);
@@ -547,7 +558,7 @@ column while the runner applies. Scheduling is out of scope.
 | `GET /v1/qa/overview?workspaceId=&projectId=&documentId=` | viewer, workspace (guests too), filtered by scope; every HTTP operation's suite state |
 | `POST /v1/api-specs/:id/test-runs` | viewer, document, capability `api-test-suites.run`, runner on; queues a server run (202) |
 | `GET /v1/api-specs/:id/test-runs?entityKey=` / `…/test-runs/:runId` | viewer, document; a suite's recent runs / one run's plan and results |
-| `GET\|POST /v1/workspaces/:id/test-environments`, `PATCH\|DELETE …/:environmentId` | viewer to read (names, server, inputs, secret names); editor to write; secrets write-only |
+| `GET\|POST /v1/workspaces/:id/test-environments`, `PATCH\|DELETE …/:environmentId` | viewer to read (names, server, inputs, secret names, secret origins); editor to write; secrets write-only, and cleared by a change that adds a place they may go |
 | `GET /v1/api-operations?workspaceId=&q=&documentId=&entityKey=` | viewer, query, guests; operations at each spec's default-branch head |
 | `GET` / `PATCH /v1/workspaces/:id/api-settings` | viewer / admin, workspace |
 | `GET /v1/documents/:id/compare` | unchanged; gains `api` on a spec |

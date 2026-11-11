@@ -451,6 +451,8 @@ export interface ApiTestEnvironment {
   inputs: Record<string, string>;
   /** The names of the stored secrets (`secret.qaPassword`, `TOKEN`). */
   secrets: string[];
+  /** Origins besides the server's that a run may send a secret to (a login service). */
+  secretOrigins: string[];
   updatedAt: string;
 }
 
@@ -458,12 +460,18 @@ export interface ListApiTestEnvironmentsResponse {
   environments: ApiTestEnvironment[];
 }
 
-/** POST creates (name required); PATCH merges. A secret set to null is removed. */
+/**
+ * POST creates (name required); PATCH merges. A secret set to null is removed.
+ * A PATCH that adds somewhere secrets may go (a new server origin, a new entry
+ * in `secretOrigins`) keeps only the secrets it sets itself.
+ */
 export interface SaveApiTestEnvironmentRequest {
   name?: string;
   server?: string | null;
   inputs?: Record<string, string>;
   secrets?: Record<string, string | null>;
+  /** Replaces the list. */
+  secretOrigins?: string[];
 }
 
 export const API_TEST_RUN_STATUSES = ['queued', 'running', 'passed', 'failed', 'error'] as const;

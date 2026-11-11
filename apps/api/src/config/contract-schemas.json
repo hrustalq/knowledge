@@ -16696,6 +16696,10 @@
       "source": {
         "$ref": "#/components/schemas/MemoSource"
       },
+      "type": {
+        "type": "string",
+        "nullable": true
+      },
       "createdAt": {
         "type": "string"
       },
@@ -16718,6 +16722,7 @@
       "error",
       "audioAvailable",
       "source",
+      "type",
       "createdAt",
       "updatedAt"
     ]
@@ -16954,6 +16959,51 @@
     "required": [
       "enabled",
       "missing"
+    ]
+  },
+  "MemoType": {
+    "type": "object",
+    "properties": {
+      "key": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "guidance": {
+        "type": "string"
+      },
+      "builtIn": {
+        "type": "boolean"
+      },
+      "overridden": {
+        "type": "boolean"
+      },
+      "hidden": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "key",
+      "name",
+      "guidance",
+      "builtIn",
+      "overridden",
+      "hidden"
+    ]
+  },
+  "MemoTypesResponse": {
+    "type": "object",
+    "properties": {
+      "types": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/MemoType"
+        }
+      }
+    },
+    "required": [
+      "types"
     ]
   },
   "MergeConflictHunk": {

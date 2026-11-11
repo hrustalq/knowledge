@@ -7368,6 +7368,33 @@
     "offlineDescription": "Pages already open stay readable. Anything that needs the server will fail until the connection returns."
   },
   "memos": {
+    "types": {
+      "builtin": {
+        "daily": "Daily",
+        "retro": "Retrospective",
+        "sprint-planning": "Sprint planning",
+        "task-planning": "Task planning"
+      },
+      "all": "All types",
+      "filter": "Filter by type",
+      "none": "No type",
+      "ofMemo": "Type of this memo",
+      "noneOfType": "No memos of this type yet.",
+      "manage": "Memo types",
+      "title": "Memo types",
+      "description": "What kinds of recording this workspace has, and how the agent treats each. Changes apply to every member's memos from now on.",
+      "pick": "Type",
+      "add": "Add a type…",
+      "hiddenTag": "hidden",
+      "name": "Name",
+      "keyTaken": "Use a name with Latin letters that no other type has.",
+      "guidance": "How the agent treats it",
+      "guidanceHint": "This text becomes part of the agent's instructions. Leave it empty on a built-in type to use the text it ships with.",
+      "hide": "Hide this type: it is not offered any more, and memos that have it keep it",
+      "reset": "Back to built-in",
+      "remove": "Delete type",
+      "saved": "Memo type saved"
+    },
     "player": {
       "play": "Play {title}",
       "pause": "Pause {title}",

@@ -336,3 +336,28 @@ A memo stays private to its uploader: a matched person gains no access to it and
 
 Not built: a model's suggestion from what is said ("thanks, Anna"). Suggestions come from the label only.
 
+## Memo types (#879, phase 1)
+
+A memo has a `type`: a key from the workspace's catalogue, or null. Built-in types are code
+(`BUILT_IN_MEMO_TYPE_KEYS` in contracts: `daily`, `retro`, `sprint-planning`, `task-planning`; their names and
+guidance in `memos/memo-types.ts`). A workspace's `memo_types` rows are a sparse override: a row renames a
+built-in, replaces its guidance, hides it, or adds a type of the workspace's own. An empty table is exactly the
+built-in catalogue, and text saved back as shipped is stored as null, so a row follows later changes to the
+built-in.
+
+| Route                               | Role   |                                                                  |
+| ----------------------------------- | ------ | ---------------------------------------------------------------- |
+| `GET /v1/memos/types?workspaceId=`  | viewer | the catalogue, hidden types included                             |
+| `PUT /v1/memos/types/:key`          | admin  | `{ workspaceId, name?, guidance?, hidden? }`                     |
+| `DELETE /v1/memos/types/:key`       | admin  | a built-in back as shipped, or a workspace's own type removed    |
+| `PATCH /v1/memos/:id`               | editor | `{ type }`: a key the workspace offers, or null                  |
+| `GET /v1/memos?type=`               | viewer | only memos of that type                                          |
+
+Guidance is **trusted text**: `memoTypeBrief` appends it to the secretary's system instructions for a memo of
+that type. That is why writing a type is an admin's act, like an agent's own instructions. It steers what the
+proposals look like and nothing else: which pages a memo may update is still decided by `readMemoProposals`.
+A hidden type is not offered, and a memo that already has it keeps it; a deleted type's key on a memo reads as
+no type.
+
+Phase 1 sets the type by hand. Detecting it, routing by it and tags are phases 2 and 3 of #879.
+

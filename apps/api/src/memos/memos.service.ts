@@ -24,6 +24,7 @@ import {
   type MemoSegment,
   type MemoSource,
   type MemoSpeaker,
+  type MemoType,
   type MemoStatus,
   type MemoTranscriptionState,
 } from '@knowledge/contracts';
@@ -32,6 +33,7 @@ import type { Principal } from '../auth/principal.js';
 import { AiUsageService } from '../ai/ai-usage.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { PlaudError } from '../plaud/plaud.client.js';
+import { effectiveMemoTypes, shippedMemoType } from './memo-types.js';
 import { loadSpeakers, readChoices, speakerLabels } from './speakers.js';
 import { PlaudService } from '../plaud/plaud.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -90,9 +92,9 @@ export class MemosService {
     this.speakers = config.get('TRANSCRIPTION_PROVIDER', { infer: true }) === 'gen-api' && config.get('TRANSCRIPTION_SPEAKERS', { infer: true });
   }
 
-  async list(principal: Principal, workspaceId: string, projectId?: string): Promise<MemoListResponse> {
+  async list(principal: Principal, workspaceId: string, projectId?: string, type?: string): Promise<MemoListResponse> {
     const rows = await this.prisma.memo.findMany({
-      where: { workspaceId, createdBy: principal.userId, ...(projectId ? { projectId } : {}) },
+      where: { workspaceId, createdBy: principal.userId, ...(projectId ? { projectId } : {}), ...(type ? { type } : {}) },
       orderBy: { createdAt: 'desc' },
       take: 200,
       omit: { transcript: true, dropped: true, summary: true },
@@ -323,10 +325,61 @@ export class MemosService {
     return toInfo({ ...row, status, stage: null, error: null });
   }
 
-  /** The uploader's own name for it (#875). Anyone else gets the same bare 404 as on a read. */
-  async rename(principal: Principal, memoId: string, title: string): Promise<MemoInfo> {
+  /**
+   * The uploader's own name for it (#875) and what kind of recording it is
+   * (#879). Anyone else gets the same bare 404 as on a read. A type must be
+   * one the workspace offers; null takes it away.
+   */
+  async update(principal: Principal, memoId: string, input: { title?: string; type?: string | null }): Promise<MemoInfo> {
     const row = await this.require(principal, memoId);
-    return toInfo(await this.prisma.memo.update({ where: { id: row.id }, data: { title } }));
+    if (input.type) {
+      const offered = (await this.types(row.workspaceId)).some((t) => t.key === input.type && !t.hidden);
+      if (!offered) throw new BadRequestException(t('error.memo.typeUnknown'));
+    }
+    const data = { ...(input.title ? { title: input.title } : {}), ...(input.type !== undefined ? { type: input.type } : {}) };
+    return toInfo(await this.prisma.memo.update({ where: { id: row.id }, data }));
+  }
+
+  /** The workspace's catalogue of memo types (#879): built-ins as its rows left them, then its own. */
+  async types(workspaceId: string): Promise<MemoType[]> {
+    return effectiveMemoTypes(await this.prisma.memoType.findMany({ where: { workspaceId } }));
+  }
+
+  /**
+   * An admin's edit to one type: a built-in's override, or a type of the
+   * workspace's own, which needs a name. Guidance written here becomes part
+   * of the secretary's instructions for every member's memos of that type.
+   */
+  async saveType(
+    principal: Principal,
+    workspaceId: string,
+    key: string,
+    input: { name?: string | null; guidance?: string | null; hidden?: boolean },
+  ): Promise<MemoType[]> {
+    const shipped = shippedMemoType(key);
+    const builtIn = Boolean(shipped);
+    // Sent back as shipped is "inherit", not an override: the row stays sparse and follows a later change to the built-in.
+    const own = (value: string | null | undefined, original: string | undefined) => (value?.trim() && value.trim() !== original ? value.trim() : null);
+    const existing = await this.prisma.memoType.findUnique({ where: { workspaceId_key: { workspaceId, key } } });
+    const name = input.name === undefined ? existing?.name : own(input.name, shipped?.name);
+    if (!builtIn && !name) throw new BadRequestException(t('error.memo.typeNeedsName'));
+    const data = {
+      name: name ?? null,
+      ...(input.guidance !== undefined ? { guidance: own(input.guidance, shipped?.guidance) } : {}),
+      ...(input.hidden !== undefined ? { hidden: input.hidden } : {}),
+    };
+    await this.prisma.memoType.upsert({
+      where: { workspaceId_key: { workspaceId, key } },
+      create: { workspaceId, key, createdBy: principal.userId, ...data },
+      update: data,
+    });
+    return this.types(workspaceId);
+  }
+
+  /** Back to the built-in, or gone if it was the workspace's own. Memos keep the key; an unknown key reads as no type. */
+  async removeType(workspaceId: string, key: string): Promise<MemoType[]> {
+    await this.prisma.memoType.deleteMany({ where: { workspaceId, key } });
+    return this.types(workspaceId);
   }
 
   /**
@@ -513,6 +566,7 @@ function toInfo(row: Omit<Memo, 'transcript' | 'dropped' | 'summary'>): MemoInfo
     error: row.error,
     audioAvailable: !row.audioPurgedAt && row.status !== 'pending',
     source: row.source as MemoSource,
+    type: row.type,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

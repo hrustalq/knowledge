@@ -923,6 +923,8 @@ export type I18nTranslations = {
             "transcriptionFailed": string;
             "speakerUnknown": string;
             "speakerNotMember": string;
+            "typeUnknown": string;
+            "typeNeedsName": string;
             "speaker": string;
             "speechServerDown": string;
             "speechServerRefused": string;

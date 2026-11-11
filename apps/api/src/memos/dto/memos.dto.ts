@@ -1,15 +1,54 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsInt, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, IsUUID, MaxLength, ValidateIf } from 'class-validator';
+import { IsBoolean, IsInt, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, IsUUID, Matches, MaxLength, ValidateIf } from 'class-validator';
+import { MEMO_TYPE_KEY_RE } from '@knowledge/contracts';
 import { vmsg } from '../../common/validation.js';
 
 export class RenameMemoDto {
-  @ApiProperty({ description: 'Shown in the list and on the memo; a Plaud memo keeps Plaud\'s own name as its filename' })
+  @ApiPropertyOptional({ description: 'Shown in the list and on the memo; a Plaud memo keeps Plaud\'s own name as its filename' })
+  @IsOptional()
   @IsString()
   @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
   @IsNotEmpty()
   @MaxLength(300, { message: vmsg('maxLength') })
-  title!: string;
+  title?: string;
+
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'A memo type\'s key from GET /v1/memos/types, or null for none' })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @Matches(MEMO_TYPE_KEY_RE)
+  type?: string | null;
+}
+
+export class MemoTypesQueryDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+}
+
+export class SaveMemoTypeDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'Null or empty = the built-in name; required for a type of your own' })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  @MaxLength(80, { message: vmsg('maxLength') })
+  name?: string | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'How the agent treats a recording of this kind. Null or empty = the built-in guidance' })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  @MaxLength(4000, { message: vmsg('maxLength') })
+  guidance?: string | null;
+
+  @ApiPropertyOptional({ description: 'Hidden types are not offered; memos already of the type keep it' })
+  @IsOptional()
+  @IsBoolean()
+  hidden?: boolean;
 }
 
 export class MatchMemoSpeakerDto {
@@ -71,6 +110,11 @@ export class ListMemosQueryDto {
   @IsOptional()
   @IsUUID()
   projectId?: string;
+
+  @ApiPropertyOptional({ description: 'Only memos of this type' })
+  @IsOptional()
+  @Matches(MEMO_TYPE_KEY_RE)
+  type?: string;
 }
 
 export class ImportPlaudMemoDto {

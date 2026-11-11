@@ -114,9 +114,19 @@ describe('MemosService', () => {
     const { prisma, memos } = service();
     const update = vi.fn();
     Object.assign(prisma.memo, { update });
-    await expect(memos.rename(member, 'm1', 'Retro')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(memos.update(member, 'm1', { title: 'Retro' })).rejects.toBeInstanceOf(NotFoundException);
     expect(prisma.memo.findFirst).toHaveBeenCalledWith({ where: { id: 'm1', createdBy: 'u1' } });
     expect(update).not.toHaveBeenCalled();
+  });
+
+  it('keeps a built-in type’s row sparse: text sent back as shipped is stored as inherit (#879)', async () => {
+    const { prisma, memos } = service();
+    const upsert = vi.fn();
+    Object.assign(prisma, { memoType: { findUnique: vi.fn().mockResolvedValue(null), upsert, findMany: vi.fn().mockResolvedValue([]) } });
+    const shipped = (await memos.types('ws')).find((x) => x.key === 'daily')!;
+    await memos.saveType(member, 'ws', 'daily', { name: shipped.name, guidance: shipped.guidance, hidden: true });
+    expect(upsert.mock.calls[0]![0].update).toEqual({ name: null, guidance: null, hidden: true });
+    await expect(memos.saveType(member, 'ws', 'customer-call', { guidance: 'x' })).rejects.toThrow();
   });
 
   it('refuses to reserve when this server cannot transcribe, naming what to set', async () => {

@@ -38,6 +38,29 @@ export interface MemoSegment {
   speaker?: string;
 }
 
+/** The kinds of recording the product knows without being told (#879). A workspace can rename, hide or add to them. */
+export const BUILT_IN_MEMO_TYPE_KEYS = ['daily', 'retro', 'sprint-planning', 'task-planning'] as const;
+export type BuiltInMemoTypeKey = (typeof BUILT_IN_MEMO_TYPE_KEYS)[number];
+/** A workspace's own type key. */
+export const MEMO_TYPE_KEY_RE = /^[a-z][a-z0-9-]{0,39}$/;
+
+export interface MemoType {
+  key: string;
+  name: string;
+  /** How the agent treats a recording of this kind. Trusted text, written by a workspace admin. */
+  guidance: string;
+  builtIn: boolean;
+  /** A built-in whose name or guidance this workspace changed. */
+  overridden: boolean;
+  /** Not offered when classifying; memos already of this type keep it. */
+  hidden: boolean;
+}
+
+// GET /v1/memos/types
+export interface MemoTypesResponse {
+  types: MemoType[];
+}
+
 /** Where a memo came from: an uploaded recording, or a Plaud recording's own transcript (#864). */
 export const MEMO_SOURCES = ['upload', 'plaud'] as const;
 export type MemoSource = (typeof MEMO_SOURCES)[number];
@@ -77,6 +100,8 @@ export interface MemoInfo {
   /** False once the audio was purged (retention), and always for a Plaud memo — the transcript stays. */
   audioAvailable: boolean;
   source: MemoSource;
+  /** A memo type's key (#879), or null while unclassified. */
+  type: string | null;
   createdAt: string;
   updatedAt: string;
 }

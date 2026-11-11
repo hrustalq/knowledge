@@ -26692,6 +26692,15 @@
             }
           },
           {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "description": "Only memos of this type",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "Accept-Language",
             "in": "header",
             "required": false,
@@ -26802,6 +26811,216 @@
           }
         },
         "summary": "Reserve a memo and get a presigned upload URL",
+        "tags": [
+          "memos"
+        ]
+      }
+    },
+    "/v1/memos/types": {
+      "get": {
+        "operationId": "MemosController_types",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoTypesResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The kinds of recording this workspace knows: built-in types and its own",
+        "tags": [
+          "memos"
+        ]
+      }
+    },
+    "/v1/memos/types/{key}": {
+      "put": {
+        "operationId": "MemosController_saveType",
+        "parameters": [
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveMemoTypeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoTypesResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Change a built-in memo type for this workspace, or add or change one of its own",
+        "tags": [
+          "memos"
+        ]
+      },
+      "delete": {
+        "operationId": "MemosController_removeType",
+        "parameters": [
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoTypesResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Put a built-in memo type back as shipped, or delete one of the workspace's own",
         "tags": [
           "memos"
         ]
@@ -27069,7 +27288,7 @@
             }
           }
         },
-        "summary": "Rename a memo",
+        "summary": "Rename a memo, or say what kind of recording it is",
         "tags": [
           "memos"
         ]
@@ -47563,6 +47782,32 @@
           "markdown"
         ]
       },
+      "SaveMemoTypeDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true,
+            "description": "Null or empty = the built-in name; required for a type of your own"
+          },
+          "guidance": {
+            "type": "string",
+            "nullable": true,
+            "description": "How the agent treats a recording of this kind. Null or empty = the built-in guidance"
+          },
+          "hidden": {
+            "type": "boolean",
+            "description": "Hidden types are not offered; memos already of the type keep it"
+          }
+        },
+        "required": [
+          "workspaceId"
+        ]
+      },
       "CreateMemoDto": {
         "type": "object",
         "properties": {
@@ -47632,11 +47877,13 @@
           "title": {
             "type": "string",
             "description": "Shown in the list and on the memo; a Plaud memo keeps Plaud's own name as its filename"
+          },
+          "type": {
+            "type": "string",
+            "nullable": true,
+            "description": "A memo type's key from GET /v1/memos/types, or null for none"
           }
-        },
-        "required": [
-          "title"
-        ]
+        }
       },
       "MatchMemoSpeakerDto": {
         "type": "object",
@@ -66714,6 +66961,10 @@
           "source": {
             "$ref": "#/components/schemas/MemoSource"
           },
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
           "createdAt": {
             "type": "string"
           },
@@ -66736,6 +66987,7 @@
           "error",
           "audioAvailable",
           "source",
+          "type",
           "createdAt",
           "updatedAt"
         ]
@@ -66972,6 +67224,51 @@
         "required": [
           "enabled",
           "missing"
+        ]
+      },
+      "MemoType": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "guidance": {
+            "type": "string"
+          },
+          "builtIn": {
+            "type": "boolean"
+          },
+          "overridden": {
+            "type": "boolean"
+          },
+          "hidden": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "guidance",
+          "builtIn",
+          "overridden",
+          "hidden"
+        ]
+      },
+      "MemoTypesResponse": {
+        "type": "object",
+        "properties": {
+          "types": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MemoType"
+            }
+          }
+        },
+        "required": [
+          "types"
         ]
       },
       "MergeConflictHunk": {

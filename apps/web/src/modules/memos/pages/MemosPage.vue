@@ -9,7 +9,7 @@
  * speech endpoint on the server the page says which variable to set instead
  * of offering an upload that would be refused.
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
@@ -17,23 +17,35 @@ import type { MemoInfo, MemoListResponse } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
 import { formatDateTime, formatDuration, formatRelative } from '@/shared/utils/format'
+import { useAuthStore } from '@/stores/auth'
 import { useProjectsStore } from '@/stores/projects'
+import { Button } from '@/shared/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import { PageLayout, PageState } from '@/shared/layout'
 import MemoActions from '@/modules/memos/components/MemoActions.vue'
 import MemoListPlayer from '@/modules/memos/components/MemoListPlayer.vue'
+import MemoTypesDialog from '@/modules/memos/components/MemoTypesDialog.vue'
 import MemoUpload from '@/modules/memos/components/MemoUpload.vue'
 import PlaudPanel from '@/modules/memos/components/PlaudPanel.vue'
 import { useMemoListPlayer } from '@/modules/memos/model/memo-player'
+import { useMemoTypes } from '@/modules/memos/model/memo-types'
 import { MEMO_STATUS_CLASS, MEMO_STATUS_ICON, isMemoInFlight } from '@/modules/memos/model/memo-ui'
 
 const { t } = useI18n()
 const projects = useProjectsStore()
 const workspaceId = getWorkspaceId()
 
+/** The list's one filter (#879): a kind of recording, or all of them. */
+const ALL = 'all'
+const auth = useAuthStore()
+const { offered, labelOf, nameOf } = useMemoTypes(workspaceId)
+const typeFilter = ref(ALL)
+const typesOpen = ref(false)
+
 const listQuery = useQuery(
   computed(() => ({
     ...apiQueryOptions('/v1/memos', {
-      query: { workspaceId, ...(projects.activeId ? { projectId: projects.activeId } : {}) },
+      query: { workspaceId, ...(projects.activeId ? { projectId: projects.activeId } : {}), ...(typeFilter.value !== ALL ? { type: typeFilter.value } : {}) },
     }),
     refetchInterval: (q: { state: { data: unknown } }) =>
       (q.state.data as MemoListResponse | undefined)?.memos.some((m) => isMemoInFlight(m.status)) ? 3000 : false,
@@ -71,7 +83,18 @@ const playable = (m: MemoInfo) => m.audioAvailable && m.status !== 'pending'
 
       <!-- The upload above is already the call to action; a second framed
            "nothing here" box would only repeat it. -->
-      <p v-if="!memos.length" class="text-muted-foreground kn-measure text-sm">{{ t('memos.empty') }}</p>
+      <div v-if="memos.length || typeFilter !== ALL" class="flex flex-wrap items-center gap-2">
+        <Select v-model="typeFilter">
+          <SelectTrigger size="sm" class="w-52" :aria-label="t('memos.types.filter')"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem :value="ALL">{{ t('memos.types.all') }}</SelectItem>
+            <SelectItem v-for="type in offered" :key="type.key" :value="type.key">{{ nameOf(type) }}</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button v-if="auth.canAdminWorkspace" size="sm" variant="ghost" @click="typesOpen = true">{{ t('memos.types.manage') }}</Button>
+      </div>
+
+      <p v-if="!memos.length" class="text-muted-foreground kn-measure text-sm">{{ t(typeFilter === ALL ? 'memos.empty' : 'memos.types.noneOfType') }}</p>
 
       <ul v-else class="divide-y rounded-lg border bg-card">
         <li v-for="m in memos" :key="m.memoId" class="hover:bg-muted/50 flex items-center pr-2">
@@ -93,6 +116,7 @@ const playable = (m: MemoInfo) => m.audioAvailable && m.status !== 'pending'
                 <p class="truncate font-medium">{{ m.title }}</p>
                 <p class="text-muted-foreground flex flex-wrap gap-x-2 text-xs">
                   <span :class="MEMO_STATUS_CLASS[m.status]">{{ t(`memos.status.${m.status}`) }}</span>
+                  <span v-if="labelOf(m.type)">{{ labelOf(m.type) }}</span>
                   <span v-if="m.durationSeconds" class="tabular-nums">{{ formatDuration(m.durationSeconds * 1000) }}</span>
                   <span :title="formatDateTime(m.createdAt)">{{ formatRelative(m.createdAt) }}</span>
                 </p>
@@ -111,5 +135,6 @@ const playable = (m: MemoInfo) => m.audioAvailable && m.status !== 'pending'
         </li>
       </ul>
     </template>
+    <MemoTypesDialog v-if="auth.canAdminWorkspace" v-model:open="typesOpen" :workspace-id="workspaceId" />
   </PageLayout>
 </template>

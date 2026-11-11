@@ -36,7 +36,7 @@ import { Label } from '@/shared/ui/label'
 import { useAuthStore } from '@/stores/auth'
 import { useProjectsStore } from '@/stores/projects'
 import MemoActions from '@/modules/memos/components/MemoActions.vue'
-import { useMemoTypes } from '@/modules/memos/model/memo-types'
+import { newMemoTypeKey, useMemoTypes } from '@/modules/memos/model/memo-types'
 import { apiUrl, getWorkspaceId } from '@/shared/api/api'
 import { MEMO_STATUS_CLASS, MEMO_STATUS_ICON, isMemoInFlight, segmentAt } from '@/modules/memos/model/memo-ui'
 
@@ -206,8 +206,7 @@ const adoptType = () =>
   act(async () => {
     const proposed = data.value?.triage?.newType
     if (!proposed || !review.value) return
-    const key = proposed.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40)
-    if (!key) throw new Error(t('memos.types.keyTaken'))
+    const key = newMemoTypeKey(proposed.name, types.value.map((type) => type.key))
     await request('put', '/v1/memos/types/{key}', {
       path: { key },
       body: { workspaceId: getWorkspaceId(), name: proposed.name, guidance: proposed.guidance },

@@ -12,7 +12,7 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
-import { useQuery } from '@tanstack/vue-query'
+import { keepPreviousData, useQuery } from '@tanstack/vue-query'
 import type { MemoInfo, MemoListResponse } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
@@ -48,6 +48,8 @@ const listQuery = useQuery(
     ...apiQueryOptions('/v1/memos', {
       query: { workspaceId, ...(projects.activeId ? { projectId: projects.activeId } : {}), ...(typeFilter.value !== ALL ? { type: typeFilter.value } : {}), ...(tagFilter.value !== ALL ? { tag: tagFilter.value } : {}) },
     }),
+    // A filter change keeps the page (upload, Plaud panel, the filters themselves) mounted while its list loads.
+    placeholderData: keepPreviousData,
     refetchInterval: (q: { state: { data: unknown } }) =>
       (q.state.data as MemoListResponse | undefined)?.memos.some((m) => isMemoInFlight(m.status)) ? 3000 : false,
   })),

@@ -13,6 +13,19 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Fixed
+
+- **A memo type can be named in any language.** "Add this type" on a memo waiting for your confirm failed with
+  "Use a name with Latin letters" whenever the proposed type was named in Russian, and Memo types refused such a
+  name for a new type. Both now save it. "Add this type" also no longer replaces an existing type when the
+  proposed name matches that type's key: it is added as a new one. (#896)
+
+- **`/memos` stays in place when you change a filter.** Choosing a type or a tag replaced the whole page, the
+  upload box and the Plaud panel included, with a loading placeholder, and the Plaud panel forgot which recordings
+  were ticked and which projects were picked. Now only the list's rows change. (#896)
+
 ## [0.49.0] — 2026-11-11
 
 ### Added

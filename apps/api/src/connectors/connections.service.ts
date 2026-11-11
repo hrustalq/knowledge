@@ -20,7 +20,7 @@ import { AUTHOR_ID_STUB } from '../activity/actor.js';
 import { decryptSecret, encryptSecret, MissingEncryptionKeyError, parseKey } from '../ai/secret-box.js';
 import { assertSafeExternalUrl } from '../common/safe-url.js';
 import type { Env } from '../config/env.js';
-import { FigmaOauthService, pruneFigmaGrants } from '../embeds/figma-oauth.service.js';
+import { FigmaOauthService } from '../embeds/figma-oauth.service.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { identify, listBranches, listResources, type ProbeContext } from './adapters/connection-providers.js';
@@ -151,7 +151,7 @@ export class ConnectionsService {
     });
     const data = onCredential(credential);
     const row = existing
-      ? await this.rotateRow(existing.id, data)
+      ? await this.prisma.connection.update({ where: { id: existing.id }, data })
       : await this.prisma.connection.create({
           data: { workspaceId, provider: credential.provider, site, method: 'token', createdBy: userId, ...data },
         });
@@ -174,7 +174,7 @@ export class ConnectionsService {
         throw new BadRequestException(t('error.connector.connectionMismatch', { provider: credential.provider }));
       }
       await this.probeAt(credential, row.site);
-      await this.rotateRow(id, onCredential(credential));
+      await this.prisma.connection.update({ where: { id }, data: onCredential(credential) });
       return this.get(id);
     }
     const secret = input.credential!;
@@ -191,7 +191,7 @@ export class ConnectionsService {
       return this.get(id);
     }
     const credential = await this.credentials.saveToken(userId, row.provider as ConnectionProvider, row.site, secret, this.encrypt(secret), account);
-    await this.rotateRow(id, onCredential(credential));
+    await this.prisma.connection.update({ where: { id }, data: onCredential(credential) });
     return this.get(id);
   }
 
@@ -226,8 +226,6 @@ export class ConnectionsService {
       });
     }
     await this.prisma.connection.delete({ where: { id: row.id } });
-    // A Figma grant nothing references any more goes with its last connection.
-    if (row.method === 'oauth') await pruneFigmaGrants(this.prisma);
   }
 
   /**
@@ -372,15 +370,6 @@ export class ConnectionsService {
     return row;
   }
 
-  /** The new token lands on the connection and on the inline copies its connectors keep for a rollback. */
-  private async rotateRow(id: string, data: Prisma.ConnectionUncheckedUpdateInput & { credential: string; credentialHint: string | null }) {
-    const [row] = await this.prisma.$transaction([
-      this.prisma.connection.update({ where: { id }, data }),
-      this.prisma.connector.updateMany({ where: { connectionId: id }, data: { credential: data.credential, credentialHint: data.credentialHint } }),
-    ]);
-    return row;
-  }
-
   /** An origin, SSRF-checked, for providers that are not one fixed host. */
   private async siteFor(provider: ConnectionProvider, raw: string | null): Promise<string | null> {
     if (FIXED_HOST.has(provider)) return null;
@@ -431,15 +420,13 @@ export class ConnectionsService {
 
 const SUMMARY_INCLUDE = {
   connectors: { select: { id: true, name: true, kind: true, projectId: true }, orderBy: { name: 'asc' } },
-  credentialRow: { select: { userId: true } },
+  credentialRow: { select: { userId: true, secretHint: true } },
 } satisfies Prisma.ConnectionInclude;
 
-/** What a connection holds once it dials with `credential`, including the copies the previous release reads. */
+/** What a connection holds once it dials with `credential`. */
 function onCredential(credential: Credential) {
   return {
     credentialId: credential.id,
-    credential: credential.secret,
-    credentialHint: credential.secretHint,
     accountId: credential.accountId,
     accountLabel: credential.accountLabel,
     accountAvatarUrl: credential.accountAvatarUrl,
@@ -449,7 +436,7 @@ function onCredential(credential: Credential) {
 function toSummary(
   row: Connection & {
     connectors: Array<{ id: string; name: string; kind: string; projectId: string }>;
-    credentialRow: { userId: string | null } | null;
+    credentialRow: { userId: string | null; secretHint: string | null } | null;
   },
   members: Set<string>,
 ): ConnectionSummary {
@@ -463,7 +450,7 @@ function toSummary(
     accountId: row.accountId,
     accountLabel: row.accountLabel,
     accountAvatarUrl: row.accountAvatarUrl,
-    credentialHint: row.credentialHint,
+    credentialHint: row.credentialRow?.secretHint ?? null,
     credentialId: row.credentialId,
     ownerId,
     ownerLeft: row.credentialId !== null && (ownerId === null || !members.has(ownerId)),

@@ -96,8 +96,8 @@ export function canonicalizeEmbedUrl(raw: string): string {
 export const FIGMA_ALLOWLIST_CONFIG_KEY = 'allowlist';
 export const FIGMA_TOKEN_EXPIRES_CONFIG_KEY = 'tokenExpiresAt';
 /**
- * The OAuth grant a connector dials with (#557): the Figma user id its
- * `figma_oauth_grants` row is keyed by, and that person's handle for the card.
+ * The OAuth sign-in a connector dials with (#557): the Figma user id its
+ * `credentials` row is keyed by (#857), and that person's handle for the card.
  * Server-owned: only the OAuth callback writes them, and a create or update
  * that names them is ignored, so no admin can point a connector at a grant
  * another workspace connected.

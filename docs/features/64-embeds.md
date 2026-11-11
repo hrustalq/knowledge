@@ -160,10 +160,12 @@ refused.
     exchange, because the code is spent and a new code carries another
     challenge.
   - Figma keeps **one access token per app per user**, and a refresh
-    invalidates the previous one. So the grant is a `figma_oauth_grants` row
-    keyed by Figma's `user_id_string`, and a connector only names it in
+    invalidates the previous one. So the sign-in is one `credentials` row
+    (#857, `provider: figma`, `method: oauth`) per Figma account, keyed by
+    Figma's `user_id_string`, and a connector only names it in
     `config.figmaGrant` (with `config.figmaHandle` for the card). Connecting the
-    same Figma person from a second workspace reuses the row. Both keys are
+    same Figma person from a second workspace reuses the row; a second person
+    on that Figma account is refused. Both keys are
     server-owned: a create or update that names them keeps the stored values.
   - `FigmaOauthService.tokenFor` refreshes 5 minutes before expiry or when
     Figma just refused the token. One guarded `updateMany` — the stored
@@ -177,8 +179,8 @@ refused.
     Reconnect and Disconnect; a token connector gets Connect with Figma there
     and switches without being recreated (its typed-in expiry is dropped).
     Disconnecting, deleting the connector or tearing down the workspace
-    removes the reference, and `pruneFigmaGrants` deletes any grant no
-    connector names any more.
+    removes the reference; the sign-in stays its owner's, under **Connected
+    accounts**, until they disconnect it there.
 - **Token expiry is a config field**, typed in by the admin. Figma's API does
   not report a PAT's expiry, so the card shows the date the admin entered. From
   14 days before it, the card warns. A bad token is a `401`. A `403` on a

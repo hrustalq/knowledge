@@ -1015,7 +1015,7 @@ export interface ConnectorSummary {
   /** Secrets are write-only: the value never leaves the API. */
   hasCredential: boolean;
   credentialHint: string | null;
-  /** The connection it dials through (#564); null while it holds only an inline credential. */
+  /** The connection it dials through (#564); null = nothing to authenticate with. */
   connectionId: string | null;
   /** False when SETTINGS_ENCRYPTION_KEY is unset — the UI must disable credential entry. */
   canStoreSecrets: boolean;

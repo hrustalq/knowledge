@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { connectionProviderFor } from '@knowledge/contracts';
 import { encryptSecret } from '../src/ai/secret-box.js';
 import { bindConnection, type BindableConnector } from '../src/connectors/connection-binding.js';
-import { ConnectionsBackfill } from '../src/connectors/connections.backfill.js';
 import { ConnectorsService } from '../src/connectors/connectors.service.js';
 
 /**
@@ -22,14 +21,14 @@ interface Conn {
   method: string;
   site: string | null;
   externalRef: string | null;
-  credential: string | null;
+  credentialId?: string | null;
   createdAt: Date;
   [k: string]: unknown;
 }
-type Row = BindableConnector & { connectionId: string | null; createdAt: Date };
+type Row = BindableConnector & { connectionId: string | null; createdAt: Date; token: string | null };
 
 /** Just enough of Prisma for the binding, over two arrays. */
-function fakeDb(connectors: Row[], installations: Array<Record<string, unknown>> = []) {
+function fakeDb(connectors: Row[]) {
   const connections: Conn[] = [];
   const matches = (c: Conn, where: Record<string, unknown>) =>
     Object.entries(where).every(([k, v]) => (c as Record<string, unknown>)[k] === v);
@@ -37,7 +36,9 @@ function fakeDb(connectors: Row[], installations: Array<Record<string, unknown>>
     connections,
     connectors,
     connection: {
-      findMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) => connections.filter((c) => matches(c, where))),
+      findMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) =>
+        connections.filter((c) => matches(c, where)).map((c) => ({ ...c, credentialRow: db.credentials.find((r) => r.id === c.credentialId) ?? null })),
+      ),
       findUnique: vi.fn(async ({ where }: { where: { id: string } }) => connections.find((c) => c.id === where.id) ?? null),
       create: vi.fn(async ({ data }: { data: Omit<Conn, 'id' | 'createdAt'> }) => {
         const row = { externalRef: null, site: null, ...data, id: randomUUID(), createdAt: new Date() } as Conn;
@@ -50,7 +51,6 @@ function fakeDb(connectors: Row[], installations: Array<Record<string, unknown>>
       }),
     },
     connector: {
-      findMany: vi.fn(async () => connectors.filter((c) => c.connectionId === null)),
       update: vi.fn(async ({ where, data }: { where: { id: string }; data: Partial<Row> }) => {
         const row = connectors.find((c) => c.id === where.id)!;
         Object.assign(row, data);
@@ -59,7 +59,6 @@ function fakeDb(connectors: Row[], installations: Array<Record<string, unknown>>
     },
     githubInstallation: {
       findUnique: vi.fn(async () => ({ accountLogin: 'acme', accountAvatarUrl: null })),
-      findMany: vi.fn(async () => installations),
     },
     // A new token connection gets its owner's credential (#857); its own spec covers the matching.
     credentials: [] as Array<{ id: string; secret: string; accountId: null; accountLabel: null; accountAvatarUrl: null }>,
@@ -71,8 +70,6 @@ function fakeDb(connectors: Row[], installations: Array<Record<string, unknown>>
         return row;
       }),
     },
-    githubUserToken: { findMany: vi.fn(async () => []) },
-    figmaOauthGrant: { findMany: vi.fn(async () => []) },
   };
   return db;
 }
@@ -84,8 +81,7 @@ function connector(over: Partial<Row> & { token?: string }): Row {
     workspaceId: WS,
     kind: 'markdown-git',
     config: { repoUrl: 'https://github.com/acme/runbooks' },
-    credential: token ? encryptSecret(token, key) : null,
-    credentialHint: token ? '…oken' : null,
+    token: token ?? null,
     createdBy: null,
     connectionId: null,
     createdAt: new Date(),
@@ -93,8 +89,12 @@ function connector(over: Partial<Row> & { token?: string }): Row {
   };
 }
 
-const backfill = (db: ReturnType<typeof fakeDb>) =>
-  new ConnectionsBackfill(db as never, { get: () => keyText } as never);
+/** Binds each connector as `ConnectorsService.create` does, with the token it was given. */
+const bindAll = async (db: ReturnType<typeof fakeDb>) => {
+  for (const row of db.connectors) {
+    await bindConnection(db as never, row, key, row.token ? { secret: row.token, envelope: encryptSecret(row.token, key) } : null);
+  }
+};
 
 describe('connectionProviderFor', () => {
   it('derives the provider from the kind, and the host for git kinds', () => {
@@ -126,7 +126,7 @@ describe('connectionProviderFor', () => {
   });
 });
 
-describe('bindConnection and the boot backfill', () => {
+describe('bindConnection', () => {
   it('shares one connection between connectors holding the same token, never across workspaces', async () => {
     const a = connector({ token: 'ghp_same' });
     const b = connector({ kind: 'codebase', config: { repoUrl: 'https://github.com/acme/api' }, token: 'ghp_same' });
@@ -135,7 +135,7 @@ describe('bindConnection and the boot backfill', () => {
     const publicRepo = connector({});
     const db = fakeDb([a, b, c, d, publicRepo]);
 
-    expect(await backfill(db).run()).toBe(4);
+    await bindAll(db);
     expect(a.connectionId).toBe(b.connectionId);
     expect(c.connectionId).not.toBe(a.connectionId);
     expect(d.connectionId).not.toBe(a.connectionId);
@@ -145,25 +145,16 @@ describe('bindConnection and the boot backfill', () => {
       [WS, 'github', 'token'],
       [OTHER_WS, 'github', 'token'],
     ]);
-    // Same connection after the dedupe as before: the envelope was copied, not re-sealed.
-    expect(db.connections[0].credential).toBe(a.credential);
+    // The secret lives on the credential only (#857).
+    expect(db.connections.every((x) => x.credentialId && !('credential' in x))).toBe(true);
   });
 
-  it('is idempotent', async () => {
-    const db = fakeDb([connector({ token: 'ghp_same' }), connector({ token: 'ghp_same' }), connector({})]);
-    await backfill(db).run();
-    const before = db.connectors.map((c) => c.connectionId);
-    expect(await backfill(db).run()).toBe(0);
-    expect(db.connectors.map((c) => c.connectionId)).toEqual(before);
-    expect(db.connections).toHaveLength(1);
-  });
-
-  it('turns an installation and a Figma grant into one app / oauth connection each', async () => {
+  it('turns an installation and a Figma sign-in into one app / oauth connection each', async () => {
     const one = connector({ config: { repoUrl: 'https://github.com/acme/a', githubInstallationId: '42' } });
     const two = connector({ kind: 'codebase', config: { repoUrl: 'https://github.com/acme/b', githubInstallationId: '42' } });
     const figma = connector({ kind: 'figma', config: { figmaGrant: 'fu-1', figmaHandle: 'ann' } });
     const db = fakeDb([one, two, figma]);
-    await backfill(db).run();
+    await bindAll(db);
 
     expect(one.connectionId).toBe(two.connectionId);
     expect(db.connections.map((x) => [x.provider, x.method, x.externalRef, x.accountLabel])).toEqual([
@@ -172,37 +163,33 @@ describe('bindConnection and the boot backfill', () => {
     ]);
   });
 
-  it('lists a recorded installation no connector uses yet, once', async () => {
-    const install = { workspaceId: WS, installationId: 77n, accountLogin: 'acme', accountAvatarUrl: null, createdBy: null };
-    const db = fakeDb([], [install]);
-    await backfill(db).run();
-    await backfill(db).run();
-    expect(db.connections.map((x) => [x.provider, x.method, x.externalRef, x.accountLabel])).toEqual([['github', 'app', '77', 'acme']]);
-  });
-
-  it('rebinds when the token changes', async () => {
+  it('rebinds when the token changes, and unbinds when it is cleared', async () => {
     const row = connector({ token: 'ghp_old' });
     const db = fakeDb([row]);
-    await bindConnection(db as never, row, key);
+    await bindAll(db);
     const first = row.connectionId;
-    row.credential = encryptSecret('ghp_new', key);
-    await bindConnection(db as never, row, key);
+    await bindConnection(db as never, row, key, { secret: 'ghp_new', envelope: encryptSecret('ghp_new', key) });
     expect(row.connectionId).not.toBe(first);
+    await bindConnection(db as never, row, key, null);
+    expect(row.connectionId).toBeNull();
   });
 });
 
 describe('dialing through a connection', () => {
-  function service(connection: Partial<Conn>) {
-    const prisma = { connection: { findUnique: vi.fn(async () => ({ workspaceId: WS, method: 'token', ...connection })) } };
+  function service(connection: Partial<Conn>, secret?: string) {
+    const prisma = {
+      connection: { findUnique: vi.fn(async () => ({ workspaceId: WS, method: 'token', credentialId: 'cred-1', ...connection })) },
+      credential: { findUnique: vi.fn(async () => (secret ? { secret: encryptSecret(secret, key) } : null)) },
+    };
     const config = { get: (name: string) => (name === 'SETTINGS_ENCRYPTION_KEY' ? keyText : false) };
     const githubApp = { installationToken: vi.fn(async (id: string) => `ghs_for_${id}`) };
     return new ConnectorsService(prisma as never, config as never, {} as never, {} as never, githubApp as never, {} as never);
   }
   const row = (over: Partial<Row> = {}) =>
-    ({ ...connector({ token: 'ghp_inline' }), connectionId: 'conn-1', locale: 'en', webhookSecret: null, ...over }) as never;
+    ({ ...connector({}), connectionId: 'conn-1', locale: 'en', webhookSecret: null, ...over }) as never;
 
-  it('uses the connection’s token over the inline one, so a rotation reaches every connector on it', async () => {
-    const ctx = await service({ credential: encryptSecret('ghp_rotated', key) }).contextFor(row(), async () => undefined);
+  it('dials with the connection’s credential, so a rotation reaches every connector on it', async () => {
+    const ctx = await service({}, 'ghp_rotated').contextFor(row(), async () => undefined);
     expect(ctx.credential).toBe('ghp_rotated');
   });
 
@@ -213,12 +200,12 @@ describe('dialing through a connection', () => {
 
   it('refuses a connection that belongs to another workspace', async () => {
     await expect(
-      service({ workspaceId: OTHER_WS, credential: encryptSecret('theirs', key) }).contextFor(row(), async () => undefined),
+      service({ workspaceId: OTHER_WS }, 'theirs').contextFor(row(), async () => undefined),
     ).rejects.toThrow(/connectionForeign/);
   });
 
-  it('falls back to the inline credential while unbound', async () => {
-    const ctx = await service({}).contextFor(row({ connectionId: null }), async () => undefined);
-    expect(ctx.credential).toBe('ghp_inline');
+  it('sends nothing while unbound (a public repository)', async () => {
+    const ctx = await service({}, 'unused').contextFor(row({ connectionId: null }), async () => undefined);
+    expect(ctx.credential).toBeNull();
   });
 });

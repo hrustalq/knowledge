@@ -26,7 +26,7 @@ import {
   type ConnectorTrigger,
   type DocumentCategory,
 } from '@knowledge/contracts';
-import { decryptSecret, encryptSecret, MissingEncryptionKeyError, maskSecret, parseKey } from '../ai/secret-box.js';
+import { decryptSecret, encryptSecret, MissingEncryptionKeyError, parseKey } from '../ai/secret-box.js';
 import { assertSafeExternalUrl } from '../common/safe-url.js';
 import { withSubjectLock } from '../common/subject-lock.js';
 import type { Env } from '../config/env.js';
@@ -37,9 +37,9 @@ import { ProjectsService } from '../projects/projects.service.js';
 import { withVisibleWarnings } from './run-visibility.js';
 import { ConnectorRegistry } from './adapters/connector.registry.js';
 import { releaseMirroredAccess } from './connector-acl-release.js';
-import { bindConnection, connectionSecret } from './connection-binding.js';
+import { bindConnection, connectionSecret, type ConnectorToken } from './connection-binding.js';
 import { GithubAppService } from './github/github-app.service.js';
-import { FigmaOauthService, pruneFigmaGrants } from '../embeds/figma-oauth.service.js';
+import { FigmaOauthService } from '../embeds/figma-oauth.service.js';
 import { SourceSettingsService } from './source-settings.service.js';
 import type { ConnectorContext } from './adapters/connector.types.js';
 
@@ -192,6 +192,7 @@ export class ConnectorsService {
     const config = withServerKeys(input.config ?? {}, {});
     await this.validateConfig(info.kind, config);
     const via = input.connectionId ? await this.viaConnection(input.workspaceId, info.kind, input.connectionId, config) : null;
+    const token = via ? null : this.token(input.credential ?? null);
 
     const taken = await this.prisma.connector.findUnique({
       where: { workspaceId_name: { workspaceId: input.workspaceId, name: input.name } },
@@ -207,8 +208,6 @@ export class ConnectorsService {
         parentId: input.parentId ?? null,
         category: input.category ?? 'other',
         config: config as Prisma.InputJsonValue,
-        credential: this.encrypt(input.credential ?? null),
-        credentialHint: input.credential ? maskSecret(input.credential) : null,
         ...via,
         direction: this.checkDirection(info.kind, input.direction ?? 'pull'),
         conflict: input.conflict ?? 'manual',
@@ -222,7 +221,7 @@ export class ConnectorsService {
         createdBy: userId ?? null,
       },
     });
-    if (!via) await bindConnection(this.prisma, row, this.key);
+    if (!via) row.connectionId = await bindConnection(this.prisma, row, this.key, token);
     return this.toSummary(row);
   }
 
@@ -238,6 +237,9 @@ export class ConnectorsService {
     const via = input.connectionId
       ? await this.viaConnection(row.workspaceId, kind, input.connectionId, config ?? { ...(row.config as Record<string, string>) })
       : null;
+    // undefined keeps the token it dials with now, null clears it.
+    const rebind = !via && (input.credential !== undefined || input.config !== undefined);
+    const token = !rebind ? null : input.credential === undefined ? await this.currentToken(row.connectionId) : this.token(input.credential);
     if (input.name !== undefined && input.name !== row.name) {
       const taken = await this.prisma.connector.findUnique({
         where: { workspaceId_name: { workspaceId: row.workspaceId, name: input.name } },
@@ -264,20 +266,12 @@ export class ConnectorsService {
         ...keep('enabled'),
         ...(config === null ? {} : { config: config as Prisma.InputJsonValue }),
         ...(input.direction === undefined ? {} : { direction: this.checkDirection(kind, input.direction) }),
-        ...(input.credential === undefined
-          ? {}
-          : {
-              credential: this.encrypt(input.credential),
-              credentialHint: input.credential ? maskSecret(input.credential) : null,
-            }),
         ...(input.webhookSecret === undefined ? {} : { webhookSecret: this.encrypt(input.webhookSecret) }),
         ...via,
       },
     });
     // A new token, installation or repository host can mean another account.
-    if (!via && (input.credential !== undefined || input.config !== undefined)) {
-      await bindConnection(this.prisma, updated, this.key);
-    }
+    if (rebind) updated.connectionId = await bindConnection(this.prisma, updated, this.key, token);
     return this.toSummary(updated);
   }
 
@@ -288,7 +282,6 @@ export class ConnectorsService {
     // should it open them: what it mirrored becomes ordinary manual access.
     await releaseMirroredAccess(this.prisma, connectorId);
     await this.prisma.connector.delete({ where: { id: connectorId } });
-    await pruneFigmaGrants(this.prisma);
   }
 
   async testConnection(connectorId: string): Promise<ConnectorTestResponse> {
@@ -336,31 +329,19 @@ export class ConnectorsService {
    * token, and the 404 classifier in `repo-archive.ts` says so in words.
    */
   private async credentialFor(row: Connector): Promise<Pick<ConnectorContext, 'credential' | 'bearer' | 'renewCredential'>> {
-    // The connection (#564) wins, dialing with its credential (#857); the inline fallbacks below stay for one
-    // release, for a connector the boot backfill has not reached yet.
-    if (row.connectionId) {
-      const connection = await this.prisma.connection.findUnique({ where: { id: row.connectionId } });
-      // Only the server binds a connection, but a binding across workspaces
-      // would dial with someone else's account: refuse it rather than trust it.
-      if (!connection || connection.workspaceId !== row.workspaceId) {
-        throw new ForbiddenException(t('error.connector.connectionForeign'));
-      }
-      if (connection.method === 'app') {
-        return { credential: connection.externalRef ? await this.githubApp.installationToken(connection.externalRef) : null };
-      }
-      if (connection.method === 'oauth') return this.figmaGrant(connection.externalRef ?? '');
-      return { credential: await connectionSecret(this.prisma, connection, this.key) };
+    // The connection (#564) is the only source, dialing with its credential (#857). None = nothing to send.
+    if (!row.connectionId) return { credential: null };
+    const connection = await this.prisma.connection.findUnique({ where: { id: row.connectionId } });
+    // Only the server binds a connection, but a binding across workspaces
+    // would dial with someone else's account: refuse it rather than trust it.
+    if (!connection || connection.workspaceId !== row.workspaceId) {
+      throw new ForbiddenException(t('error.connector.connectionForeign'));
     }
-
-    const config = (row.config ?? {}) as Record<string, unknown>;
-    // A Figma connector connected over OAuth dials with its grant (#557).
-    const grant = row.kind === 'figma' ? config[FIGMA_GRANT_CONFIG_KEY] : undefined;
-    if (typeof grant === 'string' && grant) return this.figmaGrant(grant);
-    const installationId = config[GITHUB_INSTALLATION_CONFIG_KEY];
-    if (typeof installationId === 'string' && installationId.trim() !== '') {
-      return { credential: await this.githubApp.installationToken(installationId.trim()) };
+    if (connection.method === 'app') {
+      return { credential: connection.externalRef ? await this.githubApp.installationToken(connection.externalRef) : null };
     }
-    return { credential: decryptSecret(row.credential, this.key) };
+    if (connection.method === 'oauth') return this.figmaGrant(connection.externalRef ?? '');
+    return { credential: await connectionSecret(this.prisma, connection, this.key) };
   }
 
   private async figmaGrant(grant: string): Promise<Pick<ConnectorContext, 'credential' | 'bearer' | 'renewCredential'>> {
@@ -665,17 +646,15 @@ export class ConnectorsService {
   // --- internals ---
 
   /**
-   * The columns that bind a connector to a chosen connection (#564). The
-   * inline fields it replaces are written too, for one release: the previous
-   * image reads only them, and `bindConnection` re-derives the same
-   * connection from them. Mutates `config` to carry the installation or grant.
+   * The columns that bind a connector to a chosen connection (#564).
+   * Mutates `config` to carry the installation or Figma sign-in.
    */
   private async viaConnection(
     workspaceId: string,
     kind: ConnectorKind,
     connectionId: string,
     config: Record<string, string>,
-  ): Promise<{ connectionId: string; credential: string | null; credentialHint: string | null; config: Prisma.InputJsonValue }> {
+  ): Promise<{ connectionId: string; config: Prisma.InputJsonValue }> {
     const connection = await this.prisma.connection.findUnique({ where: { id: connectionId } });
     if (!connection || connection.workspaceId !== workspaceId) {
       throw new ForbiddenException(t('error.connector.connectionForeign'));
@@ -693,12 +672,23 @@ export class ConnectorsService {
       config[FIGMA_GRANT_CONFIG_KEY] = connection.externalRef;
       config[FIGMA_HANDLE_CONFIG_KEY] = connection.accountLabel ?? '';
     }
-    return {
-      connectionId,
-      credential: connection.method === 'token' ? connection.credential : null,
-      credentialHint: connection.method === 'token' ? connection.credentialHint : null,
-      config: config as Prisma.InputJsonValue,
-    };
+    return { connectionId, config: config as Prisma.InputJsonValue };
+  }
+
+  /** A pasted token, sealed; null or empty = none. */
+  private token(plaintext: string | null): ConnectorToken | null {
+    const envelope = this.encrypt(plaintext);
+    return envelope ? { secret: plaintext!, envelope } : null;
+  }
+
+  /** The token a connector dials with now, so an update that does not touch it keeps it. */
+  private async currentToken(connectionId: string | null): Promise<ConnectorToken | null> {
+    const connection = connectionId
+      ? await this.prisma.connection.findUnique({ where: { id: connectionId }, select: { method: true, credentialRow: { select: { secret: true } } } })
+      : null;
+    const envelope = connection?.method === 'token' ? connection.credentialRow?.secret : undefined;
+    const secret = decryptSecret(envelope, this.key);
+    return secret ? { secret, envelope: envelope! } : null;
   }
 
   private encrypt(plaintext: string | null): string | null {
@@ -754,9 +744,12 @@ export class ConnectorsService {
 
   private async toSummary(row: Connector): Promise<ConnectorSummary> {
     const info = connectorKindInfo(row.kind);
-    const [linkCount, lastRun] = await Promise.all([
+    const [linkCount, lastRun, connection] = await Promise.all([
       this.prisma.connectorLink.count({ where: { connectorId: row.id } }),
       this.prisma.connectorRun.findFirst({ where: { connectorId: row.id }, orderBy: { createdAt: 'desc' } }),
+      row.connectionId
+        ? this.prisma.connection.findUnique({ where: { id: row.connectionId }, select: { credentialRow: { select: { secretHint: true } } } })
+        : null,
     ]);
 
     return {
@@ -766,8 +759,8 @@ export class ConnectorsService {
       name: row.name,
       enabled: row.enabled,
       config: (row.config ?? {}) as Record<string, string>,
-      hasCredential: row.credential !== null || row.connectionId !== null,
-      credentialHint: row.credentialHint,
+      hasCredential: row.connectionId !== null,
+      credentialHint: connection?.credentialRow?.secretHint ?? null,
       connectionId: row.connectionId,
       canStoreSecrets: this.canStoreSecrets,
       projectId: row.projectId,

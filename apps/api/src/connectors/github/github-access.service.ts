@@ -38,7 +38,7 @@ export class GithubAccessService {
     const config = (row.config ?? {}) as Record<string, unknown>;
     const installationId =
       typeof config[GITHUB_INSTALLATION_CONFIG_KEY] === 'string' ? String(config[GITHUB_INSTALLATION_CONFIG_KEY]).trim() : '';
-    const auth: ConnectorGithubAccessResponse['auth'] = installationId ? 'app' : row.credential ? 'token' : 'none';
+    const auth: ConnectorGithubAccessResponse['auth'] = installationId ? 'app' : row.connectionId ? 'token' : 'none';
 
     const base: ConnectorGithubAccessResponse = {
       configured: this.app.configured && this.oauth.configured,

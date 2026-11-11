@@ -117,16 +117,19 @@ function setup(members: Array<{ workspaceId: string; userId: string }> = []) {
 
 describe('token connections', () => {
   it('identifies the account, and rotates when the same account is saved again', async () => {
-    const { service, connections, connectors } = setup();
+    const { service, connections, connectors, credentials } = setup();
     const first = await service.saveToken({ workspaceId: WS, provider: 'github', credential: 'ghp_ann_1' }, null);
     expect(first).toMatchObject({ provider: 'github', site: null, accountLabel: 'ann' });
-    connectors.push({ id: 'c1', name: 'Runbooks', connectionId: first.id, credential: 'old' });
+    connectors.push({ id: 'c1', name: 'Runbooks', connectionId: first.id });
 
     const again = await service.saveToken({ workspaceId: WS, provider: 'github', credential: 'ghp_ann_2' }, null);
     expect(again.id).toBe(first.id);
     expect(connections).toHaveLength(1);
-    // The rollback copy follows the rotation.
-    expect(connectors[0].credential).toBe(connections[0].credential);
+    // The connection dials with the new token; nothing is copied onto its connectors (#857).
+    const dialed = credentials.find((c) => c.id === connections[0].credentialId)!;
+    expect(decryptSecret(dialed.secret as string, Buffer.from(key, 'base64'))).toBe('ghp_ann_2');
+    expect(again.credentialHint).toBe(dialed.secretHint);
+    expect(connectors[0]).not.toHaveProperty('credential');
 
     const other = await service.saveToken({ workspaceId: WS, provider: 'github', credential: 'ghp_bob_1' }, null);
     expect(other.id).not.toBe(first.id);
@@ -183,13 +186,13 @@ describe('credentials (#857)', () => {
     const ctx = setup([{ workspaceId: WS, userId: ANN }, { workspaceId: WS_B, userId: ANN }]);
     const inA = await ctx.service.saveToken({ workspaceId: WS, provider: 'github', credential: 'ghp_ann_1' }, ANN);
     const inB = await ctx.service.saveToken({ workspaceId: WS_B, provider: 'github', credentialId: inA.credentialId! }, ANN);
-    ctx.connectors.push({ id: 'c1', name: 'Runbooks', connectionId: inB.id, credential: 'old' });
+    ctx.connectors.push({ id: 'c1', name: 'Runbooks', connectionId: inB.id });
 
     await ctx.service.rotateCredential(inA.credentialId!, 'ghp_ann_2', ANN);
     expect([secretOf(ctx, inA.id), secretOf(ctx, inB.id)]).toEqual(['ghp_ann_2', 'ghp_ann_2']);
-    // The copies the previous release dials with follow.
-    expect(ctx.connectors[0].credential).toBe(ctx.credentials[0].secret);
-    expect(ctx.connections.every((c) => c.credential === ctx.credentials[0].secret)).toBe(true);
+    // One row changed: the connections read it live, and keep no copy of their own.
+    expect(ctx.prisma.connection.updateMany).not.toHaveBeenCalled();
+    expect(ctx.prisma.connector.updateMany).not.toHaveBeenCalled();
     await expect(ctx.service.rotateCredential(inA.credentialId!, 'ghp_bob_1', ANN)).rejects.toThrow(/otherAccount/);
 
     await expect(ctx.creds.remove(inA.credentialId!, ANN)).rejects.toMatchObject({ response: { workspaces: ['Acme', 'Beta'], connectors: ['Runbooks'] } });

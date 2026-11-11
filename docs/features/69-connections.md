@@ -38,26 +38,25 @@ tab that started the flow updated only when it regained focus.
   GitLab is `gitlab` with its origin as `site`; anything else is `git`. Intercom's `site` is its region's
   API host, because a token belongs to one region. `repoHost` in `repo-archive.ts` reads the same host
   rule (`gitProviderOf`). `connectionKindsFor` is the inverse, for the connect flow.
-- **The connection wins, the inline credential is the fallback** — `ConnectorsService.credentialFor`
-  dials through `connectors.connection_id` (token → decrypt, app → `GithubAppService.installationToken`,
+- **The connection is the only source** — `ConnectorsService.credentialFor` dials through
+  `connectors.connection_id` (token → its credential's secret, app → `GithubAppService.installationToken`,
   oauth → `FigmaOauthService.tokenFor` with renew) and refuses a connection from another workspace (403).
-  An unbound connector dials exactly as before.
-- **One writer of `connection_id` while the inline fields still exist: `bindConnection`.** It points a
-  connector at the connection its own settings imply — the installation or grant in its config, else its
-  token — and reuses an equal connection before creating one, comparing **decrypted** secrets (two
-  envelopes of one secret never match). It runs on create, on any update that touches the credential or
-  config, on the Figma OAuth bind/unbind, and in `ConnectionsBackfill` at API boot. A connector bound
-  through the link flow writes the inline fields too (installation id, grant, a copy of the token
-  envelope), so `bindConnection` re-derives the same connection from them.
-- **Backfill at boot, not in SQL** (decided on #564). Provider derivation and equal-token detection need
-  TypeScript; the migration only adds the table and the column. `ConnectionsBackfill` (API-only,
-  idempotent) binds every unbound connector and turns every recorded `github_installations` row into an
-  `app` connection. No separate merge pass: binding never creates the duplicate a merge would clean.
+  A connector with no connection sends no credential (a public repository).
+- **One writer of `connection_id` when no connection is chosen: `bindConnection`.** It points a connector
+  at the connection its own settings imply — the installation or Figma sign-in in its config, else the
+  token it was given — and reuses an equal connection before creating one, comparing **decrypted** secrets
+  (two envelopes of one secret never match). It runs on create, on any update that touches the credential
+  or config (an update that sends no token keeps the one its connection dials with, so a new repository
+  host gets its own connection for the same secret; `null` unbinds), and on the Figma OAuth bind/unbind.
+  A connector keeps no secret of its own: the pasted `credential` on `POST`/`PATCH /v1/connectors`
+  becomes its creator's credential and a connection (#857).
+- **Backfilled at boot, then removed.** #564's `ConnectionsBackfill` bound every connector and recorded
+  installation at API boot, and #857's moved every sign-in into `credentials`; both were removed in #857
+  phase 4, once production had run them. Recording an installation creates its `app` connection.
 - **Saving a token identifies the account** through a cheap probe per provider
   (`adapters/connection-providers.ts`: `GET /user`, `/api/v4/user`, `/rest/api/3/myself`, `/users/me`,
   `viewer`, `/v1/me`, …; a service-account key names itself; plain `git` has no account API). A token
-  upstream refuses is never stored. The same account again **rotates** that connection — and the inline
-  copies its connectors keep for a rollback. `PATCH` refuses a token for another account (409): it would
+  upstream refuses is never stored. The same account again **rotates** that connection. `PATCH` refuses a token for another account (409): it would
   silently move every connector on it.
 - **In use is not deletable.** `DELETE` answers 409 with `connectors: [names]`. Removing a pair is the
   connector's own delete; the link screen never deletes.
@@ -114,10 +113,12 @@ installation belongs to a GitHub account or org, not to a person.
   The connection keeps syncing; the row says so and offers **Reconnect**.
 - **Refuse, don't cascade.** `DELETE /v1/me/credentials/:id` answers 409 naming the workspaces and
   connectors while any connection uses it.
-- **Expand/contract.** Every write still fills `connections.credential`, `connectors.credential`,
-  `github_user_tokens` and `figma_oauth_grants`, which the previous release reads. The migration moves sign-ins in
-  SQL; pasted tokens move at boot (`backfillCredentials`, matched by decrypted secret), which also copies
-  a rotation a rolled-back image made. Credentials are `platform` in the teardown inventory.
+- **Expand/contract.** Phases 1–3 (v0.47.0) wrote `connections.credential`, `connectors.credential`,
+  `github_user_tokens` and `figma_oauth_grants` as well, for the previous release, and moved the old rows
+  in at boot. Phase 4 stopped writing and reading them and took them out of `schema.prisma`; the columns
+  and tables are dropped one release later, because the previous image's Prisma still selects every field
+  its schema declares ([versioning](../versioning.md#rollback-and-the-expandcontract-rule)). Credentials
+  are `platform` in the teardown inventory.
 
 Web: the connect dialog's sign-in step lists **Your accounts** (the caller's bindable credentials for the
 provider that this workspace does not use yet) with **Use**; the Connections tab names who signed in and
@@ -154,15 +155,14 @@ is unchanged.
 
 Migration `20261218100000_connections` adds `connections` (no FK on workspace/user, per house policy;
 unique `(workspace_id, provider, method, external_ref)` — token rows have a null ref) and
-`connectors.connection_id` (FK, `ON DELETE RESTRICT`). It is additive: `connectors.credential` stays
-populated for one release and is read whenever `connection_id` is null, so the previous image keeps
-syncing against a migrated database. `pruneFigmaGrants` keeps a grant a connection references. Workspace
-teardown deletes `connections` after `connectors`.
+`connectors.connection_id` (FK, `ON DELETE RESTRICT`). It was additive: `connectors.credential` stayed
+populated until #857 phase 4, so the previous image kept syncing against a migrated database. Workspace
+teardown deletes `connections` after `connectors`; credentials stay with their owners.
 
 ## Deliberate deferrals
 
-- Dropping `connectors.credential` — the contract half, one release after this ships. With it (#857
-  phase 4): `connections.credential` / `credential_hint`, `github_user_tokens` and `figma_oauth_grants`.
+- The `DROP` of `connectors.credential` / `credential_hint`, `connections.credential` / `credential_hint`,
+  `github_user_tokens` and `figma_oauth_grants`, unread since #857 phase 4, in the release after it.
 - Workspace-owned service accounts that belong to no person, and sharing one credential between people
   (#857, out of scope).
 - OAuth for Atlassian, GitLab, Notion, Google Drive, Linear, Zendesk and Intercom — each needs an app

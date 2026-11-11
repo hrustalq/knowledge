@@ -287,9 +287,6 @@ importers:
       '@knowledge/workflow':
         specifier: workspace:*
         version: link:../../packages/workflow
-      '@lucide/vue':
-        specifier: ^1.38.0
-        version: 1.38.0(vue@3.5.42(typescript@6.0.3))
       '@tanstack/vue-query':
         specifier: ^5.102.8
         version: 5.102.8(vue@3.5.42(typescript@6.0.3))
@@ -362,12 +359,6 @@ importers:
       axios:
         specifier: ^1.20.0
         version: 1.20.0
-      class-variance-authority:
-        specifier: ^0.7.1
-        version: 0.7.1
-      clsx:
-        specifier: ^2.1.1
-        version: 2.1.1
       compression:
         specifier: ^1.8.1
         version: 1.8.1
@@ -416,9 +407,6 @@ importers:
       sirv:
         specifier: ^3.0.2
         version: 3.0.2
-      tailwind-merge:
-        specifier: ^3.6.0
-        version: 3.6.0
       turndown:
         specifier: ^7.2.4
         version: 7.2.4
@@ -489,15 +477,9 @@ importers:
       openapi-typescript-helpers:
         specifier: ^0.1.0
         version: 0.1.0
-      shadcn-vue:
-        specifier: ^2.8.2
-        version: 2.8.2(eslint@9.39.5(jiti@2.7.0))(magicast@0.5.4)(vue@3.5.42(typescript@6.0.3))
       tailwindcss:
         specifier: ^4.1.0
         version: 4.3.3
-      tw-animate-css:
-        specifier: ^1.4.0
-        version: 1.4.0
       typescript:
         specifier: ~6.0.2
         version: 6.0.3

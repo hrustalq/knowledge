@@ -12,7 +12,7 @@
  * Two things are better for the move.
  *
  * **The rail remembers.** Open state lives in the layout store keyed by
- * surface (provided by the app as `RAIL_MEMORY`, since shared/ cannot import a store),
+ * surface (provided by the app as `RAIL_MEMORY`, since this package cannot import a store),
  * so a reader who always checks History finds it open on the next page
  * instead of opening it again on every one. Session-scoped, not persisted — see
  * stores/layout.ts for why a remembered set restored after hydration would push

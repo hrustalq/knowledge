@@ -114,9 +114,9 @@ the AI-readable routes use.
 the host check) is how the worker gets an export's HTML
 ([feature 45](../features/45-export.md)). It calls a third SSR module,
 `src/export-render.ts`, which renders each page with `renderPublicMarkdown`
-and wraps the pages in the app's own stylesheets: `assets/styles/tokens.css` (the
-palette, kept out of `assets/style.css`'s Tailwind entry so it can be inlined) and
-`assets/styles/editor.css`. It answers only an internal peer whose request carries no
+and wraps the pages in the app's own stylesheets: `@knowledge/ui/tokens.css` (the
+palette, `packages/ui/src/styles/tokens.css`, kept apart from the Tailwind theme so
+it can be inlined) and `assets/styles/editor.css`. It answers only an internal peer whose request carries no
 `X-Forwarded-*` header, which is never a request through Caddy. The module is a
 third SSR input in `vite.config.ts`.
 

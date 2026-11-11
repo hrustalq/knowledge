@@ -142,6 +142,16 @@ what lets a buildless package be split across many files —
 which is why `Dockerfile.api` ends with a `node --input-type=module` import of
 every package entry — a build failure now, instead of a 3 a.m. production one.
 
+**`@knowledge/ui` is the one exception** (#941). It is buildless too, but it holds
+Vue components (the UI kit and the page chrome,
+[11](11-web-modules.md#the-ui-package)) and its only consumer is Vite, which
+resolves a relative import into source. Its files import each other relatively,
+because that is how `shadcn-vue add` writes them, so the root
+`.dependency-cruiser.cjs` excludes it and `packages/ui/.dependency-cruiser.cjs`
+holds its rules instead: nothing from an app, no other `@knowledge/*` package.
+The price is that **no Node process may ever import it** — not the API, not the
+worker, not `apps/web/server.js`.
+
 ## Contracts as the single vocabulary
 
 `packages/contracts` holds plain request/response types shared by api and web.

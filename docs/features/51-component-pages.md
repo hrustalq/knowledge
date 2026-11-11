@@ -21,7 +21,7 @@ graph, the drift check and the knowledge-health dashboard.
   component:
     name: ResponsivePopover        # optional; else the DESCRIBES relation, else the title
     repository: owner/repo         # optional with exactly one codebase connector
-    paths: [apps/web/src/shared/ui/popover/ResponsivePopover.vue]  # files, dirs (`dir/`) or globs
+    paths: [packages/ui/src/popover/ResponsivePopover.vue]  # files, dirs (`dir/`) or globs
     symbols: [ResponsivePopover]   # optional; narrows "used" to these exports
   ```
 

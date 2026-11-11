@@ -9,8 +9,9 @@ import { useRoute, useRouter } from 'vue-router'
  *   parameter and `PageRail` opens the widget the URL names;
  * - `meta.fill` on the route of every `canvas` page, typed below, which
  *   `PageLayout` asserts in dev;
- * - `RAIL_MEMORY` and `ERROR_TEXT`, provided at the app root (both optional:
- *   without them the rail forgets and an error shows its own message);
+ * - `RAIL_MEMORY`, provided at the app root: `PageRail` requires it;
+ * - `ERROR_TEXT`, provided at the app root (optional: without it `PageState`
+ *   shows the error's own message);
  * - the `ui` message catalogue (`@knowledge/ui/messages/<locale>.json`) merged
  *   into the app's vue-i18n instance.
  */
@@ -115,8 +116,9 @@ export function usePageTabs<K extends string>(
 
 /**
  * Which rail widgets are open, per surface. `PageRail` remembers it across
- * pages; the store that holds it is app state (stores/layout), which shared/
- * may not import, so the app provides it under this key (docs/architecture/11).
+ * pages; the store that holds it is app state (apps/web's stores/layout), which
+ * this package may not import, so the app provides it under this key
+ * (docs/architecture/11).
  * `null` means nobody has touched that surface's rail yet.
  */
 export interface RailMemory {

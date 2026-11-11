@@ -1,6 +1,6 @@
 /**
  * Diagrams a reader can open full-screen (#476): rendered mermaid blocks and
- * whiteboard drawings. The counterpart of lib/image-gallery, and a separate
+ * whiteboard drawings. The counterpart of ./image-gallery, and a separate
  * sequence — ←/→ in one never lands in the other.
  *
  * A surface marks a diagram with `DIAGRAM_ATTR` once its SVG is in the DOM, so

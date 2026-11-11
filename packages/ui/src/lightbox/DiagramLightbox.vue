@@ -8,7 +8,7 @@
  * - The stage keeps the app's theme instead of going dark. Mermaid bakes the
  *   page theme's colours into its SVG and drawings inherit `--kn-draw-*`, so the
  *   copy only looks like the page against the page's own ground.
- * - It shows a copy of the SVG the page drew (lib/diagram-gallery), sized for
+ * - It shows a copy of the SVG the page drew (./diagram-gallery), sized for
  *   real rather than transformed, so 400% is as sharp as 100%. Nothing is
  *   re-rendered and nothing is fetched.
  *

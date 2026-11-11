@@ -22,7 +22,9 @@ cycles.
 > modules share lives in `entities/`. Midway the design tightened —
 > **modules never import each other**, and widgets sit above the modules —
 > and the baseline went from 240 violations of the tightened rules to 4
-> justified cycles (see the baseline below).
+> justified cycles. The UI kit and the page chrome have since left the app for
+> `@knowledge/ui` (#941, [below](#the-ui-package)), which took three of those
+> cycles with it (see the baseline below).
 
 ## The layers
 
@@ -40,7 +42,7 @@ app → widgets → modules → entities → stores → shared → core        a
 | `modules/`  | one folder per feature, each owning routes (the map below)                                                                                                        | entities (by index), stores, shared, core — **never another module**, never a widget |
 | `entities/` | one folder per domain: the components, stores and composables two or more modules share (the entity test below)                                                  | another entity by its `index.ts`, no cycles; stores, shared, core  |
 | `stores/`   | cross-cutting Pinia stores only (the list below)                                                                                                                  | shared, core                                                       |
-| `shared/`   | business-agnostic: `api/` (generated client, `schema.d.ts`, query helpers), `composables/`, `constants/`, `types/`, `utils/`, `ui/` (the shadcn-vue kit), `layout/` (the page chrome), `i18n/` | core                                                               |
+| `shared/`   | business-agnostic: `api/` (generated client, `schema.d.ts`, query helpers), `composables/`, `constants/`, `types/`, `utils/`, `i18n/` | core                                                               |
 | `core/`     | pure TypeScript: no Vue, no Pinia, no DOM, nothing from `src/` outside `core/`                                                                                    | `@knowledge/*` packages only                                       |
 | `assets/`   | static assets and global styles (`style.css`, `styles/`)                                                                                                          | —                                                                  |
 
@@ -49,6 +51,10 @@ The entry files stay at the `src/` root, above `app/`: `main.ts`,
 `entry-public-client.ts`, `export-render.ts`, `sw.ts`. `index.html`,
 `reader.html`, `server.js` and `vite.config.ts` load them by path. They reach a
 module the way `app/` does.
+
+Every layer may also import `@knowledge/ui`, the workspace package that holds
+the shadcn-vue kit and the page chrome ([below](#the-ui-package)); `core/` has
+no use for it, and `core-is-pure` refuses the Vue it would bring.
 
 `core/` is for logic that has no reason to know about Vue or the browser:
 parsers, diffing, matchers, state machines' pure halves. Logic the API needs as
@@ -107,8 +113,8 @@ entities/<domain>/
   two or more modules use it, it owns no route, and it has a domain — it would
   have to change when that domain's rules change: `RichEditor`, the document
   tree row, the verification badge, the members composable, the templates
-  store. With no domain it goes to `shared/` (the page chrome is
-  `shared/layout/`). With one user it stays in that module.
+  store. With no domain it goes to `shared/`, or to `@knowledge/ui` when it
+  is a UI primitive or page chrome. With one user it stays in that module.
 - **`index.ts` is the only door**, for modules, `app/` and other entities
   alike. Explicit named re-exports; everything not exported is private.
 - An entity may import another entity through its index (a document's owner
@@ -124,14 +130,55 @@ importing one. It is built from its own implementation, entities and
 from `app/`. One folder per widget with an `index.ts`, imported only through it
 (`widget-via-index-only`). `widgets/` is empty today: the page chrome that sat
 there in phase 1 is domain-less and every module renders it, so it moved down
-to `shared/layout/`, and the person chip and hover card have a domain, so they
-are `entities/person`. A shell block becomes a widget when it is composed from
-more than one place in `app/`.
+(to `shared/layout/`, and from there to `@knowledge/ui/layout`), and the person
+chip and hover card have a domain, so they are `entities/person`. A shell block
+becomes a widget when it is composed from more than one place in `app/`.
 
-`shared/layout/` may not import a store either. The one piece of app state the
-chrome needs — which `PageRail` widgets are open, remembered per surface — is a
-`RailMemory` interface declared in `shared/layout/page-chrome.ts`; `App.vue`
-provides `stores/layout` under `RAIL_MEMORY`, and `PageRail` injects it.
+## The UI package
+
+`packages/ui` is `@knowledge/ui` (#941): the shadcn-vue kit, one export per
+folder (`@knowledge/ui/button`, `@knowledge/ui/dialog`, …), the page chrome
+(`@knowledge/ui/layout`: `PageLayout`, `PageHeader`, `PageTabs`, `PageRail`,
+`PageSubRail`, `PageState`, `PageScrollList`, `RailSection`), `cn`, the
+hydration-safe media query, the palette (`tokens.css`) and the Tailwind theme
+(`theme.css`). It exists so that a second app in this monorepo renders the same
+buttons, dialogs and page shapes without copying them. The app shell
+(`app/shell/`), entities and modules stay in `apps/web`.
+
+The rule: **a component lives in the package when it has no domain. It imports
+nothing from an app, and whatever an app must supply reaches it by prop, slot
+or inject.** `packages/ui/.dependency-cruiser.cjs` enforces the import half
+(nothing under `apps/`, no other `@knowledge/*` package); the package has no
+store, no API client and no `@/` alias to reach for.
+
+What an app provides to use it (`apps/web` does each of these, and
+`packages/ui/README.md` spells them out for the next consumer):
+
+| The package needs                                                    | `apps/web` supplies it in                                                              |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| its stylesheet, after Tailwind                                       | `assets/style.css`: `@import "@knowledge/ui/theme.css"`                                |
+| its strings, `ui.*`, merged into the app's vue-i18n instance         | `shared/i18n/catalog.<locale>.ts` (member app), `public-main.ts` (reader)             |
+| `RAIL_MEMORY`: which `PageRail` widgets are open, per surface        | `app/App.vue` provides `stores/layout`                                                 |
+| `ERROR_TEXT`: what `PageState` says for a thrown value (optional)    | `app/App.vue` provides `errorMessage` from `shared/api/errors.ts`                      |
+| a router; `meta.fill` on the route of every `canvas` page            | `app/router/` (the `RouteMeta.fill` type is declared in the package's `page-chrome.ts`) |
+| a formatter where a component shows a date (`DailyBars`' `dayLabel`) | the caller passes one from `shared/utils/format.ts`                                    |
+
+- **Strings.** The kit reads only `ui.*` keys, from
+  `packages/ui/src/messages/{en,ru}.json`, and app code reads none of them. The
+  package's `messages.spec.ts` fails a kit file that reads any other key, an
+  unread key, and a Russian catalogue that differs from the English one in
+  keys. A string the app also needs (`common.cancel`) exists twice on purpose.
+- **Tailwind.** `theme.css` carries `@source ".."`. Tailwind scans the
+  consumer's tree, not its dependencies, so without that line a class used only
+  inside the package is missing from the built CSS.
+- **Relative imports.** Files in the package import each other relatively,
+  which every other workspace package is forbidden to do
+  ([01](01-entrypoints-modules.md#buildless-workspace-packages)). It is safe
+  only because Vite is the sole consumer: no Node process may import
+  `@knowledge/ui`.
+- **Indexes.** A kit folder's `index.ts` may declare (`buttonVariants`), so it
+  is not covered by the side-effect-free plugin below. The move changed no
+  chunk: the production bundles before and after were byte-identical.
 
 ## Indexes are side-effect free, and the build is told so
 
@@ -184,18 +231,20 @@ entries; the only edges it added were three imports earlier phases had routed
 through the `captures` and `notifications` indexes). It only shrinks from
 here, and a new violation of an already-baselined rule still fails.
 
-What is left in it is four cycles, each justified:
+What is left in it is one cycle:
 
-- `shared/ui/badge`, `shared/ui/button`, `shared/ui/select`: a component
-  imports its variants (or a sibling part) from its folder's `index.ts`, which
-  re-exports the component. This is how `shadcn-vue add` writes them, and a
-  hand edit would be overwritten by the next `add`. The import is used at
-  render time, never while the module evaluates.
 - `shared/api/api.ts` ↔ `shared/utils/format.ts`: `format` reads the
   request's locale from `getLocale()`, and `api` keeps `relativeTime()` as a
   wrapper over `formatRelative` for its ~40 call sites. Both directions are
   calls inside functions, never at module evaluation. Moving those call sites
   to `formatRelative` and deleting the wrapper removes it.
+
+Three more left with the kit (#941) and are tolerated by name in
+`packages/ui/.dependency-cruiser.cjs`: in `badge`, `button` and `select` a
+component imports its variants (or a sibling part) from its folder's
+`index.ts`, which re-exports the component. This is how `shadcn-vue add` writes
+them, and a hand edit would be overwritten by the next `add`. The import is
+used at render time, never while the module evaluates.
 
 ## Cross-cutting stores
 
@@ -239,10 +288,10 @@ forbids. Both now take registrations instead:
 | a page                                                  | `modules/<m>/pages/`, routed from `modules/<m>/routes.ts`    |
 | a component one module uses                             | `modules/<m>/components/`                                    |
 | a component several modules use, with a domain          | `entities/<d>/components/`, exported from its `index.ts`     |
-| a component several modules use, without a domain       | `shared/` (`shared/layout/` for page chrome, `shared/ui/` for a primitive) |
+| a component several modules use, without a domain       | `@knowledge/ui` if a second app would render it too (`packages/ui/src/layout/` for page chrome, its own folder for a primitive), else `shared/` |
 | a composite block the shell mounts                      | `widgets/<w>/`, exported from its `index.ts`                 |
 | a component the shell mounts from a module              | the module, exported from its `index.ts`                     |
-| a shadcn-vue primitive                                  | `shared/ui/` (`pnpm exec shadcn-vue add` writes there)       |
+| a shadcn-vue primitive                                  | `packages/ui/src/<name>/` (`pnpm exec shadcn-vue add <name>` from `packages/ui` writes there; fix its `cn` import, `CLAUDE.md` Gotchas) |
 | a composable for one feature                            | `modules/<m>/model/`                                         |
 | a composable several modules use, with a domain         | `entities/<d>/model/`                                        |
 | a composable with no domain (`useCopy`)                 | `shared/composables/`                                        |
@@ -253,6 +302,7 @@ forbids. Both now take registrations instead:
 | pure logic with no domain                               | `core/`                                                      |
 | logic the API needs too                                 | `@knowledge/contracts`                                       |
 | a UI string                                             | `shared/i18n/messages/{en,ru}.json`, both locales            |
+| a string a `@knowledge/ui` component shows              | `packages/ui/src/messages/{en,ru}.json` under `ui.`, both locales |
 
 ## The entity map
 
@@ -277,7 +327,8 @@ its files went when that differed from the plan; the rest moved as listed.
 | `capture`        | CaptureOriginParts, clientLabel, repoAtCommit                                                                                                |
 | `workflow`       | **done:** WorkflowRail, the workflows store, workflow-ui. graph-theme went to `graph`, which since took the graph view too: GraphView (also as `LazyGraphView`), GraphCanvas, KnowledgeGraph, GraphControls, GraphTimeSlider, graph-model, graph-time, use-graph-time |
 
-`DailyBars` and `AiEmptyState` have no domain and moved to `shared/ui`.
+`DailyBars` and `AiEmptyState` have no domain and moved to `shared/ui`, which
+is now `@knowledge/ui`.
 
 ## The module map
 
@@ -322,16 +373,16 @@ Outside the modules:
 | From                                                              | To                                                                                                        |
 | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | `components/layout` (minus `page/`), `SettingsPage`, `App.vue`    | `app/` (the shell; SettingsPage is the settings shell)                                                    |
-| `components/layout/page/`, `components/knowledge/RailSection.vue` | `widgets/page/` in phase 1, now `shared/layout/` — every module renders it                                |
+| `components/layout/page/`, `components/knowledge/RailSection.vue` | `widgets/page/` in phase 1, then `shared/layout/`, now `@knowledge/ui/layout` (#941) — every module renders it |
 | `people/UserChip`, `people/UserCard`, `merge-requests/UserAvatar` | `widgets/person/` in phase 1, now `entities/person`                                                        |
-| `components/ui/`                                                  | `shared/ui/`                                                                                              |
+| `components/ui/`                                                  | `shared/ui/`, now `@knowledge/ui` (#941)                                                                  |
 | `api/`                                                            | `shared/api/`                                                                                             |
 | `i18n/`                                                           | `shared/i18n/`                                                                                            |
 | `router/index.ts`                                                 | `app/router/`                                                                                             |
 | `style.css`, `styles/`, `assets/`                                 | `assets/`                                                                                                 |
 | `lib/` pure, no domain                                            | `core/`                                                                                                   |
 | `lib/use-*.ts`, `lib/rx-vue.ts`                                   | `shared/composables/`                                                                                     |
-| `lib/utils.ts`                                                    | `shared/utils/cn.ts` (the shadcn-vue `utils` alias)                                                       |
+| `lib/utils.ts`                                                    | `shared/utils/cn.ts`, now `@knowledge/ui/cn` (the shadcn-vue `utils` alias)                               |
 | `lib/` with a domain                                              | that module's `model/`                                                                                    |
 
 The per-file list for `lib/` is in the phase 1 PR description, which carries
@@ -339,7 +390,7 @@ the move script.
 
 ## Not in scope
 
-- One i18n catalogue stays (`shared/i18n/messages/en.json`, `ru.json`); it is
-  not split per module.
+- One app catalogue stays (`shared/i18n/messages/en.json`, `ru.json`); it is
+  not split per module. The kit's own strings are the one part that left it.
 - `core/` logic does not move to `@knowledge/contracts` unless the API needs it.
 - No behaviour, design or URL changes ride on any phase of this.

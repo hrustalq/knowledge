@@ -9,7 +9,7 @@
  * locking, Escape and focus return are the Dialog's.
  *
  * It owns no markup in the page: it listens on the read surface's `root` for a
- * click or Enter on an image the surface marked (lib/image-gallery) and builds
+ * click or Enter on an image the surface marked (./image-gallery) and builds
  * the gallery from the DOM at that moment, so every surface shares one
  * definition of which images open and in what order.
  *

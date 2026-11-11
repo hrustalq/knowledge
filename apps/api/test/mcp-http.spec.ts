@@ -16,7 +16,11 @@ import { McpService, type McpExtras } from '../src/mcp/mcp.service.js';
 import type { AgentLearning } from '@prisma/client';
 import { CAPTURE_TOOLS, FEATURE_TOOLS, MCP_INSTRUCTIONS, WRITE_TOOLS, instructionsFor, settleTools } from '../src/mcp/mcp-tools.js';
 import { choosePromptLearnings } from '../src/ai/agent-learnings.service.js';
-import { renderSkill } from '../src/mcp/skill.js';
+import { STACK_MARKER, renderSkill, renderSkillStack, renderSkillStackInstaller, stackToolsets } from '../src/mcp/skill.js';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { AiReadableService } from '../src/ai-readable/ai-readable.service.js';
 import { AiReadableController } from '../src/ai-readable/ai-readable.controller.js';
 import { ENFORCING_PROVIDER, enforcingPolicy, noAuthPolicy } from './auth-policy-fakes.js';
@@ -1571,6 +1575,130 @@ describe('renderSkill', () => {
       const named = new Set(playbooks.replaceAll('mcp__knowledge__', '').match(/knowledge_[a-z_]+/g));
       expect([...named].filter((name) => !offered.has(name))).toEqual([]);
     }
+  });
+
+  describe('as a stack (#945)', () => {
+    const sectionsOff = ['qa', 'memos', 'captures', 'analytics', 'conflicts', 'workflows', 'git'] as const;
+    const full = skillInputFor('write');
+    const only = (...toolsets: string[]) => ({ ...full, tools: full.tools.filter((t) => toolsets.includes(t.toolset)) });
+    const inputs = [full, skillInputFor('read'), skillInputFor('capture'), skillInputFor('write', sectionsOff), only('core', 'graph'), only('core', 'authoring', 'insights', 'chat')];
+    const headings = (md: string) => md.split('\n').filter((line) => /^#{2,3} /.test(line));
+    // Headings only the stack has: its own frame, and the two sections that open with a heading when they stand alone.
+    const STACK_ONLY = ['## More skills', '## Tools', '### How pages are read', '### Team chats'];
+
+    it('is a core skill plus one per offered toolset that has a playbook, each named after its folder', () => {
+      const stack = renderSkillStack(full);
+      expect(stack.map((s) => s.name)).toEqual([
+        'knowledge-core',
+        'knowledge-authoring',
+        'knowledge-quality',
+        'knowledge-review',
+        'knowledge-graph',
+        'knowledge-captures',
+        'knowledge-qa',
+        'knowledge-code',
+        'knowledge-insights',
+        'knowledge-embeds',
+        'knowledge-chat',
+        'knowledge-projects',
+      ]);
+      for (const skill of stack) {
+        expect(skill.content.startsWith(`---\nname: ${skill.name}\ndescription: `)).toBe(true);
+        expect(skill.content).toContain(STACK_MARKER);
+      }
+      // The core names the others, so a model knows they exist.
+      for (const skill of stack.slice(1)) expect(stack[0].content).toContain(`\`${skill.name}\``);
+    });
+
+    it('drops a toolset that is not offered, from the stack and from what the core names', () => {
+      const stack = renderSkillStack(skillInputFor('write', ['qa']));
+      expect(stack.map((s) => s.name)).not.toContain('knowledge-qa');
+      expect(stack[0].content).not.toContain('knowledge-qa');
+      expect(renderSkillStack(only('core')).map((s) => s.name)).toEqual(['knowledge-core']);
+      expect(renderSkillStack(only('core'))[0].content).not.toContain('More skills');
+    });
+
+    it('holds every playbook of the one document exactly once, and none of its own', () => {
+      for (const input of inputs) {
+        const stack = renderSkillStack(input);
+        const one = headings(renderSkill(input)).filter((h) => h !== '## Tools offered to this connection');
+        for (const heading of one) {
+          expect(stack.filter((s) => headings(s.content).includes(heading)).map((s) => s.name), heading).toHaveLength(1);
+        }
+        const extra = stack.flatMap((s) => headings(s.content)).filter((h) => !one.includes(h) && !STACK_ONLY.includes(h) && h !== '## Tools offered to this connection');
+        expect(extra).toEqual([]);
+      }
+    });
+
+    it('names no tool the caller is not offered, and lists a skill exactly when its sections render', () => {
+      for (const input of inputs) {
+        const offered = new Set(input.tools.map((t) => t.name));
+        const stack = renderSkillStack(input);
+        for (const skill of stack) {
+          const [playbooks] = skill.content.split(/^## Tools/m);
+          const named = new Set(playbooks.replaceAll('mcp__knowledge__', '').match(/knowledge_[a-z_]+/g));
+          expect([...named].filter((name) => !offered.has(name)), skill.name).toEqual([]);
+        }
+        // `needs` is the sync twin of "has a section": the resources are listed from it.
+        expect(stackToolsets((name) => offered.has(name)).map((key) => `knowledge-${key}`).sort()).toEqual(stack.slice(1).map((s) => s.name).sort());
+      }
+    });
+
+    it('lists each stack skill as a resource only when it is offered', async () => {
+      const { mcp } = service(accessWith('editor'));
+      vi.spyOn(mcp, 'whoami').mockResolvedValue(full.whoami);
+      const client = await connect(mcp, keyPrincipal({ id: 'k', scope: 'read', workspaceId: null, toolsets: ['core', 'graph'] }));
+      const uris = (await client.listResources()).resources.map((r) => r.uri).sort();
+      expect(uris).toEqual(['knowledge://skill', 'knowledge://skills/knowledge-core', 'knowledge://skills/knowledge-graph']);
+      const read = await client.readResource({ uri: 'knowledge://skills/knowledge-graph' });
+      expect((read.contents[0] as { text: string }).text).toContain('# Knowledge platform: Dependencies and impact');
+    });
+
+    it('serves the stack as files, and refuses a directory it does not know', async () => {
+      const { mcp } = service(accessWith('editor'));
+      vi.spyOn(mcp, 'whoami').mockResolvedValue(full.whoami);
+      const principal = keyPrincipal({ id: 'k', scope: 'write', workspaceId: null });
+      const res = await mcp.skillStackFor(principal, 'agents', { offSections: ['qa'] });
+      expect(res).toMatchObject({ version: 1, dir: '~/.agents/skills' });
+      expect(res.files.map((f) => f.path)).toContain('knowledge-graph/SKILL.md');
+      expect(res.files.map((f) => f.path)).not.toContain('knowledge-qa/SKILL.md');
+      await expect(mcp.skillStackFor(principal, '../etc')).rejects.toMatchObject({ status: 400, response: { reason: 'skills-dir' } });
+    });
+
+    it('installs, updates in place, removes what is no longer offered and touches nothing it did not write', () => {
+      const dir = mkdtempSync(join(tmpdir(), 'kn-skills-'));
+      const run = (input: Parameters<typeof renderSkillStack>[0]) =>
+        execFileSync('sh', { input: renderSkillStackInstaller(renderSkillStack(input), '~/.claude/skills', 'https://kb.example.com/api/v1/mcp/skills/install?dir=claude'), env: { ...process.env, KNOWLEDGE_SKILLS_DIR: dir }, stdio: ['pipe', 'pipe', 'pipe'] }).toString();
+      try {
+        // A person's own skill that happens to share the prefix, and one that shares a stack name.
+        mkdirSync(join(dir, 'knowledge-mine'));
+        writeFileSync(join(dir, 'knowledge-mine', 'SKILL.md'), 'mine');
+        mkdirSync(join(dir, 'knowledge-chat'));
+        writeFileSync(join(dir, 'knowledge-chat', 'SKILL.md'), 'also mine');
+
+        run(full);
+        const first = readdirSync(dir).sort();
+        expect(first).toContain('knowledge-core');
+        expect(first).toContain('knowledge-qa');
+        expect(readFileSync(join(dir, 'knowledge-qa', 'SKILL.md'), 'utf8')).toBe(renderSkillStack(full).find((s) => s.name === 'knowledge-qa')!.content);
+        expect(readFileSync(join(dir, 'knowledge-chat', 'SKILL.md'), 'utf8')).toBe('also mine');
+
+        run(full);
+        expect(readdirSync(dir).sort()).toEqual(first);
+
+        const out = run(skillInputFor('write', ['qa']));
+        expect(out).toContain('removed knowledge-qa');
+        expect(existsSync(join(dir, 'knowledge-qa'))).toBe(false);
+        expect(readFileSync(join(dir, 'knowledge-mine', 'SKILL.md'), 'utf8')).toBe('mine');
+        expect(readFileSync(join(dir, 'knowledge-chat', 'SKILL.md'), 'utf8')).toBe('also mine');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('pins the installer for a small stack', () => {
+      expect(renderSkillStackInstaller(renderSkillStack(only('core', 'graph')), '~/.claude/skills', 'https://kb.example.com/api/v1/mcp/skills/install?dir=claude')).toMatchSnapshot();
+    });
   });
 
   it('is a skill with frontmatter, the caller workspaces, and escaped cells', () => {

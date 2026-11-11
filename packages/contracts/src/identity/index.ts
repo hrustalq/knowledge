@@ -958,6 +958,23 @@ export interface McpConnectionInfo {
 }
 
 /**
+ * Where a client keeps its skills: the directories the skill stack installs
+ * into (#945), named by a key so a URL never carries a path.
+ */
+export const SKILL_DIRS = { claude: '~/.claude/skills', agents: '~/.agents/skills' } as const;
+export type SkillDirKey = keyof typeof SKILL_DIRS;
+export const SKILL_DIR_KEYS = Object.keys(SKILL_DIRS) as SkillDirKey[];
+
+// GET /v1/mcp/skills — the skill as a stack: a core skill and one per offered toolset that has a playbook.
+export interface SkillStackResponse {
+  /** Bumped when the stack's layout changes; an installed skill names it. */
+  version: number;
+  /** The skills directory the paths are relative to. */
+  dir: string;
+  files: { path: string; content: string; toolset: McpToolset }[];
+}
+
+/**
  * Why a whole toolset is missing from an offer: its section is off in every
  * workspace the caller reaches, or the key's own toolset list leaves it out.
  * A key's scope hides single write tools, never a whole toolset.

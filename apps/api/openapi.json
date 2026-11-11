@@ -41403,6 +41403,135 @@
         ]
       }
     },
+    "/v1/mcp/skills": {
+      "get": {
+        "operationId": "McpController_skills",
+        "parameters": [
+          {
+            "name": "dir",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "claude",
+                "agents"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillStackResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The skill as a stack of SKILL.md files for the caller: a core skill plus one per offered toolset that has a playbook",
+        "tags": [
+          "mcp"
+        ]
+      }
+    },
+    "/v1/mcp/skills/install": {
+      "get": {
+        "operationId": "McpController_skillsInstaller",
+        "parameters": [
+          {
+            "name": "dir",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "claude",
+                "agents"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The skill stack as a POSIX shell script that installs it into a client's skills directory and removes a skill no longer offered",
+        "tags": [
+          "mcp"
+        ]
+      }
+    },
     "/v1/mcp/capture-kit": {
       "get": {
         "operationId": "McpController_captureKit",
@@ -72836,6 +72965,44 @@
         "required": [
           "secret",
           "setAt"
+        ]
+      },
+      "SkillStackResponse": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "number"
+          },
+          "dir": {
+            "type": "string"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "content": {
+                  "type": "string"
+                },
+                "toolset": {
+                  "$ref": "#/components/schemas/McpToolset"
+                }
+              },
+              "required": [
+                "path",
+                "content",
+                "toolset"
+              ]
+            }
+          }
+        },
+        "required": [
+          "version",
+          "dir",
+          "files"
         ]
       },
       "SourceCheckFailure": {

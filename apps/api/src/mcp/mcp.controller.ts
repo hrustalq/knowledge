@@ -3,7 +3,7 @@ import { ApiOperation, ApiProduces, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { Request, Response } from 'express';
-import { CAPTURE_KIT_CLIENTS, type CaptureKitResponse, type McpConnectionInfo } from '@knowledge/contracts';
+import { CAPTURE_KIT_CLIENTS, SKILL_DIR_KEYS, type CaptureKitResponse, type McpConnectionInfo, type SkillStackResponse } from '@knowledge/contracts';
 import { CurrentPrincipal, McpKeyOk, ReadKeyOk } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { MCP_SERVER_NAME, toolsetsNotOffered } from './mcp-tools.js';
@@ -119,6 +119,33 @@ export class McpController {
   })
   skill(@CurrentPrincipal() principal: Principal): Promise<string> {
     return this.mcp.skillFor(principal, undefined, this.extras);
+  }
+
+  /*
+   * The skill as a stack (#945): a core skill and one per offered toolset that
+   * has a playbook, for a client with a skills directory. JSON for a person or
+   * a tool; `install` is the same files as a script. `GET skill` above stays
+   * the one-file default.
+   */
+  @Get('skills')
+  @Returns('SkillStackResponse')
+  @ApiQuery({ name: 'dir', enum: SKILL_DIR_KEYS, required: false })
+  @ApiOperation({
+    summary: 'The skill as a stack of SKILL.md files for the caller: a core skill plus one per offered toolset that has a playbook',
+  })
+  skills(@CurrentPrincipal() principal: Principal, @Query('dir') dir?: string): Promise<SkillStackResponse> {
+    return this.mcp.skillStackFor(principal, dir, this.extras);
+  }
+
+  @Get('skills/install')
+  @Header('Content-Type', 'text/x-shellscript; charset=utf-8')
+  @ApiProduces('text/x-shellscript')
+  @ApiQuery({ name: 'dir', enum: SKILL_DIR_KEYS, required: false })
+  @ApiOperation({
+    summary: "The skill stack as a POSIX shell script that installs it into a client's skills directory and removes a skill no longer offered",
+  })
+  skillsInstaller(@CurrentPrincipal() principal: Principal, @Query('dir') dir?: string): Promise<string> {
+    return this.mcp.skillStackInstallerFor(principal, dir, this.extras);
   }
 
   /*

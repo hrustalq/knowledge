@@ -318,6 +318,7 @@ import type {
   SiteSignInResponse,
   SiteVersionSummary,
   SiteVisitorSecretResponse,
+  SkillStackResponse,
   SourcePolicy,
   SourceRecipePreview,
   SourceSettingsResponse,
@@ -681,6 +682,7 @@ export interface ContractResponses {
   SiteSignInResponse: SiteSignInResponse;
   SiteVersionSummary: SiteVersionSummary;
   SiteVisitorSecretResponse: SiteVisitorSecretResponse;
+  SkillStackResponse: SkillStackResponse;
   SourcePolicy: SourcePolicy;
   SourceRecipePreview: SourceRecipePreview;
   SourceSettingsResponse: SourceSettingsResponse;

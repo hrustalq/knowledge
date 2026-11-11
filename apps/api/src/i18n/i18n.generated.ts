@@ -1412,6 +1412,7 @@ export type I18nTranslations = {
             "inFlight": string;
             "messageNotAssistant": string;
             "kitClient": string;
+            "skillsDir": string;
             "kitNotOffered": string;
             "keyNotHere": string;
         };

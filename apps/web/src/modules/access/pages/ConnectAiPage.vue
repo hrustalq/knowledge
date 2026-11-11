@@ -42,7 +42,7 @@ import { useQueryClient } from '@tanstack/vue-query'
 import { api, fetchApi, isApiRequestError } from '@/shared/api/queries'
 import { getProjectId, getWorkspaceId, saveFile } from '@/shared/api/api'
 import { formatDate, formatRelative } from '@/shared/utils/format'
-import { KEY_ENV, SKILL_NAME, captureKitFileRole, captureKitInstallCommand, mcpClients, skillInstallCommand } from '@/entities/access'
+import { KEY_ENV, SKILL_NAME, captureKitFileRole, captureKitInstallCommand, mcpClients, skillInstallCommand, skillStackInstallCommand } from '@/entities/access'
 import { useWorkspacesStore } from '@/stores/workspaces'
 import { useProjectsStore } from '@/stores/projects'
 import { useFeaturesStore } from '@/stores/features'
@@ -255,6 +255,9 @@ const exportLine = computed(() => `export ${KEY_ENV}=${fresh.value?.apiKey ?? '<
 const skillUrl = computed(() => (connection.value ? `${connection.value.url}/skill` : ''))
 const skillLines = computed(() => skill.value?.split('\n').length ?? 0)
 const showSkill = ref(false)
+const stackCommand = computed(() =>
+  connection.value && client.value?.skillDir ? skillStackInstallCommand(connection.value.url, client.value.skillDir, needsKey.value) : null,
+)
 
 async function refreshSkill(asKey: string) {
   try {
@@ -649,6 +652,11 @@ const canManageFeatures = computed(() => auth.role === 'admin')
 
           <CopyBlock v-if="client?.skillDir" :code="skillInstallCommand(skillUrl, client.skillDir, needsKey)" :label="t('connect.skill.installFor', { client: client.name, path: `${client.skillDir}/${SKILL_NAME}/SKILL.md` })" />
           <p v-else-if="client" class="text-caption text-muted-foreground">{{ t('connect.skill.noSkillDir', { client: client.name }) }}</p>
+          <!-- The same playbooks as several skills (#945), for a client that loads a skill by its description. -->
+          <template v-if="client?.skillDir && stackCommand">
+            <CopyBlock :code="stackCommand" :label="t('connect.skill.stackFor', { client: client.name, path: client.skillDir })" />
+            <p class="max-w-3xl text-caption text-muted-foreground">{{ t('connect.skill.stackHint') }}</p>
+          </template>
           <p class="text-caption text-muted-foreground">{{ t('connect.skill.alsoServed') }}</p>
 
           <CopyBlock v-if="showSkill && skill" :code="skill" label="SKILL.md" />

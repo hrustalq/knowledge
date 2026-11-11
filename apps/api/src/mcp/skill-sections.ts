@@ -32,6 +32,71 @@ export interface SkillSection {
 }
 
 /**
+ * The toolsets that have a playbook: each is its own skill in the stack
+ * (#945), loaded by a client when `when` matches the task. `needs` is a tool
+ * without which none of the toolset's sections renders — the sync twin of
+ * "it has a section", for listing its resource before a skill is rendered.
+ * A section filed under a toolset missing here stays in the core skill.
+ */
+export const TOOLSET_SKILLS: Partial<Record<McpToolset, { title: string; when: string; needs: string }>> = {
+  embeds: {
+    title: 'Designs embedded in pages',
+    when: 'a page embeds Figma frames, or you need every page that documents a screen before changing it',
+    needs: 'knowledge_get_embed',
+  },
+  quality: {
+    title: 'House style and page quality',
+    when: 'checking a draft against the styleguide before writing it, or improving a page from its quality score',
+    needs: 'knowledge_lint_draft',
+  },
+  insights: {
+    title: 'How pages are read',
+    when: 'asking how often a page is read, or which searches found nothing and deserve a page',
+    needs: 'knowledge_get_page_insights',
+  },
+  graph: {
+    title: 'Dependencies and impact',
+    when: 'asking what depends on a service or component, what a change would break, how two things are connected, or how the knowledge base stood at an earlier date or release',
+    needs: 'knowledge_find_relations',
+  },
+  chat: {
+    title: 'Team chats',
+    when: 'the answer may have been said in a team chat and never written on a page',
+    needs: 'knowledge_search_chat',
+  },
+  code: {
+    title: 'Repositories',
+    when: 'describing how a connected repository is built, or finding the callers and the pages a code change reaches',
+    needs: 'knowledge_repo_wiki',
+  },
+  qa: {
+    title: 'API tests',
+    when: 'testing an API operation: its QA suite, the fixtures that set it up, or running the suite yourself',
+    needs: 'knowledge_qa_overview',
+  },
+  authoring: {
+    title: 'Writing pages',
+    when: 'creating a page, starting one from a template, or changing an existing page through a branch and a merge request',
+    needs: 'knowledge_create_branch',
+  },
+  projects: {
+    title: 'Starting a project',
+    when: 'creating a new project from a blueprint, with its page tree and conventions',
+    needs: 'knowledge_scaffold_project',
+  },
+  review: {
+    title: 'Reviewing merge requests',
+    when: 'reading, reviewing or commenting on a merge request',
+    needs: 'knowledge_comment_merge_request',
+  },
+  captures: {
+    title: 'Capture memory',
+    when: 'finishing a piece of work that settled a decision, hit a non-obvious gotcha or followed a team convention worth recording',
+    needs: 'knowledge_capture_decision',
+  },
+};
+
+/**
  * The sections this caller is given, in the order the skill prints them. A
  * section renders only when its tools are offered, so a skill never describes
  * a call that cannot be made. A new playbook is a section here, never a block

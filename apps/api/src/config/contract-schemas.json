@@ -22411,6 +22411,44 @@
       "setAt"
     ]
   },
+  "SkillStackResponse": {
+    "type": "object",
+    "properties": {
+      "version": {
+        "type": "number"
+      },
+      "dir": {
+        "type": "string"
+      },
+      "files": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "content": {
+              "type": "string"
+            },
+            "toolset": {
+              "$ref": "#/components/schemas/McpToolset"
+            }
+          },
+          "required": [
+            "path",
+            "content",
+            "toolset"
+          ]
+        }
+      }
+    },
+    "required": [
+      "version",
+      "dir",
+      "files"
+    ]
+  },
   "SourceCheckFailure": {
     "type": "string",
     "enum": [

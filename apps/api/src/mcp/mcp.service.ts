@@ -1,13 +1,23 @@
 import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { CAPTURE_KIT_CLIENTS, MCP_LEARNING_TARGET, type CaptureKitClient } from '@knowledge/contracts';
-import type { CaptureKitResponse, McpToolSummary, WorkspaceFeature, WorkspaceRole } from '@knowledge/contracts';
+import { CAPTURE_KIT_CLIENTS, MCP_LEARNING_TARGET, SKILL_DIRS, SKILL_DIR_KEYS, type CaptureKitClient, type SkillDirKey } from '@knowledge/contracts';
+import type { CaptureKitResponse, McpToolSummary, SkillStackResponse, WorkspaceFeature, WorkspaceRole } from '@knowledge/contracts';
 import { t } from '../i18n/t.js';
 import { DEV_PRINCIPAL, type Principal } from '../auth/principal.js';
 import { CAPTURE_TOOLS, MCP_SERVER_NAME, featureOfTool, instructionsFor, isOffered, settleTools, trackTools } from './mcp-tools.js';
 import { renderCaptureKit, renderCaptureKitInstaller } from './capture-kit.js';
-import { renderMcpLearnings, renderSkill, type McpLearningGroup, type McpWhoami } from './skill.js';
+import {
+  SKILL_STACK_VERSION,
+  renderMcpLearnings,
+  renderSkill,
+  renderSkillStack,
+  renderSkillStackInstaller,
+  type McpLearningGroup,
+  type McpWhoami,
+  type SkillInput,
+  type StackSkill,
+} from './skill.js';
 import { registerCaptureTools } from './capture-tools.js';
 import { json, type McpToolContext } from './tools/context.js';
 import { McpServices } from './mcp-services.js';
@@ -197,6 +207,8 @@ export class McpService extends McpServices {
       svc: this,
       whoami: () => this.whoami(principal),
       skill: () => this.skillFor(principal, undefined, extras),
+      stack: () => this.skillStackOf(principal, extras),
+      offered: (tool) => isOffered(tool, principal, extras.offSections),
     };
     registerSearchTools(ctx);
     registerPagesTools(ctx);
@@ -228,9 +240,47 @@ export class McpService extends McpServices {
 
   /** The SKILL.md for `principal` — see skill.ts. `url` overrides the endpoint it names. */
   async skillFor(principal: Principal, url?: string, extras: McpExtras = {}): Promise<string> {
+    return renderSkill(await this.skillInput(principal, url, extras));
+  }
+
+  /** The same playbooks as a stack: a core skill and one per offered toolset that has one (#945). */
+  async skillStackOf(principal: Principal, extras: McpExtras = {}): Promise<StackSkill[]> {
+    return renderSkillStack(await this.skillInput(principal, undefined, extras));
+  }
+
+  /** The stack as files under a client's skills directory, `dir` a key of SKILL_DIRS. */
+  async skillStackFor(principal: Principal, dir: string | undefined, extras: McpExtras = {}): Promise<SkillStackResponse> {
+    const key = this.skillDirKey(dir);
+    const skills = await this.skillStackOf(principal, extras);
+    return {
+      version: SKILL_STACK_VERSION,
+      dir: SKILL_DIRS[key],
+      files: skills.map((s) => ({ path: `${s.name}/SKILL.md`, content: s.content, toolset: s.toolset })),
+    };
+  }
+
+  /** The stack as a shell script that installs it — `curl … | sh`. */
+  async skillStackInstallerFor(principal: Principal, dir: string | undefined, extras: McpExtras = {}): Promise<string> {
+    const key = this.skillDirKey(dir);
+    return renderSkillStackInstaller(await this.skillStackOf(principal, extras), SKILL_DIRS[key], `${this.publicUrl()}/skills/install?dir=${key}`);
+  }
+
+  private skillDirKey(dir: string | undefined): SkillDirKey {
+    const key = dir ?? 'claude';
+    if (!(SKILL_DIR_KEYS as readonly string[]).includes(key)) {
+      throw new BadRequestException({
+        statusCode: 400,
+        message: t('error.capture.skillsDir', { dir: key, dirs: SKILL_DIR_KEYS.join(', ') }),
+        reason: 'skills-dir',
+      });
+    }
+    return key as SkillDirKey;
+  }
+
+  private async skillInput(principal: Principal, url: string | undefined, extras: McpExtras): Promise<SkillInput> {
     const whoami = await this.whoami(principal);
     const offSections = extras.offSections ?? (await this.features.offEverywhere(whoami.workspaces.map((w) => w.workspaceId)));
-    return renderSkill({
+    return {
       url: url ?? this.publicUrl(),
       serverName: MCP_SERVER_NAME,
       version: PRODUCT_VERSION,
@@ -240,7 +290,7 @@ export class McpService extends McpServices {
       tools: this.toolsFor(principal, { ...extras, offSections }),
       learnings: await this.learningsFor(whoami),
       git: this.config.get('GIT_REMOTE_ENABLED') === true && !offSections.includes('git'),
-    });
+    };
   }
 
   /**

@@ -1,5 +1,7 @@
 import { ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { McpToolContext } from './context.js';
+import { STACK_CORE_SKILL, stackToolsets } from '../skill.js';
+import { TOOLSET_SKILLS } from '../skill-sections.js';
 
 /** The skill as a resource and a prompt, and the AI-readable resource templates (#68). */
 export function registerResourcesTools(ctx: McpToolContext): void {
@@ -18,6 +20,26 @@ export function registerResourcesTools(ctx: McpToolContext): void {
     },
     async (uri) => ({ contents: [{ uri: uri.href, mimeType: 'text/markdown', text: await ctx.skill() }] }),
   );
+  // The stack (#945): the core and each offered toolset's playbook on its own,
+  // for a client that reads one resource at a time. Listed only when offered.
+  for (const toolset of ['core' as const, ...stackToolsets(ctx.offered)]) {
+    const name = toolset === 'core' ? STACK_CORE_SKILL : `knowledge-${toolset}`;
+    server.registerResource(
+      `skill-${toolset}`,
+      `knowledge://skills/${name}`,
+      {
+        title: toolset === 'core' ? 'Knowledge platform: core skill' : `Knowledge platform: ${TOOLSET_SKILLS[toolset]!.title}`,
+        description:
+          toolset === 'core'
+            ? 'The connection, your workspaces, how to answer from the knowledge base, and the rules. One part of knowledge://skill.'
+            : `Use when ${TOOLSET_SKILLS[toolset]!.when}. One part of knowledge://skill.`,
+        mimeType: 'text/markdown',
+      },
+      async (uri) => ({
+        contents: [{ uri: uri.href, mimeType: 'text/markdown', text: (await ctx.stack()).find((s) => s.toolset === toolset)?.content ?? '' }],
+      }),
+    );
+  }
   server.registerPrompt(
     'guide',
     {

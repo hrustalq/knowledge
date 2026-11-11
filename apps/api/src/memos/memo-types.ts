@@ -52,6 +52,8 @@ export interface MemoTypeRow {
   name: string | null;
   guidance: string | null;
   hidden: boolean;
+  projectId?: string | null;
+  auto?: boolean;
 }
 
 /** The workspace's catalogue: built-ins as its rows left them, then its own types by name. Hidden ones included. */
@@ -66,11 +68,13 @@ export function effectiveMemoTypes(rows: readonly MemoTypeRow[]): MemoType[] {
       builtIn: true,
       overridden: Boolean(row && (row.name?.trim() || row.guidance?.trim())),
       hidden: row?.hidden ?? false,
+      projectId: row?.projectId ?? null,
+      auto: row?.auto ?? false,
     };
   });
   const own = rows
     .filter((r) => !(BUILT_IN_MEMO_TYPE_KEYS as readonly string[]).includes(r.key))
-    .map((r): MemoType => ({ key: r.key, name: r.name?.trim() || r.key, guidance: r.guidance?.trim() ?? '', builtIn: false, overridden: false, hidden: r.hidden }))
+    .map((r): MemoType => ({ key: r.key, name: r.name?.trim() || r.key, guidance: r.guidance?.trim() ?? '', builtIn: false, overridden: false, hidden: r.hidden, projectId: r.projectId ?? null, auto: r.auto ?? false }))
     .sort((a, b) => a.name.localeCompare(b.name));
   return [...builtIn, ...own];
 }

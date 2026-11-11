@@ -723,6 +723,13 @@ export const envSchema = z.object({
    * several times the price per minute. Unread by `openai-compatible`.
    */
   TRANSCRIPTION_SPEAKERS: boolish(false),
+  /**
+   * Sort a memo before it is analysed (#879): one extra model call per memo
+   * suggests its type, project and tags, and a memo whose type is not set to
+   * auto waits for its owner's confirm. Off = a memo goes straight to analysis,
+   * as before.
+   */
+  MEMO_TRIAGE_ENABLED: boolish(false),
   /** Upload ceiling, enforced at reserve and again from the bucket's HEAD. */
   MEMO_MAX_BYTES: z.coerce.number().int().positive().default(209_715_200),
   /** Length ceiling: the browser's claim at reserve, ffprobe's in the worker. */

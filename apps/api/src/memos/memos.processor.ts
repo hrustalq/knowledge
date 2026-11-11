@@ -37,6 +37,7 @@ export class MemosProcessor extends WorkerHost {
   private readonly logger = new Logger(MemosProcessor.name);
   private readonly maxMinutes: number;
   private readonly maxBytes: number;
+  private readonly triage: boolean;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -50,6 +51,7 @@ export class MemosProcessor extends WorkerHost {
     super();
     this.maxMinutes = config.get('MEMO_MAX_MINUTES', { infer: true });
     this.maxBytes = config.get('MEMO_MAX_BYTES', { infer: true });
+    this.triage = config.get('MEMO_TRIAGE_ENABLED', { infer: true });
   }
 
   async process(job: Job<{ memoId: string }>): Promise<void> {
@@ -57,6 +59,8 @@ export class MemosProcessor extends WorkerHost {
     if (!row) return;
     // A retried analysis (#551): the transcript is kept, only the reading runs again.
     if (Array.isArray(row.transcript)) {
+      // Sorted first (#879): the API's triage sweeper asks about it and queues it again, or leaves it for its owner.
+      if (this.triage && row.triage === null) return;
       const resumed = await this.prisma.memo.updateMany({
         where: { id: row.id, status: 'transcribed' },
         data: { status: 'analysing' },
@@ -141,6 +145,8 @@ export class MemosProcessor extends WorkerHost {
       }
     }
     if (failure) return this.fail(memoId, 'transcribing', failure);
+    // Left `transcribed` for the API's triage sweeper (#879), which sorts it and queues the analysis.
+    if (this.triage) return;
     await this.analyse(row).catch((error: unknown) => this.fail(memoId, 'analysing', (error as Error).message));
   }
 

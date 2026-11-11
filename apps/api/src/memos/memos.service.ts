@@ -24,6 +24,7 @@ import {
   type MemoSegment,
   type MemoSource,
   type MemoSpeaker,
+  type MemoTriage,
   type MemoType,
   type MemoStatus,
   type MemoTranscriptionState,
@@ -34,6 +35,7 @@ import { AiUsageService } from '../ai/ai-usage.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { PlaudError } from '../plaud/plaud.client.js';
 import { effectiveMemoTypes, shippedMemoType } from './memo-types.js';
+import { cleanTags } from './triage.js';
 import { loadSpeakers, readChoices, speakerLabels } from './speakers.js';
 import { PlaudService } from '../plaud/plaud.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -275,6 +277,7 @@ export class MemosService {
     return {
       memo,
       speakers: (await loadSpeakers(this.prisma, row)).speakers,
+      triage: row.triage && typeof row.triage === 'object' ? (row.triage as unknown as MemoTriage) : null,
       progress: memoProgressFor(
         memo,
         run && {
@@ -330,14 +333,38 @@ export class MemosService {
    * (#879). Anyone else gets the same bare 404 as on a read. A type must be
    * one the workspace offers; null takes it away.
    */
-  async update(principal: Principal, memoId: string, input: { title?: string; type?: string | null }): Promise<MemoInfo> {
+  async update(principal: Principal, memoId: string, input: { title?: string; type?: string | null; tags?: string[] }): Promise<MemoInfo> {
     const row = await this.require(principal, memoId);
     if (input.type) {
       const offered = (await this.types(row.workspaceId)).some((t) => t.key === input.type && !t.hidden);
       if (!offered) throw new BadRequestException(t('error.memo.typeUnknown'));
     }
-    const data = { ...(input.title ? { title: input.title } : {}), ...(input.type !== undefined ? { type: input.type } : {}) };
+    const data = {
+      ...(input.title ? { title: input.title } : {}),
+      ...(input.type !== undefined ? { type: input.type } : {}),
+      ...(input.tags ? { tags: cleanTags(input.tags) } : {}),
+    };
     return toInfo(await this.prisma.memo.update({ where: { id: row.id }, data }));
+  }
+
+  /**
+   * The owner's answer to a memo waiting in `review` (#879): what it is, where
+   * it goes and its tags, theirs to change from what triage suggested. Then
+   * on to the secretary. Guarded on `review`, so a double press queues once.
+   * The project is checked like any memo's (`projectFor`): theirs to file into.
+   */
+  async confirm(principal: Principal, memoId: string, input: { type: string | null; projectId: string; tags: string[] }): Promise<MemoInfo> {
+    const row = await this.require(principal, memoId);
+    if (input.type) {
+      const offered = (await this.types(row.workspaceId)).some((t) => t.key === input.type && !t.hidden);
+      if (!offered) throw new BadRequestException(t('error.memo.typeUnknown'));
+    }
+    const project = await this.projectFor(principal, row.workspaceId, input.projectId);
+    const data = { status: 'transcribed', type: input.type, projectId: project.id, tags: cleanTags(input.tags) };
+    const claimed = await this.prisma.memo.updateMany({ where: { id: row.id, status: 'review' }, data });
+    if (claimed.count === 0) throw new ConflictException(t('error.memo.notInReview'));
+    await this.producer.enqueue(row.id);
+    return toInfo({ ...row, ...data });
   }
 
   /** The workspace's catalogue of memo types (#879): built-ins as its rows left them, then its own. */
@@ -354,7 +381,7 @@ export class MemosService {
     principal: Principal,
     workspaceId: string,
     key: string,
-    input: { name?: string | null; guidance?: string | null; hidden?: boolean },
+    input: { name?: string | null; guidance?: string | null; hidden?: boolean; projectId?: string | null; auto?: boolean },
   ): Promise<MemoType[]> {
     const shipped = shippedMemoType(key);
     const builtIn = Boolean(shipped);
@@ -367,7 +394,13 @@ export class MemosService {
       name: name ?? null,
       ...(input.guidance !== undefined ? { guidance: own(input.guidance, shipped?.guidance) } : {}),
       ...(input.hidden !== undefined ? { hidden: input.hidden } : {}),
+      ...(input.auto !== undefined ? { auto: input.auto } : {}),
+      ...(input.projectId !== undefined ? { projectId: input.projectId } : {}),
     };
+    if (input.projectId) {
+      const project = await this.prisma.project.findFirst({ where: { id: input.projectId, workspaceId }, select: { id: true } });
+      if (!project) throw new BadRequestException(t('error.project.notFound', { id: input.projectId }));
+    }
     await this.prisma.memoType.upsert({
       where: { workspaceId_key: { workspaceId, key } },
       create: { workspaceId, key, createdBy: principal.userId, ...data },
@@ -567,6 +600,7 @@ function toInfo(row: Omit<Memo, 'transcript' | 'dropped' | 'summary'>): MemoInfo
     audioAvailable: !row.audioPurgedAt && row.status !== 'pending',
     source: row.source as MemoSource,
     type: row.type,
+    tags: Array.isArray(row.tags) ? (row.tags as string[]) : [],
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

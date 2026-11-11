@@ -19,6 +19,7 @@ import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import { Textarea } from '@/shared/ui/textarea'
+import { useProjectsStore } from '@/stores/projects'
 import { useMemoTypes } from '../model/memo-types'
 
 const props = defineProps<{ workspaceId: string }>()
@@ -33,6 +34,11 @@ const selected = ref<string>(NEW)
 const name = ref('')
 const guidance = ref('')
 const hidden = ref(false)
+/** Where a detected memo of this type goes, and whether it waits for its owner (#879, phase 2). */
+const HERE = 'here'
+const projects = useProjectsStore()
+const project = ref(HERE)
+const auto = ref(false)
 const saving = ref(false)
 
 const current = computed<MemoType | undefined>(() => types.value.find((type) => type.key === selected.value))
@@ -42,6 +48,8 @@ function load() {
   name.value = type ? (type.builtIn && !type.overridden ? '' : type.name) : ''
   guidance.value = type?.guidance ?? ''
   hidden.value = type?.hidden ?? false
+  project.value = type?.projectId ?? HERE
+  auto.value = type?.auto ?? false
 }
 watch(open, (now) => {
   if (!now) return
@@ -81,7 +89,7 @@ function save() {
     () =>
       request('put', '/v1/memos/types/{key}', {
         path: { key },
-        body: { workspaceId: props.workspaceId, name: name.value.trim() || null, guidance: guidance.value.trim() || null, hidden: hidden.value },
+        body: { workspaceId: props.workspaceId, name: name.value.trim() || null, guidance: guidance.value.trim() || null, hidden: hidden.value, projectId: project.value === HERE ? null : project.value, auto: auto.value },
       }),
     () => {
       selected.value = key
@@ -132,6 +140,20 @@ function reset() {
           <Textarea id="memo-type-guidance" v-model="guidance" rows="6" maxlength="4000" />
           <p class="text-muted-foreground text-xs">{{ t('memos.types.guidanceHint') }}</p>
         </div>
+        <div class="space-y-1.5">
+          <Label for="memo-type-project">{{ t('memos.types.project') }}</Label>
+          <Select v-model="project">
+            <SelectTrigger id="memo-type-project" class="w-full"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem :value="HERE">{{ t('memos.types.projectHere') }}</SelectItem>
+              <SelectItem v-for="p in projects.items" :key="p.projectId" :value="p.projectId">{{ p.name }}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <label class="flex items-start gap-2 text-sm">
+          <Checkbox class="mt-0.5" :model-value="auto" @update:model-value="auto = $event === true" />
+          {{ t('memos.types.auto') }}
+        </label>
         <label class="flex items-center gap-2 text-sm">
           <Checkbox :model-value="hidden" @update:model-value="hidden = $event === true" />
           {{ t('memos.types.hide') }}

@@ -26,7 +26,7 @@ export function memoExtensionFor(filename: string, contentType: string): string 
  * `pending` is the reserved row before the bucket confirms the bytes; `failed`
  * keeps the `stage` it failed in, which is what Retry resumes from.
  */
-export type MemoStatus = 'pending' | 'uploaded' | 'transcribing' | 'transcribed' | 'analysing' | 'done' | 'failed';
+export type MemoStatus = 'pending' | 'uploaded' | 'transcribing' | 'transcribed' | 'review' | 'analysing' | 'done' | 'failed';
 
 /** One stretch of speech; times in seconds from the start of the recording. */
 export interface MemoSegment {
@@ -54,6 +54,23 @@ export interface MemoType {
   overridden: boolean;
   /** Not offered when classifying; memos already of this type keep it. */
   hidden: boolean;
+  /** Where a memo detected as this type goes; null = the project it arrived in. */
+  projectId: string | null;
+  /** A memo detected as this type is analysed without waiting for its owner's confirm. */
+  auto: boolean;
+}
+
+/**
+ * What a model suggested for a memo before it is analysed (#879). A
+ * suggestion only: `type` and `projectId` are ones the uploader may use, and
+ * nothing here is applied without them unless the type is set to `auto`.
+ */
+export interface MemoTriage {
+  type: string | null;
+  projectId: string | null;
+  tags: string[];
+  /** A kind of recording no listed type covers, proposed for the workspace; it does nothing until an admin adds it. */
+  newType: { name: string; guidance: string } | null;
 }
 
 // GET /v1/memos/types
@@ -102,6 +119,7 @@ export interface MemoInfo {
   source: MemoSource;
   /** A memo type's key (#879), or null while unclassified. */
   type: string | null;
+  tags: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -182,6 +200,9 @@ export function memoProgressFor(
       return { step: 'transcribe', state: 'running', since: memo.updatedAt };
     case 'transcribed':
       return { step: 'analyse', state: 'waiting', since: memo.updatedAt };
+    // Waiting for its owner, not for a machine: the page asks them instead of showing a step.
+    case 'review':
+      return null;
     case 'analysing':
       if (!run || run.status === 'pending') return { step: 'analyse', state: 'waiting', since: run?.createdAt ?? memo.updatedAt };
       if (run.status === 'running') return { step: 'analyse', state: 'running', since: run.startedAt ?? run.createdAt };
@@ -202,6 +223,8 @@ export interface MemoDetailResponse {
   progress: MemoProgress | null;
   /** One entry per speaker label in the transcript, in the order they first speak. */
   speakers: MemoSpeaker[];
+  /** The suggestion a memo in `review` is waiting on; null when triage did not run or suggested nothing. */
+  triage: MemoTriage | null;
   transcript: MemoSegment[];
   summary: string | null;
   proposals: MemoProposal[];

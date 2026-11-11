@@ -21,6 +21,7 @@ describe('memo-ui', () => {
     expect(['pending', 'uploaded', 'transcribing', 'transcribed', 'analysing'].every((s) => isMemoInFlight(s as never))).toBe(true)
     expect(isMemoInFlight('done')).toBe(false)
     expect(isMemoInFlight('failed')).toBe(false)
+    expect(isMemoInFlight('review')).toBe(false)
   })
 
   it('spells a moment the way the merge request links do', () => {

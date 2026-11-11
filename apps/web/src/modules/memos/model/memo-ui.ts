@@ -1,5 +1,5 @@
 import type { Component } from 'vue'
-import { CircleCheck, CircleDashed, FileAudio, Loader2, Sparkles, TriangleAlert, Upload } from 'lucide-vue-next'
+import { CircleCheck, CircleDashed, CircleHelp, FileAudio, Loader2, Sparkles, TriangleAlert, Upload } from 'lucide-vue-next'
 import type { MemoStatus } from '@knowledge/contracts'
 
 /**
@@ -13,6 +13,7 @@ export const MEMO_STATUS_ICON: Record<MemoStatus, Component> = {
   uploaded: CircleDashed,
   transcribing: Loader2,
   transcribed: FileAudio,
+  review: CircleHelp,
   analysing: Sparkles,
   done: CircleCheck,
   failed: TriangleAlert,
@@ -23,14 +24,15 @@ export const MEMO_STATUS_CLASS: Record<MemoStatus, string> = {
   uploaded: 'text-muted-foreground',
   transcribing: 'text-primary',
   transcribed: 'text-primary',
+  review: 'text-primary',
   analysing: 'text-primary',
   done: 'text-panel-tip-ink',
   failed: 'text-destructive',
 }
 
-/** Still moving: the list and the page poll while any memo is. */
+/** Still moving: the list and the page poll while any memo is. One in `review` waits for its owner, not for a machine. */
 export function isMemoInFlight(status: MemoStatus): boolean {
-  return status !== 'done' && status !== 'failed'
+  return status !== 'done' && status !== 'failed' && status !== 'review'
 }
 
 /**

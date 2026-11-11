@@ -1350,6 +1350,8 @@ export type AiUsageOperation =
   | 'transcription'
   /** The `secretary` reading one memo's transcript and proposing pages (#551). */
   | 'memo'
+  /** Sorting one memo before it is analysed: its type, project and tags (#879). One row per memo, on the secretary's model. */
+  | 'memo-triage'
   /** The `interpreter` drafting a `web` source's extraction recipe (#674): on a held version, or a person's Draft. */
   | 'source-recipe'
   /** The `sentinel` judging a page that links a `web` source against what its new version changed (#674, phase 5b). One row per page. */

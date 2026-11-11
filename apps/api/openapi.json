@@ -27156,6 +27156,80 @@
         ]
       }
     },
+    "/v1/memos/{id}/confirm": {
+      "post": {
+        "operationId": "MemosController_confirm",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmMemoDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Confirm what a memo waiting for review is and where it goes; it is then analysed",
+        "tags": [
+          "memos"
+        ]
+      }
+    },
     "/v1/memos/{id}/retry": {
       "post": {
         "operationId": "MemosController_retry",
@@ -47802,6 +47876,16 @@
           "hidden": {
             "type": "boolean",
             "description": "Hidden types are not offered; memos already of the type keep it"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Where a memo detected as this type goes; null = the project it arrived in"
+          },
+          "auto": {
+            "type": "boolean",
+            "description": "A memo detected as this type is analysed without waiting for its owner's confirm"
           }
         },
         "required": [
@@ -47871,6 +47955,32 @@
           "fileId"
         ]
       },
+      "ConfirmMemoDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true,
+            "description": "A memo type's key, or null for none"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The project the memo is filed into and analysed against"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "type",
+          "projectId",
+          "tags"
+        ]
+      },
       "RenameMemoDto": {
         "type": "object",
         "properties": {
@@ -47882,6 +47992,13 @@
             "type": "string",
             "nullable": true,
             "description": "A memo type's key from GET /v1/memos/types, or null for none"
+          },
+          "tags": {
+            "description": "Topic tags: trimmed, lower-cased, at most five kept",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -53013,6 +53130,7 @@
           "test-fixture-ranking",
           "transcription",
           "memo",
+          "memo-triage",
           "source-recipe",
           "source-judge",
           "blueprint-derive",
@@ -66854,6 +66972,14 @@
               "$ref": "#/components/schemas/MemoSpeaker"
             }
           },
+          "triage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemoTriage"
+              }
+            ],
+            "nullable": true
+          },
           "transcript": {
             "type": "array",
             "items": {
@@ -66881,6 +67007,7 @@
           "memo",
           "progress",
           "speakers",
+          "triage",
           "transcript",
           "summary",
           "proposals",
@@ -66965,6 +67092,12 @@
             "type": "string",
             "nullable": true
           },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "createdAt": {
             "type": "string"
           },
@@ -66988,6 +67121,7 @@
           "audioAvailable",
           "source",
           "type",
+          "tags",
           "createdAt",
           "updatedAt"
         ]
@@ -67190,6 +67324,7 @@
           "uploaded",
           "transcribing",
           "transcribed",
+          "review",
           "analysing",
           "done",
           "failed"
@@ -67226,6 +67361,51 @@
           "missing"
         ]
       },
+      "MemoTriage": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "projectId": {
+            "type": "string",
+            "nullable": true
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "newType": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "guidance": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "guidance"
+                ]
+              }
+            ],
+            "nullable": true
+          }
+        },
+        "required": [
+          "type",
+          "projectId",
+          "tags",
+          "newType"
+        ]
+      },
       "MemoType": {
         "type": "object",
         "properties": {
@@ -67246,6 +67426,13 @@
           },
           "hidden": {
             "type": "boolean"
+          },
+          "projectId": {
+            "type": "string",
+            "nullable": true
+          },
+          "auto": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -67254,7 +67441,9 @@
           "guidance",
           "builtIn",
           "overridden",
-          "hidden"
+          "hidden",
+          "projectId",
+          "auto"
         ]
       },
       "MemoTypesResponse": {

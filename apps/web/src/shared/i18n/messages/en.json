@@ -7368,6 +7368,17 @@
     "offlineDescription": "Pages already open stay readable. Anything that needs the server will fail until the connection returns."
   },
   "memos": {
+    "review": {
+      "title": "Confirm this memo",
+      "suggested": "Suggested from the recording. Change anything, then let the agent read it.",
+      "plain": "Say what this recording is and where it goes, then let the agent read it.",
+      "type": "Type",
+      "project": "Project",
+      "tags": "Tags",
+      "tagsHint": "Separated by commas; up to five are kept.",
+      "newType": "No type quite fits. The recording looks like a “{name}”; an admin can add it under Memo types.",
+      "confirm": "Confirm and analyse"
+    },
     "types": {
       "builtin": {
         "daily": "Daily",
@@ -7390,6 +7401,9 @@
       "keyTaken": "Use a name with Latin letters that no other type has.",
       "guidance": "How the agent treats it",
       "guidanceHint": "This text becomes part of the agent's instructions. Leave it empty on a built-in type to use the text it ships with.",
+      "project": "Where its memos go",
+      "projectHere": "The project the memo arrived in",
+      "auto": "Analyse a memo detected as this type right away, without waiting for its owner's confirm",
       "hide": "Hide this type: it is not offered any more, and memos that have it keep it",
       "reset": "Back to built-in",
       "remove": "Delete type",
@@ -7431,6 +7445,7 @@
       "uploaded": "Queued",
       "transcribing": "Transcribing",
       "transcribed": "Transcribed",
+      "review": "Needs your confirm",
       "analysing": "Reading",
       "done": "Done",
       "failed": "Failed"

@@ -71,6 +71,16 @@ in the pull request that introduces them — see
   and `GET /v1/memos?type=` do the same over the API. The type is set by hand for now; a memo already analysed is
   not read again when its type changes. (#879)
 
+- **A memo can be sorted before the agent reads it.** With `MEMO_TRIAGE_ENABLED=true`, a memo that has a
+  transcript is first shown to a model that suggests its type, the project it is about and up to five topic tags.
+  The memo then waits as "Needs your confirm": its page shows the suggestion, you change anything you like and
+  press Confirm, and the agent reads it in the project you chose. A workspace admin can instead mark a type to be
+  analysed right away and give it a project its memos go to, under "Memo types"; a memo detected as such a type
+  skips the wait. The suggestion only ever names a project you may file into. If sorting cannot run (no model,
+  no budget, an error), the memo is analysed unsorted rather than left waiting. A memo's tags show on its page.
+  `POST /v1/memos/:id/confirm { type, projectId, tags }`, `PATCH /v1/memos/:id { tags }`, and `projectId` and
+  `auto` on `PUT /v1/memos/types/:key` do the same over the API; `GET /v1/memos/:id` returns `triage`. (#879)
+
 ### Changed
 
 - **The agent that reads a memo may now name people.** It is told who the speakers you matched are, and may say
@@ -95,6 +105,13 @@ in the pull request that introduces them — see
   transcript line now runs the full width of its column at body text size; it was held to 65 characters. (#874)
 
 ### Operations
+
+- New optional variable `MEMO_TRIAGE_ENABLED` (default `false`). On, every memo costs one extra model call on the
+  secretary's model before analysis, recorded as `memo-triage` usage, and memos wait for their owner's confirm
+  unless their type is set to auto. Both the API and the worker read it, so set it for both.
+- Migration `20270110100000_memo_triage` adds `memos.tags` (default `[]`), nullable `memos.triage` and
+  `memos.triaged_at`, and `memo_types.project_id` and `memo_types.auto` (default `false`). Nullable columns and
+  columns with a default, so it survives a rollback to the previous release.
 
 - Migration `20270109100000_memo_types` adds the `memo_types` table and the nullable column `memos.type`. A new
   table and a nullable column, so it survives a rollback to the previous release.

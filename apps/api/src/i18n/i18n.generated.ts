@@ -925,6 +925,7 @@ export type I18nTranslations = {
             "speakerNotMember": string;
             "typeUnknown": string;
             "typeNeedsName": string;
+            "notInReview": string;
             "speaker": string;
             "speechServerDown": string;
             "speechServerRefused": string;

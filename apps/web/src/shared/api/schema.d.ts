@@ -14929,6 +14929,9 @@ export interface components {
                 name: string;
                 guidance: string;
             } | null;
+            speakers?: {
+                [key: string]: string;
+            };
         };
         MemoType: {
             key: string;
@@ -33660,6 +33663,8 @@ export interface operations {
                 projectId?: string;
                 /** @description Only memos of this type */
                 type?: string;
+                /** @description Only memos carrying this tag */
+                tag?: string;
             };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */

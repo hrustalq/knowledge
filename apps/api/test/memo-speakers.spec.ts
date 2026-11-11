@@ -40,6 +40,16 @@ describe('memo speakers (#880)', () => {
     expect(resolve(['Speaker 1'], { 'Speaker 1': 'u-anna' })['Speaker 1']!.userId).toBe('u-anna');
   });
 
+  it('offers what triage heard as a guess, numbered voices included, and never as a match', () => {
+    const got = Object.fromEntries(
+      resolveSpeakers({ labels: ['Speaker 1', 'Boss', 'eldar'], chosen: {}, earlier: [], members, guessed: { 'Speaker 1': 'u-anna', Boss: 'u-gone', eldar: 'u-anna' } }).map((s) => [s.label, s]),
+    );
+    expect(got['Speaker 1']).toMatchObject({ userId: null, suggestedUserId: 'u-anna' });
+    expect(got.Boss).toMatchObject({ userId: null, suggestedUserId: null });
+    // The label's own name wins over what was heard.
+    expect(got.eldar!.suggestedUserId).toBe('u-eldar');
+  });
+
   it('drops someone who is no longer a member, wherever they came from', () => {
     expect(resolve(['A'], { A: 'u-gone' }).A!.userId).toBeNull();
     expect(resolve(['B'], {}, [{ B: 'u-gone' }]).B!.userId).toBeNull();

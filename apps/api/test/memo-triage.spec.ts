@@ -31,6 +31,17 @@ describe('memo triage (#879)', () => {
     expect(readTriage({ type: 'retro', newType: proposed }, options).newType).toBeNull();
   });
 
+  it('keeps a speaker guess only for a label the transcript has and a name exactly one member carries (#880)', () => {
+    const members = new Map([['u1', 'Anna Petrova'], ['u2', 'Anna Petrova'], ['u3', 'Eldar K']]);
+    const answer = { speakers: [{ label: 'Speaker 1', name: 'Eldar K' }, { label: 'Speaker 2', name: 'Anna Petrova' }, { label: 'Ghost', name: 'Eldar K' }, { label: 'Speaker 1', name: 'Somebody Else' }] };
+    expect(readTriage(answer, { ...options, members }, ['Speaker 1', 'Speaker 2']).speakers).toEqual({ 'Speaker 1': 'u3' });
+    expect(readTriage({}, { ...options, members }, ['Speaker 1'])).not.toHaveProperty('speakers');
+    const { user } = triageMessages([{ i: 0, start: 0, end: 1, text: 'hi', speaker: 'Speaker 1' }], { ...options, members });
+    expect(user).toContain('Speaker labels: "Speaker 1"');
+    // No speakers in the transcript: no names are sent at all.
+    expect(triageMessages([{ i: 0, start: 0, end: 1, text: 'hi' }], { ...options, members }).user).not.toContain('Eldar');
+  });
+
   it('cleans tags the same way for a model and a person', () => {
     expect(cleanTags(['  A  B ', 'a b', 3, '', 'c', 'd', 'e', 'f', 'g'])).toEqual(['a b', 'c', 'd', 'e', 'f']);
   });
@@ -63,8 +74,9 @@ describe('MemoTriageSweeper', () => {
     const agents = { resolve: vi.fn(async () => ({ enabled: true, config: { enabled: true } })) };
     const chat = vi.fn(async () => { if (answer instanceof Error) throw answer; return JSON.stringify(answer); });
     const producer = { enqueue: vi.fn() };
-    const sweeper = new MemoTriageSweeper(prisma as never, access as never, permissions as never, agents as never, { chat } as never, { assertWithinBudget: vi.fn() } as never, producer as never, { get: () => true } as never);
-    return { sweeper, memo, chat, producer, updateMany };
+    const notify = vi.fn(async () => []);
+    const sweeper = new MemoTriageSweeper(prisma as never, access as never, permissions as never, agents as never, { chat } as never, { assertWithinBudget: vi.fn() } as never, producer as never, { notify } as never, { announce: vi.fn() } as never, { get: () => true } as never);
+    return { sweeper, memo, chat, producer, updateMany, notify };
   }
 
   it('moves a memo of an auto type into that type’s project and sends it on, never offering a project the uploader cannot see', async () => {
@@ -77,8 +89,10 @@ describe('MemoTriageSweeper', () => {
   });
 
   it('leaves any other memo waiting for its owner, with the suggestion and nothing applied', async () => {
-    const { sweeper, memo, producer } = setup({ type: 'daily', projectId: 'p2', tags: ['standup'] });
+    const { sweeper, memo, producer, notify } = setup({ type: 'daily', projectId: 'p2', tags: ['standup'] });
     await sweeper.sweep();
+    // Told once, the uploader alone, with the memo to open.
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({ userIds: ['u1'], type: 'memo.review', metadata: { memoId: 'm1' } }));
     expect(memo).toMatchObject({ status: 'review', projectId: 'p1', triage: { type: 'daily', projectId: 'p2', tags: ['standup'] } });
     expect((memo as { type?: string }).type).toBeUndefined();
     expect(producer.enqueue).not.toHaveBeenCalled();

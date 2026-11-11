@@ -33,6 +33,7 @@ import { UserAvatar, useMembers } from '@/entities/person'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
+import { useAuthStore } from '@/stores/auth'
 import { useProjectsStore } from '@/stores/projects'
 import MemoActions from '@/modules/memos/components/MemoActions.vue'
 import { useMemoTypes } from '@/modules/memos/model/memo-types'
@@ -195,6 +196,26 @@ watch(
   },
   { immediate: true },
 )
+/**
+ * An admin can take the type triage proposed in one press: it becomes a type
+ * of the workspace's own and this memo's choice. Its guidance is the model's
+ * words, shown first and theirs to rewrite afterwards under Memo types.
+ */
+const auth = useAuthStore()
+const adoptType = () =>
+  act(async () => {
+    const proposed = data.value?.triage?.newType
+    if (!proposed || !review.value) return
+    const key = proposed.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40)
+    if (!key) throw new Error(t('memos.types.keyTaken'))
+    await request('put', '/v1/memos/types/{key}', {
+      path: { key },
+      body: { workspaceId: getWorkspaceId(), name: proposed.name, guidance: proposed.guidance },
+    })
+    await queryClient.invalidateQueries({ queryKey: ['/v1/memos/types'] })
+    review.value.type = key
+  })
+
 const confirmReview = () =>
   act(() =>
     request('post', '/v1/memos/{id}/confirm', {
@@ -230,7 +251,7 @@ const retry = () => act(() => request('post', '/v1/memos/{id}/retry', { path: { 
       <Button v-if="memo.status === 'failed'" size="sm" :disabled="acting" @click="retry">
         <RotateCcw class="size-4" aria-hidden="true" />{{ t('memos.detail.retry') }}
       </Button>
-      <MemoActions :memo-id="memo.memoId" :title="memo.title" @deleted="router.push('/memos')" />
+      <MemoActions :memo-id="memo.memoId" :title="memo.title" :tags="memo.tags" @deleted="router.push('/memos')" />
     </template>
     <template #meta>
       <p class="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
@@ -329,9 +350,13 @@ const retry = () => act(() => request('post', '/v1/memos/{id}/retry', { path: { 
             <Input id="review-tags" v-model="review.tags" autocomplete="off" />
             <p class="text-muted-foreground text-xs">{{ t('memos.review.tagsHint') }}</p>
           </div>
-          <p v-if="data.triage?.newType" class="text-muted-foreground text-xs">
-            {{ t('memos.review.newType', { name: data.triage.newType.name }) }}
-          </p>
+          <div v-if="data.triage?.newType && review.type === NO_TYPE" class="text-muted-foreground space-y-1.5 text-xs">
+            <p>{{ t('memos.review.newType', { name: data.triage.newType.name }) }}</p>
+            <template v-if="auth.canAdminWorkspace">
+              <p class="italic">{{ data.triage.newType.guidance }}</p>
+              <Button size="xs" variant="outline" :disabled="acting" @click="adoptType">{{ t('memos.review.adoptType') }}</Button>
+            </template>
+          </div>
           <Button size="sm" :disabled="acting" @click="confirmReview">{{ t('memos.review.confirm') }}</Button>
         </section>
 

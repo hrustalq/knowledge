@@ -17015,6 +17015,12 @@
           }
         ],
         "nullable": true
+      },
+      "speakers": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        }
       }
     },
     "required": [

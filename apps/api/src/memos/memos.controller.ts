@@ -26,7 +26,7 @@ export class MemosController {
   @Access('viewer', 'query')
   @ApiOperation({ summary: 'My memos, newest first, and whether this server can transcribe' })
   list(@Query() query: ListMemosQueryDto, @CurrentPrincipal() principal: Principal): Promise<MemoListResponse> {
-    return this.memos.list(principal, query.workspaceId, query.projectId, query.type);
+    return this.memos.list(principal, query.workspaceId, query.projectId, query.type, query.tag);
   }
 
   // Literal segments before `:id`: Nest matches in declaration order.

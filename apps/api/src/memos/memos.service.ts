@@ -94,9 +94,9 @@ export class MemosService {
     this.speakers = config.get('TRANSCRIPTION_PROVIDER', { infer: true }) === 'gen-api' && config.get('TRANSCRIPTION_SPEAKERS', { infer: true });
   }
 
-  async list(principal: Principal, workspaceId: string, projectId?: string, type?: string): Promise<MemoListResponse> {
+  async list(principal: Principal, workspaceId: string, projectId?: string, type?: string, tag?: string): Promise<MemoListResponse> {
     const rows = await this.prisma.memo.findMany({
-      where: { workspaceId, createdBy: principal.userId, ...(projectId ? { projectId } : {}), ...(type ? { type } : {}) },
+      where: { workspaceId, createdBy: principal.userId, ...(projectId ? { projectId } : {}), ...(type ? { type } : {}), ...(tag ? { tags: { array_contains: [tag] } } : {}) },
       orderBy: { createdAt: 'desc' },
       take: 200,
       omit: { transcript: true, dropped: true, summary: true },

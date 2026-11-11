@@ -4780,6 +4780,8 @@ model PlaudImport {
   userId      String    @map("user_id") @db.Uuid
   /// The recording's id at Plaud.
   externalId  String    @map("external_id")
+  /// Where this recording goes, when its owner chose (#877). Null = the link's project at import time.
+  projectId  String?   @map("project_id") @db.Uuid
   /// Plaud's name for it: shown to its owner, never sent to a model.
   name            String
   startAt         DateTime? @map("start_at") @db.Timestamptz

@@ -7482,6 +7482,8 @@
       "waiting": "{count} recording waits for Plaud's transcript | {count} recordings wait for Plaud's transcript",
       "waitingHint": "Plaud transcribes a recording when you ask it to. Generate the transcript in the Plaud app; it moves up when you come back to this page, or press Check now.",
       "actionsFor": "Actions for {name}",
+      "projectForAll": "Project for all",
+      "projectFor": "Project for {name}",
       "checkNow": "Check now",
       "checking": "Checking…",
       "confirmedAhead": "imports once transcribed",

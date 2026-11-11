@@ -113,7 +113,7 @@ export class PlaudController {
   @Access('editor', 'body')
   @ApiOperation({ summary: 'Import these recordings: now if Plaud has transcribed them, otherwise as soon as it has' })
   async confirm(@Body() dto: PlaudImportIdsDto, @CurrentPrincipal() principal: Principal): Promise<PlaudImportsResponse> {
-    return { imports: await this.imports.confirm(principal, dto.workspaceId, dto.ids) };
+    return { imports: await this.imports.confirm(principal, dto.workspaceId, dto.ids, dto.projectId) };
   }
 
   @Post('imports/transcribe')
@@ -121,7 +121,7 @@ export class PlaudController {
   @Access('editor', 'body')
   @ApiOperation({ summary: 'Transcribe one recording here instead of waiting for Plaud: spends speech-to-text, within my allowance' })
   async transcribe(@Body() dto: PlaudTranscribeDto, @CurrentPrincipal() principal: Principal): Promise<PlaudImportsResponse> {
-    return { imports: [await this.imports.transcribe(principal, dto.workspaceId, dto.id)] };
+    return { imports: [await this.imports.transcribe(principal, dto.workspaceId, dto.id, dto.projectId)] };
   }
 
   @Post('imports/skip')

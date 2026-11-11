@@ -22,11 +22,13 @@ import { api, request } from '@/shared/api/client'
 import { errorMessage } from '@/shared/api/errors'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { formatDateTime, formatDuration } from '@/shared/utils/format'
+import { useProjectsStore } from '@/stores/projects'
 import { Button } from '@/shared/ui/button'
 import { Checkbox } from '@/shared/ui/checkbox'
 import { Collapse } from '@/shared/ui/collapse'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/shared/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import PlaudRulesDialog from './PlaudRulesDialog.vue'
 import { groupPlaudImports } from '../model/plaud-ui'
 
@@ -58,6 +60,20 @@ const chosen = computed(() => {
   return ticked.length ? ticked : queue.value.ready
 })
 const allTicked = computed(() => queue.value.ready.length > 0 && queue.value.ready.every((r) => selected.value.has(r.id)))
+
+/**
+ * Where each recording goes (#877): the person's pick here, else what the row
+ * already remembers, else the settings' project. Always sent with a yes, so a
+ * recording confirmed ahead keeps the project it was confirmed for.
+ */
+const projects = useProjectsStore()
+const picked = ref(new Map<string, string>())
+const projectOf = (row: PlaudImportEntry) => picked.value.get(row.id) ?? row.projectId ?? settings.value?.projectId ?? undefined
+function pick(rows: readonly PlaudImportEntry[], projectId: string) {
+  const next = new Map(picked.value)
+  for (const row of rows) next.set(row.id, projectId)
+  picked.value = next
+}
 
 function refresh() {
   return Promise.all([
@@ -94,8 +110,17 @@ async function act(action: 'confirm' | 'skip', rows: readonly PlaudImportEntry[]
   if (!rows.length || acting.value) return
   acting.value = true
   try {
-    const res = await request('post', `/v1/plaud/imports/${action}`, { body: { workspaceId: props.workspaceId, ids: rows.map((r) => r.id) } })
-    const done = (res as PlaudImportsResponse).imports
+    // One call per destination: a yes carries one project.
+    const groups = new Map<string | undefined, string[]>()
+    for (const row of rows) {
+      const key = action === 'confirm' ? projectOf(row) : undefined
+      groups.set(key, [...(groups.get(key) ?? []), row.id])
+    }
+    const done: PlaudImportEntry[] = []
+    for (const [projectId, ids] of groups) {
+      const res = await request('post', `/v1/plaud/imports/${action}`, { body: { workspaceId: props.workspaceId, ids, ...(projectId ? { projectId } : {}) } })
+      done.push(...(res as PlaudImportsResponse).imports)
+    }
     const failed = done.filter((r) => r.status === 'failed')
     // A refused import says why on its own row; the toast only points there.
     if (failed.length) toast.error(t('memos.plaud.toast.failed', failed.length))
@@ -151,7 +176,7 @@ async function transcribe() {
   if (!row || acting.value) return
   acting.value = true
   try {
-    await request('post', '/v1/plaud/imports/transcribe', { body: { workspaceId: props.workspaceId, id: row.id } })
+    await request('post', '/v1/plaud/imports/transcribe', { body: { workspaceId: props.workspaceId, id: row.id, ...(projectOf(row) ? { projectId: projectOf(row) } : {}) } })
     toast.success(t('memos.plaud.toast.transcribing'))
     toTranscribe.value = null
   } catch (e) {
@@ -199,7 +224,15 @@ const meta = (row: PlaudImportEntry) =>
             {{ t('memos.plaud.ready', queue.ready.length) }}
           </label>
           <!-- One group, so the pair wraps together under a long Russian heading instead of splitting. -->
-          <div class="flex gap-1">
+          <div class="flex flex-wrap items-center gap-1">
+            <Select v-if="projects.items.length > 1" :model-value="undefined" @update:model-value="pick(chosen, String($event))">
+              <SelectTrigger size="sm" class="max-w-44" :aria-label="t('memos.plaud.projectForAll')">
+                <SelectValue :placeholder="t('memos.plaud.projectForAll')" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="p in projects.items" :key="p.projectId" :value="p.projectId">{{ p.name }}</SelectItem>
+              </SelectContent>
+            </Select>
             <Button size="sm" :disabled="acting" @click="act('confirm', chosen)">
               {{ selected.size ? t('memos.plaud.importSelected', chosen.length) : t('memos.plaud.importAll') }}
             </Button>
@@ -218,7 +251,15 @@ const meta = (row: PlaudImportEntry) =>
               <p class="truncate text-sm">{{ row.name }}</p>
               <p class="text-muted-foreground text-xs tabular-nums">{{ meta(row) }}</p>
             </div>
-            <div class="flex gap-1">
+            <div class="flex flex-wrap items-center gap-1">
+              <Select v-if="projects.items.length > 1" :model-value="projectOf(row)" @update:model-value="pick([row], String($event))">
+                <SelectTrigger size="sm" class="h-7 max-w-44 py-0 data-[size=sm]:h-7" :aria-label="t('memos.plaud.projectFor', { name: row.name })">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="p in projects.items" :key="p.projectId" :value="p.projectId">{{ p.name }}</SelectItem>
+                </SelectContent>
+              </Select>
               <Button size="sm" variant="outline" class="h-7" :disabled="acting" @click="act('confirm', [row])">{{ t('memos.plaud.import') }}</Button>
               <Button size="sm" variant="ghost" class="h-7" :disabled="acting" @click="act('skip', [row])">{{ t('memos.plaud.skip') }}</Button>
             </div>

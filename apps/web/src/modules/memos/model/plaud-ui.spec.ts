@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { PlaudImportEntry } from '@knowledge/contracts'
 import { fromRulesForm, groupPlaudImports, toRulesForm } from './plaud-ui'
 
-const row = (id: string, status: PlaudImportEntry['status']): PlaudImportEntry => ({ id, name: id, startAt: null, durationSeconds: 60, status, memoId: null, error: null, createdAt: '2026-11-10T00:00:00Z' })
+const row = (id: string, status: PlaudImportEntry['status']): PlaudImportEntry => ({ id, name: id, startAt: null, durationSeconds: 60, status, projectId: null, memoId: null, error: null, createdAt: '2026-11-10T00:00:00Z' })
 
 describe('groupPlaudImports', () => {
   it('shows what needs the person, what failed and what only Plaud can move; settled rows are gone', () => {

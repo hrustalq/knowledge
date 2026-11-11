@@ -38,6 +38,14 @@ in the pull request that introduces them — see
   bars identify the memo and show progress; they are not the recording's loudness. A memo with no audio here, such
   as one built from Plaud's transcript or one past audio retention, has no player. (#884)
 
+- **Each Plaud recording can go to its own project.** A recording waiting for your yes on `/memos` has a project
+  select that starts at the project from your rules, and "Project for all" sets it for the ticked recordings or
+  for all of them. A recording you say yes to ahead of Plaud's transcript keeps the project you chose, even if you
+  change the default later. `POST /v1/plaud/imports/confirm` and `/transcribe` take an optional `projectId`, and
+  each entry of `GET /v1/plaud/imports` carries `projectId` (null = the default). A project from another workspace
+  is refused with 400; whether you may file into the project is checked when the import runs. Automatic import
+  still uses the project from your rules. (#877)
+
 ### Fixed
 
 - **A Plaud recording you have just transcribed in the Plaud app no longer sits under "waiting" on `/memos`.** The
@@ -53,6 +61,11 @@ in the pull request that introduces them — see
   began under a trail, and the memo page carried its own "All memos" arrow to make up for it. `/memos` now shows
   `Memos`, a memo shows `Memos › <its title>`, the arrow is gone, and the browser tab is named after the memo. A
   transcript line now runs the full width of its column at body text size; it was held to 65 characters. (#874)
+
+### Operations
+
+- Migration `20270107100000_plaud_import_project` adds the nullable column `plaud_imports.project_id`. It is
+  additive and survives a rollback to the previous release.
 
 ## [0.48.0] — 2026-11-10
 

@@ -47645,6 +47645,11 @@
             "items": {
               "type": "string"
             }
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Where these go instead of my settings' project; remembered for a recording that is imported later"
           }
         },
         "required": [
@@ -47663,6 +47668,11 @@
             "type": "string",
             "format": "uuid",
             "description": "One of my recordings that is waiting for a Plaud transcript"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Where these go instead of my settings' project; remembered for a recording that is imported later"
           }
         },
         "required": [
@@ -67925,6 +67935,10 @@
           "status": {
             "$ref": "#/components/schemas/PlaudImportStatus"
           },
+          "projectId": {
+            "type": "string",
+            "nullable": true
+          },
           "memoId": {
             "type": "string",
             "nullable": true
@@ -67943,6 +67957,7 @@
           "startAt",
           "durationSeconds",
           "status",
+          "projectId",
           "memoId",
           "error",
           "createdAt"

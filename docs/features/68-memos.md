@@ -190,6 +190,10 @@ server never does). `memo` covers the secretary's model calls. Reserve calls `as
   without is transcribed again. The second path is refused while transcription is off.
 - **Delete** (`DELETE :id`): the row (transcript included), then every version of the audio
   (`purgeObjectVersions`). Merge requests it opened stay; their links then 404 like any other.
+- **Its project deleted** (#901): memos are a project holding (`ProjectDeletionCounts.memos`), so a project
+  holding only memos still needs a destination. A move takes them along; a cascade deletes them and purges
+  their audio (`ProjectCascadeService.cascadeMemos`). `plaud_links`, `plaud_imports` and `memo_types` that
+  name the project follow it on a move and go null otherwise.
 - **Retention**: `MemoRetentionSweeper` (worker, 10-minute tick, back-pressure) purges every version of
   settled (`done`/`failed`) audio older than `MEMO_AUDIO_RETENTION_DAYS` and stamps `audio_purged_at`. The
   transcript and proposals stay. `0` keeps audio. Reservations never finalized are dropped after a day.

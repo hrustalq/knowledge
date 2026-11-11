@@ -10,13 +10,29 @@ import { PrismaService } from '../prisma/prisma.service.js';
 /** A plan's value name: `input.currency`, `secret.qaPassword`, `TOKEN`. */
 const VALUE_NAME = /^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?$/u;
 const MAX_VALUES = 50;
+const MAX_ORIGINS = 20;
 
 /**
  * Test environments for the QA server runner (#483, phase 5): a server URL,
  * non-secret inputs, and secrets in one `ai/secret-box.ts` envelope. Secrets
  * are write-only over the API — set, replaced, removed by name, never read
  * back. Only the worker decrypts them (`values`), when a run executes.
+ *
+ * A run sends a secret only to the environment's own server or to an origin in
+ * `secretOrigins`. Adding either is a new place for the stored secrets to go,
+ * so such a change keeps only the secrets it sets itself: whoever points an
+ * environment somewhere new has to know its secrets, not just inherit them.
  */
+export interface ApiTestEnvironmentValues {
+  name: string;
+  server: string | null;
+  /** Non-secret values, by plan name. */
+  values: Record<string, string>;
+  secrets: Record<string, string>;
+  /** Every origin a secret may be sent to: the server's and the listed ones. */
+  secretOrigins: string[];
+}
+
 @Injectable()
 export class ApiTestEnvironmentsService {
   private readonly key: Buffer | null;
@@ -49,6 +65,7 @@ export class ApiTestEnvironmentsService {
           name,
           server: checkServer(dto.server ?? null),
           inputs: checkValues(dto.inputs ?? {}),
+          secretOrigins: checkOrigins(dto.secretOrigins ?? []),
           ...this.seal(secrets),
           createdBy: userId,
           updatedBy: userId,
@@ -66,7 +83,15 @@ export class ApiTestEnvironmentsService {
     const data: Prisma.ApiTestEnvironmentUpdateInput = { name, updatedBy: userId };
     if (dto.server !== undefined) data.server = checkServer(dto.server);
     if (dto.inputs !== undefined) data.inputs = checkValues(dto.inputs);
-    if (dto.secrets !== undefined) Object.assign(data, this.seal(mergeSecrets(this.open(row), dto.secrets)));
+    if (dto.secretOrigins !== undefined) data.secretOrigins = checkOrigins(dto.secretOrigins);
+    const before = secretDestinations(row.server, row.secretOrigins);
+    const after = secretDestinations(
+      dto.server !== undefined ? (data.server as string | null) : row.server,
+      dto.secretOrigins !== undefined ? (data.secretOrigins as string[]) : row.secretOrigins,
+    );
+    const widened = [...after].some((origin) => !before.has(origin));
+    if (widened) Object.assign(data, this.seal(mergeSecrets({}, dto.secrets)));
+    else if (dto.secrets !== undefined) Object.assign(data, this.seal(mergeSecrets(this.open(row), dto.secrets)));
     try {
       return toInfo(await this.prisma.apiTestEnvironment.update({ where: { id }, data }));
     } catch (e) {
@@ -80,14 +105,18 @@ export class ApiTestEnvironmentsService {
   }
 
   /**
-   * What a run sends with: the server, and every value by plan name — inputs,
-   * then secrets. Null when the environment is gone. A secret envelope that no
-   * longer decrypts (a rotated key) refuses rather than running without it.
+   * What a run sends with: the server, the inputs by plan name, and the
+   * secrets with the origins they may go to. A secret wins over an input of
+   * the same name, so that input is left out. Null when the environment is
+   * gone. A secret envelope that no longer decrypts (a rotated key) refuses
+   * rather than running without it.
    */
-  async values(workspaceId: string, id: string): Promise<{ name: string; server: string | null; values: Record<string, string> } | null> {
+  async values(workspaceId: string, id: string): Promise<ApiTestEnvironmentValues | null> {
     const row = await this.prisma.apiTestEnvironment.findFirst({ where: { id, workspaceId } });
     if (!row) return null;
-    return { name: row.name, server: row.server, values: { ...(row.inputs as Record<string, string>), ...this.open(row) } };
+    const secrets = this.open(row);
+    const inputs = Object.fromEntries(Object.entries(row.inputs as Record<string, string>).filter(([name]) => !(name in secrets)));
+    return { name: row.name, server: row.server, values: inputs, secrets, secretOrigins: [...secretDestinations(row.server, row.secretOrigins)] };
   }
 
   private async find(workspaceId: string, id: string): Promise<Row> {
@@ -122,6 +151,7 @@ function toInfo(row: Row): ApiTestEnvironment {
     server: row.server,
     inputs: row.inputs as Record<string, string>,
     secrets: row.secretNames,
+    secretOrigins: row.secretOrigins,
     updatedAt: row.updatedAt.toISOString(),
   };
 }
@@ -146,6 +176,22 @@ function checkServer(raw: string | null): string | null {
     throw new BadRequestException(t('error.apiTestEnvironment.server', { url: value }));
   }
   return value.replace(/\/+$/u, '');
+}
+
+/** Each an absolute http(s) URL with no credentials, kept as its origin. */
+function checkOrigins(raw: string[]): string[] {
+  if (raw.length > MAX_ORIGINS) throw new BadRequestException(t('error.apiTestEnvironment.tooMany', { max: MAX_ORIGINS }));
+  const origins = raw.map((value) => new URL(checkServer(value) ?? fail(value)).origin);
+  return [...new Set(origins)].sort();
+}
+
+function fail(value: string): never {
+  throw new BadRequestException(t('error.apiTestEnvironment.server', { url: value }));
+}
+
+/** The origins a run may send this environment's secrets to. */
+export function secretDestinations(server: string | null, origins: readonly string[]): Set<string> {
+  return new Set([...(server ? [new URL(server).origin] : []), ...origins]);
 }
 
 function checkValues(values: Record<string, unknown>): Record<string, string> {

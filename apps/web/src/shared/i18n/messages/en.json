@@ -4964,6 +4964,9 @@
       "name": "Name",
       "server": "Server",
       "serverHint": "Used only for steps whose spec declares this server; the try-it proxy's rules apply.",
+      "secretOrigins": "Other hosts that may receive secrets",
+      "secretOriginsHint": "A secret is sent only to the server above and to these hosts, such as a login service. One per line.",
+      "secretsCleared": "Secrets will go somewhere new, so the saved ones are cleared on save. Enter them again.",
       "inputs": "Inputs",
       "value": "Value",
       "addInput": "Add an input",
@@ -6419,6 +6422,7 @@
         "capture": "The response has no {name} to capture",
         "setup": "Its setup failed",
         "skipped": "Setup never captured what this step sends",
+        "withheld": "Not sent: the environment does not allow {names} to go to this host",
         "cors": "No response reached this page from {host}: the API may not allow requests from a browser (CORS), or it could not be reached. Try the proxy."
       },
       "summary": "{passed} passed · {failed} failed · {notRun} not run",

@@ -30,7 +30,29 @@ describe('test environments (#483, phase 5)', () => {
 
     await service.update(WS, 'e1', { secrets: { TOKEN: 'abc', 'secret.qaPassword': null } }, 'u1');
     expect(stored().secretNames).toEqual(['TOKEN']);
-    expect((await service.values(WS, 'e1'))?.values).toEqual({ 'input.currency': 'EUR', TOKEN: 'abc' });
+    expect(await service.values(WS, 'e1')).toMatchObject({
+      values: { 'input.currency': 'EUR' },
+      secrets: { TOKEN: 'abc' },
+      secretOrigins: ['https://staging.example.com'],
+    });
+  });
+
+  it('keeps only the secrets a change sets itself when it adds somewhere they may go', async () => {
+    const { service, stored } = environments();
+    await service.create(WS, { name: 'Staging', server: 'https://staging.example.com/v1', secrets: { TOKEN: 'abc', 'secret.qaPassword': 'hunter2' } }, 'u1');
+
+    // Same origin, a narrower list: nothing new to reach, the secrets stay.
+    await service.update(WS, 'e1', { server: 'https://staging.example.com/v2', secretOrigins: [] }, 'u1');
+    expect(stored().secretNames).toEqual(['TOKEN', 'secret.qaPassword']);
+
+    await service.update(WS, 'e1', { secretOrigins: ['https://auth.example.com/login'], secrets: { TOKEN: 'new' } }, 'u1');
+    expect(stored().secretOrigins).toEqual(['https://auth.example.com']);
+    expect((await service.values(WS, 'e1'))?.secrets).toEqual({ TOKEN: 'new' });
+
+    await service.update(WS, 'e1', { server: 'https://elsewhere.example.com' }, 'u1');
+    expect(stored().secretNames).toEqual([]);
+    expect(stored().secretsCipher).toBeNull();
+    await expect(service.update(WS, 'e1', { secretOrigins: ['ftp://x.example.com'] }, 'u1')).rejects.toMatchObject({ status: 400 });
   });
 
   it('refuses a URL with credentials and a name no plan uses', async () => {
@@ -80,7 +102,7 @@ const PLAN: TestRunPlan = {
   secrets: ['secret.qaPassword'],
 };
 
-function processor(opts: { runnerOn?: boolean } = {}) {
+function processor(opts: { runnerOn?: boolean; secretOrigins?: string[] } = {}) {
   const finish = vi.fn(async () => undefined);
   const runs = {
     claim: vi.fn(async () => ({ id: 'r1', workspaceId: WS, documentId: 'billing', environmentId: 'e1', createdBy: 'u1', plan: PLAN })),
@@ -89,7 +111,15 @@ function processor(opts: { runnerOn?: boolean } = {}) {
     }),
     finish,
   };
-  const environments = { values: vi.fn(async () => ({ name: 'Staging', server: 'https://staging.example.com', values: { 'secret.qaPassword': 'hunter2' } })) };
+  const environments = {
+    values: vi.fn(async () => ({
+      name: 'Staging',
+      server: 'https://staging.example.com',
+      values: {},
+      secrets: { 'secret.qaPassword': 'hunter2' },
+      secretOrigins: opts.secretOrigins ?? ['https://staging.example.com', 'https://auth.example.com'],
+    })),
+  };
   const sent: Array<{ actor: string; url: string; body: string | null | undefined }> = [];
   const tries = {
     sendAs: vi.fn(async (actor: string, _doc: string, req: { url: string; body?: string | null }, metered: boolean) => {
@@ -125,6 +155,16 @@ describe('the server runner (#483, phase 5)', () => {
     expect(out.status).toBe('passed');
     expect(out.results['setup/login'].captures).toEqual({ userId: 'u-9' });
     expect(JSON.stringify(out)).not.toContain('t0k');
+  });
+
+  it('does not send a step whose secret the environment does not allow on that host', async () => {
+    const { p, finish, sent } = processor({ secretOrigins: ['https://staging.example.com'] });
+    await p.process({ data: { runId: 'r1' } } as never);
+    expect(sent).toEqual([]);
+    const out = finish.mock.calls[0][1] as { status: string; results: Record<string, { outcome: string; reason: string | null }> };
+    expect(out.results['setup/login']).toMatchObject({ outcome: 'error', reason: 'withheld:secret.qaPassword' });
+    expect(out.results['case/ok'].outcome).toBe('not-run');
+    expect(JSON.stringify(out)).not.toContain('hunter2');
   });
 
   it('errors without sending when the runner was turned off after the click', async () => {

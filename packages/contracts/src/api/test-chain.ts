@@ -604,6 +604,12 @@ export function fillRunRequest(req: TestRunRequest, values: Readonly<Record<stri
   return { request: { method: req.method, url, headers, body }, missing: [...missing] };
 }
 
+/** Every placeholder name a request template uses, in its URL, headers and body. */
+function placeholderNames(req: TestRunRequest): string[] {
+  const text = [req.url, ...req.headers.map((h) => h.value), req.body ?? ''].join('\n');
+  return [...new Set([...text.matchAll(PLACEHOLDER_RE)].map((m) => m[1]!))];
+}
+
 /** `201` matches 201; `2XX` matches 200–299. */
 function statusMatches(expect: string, status: number): boolean {
   const range = /^([1-5])XX$/iu.exec(expect.trim());
@@ -632,6 +638,16 @@ export interface TestRunResponse {
   body: string;
   /** The request's own time, when the sender knows it better than the wall clock (a proxy that waited out a rate limit). */
   durationMs?: number;
+}
+
+/**
+ * Values a run fills only into the requests they may go with: a server run's
+ * stored secrets. `allow` sees the URL filled with everything else, so a step
+ * that needs one of them and goes elsewhere is not sent (`withheld:<names>`).
+ */
+export interface TestRunGuardedValues {
+  values: Readonly<Record<string, string>>;
+  allow: (target: TestRunTarget, url: string) => boolean;
 }
 
 /** Sends one filled request. A throw is an `error` row, never the end of the run. */
@@ -675,6 +691,8 @@ const outcomeOf = (outcome: TestRunOutcome, reason: string | null = null): TestR
  * suite's teardown — always, after a failure or `signal` too. A teardown
  * step whose values were never captured is skipped, not sent with a hole.
  * `onResult` fires as each row settles; the map it fills is also returned.
+ * `guarded` values reach a request only where their `allow` says so; a
+ * captured value of the same name still wins, as it does over `values`.
  */
 export async function runTestPlan(
   plan: TestRunPlan,
@@ -682,6 +700,7 @@ export async function runTestPlan(
   send: TestRunSend,
   onResult: (key: string, result: TestRunResult) => void = () => undefined,
   signal?: AbortSignal,
+  guarded?: TestRunGuardedValues,
 ): Promise<Map<string, TestRunResult>> {
   const results = new Map<string, TestRunResult>();
   const vars: Record<string, string> = { ...values };
@@ -692,7 +711,16 @@ export async function runTestPlan(
   };
 
   const sendOne = async (key: string, target: TestRunTarget, req: TestRunRequest, expect: string, capture: Record<string, string>, teardown: boolean) => {
-    const { request, missing } = fillRunRequest(req, vars);
+    let scope: Readonly<Record<string, string>> = vars;
+    if (guarded) {
+      const url = fillRunRequest({ method: req.method, url: req.url, headers: [], body: null }, vars).request.url;
+      if (guarded.allow(target, url)) scope = { ...guarded.values, ...vars };
+      else {
+        const held = placeholderNames(req).filter((name) => name in guarded.values && !(name in vars));
+        if (held.length) return settle(key, outcomeOf(teardown ? 'skipped' : 'error', `withheld:${held.join(',')}`));
+      }
+    }
+    const { request, missing } = fillRunRequest(req, scope);
     if (missing.length) return settle(key, outcomeOf(teardown ? 'skipped' : 'error', `missing:${missing.join(',')}`));
     const started = Date.now();
     let res: TestRunResponse;

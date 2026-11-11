@@ -4049,6 +4049,8 @@ model ApiTestEnvironment {
   /// `gcm$…` envelope of `{ name: value }`; null for none.
   secretsCipher String?  @map("secrets_cipher")
   secretNames   String[] @default([]) @map("secret_names")
+  /// Origins besides the server's that a run may send a secret to.
+  secretOrigins String[] @default([]) @map("secret_origins")
   /// No FK, house policy.
   createdBy     String   @map("created_by") @db.Uuid
   updatedBy     String   @map("updated_by") @db.Uuid

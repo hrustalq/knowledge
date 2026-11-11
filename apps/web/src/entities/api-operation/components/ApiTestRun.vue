@@ -373,6 +373,7 @@ function reasonText(r: TestRunResult | undefined): string | null {
   if (reason.startsWith('missing:')) {
     return r.outcome === 'skipped' ? t('apiTests.run.reason.skipped') : t('apiTests.run.reason.missing', { names: reason.slice(8).split(',').join(', ') })
   }
+  if (reason.startsWith('withheld:')) return t('apiTests.run.reason.withheld', { names: reason.slice(9).split(',').join(', ') })
   if (reason.startsWith('capture:')) return t('apiTests.run.reason.capture', { name: reason.slice(8) })
   if (reason === 'setup') return t('apiTests.run.reason.setup')
   return reason

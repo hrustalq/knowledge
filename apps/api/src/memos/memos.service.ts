@@ -65,6 +65,8 @@ export class MemosService {
   private readonly maxMinutes: number;
   private readonly plaudTranscribeSeconds: number;
   private readonly transcription: MemoTranscriptionState;
+  /** Mirrors `TranscriptionClient.speakers`, which lives in the worker's module. */
+  private readonly speakers: boolean;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -83,6 +85,7 @@ export class MemosService {
       config.get('TRANSCRIPTION_BASE_URL', { infer: true }),
       config.get('TRANSCRIPTION_API_KEY', { infer: true }),
     );
+    this.speakers = config.get('TRANSCRIPTION_PROVIDER', { infer: true }) === 'gen-api' && config.get('TRANSCRIPTION_SPEAKERS', { infer: true });
   }
 
   async list(principal: Principal, workspaceId: string, projectId?: string): Promise<MemoListResponse> {
@@ -416,7 +419,7 @@ export class MemosService {
    * the last 30 days, uploads included. Read from `ai_usage`, not a counter.
    */
   // ponytail: a memo still being transcribed is not in ai_usage yet, so two quick presses can overshoot by one recording; count queued memos if that matters.
-  async plaudTranscribeAllowance(userId: string, workspaceId: string): Promise<{ enabled: boolean; limitSeconds: number; remainingSeconds: number }> {
+  async plaudTranscribeAllowance(userId: string, workspaceId: string): Promise<{ enabled: boolean; limitSeconds: number; remainingSeconds: number; speakers: boolean }> {
     const used = await this.prisma.aiUsage.aggregate({
       where: { workspaceId, userId, operation: 'transcription', createdAt: { gte: new Date(Date.now() - 30 * 86_400_000) } },
       _sum: { audioSeconds: true },
@@ -426,6 +429,7 @@ export class MemosService {
       enabled: this.transcription.enabled && limitSeconds > 0,
       limitSeconds,
       remainingSeconds: Math.max(0, limitSeconds - (used._sum.audioSeconds ?? 0)),
+      speakers: this.speakers,
     };
   }
 

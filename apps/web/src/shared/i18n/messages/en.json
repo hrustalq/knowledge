@@ -7509,6 +7509,7 @@
         "action": "Transcribe here",
         "title": "Transcribe this recording here?",
         "body": "It is {minutes} min long, and you have {left} min of transcription left this month. This spends on speech-to-text instead of waiting for Plaud.",
+        "numberedSpeakers": "A transcript made here numbers the speakers (Speaker 1, Speaker 2). It does not know their names.",
         "noSpeakers": "A transcript made here has no speaker names.",
         "over": "That is more than you have left this month. Generate the transcript in the Plaud app instead.",
         "confirm": "Transcribe"

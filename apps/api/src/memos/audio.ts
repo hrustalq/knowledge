@@ -14,6 +14,12 @@ export const CHUNK_SECONDS = 600;
  * finely a proposal can point into the recording.
  */
 export const SHORT_CHUNK_SECONDS = 60;
+/**
+ * A piece for a server that tells speakers apart (#878): its labels mean
+ * something only inside one request, so a recording goes whole when it can.
+ * An hour at 32 kbit/s is about 14 MiB.
+ */
+export const SPEAKER_CHUNK_SECONDS = 3600;
 
 /** The recording's length, from its container — what the length ceiling is enforced on. */
 export async function probeSeconds(path: string): Promise<number> {
@@ -29,9 +35,9 @@ export async function probeSeconds(path: string): Promise<number> {
 }
 
 /** Cut every `CHUNK_SECONDS`: for a server that times its own segments. */
-export function fixedCuts(seconds: number): number[] {
+export function fixedCuts(seconds: number, every = CHUNK_SECONDS): number[] {
   const cuts: number[] = [];
-  for (let at = CHUNK_SECONDS; at < seconds; at += CHUNK_SECONDS) cuts.push(at);
+  for (let at = every; at < seconds; at += every) cuts.push(at);
   return cuts;
 }
 

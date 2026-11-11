@@ -358,7 +358,9 @@ const meta = (row: PlaudImportEntry) =>
           </DialogDescription>
         </DialogHeader>
         <p v-if="overAllowance" role="alert" class="text-destructive text-sm">{{ t('memos.plaud.transcribe.over') }}</p>
-        <p v-else class="text-muted-foreground text-sm">{{ t('memos.plaud.transcribe.noSpeakers') }}</p>
+        <p v-else class="text-muted-foreground text-sm">
+          {{ t(settings?.transcribe.speakers ? 'memos.plaud.transcribe.numberedSpeakers' : 'memos.plaud.transcribe.noSpeakers') }}
+        </p>
         <DialogFooter>
           <Button variant="outline" @click="toTranscribe = null">{{ t('memos.plaud.cancel') }}</Button>
           <Button :disabled="acting || overAllowance" @click="transcribe">{{ t('memos.plaud.transcribe.confirm') }}</Button>

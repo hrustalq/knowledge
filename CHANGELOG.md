@@ -46,6 +46,14 @@ in the pull request that introduces them — see
   is refused with 400; whether you may file into the project is checked when the import runs. Automatic import
   still uses the project from your rules. (#877)
 
+- **A recording this server transcribes can come back with its speakers told apart.** With
+  `TRANSCRIPTION_SPEAKERS=true` on a gen-api server, an uploaded memo and a Plaud recording transcribed here both
+  show who is speaking as numbered voices (Speaker 1, Speaker 2), each line carries its real start time, and the
+  secretary reads the voices like it reads the names in a Plaud transcript. The voices are numbers, not names.
+  In a recording longer than an hour the numbering starts again for each hour, so one person can appear under
+  two numbers. `GET /v1/plaud/settings` returns `transcribe.speakers`, and the "Transcribe here" dialog says
+  which kind of transcript you will get. (#878)
+
 ### Fixed
 
 - **A Plaud recording you have just transcribed in the Plaud app no longer sits under "waiting" on `/memos`.** The
@@ -63,6 +71,12 @@ in the pull request that introduces them — see
   transcript line now runs the full width of its column at body text size; it was held to 65 characters. (#874)
 
 ### Operations
+
+- New optional variable `TRANSCRIPTION_SPEAKERS` (default `false`). It is read only with
+  `TRANSCRIPTION_PROVIDER=gen-api`, where it switches transcription from gen-api's `gen-stt` to its
+  `speech-to-text` network. **That network costs several times more per minute**: gen-api lists about 2 ₽
+  against 0.45 ₽, and a 17-second test call was billed 2. Recordings then go to gen-api whole, up to an hour a
+  request, instead of in one-minute pieces. Turning it off again changes nothing for memos already transcribed.
 
 - Migration `20270107100000_plaud_import_project` adds the nullable column `plaud_imports.project_id`. It is
   additive and survives a rollback to the previous release.

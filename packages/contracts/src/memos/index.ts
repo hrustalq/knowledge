@@ -34,7 +34,7 @@ export interface MemoSegment {
   start: number;
   end: number;
   text: string;
-  /** Who is speaking, when the source names them (a Plaud transcript does; our own speech-to-text does not). */
+  /** Who is speaking: a name from a Plaud transcript, or a numbered voice when this server's speech-to-text tells voices apart (#878). */
   speaker?: string;
 }
 
@@ -226,7 +226,8 @@ export interface PlaudSettingsResponse {
    * "Transcribe here": our own speech-to-text on a recording Plaud has not transcribed. Off when this server cannot
    * transcribe or the allowance is 0. `remainingSeconds` is what is left of the caller's 30-day allowance.
    */
-  transcribe: { enabled: boolean; limitSeconds: number; remainingSeconds: number };
+  /** `speakers`: whether a transcript made here tells voices apart (#878). */
+  transcribe: { enabled: boolean; limitSeconds: number; remainingSeconds: number; speakers: boolean };
 }
 
 export interface PlaudImportEntry {

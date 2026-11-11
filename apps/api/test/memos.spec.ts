@@ -3,7 +3,7 @@ import { ConflictException, NotFoundException, PayloadTooLargeException, Service
 import { memoExtensionFor, memoProgressFor } from '@knowledge/contracts';
 import { MemosService, transcriptionState } from '../src/memos/memos.service.js';
 import type { Principal } from '../src/auth/principal.js';
-import { stitchTranscript } from '../src/memos/transcript.js';
+import { scribeSegments, stitchTranscript } from '../src/memos/transcript.js';
 import { fixedCuts, parsePauses, pauseCuts } from '../src/memos/audio.js';
 import { MemoRetentionSweeper } from '../src/memos/memo-retention.sweeper.js';
 
@@ -180,6 +180,43 @@ describe('stitchTranscript', () => {
       'the key is [SECRET_1]',
       'and cc [EMAIL_1] again',
     ]);
+  });
+});
+
+describe('speakers from a Scribe answer (#878)', () => {
+  // The shape gen-api's `speech-to-text` returned on a real call: words and the spacing between them.
+  const say = (speaker: string, at: number, text: string) =>
+    text.split(' ').flatMap((word, i) => [
+      ...(i ? [{ text: ' ', start: at + i * 0.4 - 0.1, end: at + i * 0.4, type: 'spacing', speaker_id: speaker }] : []),
+      { text: word, start: at + i * 0.4, end: at + i * 0.4 + 0.3, type: 'word', speaker_id: speaker },
+    ]);
+
+  it('starts a segment when the voice changes or after a long pause, and drops what is not speech', () => {
+    const segments = scribeSegments([
+      ...say('speaker_0', 0, 'Where are we on billing?'),
+      { text: '(laughter)', start: 2.2, end: 2.6, type: 'audio_event', speaker_id: 'speaker_0' },
+      ...say('speaker_1', 3, 'Next Tuesday.'),
+      ...say('speaker_1', 9, 'And the old queue stays.'),
+    ]);
+    expect(segments.map((s) => [s.speaker, s.text.trim()])).toEqual([
+      ['speaker_0', 'Where are we on billing?'],
+      ['speaker_1', 'Next Tuesday.'],
+      ['speaker_1', 'And the old queue stays.'],
+    ]);
+    expect(segments[0]!.start).toBe(0);
+    expect(segments[0]!.end).toBeCloseTo(1.9);
+  });
+
+  it('numbers voices across the recording, never reusing a number for a later chunk, and leaves a Plaud name alone', () => {
+    const chunk = (offset: number, ids: string[]) => ({
+      offset, duration: 10, language: null, text: '', anonymousSpeakers: true,
+      segments: ids.map((speaker, i) => ({ start: i, end: i + 1, text: `line ${i}`, speaker })),
+    });
+    const { segments } = stitchTranscript([chunk(0, ['speaker_0', 'speaker_1', 'speaker_0']), chunk(3600, ['speaker_0'])], (n) => `Voice ${n}`);
+    expect(segments.map((s) => s.speaker)).toEqual(['Voice 1', 'Voice 2', 'Voice 1', 'Voice 3']);
+
+    const named = stitchTranscript([{ offset: 0, duration: 5, language: null, text: '', segments: [{ start: 0, end: 1, text: 'hi', speaker: 'Eldar' }] }]);
+    expect(named.segments[0]!.speaker).toBe('Eldar');
   });
 });
 

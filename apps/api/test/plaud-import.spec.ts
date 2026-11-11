@@ -201,7 +201,7 @@ describe('MemosService.importPlaud', () => {
       await expect(over.memos.transcribePlaud(member, input)).rejects.toMatchObject({ response: { reason: 'plaud-transcribe-allowance', remainingSeconds: 40 } });
       expect(over.rows).toHaveLength(0);
       expect(over.producer.enqueue).not.toHaveBeenCalled();
-      expect(await over.memos.plaudTranscribeAllowance('u1', WS)).toEqual({ enabled: true, limitSeconds: 120, remainingSeconds: 40 });
+      expect(await over.memos.plaudTranscribeAllowance('u1', WS)).toEqual({ enabled: true, limitSeconds: 120, remainingSeconds: 40, speakers: false });
 
       await expect(setup({ env: on, recording: { ...recording, durationSeconds: 61 } }).memos.transcribePlaud(member, input)).rejects.toBeInstanceOf(PayloadTooLargeException);
       const off = setup({ env: { ...on, PLAUD_TRANSCRIBE_MINUTES_PER_MONTH: 0 } });

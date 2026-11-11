@@ -68073,12 +68073,16 @@
               },
               "remainingSeconds": {
                 "type": "number"
+              },
+              "speakers": {
+                "type": "boolean"
               }
             },
             "required": [
               "enabled",
               "limitSeconds",
-              "remainingSeconds"
+              "remainingSeconds",
+              "speakers"
             ]
           }
         },

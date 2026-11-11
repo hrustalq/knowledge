@@ -27,12 +27,13 @@ import { request } from '@/shared/api/client'
 import { errorMessage } from '@/shared/api/errors'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { Button } from '@/shared/ui/button'
-import { apiUrl } from '@/shared/api/api'
 import { formatDateTime, formatDuration, formatRelative } from '@/shared/utils/format'
 import { PageLayout, PageState } from '@/shared/layout'
 import { UserAvatar, useMembers } from '@/entities/person'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
 import MemoActions from '@/modules/memos/components/MemoActions.vue'
+import { useMemoTypes } from '@/modules/memos/model/memo-types'
+import { apiUrl, getWorkspaceId } from '@/shared/api/api'
 import { MEMO_STATUS_CLASS, MEMO_STATUS_ICON, isMemoInFlight, segmentAt } from '@/modules/memos/model/memo-ui'
 
 const { t } = useI18n()
@@ -162,6 +163,13 @@ const speakerName = (label: string) => {
 const matchSpeaker = (speaker: MemoSpeaker, userId: string | null) =>
   act(() => request('put', '/v1/memos/{id}/speakers', { path: { id: id.value }, body: { label: speaker.label, userId } }))
 
+/** What kind of recording this is (#879). A type the workspace has since hidden stays shown on the memo that has it. */
+const NO_TYPE = 'none'
+const { types, offered, nameOf: typeName } = useMemoTypes(getWorkspaceId())
+const typeChoices = computed(() => types.value.filter((type) => !type.hidden || type.key === memo.value?.type))
+const setType = (key: string) =>
+  act(() => request('patch', '/v1/memos/{id}', { path: { id: id.value }, body: { type: key === NO_TYPE ? null : key } }))
+
 const retry = () => act(() => request('post', '/v1/memos/{id}/retry', { path: { id: id.value } }))
 </script>
 
@@ -192,6 +200,13 @@ const retry = () => act(() => request('post', '/v1/memos/{id}/retry', { path: { 
       <span class="text-muted-foreground">{{ formatDateTime(memo.createdAt) }}</span>
       <span v-if="memo.durationSeconds" class="text-muted-foreground tabular-nums">{{ formatDuration(memo.durationSeconds * 1000) }}</span>
       <span class="text-muted-foreground inline-flex items-center gap-1"><Lock class="size-3" aria-hidden="true" />{{ t('memos.detail.private') }}</span>
+      <Select v-if="offered.length" :model-value="memo.type ?? NO_TYPE" :disabled="acting" @update:model-value="setType(String($event))">
+        <SelectTrigger size="sm" class="h-7 py-0 data-[size=sm]:h-7" :aria-label="t('memos.types.ofMemo')"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem :value="NO_TYPE">{{ t('memos.types.none') }}</SelectItem>
+          <SelectItem v-for="type in typeChoices" :key="type.key" :value="type.key">{{ typeName(type) }}</SelectItem>
+        </SelectContent>
+      </Select>
       </p>
     </template>
 

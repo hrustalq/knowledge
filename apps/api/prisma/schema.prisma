@@ -4716,6 +4716,8 @@ model Memo {
 
   /// MemoSegment[] — masked before it is written. Never selected by the list.
   transcript   Json?
+  /// A memo type's key (#879): built-in or the workspace's own. Null = unclassified.
+  type         String?
   /// SpeakerChoices: { "<speaker label>": userId | null }, the uploader's matches (#880).
   speakers     Json?
   summary      String?
@@ -4746,6 +4748,26 @@ model Memo {
 /// A person's Plaud auto-import settings in one workspace (#864): where picked
 /// recordings go and which ones are picked. The sign-in itself is their
 /// `credentials` row; this row exists once they save settings.
+/// A workspace's edit to the memo type catalogue (#879): overrides or hides a
+/// built-in type, or adds its own. Built-ins themselves are code.
+model MemoType {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  /// A built-in key, or the workspace's own (MEMO_TYPE_KEY_RE).
+  key         String
+  /// Null = the built-in's name.
+  name        String?
+  /// Trusted text for the secretary, admin-written. Null = the built-in's guidance.
+  guidance    String?
+  hidden      Boolean  @default(false)
+  createdBy   String   @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@unique([workspaceId, key])
+  @@map("memo_types")
+}
+
 model PlaudLink {
   id          String  @id @default(uuid()) @db.Uuid
   workspaceId String  @map("workspace_id") @db.Uuid

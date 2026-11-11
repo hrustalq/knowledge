@@ -62,6 +62,15 @@ in the pull request that introduces them — see
   (editor, the uploader only) writes a match and `GET /v1/memos/:id` returns `speakers`. Being matched gives that
   person no access to the memo and sends them nothing. (#880)
 
+- **A memo can have a type, and the agent treats each type its own way.** Four types are built in: Daily,
+  Retrospective, Sprint planning and Task planning. Set a memo's type on its page; the memo list shows it and can
+  be filtered by it. Each type carries guidance for the agent that reads the recording: a daily keeps only what was
+  decided or newly blocked, a retrospective becomes one page with the agreed actions. A workspace admin can rename
+  a built-in type, rewrite its guidance, hide it, or add types of the workspace's own, under "Memo types" on
+  `/memos`. `GET /v1/memos/types`, `PUT` and `DELETE /v1/memos/types/:key` (admin), `PATCH /v1/memos/:id { type }`
+  and `GET /v1/memos?type=` do the same over the API. The type is set by hand for now; a memo already analysed is
+  not read again when its type changes. (#879)
+
 ### Changed
 
 - **The agent that reads a memo may now name people.** It is told who the speakers you matched are, and may say
@@ -86,6 +95,9 @@ in the pull request that introduces them — see
   transcript line now runs the full width of its column at body text size; it was held to 65 characters. (#874)
 
 ### Operations
+
+- Migration `20270109100000_memo_types` adds the `memo_types` table and the nullable column `memos.type`. A new
+  table and a nullable column, so it survives a rollback to the previous release.
 
 - Migration `20270108100000_memo_speakers` adds the nullable column `memos.speakers`. It is additive and survives a
   rollback to the previous release.

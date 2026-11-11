@@ -229,6 +229,8 @@
     "transcriptionFailed": "The recording could not be transcribed.",
     "speakerUnknown": "The transcript has no speaker with that label.",
     "speakerNotMember": "That person is not a member of this workspace.",
+    "typeUnknown": "This workspace has no memo type with that key.",
+    "typeNeedsName": "A memo type of your own needs a name.",
     "speaker": "Speaker {n}",
     "speechServerDown": "The speech server could not be reached. Try again later, or ask an admin to check it.",
     "speechServerRefused": "The speech server refused the recording (HTTP {status}).",

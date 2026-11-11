@@ -7368,6 +7368,11 @@
     "offlineDescription": "Pages already open stay readable. Anything that needs the server will fail until the connection returns."
   },
   "memos": {
+    "player": {
+      "play": "Play {title}",
+      "pause": "Pause {title}",
+      "position": "Position in {title}"
+    },
     "actions": {
       "for": "Actions for {title}",
       "rename": "Rename",

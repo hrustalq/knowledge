@@ -13,6 +13,16 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Operations
+
+- **The provider columns that #798 retired are no longer in the Prisma schema, and this release has no migration.**
+  Those are `ai_settings.*_provider_id`, `ai_agents.provider_id`, `assistant_threads.provider_id`, and
+  `ai_providers.model`, its prices and capabilities. They stay in the database, unread. Rollback by retag still
+  works to any earlier release. The next release drops the columns, and from then on a rollback can go no further
+  back than this one. (#803)
+
 ## [0.49.2] — 2026-11-11
 
 ### Security

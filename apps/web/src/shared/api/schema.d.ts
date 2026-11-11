@@ -14713,6 +14713,7 @@ export interface components {
         MembershipSource: "manual" | "jit" | "group" | "scim";
         MemoDetailResponse: {
             memo: components["schemas"]["MemoInfo"];
+            progress: components["schemas"]["MemoProgress"] | null;
             transcript: components["schemas"]["MemoSegment"][];
             summary: string | null;
             proposals: components["schemas"]["MemoProposal"][];
@@ -14750,6 +14751,12 @@ export interface components {
                 maxMinutes: number;
             };
         };
+        MemoProgress: {
+            step: components["schemas"]["MemoStep"];
+            /** @enum {string} */
+            state: "waiting" | "running";
+            since: string;
+        };
         MemoProposal: {
             /** @enum {string} */
             action: "create" | "update";
@@ -14774,6 +14781,8 @@ export interface components {
         MemoSource: "upload" | "plaud";
         /** @enum {string} */
         MemoStatus: "pending" | "uploaded" | "transcribing" | "transcribed" | "analysing" | "done" | "failed";
+        /** @enum {string} */
+        MemoStep: "upload" | "transcribe" | "analyse" | "publish";
         MemoTranscriptionState: {
             enabled: boolean;
             /** @enum {string|null} */

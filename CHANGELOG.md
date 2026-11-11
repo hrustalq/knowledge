@@ -25,6 +25,13 @@ in the pull request that introduces them — see
   recording waiting for Plaud's transcript, "Transcribe here", "Import when ready" and "Skip" moved from three
   buttons into a ⋮ menu. (#875)
 
+- **A memo's page says what is happening to it while it is being processed.** In place of one line of status, the
+  page lists the steps (upload, transcription, reading against the knowledge base, merge requests) with the ones
+  behind ticked, what the current one is doing and since when. It tells "waiting for the agent" from "the agent is
+  reading" and from "the agent has finished, its proposals are being opened", and says so when nothing has picked
+  a step up for five minutes. A Plaud memo, which arrives with its transcript, starts at the reading step.
+  `GET /v1/memos/:id` returns it as `progress: { step, state, since }`, null once the memo is done or failed. (#876)
+
 ### Fixed
 
 - **A Plaud recording you have just transcribed in the Plaud app no longer sits under "waiting" on `/memos`.** The

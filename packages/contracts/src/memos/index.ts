@@ -115,8 +115,49 @@ export interface MemoProposal {
   mergeRequestId: string | null;
 }
 
+/** The steps a memo moves through; a Plaud memo arrives with the first two behind it. */
+export const MEMO_STEPS = ['upload', 'transcribe', 'analyse', 'publish'] as const;
+export type MemoStep = (typeof MEMO_STEPS)[number];
+
+/** What is happening to a memo right now (#876): the step, whether anything has picked it up, and since when. */
+export interface MemoProgress {
+  step: MemoStep;
+  state: 'waiting' | 'running';
+  since: string;
+}
+
+/**
+ * Derived on read from the memo's status and its secretary run, never stored.
+ * Null once the memo is done or failed: the status says the rest. A run that
+ * has ended on a memo still `analysing` is waiting for the publisher, which
+ * opens its merge requests.
+ */
+export function memoProgressFor(
+  memo: { status: MemoStatus; updatedAt: string },
+  run: { status: string; createdAt: string; startedAt: string | null; finishedAt: string | null } | null,
+): MemoProgress | null {
+  switch (memo.status) {
+    case 'pending':
+      return { step: 'upload', state: 'running', since: memo.updatedAt };
+    case 'uploaded':
+      return { step: 'transcribe', state: 'waiting', since: memo.updatedAt };
+    case 'transcribing':
+      return { step: 'transcribe', state: 'running', since: memo.updatedAt };
+    case 'transcribed':
+      return { step: 'analyse', state: 'waiting', since: memo.updatedAt };
+    case 'analysing':
+      if (!run || run.status === 'pending') return { step: 'analyse', state: 'waiting', since: run?.createdAt ?? memo.updatedAt };
+      if (run.status === 'running') return { step: 'analyse', state: 'running', since: run.startedAt ?? run.createdAt };
+      return { step: 'publish', state: 'waiting', since: run.finishedAt ?? memo.updatedAt };
+    default:
+      return null;
+  }
+}
+
 export interface MemoDetailResponse {
   memo: MemoInfo;
+  /** Null once the memo is done or failed. */
+  progress: MemoProgress | null;
   transcript: MemoSegment[];
   summary: string | null;
   proposals: MemoProposal[];

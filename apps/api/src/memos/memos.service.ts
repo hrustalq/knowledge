@@ -14,6 +14,7 @@ import { Prisma, type Memo } from '@prisma/client';
 import {
   MEMO_FORMATS,
   memoExtensionFor,
+  memoProgressFor,
   type AgentFinding,
   type CreateMemoResponse,
   type MemoDetailResponse,
@@ -260,11 +261,21 @@ export class MemosService {
     // The kept proposals are the run's findings — the one copy the publisher
     // writes merge request ids into.
     const run = row.agentRunId
-      ? await this.prisma.agentRun.findFirst({ where: { id: row.agentRunId, workspaceId: row.workspaceId }, select: { findings: true } })
+      ? await this.prisma.agentRun.findFirst({ where: { id: row.agentRunId, workspaceId: row.workspaceId }, select: { findings: true, status: true, createdAt: true, startedAt: true, finishedAt: true } })
       : null;
     const findings = Array.isArray(run?.findings) ? (run.findings as unknown as AgentFinding[]) : [];
+    const memo = toInfo(row);
     return {
-      memo: toInfo(row),
+      memo,
+      progress: memoProgressFor(
+        memo,
+        run && {
+          status: run.status,
+          createdAt: run.createdAt.toISOString(),
+          startedAt: run.startedAt?.toISOString() ?? null,
+          finishedAt: run.finishedAt?.toISOString() ?? null,
+        },
+      ),
       transcript: Array.isArray(row.transcript) ? (row.transcript as unknown as MemoSegment[]) : [],
       summary: row.summary,
       proposals: findings.map((f) => ({

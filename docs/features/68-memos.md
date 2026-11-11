@@ -203,9 +203,10 @@ REST, each route `@Access` + `@Returns`:
 | `GET /v1/memos?workspaceId&projectId` | viewer | my memos, no transcript; `transcription: { enabled, missing }`, `limits` |
 | `POST /v1/memos`                      | editor | reserve: row + presigned PUT; 503 `transcription-disabled` when off       |
 | `POST /v1/memos/:id/finalize`         | editor | size re-read from the bucket, transcription queued                       |
-| `GET /v1/memos/:id`                   | viewer | memo, transcript, summary, proposals with merge requests, dropped        |
+| `GET /v1/memos/:id`                   | viewer | memo, `progress` (#876), transcript, summary, proposals, dropped         |
 | `GET /v1/memos/:id/audio`             | viewer | 302 to a presigned GET (session cookie, `<audio>` sends no header)        |
 | `POST /v1/memos/:id/retry`            | editor | resume a failed memo                                                     |
+| `PATCH /v1/memos/:id`                 | editor | `{ title }`: rename (#875)                                               |
 | `DELETE /v1/memos/:id`                | editor | purge audio + row                                                        |
 
 MCP: `knowledge_list_memos` (`guard.ws`, viewer) and `knowledge_get_memo` (`guard.memo`, viewer; the memo
@@ -270,3 +271,15 @@ Web (`/memos` after Captures in the sidebar; design brief on #551):
   - a real model running the secretary (only the paid gen-api was configured locally);
   - the >10-minute multi-chunk path end to end;
   - a second, non-admin member getting 404s (dev mode is a platform admin).
+
+## Progress on the memo page (#876)
+
+`GET /v1/memos/:id` answers `progress: { step, state, since } | null`, where `step` is one of `MEMO_STEPS`
+(`upload`, `transcribe`, `analyse`, `publish`) and `state` is `waiting` or `running`. It is derived on read by
+`memoProgressFor` (`@knowledge/contracts`) from the memo's status and its secretary run's status and timestamps,
+and is never stored. A run that has ended on a memo still `analysing` reads as `publish` / `waiting`: the
+`MemoPublishSweeper` has not opened its merge requests yet. It is null once the memo is `done` or `failed`.
+
+The page draws the steps in its rail: the ones behind, the current one with what is happening and since when,
+the ones ahead. A step nothing has picked up for five minutes says so. A Plaud memo shows no upload step, and a
+transcription step only when its owner chose "Transcribe here".

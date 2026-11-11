@@ -16575,6 +16575,14 @@
       "memo": {
         "$ref": "#/components/schemas/MemoInfo"
       },
+      "progress": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/MemoProgress"
+          }
+        ],
+        "nullable": true
+      },
       "transcript": {
         "type": "array",
         "items": {
@@ -16600,6 +16608,7 @@
     },
     "required": [
       "memo",
+      "progress",
       "transcript",
       "summary",
       "proposals",
@@ -16740,6 +16749,29 @@
       "limits"
     ]
   },
+  "MemoProgress": {
+    "type": "object",
+    "properties": {
+      "step": {
+        "$ref": "#/components/schemas/MemoStep"
+      },
+      "state": {
+        "type": "string",
+        "enum": [
+          "waiting",
+          "running"
+        ]
+      },
+      "since": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "step",
+      "state",
+      "since"
+    ]
+  },
   "MemoProposal": {
     "type": "object",
     "properties": {
@@ -16839,6 +16871,15 @@
       "analysing",
       "done",
       "failed"
+    ]
+  },
+  "MemoStep": {
+    "type": "string",
+    "enum": [
+      "upload",
+      "transcribe",
+      "analyse",
+      "publish"
     ]
   },
   "MemoTranscriptionState": {

@@ -21,7 +21,7 @@ import { AiReadableService } from '../src/ai-readable/ai-readable.service.js';
 import { AiReadableController } from '../src/ai-readable/ai-readable.controller.js';
 import { ENFORCING_PROVIDER, enforcingPolicy, noAuthPolicy } from './auth-policy-fakes.js';
 import { ElicitRequestSchema, type ElicitRequest, type ElicitResult } from '@modelcontextprotocol/sdk/types.js';
-import { FLOW_NO_LINK, FLOW_OTHER_KEY, FLOW_SCOPE_SUBTREE } from '@knowledge/contracts';
+import { FLOW_NO_LINK, FLOW_OTHER_KEY, FLOW_SCOPE_SUBTREE, MCP_TOOLSETS, MCP_TOOLSET_KEYS } from '@knowledge/contracts';
 import { FlowsService } from '../src/flows/flows.service.js';
 
 /**
@@ -397,6 +397,11 @@ function fakeDrafts(enabled = true) {
   };
 }
 
+/** The sorted names `principal` is offered, draft tools included. */
+function mcpToolNames(mcp: McpService, principal: Principal): string[] {
+  return mcp.toolsFor(principal, { drafts: fakeDrafts() }).map((t) => t.name).sort();
+}
+
 async function connect(mcp: McpService, principal: Principal, extras: McpExtras = {}) {
   const { server } = mcp.buildServer(principal, extras);
   const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
@@ -461,6 +466,39 @@ describe('McpService over a principal', () => {
     for (const name of WRITE_TOOLS) expect(names, name).toContain(name);
     for (const name of CAPTURE_TOOLS) expect(names, name).toContain(name);
     for (const tools of Object.values(FEATURE_TOOLS)) for (const name of tools ?? []) expect(names, name).toContain(name);
+  });
+
+  it('files every registered tool in exactly one toolset, and the catalogue names no other (#945)', () => {
+    // Registered, before `settleTools` drops what it cannot file.
+    const { server } = service(accessWith('admin')).mcp.buildServer(DEV_PRINCIPAL, { drafts: fakeDrafts() });
+    const offered = mcpToolNames(service(accessWith('admin')).mcp, DEV_PRINCIPAL);
+    const filed = MCP_TOOLSET_KEYS.flatMap((key) => [...MCP_TOOLSETS[key].tools]);
+    expect(new Set(filed).size, 'a tool is filed in two toolsets').toBe(filed.length);
+    expect([...filed].sort()).toEqual(offered);
+    // 93 registered: nothing was dropped for want of a toolset.
+    expect(Object.keys((server as unknown as { _registeredTools: object })._registeredTools).sort()).toEqual(offered);
+  });
+
+  it('derives the section map from the catalogue, unchanged (#945)', () => {
+    expect(FEATURE_TOOLS).toEqual({
+      workflows: ['knowledge_list_workflows', 'knowledge_start_workflow', 'knowledge_get_workflow_run'],
+      qa: [
+        'knowledge_list_test_fixtures',
+        'knowledge_get_test_fixture',
+        'knowledge_get_test_suite',
+        'knowledge_generate_test_suite',
+        'knowledge_suggest_test_fixtures',
+        'knowledge_set_test_fixtures',
+        'knowledge_get_test_run_plan',
+        'knowledge_run_test_suite',
+        'knowledge_get_test_run',
+        'knowledge_qa_overview',
+      ],
+      analytics: ['knowledge_get_page_insights', 'knowledge_list_search_gaps'],
+      captures: [...CAPTURE_TOOLS, 'knowledge_list_captures'],
+      memos: ['knowledge_list_memos', 'knowledge_get_memo'],
+      conflicts: ['knowledge_list_conflicts', 'knowledge_resolve_conflict'],
+    });
   });
 
   it('refuses a tool of a switched-off section, after the membership check (#604)', async () => {

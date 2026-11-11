@@ -1,5 +1,6 @@
 import { HttpException } from '@nestjs/common';
 import type { McpServer, RegisteredTool } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { MCP_TOOLSETS, MCP_TOOLSET_KEYS, featureOfToolset, toolsetOf } from '@knowledge/contracts';
 import type { McpToolSummary, WorkspaceFeature } from '@knowledge/contracts';
 import type { Principal } from '../auth/principal.js';
 import type { RecordedToolCall } from '../analytics/analytics.recorder.js';
@@ -117,33 +118,20 @@ export const CAPTURE_TOOLS: ReadonlySet<string> = new Set([
  * The tools of each section a workspace may switch off (#604): the MCP half of
  * `@Feature` on their REST twins. A call is refused (404) when the workspace
  * it names has the feature off — named by `workspaceId`, else `documentId`,
- * else the tool's own id (the gate in `McpService` resolves it). A tool missing
- * here keeps working when its section is off, so a new tool of one joins it.
+ * else the tool's own id (the gate in `McpService` resolves it). Derived from
+ * `MCP_TOOLSETS` (#945): a tool joins a section by being filed in its toolset.
  */
-export const FEATURE_TOOLS: Readonly<Partial<Record<WorkspaceFeature, readonly string[]>>> = {
-  workflows: ['knowledge_list_workflows', 'knowledge_start_workflow', 'knowledge_get_workflow_run'],
-  qa: [
-    'knowledge_list_test_fixtures',
-    'knowledge_get_test_fixture',
-    'knowledge_get_test_suite',
-    'knowledge_generate_test_suite',
-    'knowledge_suggest_test_fixtures',
-    'knowledge_set_test_fixtures',
-    'knowledge_get_test_run_plan',
-    'knowledge_run_test_suite',
-    'knowledge_get_test_run',
-    'knowledge_qa_overview',
-  ],
-  analytics: ['knowledge_get_page_insights', 'knowledge_list_search_gaps'],
-  captures: [...CAPTURE_TOOLS, 'knowledge_list_captures'],
-  memos: ['knowledge_list_memos', 'knowledge_get_memo'],
-  conflicts: ['knowledge_list_conflicts', 'knowledge_resolve_conflict'],
-};
+export const FEATURE_TOOLS: Readonly<Partial<Record<WorkspaceFeature, readonly string[]>>> = Object.fromEntries(
+  MCP_TOOLSET_KEYS.flatMap((key) => {
+    const feature = featureOfToolset(key);
+    return feature ? [[feature, MCP_TOOLSETS[key].tools]] : [];
+  }),
+);
 
 /** The feature a tool belongs to, if any. */
 export function featureOfTool(tool: string): WorkspaceFeature | null {
-  for (const [feature, tools] of Object.entries(FEATURE_TOOLS)) if (tools.includes(tool)) return feature as WorkspaceFeature;
-  return null;
+  const toolset = toolsetOf(tool);
+  return toolset ? featureOfToolset(toolset) : null;
 }
 
 /**
@@ -253,12 +241,14 @@ export function settleTools(handles: Map<string, RegisteredTool>, principal: Pri
   const offered: McpToolSummary[] = [];
   for (const [name, handle] of handles) {
     const readOnly = !WRITE_TOOLS.has(name) && !CAPTURE_TOOLS.has(name);
-    if (!isOffered(name, principal)) {
+    // A tool filed in no toolset is not offered (#945); the spec fails before that ships.
+    const toolset = toolsetOf(name);
+    if (!toolset || !isOffered(name, principal)) {
       handle.remove();
       continue;
     }
     handle.update({ annotations: { ...handle.annotations, readOnlyHint: readOnly } });
-    offered.push({ name, description: handle.description ?? '', readOnly });
+    offered.push({ name, description: handle.description ?? '', toolset, readOnly });
   }
   return offered.sort((a, b) => a.name.localeCompare(b.name));
 }

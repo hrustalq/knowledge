@@ -1079,6 +1079,12 @@ export interface ProjectDeletionCounts {
   /** Imports still `awaiting-upload | queued | running`: their destination changes under them. */
   pendingImports: number;
   /**
+   * Memos filed here, everyone's, including ones the caller cannot open: a memo
+   * is private to its uploader, but it moves or goes with the project all the
+   * same (#901).
+   */
+  memos: number;
+  /**
    * People watching the project itself. Not moved and not blocking — the
    * subscriptions go away with their subject — but disclosed, because those
    * people stop hearing about this work without ever pressing anything.
@@ -1116,6 +1122,8 @@ export interface ProjectCascadeCounts {
   /** Review threads and page comment threads together — every discussion lost. */
   discussions: number;
   workflowRuns: number;
+  /** Memos, everyone's; any recording a memo still has goes with it (#901). */
+  memos: number;
   /** Objects in storage: each revision's source and normalized JSON, plus attachments. */
   storedFiles: number;
 }

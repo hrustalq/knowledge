@@ -18612,6 +18612,9 @@
       "workflowRuns": {
         "type": "number"
       },
+      "memos": {
+        "type": "number"
+      },
       "storedFiles": {
         "type": "number"
       }
@@ -18623,6 +18626,7 @@
       "mergeRequests",
       "discussions",
       "workflowRuns",
+      "memos",
       "storedFiles"
     ]
   },
@@ -18666,6 +18670,9 @@
       "pendingImports": {
         "type": "number"
       },
+      "memos": {
+        "type": "number"
+      },
       "watchers": {
         "type": "number"
       }
@@ -18677,6 +18684,7 @@
       "workflowDefinitions",
       "activeWorkflowRuns",
       "pendingImports",
+      "memos",
       "watchers"
     ]
   },

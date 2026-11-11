@@ -5,7 +5,7 @@
  *
  *   apps/api/openapi.json                 → REST endpoints (method/path/tag/summary)
  *   apps/api/src/ ** /*.controller.ts     → the role each endpoint requires
- *   apps/api/src/mcp/mcp.service.ts       → the MCP tools and their inputs
+ *   apps/api/src/mcp/ ** /*.ts            → the MCP tools and their inputs
  *                                         ↓
  *   apps/web/src/modules/help/docs/reference.generated.json   (committed, like schema.d.ts)
  *
@@ -28,7 +28,7 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 const REPO = resolve(HERE, '../../..')
 const API_SRC = join(REPO, 'apps/api/src')
 const OPENAPI = join(REPO, 'apps/api/openapi.json')
-const MCP_SERVICE = join(API_SRC, 'mcp/mcp.service.ts')
+const MCP_DIR = join(API_SRC, 'mcp')
 const OUT = join(REPO, 'apps/web/src/modules/help/docs/reference.generated.json')
 
 /** A parse that stops matching must fail loudly, not quietly empty the page. */
@@ -151,21 +151,25 @@ function readEndpoints(access) {
  * multi-line zod expression.
  */
 function readMcpTools() {
-  const src = readFileSync(MCP_SERVICE, 'utf8')
   const tools = []
-  const call = /server\.registerTool\(\s*'([^']+)'\s*,\s*\{/g
+  // The registrars are spread across the directory (tools/*.ts, capture-tools.ts,
+  // draft-tools.ts), so scan all of it rather than name the files (#861).
+  for (const file of walk(MCP_DIR)) {
+    if (!file.endsWith('.ts') || file.endsWith('.spec.ts')) continue
+    const src = readFileSync(file, 'utf8')
+    const call = /server\.registerTool\(\s*'([^']+)'\s*,\s*\{/g
 
-  let match
-  while ((match = call.exec(src))) {
-    const name = match[1]
-    const config = balanced(src, src.indexOf('{', match.index + match[0].length - 1))
-    if (!config) continue
+    let match
+    while ((match = call.exec(src))) {
+      const config = balanced(src, src.indexOf('{', match.index + match[0].length - 1))
+      if (!config) continue
 
-    tools.push({
-      name,
-      description: readDescription(config),
-      inputs: readInputs(config),
-    })
+      tools.push({
+        name: match[1],
+        description: readDescription(config),
+        inputs: readInputs(config),
+      })
+    }
   }
 
   tools.sort((a, b) => a.name.localeCompare(b.name))

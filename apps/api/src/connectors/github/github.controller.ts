@@ -164,7 +164,7 @@ export class GithubController {
    * Forget this person's GitHub identity (docs/features/36).
    *
    * No `@Access`: an identity belongs to a person, not a workspace — the reason
-   * `github_user_tokens` is keyed by user id — so there is no workspace to check
+   * a GitHub sign-in is a per-person `credentials` row — so there is no workspace to check
    * and nothing anyone else can be refused. Authenticated is the whole rule, and
    * the only row it can touch is the caller's own. Installations are untouched:
    * they are the workspace's, and every sync keeps running on them.

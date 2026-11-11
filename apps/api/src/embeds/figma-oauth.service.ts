@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Prisma, type Credential, type PrismaClient } from '@prisma/client';
+import { Prisma, type Credential } from '@prisma/client';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { FIGMA_GRANT_CONFIG_KEY, FIGMA_HANDLE_CONFIG_KEY, FIGMA_TOKEN_EXPIRES_CONFIG_KEY } from '@knowledge/contracts';
 import { decryptSecret, encryptSecret, parseKey } from '../ai/secret-box.js';
@@ -152,9 +152,6 @@ export class FigmaOauthService {
       const credential = held
         ? await tx.credential.update({ where: { id: held.id }, data: signIn })
         : await tx.credential.create({ data: { ...FIGMA_SIGN_IN, site: null, accountId: figmaUserId, ...signIn } });
-      // The row the previous release reads (expand/contract, #857).
-      const grant = { handle, ...secrets, refreshingUntil: null, connectedBy: state.userId };
-      await tx.figmaOauthGrant.upsert({ where: { figmaUserId }, create: { figmaUserId, ...grant }, update: grant });
 
       const ref = { workspaceId: state.workspaceId, provider: 'figma', method: 'oauth', externalRef: figmaUserId };
       const account = { accountId: figmaUserId, accountLabel: handle, credentialId: credential.id };
@@ -164,10 +161,7 @@ export class FigmaOauthService {
         // A reconnect touches the row, which is what the waiting tab's long poll sees.
         update: account,
       });
-      if (!state.connectorId) {
-        await pruneFigmaGrants(tx);
-        return 'connected' as const;
-      }
+      if (!state.connectorId) return 'connected' as const;
       // The state names the workspace, so a connector moved or deleted since is not bound.
       const connector = await tx.connector.findFirst({
         where: { id: state.connectorId, workspaceId: state.workspaceId, kind: 'figma' },
@@ -179,13 +173,9 @@ export class FigmaOauthService {
         delete config[FIGMA_TOKEN_EXPIRES_CONFIG_KEY];
         config[FIGMA_GRANT_CONFIG_KEY] = figmaUserId;
         config[FIGMA_HANDLE_CONFIG_KEY] = handle;
-        const bound = await tx.connector.update({
-          where: { id: state.connectorId },
-          data: { config: config as Prisma.InputJsonValue, credential: null, credentialHint: null },
-        });
-        await bindConnection(tx, bound, this.key);
+        const bound = await tx.connector.update({ where: { id: state.connectorId }, data: { config: config as Prisma.InputJsonValue } });
+        await bindConnection(tx, bound, this.key, null);
       }
-      await pruneFigmaGrants(tx);
       return connector ? ('connected' as const) : ('auth-failed' as const);
     });
   }
@@ -216,7 +206,7 @@ export class FigmaOauthService {
     return null;
   }
 
-  /** Unbinds a connector; its grant goes too once nothing else references it. */
+  /** Unbinds a connector. The sign-in stays its owner's, under Connected accounts. */
   async disconnect(connectorId: string): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       const row = await tx.connector.findUnique({ where: { id: connectorId }, select: { config: true } });
@@ -225,8 +215,7 @@ export class FigmaOauthService {
       delete config[FIGMA_GRANT_CONFIG_KEY];
       delete config[FIGMA_HANDLE_CONFIG_KEY];
       const unbound = await tx.connector.update({ where: { id: connectorId }, data: { config: config as Prisma.InputJsonValue } });
-      await bindConnection(tx, unbound, this.key);
-      await pruneFigmaGrants(tx);
+      await bindConnection(tx, unbound, this.key, null);
     });
   }
 
@@ -240,13 +229,10 @@ export class FigmaOauthService {
       await this.prisma.credential.updateMany({ where: { id: row.id }, data: { refreshingUntil: null } });
       return null;
     }
-    const renewed = { accessToken: encryptSecret(body.access_token, this.key), expiresAt: expiry(body.expires_in) };
     await this.prisma.credential.update({
       where: { id: row.id },
-      data: { secret: renewed.accessToken, expiresAt: renewed.expiresAt, refreshingUntil: null },
+      data: { secret: encryptSecret(body.access_token, this.key), expiresAt: expiry(body.expires_in), refreshingUntil: null },
     });
-    // Figma just revoked the old token, so the previous release's copy must follow (#857).
-    await this.prisma.figmaOauthGrant.updateMany({ where: { figmaUserId: row.accountId ?? '' }, data: renewed });
     return body.access_token;
   }
 
@@ -287,18 +273,6 @@ export class FigmaOauthService {
       return null;
     }
   }
-}
-
-/**
- * Deletes every grant neither a connector nor a connection references: after
- * a disconnect, a rebind, a connector's or connection's deletion and a
- * workspace teardown. One statement, so it is idempotent and safe to run from anywhere.
- */
-export async function pruneFigmaGrants(db: Pick<PrismaClient, '$executeRaw'>): Promise<void> {
-  await db.$executeRaw`DELETE FROM figma_oauth_grants g WHERE NOT EXISTS (
-    SELECT 1 FROM connectors c WHERE c.kind = 'figma' AND c.config->>${FIGMA_GRANT_CONFIG_KEY} = g.figma_user_id)
-    AND NOT EXISTS (
-    SELECT 1 FROM connections n WHERE n.provider = 'figma' AND n.method = 'oauth' AND n.external_ref = g.figma_user_id)`;
 }
 
 /** Figma's `expires_in` is seconds; 90 days when it says nothing. */

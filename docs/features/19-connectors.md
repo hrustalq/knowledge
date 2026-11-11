@@ -173,7 +173,7 @@ Confluence site holds thousands that no page in scope mentions. *(The plan had
 
 **Identities.** `external_identities` holds every upstream person an ACL or a
 group named, mapped or not. Resolution, strongest first: a mapping by hand
-(never overwritten), a linked GitHub account (`github_user_tokens`), a
+(never overwritten), a linked GitHub account (a GitHub sign-in in `credentials`), a
 **verified** email (`users.email_verified_at`). Only workspace members resolve.
 Mirrored groups are `user_groups` rows with `source = 'connector'`, named
 `<connector> · <group>`, read-only in the UI, membership replaced on each sync.

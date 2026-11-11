@@ -74,6 +74,4 @@ effective catalogue (`effectiveMemoTypes`) are all computed on read from these r
 
 - A type's target page or page template: guidance text only, by the owner's decision for the first version.
 - Re-running the secretary after a type, a tag or a speaker changes on a memo already analysed.
-- Matching voices across the hourly pieces of a recording longer than an hour (doc 68, `ponytail:` in
-  `stitchTranscript`).
 - Sorting recordings while they are still in the Plaud queue: by decision, see the promises above.

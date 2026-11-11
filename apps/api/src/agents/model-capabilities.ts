@@ -3,10 +3,9 @@ import type { AgentCapability } from '@knowledge/contracts';
 /**
  * What a model can do (docs/features/20).
  *
- * This is a code table with a per-profile override column, exactly the shape
- * `MODEL_PRICES` + `ai_providers.price_*_per_mtok` already has in
- * ai-config.service.ts — and for the same reason: any hardcoded list of models
- * goes stale, so the table is a good default and never the last word.
+ * This is a code table with a per-model override column, exactly the shape
+ * `MODEL_PRICES` + `ai_models.price_*_per_mtok` already has — and for the same
+ * reason: any hardcoded list of models goes stale, so the table is a good default and never the last word.
  *
  * Matching is by substring on a lowercased model id, because the same model
  * arrives under many names through aggregators ('gpt-4o', 'openai/gpt-4o',

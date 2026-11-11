@@ -203,10 +203,7 @@ export class GithubOauthService {
 
   /** Forgetting the identity, for a disconnect. The installations stay: they are the workspace's. */
   async disconnect(userId: string): Promise<void> {
-    await this.prisma.$transaction([
-      this.prisma.credential.deleteMany({ where: { userId, ...GITHUB_SIGN_IN } }),
-      this.prisma.githubUserToken.deleteMany({ where: { userId } }),
-    ]);
+    await this.prisma.credential.deleteMany({ where: { userId, ...GITHUB_SIGN_IN } });
   }
 
   /** The person's GitHub sign-in (#857): a `credentials` row, one per person. */
@@ -264,27 +261,16 @@ export class GithubOauthService {
 
   private async store(userId: string, token: TokenResponse, identity: RawUser): Promise<void> {
     const now = Date.now();
-    const data = {
-      githubUserId: BigInt(identity.id),
-      githubLogin: identity.login,
-      githubAvatarUrl: identity.avatar_url ?? null,
-      accessToken: encryptSecret(token.access_token!, this.key),
-      refreshToken: token.refresh_token ? encryptSecret(token.refresh_token, this.key) : null,
+    const signIn = {
+      accountId: String(identity.id),
+      accountLabel: identity.login,
+      accountAvatarUrl: identity.avatar_url ?? null,
+      secret: encryptSecret(token.access_token!, this.key),
+      refreshSecret: token.refresh_token ? encryptSecret(token.refresh_token, this.key) : null,
       // Absent when the App does not expire user tokens, which is a valid
       // configuration — `tokenFor` reads null as "never stale".
       expiresAt: token.expires_in ? new Date(now + token.expires_in * 1000) : null,
-      refreshExpiresAt: token.refresh_token_expires_in
-        ? new Date(now + token.refresh_token_expires_in * 1000)
-        : null,
-    };
-    const signIn = {
-      accountId: String(identity.id),
-      accountLabel: data.githubLogin,
-      accountAvatarUrl: data.githubAvatarUrl,
-      secret: data.accessToken,
-      refreshSecret: data.refreshToken,
-      expiresAt: data.expiresAt,
-      refreshExpiresAt: data.refreshExpiresAt,
+      refreshExpiresAt: token.refresh_token_expires_in ? new Date(now + token.refresh_token_expires_in * 1000) : null,
     };
     await this.prisma.$transaction(async (tx) => {
       // One per person: signing in as another GitHub account replaces it.
@@ -292,8 +278,6 @@ export class GithubOauthService {
       if (stale.length) await tx.credential.deleteMany({ where: { id: { in: stale.map((c) => c.id) } } });
       if (kept) await tx.credential.update({ where: { id: kept.id }, data: signIn });
       else await tx.credential.create({ data: { userId, ...GITHUB_SIGN_IN, site: null, ...signIn } });
-      // The row the previous release reads (expand/contract).
-      await tx.githubUserToken.upsert({ where: { userId }, create: { userId, ...data }, update: data });
     });
   }
 }

@@ -42421,7 +42421,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.48.0",
+    "version": "0.49.2",
     "contact": {}
   },
   "tags": [],
@@ -69003,6 +69003,9 @@
           "workflowRuns": {
             "type": "number"
           },
+          "memos": {
+            "type": "number"
+          },
           "storedFiles": {
             "type": "number"
           }
@@ -69014,6 +69017,7 @@
           "mergeRequests",
           "discussions",
           "workflowRuns",
+          "memos",
           "storedFiles"
         ]
       },
@@ -69057,6 +69061,9 @@
           "pendingImports": {
             "type": "number"
           },
+          "memos": {
+            "type": "number"
+          },
           "watchers": {
             "type": "number"
           }
@@ -69068,6 +69075,7 @@
           "workflowDefinitions",
           "activeWorkflowRuns",
           "pendingImports",
+          "memos",
           "watchers"
         ]
       },

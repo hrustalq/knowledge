@@ -1,4 +1,6 @@
+import { UnauthorizedException } from '@nestjs/common';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ChatWebhookController } from '../src/chat/chat-webhook.controller.js';
 import { SlackAdapter, markdownForSlack, slackPlainText, slackSignature } from '../src/chat/adapters/slack.adapter.js';
 import { ChatPlatformError, type ChatAdapterContext, type RawInbound } from '../src/chat/adapters/chat-adapter.types.js';
 
@@ -281,8 +283,7 @@ describe('the Web API', () => {
 describe('the webhook, for a Slack bot', () => {
   const id = '22222222-2222-4222-8222-222222222222';
   const row = { id, enabled: true, kind: 'slack', botUsername: BOT, inboundSecretHash: null };
-  async function controller() {
-    const { ChatWebhookController } = await import('../src/chat/chat-webhook.controller.js');
+  function controller() {
     const receive = vi.fn(async () => undefined);
     const ctl = new ChatWebhookController(
       { find: vi.fn(async () => row), context: () => ({ ...ctx, signingSecret: SECRET }) } as never,
@@ -296,15 +297,14 @@ describe('the webhook, for a Slack bot', () => {
   const req = (b: string) => ({ rawBody: Buffer.from(b) }) as never;
 
   it('answers a signed Request URL check with its challenge, and reads nothing else', async () => {
-    const { ctl, receive } = await controller();
+    const { ctl, receive } = controller();
     const body = JSON.stringify({ token: 'x', challenge: 'c-1', type: 'url_verification' });
     await expect(ctl.receive(id, live(body).headers, req(body))).resolves.toEqual({ challenge: 'c-1' });
     expect(receive).not.toHaveBeenCalled();
   });
 
   it('401s an unsigned or forged request, the URL check included', async () => {
-    const { UnauthorizedException } = await import('@nestjs/common');
-    const { ctl, receive } = await controller();
+    const { ctl, receive } = controller();
     const body = JSON.stringify({ token: 'x', challenge: 'c-1', type: 'url_verification' });
     await expect(ctl.receive(id, {}, req(body))).rejects.toBeInstanceOf(UnauthorizedException);
     await expect(ctl.receive(id, signed(body, Date.now() / 1000, 'forged').headers, req(body))).rejects.toBeInstanceOf(UnauthorizedException);
@@ -312,7 +312,7 @@ describe('the webhook, for a Slack bot', () => {
   });
 
   it('hands a verified event on', async () => {
-    const { ctl, receive } = await controller();
+    const { ctl, receive } = controller();
     const body = event({ type: 'message', channel: 'D1', channel_type: 'im', user: 'U1', text: 'hi', ts: '1.1' });
     await expect(ctl.receive(id, live(body).headers, req(body))).resolves.toEqual({ ok: true });
     expect(receive).toHaveBeenCalledWith(row, expect.objectContaining({ text: 'hi', isDm: true, chatId: 'D1' }));

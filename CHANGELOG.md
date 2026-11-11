@@ -13,6 +13,62 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.50.0] — 2026-11-11
+
+### Changed
+
+- A memo recording longer than an hour, transcribed with speakers (`TRANSCRIPTION_SPEAKERS=true`), keeps one
+  speaker number per person across the whole recording. Before, a person who spoke in both hours of a two-hour
+  recording was "Speaker 1" in the first hour and "Speaker 3" in the second. Each later hourly piece now
+  re-sends the 30 seconds before its cut, and the voices are matched by who speaks at the same moment there.
+  No word from those 30 seconds appears twice. Those seconds are billed twice: about 30 s for each hour after
+  the first. A person who is silent for that whole stretch still gets a new number. Recordings under an hour are
+  transcribed as before. (#893)
+
+### Fixed
+
+- The MCP tools table on the in-app docs page lists every tool again, including the capture tools
+  (`knowledge_capture_*`, `knowledge_propose_*`, `knowledge_find_similar`, `knowledge_list_captures`) and the draft
+  tools (`knowledge_get_draft`, `knowledge_suggest_draft_edit`). The reference generator had stopped finding any
+  tool once their registration moved into per-section files, so `make api-client` failed at its last step and the
+  table was not refreshed. (#861)
+- On a memo with no recording (a Plaud import, or one past audio retention), the time chips under a proposal no
+  longer tell a screen reader they play the recording. They are announced as showing the passage at that time,
+  which is what they do. (#900)
+- Deleting a project no longer strands its memos. Before, they stayed filed under a project that no longer
+  existed, so `/memos` showed "No memos yet" in every project. The delete dialog now counts memos with the rest
+  of the project's contents: **Move** takes them to the destination project, and **Delete everything** deletes
+  them and their audio. The Plaud auto-import destination, a recording picked for a project, and a memo type's
+  target project follow the move, or are cleared on a delete (auto-import off, the recording goes to the link's
+  project, the memo stays where it arrived). (#901)
+
+### Operations
+
+- **Migration `20270111100000_memo_orphans` deletes data and cannot be undone.** It deletes every memo whose
+  project no longer exists, transcript included. These are memos stranded by an earlier project delete, which no
+  screen could list. It also clears `project_id` on `plaud_links`, `plaud_imports` and `memo_types` rows that name
+  a missing project. It changes no schema, so rollback by retag still works, but the deleted memos do not come
+  back. The migration cannot reach object storage, so any audio those memos still had stays in the bucket,
+  unreferenced, under `workspaces/{ws}/memos/{memoId}/`. To see what it will remove, run this before deploying:
+  `SELECT id, workspace_id, project_id, title, audio_key FROM memos m WHERE NOT EXISTS (SELECT 1 FROM projects p
+  WHERE p.id = m.project_id);` (#901)
+- **The provider columns that #798 retired are no longer in the Prisma schema, and no migration touches them.**
+  Those are `ai_settings.*_provider_id`, `ai_agents.provider_id`, `assistant_threads.provider_id`, and
+  `ai_providers.model`, its prices and capabilities. They stay in the database, unread. Rollback by retag still
+  works to any earlier release. The next release drops the columns, and from then on a rollback can go no further
+  back than this one. (#803)
+- **Connector secrets now live only in `credentials`, and no migration touches the old copies.** The copies kept for
+  rollbacks since v0.47.0 are no longer written or read, and leave the Prisma schema: `connectors.credential` /
+  `credential_hint`, `connections.credential` / `credential_hint`, `github_user_tokens` and `figma_oauth_grants`.
+  The API no longer runs its boot backfill (no more `moved N sign-in(s) into credentials` or `bound N connector(s)`
+  lines). **Before tagging**, confirm on production that every connector and connection reaches a credential: a
+  connector with an inline secret and no connection, or a token connection with no `credential_id`, would dial
+  with nothing after this deploy. The read-only query is on #857. Rollback by retag is safe back to v0.47.0. Two
+  things to know if you do roll back: a GitHub or Figma account disconnected under this release comes back from
+  the stale old row on the older image's first boot, and has to be disconnected again; and before v0.47.0, a
+  connector created or re-keyed under this release has no secret. The release after this one drops the columns
+  and tables. (#857)
+
 ## [0.49.2] — 2026-11-11
 
 ### Security
@@ -6674,7 +6730,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.49.2...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.50.0...HEAD
+[0.50.0]: https://github.com/hrustalq/knowledge/compare/v0.49.2...v0.50.0
 [0.49.2]: https://github.com/hrustalq/knowledge/compare/v0.49.1...v0.49.2
 [0.49.1]: https://github.com/hrustalq/knowledge/compare/v0.49.0...v0.49.1
 [0.49.0]: https://github.com/hrustalq/knowledge/compare/v0.48.0...v0.49.0

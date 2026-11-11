@@ -20,6 +20,12 @@ export const SHORT_CHUNK_SECONDS = 60;
  * An hour at 32 kbit/s is about 14 MiB.
  */
 export const SPEAKER_CHUNK_SECONDS = 3600;
+/**
+ * How far each later speaker piece reaches back into the one before (#893):
+ * both transcribe these seconds, which is how `stitchTranscript` tells which
+ * of the new piece's voices is which of the old one's.
+ */
+export const SPEAKER_OVERLAP_SECONDS = 30;
 
 /** The recording's length, from its container — what the length ceiling is enforced on. */
 export async function probeSeconds(path: string): Promise<number> {
@@ -83,20 +89,34 @@ export function pauseCuts(pauses: number[], seconds: number, max = SHORT_CHUNK_S
 /**
  * Normalise to 16 kHz mono mp3 and cut at `cuts`, in order, with each piece's
  * offset into the recording and its length. Any input ffmpeg reads works, so
- * the speech server only ever sees one format.
+ * the speech server only ever sees one format. With an `overlap`, every piece
+ * after the first starts that many seconds before its cut (#893).
  */
 export async function splitAudio(
   input: string,
   dir: string,
   cuts: number[],
   seconds: number,
+  overlap = 0,
 ): Promise<Array<{ path: string; offset: number; duration: number }>> {
+  const normalise = ['-vn', '-ac', '1', '-ar', '16000', '-c:a', 'libmp3lame', '-b:a', '32k'];
+  if (overlap > 0 && cuts.length) {
+    // The segment muxer cannot overlap, so each piece is its own read: a long recording has few of them.
+    const pieces = [0, ...cuts].map((cut, index) => {
+      const offset = index ? Math.max(0, cut - overlap) : 0;
+      return { path: join(dir, `chunk-${String(index).padStart(4, '0')}.mp3`), offset, duration: (cuts[index] ?? seconds) - offset };
+    });
+    for (const piece of pieces) {
+      await run('ffmpeg', ['-v', 'error', '-ss', String(piece.offset), '-t', String(piece.duration), '-i', input, ...normalise, piece.path]);
+    }
+    return pieces;
+  }
   await run(
     'ffmpeg',
     [
       '-v', 'error',
       '-i', input,
-      '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'libmp3lame', '-b:a', '32k',
+      ...normalise,
       '-f', 'segment',
       // With neither flag the segment muxer cuts every 2 s.
       ...(cuts.length ? ['-segment_times', cuts.join(',')] : ['-segment_time', String(Math.ceil(seconds) + 1)]),

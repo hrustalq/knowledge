@@ -234,16 +234,23 @@ export function isOffered(name: string, principal: Principal): boolean {
  * Annotate every tool read-only or not, and drop the writes a narrowed key
  * could never run — offering a tool that always 403s spends the model's
  * context on a dead end. A read key keeps the reads; a capture key the reads
- * and CAPTURE_TOOLS. Offering is not the check: each write tool still runs
- * `requireRole`, which refuses the key on its own.
+ * and CAPTURE_TOOLS. A toolset whose section is in `offSections` goes the same
+ * way. Offering is not the check: each write tool still runs `requireRole`,
+ * which refuses the key on its own, and the section gate runs on every call.
  */
-export function settleTools(handles: Map<string, RegisteredTool>, principal: Principal): McpToolSummary[] {
+export function settleTools(
+  handles: Map<string, RegisteredTool>,
+  principal: Principal,
+  // Sections off in every workspace the connection reaches (#945); their toolsets are not offered.
+  offSections: readonly WorkspaceFeature[] = [],
+): McpToolSummary[] {
   const offered: McpToolSummary[] = [];
   for (const [name, handle] of handles) {
     const readOnly = !WRITE_TOOLS.has(name) && !CAPTURE_TOOLS.has(name);
     // A tool filed in no toolset is not offered (#945); the spec fails before that ships.
     const toolset = toolsetOf(name);
-    if (!toolset || !isOffered(name, principal)) {
+    const feature = toolset && featureOfToolset(toolset);
+    if (!toolset || !isOffered(name, principal) || (feature && offSections.includes(feature))) {
       handle.remove();
       continue;
     }

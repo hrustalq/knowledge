@@ -52,8 +52,9 @@ export class McpController {
     summary: 'MCP Streamable HTTP endpoint (JSON-RPC). Point an MCP client here with a Bearer API key',
   })
   async handle(@CurrentPrincipal() principal: Principal, @Req() req: Request, @Res() res: Response): Promise<void> {
+    const asks = (method: string) => [req.body as unknown].flat().some((m) => (m as { method?: unknown } | null)?.method === method);
     // Only `initialize` carries the instructions, so only it pays for the learnings read (#305).
-    const initialize = [req.body as unknown].flat().some((m) => (m as { method?: unknown } | null)?.method === 'initialize');
+    const initialize = asks('initialize');
     // Guidance is advisory: a failed read falls back to the static instructions rather than refusing the client.
     const instructions = initialize
       ? await this.mcp.instructionsFor(principal).catch((err: unknown) => {
@@ -61,7 +62,9 @@ export class McpController {
           return undefined;
         })
       : undefined;
-    const { server } = this.mcp.buildServer(principal, { ...this.extras, noTrack: noTrackOf(req.headers), instructions });
+    // Only a listing is cut by section (#945): a call to a switched-off section's tool meets the per-call gate either way.
+    const offSections = initialize || asks('tools/list') ? await this.offSections(principal) : undefined;
+    const { server } = this.mcp.buildServer(principal, { ...this.extras, noTrack: noTrackOf(req.headers), instructions, offSections });
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     res.on('close', () => {
       void transport.close();
@@ -83,14 +86,23 @@ export class McpController {
   @Get('connection')
   @Returns('McpConnectionInfo')
   @ApiOperation({ summary: 'What an MCP client needs to connect: endpoint URL, auth mode, and the tools it would get' })
-  connection(@CurrentPrincipal() principal: Principal): McpConnectionInfo {
+  async connection(@CurrentPrincipal() principal: Principal): Promise<McpConnectionInfo> {
+    const offSections = await this.offSections(principal);
     return {
       url: this.mcp.publicUrl(),
       serverName: MCP_SERVER_NAME,
       authMode: this.config.get('AUTH_MODE') === 'api-key' ? 'api-key' : 'none',
       version: PRODUCT_VERSION,
-      tools: this.mcp.toolsFor(principal, this.extras),
+      tools: this.mcp.toolsFor(principal, { ...this.extras, offSections }),
     };
+  }
+
+  /** A failed read offers every section's tools, which the per-call gate still refuses where they are off. */
+  private offSections(principal: Principal) {
+    return this.mcp.sectionsOffFor(principal).catch((err: unknown) => {
+      this.logger.warn({ err }, 'MCP sections unavailable; every toolset offered');
+      return undefined;
+    });
   }
 
   @Get('skill')

@@ -23,6 +23,7 @@ import { ENFORCING_PROVIDER, enforcingPolicy, noAuthPolicy } from './auth-policy
 import { ElicitRequestSchema, type ElicitRequest, type ElicitResult } from '@modelcontextprotocol/sdk/types.js';
 import { FLOW_NO_LINK, FLOW_OTHER_KEY, FLOW_SCOPE_SUBTREE, MCP_TOOLSETS, MCP_TOOLSET_KEYS } from '@knowledge/contracts';
 import { FlowsService } from '../src/flows/flows.service.js';
+import { FeaturesService } from '../src/auth/features.service.js';
 
 /**
  * MCP over HTTP and named API keys (docs/features/33).
@@ -209,7 +210,7 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
     agents: {},
     access,
     // Feature toggles (#604): every section on unless a test switches one off.
-    features: { require: vi.fn(async () => undefined) },
+    features: { require: vi.fn(async () => undefined), offEverywhere: vi.fn(async () => []) },
     config,
     aiReadable,
     provenance: { decorateResults: vi.fn(async (_ws: string, results: unknown[]) => results) },
@@ -513,6 +514,77 @@ describe('McpService over a principal', () => {
     features.require.mockClear();
     await client.callTool({ name: 'knowledge_whoami', arguments: {} });
     expect(features.require).not.toHaveBeenCalled();
+  });
+
+  describe('the offer follows the sections a connection reaches (#945)', () => {
+    const QA = MCP_TOOLSETS.qa.tools;
+
+    /** Real FeaturesService and reach rule over `disabled` per workspace; `member` = the caller's workspaces. */
+    function sectioned(disabled: Record<string, string[]>, member: string[] = Object.keys(disabled)) {
+      const s = service(accessWith('editor'));
+      const findSettings = vi.fn(async ({ where }: { where: { workspaceId: { in: string[] } } }) =>
+        where.workspaceId.in.filter((id) => disabled[id]).map((workspaceId) => ({ workspaceId, disabledFeatures: disabled[workspaceId] })),
+      );
+      const prisma = {
+        workspaceMember: { findMany: vi.fn(async () => member.map((workspaceId) => ({ workspaceId, role: 'editor' }))) },
+        workspace: {
+          findMany: vi.fn(async ({ where }: { where: { id?: { in: string[] } } }) =>
+            (where.id?.in ?? Object.keys(disabled)).map((id) => ({ id, name: id })),
+          ),
+        },
+        workspaceSettings: {
+          findMany: findSettings,
+          findUnique: vi.fn(async ({ where }: { where: { workspaceId: string } }) => ({ disabledFeatures: disabled[where.workspaceId] ?? [] })),
+        },
+      };
+      const features = new FeaturesService(prisma as never, { get: () => true } as never);
+      Object.assign(s.mcp as unknown as { prisma: object; features: object }, { prisma, features });
+      const offered = async (principal: Principal) =>
+        s.mcp.toolsFor(principal, { drafts: fakeDrafts(), offSections: await s.mcp.sectionsOffFor(principal) }).map((t) => t.name);
+      return { ...s, offered, findSettings };
+    }
+    const write = (workspaceId: string | null, extra: Partial<Principal> = {}) => keyPrincipal({ id: 'k', scope: 'write', workspaceId }, extra);
+
+    it('a key pinned to a workspace with a section off is not offered its tools', async () => {
+      const { offered } = sectioned({ [WS_A]: ['qa', 'memos'] });
+      const names = await offered(write(WS_A));
+      for (const name of [...QA, ...MCP_TOOLSETS.memos.tools]) expect(names, name).not.toContain(name);
+      expect(names).toContain('knowledge_list_conflicts');
+    });
+
+    it('on in one reachable workspace is enough to offer it, and a call naming the other is still a 404', async () => {
+      const { mcp, offered } = sectioned({ [WS_A]: [], [WS_B]: ['qa'] });
+      const principal = write(null);
+      const names = await offered(principal);
+      for (const name of QA) expect(names, name).toContain(name);
+
+      const overview = vi.fn();
+      Object.assign(mcp as unknown as { testSuites: object }, { testSuites: { overview } });
+      const client = await connect(mcp, principal, { offSections: await mcp.sectionsOffFor(principal) });
+      const refused = await client.callTool({ name: 'knowledge_qa_overview', arguments: { workspaceId: WS_B } });
+      expect(refused.isError).toBe(true);
+      expect(JSON.stringify(refused.content)).toContain('"statusCode\\":404');
+      expect(overview).not.toHaveBeenCalled();
+    });
+
+    it('offers exactly the full list when nothing is switched off', async () => {
+      const { mcp, offered } = sectioned({ [WS_A]: [], [WS_B]: [] });
+      expect((await offered(write(null))).sort()).toEqual(mcpToolNames(mcp, write(null)));
+    });
+
+    it('offers no section-tied toolset to a connection that reaches no workspace', async () => {
+      const { offered } = sectioned({ [WS_A]: [] }, []);
+      const names = await offered(write(null));
+      for (const tools of Object.values(FEATURE_TOOLS)) for (const name of tools ?? []) expect(names, name).not.toContain(name);
+      expect(names).toContain('knowledge_search');
+    });
+
+    it('reads the settings of every workspace a platform admin reaches in one query', async () => {
+      const many = Object.fromEntries(Array.from({ length: 40 }, (_, i) => [`ws-${i}`, i ? ['qa'] : []]));
+      const { offered, findSettings } = sectioned(many, []);
+      expect(await offered(write(null, { isAdmin: true }))).toContain('knowledge_qa_overview');
+      expect(findSettings).toHaveBeenCalledOnce();
+    });
   });
 
   it('annotates reads read-only, and hides writes from a read-only key', async () => {

@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/com
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CAPTURE_KIT_CLIENTS, MCP_LEARNING_TARGET, type CaptureKitClient } from '@knowledge/contracts';
-import type { CaptureKitResponse, McpToolSummary, WorkspaceRole } from '@knowledge/contracts';
+import type { CaptureKitResponse, McpToolSummary, WorkspaceFeature, WorkspaceRole } from '@knowledge/contracts';
 import { t } from '../i18n/t.js';
 import { DEV_PRINCIPAL, type Principal } from '../auth/principal.js';
 import { CAPTURE_TOOLS, MCP_INSTRUCTIONS, MCP_SERVER_NAME, featureOfTool, isOffered, settleTools, trackTools } from './mcp-tools.js';
@@ -117,6 +117,12 @@ export interface McpExtras {
    * request is an `initialize` — the one message that carries instructions.
    */
   instructions?: string;
+  /**
+   * The sections off in every workspace this caller reaches (#945), from
+   * `sectionsOffFor`: their toolsets are not offered. Async, so computed by the
+   * caller. Absent offers every section's tools — the per-call gate is the check.
+   */
+  offSections?: readonly WorkspaceFeature[];
 }
 
 
@@ -125,7 +131,9 @@ export class McpService extends McpServices {
   async serveStdio(): Promise<void> {
     // ponytail: learnings read once at startup; a learning approved later reaches a restarted stdio server.
     const instructions = await this.instructionsFor(DEV_PRINCIPAL);
-    await this.buildServer(DEV_PRINCIPAL, { instructions }).server.connect(new StdioServerTransport());
+    // Likewise the sections: one switched off later is refused per call until a restart drops its tools.
+    const offSections = await this.sectionsOffFor(DEV_PRINCIPAL);
+    await this.buildServer(DEV_PRINCIPAL, { instructions, offSections }).server.connect(new StdioServerTransport());
   }
 
   /** MCP_INSTRUCTIONS plus the team guidance this caller is given (#305). */
@@ -215,12 +223,13 @@ export class McpService extends McpServices {
       registerDraftTools(server, { drafts: extras.drafts, principal, guard, json });
     }
 
-    return { server, tools: settleTools(handles, principal) };
+    return { server, tools: settleTools(handles, principal, extras.offSections) };
   }
 
   /** The SKILL.md for `principal` — see skill.ts. `url` overrides the endpoint it names. */
   async skillFor(principal: Principal, url?: string, extras: McpExtras = {}): Promise<string> {
     const whoami = await this.whoami(principal);
+    const offSections = extras.offSections ?? (await this.features.offEverywhere(whoami.workspaces.map((w) => w.workspaceId)));
     return renderSkill({
       url: url ?? this.publicUrl(),
       serverName: MCP_SERVER_NAME,
@@ -228,7 +237,7 @@ export class McpService extends McpServices {
       authMode: this.config.get('AUTH_MODE') === 'api-key' ? 'api-key' : 'none',
       webUrl: this.webUrl(),
       whoami,
-      tools: this.toolsFor(principal, extras),
+      tools: this.toolsFor(principal, { ...extras, offSections }),
       learnings: await this.learningsFor(whoami),
       git: this.config.get('GIT_REMOTE_ENABLED') === true,
     });
@@ -277,19 +286,34 @@ export class McpService extends McpServices {
     return `${base}/v1/mcp`;
   }
 
-  async whoami(principal: Principal): Promise<McpWhoami> {
-    // WorkspacesService.list's rule (dev and platform admins see every
-    // workspace), read directly: WorkspacesModule carries a controller and so
-    // cannot load in the stdio process.
+  /**
+   * The workspaces `principal` reaches, oldest first, and its role in each.
+   * WorkspacesService.list's rule (dev and platform admins see every
+   * workspace), read directly: WorkspacesModule carries a controller and so
+   * cannot load in the stdio process.
+   */
+  private async reachable(principal: Principal) {
     const pinned = principal.apiKey?.workspaceId ?? null;
     const seesAll = principal.mode === 'dev' || principal.isAdmin;
     const memberships = await this.prisma.workspaceMember.findMany({ where: { userId: principal.userId } });
     const roleOf = new Map(memberships.map((m) => [m.workspaceId, m.role as WorkspaceRole]));
     const ids = pinned ? [pinned] : seesAll ? undefined : [...roleOf.keys()];
-    const reachable = await this.prisma.workspace.findMany({
+    const found = await this.prisma.workspace.findMany({
       where: ids ? { id: { in: ids } } : {},
       orderBy: { createdAt: 'asc' },
     });
+    // A key pinned to a workspace its owner has since left reaches nothing.
+    return { workspaces: found.filter((w) => seesAll || roleOf.has(w.id)), roleOf };
+  }
+
+  /** The sections off in every workspace `principal` reaches (#945): `McpExtras.offSections`. */
+  async sectionsOffFor(principal: Principal): Promise<WorkspaceFeature[]> {
+    const { workspaces } = await this.reachable(principal);
+    return this.features.offEverywhere(workspaces.map((w) => w.id));
+  }
+
+  async whoami(principal: Principal): Promise<McpWhoami> {
+    const { workspaces: reachable, roleOf } = await this.reachable(principal);
     const projects = await Promise.all(
       reachable.map(async (w) => {
         // A key pinned to a workspace its person has left reaches no project in it.
@@ -311,26 +335,23 @@ export class McpService extends McpServices {
             projectIds: principal.apiKey.projectIds?.length ? principal.apiKey.projectIds : null,
           }
         : null,
-      workspaces: reachable
-        // A key pinned to a workspace its owner has since left reaches nothing.
-        .filter((w) => seesAll || roleOf.has(w.id))
-        .map((w) => {
-          const role = roleOf.get(w.id) ?? 'admin';
-          // A guest reads only what is granted to them (#76), so the workspace's
-          // project names are not theirs to list, and a read-only key cannot
-          // lift them to viewer.
-          const guest = role === 'guest';
-          return {
-            workspaceId: w.id,
-            name: w.name,
-            // What this connection may actually do, not merely the membership
-            // row: a read-only key caps it, and dev/platform admin has no row.
-            role: readOnly && !guest ? 'viewer' : role,
-            projects: guest
-              ? []
-              : projects[reachable.indexOf(w)].projects.map((p) => ({ projectId: p.projectId, name: p.name })),
-          };
-        }),
+      workspaces: reachable.map((w) => {
+        const role = roleOf.get(w.id) ?? 'admin';
+        // A guest reads only what is granted to them (#76), so the workspace's
+        // project names are not theirs to list, and a read-only key cannot
+        // lift them to viewer.
+        const guest = role === 'guest';
+        return {
+          workspaceId: w.id,
+          name: w.name,
+          // What this connection may actually do, not merely the membership
+          // row: a read-only key caps it, and dev/platform admin has no row.
+          role: readOnly && !guest ? 'viewer' : role,
+          projects: guest
+            ? []
+            : projects[reachable.indexOf(w)].projects.map((p) => ({ projectId: p.projectId, name: p.name })),
+        };
+      }),
     };
   }
 

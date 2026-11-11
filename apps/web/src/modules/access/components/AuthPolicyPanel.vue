@@ -18,11 +18,11 @@ import { ApiRequestError } from '@/shared/api/http'
 import { errorMessage } from '@/shared/api/errors'
 import { getWorkspaceId } from '@/shared/api/api'
 import { formatList } from '@/shared/utils/format'
-import { Button } from '@/shared/ui/button'
-import { confirm } from '@/shared/ui/confirm'
-import { Checkbox } from '@/shared/ui/checkbox'
-import { Input } from '@/shared/ui/input'
-import { PageState } from '@/shared/layout'
+import { Button } from '@knowledge/ui/button'
+import { confirm } from '@knowledge/ui/confirm'
+import { Checkbox } from '@knowledge/ui/checkbox'
+import { Input } from '@knowledge/ui/input'
+import { PageState } from '@knowledge/ui/layout'
 
 const { t } = useI18n()
 const workspaceId = getWorkspaceId()

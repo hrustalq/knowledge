@@ -6,7 +6,7 @@
  * a rail this dense, a subtree arriving in one frame shifts every row below it
  * and you lose the page you were aiming at.
  */
-import { Collapse } from '@/shared/ui/collapse'
+import { Collapse } from '@knowledge/ui/collapse'
 
 defineProps<{
   open: boolean

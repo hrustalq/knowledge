@@ -16,7 +16,7 @@
  */
 import { useI18n } from 'vue-i18n'
 import { X } from 'lucide-vue-next'
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/shared/ui/dialog'
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@knowledge/ui/dialog'
 
 defineProps<{ open: boolean; title: string; subtitle?: string }>()
 const emit = defineEmits<{ 'update:open': [boolean] }>()

@@ -20,9 +20,9 @@ import { errorMessage } from '@/shared/api/errors'
 import { getWorkspaceId } from '@/shared/api/api'
 import { formatBytes, formatDateTime, formatRelative } from '@/shared/utils/format'
 import { useAuthStore } from '@/stores/auth'
-import { Badge } from '@/shared/ui/badge'
-import { Button } from '@/shared/ui/button'
-import { PageState } from '@/shared/layout'
+import { Badge } from '@knowledge/ui/badge'
+import { Button } from '@knowledge/ui/button'
+import { PageState } from '@knowledge/ui/layout'
 import { UserChip } from '@/entities/person'
 
 const { t } = useI18n()

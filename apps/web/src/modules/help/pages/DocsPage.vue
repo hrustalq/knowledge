@@ -19,7 +19,7 @@ import { computed, ref } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { Search, Sparkles, X } from 'lucide-vue-next'
 import { articles, sections, searchArticles, type DocArticle } from '@/modules/help/docs/registry'
-import { Input } from '@/shared/ui/input'
+import { Input } from '@knowledge/ui/input'
 
 const { t } = useI18n()
 const route = useRoute()

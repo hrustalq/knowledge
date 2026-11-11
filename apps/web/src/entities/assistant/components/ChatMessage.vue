@@ -15,7 +15,7 @@ import { BookmarkCheck, BookmarkPlus, Check, CircleHelp, Copy, CornerDownRight, 
 import { toast } from 'vue-sonner'
 import type { AssistantFlowAnswer, AssistantMessageInfo, AssistantUiBlock, CaptureResult } from '@knowledge/contracts'
 import { assistantSourceHref, assistantSourceKey, isChatSource, isPageSource, isWebSource } from '@knowledge/contracts'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 import { MarkdownView } from '@/entities/document'
 import GenerativeUiBlock from '@/entities/assistant/components/GenerativeUiBlock.vue'
 import AssistantPrompt from './AssistantPrompt.vue'

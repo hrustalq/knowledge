@@ -21,7 +21,7 @@ import {
   type PublicSiteAskSource,
 } from '@knowledge/contracts/publishing'
 import { isApiErrorPayload } from '@knowledge/contracts'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 import { loadCitations } from '@/entities/assistant'
 import '@/assets/styles/citations.css'
 

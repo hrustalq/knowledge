@@ -19,7 +19,9 @@ import reader from './reader/en.json'
 const SRC = join(import.meta.dirname, '../..')
 
 // The public reader's catalog is separate (docs/features/43) but resolves the same way.
-// Merged per namespace: both carry `common` (the reader for the shared Sheet's close label).
+// Merged per namespace: both carry `search`, `export` and `category` for the components they share.
+// The UI kit's catalogue (`ui.*`) is merged into every app instance, but app code reads none
+// of it: the kit checks its own keys (packages/ui/src/messages/messages.spec.ts).
 const en: Record<string, unknown> = { ...app }
 for (const [ns, keys] of Object.entries(reader)) {
   en[ns] = { ...((en[ns] as object | undefined) ?? {}), ...keys }

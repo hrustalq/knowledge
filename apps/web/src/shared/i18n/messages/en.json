@@ -15,7 +15,6 @@
     "filter": "Filter",
     "loading": "Loading…",
     "saving": "Saving…",
-    "none": "None",
     "all": "All",
     "yes": "Yes",
     "no": "No",
@@ -28,14 +27,11 @@
     "clear": "Clear",
     "loadMore": "Load more",
     "loadingMore": "Loading more…",
-    "searchIn": "Search {label}…",
-    "noneYet": "No {label} yet.",
     "noMatchFor": "No match for {query}",
     "continue": "Continue",
     "send": "Send",
     "tooLarge": "That is too large to send. Split it up, or attach it as a file instead of pasting it.",
     "unknownError": "Something went wrong. Try again.",
-    "typeAtLeast": "Type at least {n} characters",
     "creating": "Creating…",
     "deleting": "Deleting…",
     "loadEarlier": "Load earlier",
@@ -60,10 +56,6 @@
     "removeNamed": "Remove {name}",
     "deleteNamed": "Delete {name}",
     "enableNamed": "Enable {name}",
-    "noMatches": "No matches",
-    "filterPlaceholder": "Filter…",
-    "searchPlaceholder": "Search…",
-    "openLarger": "Open {title} in a larger view",
     "assistant": "Assistant"
   },
   "page": {
@@ -7344,28 +7336,6 @@
       "ceiling": "This deployment creates at most {n} ticket per sweep (every ~15 s), across all workspaces. A large backlog is handed off over a few minutes. | This deployment creates at most {n} tickets per sweep (every ~15 s), across all workspaces. A large backlog is handed off over a few minutes.",
       "stopped": "This deployment has handoff rules switched off (WORK_ITEM_AUTOCREATE_MAX_PER_TICK=0 or WORK_ITEM_SYNC_ENABLED=false). Saved rules apply once they are back on."
     }
-  },
-  "imageViewer": {
-    "title": "Image preview",
-    "hint": "Click the image to see it at full size, drag to move around it, and use the arrow keys to go to the next or previous image.",
-    "open": "Open image",
-    "openNamed": "Open image: {name}",
-    "position": "Image {n} of {total}",
-    "fit": "Fit to screen",
-    "actualSize": "Actual size",
-    "previous": "Previous image",
-    "next": "Next image"
-  },
-  "diagramViewer": {
-    "title": "Diagram preview",
-    "hint": "Click the diagram to see it at its own size, drag to move around it, use + and − or Ctrl and the wheel to zoom, 0 to fit, and the arrow keys to go to the next or previous diagram.",
-    "open": "Open diagram",
-    "position": "Diagram {n} of {total}",
-    "zoomIn": "Zoom in",
-    "zoomOut": "Zoom out",
-    "fit": "Fit to screen ({percent}%)",
-    "previous": "Previous diagram",
-    "next": "Next diagram"
   },
   "pwa": {
     "updateReady": "A new version is available.",

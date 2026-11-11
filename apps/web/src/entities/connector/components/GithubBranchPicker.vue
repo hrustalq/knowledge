@@ -18,7 +18,7 @@ import { useQuery } from '@tanstack/vue-query'
 import { GitBranch } from 'lucide-vue-next'
 import type { GithubBranchesResponse } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/shared/api/queries'
-import Autocomplete, { type AutocompleteOption } from '@/shared/ui/autocomplete/Autocomplete.vue'
+import { Autocomplete, type AutocompleteOption } from '@knowledge/ui/autocomplete'
 
 const props = defineProps<{
   workspaceId: string

@@ -7,8 +7,8 @@
 import { nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, X } from 'lucide-vue-next'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
+import { Button } from '@knowledge/ui/button'
+import { Input } from '@knowledge/ui/input'
 import type { Row } from '@/modules/api-reference/model/test-fixture'
 
 const rows = defineModel<Row[]>({ required: true })

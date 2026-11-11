@@ -23,8 +23,8 @@ import { api } from '@/shared/api/client'
 import { errorMessage, errorReason } from '@/shared/api/errors'
 import { formatDateTime, formatNumber, formatRelative } from '@/shared/utils/format'
 import { useAuthStore } from '@/stores/auth'
-import { Badge } from '@/shared/ui/badge'
-import { Button } from '@/shared/ui/button'
+import { Badge } from '@knowledge/ui/badge'
+import { Button } from '@knowledge/ui/button'
 import { WorkItemChips } from '@/entities/document'
 
 const props = withDefaults(

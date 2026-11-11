@@ -16,9 +16,9 @@ import { api } from '@/shared/api/client'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
 import { getWorkspaceId } from '@/shared/api/api'
-import { Button } from '@/shared/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
-import { PageState } from '@/shared/layout'
+import { Button } from '@knowledge/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
+import { PageState } from '@knowledge/ui/layout'
 
 const { t } = useI18n()
 const queryClient = useQueryClient()

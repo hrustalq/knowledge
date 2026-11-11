@@ -4,9 +4,9 @@ import { ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { useAuthStore } from '@/stores/auth'
-import { Button } from '@/shared/ui/button'
-import { Card, CardContent, CardDescription, CardHeader } from '@/shared/ui/card'
-import { Input } from '@/shared/ui/input'
+import { Button } from '@knowledge/ui/button'
+import { Card, CardContent, CardDescription, CardHeader } from '@knowledge/ui/card'
+import { Input } from '@knowledge/ui/input'
 
 const { t } = useI18n()
 

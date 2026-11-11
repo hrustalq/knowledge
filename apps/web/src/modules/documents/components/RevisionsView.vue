@@ -15,20 +15,20 @@ import type {
 import { toast } from 'vue-sonner'
 import { api, fetchApi } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
-import { confirm } from '@/shared/ui/confirm'
+import { confirm } from '@knowledge/ui/confirm'
 import { statusVariant } from '@/shared/api/api'
-import { Badge } from '@/shared/ui/badge'
-import { Button } from '@/shared/ui/button'
-import { Skeleton } from '@/shared/ui/skeleton'
-import { RadioGroup, RadioGroupItem } from '@/shared/ui/radio-group'
+import { Badge } from '@knowledge/ui/badge'
+import { Button } from '@knowledge/ui/button'
+import { Skeleton } from '@knowledge/ui/skeleton'
+import { RadioGroup, RadioGroupItem } from '@knowledge/ui/radio-group'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/shared/ui/select'
-import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
+} from '@knowledge/ui/select'
+import { Card, CardContent, CardHeader, CardTitle } from '@knowledge/ui/card'
 import { DiffView } from '@/entities/document'
 import { UserChip } from '@/entities/person'
 import { ApiChangesPanel } from '@/entities/api-operation'

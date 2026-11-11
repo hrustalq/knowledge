@@ -79,6 +79,13 @@ module.exports = {
   ],
 
   options: {
+    // `@knowledge/ui` is the one package these rules do not cover (#941): it is
+    // Vue components, its only consumer is Vite, which resolves a relative
+    // import into source, and `shadcn-vue add` writes files that import each
+    // other relatively. No Node process may ever import it. Its own rules (no
+    // app, no other @knowledge/* package, cycles) are in
+    // packages/ui/.dependency-cruiser.cjs, run by `make deps` like these.
+    exclude: { path: '^packages/ui/' },
     doNotFollow: { path: 'node_modules' },
     tsPreCompilationDeps: true,
     enhancedResolveOptions: {

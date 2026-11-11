@@ -17,7 +17,7 @@ import { request } from '@/shared/api/client'
 import { errorMessage } from '@/shared/api/errors'
 import { formatBytes } from '@/shared/utils/format'
 import { presignedPut } from '@/shared/api/presigned-put'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 import { readDurationSeconds } from '../model/memo-ui'
 
 const props = defineProps<{

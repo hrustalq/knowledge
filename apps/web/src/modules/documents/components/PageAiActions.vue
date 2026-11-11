@@ -29,7 +29,7 @@ import { getWorkspaceId } from '@/shared/api/api'
 import { useCopy } from '@/shared/composables/use-copy'
 import { mcpClients } from '@/entities/access'
 import { agentLink, cursorMcpInstallUrl, openInVendor, pageMarkdownUrl, type ExternalVendor } from '@/modules/documents/model/ai-actions'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,7 +39,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
+} from '@knowledge/ui/dropdown-menu'
 
 const props = defineProps<{
   documentId: string

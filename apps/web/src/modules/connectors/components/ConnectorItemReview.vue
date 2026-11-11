@@ -32,9 +32,9 @@ import {
   Wand2,
 } from 'lucide-vue-next'
 import type { CompareResponse, ConnectorRunItemInfo } from '@knowledge/contracts'
-import { Button } from '@/shared/ui/button'
-import { Textarea } from '@/shared/ui/textarea'
-import { Collapse } from '@/shared/ui/collapse'
+import { Button } from '@knowledge/ui/button'
+import { Textarea } from '@knowledge/ui/textarea'
+import { Collapse } from '@knowledge/ui/collapse'
 import { DiffView } from '@/entities/document'
 import { RichEditor } from '@/entities/rich-editor'
 import { useDocumentsStore } from '@/stores/documents'

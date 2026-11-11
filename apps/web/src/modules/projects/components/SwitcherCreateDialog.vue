@@ -22,8 +22,8 @@ import { Check, Library, Loader2 } from 'lucide-vue-next'
 import { isApiRequestError } from '@/shared/api/queries'
 import { createWorkspace, type ScopeCreated } from '@/modules/projects/model/scopes'
 import { useWorkspacesStore } from '@/stores/workspaces'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
+import { Button } from '@knowledge/ui/button'
+import { Input } from '@knowledge/ui/input'
 import {
   Dialog,
   DialogContent,
@@ -31,7 +31,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
+} from '@knowledge/ui/dialog'
 import CreateProjectStep from './CreateProjectStep.vue'
 
 const { t } = useI18n()

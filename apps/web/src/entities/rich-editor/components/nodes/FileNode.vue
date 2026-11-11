@@ -5,7 +5,7 @@
 import { computed, ref } from 'vue'
 import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import { Download, ExternalLink, File, FileText, Maximize2, Minimize2, Trash2 } from 'lucide-vue-next'
-import { Collapse } from '@/shared/ui/collapse'
+import { Collapse } from '@knowledge/ui/collapse'
 import { resolveAssetUrl } from '@/shared/api/api'
 import { attachmentKind } from '@/core/markdown/nodes'
 import { formatBytes } from '@/shared/utils/format'

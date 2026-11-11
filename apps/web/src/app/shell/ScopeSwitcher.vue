@@ -21,7 +21,7 @@ import { useWorkspacesStore } from '@/stores/workspaces'
 import { getWorkspaceId } from '@/shared/api/api'
 import { avatarColor } from '@/core/avatar'
 import { initialsOf } from '@/core/monogram'
-import { Combobox, type ComboboxOption } from '@/shared/ui/combobox'
+import { Combobox, type ComboboxOption } from '@knowledge/ui/combobox'
 
 const { t } = useI18n()
 

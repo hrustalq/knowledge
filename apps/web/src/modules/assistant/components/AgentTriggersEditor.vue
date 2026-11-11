@@ -22,11 +22,11 @@ import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { getWorkspaceId, relativeTime } from '@/shared/api/api'
 import { formatList } from '@/shared/utils/format'
 import { useProjectsStore } from '@/stores/projects'
-import { Badge } from '@/shared/ui/badge'
-import { Button } from '@/shared/ui/button'
-import { Checkbox } from '@/shared/ui/checkbox'
-import { Input } from '@/shared/ui/input'
-import { Textarea } from '@/shared/ui/textarea'
+import { Badge } from '@knowledge/ui/badge'
+import { Button } from '@knowledge/ui/button'
+import { Checkbox } from '@knowledge/ui/checkbox'
+import { Input } from '@knowledge/ui/input'
+import { Textarea } from '@knowledge/ui/textarea'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,8 +36,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/shared/ui/alert-dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
+} from '@knowledge/ui/alert-dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
 
 const props = defineProps<{ agent: AiAgentSummary }>()
 const { t } = useI18n()

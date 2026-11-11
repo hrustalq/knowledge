@@ -25,8 +25,8 @@ import type {
 import { api } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
 import { formatRelative } from '@/shared/utils/format'
-import { Badge } from '@/shared/ui/badge'
-import { Button } from '@/shared/ui/button'
+import { Badge } from '@knowledge/ui/badge'
+import { Button } from '@knowledge/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -34,11 +34,11 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
-import { Label } from '@/shared/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
-import { Textarea } from '@/shared/ui/textarea'
-import PageState from '@/shared/layout/PageState.vue'
+} from '@knowledge/ui/dialog'
+import { Label } from '@knowledge/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
+import { Textarea } from '@knowledge/ui/textarea'
+import { PageState } from '@knowledge/ui/layout'
 import { UserChip } from '@/entities/person'
 
 const { t } = useI18n()

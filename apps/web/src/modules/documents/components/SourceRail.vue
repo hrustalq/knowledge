@@ -15,10 +15,10 @@ import { SOURCE_MISALIGNMENT_MODES, type DocumentSourceInfo, type DocumentSource
 import { relativeTime } from '@/shared/api/api'
 import { api, apiQueryOptions } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
-import { confirm } from '@/shared/ui/confirm'
+import { confirm } from '@knowledge/ui/confirm'
 import { formatDateTime } from '@/shared/utils/format'
-import { Button } from '@/shared/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
+import { Button } from '@knowledge/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
 import { SOURCE_INTERVAL_OPTIONS, intervalValue, toInterval } from '../model/source-intervals'
 import { recipeAttention } from '../model/source-recipe'
 

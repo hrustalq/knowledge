@@ -5,7 +5,7 @@
 // set. The caller owns the form around it: the question, Enter, submit.
 import { useI18n } from 'vue-i18n'
 import type { AssistantPromptField } from '@knowledge/contracts'
-import { Input } from '@/shared/ui/input'
+import { Input } from '@knowledge/ui/input'
 import type { PromptValues } from '@/entities/assistant/model/prompt-values'
 
 const { t } = useI18n()

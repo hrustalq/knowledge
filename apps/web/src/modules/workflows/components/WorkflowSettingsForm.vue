@@ -13,8 +13,8 @@
  */
 import { useI18n } from 'vue-i18n'
 import { DOCUMENT_CATEGORIES, KNOWN_EVENT_TYPES, REPO_EVENT_TYPES, type WorkflowTrigger } from '@knowledge/contracts'
-import { Checkbox } from '@/shared/ui/checkbox'
-import { Textarea } from '@/shared/ui/textarea'
+import { Checkbox } from '@knowledge/ui/checkbox'
+import { Textarea } from '@knowledge/ui/textarea'
 
 const props = defineProps<{
   description: string

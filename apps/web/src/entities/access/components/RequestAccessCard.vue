@@ -21,11 +21,11 @@ import { api } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
 import { errorMessage } from '@/shared/api/errors'
 import { formatRelative } from '@/shared/utils/format'
-import { Button } from '@/shared/ui/button'
-import { Label } from '@/shared/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
-import { Textarea } from '@/shared/ui/textarea'
-import PageState from '@/shared/layout/PageState.vue'
+import { Button } from '@knowledge/ui/button'
+import { Label } from '@knowledge/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
+import { Textarea } from '@knowledge/ui/textarea'
+import { PageState } from '@knowledge/ui/layout'
 
 const { t } = useI18n()
 

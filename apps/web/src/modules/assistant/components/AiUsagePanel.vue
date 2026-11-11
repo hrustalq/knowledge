@@ -2,18 +2,18 @@
 // Token spend per user, with a daily bar chart (DailyBars).
 import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
-import { formatCosts, formatNumber } from '@/shared/utils/format'
+import { formatCosts, formatNumber, formatDayMonth } from '@/shared/utils/format'
 import { useQuery } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 import type { AiBudgetInfo, AiUsageResponse, ListAiBudgetsResponse } from '@knowledge/contracts'
 import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
-import { Badge } from '@/shared/ui/badge'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
-import { Skeleton } from '@/shared/ui/skeleton'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
-import { DailyBars } from '@/shared/ui/daily-bars'
+import { Badge } from '@knowledge/ui/badge'
+import { Button } from '@knowledge/ui/button'
+import { Input } from '@knowledge/ui/input'
+import { Skeleton } from '@knowledge/ui/skeleton'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@knowledge/ui/table'
+import { DailyBars } from '@knowledge/ui/daily-bars'
 
 const { t } = useI18n()
 
@@ -170,6 +170,7 @@ function labelFor(userId: string): string {
             :to="data.to"
             :points="chartPoints"
             :segments="[{ class: 'bg-primary/60 hover:bg-primary' }]"
+            :day-label="formatDayMonth"
             :label="t('ai.tokensChartLabel', { n: days, peak: fmtTokens(chartMax) })"
             :point-title="
               (date, [tokens]) =>

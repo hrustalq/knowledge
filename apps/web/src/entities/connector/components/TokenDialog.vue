@@ -8,9 +8,9 @@
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Loader2 } from 'lucide-vue-next'
-import { Button } from '@/shared/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/shared/ui/dialog'
-import { Input } from '@/shared/ui/input'
+import { Button } from '@knowledge/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@knowledge/ui/dialog'
+import { Input } from '@knowledge/ui/input'
 
 const props = defineProps<{
   open: boolean

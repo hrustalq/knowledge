@@ -17,8 +17,8 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
-import { Input } from '@/shared/ui/input'
+} from '@knowledge/ui/dialog'
+import { Input } from '@knowledge/ui/input'
 
 const { t } = useI18n()
 

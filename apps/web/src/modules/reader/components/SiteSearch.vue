@@ -19,7 +19,7 @@ import { SITE_SEARCH_MIN_CHARS, type PublicSiteFacetsResponse } from '@knowledge
 import { FacetFields } from '@/entities/search'
 import { SearchSheetFrame } from '@/entities/search'
 import { useSearch } from '@/entities/search'
-import type { AutocompleteOption } from '@/shared/ui/autocomplete'
+import type { AutocompleteOption } from '@knowledge/ui/autocomplete'
 import { labelFor } from '@/shared/i18n/labels'
 import { isSearchShortcut } from '@/shared/utils/search-shortcut'
 import type { PublicSiteChrome } from '../model/reader-state'

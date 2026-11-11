@@ -144,7 +144,7 @@ components:
 
 **Creative North Star: "Ink on Paper, Graph Glow"**
 
-The phrase is not aspirational — it is already written at the top of `assets/style.css`,
+The phrase is not aspirational — it is already written at the top of the palette (`packages/ui/src/styles/tokens.css`),
 and the system has been obeying it. The ground is paper that was never bleached
 white (a warm near-white at hue 85°), the type is ink pressed into it, and exactly
 one cool indigo is allowed to glow: on links, on the active trail, on a focus ring,
@@ -289,7 +289,7 @@ long as they keep reading.
 ### UI Ramp
 
 Interface text outside prose uses five steps, declared as `--kn-text-*` in
-`assets/styles/tokens.css` (the export renderer inlines that file without Tailwind) and
+`packages/ui/src/styles/tokens.css` (the export renderer inlines that file without Tailwind) and
 mapped to `text-micro / caption / xs / ui / sm` utilities:
 
 - **micro** (10px / 0.875rem): kbd hints, count badges, avatar initials, chart and

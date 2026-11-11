@@ -14,8 +14,8 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute } from 'vue-router'
 import { CircleAlert, CircleCheck } from 'lucide-vue-next'
 import { readOauthLanding } from '@/modules/connectors/model/oauth-landing'
-import { Button } from '@/shared/ui/button'
-import { Card, CardContent, CardHeader } from '@/shared/ui/card'
+import { Button } from '@knowledge/ui/button'
+import { Card, CardContent, CardHeader } from '@knowledge/ui/card'
 
 const { t } = useI18n()
 const route = useRoute()

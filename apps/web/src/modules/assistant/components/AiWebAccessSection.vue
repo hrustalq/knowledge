@@ -22,11 +22,11 @@ import type {
 import { api } from '@/shared/api/client'
 import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
-import { Badge } from '@/shared/ui/badge'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
-import { Skeleton } from '@/shared/ui/skeleton'
-import { RadioGroup, RadioGroupItem } from '@/shared/ui/radio-group'
+import { Badge } from '@knowledge/ui/badge'
+import { Button } from '@knowledge/ui/button'
+import { Input } from '@knowledge/ui/input'
+import { Skeleton } from '@knowledge/ui/skeleton'
+import { RadioGroup, RadioGroupItem } from '@knowledge/ui/radio-group'
 
 const { t } = useI18n()
 

@@ -27,7 +27,7 @@ import type {
 } from '@knowledge/contracts'
 import { apiQueryOptions, useApiMutation, isApiRequestError } from '@/shared/api/queries'
 import { useAuthStore } from '@/stores/auth'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -35,16 +35,16 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
-import { Label } from '@/shared/ui/label'
-import { Textarea } from '@/shared/ui/textarea'
+} from '@knowledge/ui/dialog'
+import { Label } from '@knowledge/ui/label'
+import { Textarea } from '@knowledge/ui/textarea'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/shared/ui/select'
+} from '@knowledge/ui/select'
 import { mrIcon } from '@/entities/merge-request'
 import { actorLabel } from '@/entities/person'
 import { lintCheckView, useLintChecks } from '../model/lint-check'

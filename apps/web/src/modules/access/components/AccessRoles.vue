@@ -23,16 +23,16 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ShieldCheck, Wrench } from 'lucide-vue-next'
 import type { WorkspaceMemberEntry, WorkspaceRole } from '@knowledge/contracts'
-import { Badge } from '@/shared/ui/badge'
-import { Button } from '@/shared/ui/button'
-import { Checkbox } from '@/shared/ui/checkbox'
+import { Badge } from '@knowledge/ui/badge'
+import { Button } from '@knowledge/ui/button'
+import { Checkbox } from '@knowledge/ui/checkbox'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/shared/ui/select'
+} from '@knowledge/ui/select'
 import { UserChip } from '@/entities/person'
 
 const { t } = useI18n()

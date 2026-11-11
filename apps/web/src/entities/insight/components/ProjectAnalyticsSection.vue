@@ -10,10 +10,10 @@ import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { TRAFFIC_CLASSES, type ProjectAnalyticsResponse } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/shared/api/queries'
-import { formatDate, formatDuration, formatNumber, formatRelative } from '@/shared/utils/format'
-import { Button } from '@/shared/ui/button'
-import { Skeleton } from '@/shared/ui/skeleton'
-import { DailyBars } from '@/shared/ui/daily-bars'
+import { formatDate, formatDuration, formatNumber, formatRelative, formatDayMonth } from '@/shared/utils/format'
+import { Button } from '@knowledge/ui/button'
+import { Skeleton } from '@knowledge/ui/skeleton'
+import { DailyBars } from '@knowledge/ui/daily-bars'
 import { TRAFFIC_BAR, TRAFFIC_SEGMENTS, trafficPoints } from '../model/traffic'
 
 const props = defineProps<{ projectId: string }>()
@@ -105,6 +105,7 @@ const deadPending = computed(() => {
               :points="points"
               :segments="TRAFFIC_SEGMENTS"
               :height="64"
+              :day-label="formatDayMonth"
               :label="t('analytics.viewsChartLabel', { n: days })"
               :point-title="(date, [human, assisted, agent]) => t('analytics.chartPoint', { date, human, assisted, agent })"
             />

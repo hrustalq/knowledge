@@ -8,8 +8,8 @@
 import { useI18n } from 'vue-i18n'
 import { EXPORT_FORMATS, type ExportFormat } from '@knowledge/contracts'
 import { exportFormatAvailable } from '@/core/export-formats'
-import { Label } from '@/shared/ui/label'
-import { RadioGroup, RadioGroupItem } from '@/shared/ui/radio-group'
+import { Label } from '@knowledge/ui/label'
+import { RadioGroup, RadioGroupItem } from '@knowledge/ui/radio-group'
 
 defineProps<{ formats?: Record<ExportFormat, boolean> | null }>()
 const format = defineModel<ExportFormat>({ required: true })

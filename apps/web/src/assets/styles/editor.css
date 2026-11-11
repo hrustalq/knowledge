@@ -148,7 +148,7 @@
 }
 .markdown-body hr, .kn-prose hr { border: none; border-top: 1px solid var(--border); margin: 1.75em 0; }
 .markdown-body img, .kn-prose img { max-width: 100%; border-radius: 8px; }
-/* A read-mode image or diagram opens a lightbox (#467, #476; lib/image-gallery, lib/diagram-gallery). */
+/* A read-mode image or diagram opens a lightbox (#467, #476; @knowledge/ui/lightbox). */
 [data-kn-zoom], [data-kn-diagram] { cursor: zoom-in; }
 [data-kn-zoom]:focus-visible, [data-kn-diagram]:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 [data-kn-diagram] { border-radius: 8px; }

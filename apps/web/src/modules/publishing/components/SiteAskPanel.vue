@@ -15,10 +15,10 @@ import { useI18n } from 'vue-i18n'
 import { Check, Copy } from 'lucide-vue-next'
 import { SITE_ASK_BUDGET_MAX, SITE_EMBED_ORIGINS_MAX, type ProjectSiteResponse, type PublishedSiteSummary } from '@knowledge/contracts'
 import { useCopy } from '@/shared/composables/use-copy'
-import { Badge } from '@/shared/ui/badge'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
-import { Textarea } from '@/shared/ui/textarea'
+import { Badge } from '@knowledge/ui/badge'
+import { Button } from '@knowledge/ui/button'
+import { Input } from '@knowledge/ui/input'
+import { Textarea } from '@knowledge/ui/textarea'
 
 const props = defineProps<{
   site: PublishedSiteSummary

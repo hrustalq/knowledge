@@ -10,7 +10,7 @@ import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { Loader2, Plus, Sparkles, X } from 'lucide-vue-next'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 import type { SuiteFixtures } from '../model/use-suite-fixtures'
 
 const props = defineProps<{ fixtures: SuiteFixtures; canBind: boolean; hasSuite: boolean; canGenerate: boolean; generating: boolean }>()

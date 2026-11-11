@@ -25,10 +25,7 @@ import { resolveAssetUrl } from '@/shared/api/api'
 import { useTheme } from '@/shared/utils/theme'
 import { mermaidConfig, mermaidSvg } from '@/shared/utils/mermaid'
 import { createRevealTracker, wrapRuns } from '@/shared/utils/stream-reveal'
-import { markZoomable } from '@/shared/utils/image-gallery'
-import { markDiagrams } from '@/shared/utils/diagram-gallery'
-import ImageLightbox from '@/shared/ui/lightbox/ImageLightbox.vue'
-import DiagramLightbox from '@/shared/ui/lightbox/DiagramLightbox.vue'
+import { DiagramLightbox, ImageLightbox, markDiagrams, markZoomable } from '@knowledge/ui/lightbox'
 
 // Several roots (the body and the lightboxes), so a parent's class lands on the body by hand.
 defineOptions({ inheritAttrs: false })

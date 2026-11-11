@@ -35,11 +35,10 @@ import type {
   ReviewThread,
   ReviewThreadAnchor,
 } from '@knowledge/contracts'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 import { RichEditor } from '@/entities/rich-editor'
 import { EMBED_DOCUMENT } from '@/entities/rich-editor'
-import ImageLightbox from '@/shared/ui/lightbox/ImageLightbox.vue'
-import DiagramLightbox from '@/shared/ui/lightbox/DiagramLightbox.vue'
+import { DiagramLightbox, ImageLightbox } from '@knowledge/ui/lightbox'
 import { ANCHOR_ATTR, anchorFromDomSelection, anchorFromRange, anchorsAtEvent, blockRangeAt, linesAt, type AnchorAuthor, type CommentAnchor } from '@/entities/rich-editor'
 import type { TextAnchor } from '@/core/anchor-match'
 import { slugifyHeading } from '@/core/markdown/render'

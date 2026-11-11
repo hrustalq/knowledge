@@ -22,14 +22,14 @@ import { useI18n } from 'vue-i18n'
 import { computed, nextTick, ref, watch } from 'vue'
 import { refDebounced } from '@vueuse/core'
 import { Search } from 'lucide-vue-next'
-import { Autocomplete, type AutocompleteOption } from '@/shared/ui/autocomplete'
+import { Autocomplete, type AutocompleteOption } from '@knowledge/ui/autocomplete'
 import {
   FilterChip,
   defaultOperators,
   type ActiveFilter,
   type FilterField,
   type FilterOperator,
-} from '@/shared/ui/filter-bar'
+} from '@knowledge/ui/filter-bar'
 import { useAuthStore } from '@/stores/auth'
 import {
   MR_BRANCH_FIELDS,

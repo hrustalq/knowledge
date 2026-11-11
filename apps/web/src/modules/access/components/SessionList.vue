@@ -13,7 +13,7 @@ import type { SessionView } from '@knowledge/contracts'
 import { formatRelative } from '@/shared/utils/format'
 import { labelFor } from '@/shared/i18n/labels'
 import { describeUserAgent } from '@/core/user-agent'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 
 const props = defineProps<{
   sessions: SessionView[]

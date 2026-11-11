@@ -32,16 +32,16 @@ import { relativeTime } from '@/shared/api/api'
 import { labelFor } from '@/shared/i18n/labels'
 import { useAuthStore } from '@/stores/auth'
 import { useWorkflowsStore } from '@/entities/workflow'
-import { Badge } from '@/shared/ui/badge'
-import { Button, buttonVariants } from '@/shared/ui/button'
-import { Skeleton } from '@/shared/ui/skeleton'
+import { Badge } from '@knowledge/ui/badge'
+import { Button, buttonVariants } from '@knowledge/ui/button'
+import { Skeleton } from '@knowledge/ui/skeleton'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
+} from '@knowledge/ui/dropdown-menu'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,7 +51,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/shared/ui/alert-dialog'
+} from '@knowledge/ui/alert-dialog'
 import WorkflowMap from '@/modules/workflows/components/WorkflowMap.vue'
 import { describeChain } from '@/entities/workflow'
 

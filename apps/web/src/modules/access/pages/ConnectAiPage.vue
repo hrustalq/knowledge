@@ -44,12 +44,12 @@ import { formatDate, formatRelative } from '@/shared/utils/format'
 import { KEY_ENV, SKILL_NAME, captureKitFileRole, captureKitInstallCommand, mcpClients, skillInstallCommand } from '@/entities/access'
 import { useWorkspacesStore } from '@/stores/workspaces'
 import { useProjectsStore } from '@/stores/projects'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
-import { Label } from '@/shared/ui/label'
-import { Badge } from '@/shared/ui/badge'
-import { Skeleton } from '@/shared/ui/skeleton'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
+import { Button } from '@knowledge/ui/button'
+import { Input } from '@knowledge/ui/input'
+import { Label } from '@knowledge/ui/label'
+import { Badge } from '@knowledge/ui/badge'
+import { Skeleton } from '@knowledge/ui/skeleton'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -59,7 +59,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/shared/ui/alert-dialog'
+} from '@knowledge/ui/alert-dialog'
 import { CopyBlock } from '@/entities/access'
 
 const { t } = useI18n()

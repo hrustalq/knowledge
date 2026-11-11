@@ -31,8 +31,8 @@ import { NOTIFICATION_CATEGORIES } from '@knowledge/contracts'
 import { useQueryClient } from '@tanstack/vue-query'
 import { api, fetchApi } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
-import { Button } from '@/shared/ui/button'
-import { Skeleton } from '@/shared/ui/skeleton'
+import { Button } from '@knowledge/ui/button'
+import { Skeleton } from '@knowledge/ui/skeleton'
 import { categoryLook } from '@/modules/notifications/model/notification-ui'
 
 const { t } = useI18n()

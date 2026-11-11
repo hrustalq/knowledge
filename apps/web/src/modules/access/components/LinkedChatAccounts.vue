@@ -15,7 +15,7 @@ import { api } from '@/shared/api/client'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
 import { formatDate } from '@/shared/utils/format'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 
 const { t } = useI18n()
 const queryClient = useQueryClient()

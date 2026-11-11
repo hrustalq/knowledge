@@ -6,7 +6,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import { resolveAssetUrl } from '@/shared/api/api'
-import { ZOOM_ATTR, zoomLabel } from '@/shared/utils/image-gallery'
+import { ZOOM_ATTR, zoomLabel } from '@knowledge/ui/lightbox'
 import { startWidthDrag } from './width-drag'
 
 const props = defineProps(nodeViewProps)

@@ -26,12 +26,12 @@ import { getProjectId, getWorkspaceId } from '@/shared/api/api'
 import { api, fetchApi, isApiRequestError } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
 import { presignedPut } from '@/shared/api/presigned-put'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
-import { Label } from '@/shared/ui/label'
-import { Textarea } from '@/shared/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
-import { PageLayout, PageState } from '@/shared/layout'
+import { Button } from '@knowledge/ui/button'
+import { Input } from '@knowledge/ui/input'
+import { Label } from '@knowledge/ui/label'
+import { Textarea } from '@knowledge/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
+import { PageLayout, PageState } from '@knowledge/ui/layout'
 
 const { t } = useI18n()
 const route = useRoute()

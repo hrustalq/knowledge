@@ -15,8 +15,8 @@ import { useQuery } from '@tanstack/vue-query'
 import { CONFLICT_STATUSES, type ConflictStatus, type ListConflictsResponse } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
-import { Button } from '@/shared/ui/button'
-import { PageLayout, PageState, PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@/shared/layout'
+import { Button } from '@knowledge/ui/button'
+import { PageLayout, PageState, PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@knowledge/ui/layout'
 import ConflictCard from '@/modules/documents/components/ConflictCard.vue'
 
 const { t } = useI18n()

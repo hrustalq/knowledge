@@ -11,7 +11,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
-import { Badge } from '@/shared/ui/badge'
+import { Badge } from '@knowledge/ui/badge'
 import { useAuthStore } from '@/stores/auth'
 import { aiSectionLabel } from '@/modules/assistant/model/ai-sections'
 import AiConfigPanel from '@/modules/assistant/components/AiConfigPanel.vue'

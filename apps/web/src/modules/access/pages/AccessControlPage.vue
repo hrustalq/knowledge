@@ -39,12 +39,12 @@ import { getWorkspaceId } from '@/shared/api/api'
 import { useAuthStore } from '@/stores/auth'
 import { useWorkspacesStore } from '@/stores/workspaces'
 import DeleteWorkspaceDialog from '@/modules/access/components/DeleteWorkspaceDialog.vue'
-import { Autocomplete, type AutocompleteOption } from '@/shared/ui/autocomplete'
-import { Badge } from '@/shared/ui/badge'
+import { Autocomplete, type AutocompleteOption } from '@knowledge/ui/autocomplete'
+import { Badge } from '@knowledge/ui/badge'
 import { UserChip } from '@/entities/person'
-import { Button } from '@/shared/ui/button'
-import { confirm } from '@/shared/ui/confirm'
-import { Checkbox } from '@/shared/ui/checkbox'
+import { Button } from '@knowledge/ui/button'
+import { confirm } from '@knowledge/ui/confirm'
+import { Checkbox } from '@knowledge/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -52,29 +52,29 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
+} from '@knowledge/ui/dialog'
 import {
   FilterBar,
   filterRows,
   type ActiveFilter,
   type FilterAccessors,
   type FilterField,
-} from '@/shared/ui/filter-bar'
-import { Input } from '@/shared/ui/input'
-import { Label } from '@/shared/ui/label'
+} from '@knowledge/ui/filter-bar'
+import { Input } from '@knowledge/ui/input'
+import { Label } from '@knowledge/ui/label'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/shared/ui/select'
-import { Skeleton } from '@/shared/ui/skeleton'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/ui/tooltip'
+} from '@knowledge/ui/select'
+import { Skeleton } from '@knowledge/ui/skeleton'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@knowledge/ui/tooltip'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/shared/ui/table'
-import { PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@/shared/layout'
+} from '@knowledge/ui/table'
+import { PageTabs, panelId, tabId, usePageTabs, type PageTab } from '@knowledge/ui/layout'
 import AccessRoles from '@/modules/access/components/AccessRoles.vue'
 import AccessAccounts from '@/modules/access/components/AccessAccounts.vue'
 import AccessGroups from '@/modules/access/components/AccessGroups.vue'

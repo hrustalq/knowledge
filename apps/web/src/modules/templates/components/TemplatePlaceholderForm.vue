@@ -11,9 +11,9 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { TemplatePlaceholder, TemplateValues } from '@knowledge/contracts'
-import { Input } from '@/shared/ui/input'
-import { Label } from '@/shared/ui/label'
-import { Autocomplete, type AutocompleteOption } from '@/shared/ui/autocomplete'
+import { Input } from '@knowledge/ui/input'
+import { Label } from '@knowledge/ui/label'
+import { Autocomplete, type AutocompleteOption } from '@knowledge/ui/autocomplete'
 import { useMembers } from '@/entities/person'
 import { useDocumentsStore } from '@/stores/documents'
 

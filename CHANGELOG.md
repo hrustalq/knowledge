@@ -54,6 +54,21 @@ in the pull request that introduces them — see
   two numbers. `GET /v1/plaud/settings` returns `transcribe.speakers`, and the "Transcribe here" dialog says
   which kind of transcript you will get. (#878)
 
+- **You can say who a memo's speakers are.** A memo's page lists its speakers, each with a choice of workspace
+  members or "Nobody here". A matched speaker is shown by name in the transcript. A speaker name seen before in
+  the same project starts matched, from your earlier memo; a name that fits exactly one member is offered as a
+  guess with a Confirm button and counts for nothing until you press it. A numbered voice (Speaker 1) can be
+  matched on its own memo but is never carried to the next one. `PUT /v1/memos/:id/speakers { label, userId }`
+  (editor, the uploader only) writes a match and `GET /v1/memos/:id` returns `speakers`. Being matched gives that
+  person no access to the memo and sends them nothing. (#880)
+
+### Changed
+
+- **The agent that reads a memo may now name people.** It is told who the speakers you matched are, and may say
+  whose decision or action something is in the pages it proposes. It still names nobody you have not matched.
+  Only matches that exist when it starts reading count, so for a first recording with new speaker names its
+  proposals stay unattributed. Until now it was told never to name who said what. (#880)
+
 ### Fixed
 
 - **A Plaud recording you have just transcribed in the Plaud app no longer sits under "waiting" on `/memos`.** The
@@ -71,6 +86,9 @@ in the pull request that introduces them — see
   transcript line now runs the full width of its column at body text size; it was held to 65 characters. (#874)
 
 ### Operations
+
+- Migration `20270108100000_memo_speakers` adds the nullable column `memos.speakers`. It is additive and survives a
+  rollback to the previous release.
 
 - New optional variable `TRANSCRIPTION_SPEAKERS` (default `false`). It is read only with
   `TRANSCRIPTION_PROVIDER=gen-api`, where it switches transcription from gen-api's `gen-stt` to its

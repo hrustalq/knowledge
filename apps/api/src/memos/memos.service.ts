@@ -23,6 +23,7 @@ import {
   type MemoListResponse,
   type MemoSegment,
   type MemoSource,
+  type MemoSpeaker,
   type MemoStatus,
   type MemoTranscriptionState,
 } from '@knowledge/contracts';
@@ -31,6 +32,7 @@ import type { Principal } from '../auth/principal.js';
 import { AiUsageService } from '../ai/ai-usage.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { PlaudError } from '../plaud/plaud.client.js';
+import { loadSpeakers, readChoices, speakerLabels } from './speakers.js';
 import { PlaudService } from '../plaud/plaud.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
@@ -270,6 +272,7 @@ export class MemosService {
     const memo = toInfo(row);
     return {
       memo,
+      speakers: (await loadSpeakers(this.prisma, row)).speakers,
       progress: memoProgressFor(
         memo,
         run && {
@@ -324,6 +327,25 @@ export class MemosService {
   async rename(principal: Principal, memoId: string, title: string): Promise<MemoInfo> {
     const row = await this.require(principal, memoId);
     return toInfo(await this.prisma.memo.update({ where: { id: row.id }, data: { title } }));
+  }
+
+  /**
+   * The uploader says who a speaker is, or that it is nobody here (#880).
+   * The label must be one the transcript uses and the person a member of the
+   * memo's workspace: a match names someone to the secretary, so neither is
+   * taken on trust. Matching gives that person no access to the memo.
+   */
+  async matchSpeaker(principal: Principal, memoId: string, label: string, userId: string | null): Promise<MemoSpeaker[]> {
+    const row = await this.require(principal, memoId);
+    const labels = speakerLabels(Array.isArray(row.transcript) ? (row.transcript as unknown as MemoSegment[]) : []);
+    if (!labels.includes(label)) throw new BadRequestException(t('error.memo.speakerUnknown'));
+    if (userId) {
+      const member = await this.prisma.workspaceMember.findFirst({ where: { workspaceId: row.workspaceId, userId }, select: { userId: true } });
+      if (!member) throw new BadRequestException(t('error.memo.speakerNotMember'));
+    }
+    const speakers = { ...readChoices(row.speakers), [label]: userId };
+    await this.prisma.memo.update({ where: { id: row.id }, data: { speakers } });
+    return (await loadSpeakers(this.prisma, { ...row, speakers })).speakers;
   }
 
   /**

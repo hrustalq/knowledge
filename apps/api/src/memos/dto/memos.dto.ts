@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsInt, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsInt, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, IsUUID, MaxLength, ValidateIf } from 'class-validator';
 import { vmsg } from '../../common/validation.js';
 
 export class RenameMemoDto {
@@ -10,6 +10,19 @@ export class RenameMemoDto {
   @IsNotEmpty()
   @MaxLength(300, { message: vmsg('maxLength') })
   title!: string;
+}
+
+export class MatchMemoSpeakerDto {
+  @ApiProperty({ description: 'A speaker label exactly as the transcript has it' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(300, { message: vmsg('maxLength') })
+  label!: string;
+
+  @ApiProperty({ type: String, format: 'uuid', nullable: true, description: 'A member of the workspace, or null for nobody here' })
+  @ValidateIf((_, value) => value !== null)
+  @IsUUID()
+  userId!: string | null;
 }
 
 export class CreateMemoDto {

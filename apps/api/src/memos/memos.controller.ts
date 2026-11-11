@@ -1,11 +1,11 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Redirect } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, Redirect } from '@nestjs/common';
 import { ApiExcludeEndpoint, ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { CreateMemoResponse, MemoDetailResponse, MemoListResponse, MemoResponse } from '@knowledge/contracts';
+import type { CreateMemoResponse, MemoDetailResponse, MemoListResponse, MemoResponse, MemoSpeakersResponse } from '@knowledge/contracts';
 import { Access, CurrentPrincipal, Feature } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { Returns } from '../common/returns.decorator.js';
-import { CreateMemoDto, ImportPlaudMemoDto, ListMemosQueryDto, RenameMemoDto } from './dto/memos.dto.js';
+import { CreateMemoDto, ImportPlaudMemoDto, ListMemosQueryDto, MatchMemoSpeakerDto, RenameMemoDto } from './dto/memos.dto.js';
 import { MemosService } from './memos.service.js';
 
 /**
@@ -65,6 +65,14 @@ export class MemosController {
   @ApiOperation({ summary: 'Rename a memo' })
   async rename(@Param('id', ParseUUIDPipe) id: string, @Body() dto: RenameMemoDto, @CurrentPrincipal() principal: Principal): Promise<MemoResponse> {
     return { memo: await this.memos.rename(principal, id, dto.title) };
+  }
+
+  @Put(':id/speakers')
+  @Returns('MemoSpeakersResponse')
+  @Access('editor', 'memo')
+  @ApiOperation({ summary: 'Say who one of the memo\'s speakers is, or that it is nobody here' })
+  async matchSpeaker(@Param('id', ParseUUIDPipe) id: string, @Body() dto: MatchMemoSpeakerDto, @CurrentPrincipal() principal: Principal): Promise<MemoSpeakersResponse> {
+    return { speakers: await this.memos.matchSpeaker(principal, id, dto.label, dto.userId) };
   }
 
   @Delete(':id')

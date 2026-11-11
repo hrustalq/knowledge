@@ -115,6 +115,18 @@ export interface MemoProposal {
   mergeRequestId: string | null;
 }
 
+/**
+ * Who one of a memo's speakers is (#880). `userId` is a match that holds:
+ * `confirmed` on this memo by its uploader, or `remembered` from their earlier
+ * memo in the same project. `suggestedUserId` is only a guess from the label.
+ */
+export interface MemoSpeaker {
+  label: string;
+  userId: string | null;
+  source: 'confirmed' | 'remembered' | null;
+  suggestedUserId: string | null;
+}
+
 /** The steps a memo moves through; a Plaud memo arrives with the first two behind it. */
 export const MEMO_STEPS = ['upload', 'transcribe', 'analyse', 'publish'] as const;
 export type MemoStep = (typeof MEMO_STEPS)[number];
@@ -154,10 +166,17 @@ export function memoProgressFor(
   }
 }
 
+// PUT /v1/memos/:id/speakers
+export interface MemoSpeakersResponse {
+  speakers: MemoSpeaker[];
+}
+
 export interface MemoDetailResponse {
   memo: MemoInfo;
   /** Null once the memo is done or failed. */
   progress: MemoProgress | null;
+  /** One entry per speaker label in the transcript, in the order they first speak. */
+  speakers: MemoSpeaker[];
   transcript: MemoSegment[];
   summary: string | null;
   proposals: MemoProposal[];

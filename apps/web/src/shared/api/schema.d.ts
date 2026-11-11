@@ -5051,6 +5051,23 @@ export interface paths {
         patch: operations["MemosController_rename"];
         trace?: never;
     };
+    "/v1/memos/{id}/speakers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Say who one of the memo's speakers is, or that it is nobody here */
+        put: operations["MemosController_matchSpeaker"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/plaud/link": {
         parameters: {
             query?: never;
@@ -10019,6 +10036,15 @@ export interface components {
             /** @description Shown in the list and on the memo; a Plaud memo keeps Plaud's own name as its filename */
             title: string;
         };
+        MatchMemoSpeakerDto: {
+            /** @description A speaker label exactly as the transcript has it */
+            label: string;
+            /**
+             * Format: uuid
+             * @description A member of the workspace, or null for nobody here
+             */
+            userId: string | null;
+        };
         PlaudRulesDto: {
             /** @description Only recordings started on or after this day, YYYY-MM-DD. Unset = the day the settings were first saved */
             since?: string;
@@ -14724,6 +14750,7 @@ export interface components {
         MemoDetailResponse: {
             memo: components["schemas"]["MemoInfo"];
             progress: components["schemas"]["MemoProgress"] | null;
+            speakers: components["schemas"]["MemoSpeaker"][];
             transcript: components["schemas"]["MemoSegment"][];
             summary: string | null;
             proposals: components["schemas"]["MemoProposal"][];
@@ -14789,6 +14816,16 @@ export interface components {
         };
         /** @enum {string} */
         MemoSource: "upload" | "plaud";
+        MemoSpeaker: {
+            label: string;
+            userId: string | null;
+            /** @enum {string|null} */
+            source: "confirmed" | "remembered" | null;
+            suggestedUserId: string | null;
+        };
+        MemoSpeakersResponse: {
+            speakers: components["schemas"]["MemoSpeaker"][];
+        };
         /** @enum {string} */
         MemoStatus: "pending" | "uploaded" | "transcribing" | "transcribed" | "analysing" | "done" | "failed";
         /** @enum {string} */
@@ -33829,6 +33866,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MemoResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MemosController_matchSpeaker: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MatchMemoSpeakerDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoSpeakersResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

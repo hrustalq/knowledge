@@ -1083,8 +1083,6 @@ model AssistantThread {
   // Document the pane was opened from, if any — the default chat grounding.
   documentId  String?  @map("document_id") @db.Uuid
   title       String?
-  /// Retired by #798 for `modelId`. Kept so the previous image can roll back over it.
-  providerId  String?  @map("provider_id") @db.Uuid
   /// ai_models row pinned to this thread by whoever is chatting. Null = whatever
   /// the workspace routes 'chat' at. No FK, like the routing columns.
   modelId     String?  @map("model_id") @db.Uuid
@@ -1317,14 +1315,7 @@ model AiSettings {
   defaultUserMonthlyTokenBudget BigInt? @map("default_user_monthly_token_budget")
   enforceBudget                 Boolean @default(false) @map("enforce_budget")
 
-  /// Retired by #798 for the `*ModelId` columns below. Kept so the previous image
-  /// can roll back over them.
-  chatProviderId       String? @map("chat_provider_id") @db.Uuid
-  reviewProviderId     String? @map("review_provider_id") @db.Uuid
-  extractionProviderId String? @map("extraction_provider_id") @db.Uuid
-  decisionProviderId   String? @map("decision_provider_id") @db.Uuid
-
-  /// Per-purpose routing into ai_models. Null = fall back to the columns above,
+  /// Per-purpose routing into ai_models. Null = fall back to the inline config above,
   /// then to the ASSISTANT_* env vars — so a workspace that never adds a model
   /// behaves exactly as it did before.
   chatModelId       String? @map("chat_model_id") @db.Uuid
@@ -1421,23 +1412,12 @@ model AiProvider {
   /// 'openai-compatible' | 'deepseek'
   provider     String
   baseUrl      String? @map("base_url")
-  /// Retired by #798, as are the prices and capabilities below: they moved to
-  /// ai_models. The default lets the previous image read a row written since.
-  model        String  @default("")
   /// AES-256-GCM envelope; never leaves the API process.
   apiKeyCipher String? @map("api_key_cipher")
 
   temperature  Float?
   maxToolCalls Int?   @map("max_tool_calls")
   timeoutMs    Int?   @map("timeout_ms")
-
-  pricePromptPerMTok     Decimal? @map("price_prompt_per_mtok") @db.Decimal(12, 6)
-  priceCompletionPerMTok Decimal? @map("price_completion_per_mtok") @db.Decimal(12, 6)
-  priceCachedPerMTok     Decimal? @map("price_cached_per_mtok") @db.Decimal(12, 6)
-  /// 'USD' | 'RUB'. Null with a price set means USD, as prices were before #793.
-  priceCurrency          String?  @map("price_currency")
-
-  capabilities Json?
 
   /// Off hides every model of this provider from every picker. Pins at them are
   /// kept and fall through until it is back on.
@@ -1581,8 +1561,6 @@ model AiAgent {
   /// string[] of ai_skills ids always attached to this agent's turns.
   skillIds     Json?   @map("skill_ids")
 
-  /// Retired by #798 for `modelId`. Kept so the previous image can roll back over it.
-  providerId String? @map("provider_id") @db.Uuid
   /// ai_models row pinned to this agent. Null falls through to the purpose route,
   /// then the inline config, then env (feature 12's chain). No FK, matching the
   /// other routing columns (house style).

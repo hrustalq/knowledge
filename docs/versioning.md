@@ -119,6 +119,15 @@ That makes a destructive schema change **two releases**, never one:
 | `N`     | _Expand._ Add the new column nullable, backfill it, write to both shapes. |
 | `N+1`   | _Contract._ Switch reads over, then drop the old column.                  |
 
+With Prisma, dropping the column takes **one more release**. A `findMany` or
+`findUnique` with no `select` reads every field the schema declares, so the
+previous image fails on a dropped column even if no code uses that field. That
+happens during the rollout too, because migrations apply before the new image
+starts. Contract therefore takes two steps: one release removes the field from
+`schema.prisma` and adds no migration, so the column stays in the database
+unread. The release after that drops it, and its **Operations** entry says how
+far back a rollback can go. #803 is the worked example.
+
 `apps/api/prisma/migrations/20260907160044_projects_layer` is the worked example of
 the nullable → `UPDATE` → `SET NOT NULL` shape (and of why `make db-migrate-new`
 cannot express it — see the gotcha in `CLAUDE.md`).

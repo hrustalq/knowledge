@@ -85,6 +85,11 @@ export class PlaudImportIdsDto {
   @ArrayMaxSize(200)
   @IsUUID(undefined, { each: true })
   ids!: string[];
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'Where these go instead of my settings\' project; remembered for a recording that is imported later' })
+  @IsOptional()
+  @IsUUID()
+  projectId?: string;
 }
 
 export class PlaudTranscribeDto {
@@ -95,4 +100,9 @@ export class PlaudTranscribeDto {
   @ApiProperty({ format: 'uuid', description: 'One of my recordings that is waiting for a Plaud transcript' })
   @IsUUID()
   id!: string;
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'Where these go instead of my settings\' project; remembered for a recording that is imported later' })
+  @IsOptional()
+  @IsUUID()
+  projectId?: string;
 }

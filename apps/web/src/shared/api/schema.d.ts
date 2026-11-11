@@ -10055,6 +10055,11 @@ export interface components {
             workspaceId: string;
             /** @description One or many; ids that are not my open recordings are ignored */
             ids: string[];
+            /**
+             * Format: uuid
+             * @description Where these go instead of my settings' project; remembered for a recording that is imported later
+             */
+            projectId?: string;
         };
         PlaudTranscribeDto: {
             /** Format: uuid */
@@ -10064,6 +10069,11 @@ export interface components {
              * @description One of my recordings that is waiting for a Plaud transcript
              */
             id: string;
+            /**
+             * Format: uuid
+             * @description Where these go instead of my settings' project; remembered for a recording that is imported later
+             */
+            projectId?: string;
         };
         WorkflowDraftMessageDto: {
             /** @enum {string} */
@@ -15040,6 +15050,7 @@ export interface components {
             startAt: string | null;
             durationSeconds: number;
             status: components["schemas"]["PlaudImportStatus"];
+            projectId: string | null;
             memoId: string | null;
             error: string | null;
             createdAt: string;

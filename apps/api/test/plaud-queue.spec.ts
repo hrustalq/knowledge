@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import type { Principal } from '../src/auth/principal.js';
 import { PlaudImportSweeper } from '../src/plaud/plaud-import.sweeper.js';
 import { PlaudImportsService } from '../src/plaud/plaud-imports.service.js';
@@ -80,7 +80,7 @@ function setup(over: { rules?: object; projectId?: string | null; maxPerDay?: nu
     }),
     findUnique: vi.fn(async () => link),
   };
-  const prisma = { plaudImport, plaudLink };
+  const prisma = { plaudImport, plaudLink, project: { findFirst: vi.fn(async ({ where }: { where: { id: string } }) => (where.id === 'gone' ? null : { id: where.id })) } };
   const transcribed = new Set<string>();
   const plaud = {
     list: vi.fn(async (): Promise<unknown[] | null> => []),
@@ -191,6 +191,28 @@ describe('PlaudImportsService.sweepLink', () => {
     transcribed.add('b');
     await sweep();
     expect(statuses(rows).b).toBe('imported');
+  });
+
+  it('files a recording into the project chosen for it, and remembers that for one imported later (#877)', async () => {
+    const { service, sweep, rows, plaud, memos, transcribed } = setup();
+    plaud.list.mockResolvedValue([rec('a'), rec('b'), rec('c')]);
+    await sweep();
+    transcribed.add('a').add('c');
+
+    // Chosen and ready: imported there now. Chosen ahead: kept on the row.
+    await service.confirm(me, WS, ['i-a', 'i-b'], 'p2');
+    expect(memos.importPlaud).toHaveBeenCalledWith(me, expect.objectContaining({ projectId: 'p2', fileId: 'a' }));
+    expect(rows.find((r) => r.id === 'i-b')).toMatchObject({ status: 'confirmed', projectId: 'p2' });
+    transcribed.add('b');
+    await sweep();
+    expect(memos.importPlaud).toHaveBeenLastCalledWith(me, expect.objectContaining({ projectId: 'p2', fileId: 'b' }));
+
+    // No choice: the settings' project, as before.
+    await service.confirm(me, WS, ['i-c']);
+    expect(memos.importPlaud).toHaveBeenLastCalledWith(me, expect.objectContaining({ projectId: 'p1', fileId: 'c' }));
+
+    // A project that is not this workspace's is refused before anything is written.
+    await expect(service.confirm(me, WS, ['i-c'], 'gone')).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('looks again when the person asks, but not twice inside the floor', async () => {

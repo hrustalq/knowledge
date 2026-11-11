@@ -236,6 +236,8 @@ export interface PlaudImportEntry {
   startAt: string | null;
   durationSeconds: number;
   status: PlaudImportStatus;
+  /** The project chosen for this recording; null = the settings' project when it is imported. */
+  projectId: string | null;
   /** The memo it became. */
   memoId: string | null;
   error: string | null;

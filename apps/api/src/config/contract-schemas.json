@@ -18010,6 +18010,10 @@
       "status": {
         "$ref": "#/components/schemas/PlaudImportStatus"
       },
+      "projectId": {
+        "type": "string",
+        "nullable": true
+      },
       "memoId": {
         "type": "string",
         "nullable": true
@@ -18028,6 +18032,7 @@
       "startAt",
       "durationSeconds",
       "status",
+      "projectId",
       "memoId",
       "error",
       "createdAt"

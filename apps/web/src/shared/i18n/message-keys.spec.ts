@@ -3,6 +3,7 @@ import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import app from './messages/en.json'
 import reader from './reader/en.json'
+import ui from '../ui/messages/en.json'
 
 /**
  * Every static `t('…')` key in the web source must resolve to a message in
@@ -19,11 +20,15 @@ import reader from './reader/en.json'
 const SRC = join(import.meta.dirname, '../..')
 
 // The public reader's catalog is separate (docs/features/43) but resolves the same way.
-// Merged per namespace: both carry `common` (the reader for the shared Sheet's close label).
-const en: Record<string, unknown> = { ...app }
+// Merged per namespace: both carry `search`, `export` and `category` for the components they share.
+// The UI kit's catalogue (`ui.*`) is merged into every app instance.
+const en: Record<string, unknown> = { ...app, ...ui }
 for (const [ns, keys] of Object.entries(reader)) {
   en[ns] = { ...((en[ns] as object | undefined) ?? {}), ...keys }
 }
+
+// The kit and the page chrome own their strings: they read `ui.*` and nothing else (#941).
+const KIT = /^shared\/(ui|layout)\//
 
 // `t(`, `$t(`, `te(`, `tm(` — but not `emit(`, `split(`, or `x.t(` on some other object.
 const CALL = /(?<![\w$.])\$?(?:t|te|tm)\(\s*(['"])([^'"`\n]+?)\1/g
@@ -56,7 +61,7 @@ describe('web i18n message keys', () => {
       for (const match of text.matchAll(CALL)) {
         const key = match[2]!
         checked++
-        if (!resolves(key)) {
+        if (!resolves(key) || (KIT.test(relative(SRC, file)) && !key.startsWith('ui.'))) {
           const line = text.slice(0, match.index).split('\n').length
           missing.push(`${relative(SRC, file)}:${line}  ${key}`)
         }
@@ -89,7 +94,7 @@ describe('web i18n message keys', () => {
       ...Array.from(source.matchAll(/labelFor\([^,]*,\s*'([^']+)'/g), (m) => `${m[1]!}.`),
     ]
 
-    const unused = leafKeys(app).filter(
+    const unused = leafKeys({ ...app, ...ui }).filter(
       (key) =>
         !literals.has(key) &&
         !prefixes.some((prefix) => key.startsWith(prefix)) &&

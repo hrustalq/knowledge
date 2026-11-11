@@ -14,7 +14,7 @@ describe('image gallery', () => {
     const [first, linked, second] = root.querySelectorAll('img')
     expect(zoomableAt(linked!)).toBeNull()
     expect(zoomableAt(second!)).toBe(second)
-    expect(second!.getAttribute('aria-label')).toBe('imageViewer.openNamed second')
+    expect(second!.getAttribute('aria-label')).toBe('ui.imageViewer.openNamed second')
     expect(second!.tabIndex).toBe(0)
 
     const { images, index } = galleryFrom(root, second!)

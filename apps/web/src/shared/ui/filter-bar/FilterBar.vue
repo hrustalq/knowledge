@@ -107,24 +107,24 @@ function removeAt(index: number) {
       class="h-7 px-2 text-xs"
       @click="emit('update:modelValue', modelValue.filter((f) => fieldsByKey.get(f.key)?.pinned))"
     >
-      {{ t('common.clear') }}
+      {{ t('ui.common.clear') }}
     </Button>
 
     <FilterPopover
       :items="pickerItems"
-      :search-placeholder="t('common.filterPlaceholder')"
-      :empty-label="t('filter.noFiltersLeft')"
+      :search-placeholder="t('ui.common.filterPlaceholder')"
+      :empty-label="t('ui.filter.noFiltersLeft')"
       @select="addField"
     >
       <template #trigger="{ toggle }">
         <button
           type="button"
           class="text-muted-foreground hover:bg-accent hover:text-foreground flex h-7 items-center gap-1.5 rounded-md px-2 text-xs transition-colors"
-          :aria-label="emptyLabel ?? t('common.filter')"
+          :aria-label="emptyLabel ?? t('ui.common.filter')"
           @click="toggle"
         >
           <ListFilter class="size-3.5" />
-          <span v-if="clearable.length === 0">{{ emptyLabel ?? t('common.filter') }}</span>
+          <span v-if="clearable.length === 0">{{ emptyLabel ?? t('ui.common.filter') }}</span>
         </button>
       </template>
     </FilterPopover>

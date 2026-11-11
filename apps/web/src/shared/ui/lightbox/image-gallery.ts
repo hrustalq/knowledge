@@ -17,7 +17,7 @@ type Translate = (key: string, named?: Record<string, unknown>) => string
 
 /** The screen-reader name of an image that opens the lightbox. */
 export function zoomLabel(t: Translate, name: string): string {
-  return name ? t('imageViewer.openNamed', { name }) : t('imageViewer.open')
+  return name ? t('ui.imageViewer.openNamed', { name }) : t('ui.imageViewer.open')
 }
 
 /** Mark every image under `root` that is not inside a link. */

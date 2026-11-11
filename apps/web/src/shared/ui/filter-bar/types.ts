@@ -14,10 +14,10 @@ export type FilterOperator = 'is' | 'is-not' | 'contains' | 'not-contains'
 
 /** Message keys — resolve with `t()` at render (module scope has no locale). */
 export const OPERATOR_LABELS: Record<FilterOperator, string> = {
-  'is': 'filter.operator.is',
-  'is-not': 'filter.operator.isNot',
-  'contains': 'filter.operator.contains',
-  'not-contains': 'filter.operator.notContains',
+  'is': 'ui.filter.operator.is',
+  'is-not': 'ui.filter.operator.isNot',
+  'contains': 'ui.filter.operator.contains',
+  'not-contains': 'ui.filter.operator.notContains',
 }
 
 export interface FilterOption {

@@ -59,18 +59,18 @@ const heading = computed(() => {
   if (props.title) return props.title
   switch (props.state) {
     case 'error':
-      return t('page.errorTitle')
+      return t('ui.page.errorTitle')
     case 'forbidden':
-      return t('page.forbiddenTitle')
+      return t('ui.page.forbiddenTitle')
     default:
-      return t('page.empty')
+      return t('ui.page.empty')
   }
 })
 
 const body = computed(() => {
   if (props.description) return props.description
   if (props.state === 'error' && props.error !== undefined) return errorText(props.error)
-  if (props.state === 'forbidden') return t('page.forbiddenHint')
+  if (props.state === 'forbidden') return t('ui.page.forbiddenHint')
   return ''
 })
 

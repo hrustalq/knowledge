@@ -77,7 +77,7 @@ defineExpose({
       v-else
       type="button"
       class="text-muted-foreground hover:bg-accent hover:text-foreground h-full border-l px-2 whitespace-nowrap transition-colors"
-      :title="t('filter.changeOperator', { options: operators.map((o) => t(OPERATOR_LABELS[o])).join(' / ') })"
+      :title="t('ui.filter.changeOperator', { options: operators.map((o) => t(OPERATOR_LABELS[o])).join(' / ') })"
       @click="cycleOperator"
     >
       {{ t(OPERATOR_LABELS[filter.operator]) }}
@@ -125,7 +125,7 @@ defineExpose({
       v-if="!field.pinned"
       type="button"
       class="text-muted-foreground hover:bg-accent hover:text-foreground h-full border-l px-1.5 transition-colors"
-      :aria-label="t('filter.removeFilter', { field: field.label })"
+      :aria-label="t('ui.filter.removeFilter', { field: field.label })"
       @click="emit('remove')"
     >
       <X class="size-3.5" />

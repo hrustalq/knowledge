@@ -110,14 +110,14 @@ const { t } = useI18n()
         <ComboboxInput
           v-model="search"
           auto-focus
-          :placeholder="searchPlaceholder ?? t('common.filterPlaceholder')"
+          :placeholder="searchPlaceholder ?? t('ui.common.filterPlaceholder')"
           class="placeholder:text-muted-foreground h-9 w-full bg-transparent pr-3 pl-9 text-ui outline-none"
         />
       </div>
 
       <ComboboxViewport class="quiet-scroll min-h-0 flex-1 overflow-y-auto p-1">
         <ComboboxEmpty class="text-muted-foreground px-3 py-6 text-center text-xs">
-          {{ emptyLabel ?? t('common.noMatches') }}
+          {{ emptyLabel ?? t('ui.common.noMatches') }}
         </ComboboxEmpty>
 
         <template v-for="([group, groupItems], i) in sections" :key="group || '_'">

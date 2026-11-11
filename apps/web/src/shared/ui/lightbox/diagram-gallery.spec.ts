@@ -13,7 +13,7 @@ describe('diagram gallery', () => {
 
     const [mermaid, drawing] = diagramsIn(root)
     expect(diagramsIn(root)).toHaveLength(2)
-    expect(mermaid!.getAttribute('aria-label')).toBe('diagramViewer.open')
+    expect(mermaid!.getAttribute('aria-label')).toBe('ui.diagramViewer.open')
     expect(mermaid!.tabIndex).toBe(0)
 
     expect(diagramAt(mermaid!.querySelector('rect'))).toBe(mermaid)

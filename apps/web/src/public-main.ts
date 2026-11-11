@@ -6,6 +6,9 @@ import { russianPluralRule } from './shared/i18n/plural'
 // would put both whole app catalogs into the reader's bundle.
 import en from './shared/i18n/reader/en.json'
 import ruCatalog from './shared/i18n/reader/ru.json'
+// The UI kit's own strings (`ui.*`): the sheet's close label, the lightboxes, the filter inputs.
+import uiEn from './shared/ui/messages/en.json'
+import uiRuCatalog from './shared/ui/messages/ru.json'
 import { SharePage, SitePage, SiteWidget, type PublicReaderState } from './modules/reader'
 import './assets/style.css'
 
@@ -18,6 +21,7 @@ import './assets/style.css'
  */
 // English is the key vocabulary; a gap in ru fails vue-tsc, as in i18n/index.ts.
 const ru: typeof en = ruCatalog
+const uiRu: typeof uiEn = uiRuCatalog
 
 /** The reader's strings for `locale`, for the few the server needs outside a component. */
 export function readerMessages(locale: Locale): (typeof en)['shareReader'] {
@@ -40,7 +44,7 @@ export function createPublicApp(state: PublicReaderState) {
       fallbackLocale: DEFAULT_LOCALE,
       missingWarn: false,
       fallbackWarn: false,
-      messages: { en, ru },
+      messages: { en: { ...en, ...uiEn }, ru: { ...ru, ...uiRu } },
       // The shared search sheet's filter counts are plural strings (#205).
       pluralRules: { ru: russianPluralRule },
     }),

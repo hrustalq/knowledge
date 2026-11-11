@@ -57,8 +57,8 @@ const { t } = useI18n()
         <button
           v-if="open && expandable"
           class="mr-1.5 shrink-0 rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          :title="t('common.openLarger', { title })"
-          :aria-label="t('common.openLarger', { title })"
+          :title="t('ui.common.openLarger', { title })"
+          :aria-label="t('ui.common.openLarger', { title })"
           @click="emit('expand')"
         >
           <Maximize2 class="size-3.5" />

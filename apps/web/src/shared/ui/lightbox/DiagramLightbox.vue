@@ -152,12 +152,12 @@ function onKeydown(event: KeyboardEvent) {
       @keydown="onKeydown"
     >
       <div class="flex min-w-0 items-center gap-1 px-3 py-2 sm:px-4">
-        <DialogTitle class="sr-only">{{ t('diagramViewer.title') }}</DialogTitle>
-        <DialogDescription class="sr-only">{{ t('diagramViewer.hint') }}</DialogDescription>
+        <DialogTitle class="sr-only">{{ t('ui.diagramViewer.title') }}</DialogTitle>
+        <DialogDescription class="sr-only">{{ t('ui.diagramViewer.hint') }}</DialogDescription>
         <p
           v-if="total > 1"
           class="flex-1 font-mono text-xs tabular-nums text-muted-foreground"
-          :aria-label="t('diagramViewer.position', { n: index + 1, total })"
+          :aria-label="t('ui.diagramViewer.position', { n: index + 1, total })"
           aria-live="polite"
         >
           {{ index + 1 }} / {{ total }}
@@ -167,8 +167,8 @@ function onKeydown(event: KeyboardEvent) {
           type="button"
           :class="headerButton"
           :disabled="!zoomed"
-          :aria-label="t('diagramViewer.zoomOut')"
-          :title="t('diagramViewer.zoomOut')"
+          :aria-label="t('ui.diagramViewer.zoomOut')"
+          :title="t('ui.diagramViewer.zoomOut')"
           @click="zoomTo(scale / STEP)"
         >
           <ZoomOut class="size-4" />
@@ -176,8 +176,8 @@ function onKeydown(event: KeyboardEvent) {
         <button
           type="button"
           class="h-8 min-w-14 rounded-md px-1.5 font-mono text-xs tabular-nums text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-3 focus-visible:ring-ring"
-          :aria-label="t('diagramViewer.fit', { percent })"
-          :title="t('diagramViewer.fit', { percent })"
+          :aria-label="t('ui.diagramViewer.fit', { percent })"
+          :title="t('ui.diagramViewer.fit', { percent })"
           @click="zoomTo(1)"
         >
           {{ percent }}%
@@ -186,8 +186,8 @@ function onKeydown(event: KeyboardEvent) {
           type="button"
           :class="headerButton"
           :disabled="scale >= maxScale - 0.001"
-          :aria-label="t('diagramViewer.zoomIn')"
-          :title="t('diagramViewer.zoomIn')"
+          :aria-label="t('ui.diagramViewer.zoomIn')"
+          :title="t('ui.diagramViewer.zoomIn')"
           @click="zoomTo(scale * STEP)"
         >
           <ZoomIn class="size-4" />
@@ -195,7 +195,7 @@ function onKeydown(event: KeyboardEvent) {
         <kbd class="mx-1 hidden rounded border bg-muted px-1.5 py-0.5 font-mono text-micro text-muted-foreground sm:inline-block">
           Esc
         </kbd>
-        <DialogClose :class="headerButton" :aria-label="t('common.close')">
+        <DialogClose :class="headerButton" :aria-label="t('ui.common.close')">
           <X class="size-4" />
         </DialogClose>
       </div>
@@ -226,7 +226,7 @@ function onKeydown(event: KeyboardEvent) {
             type="button"
             :class="[navButton, 'left-2 sm:left-4']"
             :disabled="index === 0"
-            :aria-label="t('diagramViewer.previous')"
+            :aria-label="t('ui.diagramViewer.previous')"
             @click.stop="go(index - 1)"
           >
             <ChevronLeft class="size-5" />
@@ -235,7 +235,7 @@ function onKeydown(event: KeyboardEvent) {
             type="button"
             :class="[navButton, 'right-2 sm:right-4']"
             :disabled="index === total - 1"
-            :aria-label="t('diagramViewer.next')"
+            :aria-label="t('ui.diagramViewer.next')"
             @click.stop="go(index + 1)"
           >
             <ChevronRight class="size-5" />

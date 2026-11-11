@@ -14,7 +14,7 @@ type Translate = (key: string, named?: Record<string, unknown>) => string
 
 /** The attributes that make a rendered diagram a button that opens the lightbox. */
 export function diagramAttrs(t: Translate): Record<string, string> {
-  return { [DIAGRAM_ATTR]: '', tabindex: '0', role: 'button', 'aria-label': t('diagramViewer.open') }
+  return { [DIAGRAM_ATTR]: '', tabindex: '0', role: 'button', 'aria-label': t('ui.diagramViewer.open') }
 }
 
 /** Mark every rendered diagram under `root` (MarkdownView's and the public reader's markup). */

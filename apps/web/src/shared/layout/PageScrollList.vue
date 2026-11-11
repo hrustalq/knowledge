@@ -149,7 +149,7 @@ watch(rows, (window) => {
          is in flight. Scrolling asks on its own before anyone gets here. -->
     <div v-if="hasMore" class="flex justify-center border-t p-2">
       <Button size="sm" variant="ghost" :disabled="loadingMore" @click="emit('load-more')">
-        {{ loadingMore ? t('common.loadingMore') : t('common.loadMore') }}
+        {{ loadingMore ? t('ui.common.loadingMore') : t('ui.common.loadMore') }}
       </Button>
     </div>
   </div>

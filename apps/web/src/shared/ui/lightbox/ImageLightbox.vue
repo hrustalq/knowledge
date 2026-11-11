@@ -104,12 +104,12 @@ function onStageClick(event: MouseEvent) {
       @keydown="onKeydown"
     >
       <div class="flex min-w-0 items-center gap-2 px-3 py-2 sm:px-4">
-        <DialogTitle class="sr-only">{{ t('imageViewer.title') }}</DialogTitle>
-        <DialogDescription class="sr-only">{{ t('imageViewer.hint') }}</DialogDescription>
+        <DialogTitle class="sr-only">{{ t('ui.imageViewer.title') }}</DialogTitle>
+        <DialogDescription class="sr-only">{{ t('ui.imageViewer.hint') }}</DialogDescription>
         <p
           v-if="images.length > 1"
           class="flex-1 font-mono text-xs tabular-nums text-muted-foreground"
-          :aria-label="t('imageViewer.position', { n: index + 1, total: images.length })"
+          :aria-label="t('ui.imageViewer.position', { n: index + 1, total: images.length })"
           aria-live="polite"
         >
           {{ index + 1 }} / {{ images.length }}
@@ -120,8 +120,8 @@ function onStageClick(event: MouseEvent) {
           :class="headerButton"
           :disabled="!canZoom"
           :aria-pressed="zoomed"
-          :aria-label="zoomed ? t('imageViewer.fit') : t('imageViewer.actualSize')"
-          :title="zoomed ? t('imageViewer.fit') : t('imageViewer.actualSize')"
+          :aria-label="zoomed ? t('ui.imageViewer.fit') : t('ui.imageViewer.actualSize')"
+          :title="zoomed ? t('ui.imageViewer.fit') : t('ui.imageViewer.actualSize')"
           @click="toggleZoom()"
         >
           <ZoomOut v-if="zoomed" class="size-4" />
@@ -130,7 +130,7 @@ function onStageClick(event: MouseEvent) {
         <kbd class="hidden rounded border bg-muted px-1.5 py-0.5 font-mono text-micro text-muted-foreground sm:inline-block">
           Esc
         </kbd>
-        <DialogClose :class="headerButton" :aria-label="t('common.close')">
+        <DialogClose :class="headerButton" :aria-label="t('ui.common.close')">
           <X class="size-4" />
         </DialogClose>
       </div>
@@ -164,7 +164,7 @@ function onStageClick(event: MouseEvent) {
             type="button"
             :class="[navButton, 'left-2 sm:left-4']"
             :disabled="index === 0"
-            :aria-label="t('imageViewer.previous')"
+            :aria-label="t('ui.imageViewer.previous')"
             @click.stop="go(index - 1)"
           >
             <ChevronLeft class="size-5" />
@@ -173,7 +173,7 @@ function onStageClick(event: MouseEvent) {
             type="button"
             :class="[navButton, 'right-2 sm:right-4']"
             :disabled="index === images.length - 1"
-            :aria-label="t('imageViewer.next')"
+            :aria-label="t('ui.imageViewer.next')"
             @click.stop="go(index + 1)"
           >
             <ChevronRight class="size-5" />

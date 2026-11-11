@@ -45,7 +45,7 @@ const open = computed({
         <AlertDialogDescription v-if="shown.description">{{ shown.description }}</AlertDialogDescription>
       </AlertDialogHeader>
       <AlertDialogFooter>
-        <AlertDialogCancel>{{ shown.cancel ?? t('common.cancel') }}</AlertDialogCancel>
+        <AlertDialogCancel>{{ shown.cancel ?? t('ui.common.cancel') }}</AlertDialogCancel>
         <AlertDialogAction :variant="shown.destructive ? 'destructive' : 'default'" @click="settleConfirm(true)">
           {{ shown.action }}
         </AlertDialogAction>

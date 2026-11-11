@@ -418,7 +418,7 @@ const listId = useId()
         autocomplete="off"
         :aria-expanded="open"
         :aria-controls="listId"
-        :placeholder="placeholder ?? t('common.searchPlaceholder')"
+        :placeholder="placeholder ?? t('ui.common.searchPlaceholder')"
         :disabled="disabled || (!load && isEmptyRoster)"
         :class="bare
           ? 'h-6 w-full bg-transparent pr-6 text-xs outline-none placeholder:text-muted-foreground disabled:opacity-50'
@@ -522,13 +522,13 @@ const listId = useId()
               class="px-3 py-1.5 text-xs text-muted-foreground"
             >
               <template v-if="belowMin">
-                {{ t('common.typeAtLeast', { n: props.minQueryLength }) }}
+                {{ t('ui.common.typeAtLeast', { n: props.minQueryLength }) }}
               </template>
               <template v-else-if="isEmptyRoster && emptyHint">{{ emptyHint }}</template>
               <template v-else-if="query.trim() !== ''">
-                {{ t('common.noMatchFor', { query: `“${query}”` }) }}
+                {{ t('ui.common.noMatchFor', { query: `“${query}”` }) }}
               </template>
-              <template v-else>{{ emptyHint ?? t('common.none') }}</template>
+              <template v-else>{{ emptyHint ?? t('ui.common.none') }}</template>
             </p>
           </div>
         </div>
@@ -552,7 +552,7 @@ const listId = useId()
         <button
           type="button"
           class="rounded-full p-0.5 transition-colors hover:bg-primary/20"
-          :aria-label="t('common.removeNamed', { name: o.label })"
+          :aria-label="t('ui.common.removeNamed', { name: o.label })"
           @click="remove(o.value)"
         >
           <X class="size-3" />

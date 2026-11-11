@@ -13,6 +13,28 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.50.1] — 2026-11-11
+
+### Operations
+
+- **Migration `20270112100000_drop_legacy_credentials` deletes data and cannot be undone. From this release on, a
+  rollback can go no further back than v0.50.0.** It drops the pre-credentials copies of connector and sign-in
+  secrets that v0.50.0 stopped reading and writing: `connectors.credential` / `credential_hint`,
+  `connections.credential` / `credential_hint`, and the tables `github_user_tokens` and `figma_oauth_grants`. Every
+  secret already lives in `credentials`, so no connector loses its token. The drop also stops an image from
+  v0.47.0–v0.49.x from recreating a disconnected GitHub or Figma sign-in out of those stale rows. An image older
+  than v0.50.0 still declares these fields and fails against the migrated database. Chat bot tokens
+  (`chat_integrations.credential`) are untouched. After deploying, run **Test connection** on one token connector
+  and on the Figma OAuth connector. (#908)
+- **Migration `20270113100000_drop_retired_provider_columns` deletes data and cannot be undone. It holds the same
+  rollback floor, v0.50.0.** It drops the provider columns that v0.46.0 replaced with per-provider models and that
+  v0.50.0 stopped declaring: `ai_settings.chat_provider_id` / `review_provider_id` / `extraction_provider_id` /
+  `decision_provider_id`, `ai_agents.provider_id`, `assistant_threads.provider_id`, and `ai_providers.model`,
+  `price_prompt_per_mtok`, `price_completion_per_mtok`, `price_cached_per_mtok`, `price_currency` and
+  `capabilities`. Routes, agent and thread pins, prices and capabilities already live in `ai_models`, so nothing
+  changes for a reader. Attribution columns (`provider_id` on `ai_usage`, `agent_runs`, `answer_feedback`) stay.
+  (#803)
+
 ## [0.50.0] — 2026-11-11
 
 ### Changed
@@ -6730,7 +6752,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.50.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.50.1...HEAD
+[0.50.1]: https://github.com/hrustalq/knowledge/compare/v0.50.0...v0.50.1
 [0.50.0]: https://github.com/hrustalq/knowledge/compare/v0.49.2...v0.50.0
 [0.49.2]: https://github.com/hrustalq/knowledge/compare/v0.49.1...v0.49.2
 [0.49.1]: https://github.com/hrustalq/knowledge/compare/v0.49.0...v0.49.1

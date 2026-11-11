@@ -7774,6 +7774,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/mcp/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The skill as a stack of SKILL.md files for the caller: a core skill plus one per offered toolset that has a playbook */
+        get: operations["McpController_skills"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mcp/skills/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The skill stack as a POSIX shell script that installs it into a client's skills directory and removes a skill no longer offered */
+        get: operations["McpController_skillsInstaller"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/mcp/capture-kit": {
         parameters: {
             query?: never;
@@ -8036,6 +8070,8 @@ export interface components {
             workspaceId?: string;
             /** @description Pin a 'capture' key to these projects (at most 20); omit for every project. Refused on any other scope. */
             projectIds?: string[];
+            /** @description Limit the key to these MCP toolsets ('core' is always added); omit for every toolset. A key with a list works over MCP only: it is refused on REST routes, the git remote and plain-markdown URLs. */
+            toolsets?: ("core" | "authoring" | "quality" | "review" | "graph" | "conflicts" | "captures" | "qa" | "api-reference" | "code" | "connectors" | "workflows" | "agents" | "insights" | "memos" | "sharing" | "embeds" | "chat" | "projects" | "drafts")[];
             /** @description Days until the key stops working (1–365); omit for no expiry. */
             expiresInDays?: number;
         };
@@ -11967,6 +12003,7 @@ export interface components {
             scope: components["schemas"]["ApiKeyScope"];
             workspaceId: string | null;
             projectIds: string[] | null;
+            toolsets: components["schemas"]["McpToolset"][] | null;
             expiresAt: string | null;
             lastUsedAt: string | null;
             createdAt: string;
@@ -14809,12 +14846,21 @@ export interface components {
             authMode: "none" | "api-key";
             version: string;
             tools: components["schemas"]["McpToolSummary"][];
+            notOffered: {
+                toolset: components["schemas"]["McpToolset"];
+                reason: components["schemas"]["McpToolsetOffReason"];
+            }[];
         };
         McpToolSummary: {
             name: string;
             description: string;
+            toolset: components["schemas"]["McpToolset"];
             readOnly: boolean;
         };
+        /** @enum {string} */
+        McpToolset: "core" | "authoring" | "quality" | "review" | "graph" | "conflicts" | "captures" | "qa" | "api-reference" | "code" | "connectors" | "workflows" | "agents" | "insights" | "memos" | "sharing" | "embeds" | "chat" | "projects" | "drafts";
+        /** @enum {string} */
+        McpToolsetOffReason: "section-off" | "key-toolsets";
         MeResponse: {
             userId: string;
             email: string;
@@ -16176,6 +16222,15 @@ export interface components {
         SiteVisitorSecretResponse: {
             secret: string;
             setAt: string;
+        };
+        SkillStackResponse: {
+            version: number;
+            dir: string;
+            files: {
+                path: string;
+                content: string;
+                toolset: components["schemas"]["McpToolset"];
+            }[];
         };
         /** @enum {string} */
         SourceCheckFailure: "no-content" | "landmark" | "words" | "headings" | "unsupported" | "spec-invalid";
@@ -42964,6 +43019,88 @@ export interface operations {
     McpController_skill: {
         parameters: {
             query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    McpController_skills: {
+        parameters: {
+            query?: {
+                dir?: "claude" | "agents";
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillStackResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    McpController_skillsInstaller: {
+        parameters: {
+            query?: {
+                dir?: "claude" | "agents";
+            };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
                 "Accept-Language"?: "en" | "ru";

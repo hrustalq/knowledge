@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { ArrayMaxSize, IsArray, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
-import { API_KEY_MAX_PROJECTS, API_KEY_SCOPES, type ApiKeyScope } from '@knowledge/contracts';
+import { API_KEY_MAX_PROJECTS, API_KEY_SCOPES, MCP_TOOLSET_KEYS, type ApiKeyScope, type McpToolset } from '@knowledge/contracts';
 import { vmsg } from '../common/validation.js';
 
 export class CreateApiKeyDto {
@@ -37,6 +37,19 @@ export class CreateApiKeyDto {
   @ArrayMaxSize(API_KEY_MAX_PROJECTS)
   @IsUUID(undefined, { each: true })
   projectIds?: string[];
+
+  @ApiPropertyOptional({
+    type: [String],
+    enum: MCP_TOOLSET_KEYS,
+    description:
+      "Limit the key to these MCP toolsets ('core' is always added); omit for every toolset. A key with a list works " +
+      'over MCP only: it is refused on REST routes, the git remote and plain-markdown URLs.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(MCP_TOOLSET_KEYS.length)
+  @IsIn(MCP_TOOLSET_KEYS, { each: true, message: vmsg('isIn') })
+  toolsets?: McpToolset[];
 
   @ApiPropertyOptional({ type: Number, description: 'Days until the key stops working (1–365); omit for no expiry.' })
   @IsOptional()

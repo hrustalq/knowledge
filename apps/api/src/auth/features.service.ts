@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.js';
-import { isWorkspaceFeature, type WorkspaceFeature } from '@knowledge/contracts';
+import { WORKSPACE_FEATURES, isWorkspaceFeature, type WorkspaceFeature } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { t } from '../i18n/t.js';
 import { ttlCache } from '../common/ttl-cache.js';
@@ -38,6 +38,23 @@ export class FeaturesService {
       // A value a later release dropped from the catalogue reads as nothing.
       return (row?.disabledFeatures ?? []).filter(isWorkspaceFeature);
     });
+  }
+
+  /**
+   * The sections that are off, or unavailable here, in **every** one of
+   * `workspaceIds` (#945): what an MCP connection reaching them is not offered.
+   * One read however many workspaces (a platform admin reaches all of them),
+   * which also fills the per-workspace cache. No workspace = every section.
+   */
+  async offEverywhere(workspaceIds: string[]): Promise<WorkspaceFeature[]> {
+    const rows = await this.prisma.workspaceSettings.findMany({
+      where: { workspaceId: { in: workspaceIds } },
+      select: { workspaceId: true, disabledFeatures: true },
+    });
+    const stored = new Map(rows.map((r) => [r.workspaceId, r.disabledFeatures.filter(isWorkspaceFeature)]));
+    for (const id of workspaceIds) void this.cache.get(id, async () => stored.get(id) ?? []);
+    const unavailable = this.unavailable();
+    return WORKSPACE_FEATURES.filter((f) => unavailable.includes(f) || workspaceIds.every((id) => stored.get(id)?.includes(f)));
   }
 
   /** 404, as if the route or tool did not exist: a switched-off section is absent, not forbidden. */

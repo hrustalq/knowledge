@@ -4002,6 +4002,26 @@
     },
     {
       "method": "GET",
+      "path": "/v1/mcp/skills",
+      "tag": "mcp",
+      "summary": "The skill as a stack of SKILL.md files for the caller: a core skill plus one per offered toolset that has a playbook",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/mcp/skills/install",
+      "tag": "mcp",
+      "summary": "The skill stack as a POSIX shell script that installs it into a client's skills directory and removes a skill no longer offered",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/memos",
       "tag": "memos",
       "summary": "My memos, newest first, and whether this server can transcribe",

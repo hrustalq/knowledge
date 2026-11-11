@@ -905,6 +905,12 @@ export interface ApiKeyInfo {
    * other (issue #73). Null for every project. Reads are not narrowed by it.
    */
   projectIds: string[] | null;
+  /**
+   * The MCP toolsets the key is limited to (#945), `core` always among them;
+   * null for every toolset. A key with a list is MCP-only: refused on REST,
+   * the git remote and the plain-markdown URLs.
+   */
+  toolsets: McpToolset[] | null;
   expiresAt: string | null;
   /** Coarse — refreshed at most once a minute, so it answers "is this still in use", not "when exactly". */
   lastUsedAt: string | null;
@@ -930,6 +936,8 @@ export interface CreateApiKeyResponse {
 export interface McpToolSummary {
   name: string;
   description: string;
+  /** The one toolset of `MCP_TOOLSETS` the tool is filed in (#945). */
+  toolset: McpToolset;
   /** Mirrors the tool's MCP `readOnlyHint`: false means it can change the knowledge base. */
   readOnly: boolean;
 }
@@ -945,7 +953,33 @@ export interface McpConnectionInfo {
   version: string;
   /** Tools the calling credential would be offered. */
   tools: McpToolSummary[];
+  /** The toolsets it is not offered at all, each with why (#945). */
+  notOffered: { toolset: McpToolset; reason: McpToolsetOffReason }[];
 }
+
+/**
+ * Where a client keeps its skills: the directories the skill stack installs
+ * into (#945), named by a key so a URL never carries a path.
+ */
+export const SKILL_DIRS = { claude: '~/.claude/skills', agents: '~/.agents/skills' } as const;
+export type SkillDirKey = keyof typeof SKILL_DIRS;
+export const SKILL_DIR_KEYS = Object.keys(SKILL_DIRS) as SkillDirKey[];
+
+// GET /v1/mcp/skills — the skill as a stack: a core skill and one per offered toolset that has a playbook.
+export interface SkillStackResponse {
+  /** Bumped when the stack's layout changes; an installed skill names it. */
+  version: number;
+  /** The skills directory the paths are relative to. */
+  dir: string;
+  files: { path: string; content: string; toolset: McpToolset }[];
+}
+
+/**
+ * Why a whole toolset is missing from an offer: its section is off in every
+ * workspace the caller reaches, or the key's own toolset list leaves it out.
+ * A key's scope hides single write tools, never a whole toolset.
+ */
+export type McpToolsetOffReason = 'section-off' | 'key-toolsets';
 
 
 
@@ -1593,4 +1627,168 @@ export interface WorkspaceFeaturesResponse {
   disabled: WorkspaceFeature[];
   /** Off on this server whatever the workspace chose (an env ceiling, e.g. `sources` under WEB_SOURCES_ENABLED). */
   unavailable: WorkspaceFeature[];
+}
+
+// ---------------------------------------------------------------------------
+// MCP toolsets (#945)
+// ---------------------------------------------------------------------------
+
+/**
+ * Every MCP tool, filed in exactly one toolset. A toolset is the unit that is
+ * offered, switched (through its `feature`, a section a workspace may turn
+ * off), narrowed by a key and described by the skill. Closed: a tool registered
+ * without an entry here fails `apps/api/test/mcp-http.spec.ts` and is not
+ * offered. The order is the order the skill's sections and the Connect page
+ * list them in.
+ */
+export const MCP_TOOLSETS = {
+  core: {
+    tools: [
+      'knowledge_whoami',
+      'knowledge_search',
+      'knowledge_list_projects',
+      'knowledge_list_documents',
+      'knowledge_get_document',
+      'knowledge_get_document_content',
+      'knowledge_find_similar',
+      'knowledge_feedback',
+      'knowledge_report_issue',
+    ],
+  },
+  authoring: {
+    tools: [
+      'knowledge_create_document',
+      'knowledge_create_branch',
+      'knowledge_create_revision',
+      'knowledge_patch_document',
+      'knowledge_start_upload',
+      'knowledge_finalize_upload',
+      'knowledge_ingest',
+      'knowledge_list_revisions',
+      'knowledge_compare_revisions',
+      'knowledge_list_branches',
+      'knowledge_list_templates',
+      'knowledge_get_template',
+      'knowledge_flag_document',
+    ],
+  },
+  quality: { tools: ['knowledge_lint_draft', 'knowledge_get_page_quality'] },
+  review: {
+    tools: [
+      'knowledge_list_merge_requests',
+      'knowledge_get_merge_request',
+      'knowledge_create_merge_request',
+      'knowledge_approve_merge_request',
+      'knowledge_close_merge_request',
+      'knowledge_comment_merge_request',
+      'knowledge_merge_revision',
+      'knowledge_update_merge_request_branch',
+    ],
+  },
+  graph: {
+    tools: [
+      'knowledge_get_workspace_graph',
+      'knowledge_find_relations',
+      'knowledge_impact_analysis',
+      'knowledge_trace_relation',
+      'knowledge_query_graph',
+      'knowledge_global_overview',
+      'knowledge_get_historical_context',
+      'knowledge_list_release_tags',
+      'knowledge_create_release_tag',
+    ],
+  },
+  conflicts: { feature: 'conflicts', tools: ['knowledge_list_conflicts', 'knowledge_resolve_conflict'] },
+  captures: {
+    feature: 'captures',
+    tools: [
+      'knowledge_capture_decision',
+      'knowledge_capture_note',
+      'knowledge_propose_glossary_term',
+      'knowledge_propose_relation',
+      'knowledge_propose_answer',
+      'knowledge_list_captures',
+    ],
+  },
+  qa: {
+    feature: 'qa',
+    tools: [
+      'knowledge_list_test_fixtures',
+      'knowledge_get_test_fixture',
+      'knowledge_get_test_suite',
+      'knowledge_generate_test_suite',
+      'knowledge_suggest_test_fixtures',
+      'knowledge_set_test_fixtures',
+      'knowledge_get_test_run_plan',
+      'knowledge_run_test_suite',
+      'knowledge_get_test_run',
+      'knowledge_qa_overview',
+    ],
+  },
+  'api-reference': { tools: ['knowledge_list_api_operations', 'knowledge_get_api_operation', 'knowledge_diff_api_spec'] },
+  code: {
+    tools: ['knowledge_code_usages', 'knowledge_document_component', 'knowledge_repo_wiki', 'knowledge_regenerate_wiki'],
+  },
+  connectors: {
+    tools: [
+      'knowledge_list_connectors',
+      'knowledge_sync_connector',
+      'knowledge_get_connector_run',
+      'knowledge_list_work_items',
+      'knowledge_handoff_work_item',
+    ],
+  },
+  workflows: {
+    feature: 'workflows',
+    tools: ['knowledge_list_workflows', 'knowledge_start_workflow', 'knowledge_get_workflow_run'],
+  },
+  agents: { tools: ['knowledge_list_agents', 'knowledge_list_agent_learnings', 'knowledge_propose_agent_learning'] },
+  insights: { feature: 'analytics', tools: ['knowledge_get_page_insights', 'knowledge_list_search_gaps'] },
+  memos: { feature: 'memos', tools: ['knowledge_list_memos', 'knowledge_get_memo'] },
+  sharing: {
+    tools: [
+      'knowledge_share_page',
+      'knowledge_export',
+      'knowledge_get_export',
+      'knowledge_get_page_access',
+      'knowledge_request_access',
+    ],
+  },
+  embeds: { tools: ['knowledge_get_embed', 'knowledge_find_embeds'] },
+  chat: { tools: ['knowledge_search_chat'] },
+  projects: { tools: ['knowledge_list_blueprints', 'knowledge_scaffold_project'] },
+  // Registered over HTTP only, with COLLAB_ENABLED (#316).
+  drafts: { tools: ['knowledge_get_draft', 'knowledge_suggest_draft_edit'] },
+} as const satisfies Record<string, { feature?: WorkspaceFeature; tools: readonly string[] }>;
+
+export type McpToolset = keyof typeof MCP_TOOLSETS;
+
+export const MCP_TOOLSET_KEYS = Object.keys(MCP_TOOLSETS) as McpToolset[];
+
+export function isMcpToolset(value: unknown): value is McpToolset {
+  return typeof value === 'string' && Object.hasOwn(MCP_TOOLSETS, value);
+}
+
+const TOOLSET_OF_TOOL = new Map<string, McpToolset>(
+  MCP_TOOLSET_KEYS.flatMap((key) => MCP_TOOLSETS[key].tools.map((tool) => [tool, key] as const)),
+);
+
+/**
+ * `api_keys.toolsets` as a key's list: null (no list, every toolset) unless an
+ * array was stored. A stored value the catalogue no longer holds reads as
+ * absent from the list, never as "all"; `core` is always in a list.
+ */
+export function keyToolsetsOf(stored: unknown): McpToolset[] | null {
+  if (!Array.isArray(stored)) return null;
+  return [...new Set<McpToolset>(['core', ...stored.filter(isMcpToolset)])];
+}
+
+/** The toolset a tool is filed in; null for a name the catalogue does not hold. */
+export function toolsetOf(tool: string): McpToolset | null {
+  return TOOLSET_OF_TOOL.get(tool) ?? null;
+}
+
+/** The section a toolset is switched by, if any. */
+export function featureOfToolset(toolset: McpToolset): WorkspaceFeature | null {
+  return (MCP_TOOLSETS[toolset] as { feature?: WorkspaceFeature }).feature ?? null;
 }

@@ -1,8 +1,8 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { userAvatarUrl } from '../common/avatar-url.js';
-import { apiKeyScopeOf, authMethodOf } from '@knowledge/contracts';
+import { apiKeyScopeOf, authMethodOf, keyToolsetsOf } from '@knowledge/contracts';
 import { DEV_PRINCIPAL, type Principal } from './principal.js';
 import { projectPinOf } from './api-keys.service.js';
 import { SessionsService } from './sessions.service.js';
@@ -29,10 +29,23 @@ export class TokenAuthService {
     private readonly tickets: UrlTicketsService,
   ) {}
 
-  async resolve(token: string | undefined): Promise<Principal> {
+  /**
+   * `mcp` is said only by the MCP endpoint's routes. A key limited to toolsets
+   * (#945) is refused without it: its list is enforced by the MCP offer, so
+   * anywhere else — a REST route, the git remote, the live socket, a
+   * plain-markdown URL — the same key would read and write past it. Refused
+   * here, where every door resolves its bearer, so a new door is closed to it
+   * until it says otherwise.
+   */
+  async resolve(token: string | undefined, opts: { mcp?: boolean } = {}): Promise<Principal> {
     if (this.config.get('AUTH_MODE') !== 'api-key') return DEV_PRINCIPAL;
     if (!token) throw new UnauthorizedException(t('error.auth.missingBearer'));
-    return token.startsWith('ks_') ? this.resolveSession(token) : this.resolveApiKey(token);
+    if (token.startsWith('ks_')) return this.resolveSession(token);
+    const principal = await this.resolveApiKey(token);
+    if (principal.apiKey?.toolsets && !opts.mcp) {
+      throw new ForbiddenException({ statusCode: 403, message: t('error.auth.apiKeyMcpOnly'), reason: 'apiKeyMcpOnly' });
+    }
+    return principal;
   }
 
   /**
@@ -142,6 +155,7 @@ export class TokenAuthService {
         scope: apiKeyScopeOf(row.scope),
         workspaceId: row.workspaceId,
         projectIds: projectPinOf(row.projectIds),
+        toolsets: keyToolsetsOf(row.toolsets),
       },
     };
   }

@@ -21,6 +21,7 @@
  */
 
 import type { CaptureKitClient, CaptureKitFile } from '@knowledge/contracts'
+import { SKILL_DIRS, SKILL_DIR_KEYS } from '@knowledge/contracts'
 
 export const KEY_ENV = 'KNOWLEDGE_API_KEY'
 export const SKILL_NAME = 'knowledge-platform'
@@ -71,7 +72,7 @@ export function mcpClients(input: McpClientInput): McpClientGuide[] {
         lang: 'json',
         code: json({ mcpServers: { [name]: { type: 'http', url, ...header(`\${${KEY_ENV}}`) } } }),
       },
-      skillDir: '~/.claude/skills',
+      skillDir: SKILL_DIRS.claude,
       usesEnv: auth,
       captureKit: 'claude-code',
       note: 'claudeCode',
@@ -88,7 +89,7 @@ export function mcpClients(input: McpClientInput): McpClientGuide[] {
           '\n',
         ),
       },
-      skillDir: '~/.agents/skills',
+      skillDir: SKILL_DIRS.agents,
       usesEnv: auth,
       captureKit: null,
       note: 'codex',
@@ -105,7 +106,7 @@ export function mcpClients(input: McpClientInput): McpClientGuide[] {
         lang: 'json',
         code: json({ mcpServers: { [name]: { httpUrl: url, ...header(`$${KEY_ENV}`) } } }),
       },
-      skillDir: '~/.agents/skills',
+      skillDir: SKILL_DIRS.agents,
       usesEnv: auth,
       captureKit: null,
       note: 'gemini',
@@ -120,7 +121,7 @@ export function mcpClients(input: McpClientInput): McpClientGuide[] {
         lang: 'json',
         code: json({ mcpServers: { [name]: { url, ...header(`\${env:${KEY_ENV}}`) } } }),
       },
-      skillDir: '~/.agents/skills',
+      skillDir: SKILL_DIRS.agents,
       usesEnv: auth,
       captureKit: 'cursor',
       note: 'cursor',
@@ -144,7 +145,7 @@ export function mcpClients(input: McpClientInput): McpClientGuide[] {
           servers: { [name]: { type: 'http', url, ...header(`\${input:${name}-key}`) } },
         }),
       },
-      skillDir: '~/.agents/skills',
+      skillDir: SKILL_DIRS.agents,
       usesEnv: false,
       captureKit: null,
       note: 'vscode',
@@ -192,7 +193,7 @@ export function mcpClients(input: McpClientInput): McpClientGuide[] {
         lang: 'json',
         code: json({ mcpServers: { [name]: { serverUrl: url, ...header(`\${env:${KEY_ENV}}`) } } }),
       },
-      skillDir: '~/.agents/skills',
+      skillDir: SKILL_DIRS.agents,
       usesEnv: auth,
       captureKit: null,
       note: 'windsurf',
@@ -212,7 +213,7 @@ export function mcpClients(input: McpClientInput): McpClientGuide[] {
           },
         }),
       },
-      skillDir: '~/.agents/skills',
+      skillDir: SKILL_DIRS.agents,
       usesEnv: auth,
       captureKit: null,
       note: 'opencode',
@@ -227,7 +228,7 @@ export function mcpClients(input: McpClientInput): McpClientGuide[] {
         lang: 'json',
         code: json({ context_servers: { [name]: { url, ...header(literal) } } }),
       },
-      skillDir: '~/.agents/skills',
+      skillDir: SKILL_DIRS.agents,
       usesEnv: false,
       captureKit: null,
       note: 'zed',
@@ -270,6 +271,18 @@ export function skillInstallCommand(skillUrl: string, dir: string, auth: boolean
     `curl -fsSL${auth ? ` -H "Authorization: Bearer $${KEY_ENV}"` : ''} \\`,
     `  ${skillUrl} -o ${target}/SKILL.md`,
   ].join('\n')
+}
+
+/**
+ * Install the skill as a stack (#945): a core skill plus one per offered
+ * toolset, so a client loads a playbook only when its description matches.
+ * Null for a directory the server has no stack for. The server renders the
+ * installer; a re-run updates the skills and removes one no longer offered.
+ */
+export function skillStackInstallCommand(mcpUrl: string, dir: string, auth: boolean): string | null {
+  const key = SKILL_DIR_KEYS.find((k) => SKILL_DIRS[k] === dir)
+  if (!key) return null
+  return `curl -fsSL${auth ? ` -H "Authorization: Bearer $${KEY_ENV}"` : ''} \\\n  "${mcpUrl}/skills/install?dir=${key}" | sh`
 }
 
 /**

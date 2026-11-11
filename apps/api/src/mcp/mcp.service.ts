@@ -1,13 +1,23 @@
 import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { CAPTURE_KIT_CLIENTS, MCP_LEARNING_TARGET, type CaptureKitClient } from '@knowledge/contracts';
-import type { CaptureKitResponse, McpToolSummary, WorkspaceRole } from '@knowledge/contracts';
+import { CAPTURE_KIT_CLIENTS, MCP_LEARNING_TARGET, SKILL_DIRS, SKILL_DIR_KEYS, type CaptureKitClient, type SkillDirKey } from '@knowledge/contracts';
+import type { CaptureKitResponse, McpToolSummary, SkillStackResponse, WorkspaceFeature, WorkspaceRole } from '@knowledge/contracts';
 import { t } from '../i18n/t.js';
 import { DEV_PRINCIPAL, type Principal } from '../auth/principal.js';
-import { CAPTURE_TOOLS, MCP_INSTRUCTIONS, MCP_SERVER_NAME, featureOfTool, isOffered, settleTools, trackTools } from './mcp-tools.js';
+import { CAPTURE_TOOLS, MCP_SERVER_NAME, featureOfTool, instructionsFor, isOffered, settleTools, trackTools } from './mcp-tools.js';
 import { renderCaptureKit, renderCaptureKitInstaller } from './capture-kit.js';
-import { renderMcpLearnings, renderSkill, type McpLearningGroup, type McpWhoami } from './skill.js';
+import {
+  SKILL_STACK_VERSION,
+  renderMcpLearnings,
+  renderSkill,
+  renderSkillStack,
+  renderSkillStackInstaller,
+  type McpLearningGroup,
+  type McpWhoami,
+  type SkillInput,
+  type StackSkill,
+} from './skill.js';
 import { registerCaptureTools } from './capture-tools.js';
 import { json, type McpToolContext } from './tools/context.js';
 import { McpServices } from './mcp-services.js';
@@ -117,6 +127,12 @@ export interface McpExtras {
    * request is an `initialize` — the one message that carries instructions.
    */
   instructions?: string;
+  /**
+   * The sections off in every workspace this caller reaches (#945), from
+   * `sectionsOffFor`: their toolsets are not offered. Async, so computed by the
+   * caller. Absent offers every section's tools — the per-call gate is the check.
+   */
+  offSections?: readonly WorkspaceFeature[];
 }
 
 
@@ -124,13 +140,15 @@ export interface McpExtras {
 export class McpService extends McpServices {
   async serveStdio(): Promise<void> {
     // ponytail: learnings read once at startup; a learning approved later reaches a restarted stdio server.
-    const instructions = await this.instructionsFor(DEV_PRINCIPAL);
-    await this.buildServer(DEV_PRINCIPAL, { instructions }).server.connect(new StdioServerTransport());
+    // Likewise the sections: one switched off later is refused per call until a restart drops its tools.
+    const offSections = await this.sectionsOffFor(DEV_PRINCIPAL);
+    const instructions = await this.instructionsFor(DEV_PRINCIPAL, offSections);
+    await this.buildServer(DEV_PRINCIPAL, { instructions, offSections }).server.connect(new StdioServerTransport());
   }
 
-  /** MCP_INSTRUCTIONS plus the team guidance this caller is given (#305). */
-  async instructionsFor(principal: Principal): Promise<string> {
-    return MCP_INSTRUCTIONS + renderMcpLearnings(await this.learningsFor(await this.whoami(principal)), 'text');
+  /** The instructions for the tools this caller is offered, plus the team guidance it is given (#305). */
+  async instructionsFor(principal: Principal, offSections?: readonly WorkspaceFeature[]): Promise<string> {
+    return instructionsFor(principal, offSections) + renderMcpLearnings(await this.learningsFor(await this.whoami(principal)), 'text');
   }
 
   /**
@@ -171,7 +189,7 @@ export class McpService extends McpServices {
   buildServer(principal: Principal, extras: McpExtras = {}): { server: McpServer; tools: McpToolSummary[] } {
     const server = new McpServer(
       { name: MCP_SERVER_NAME, version: PRODUCT_VERSION },
-      { instructions: extras.instructions ?? MCP_INSTRUCTIONS },
+      { instructions: extras.instructions ?? instructionsFor(principal, extras.offSections) },
     );
     // Every call is filed as `mcp` traffic (#79), whoever the principal is.
     const caller: AnalyticsCaller = { principal, channel: 'mcp', ...(extras.noTrack ? { noTrack: true } : {}) };
@@ -189,6 +207,8 @@ export class McpService extends McpServices {
       svc: this,
       whoami: () => this.whoami(principal),
       skill: () => this.skillFor(principal, undefined, extras),
+      stack: () => this.skillStackOf(principal, extras),
+      offered: (tool) => isOffered(tool, principal, extras.offSections),
     };
     registerSearchTools(ctx);
     registerPagesTools(ctx);
@@ -215,23 +235,62 @@ export class McpService extends McpServices {
       registerDraftTools(server, { drafts: extras.drafts, principal, guard, json });
     }
 
-    return { server, tools: settleTools(handles, principal) };
+    return { server, tools: settleTools(handles, principal, extras.offSections) };
   }
 
   /** The SKILL.md for `principal` — see skill.ts. `url` overrides the endpoint it names. */
   async skillFor(principal: Principal, url?: string, extras: McpExtras = {}): Promise<string> {
+    return renderSkill(await this.skillInput(principal, url, extras));
+  }
+
+  /** The same playbooks as a stack: a core skill and one per offered toolset that has one (#945). */
+  async skillStackOf(principal: Principal, extras: McpExtras = {}): Promise<StackSkill[]> {
+    return renderSkillStack(await this.skillInput(principal, undefined, extras));
+  }
+
+  /** The stack as files under a client's skills directory, `dir` a key of SKILL_DIRS. */
+  async skillStackFor(principal: Principal, dir: string | undefined, extras: McpExtras = {}): Promise<SkillStackResponse> {
+    const key = this.skillDirKey(dir);
+    const skills = await this.skillStackOf(principal, extras);
+    return {
+      version: SKILL_STACK_VERSION,
+      dir: SKILL_DIRS[key],
+      files: skills.map((s) => ({ path: `${s.name}/SKILL.md`, content: s.content, toolset: s.toolset })),
+    };
+  }
+
+  /** The stack as a shell script that installs it — `curl … | sh`. */
+  async skillStackInstallerFor(principal: Principal, dir: string | undefined, extras: McpExtras = {}): Promise<string> {
+    const key = this.skillDirKey(dir);
+    return renderSkillStackInstaller(await this.skillStackOf(principal, extras), SKILL_DIRS[key], `${this.publicUrl()}/skills/install?dir=${key}`);
+  }
+
+  private skillDirKey(dir: string | undefined): SkillDirKey {
+    const key = dir ?? 'claude';
+    if (!(SKILL_DIR_KEYS as readonly string[]).includes(key)) {
+      throw new BadRequestException({
+        statusCode: 400,
+        message: t('error.capture.skillsDir', { dir: key, dirs: SKILL_DIR_KEYS.join(', ') }),
+        reason: 'skills-dir',
+      });
+    }
+    return key as SkillDirKey;
+  }
+
+  private async skillInput(principal: Principal, url: string | undefined, extras: McpExtras): Promise<SkillInput> {
     const whoami = await this.whoami(principal);
-    return renderSkill({
+    const offSections = extras.offSections ?? (await this.features.offEverywhere(whoami.workspaces.map((w) => w.workspaceId)));
+    return {
       url: url ?? this.publicUrl(),
       serverName: MCP_SERVER_NAME,
       version: PRODUCT_VERSION,
       authMode: this.config.get('AUTH_MODE') === 'api-key' ? 'api-key' : 'none',
       webUrl: this.webUrl(),
       whoami,
-      tools: this.toolsFor(principal, extras),
+      tools: this.toolsFor(principal, { ...extras, offSections }),
       learnings: await this.learningsFor(whoami),
-      git: this.config.get('GIT_REMOTE_ENABLED') === true,
-    });
+      git: this.config.get('GIT_REMOTE_ENABLED') === true && !offSections.includes('git'),
+    };
   }
 
   /**
@@ -277,19 +336,34 @@ export class McpService extends McpServices {
     return `${base}/v1/mcp`;
   }
 
-  async whoami(principal: Principal): Promise<McpWhoami> {
-    // WorkspacesService.list's rule (dev and platform admins see every
-    // workspace), read directly: WorkspacesModule carries a controller and so
-    // cannot load in the stdio process.
+  /**
+   * The workspaces `principal` reaches, oldest first, and its role in each.
+   * WorkspacesService.list's rule (dev and platform admins see every
+   * workspace), read directly: WorkspacesModule carries a controller and so
+   * cannot load in the stdio process.
+   */
+  private async reachable(principal: Principal) {
     const pinned = principal.apiKey?.workspaceId ?? null;
     const seesAll = principal.mode === 'dev' || principal.isAdmin;
     const memberships = await this.prisma.workspaceMember.findMany({ where: { userId: principal.userId } });
     const roleOf = new Map(memberships.map((m) => [m.workspaceId, m.role as WorkspaceRole]));
     const ids = pinned ? [pinned] : seesAll ? undefined : [...roleOf.keys()];
-    const reachable = await this.prisma.workspace.findMany({
+    const found = await this.prisma.workspace.findMany({
       where: ids ? { id: { in: ids } } : {},
       orderBy: { createdAt: 'asc' },
     });
+    // A key pinned to a workspace its owner has since left reaches nothing.
+    return { workspaces: found.filter((w) => seesAll || roleOf.has(w.id)), roleOf };
+  }
+
+  /** The sections off in every workspace `principal` reaches (#945): `McpExtras.offSections`. */
+  async sectionsOffFor(principal: Principal): Promise<WorkspaceFeature[]> {
+    const { workspaces } = await this.reachable(principal);
+    return this.features.offEverywhere(workspaces.map((w) => w.id));
+  }
+
+  async whoami(principal: Principal): Promise<McpWhoami> {
+    const { workspaces: reachable, roleOf } = await this.reachable(principal);
     const projects = await Promise.all(
       reachable.map(async (w) => {
         // A key pinned to a workspace its person has left reaches no project in it.
@@ -311,35 +385,35 @@ export class McpService extends McpServices {
             projectIds: principal.apiKey.projectIds?.length ? principal.apiKey.projectIds : null,
           }
         : null,
-      workspaces: reachable
-        // A key pinned to a workspace its owner has since left reaches nothing.
-        .filter((w) => seesAll || roleOf.has(w.id))
-        .map((w) => {
-          const role = roleOf.get(w.id) ?? 'admin';
-          // A guest reads only what is granted to them (#76), so the workspace's
-          // project names are not theirs to list, and a read-only key cannot
-          // lift them to viewer.
-          const guest = role === 'guest';
-          return {
-            workspaceId: w.id,
-            name: w.name,
-            // What this connection may actually do, not merely the membership
-            // row: a read-only key caps it, and dev/platform admin has no row.
-            role: readOnly && !guest ? 'viewer' : role,
-            projects: guest
-              ? []
-              : projects[reachable.indexOf(w)].projects.map((p) => ({ projectId: p.projectId, name: p.name })),
-          };
-        }),
+      workspaces: reachable.map((w) => {
+        const role = roleOf.get(w.id) ?? 'admin';
+        // A guest reads only what is granted to them (#76), so the workspace's
+        // project names are not theirs to list, and a read-only key cannot
+        // lift them to viewer.
+        const guest = role === 'guest';
+        return {
+          workspaceId: w.id,
+          name: w.name,
+          // What this connection may actually do, not merely the membership
+          // row: a read-only key caps it, and dev/platform admin has no row.
+          role: readOnly && !guest ? 'viewer' : role,
+          projects: guest
+            ? []
+            : projects[reachable.indexOf(w)].projects.map((p) => ({ projectId: p.projectId, name: p.name })),
+        };
+      }),
     };
   }
 
   /**
+   * The gate every call passes. First the offer rule. Then
    * #604: refuse a tool of a section its workspace switched off, as `@Feature`
    * refuses the REST twin. Membership first, as AclGuard orders it, so the 404
    * tells only a member that the section is off.
    */
   private async featureGate(principal: Principal, tool: string, args: Record<string, unknown>): Promise<void> {
+    // A tool outside the key's scope or toolset list is not registered for it (#945); refused here as well.
+    if (!isOffered(tool, principal)) throw new ForbiddenException({ statusCode: 403, message: t('error.auth.apiKeyToolNotOffered', { tool }), tool });
     const feature = featureOfTool(tool);
     if (!feature) return;
     const id = (key: string) => (typeof args[key] === 'string' ? (args[key] as string) : null);

@@ -170,9 +170,6 @@ export const WORKSPACE_TEARDOWN = {
   Session: 'platform',
   PasswordResetToken: 'platform',
   EmailVerificationToken: 'platform',
-  GithubUserToken: 'platform',
-  // Referenced from connectors' config, pruned by `pruneFigmaGrants` once none does.
-  FigmaOauthGrant: 'platform',
   // A person's sign-in (#857): the workspace's connections go, the credential stays with its owner.
   Credential: 'platform',
 } as const satisfies Record<Prisma.ModelName, 'workspace' | 'audit' | 'page' | 'parent' | 'platform'>;

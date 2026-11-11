@@ -415,7 +415,7 @@ describe('Test connection', () => {
       workspaceId: 'ws-1',
       kind: 'google-drive',
       config,
-      credential: encryptSecret(KEY_JSON, key),
+      connectionId: 'cx-1',
       webhookSecret: null,
       createdBy: null,
       locale: 'en',
@@ -426,7 +426,12 @@ describe('Test connection', () => {
       CONNECTOR_DEBUG: false,
     };
     return new ConnectorsService(
-      { connector: { findUnique: async () => row } } as never,
+      {
+        connector: { findUnique: async () => row },
+        // The key reaches the adapter through the connection's credential (#857).
+        connection: { findUnique: async () => ({ workspaceId: 'ws-1', method: 'token', credentialId: 'cred-1' }) },
+        credential: { findUnique: async () => ({ secret: encryptSecret(KEY_JSON, key) }) },
+      } as never,
       { get: (k: string) => settings[k] } as never,
       { resolve: () => adapter } as never,
       {} as never,

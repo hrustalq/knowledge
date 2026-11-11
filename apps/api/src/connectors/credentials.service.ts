@@ -10,7 +10,6 @@ import {
 } from '@knowledge/contracts';
 import { encryptSecret, maskSecret, parseKey } from '../ai/secret-box.js';
 import type { Env } from '../config/env.js';
-import { pruneFigmaGrants } from '../embeds/figma-oauth.service.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { ProviderAccount } from './adapters/connection-providers.js';
@@ -54,11 +53,7 @@ export class CredentialsService {
     }
   }
 
-  /**
-   * A new secret for the same account, in every workspace using it: the
-   * credential, and the inline copies each connection and connector keep for
-   * a rollback to the previous release (expand/contract). The caller probed it.
-   */
+  /** A new secret for the same account, in every workspace using it, since each connection reads it live. The caller probed it. */
   async rotate(row: Credential, secret: string, account: ProviderAccount | null): Promise<Credential> {
     if (row.method !== 'token') throw new ConflictException({ statusCode: 409, message: t('error.connection.notToken') });
     if (row.accountId && account && account.id !== row.accountId) {
@@ -67,23 +62,14 @@ export class CredentialsService {
         message: t('error.connection.otherAccount', { account: account.label, expected: row.accountLabel ?? row.accountId }),
       });
     }
-    const envelope = encryptSecret(secret, this.key);
-    const hint = maskSecret(secret);
-    const connections = await this.prisma.connection.findMany({ where: { credentialId: row.id }, select: { id: true } });
-    const ids = connections.map((c) => c.id);
-    const [updated] = await this.prisma.$transaction([
-      this.prisma.credential.update({
-        where: { id: row.id },
-        data: {
-          secret: envelope,
-          secretHint: hint,
-          ...(account ? { accountId: account.id, accountLabel: account.label, accountAvatarUrl: account.avatarUrl } : {}),
-        },
-      }),
-      this.prisma.connection.updateMany({ where: { id: { in: ids } }, data: { credential: envelope, credentialHint: hint } }),
-      this.prisma.connector.updateMany({ where: { connectionId: { in: ids } }, data: { credential: envelope, credentialHint: hint } }),
-    ]);
-    return updated;
+    return this.prisma.credential.update({
+      where: { id: row.id },
+      data: {
+        secret: encryptSecret(secret, this.key),
+        secretHint: maskSecret(secret),
+        ...(account ? { accountId: account.id, accountLabel: account.label, accountAvatarUrl: account.avatarUrl } : {}),
+      },
+    });
   }
 
   async list(userId: string): Promise<CredentialSummary[]> {
@@ -100,7 +86,7 @@ export class CredentialsService {
 
   /** Disconnect. Refused while a connection dials with it, naming where — the same rule as a connection in use. */
   async remove(id: string, userId: string): Promise<void> {
-    const row = await this.requireOwn(id, userId);
+    await this.requireOwn(id, userId);
     const usedBy = (await this.usage([id])).get(id) ?? [];
     if (usedBy.length) {
       const workspaces = [...new Set(usedBy.map((u) => u.workspaceName))];
@@ -112,11 +98,6 @@ export class CredentialsService {
       });
     }
     await this.prisma.credential.delete({ where: { id } });
-    // The rows the previous release still reads go with it.
-    if (row.provider === 'github' && row.method === 'oauth') {
-      await this.prisma.githubUserToken.deleteMany({ where: { userId } });
-    }
-    if (row.provider === 'figma' && row.method === 'oauth') await pruneFigmaGrants(this.prisma);
   }
 
   private async usage(ids: string[]): Promise<Map<string, CredentialSummary['usedBy']>> {

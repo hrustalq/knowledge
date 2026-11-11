@@ -22,6 +22,17 @@ in the pull request that introduces them — see
   `ai_providers.model`, its prices and capabilities. They stay in the database, unread. Rollback by retag still
   works to any earlier release. The next release drops the columns, and from then on a rollback can go no further
   back than this one. (#803)
+- **Connector secrets now live only in `credentials`, and this release has no migration.** The copies kept for
+  rollbacks since v0.47.0 are no longer written or read, and leave the Prisma schema: `connectors.credential` /
+  `credential_hint`, `connections.credential` / `credential_hint`, `github_user_tokens` and `figma_oauth_grants`.
+  The API no longer runs its boot backfill (no more `moved N sign-in(s) into credentials` or `bound N connector(s)`
+  lines). **Before tagging**, confirm on production that every connector and connection reaches a credential: a
+  connector with an inline secret and no connection, or a token connection with no `credential_id`, would dial
+  with nothing after this deploy. The read-only query is on #857. Rollback by retag is safe back to v0.47.0. Two
+  things to know if you do roll back: a GitHub or Figma account disconnected under this release comes back from
+  the stale old row on the older image's first boot, and has to be disconnected again; and before v0.47.0, a
+  connector created or re-keyed under this release has no secret. The release after this one drops the columns
+  and tables. (#857)
 
 ## [0.49.2] — 2026-11-11
 

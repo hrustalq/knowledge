@@ -454,7 +454,7 @@ const retry = () => act(() => request('post', '/v1/memos/{id}/retry', { path: { 
                   :key="s"
                   type="button"
                   class="hover:bg-accent focus-visible:ring-ring rounded-full border px-2 py-0.5 font-mono text-xs tabular-nums outline-none focus-visible:ring-2"
-                  :aria-label="t('memos.detail.seek', { time: memoClock(segmentStart(s)) })"
+                  :aria-label="t(memo.audioAvailable ? 'memos.detail.seek' : 'memos.detail.show', { time: memoClock(segmentStart(s)) })"
                   @click="showCited(p, s)"
                 >{{ memoClock(segmentStart(s)) }}</button>
               </div>

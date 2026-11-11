@@ -15,6 +15,14 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Fixed
+
+- The MCP tools table on the in-app docs page lists every tool again, including the capture tools
+  (`knowledge_capture_*`, `knowledge_propose_*`, `knowledge_find_similar`, `knowledge_list_captures`) and the draft
+  tools (`knowledge_get_draft`, `knowledge_suggest_draft_edit`). The reference generator had stopped finding any
+  tool once their registration moved into per-section files, so `make api-client` failed at its last step and the
+  table was not refreshed. (#861)
+
 ### Operations
 
 - **The provider columns that #798 retired are no longer in the Prisma schema, and this release has no migration.**

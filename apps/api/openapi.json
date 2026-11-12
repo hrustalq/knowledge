@@ -3614,6 +3614,142 @@
         ]
       }
     },
+    "/v1/workspaces/{id}/purpose": {
+      "get": {
+        "operationId": "WorkspacesController_getPurpose",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspacePurposeResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "What this workspace is used for, and the sections that suggests off (workspace admin)",
+        "tags": [
+          "workspaces"
+        ]
+      },
+      "put": {
+        "operationId": "WorkspacesController_setPurpose",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWorkspacePurposeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspacePurposeResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Save the purpose and the confirmed section list in one write (workspace admin); no uses and an untouched list is Skip",
+        "tags": [
+          "workspaces"
+        ]
+      }
+    },
     "/v1/workspaces/{id}": {
       "patch": {
         "operationId": "WorkspacesController_update",
@@ -44063,6 +44199,55 @@
           "disabled"
         ]
       },
+      "UpdateWorkspacePurposeDto": {
+        "type": "object",
+        "properties": {
+          "uses": {
+            "type": "array",
+            "description": "What the workspace is used for. Empty with an untouched `disabled` is the Skip.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "team-wiki",
+                "engineering-docs",
+                "api-docs",
+                "meeting-notes",
+                "support-kb",
+                "public-docs"
+              ]
+            }
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 2000,
+            "description": "The admin's own words. Only admins read it back."
+          },
+          "disabled": {
+            "type": "array",
+            "description": "The sections to leave switched off, as the admin confirmed them; replaces the stored list in the same write.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "workflows",
+                "knowledge-health",
+                "qa",
+                "analytics",
+                "captures",
+                "memos",
+                "conflicts",
+                "assistant",
+                "git",
+                "sources"
+              ]
+            }
+          }
+        },
+        "required": [
+          "uses",
+          "disabled"
+        ]
+      },
       "UpdateWorkspaceDto": {
         "type": "object",
         "properties": {
@@ -77443,12 +77628,23 @@
             "items": {
               "$ref": "#/components/schemas/WorkspaceFeature"
             }
+          },
+          "uses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceUse"
+            }
+          },
+          "purposeAsked": {
+            "type": "boolean"
           }
         },
         "required": [
           "workspaceId",
           "disabled",
-          "unavailable"
+          "unavailable",
+          "uses",
+          "purposeAsked"
         ]
       },
       "WorkspaceGraphNode": {
@@ -77622,6 +77818,48 @@
           "source"
         ]
       },
+      "WorkspacePurposeResponse": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string"
+          },
+          "uses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceUse"
+            }
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "askedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "suggestedDisabled": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceFeature"
+            }
+          },
+          "disabled": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceFeature"
+            }
+          }
+        },
+        "required": [
+          "workspaceId",
+          "uses",
+          "description",
+          "askedAt",
+          "suggestedDisabled",
+          "disabled"
+        ]
+      },
       "WorkspaceRole": {
         "type": "string",
         "enum": [
@@ -77675,6 +77913,17 @@
           "createdAt",
           "memberCount",
           "myRole"
+        ]
+      },
+      "WorkspaceUse": {
+        "type": "string",
+        "enum": [
+          "team-wiki",
+          "engineering-docs",
+          "api-docs",
+          "meeting-notes",
+          "support-kb",
+          "public-docs"
         ]
       }
     }

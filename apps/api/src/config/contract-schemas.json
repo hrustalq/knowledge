@@ -26012,12 +26012,23 @@
         "items": {
           "$ref": "#/components/schemas/WorkspaceFeature"
         }
+      },
+      "uses": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/WorkspaceUse"
+        }
+      },
+      "purposeAsked": {
+        "type": "boolean"
       }
     },
     "required": [
       "workspaceId",
       "disabled",
-      "unavailable"
+      "unavailable",
+      "uses",
+      "purposeAsked"
     ]
   },
   "WorkspaceGraphNode": {
@@ -26191,6 +26202,48 @@
       "source"
     ]
   },
+  "WorkspacePurposeResponse": {
+    "type": "object",
+    "properties": {
+      "workspaceId": {
+        "type": "string"
+      },
+      "uses": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/WorkspaceUse"
+        }
+      },
+      "description": {
+        "type": "string",
+        "nullable": true
+      },
+      "askedAt": {
+        "type": "string",
+        "nullable": true
+      },
+      "suggestedDisabled": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/WorkspaceFeature"
+        }
+      },
+      "disabled": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/WorkspaceFeature"
+        }
+      }
+    },
+    "required": [
+      "workspaceId",
+      "uses",
+      "description",
+      "askedAt",
+      "suggestedDisabled",
+      "disabled"
+    ]
+  },
   "WorkspaceRole": {
     "type": "string",
     "enum": [
@@ -26244,6 +26297,17 @@
       "createdAt",
       "memberCount",
       "myRole"
+    ]
+  },
+  "WorkspaceUse": {
+    "type": "string",
+    "enum": [
+      "team-wiki",
+      "engineering-docs",
+      "api-docs",
+      "meeting-notes",
+      "support-kb",
+      "public-docs"
     ]
   }
 }

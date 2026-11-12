@@ -6099,6 +6099,26 @@
       "source": "workspace",
       "public": false,
       "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workspaces/{id}/purpose",
+      "tag": "workspaces",
+      "summary": "What this workspace is used for, and the sections that suggests off (workspace admin)",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/workspaces/{id}/purpose",
+      "tag": "workspaces",
+      "summary": "Save the purpose and the confirmed section list in one write (workspace admin); no uses and an untouched list is Skip",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
     }
   ],
   "mcpTools": [

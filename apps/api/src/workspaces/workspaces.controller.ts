@@ -20,6 +20,7 @@ import type {
   UpdateWorkspaceResponse,
   WorkspaceDeletionPreviewResponse,
   WorkspaceFeaturesResponse,
+  WorkspacePurposeResponse,
 } from '@knowledge/contracts';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
@@ -32,6 +33,7 @@ import {
   UpdateMemberDto,
   UpdateWorkspaceDto,
   UpdateWorkspaceFeaturesDto,
+  UpdateWorkspacePurposeDto,
 } from './workspaces.dto.js';
 import { WorkspacesService } from './workspaces.service.js';
 import { Returns } from '../common/returns.decorator.js';
@@ -78,7 +80,7 @@ export class WorkspacesController {
   @Access('viewer', 'workspace', { guests: true })
   @ApiOperation({ summary: 'The sections switched off in this workspace' })
   async getFeatures(@Param('id', ParseUUIDPipe) id: string): Promise<WorkspaceFeaturesResponse> {
-    return { workspaceId: id, disabled: await this.features.disabled(id), unavailable: this.features.unavailable() };
+    return { workspaceId: id, ...(await this.features.state(id)), unavailable: this.features.unavailable() };
   }
 
   @Put(':id/features')
@@ -90,7 +92,30 @@ export class WorkspacesController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateWorkspaceFeaturesDto,
   ): Promise<WorkspaceFeaturesResponse> {
-    return { workspaceId: id, disabled: await this.features.set(id, dto.disabled, principal.userId), unavailable: this.features.unavailable() };
+    await this.features.set(id, dto.disabled, principal.userId);
+    return this.getFeatures(id);
+  }
+
+  // Workspace purpose (#934): advice over the toggles above. Members read the
+  // uses through `:id/features`; the description and every write are the admin's.
+  @Get(':id/purpose')
+  @Returns('WorkspacePurposeResponse')
+  @Access('admin', 'workspace')
+  @ApiOperation({ summary: 'What this workspace is used for, and the sections that suggests off (workspace admin)' })
+  getPurpose(@Param('id', ParseUUIDPipe) id: string): Promise<WorkspacePurposeResponse> {
+    return this.features.purpose(id);
+  }
+
+  @Put(':id/purpose')
+  @Returns('WorkspacePurposeResponse')
+  @Access('admin', 'workspace')
+  @ApiOperation({ summary: 'Save the purpose and the confirmed section list in one write (workspace admin); no uses and an untouched list is Skip' })
+  setPurpose(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateWorkspacePurposeDto,
+  ): Promise<WorkspacePurposeResponse> {
+    return this.features.setPurpose(id, dto, principal.userId);
   }
 
   @Patch(':id')

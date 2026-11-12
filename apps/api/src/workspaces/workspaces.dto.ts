@@ -14,7 +14,15 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { MEMBER_CAPABILITIES, WORKSPACE_FEATURES, WORKSPACE_ROLES, type MemberCapability, type WorkspaceFeature } from '@knowledge/contracts';
+import {
+  MEMBER_CAPABILITIES,
+  WORKSPACE_FEATURES,
+  WORKSPACE_ROLES,
+  WORKSPACE_USE_KEYS,
+  type MemberCapability,
+  type WorkspaceFeature,
+  type WorkspaceUse,
+} from '@knowledge/contracts';
 import { vmsg } from '../common/validation.js';
 
 const ROLES = WORKSPACE_ROLES;
@@ -118,6 +126,31 @@ export class UpdateWorkspaceFeaturesDto {
     enum: WORKSPACE_FEATURES,
     isArray: true,
     description: 'The sections to switch off; every one not listed is on. An empty list turns everything back on.',
+  })
+  @IsArray()
+  @ArrayMaxSize(WORKSPACE_FEATURES.length)
+  @IsIn(WORKSPACE_FEATURES, { each: true })
+  disabled!: WorkspaceFeature[];
+}
+
+/** PUT /v1/workspaces/:id/purpose (#934): the uses, the admin's words and the section list they confirmed. */
+export class UpdateWorkspacePurposeDto {
+  @ApiProperty({ enum: WORKSPACE_USE_KEYS, isArray: true, description: 'What the workspace is used for. Empty with an untouched `disabled` is the Skip.' })
+  @IsArray()
+  @ArrayMaxSize(WORKSPACE_USE_KEYS.length)
+  @IsIn(WORKSPACE_USE_KEYS, { each: true })
+  uses!: WorkspaceUse[];
+
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 2000, description: "The admin's own words. Only admins read it back." })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  description?: string | null;
+
+  @ApiProperty({
+    enum: WORKSPACE_FEATURES,
+    isArray: true,
+    description: 'The sections to leave switched off, as the admin confirmed them; replaces the stored list in the same write.',
   })
   @IsArray()
   @ArrayMaxSize(WORKSPACE_FEATURES.length)

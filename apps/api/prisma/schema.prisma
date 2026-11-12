@@ -4185,6 +4185,12 @@ model WorkspaceSettings {
   workItemVerification    String?  @map("work_item_verification")
   /// #604 feature toggles: WORKSPACE_FEATURES values switched off here; empty (no row) is every feature on.
   disabledFeatures        String[] @default([]) @map("disabled_features")
+  /// #934 workspace purpose: WORKSPACE_USES values. Advice only — `disabledFeatures` stays the one switch.
+  purposeUses             String[] @default([]) @map("purpose_uses")
+  /// The admin's own words; admin-only on read, and no prompt but the purpose interview's sees it.
+  purposeDescription      String?  @map("purpose_description")
+  /// When the first-visit question was confirmed or skipped; null sends the admin to the wizard once.
+  purposeAskedAt          DateTime? @map("purpose_asked_at") @db.Timestamptz
   updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz
   updatedBy               String?  @map("updated_by") @db.Uuid
 

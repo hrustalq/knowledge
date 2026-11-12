@@ -749,6 +749,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{id}/purpose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What this workspace is used for, and the sections that suggests off (workspace admin) */
+        get: operations["WorkspacesController_getPurpose"];
+        /** Save the purpose and the confirmed section list in one write (workspace admin); no uses and an untouched list is Skip */
+        put: operations["WorkspacesController_setPurpose"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces/{id}": {
         parameters: {
             query?: never;
@@ -8420,6 +8438,14 @@ export interface components {
         };
         UpdateWorkspaceFeaturesDto: {
             /** @description The sections to switch off; every one not listed is on. An empty list turns everything back on. */
+            disabled: ("workflows" | "knowledge-health" | "qa" | "analytics" | "captures" | "memos" | "conflicts" | "assistant" | "git" | "sources")[];
+        };
+        UpdateWorkspacePurposeDto: {
+            /** @description What the workspace is used for. Empty with an untouched `disabled` is the Skip. */
+            uses: ("team-wiki" | "engineering-docs" | "api-docs" | "meeting-notes" | "support-kb" | "public-docs")[];
+            /** @description The admin's own words. Only admins read it back. */
+            description?: string | null;
+            /** @description The sections to leave switched off, as the admin confirmed them; replaces the stored list in the same write. */
             disabled: ("workflows" | "knowledge-health" | "qa" | "analytics" | "captures" | "memos" | "conflicts" | "assistant" | "git" | "sources")[];
         };
         UpdateWorkspaceDto: {
@@ -17236,6 +17262,8 @@ export interface components {
             workspaceId: string;
             disabled: components["schemas"]["WorkspaceFeature"][];
             unavailable: components["schemas"]["WorkspaceFeature"][];
+            uses: components["schemas"]["WorkspaceUse"][];
+            purposeAsked: boolean;
         };
         WorkspaceGraphNode: {
             id: string;
@@ -17276,6 +17304,14 @@ export interface components {
             capabilities: components["schemas"]["MemberCapability"][];
             source: components["schemas"]["MembershipSource"];
         };
+        WorkspacePurposeResponse: {
+            workspaceId: string;
+            uses: components["schemas"]["WorkspaceUse"][];
+            description: string | null;
+            askedAt: string | null;
+            suggestedDisabled: components["schemas"]["WorkspaceFeature"][];
+            disabled: components["schemas"]["WorkspaceFeature"][];
+        };
         /** @enum {string} */
         WorkspaceRole: "guest" | "viewer" | "editor" | "admin";
         WorkspaceShareLinksResponse: {
@@ -17288,6 +17324,8 @@ export interface components {
             memberCount: number;
             myRole: components["schemas"]["WorkspaceRole"] | null;
         };
+        /** @enum {string} */
+        WorkspaceUse: "team-wiki" | "engineering-docs" | "api-docs" | "meeting-notes" | "support-kb" | "public-docs";
     };
     responses: never;
     parameters: never;
@@ -19638,6 +19676,94 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkspaceFeaturesResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkspacesController_getPurpose: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspacePurposeResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkspacesController_setPurpose: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWorkspacePurposeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspacePurposeResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

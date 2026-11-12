@@ -1620,6 +1620,64 @@ export function isWorkspaceFeature(value: unknown): value is WorkspaceFeature {
   return (WORKSPACE_FEATURES as readonly unknown[]).includes(value);
 }
 
+/**
+ * What a workspace may be used for (#934), each with the sections it needs.
+ * Closed: the purpose interview picks from this list and never names a section
+ * key. A purpose is advice — `workspace_settings.disabled_features` stays the
+ * only switch — so a use only ever *suggests* which sections are on. A new
+ * section joins the uses that need it here, or `ALWAYS_NEEDED_FEATURES`; one in
+ * neither is suggested off for every purpose.
+ */
+export const WORKSPACE_USES = {
+  'team-wiki': ['workflows'],
+  'engineering-docs': ['git', 'conflicts', 'captures', 'sources'],
+  'api-docs': ['qa', 'git', 'sources'],
+  'meeting-notes': ['memos', 'captures'],
+  'support-kb': ['analytics', 'conflicts', 'sources'],
+  'public-docs': ['analytics', 'sources'],
+} as const satisfies Record<string, readonly WorkspaceFeature[]>;
+export type WorkspaceUse = keyof typeof WORKSPACE_USES;
+export const WORKSPACE_USE_KEYS = Object.keys(WORKSPACE_USES) as WorkspaceUse[];
+
+/** Sections every use needs, so no purpose suggests them off. */
+export const ALWAYS_NEEDED_FEATURES: readonly WorkspaceFeature[] = ['assistant', 'knowledge-health'];
+
+export function isWorkspaceUse(value: unknown): value is WorkspaceUse {
+  return typeof value === 'string' && Object.hasOwn(WORKSPACE_USES, value);
+}
+
+/** The sections a purpose suggests off: every one no chosen use needs. No uses suggests nothing. */
+export function suggestedDisabled(uses: readonly WorkspaceUse[]): WorkspaceFeature[] {
+  if (!uses.length) return [];
+  const needed = new Set<WorkspaceFeature>([...ALWAYS_NEEDED_FEATURES, ...uses.flatMap((u) => WORKSPACE_USES[u])]);
+  return WORKSPACE_FEATURES.filter((f) => !needed.has(f));
+}
+
+/**
+ * Moving a workspace from one purpose to another without a stored "set by
+ * hand" flag: a section whose state still matches what the previous uses
+ * suggested follows the next suggestion; one that differs was set by hand, so
+ * it stays as it is and is reported in `kept` when the next suggestion would
+ * have had it the other way.
+ */
+export function reconcilePurpose(
+  previous: readonly WorkspaceUse[],
+  next: readonly WorkspaceUse[],
+  disabled: readonly WorkspaceFeature[],
+): { disabled: WorkspaceFeature[]; kept: WorkspaceFeature[] } {
+  const before = suggestedDisabled(previous);
+  const after = suggestedDisabled(next);
+  const out: WorkspaceFeature[] = [];
+  const kept: WorkspaceFeature[] = [];
+  for (const f of WORKSPACE_FEATURES) {
+    const off = disabled.includes(f);
+    const byHand = off !== before.includes(f);
+    if (byHand ? off : after.includes(f)) out.push(f);
+    if (byHand && off !== after.includes(f)) kept.push(f);
+  }
+  return { disabled: out, kept };
+}
+
 // GET / PUT /v1/workspaces/:id/features
 export interface WorkspaceFeaturesResponse {
   workspaceId: string;
@@ -1627,6 +1685,23 @@ export interface WorkspaceFeaturesResponse {
   disabled: WorkspaceFeature[];
   /** Off on this server whatever the workspace chose (an env ceiling, e.g. `sources` under WEB_SOURCES_ENABLED). */
   unavailable: WorkspaceFeature[];
+  /** What the workspace is used for (#934); empty when no purpose was set. Never the description. */
+  uses: WorkspaceUse[];
+  /** False until an admin confirmed or skipped the first-visit purpose question. */
+  purposeAsked: boolean;
+}
+
+// GET / PUT /v1/workspaces/:id/purpose (workspace admin)
+export interface WorkspacePurposeResponse {
+  workspaceId: string;
+  uses: WorkspaceUse[];
+  /** The admin's own words. */
+  description: string | null;
+  askedAt: string | null;
+  /** The sections these uses suggest off (`suggestedDisabled`). */
+  suggestedDisabled: WorkspaceFeature[];
+  /** The sections actually off — the switch, which a purpose only advises. */
+  disabled: WorkspaceFeature[];
 }
 
 // ---------------------------------------------------------------------------

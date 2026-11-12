@@ -25,6 +25,11 @@ in the pull request that introduces them — see
   at about 1/250 of what GenAPI charged. They are now recorded in rubles at the model's configured price, like every
   other GenAPI call, so they count toward the ruble total. (#932)
 
+- In **Settings → AI → Configuration**, turning a provider off or on now updates the routing selects at once: a
+  select that points at one of its models reads `… (provider off)` or drops the suffix without a reload. The
+  decision route and an agent's model select do the same. At narrow widths every routing row now stacks its select
+  under its label at full width, so the rows line up. (#930)
+
 ### Operations
 
 - One migration rewrites the existing Jev usage rows in place: cost becomes input tokens × 10.5 ₽ per 1M, currency

@@ -175,6 +175,25 @@ survivable because `web_search` is one function with one caller — when a keyed
 backend is worth adding, it is added where the reliability actually bit, and
 neither tool's shape changes.
 
+That cost arrived (#978): from the production network google answered "access
+denied" and duckduckgo a CAPTCHA, and those were the only two `general` engines
+on the roster, so every search came back `200` and empty. Two rules came out of
+it:
+
+- **An engine is on the roster only once it has answered from the network the
+  instance runs on.** `searxng/settings.yml` lists what was measured and what
+  refused. A refusing engine is not neutral: it spends its timeout on every
+  query and can leave a category with nothing behind it.
+- **`web_search` takes a `kind`** (`general` by default, `code`, `science`,
+  `news`), sent to SearXNG as `categories` (`WEB_SEARCH_KINDS` in
+  `web-research.service.ts`). A query with no category asks only the `general`
+  engines, so Stack Overflow, GitHub, arXiv and the rest never fired however
+  healthy they were. One category per kind, never a union: asked together,
+  SearXNG ranks a keyword engine's hits above the general web.
+
+General web search rests on Bing and Yahoo. If both refuse the instance there is
+no third general engine behind them today.
+
 **Provider-native web search is deliberately not the shortcut it looks like.**
 OpenAI's `web_search`, Anthropic's server tool, Gemini grounding and OpenRouter's
 `:online` all search _and fetch_ server-side and return prose with citations

@@ -17,6 +17,10 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- The assistant's web search found nothing for any query: the two search engines it asked both refused the
+  server. It now asks engines that answer, and picks them by the kind of question (the web in general, code,
+  scientific papers or news). (#978)
+
 - The workspace purpose interview asked its questions in the language saved on your account even when the page was
   shown in another one; it now uses the page's language. It also no longer asks a question again after you skip it:
   a skipped question counts as answered, and a repeat ends the interview with the uses picked so far. (#972)
@@ -45,6 +49,11 @@ in the pull request that introduces them — see
 - One migration rewrites the existing Jev usage rows in place: cost becomes input tokens × 10.5 ₽ per 1M, currency
   `RUB`. It is not reversed by a rollback and does not need to be: the previous release reads the corrected rows as
   they are.
+
+- `searxng/settings.yml` has a new engine list, shipped by the deploy as before. The list holds only engines that
+  answered from the production network on 2026-11-12; an instance on another network should check its own with
+  `/search?q=test&format=json&engines=<name>` and read `unresponsive_engines`. The file now sets
+  `general.contact_url`, which the Wikipedia engine requires; `SEARXNG_CONTACT_URL` overrides it.
 
 ## [0.51.0] — 2026-11-12
 

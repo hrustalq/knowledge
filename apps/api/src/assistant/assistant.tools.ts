@@ -28,7 +28,7 @@ import { MergeRequestsService } from '../documents/merge-requests.service.js';
 import { openDraftMergeRequest } from '../documents/draft-merge-request.js';
 import { AiConfigService } from '../ai/ai-config.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
-import { WebResearchService } from './web-research.service.js';
+import { WEB_SEARCH_KINDS, WebResearchService, webSearchKind } from './web-research.service.js';
 import { AssistantReadToolsService } from './assistant-read-tools.service.js';
 import { CodeResearchService } from '../connectors/code-research/code-research.service.js';
 import { WorkItemToolsService } from '../connectors/work-item-tools.service.js';
@@ -478,6 +478,14 @@ export class AssistantToolsService {
             type: 'object',
             properties: {
               query: { type: 'string', description: 'Search query, phrased as you would type it into a search engine' },
+              kind: {
+                type: 'string',
+                enum: Object.keys(WEB_SEARCH_KINDS),
+                description:
+                  'Which engines to ask. general (default): the web, including official documentation. ' +
+                  'code: Stack Overflow, GitHub repositories, MDN, Hacker News. science: papers (arXiv, Crossref, ' +
+                  'OpenAlex, Semantic Scholar). news: recent news. If one kind finds nothing, try general.',
+              },
               limit: { type: 'integer', minimum: 1, maximum: 8, description: 'Max results (default 5)' },
             },
             required: ['query'],
@@ -994,7 +1002,7 @@ export class AssistantToolsService {
     if (!query) return this.fail('query is required');
     const limit = typeof args.limit === 'number' ? Math.min(Math.max(1, args.limit), 8) : 5;
     const { webAccess } = await this.aiConfig.resolve(ctx.workspaceId);
-    return this.web.search(ctx.workspaceId, query, webAccess.effective, limit);
+    return this.web.search(ctx.workspaceId, query, webAccess.effective, limit, webSearchKind(args.kind));
   }
 
   private async webFetch(args: Record<string, unknown>, ctx: AssistantToolContext): Promise<AssistantToolResult> {

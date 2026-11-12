@@ -1713,6 +1713,8 @@ export interface EditingPolicyResponse {
   historyAudience: ScopedSetting<HistoryAudience>;
   /** Non-author approvals a merge needs; the default is MR_REQUIRED_APPROVALS. */
   requiredApprovals: ScopedSetting<number>;
+  /** MR_REQUIRED_APPROVALS: what `requiredApprovals` goes back to when the workspace stops setting it. */
+  requiredApprovalsDefault: number;
 }
 
 // GET / PUT /v1/workspaces/:id/purpose (workspace admin)

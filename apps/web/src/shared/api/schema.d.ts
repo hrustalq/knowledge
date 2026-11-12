@@ -13971,6 +13971,7 @@ export interface components {
             publishMode: components["schemas"]["ScopedSetting<PublishMode>"];
             historyAudience: components["schemas"]["ScopedSetting<HistoryAudience>"];
             requiredApprovals: components["schemas"]["ScopedSetting<number>"];
+            requiredApprovalsDefault: number;
         };
         EffectiveAccessEntry: {
             userId: string;

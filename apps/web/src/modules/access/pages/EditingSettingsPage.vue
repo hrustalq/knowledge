@@ -23,7 +23,7 @@ const features = useFeaturesStore()
 const policy = computed(() => features.editing)
 
 // Empty = inherit the server's number.
-const approvals = ref('')
+const approvals = ref<string | number>('')
 const mode = ref<PublishMode>('review')
 const audience = ref<HistoryAudience>('everyone')
 function reset() {
@@ -33,7 +33,11 @@ function reset() {
 }
 watch(policy, reset, { immediate: true })
 
-const approvalsValue = computed(() => (approvals.value.trim() === '' ? null : Number(approvals.value)))
+// A number input hands back a number once typed in, a string before.
+const approvalsValue = computed(() => {
+  const raw = String(approvals.value ?? '').trim()
+  return raw === '' ? null : Number(raw)
+})
 const approvalsValid = computed(() => {
   const n = approvalsValue.value
   return n === null || (Number.isInteger(n) && n >= 0 && n <= 20)
@@ -102,7 +106,7 @@ async function save() {
           <p class="kn-measure mt-0.5 text-sm text-muted-foreground">{{ t('editing.approvals.subtitle') }}</p>
         </div>
         <div class="space-y-1.5">
-          <label for="editing-approvals" class="text-sm font-medium">{{ t('editing.approvals.label') }}</label>
+          <label for="editing-approvals" class="block text-sm font-medium">{{ t('editing.approvals.label') }}</label>
           <Input
             id="editing-approvals"
             v-model="approvals"
@@ -112,7 +116,7 @@ async function save() {
             step="1"
             inputmode="numeric"
             class="w-28 tabular-nums"
-            :placeholder="String(policy.requiredApprovals.inherited)"
+            :placeholder="String(policy.requiredApprovalsDefault)"
             :aria-invalid="!approvalsValid || undefined"
             aria-describedby="editing-approvals-hint"
           />
@@ -121,8 +125,8 @@ async function save() {
               !approvalsValid
                 ? t('editing.approvals.invalid')
                 : approvalsValue === null
-                  ? t('editing.approvals.inherits', { n: policy.requiredApprovals.inherited }, policy.requiredApprovals.inherited)
-                  : t('editing.approvals.hint', { n: policy.requiredApprovals.inherited })
+                  ? t('editing.approvals.inherits', { n: policy.requiredApprovalsDefault }, policy.requiredApprovalsDefault)
+                  : t('editing.approvals.hint', { n: policy.requiredApprovalsDefault })
             }}
           </p>
         </div>

@@ -63393,13 +63393,17 @@
           },
           "requiredApprovals": {
             "$ref": "#/components/schemas/ScopedSetting%3Cnumber%3E"
+          },
+          "requiredApprovalsDefault": {
+            "type": "number"
           }
         },
         "required": [
           "workspaceId",
           "publishMode",
           "historyAudience",
-          "requiredApprovals"
+          "requiredApprovals",
+          "requiredApprovalsDefault"
         ]
       },
       "EffectiveAccessEntry": {

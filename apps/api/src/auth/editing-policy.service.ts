@@ -43,11 +43,13 @@ export class EditingPolicyService {
   policy(workspaceId: string): Promise<EditingPolicyResponse> {
     return this.cache.get(workspaceId, async () => {
       const row = await this.prisma.workspaceSettings.findUnique({ where: { workspaceId }, select: SELECT });
+      const approvalsDefault = this.config.get('MR_REQUIRED_APPROVALS', { infer: true });
       return {
         workspaceId,
         publishMode: scopedSetting<PublishMode>(null, known(PUBLISH_MODES, row?.publishMode), publishModeOf(null)),
         historyAudience: scopedSetting<HistoryAudience>(null, known(HISTORY_AUDIENCES, row?.historyAudience), 'everyone'),
-        requiredApprovals: scopedSetting(null, row?.requiredApprovals, this.config.get('MR_REQUIRED_APPROVALS', { infer: true })),
+        requiredApprovals: scopedSetting(null, row?.requiredApprovals, approvalsDefault),
+        requiredApprovalsDefault: approvalsDefault,
       };
     });
   }

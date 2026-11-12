@@ -44,6 +44,8 @@ describe('editing policy (#958)', () => {
     expect(saved.requiredApprovals.effective).toBe(2);
     expect(prisma.workspaceSettings.upsert.mock.calls[0]![0].update).toEqual({ publishMode: 'direct', updatedBy: 'u1' });
     expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'workspace.editing_policy_updated', params: { publishMode: 'direct' } }));
+    // The default is reported beside a set value, so a settings page can say what clearing it returns to.
+    expect(saved.requiredApprovalsDefault).toBe(1);
     expect((await editing.set(WS, { requiredApprovals: null }, 'u1')).requiredApprovals).toMatchObject({ workspace: null, effective: 1 });
   });
 });

@@ -112,6 +112,16 @@ jobs:
       - name: Build the API and the web
         run: pnpm exec turbo run build --filter=@knowledge/api --filter=@knowledge/web
 
+      # The Hindsight wire (#986, #1000): the official client against the memory
+      # routes, on this job's Postgres, Redis and ArcadeDB. The spec boots its
+      # own app in-process with stub embeddings and a stubbed reflect model, so
+      # it reaches no provider. Before the processes below start, so nothing
+      # else is consuming the queues it uses.
+      - name: Hindsight compatibility
+        run: |
+          for i in $(seq 1 30); do curl -sf http://localhost:2480/api/v1/ready && break; sleep 2; done
+          pnpm --filter @knowledge/api run test:e2e hindsight-compat
+
       # From each app's own directory: the API writes its i18n types relative to cwd.
       # The worker goes first: it creates the graph schema, and the SSR pass
       # reads the graph, so the web cannot render before the schema exists.

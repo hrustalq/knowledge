@@ -1,3 +1,4 @@
+import { AuthCoreModule } from '../auth/auth-core.module.js';
 import { Module } from '@nestjs/common';
 import { ActivityCoreModule } from '../activity/activity-core.module.js';
 import { GraphModule } from '../graph/graph.module.js';
@@ -35,6 +36,9 @@ import { GitCoreModule } from '../git/git-core.module.js';
 @Module({
   imports: [
     PrismaModule,
+    // EditingPolicyService (#958): the publish mode is checked where a revision is created.
+    // AuthModule is global in the API only, so the worker and the git remote need it named here.
+    AuthCoreModule,
     StorageModule,
     GraphModule,
     IngestionModule,

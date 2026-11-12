@@ -11,6 +11,7 @@ import type { RelationInput } from '@knowledge/contracts/documents';
 import type { AiActionId } from '@knowledge/contracts/content';
 import type { ApiDriftSpec } from '@knowledge/contracts/api';
 import type { FlowAnswer, FlowKey } from '@knowledge/contracts/flows';
+import type { WorkspaceFeature, WorkspaceUse } from '@knowledge/contracts/identity';
 import type { ReviewThreadAnchor } from '@knowledge/contracts/reviews';
 
 // (docs/features/09 follow-up). The chat is an append-only intent log; the
@@ -107,6 +108,30 @@ export interface InterviewRound {
   questions: AssistantPromptField[];
   answers?: Record<string, InterviewAnswer>;
 }
+
+// POST /v1/workspaces/:id/purpose/interview (workspace admin)
+
+/** Rounds after which the purpose interview picks from whatever it has. Enforced by the server, not the prompt. */
+export const PURPOSE_INTERVIEW_MAX_ROUNDS = 3;
+/** Questions in one of its rounds. */
+export const PURPOSE_INTERVIEW_MAX_QUESTIONS = 3;
+
+/** A use the interview picked, with one sentence saying what in the admin's words led to it. */
+export interface WorkspaceUsePick {
+  use: WorkspaceUse;
+  reason: string;
+}
+
+/**
+ * The purpose interview's reply (#934). `asking`: one more round. `done`: the
+ * uses picked from the catalogue and the sections the map suggests off for
+ * them. `unavailable`: no model can be used here, so the caller shows the
+ * checklist. Nothing is written in any case.
+ */
+export type PurposeInterviewResponse =
+  | { status: 'asking'; round: InterviewRound }
+  | { status: 'done'; picks: WorkspaceUsePick[]; suggestedDisabled: WorkspaceFeature[] }
+  | { status: 'unavailable' };
 
 export interface AssistantFormPrompt {
   kind: 'form';

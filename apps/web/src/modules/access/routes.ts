@@ -1,7 +1,8 @@
 import type { RouteRecordRaw } from 'vue-router'
 
-/** Where an admin says what the workspace is for (#934); the router guard sends a never-asked workspace's admin here once. */
-export const PURPOSE_SETUP_PATH = '/setup/purpose'
+import { PURPOSE_SETUP_PATH } from './model/purpose-setup-path'
+
+export { PURPOSE_SETUP_PATH }
 
 export const routes: RouteRecordRaw[] = [
   // No `meta.feature`: this is how the sections get chosen, so none of them gates it.

@@ -16,7 +16,7 @@ import { useFeaturesStore } from '@/stores/features'
 import FeatureSections from '../components/FeatureSections.vue'
 import PurposeUses from '../components/PurposeUses.vue'
 import { usePurposeDraft } from '../model/purpose-draft'
-import { PURPOSE_SETUP_PATH } from '../routes'
+import { PURPOSE_SETUP_PATH } from '../model/purpose-setup-path'
 
 const { t } = useI18n()
 const auth = useAuthStore()

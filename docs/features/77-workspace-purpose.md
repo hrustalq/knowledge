@@ -122,6 +122,12 @@ values, so an invented use or a section key in the reply changes nothing. The
 description and the transcript are wrapped untrusted. Usage is recorded as
 `purpose-interview`.
 
+It writes in the language of the request (`currentLocale()`, the page's
+`Accept-Language`), falling back to the account's. A skipped answer is an
+answer: the prompt says so, and `readPurposeRound` drops a question an earlier
+round already asked (same `name` or label), so a repeat ends the interview
+instead of asking again (#972).
+
 The round shape, the answer type and the two pure functions (`readRound`,
 `transcriptOf`) are shared with Describe it
 ([73](73-project-scaffolding.md)): the types sit beside `AssistantPromptField`

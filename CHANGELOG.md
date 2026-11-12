@@ -13,6 +13,14 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Fixed
+
+- The workspace purpose interview asked its questions in the language saved on your account even when the page was
+  shown in another one; it now uses the page's language. It also no longer asks a question again after you skip it:
+  a skipped question counts as answered, and a repeat ends the interview with the uses picked so far. (#972)
+
 ## [0.51.0] — 2026-11-12
 
 ### Breaking

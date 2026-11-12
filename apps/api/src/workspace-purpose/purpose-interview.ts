@@ -44,7 +44,9 @@ const SYSTEM =
 const ASK =
   `Ask only what the description and the answers so far leave open, at most ${LIMITS.questions} questions, each ` +
   'one the person can answer in a few seconds: a "choice" (one option) or a "checklist" (several) with 2–6 ' +
-  'options, or a "text". Mark at most one option recommended. When nothing that would change the picked uses is ' +
+  'options, or a "text". Mark at most one option recommended. An answer shown as "(skipped)" is an answer: the ' +
+  'person saw the question and declined it, so none of its options applies. Never ask a question again, in the ' +
+  'same words or in others. When nothing that would change the picked uses is ' +
   `left open, respond ONLY with a json object {"done": true, "uses": [...]} in the shape ${PICKS_SHAPE}. Otherwise ` +
   'respond ONLY with a json object {"questions": [{"type": "choice"|"checklist"|"text", "name": string, "label": ' +
   'string, "options": [{"value": string, "label": string, "description"?: string, "recommended"?: boolean}]}]}.';
@@ -64,8 +66,20 @@ export function purposeMessages(input: { description: string; rounds: readonly I
   };
 }
 
-/** One round's questions under this interview's caps. */
-export const readPurposeRound = (raw: unknown): InterviewRound => readRound(raw, LIMITS);
+const spelling = (text: string) => text.trim().toLowerCase().replace(/\s+/g, ' ');
+
+/**
+ * One round's questions under this interview's caps, without any that an
+ * earlier round already asked (same `name` or same label). The prompt says not
+ * to repeat; this is what holds when it does anyway, and a round left empty
+ * ends the interview.
+ */
+export function readPurposeRound(raw: unknown, asked: readonly InterviewRound[] = []): InterviewRound {
+  const before = asked.flatMap((r) => r.questions);
+  const names = new Set(before.map((q) => q.name));
+  const labels = new Set(before.map((q) => spelling(q.label)));
+  return { questions: readRound(raw, LIMITS).questions.filter((q) => !names.has(q.name) && !labels.has(spelling(q.label))) };
+}
 
 /** The uses a reply picked: catalogue values only, once each, in catalogue order, the reason clipped. */
 export function readPicks(raw: unknown): WorkspaceUsePick[] {

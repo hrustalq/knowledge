@@ -5,6 +5,7 @@ import { AiUsageService } from '../ai/ai-usage.service.js';
 import { AssistantClient } from '../assistant/assistant.client.js';
 import type { Principal } from '../auth/principal.js';
 import { parseModelJson } from '../common/model-json.js';
+import { currentLocale } from '../i18n/t.js';
 import { purposeMessages, readPicks, readPurposeRound } from './purpose-interview.js';
 
 /**
@@ -42,9 +43,11 @@ export class PurposeInterviewService {
 
     // `finish` or the round cap always ends it, whatever the model would say.
     const asking = !input.finish && input.rounds.length < PURPOSE_INTERVIEW_MAX_ROUNDS;
-    const { system, user } = purposeMessages({ ...input, asking, language: principal.locale === 'ru' ? 'Russian' : 'English' });
+    // The language of the page that is asking (its Accept-Language), not the account's stored one: they can differ.
+    const locale = currentLocale(principal.locale);
+    const { system, user } = purposeMessages({ ...input, asking, language: locale === 'ru' ? 'Russian' : 'English' });
     const raw = await this.client.chat(
-      { config: agent.config, userId: principal.userId, operation: 'purpose-interview', locale: principal.locale },
+      { config: agent.config, userId: principal.userId, operation: 'purpose-interview', locale },
       [
         { role: 'system', content: system },
         { role: 'user', content: user },
@@ -53,7 +56,7 @@ export class PurposeInterviewService {
     );
     const parsed = parseModelJson(raw) ?? {};
     if (asking) {
-      const round = readPurposeRound(parsed.questions);
+      const round = readPurposeRound(parsed.questions, input.rounds);
       if (round.questions.length && parsed.done !== true) return { status: 'asking', round };
       // Neither a usable question nor a pick: ask once more for the picks alone.
       if (!Array.isArray(parsed.uses)) return this.interview(workspaceId, { ...input, finish: true }, principal);

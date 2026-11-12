@@ -12694,13 +12694,7 @@ export interface components {
             definition: string;
             aliases?: string[];
         };
-        BlueprintInterviewAnswer: (string | string[]) | null;
-        BlueprintInterviewRound: {
-            questions: components["schemas"]["AssistantPromptField"][];
-            answers?: {
-                [key: string]: components["schemas"]["BlueprintInterviewAnswer"];
-            };
-        };
+        BlueprintInterviewRound: components["schemas"]["InterviewRound"];
         BlueprintNode: {
             title: components["schemas"]["BlueprintText"];
             category?: components["schemas"]["DocumentCategory"];
@@ -14459,6 +14453,13 @@ export interface components {
             resourceId: string;
             title: string | null;
             grantCount: number;
+        };
+        InterviewAnswer: (string | string[]) | null;
+        InterviewRound: {
+            questions: components["schemas"]["AssistantPromptField"][];
+            answers?: {
+                [key: string]: components["schemas"]["InterviewAnswer"];
+            };
         };
         KnowledgeConflictDto: {
             id: string;

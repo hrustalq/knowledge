@@ -88,6 +88,26 @@ export type AssistantPromptField =
   /** Free text, for what the options cannot cover. */
   | { type: 'text'; name: string; label: string; placeholder?: string; multiline?: boolean; required?: boolean };
 
+/** Rounds after which an interview settles on whatever the model says (#731). Enforced by the server, not the prompt. */
+export const INTERVIEW_MAX_ROUNDS = 5;
+/** Questions in one round. */
+export const INTERVIEW_MAX_QUESTIONS = 4;
+/** Options on one question. */
+export const INTERVIEW_MAX_OPTIONS = 6;
+
+/** A question's answer: an option value, the ticked values, the person's own words, or `null` when skipped. */
+export type InterviewAnswer = string | string[] | null;
+
+/**
+ * One round of a model-led interview (#731, #934): the questions asked and,
+ * once answered, the person's answers keyed by question `name`. The client
+ * sends every round back on each call; there is no interview table.
+ */
+export interface InterviewRound {
+  questions: AssistantPromptField[];
+  answers?: Record<string, InterviewAnswer>;
+}
+
 export interface AssistantFormPrompt {
   kind: 'form';
   /** What is being asked, in the assistant's own words. */

@@ -57718,39 +57718,8 @@
           "definition"
         ]
       },
-      "BlueprintInterviewAnswer": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        ],
-        "nullable": true
-      },
       "BlueprintInterviewRound": {
-        "type": "object",
-        "properties": {
-          "questions": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AssistantPromptField"
-            }
-          },
-          "answers": {
-            "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/BlueprintInterviewAnswer"
-            }
-          }
-        },
-        "required": [
-          "questions"
-        ]
+        "$ref": "#/components/schemas/InterviewRound"
       },
       "BlueprintNode": {
         "type": "object",
@@ -65437,6 +65406,40 @@
           "resourceId",
           "title",
           "grantCount"
+        ]
+      },
+      "InterviewAnswer": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        ],
+        "nullable": true
+      },
+      "InterviewRound": {
+        "type": "object",
+        "properties": {
+          "questions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssistantPromptField"
+            }
+          },
+          "answers": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/InterviewAnswer"
+            }
+          }
+        },
+        "required": [
+          "questions"
         ]
       },
       "KnowledgeConflictDto": {

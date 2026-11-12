@@ -1,7 +1,8 @@
 import type { Locale } from '@knowledge/contracts/core';
 import type { DocumentCategory } from '@knowledge/contracts/documents';
 import type { TemplateRef } from '@knowledge/contracts/templates';
-import type { AssistantPromptField, StyleRule } from '@knowledge/contracts/ai';
+import { INTERVIEW_MAX_OPTIONS, INTERVIEW_MAX_QUESTIONS, INTERVIEW_MAX_ROUNDS } from '@knowledge/contracts/ai';
+import type { InterviewAnswer, InterviewRound, StyleRule } from '@knowledge/contracts/ai';
 import type { ProjectSummary } from '@knowledge/contracts/identity';
 
 // ---------------------------------------------------------------------------
@@ -166,25 +167,12 @@ export interface DeriveBlueprintResponse {
 
 // --- POST /v1/blueprints/generate -----------------------------------------------------
 
-/** Rounds after which the interview drafts whatever the model says (#731). Enforced by the server, not the prompt. */
-export const BLUEPRINT_INTERVIEW_MAX_ROUNDS = 5;
-/** Questions in one round. */
-export const BLUEPRINT_INTERVIEW_MAX_QUESTIONS = 4;
-/** Options on one question. */
-export const BLUEPRINT_INTERVIEW_MAX_OPTIONS = 6;
-
-/** A question's answer: an option value, the ticked values, the person's own words, or `null` when skipped. */
-export type BlueprintInterviewAnswer = string | string[] | null;
-
-/**
- * One round of the Describe it interview (#731): the questions the scaffolder
- * asked and, once answered, the person's answers keyed by question `name`.
- * The client sends every round back on each call; there is no interview table.
- */
-export interface BlueprintInterviewRound {
-  questions: AssistantPromptField[];
-  answers?: Record<string, BlueprintInterviewAnswer>;
-}
+/** The Describe it interview's caps and shapes (#731) are the shared interview's (`@knowledge/contracts/ai`). */
+export const BLUEPRINT_INTERVIEW_MAX_ROUNDS = INTERVIEW_MAX_ROUNDS;
+export const BLUEPRINT_INTERVIEW_MAX_QUESTIONS = INTERVIEW_MAX_QUESTIONS;
+export const BLUEPRINT_INTERVIEW_MAX_OPTIONS = INTERVIEW_MAX_OPTIONS;
+export type BlueprintInterviewAnswer = InterviewAnswer;
+export type BlueprintInterviewRound = InterviewRound;
 
 /**
  * Describe it's reply (#716, #731). `done`: the blueprint the `scaffolder`

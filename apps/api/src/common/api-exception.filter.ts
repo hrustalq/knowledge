@@ -144,6 +144,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
     // A Hindsight client (#986) reads FastAPI's `{"detail": …}`. By path, as above.
     if (isMemoryPath(req.originalUrl ?? req.url)) {
       const memory = memoryErrorBody(status, message, code === 'VALIDATION_FAILED' ? details?.errors : undefined);
+      if (typeof details?.retryAfter === 'number') res.setHeader('Retry-After', String(details.retryAfter));
       res.status(memory.status).json(memory.body);
       return;
     }

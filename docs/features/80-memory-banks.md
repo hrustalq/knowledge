@@ -161,6 +161,8 @@ With no model configured reflect answers 409 and bills nothing.
 | `MEMORY_RETAIN_MAX_ITEMS` | `100` | items one retain request may carry |
 | `MEMORY_RETAIN_MAX_CHARS` | `50000` | characters one item may hold |
 | `MEMORY_RETAIN_RATE_PER_MIN` | `120` | retain requests a key may send a minute |
+| `MEMORY_RECALL_RATE_PER_MIN` | `300` | recall requests a key may send a minute |
+| `MEMORY_REFLECT_RATE_PER_MIN` | `30` | reflect requests a key may send a minute; refused when the limiter is unreachable |
 | `MEMORY_OPERATION_TIMEOUT_MS` | `600000` | when a claimed async retain counts as lost |
 | `MEMORY_OPERATION_RETENTION_DAYS` | `7` | how long a finished operation's row is kept |
 

@@ -9,6 +9,7 @@ import { MemoryAccessService } from './memory-access.service.js';
 import { MemoryBanksService } from './memory-banks.service.js';
 import { MemoryIntakeService } from './memory-intake.service.js';
 import { buildMemoryMcpServer, type MemoryMcpServices } from './memory-mcp.js';
+import { MemoryRateService } from './memory-rate.service.js';
 import { MemoryRecallService } from './memory-recall.service.js';
 import { MemoryReflectService } from './memory-reflect.service.js';
 
@@ -38,8 +39,8 @@ export class MemoryMcpController {
   private readonly logger = new Logger(MemoryMcpController.name);
   private readonly services: MemoryMcpServices;
 
-  constructor(access: MemoryAccessService, banks: MemoryBanksService, intake: MemoryIntakeService, recall: MemoryRecallService, reflect: MemoryReflectService) {
-    this.services = { access, banks, intake, recall, reflect };
+  constructor(access: MemoryAccessService, banks: MemoryBanksService, intake: MemoryIntakeService, recall: MemoryRecallService, reflect: MemoryReflectService, rate: MemoryRateService) {
+    this.services = { access, banks, intake, recall, reflect, rate };
   }
 
   @Post()

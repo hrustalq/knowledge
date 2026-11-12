@@ -13,6 +13,36 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Added
+
+- **Memory banks.** An agent can keep what it learns between sessions in a memory bank and read it back at once,
+  without a merge request: a memory is a row the agent wrote for itself, readable only through its bank, never a
+  page and never in page search. The API speaks [Hindsight](https://github.com/vectorize-io/hindsight)'s wire
+  (OpenAPI v1.2.1) for banks, `retain` (sync and async, with operations), `recall` and `reflect`, so the official
+  Hindsight clients connect with `https://<host>/api` as their base URL and an API key pinned to one workspace.
+  Every other Hindsight route answers 404. Off by default; see Operations. (#986)
+- An MCP endpoint per memory bank, `https://<host>/api/mcp/{bank_id}/` (or `/api/mcp` with an `X-Bank-Id` header),
+  with the tools `retain`, `sync_retain`, `recall` and `reflect`. A read-only key is offered only the last two.
+  The platform's own endpoint `/api/v1/mcp` and its tools are unchanged. (#992)
+- A `memory` section under **Settings → Features**, and two built-in agents: `memorist`, which splits what an
+  agent retains into facts when a model is routed at extraction (otherwise the text is stored as written), and
+  `reflector`, which answers a reflect. (#987, #988, #991)
+
+### Operations
+
+- `MEMORY_ENABLED` (default `false`) switches memory banks on for the server. Off, every memory route answers 404
+  and no memory table is written; a workspace can also switch its `memory` section off. Five more values tune it,
+  each with a default: `MEMORY_RETAIN_MAX_ITEMS`, `MEMORY_RETAIN_MAX_CHARS`, `MEMORY_RETAIN_RATE_PER_MIN`,
+  `MEMORY_OPERATION_TIMEOUT_MS` and `MEMORY_OPERATION_RETENTION_DAYS`.
+- Three migrations add `memory_banks`, `memory_units`, `memory_unit_entities` and `memory_operations`. They only
+  create tables, so the previous release runs against the migrated database and a rollback needs no step.
+- The worker creates the `MemoryUnit` vector type and its index in ArcadeDB when it starts. Until a worker of
+  this release has started once, a retain answers 503 and says the index is missing.
+- Retained text is masked before it is stored, but extraction and reflect send it to the model routed for the
+  workspace, as the assistant does with pages. Neither runs with no model routed.
+
 ## [0.52.1] — 2026-11-12
 
 ### Fixed

@@ -93,8 +93,8 @@ describe('memory request resolver (#986)', () => {
 
 describe('memory error body (#986)', () => {
   it('recognises the Hindsight paths and nothing of ours', () => {
-    for (const url of ['/v1/default/banks', '/v1/default/banks/x/memories/recall?a=1', '/mcp/agent/', '/version', '/health?x=1']) expect(isMemoryPath(url)).toBe(true);
-    for (const url of ['/v1/documents', '/v1/mcp', '/v1/defaults', '/versions', '/']) expect(isMemoryPath(url)).toBe(false);
+    for (const url of ['/v1/default/banks', '/v1/default/banks/x/memories/recall?a=1', '/mcp/agent/', '/mcp', '/mcp?x=1', '/version', '/health?x=1']) expect(isMemoryPath(url)).toBe(true);
+    for (const url of ['/v1/documents', '/v1/mcp', '/v1/mcp/skill', '/v1/defaults', '/versions', '/mcps', '/']) expect(isMemoryPath(url)).toBe(false);
   });
 
   it('carries a message as `detail`, and a failed validation as FastAPI’s 422 list', () => {

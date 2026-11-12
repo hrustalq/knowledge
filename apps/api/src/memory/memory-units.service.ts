@@ -80,12 +80,12 @@ export class MemoryUnitsService {
     return { items: rows.map(memoryItem), total, limit, offset };
   }
 
-  async get(bank: MemoryBank, memoryId: string): Promise<MemoryUnitItem & { type: string; entity_names: string[] }> {
+  async get(bank: MemoryBank, memoryId: string): Promise<MemoryUnitItem & { type: string }> {
     const row = UUID_RE.test(memoryId)
       ? await this.prisma.memoryUnit.findFirst({ where: { id: memoryId, bankId: bank.id }, include: { entities: { select: { name: true } } } })
       : null;
     if (!row) throw new NotFoundException(t('error.memory.memoryNotFound', { id: memoryId }));
-    return { ...memoryItem(row), type: row.factType, entity_names: row.entities.map((e) => e.name) };
+    return { ...memoryItem(row), type: row.factType };
   }
 
   /** `DELETE …/memories`: every memory of the bank, or those of one fact type. Rows at once, vectors right after. */

@@ -7,7 +7,7 @@
 
 /** The Hindsight wire: bank routes, the per-bank MCP endpoint, and the two probes a client sends first. */
 const MEMORY_PATH_PREFIXES = ['/v1/default/', '/mcp/'];
-const MEMORY_PATHS = new Set(['/version', '/health']);
+const MEMORY_PATHS = new Set(['/version', '/health', '/mcp']);
 
 export function isMemoryPath(url: string): boolean {
   const path = url.split('?', 1)[0];

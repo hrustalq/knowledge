@@ -1,60 +1,17 @@
-import { BadRequestException, Body, Controller, Delete, Get, Headers, HttpCode, Param, Post, Query } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Body, Controller, Delete, Get, Headers, HttpCode, Param, Post, Query } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
 import { CurrentPrincipal, ReadKeyOk } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { CachePolicy } from '../common/http-cache.js';
-import type { Env } from '../config/env.js';
-import { t } from '../i18n/t.js';
-import { PublicRateLimiter, RateLimitedException } from '../public/public-rate-limit.js';
 import { MemoryAccessService } from './memory-access.service.js';
-import { MemoryBanksService } from './memory-banks.service.js';
-import { readRetainItems } from './memory-facts.js';
+import { MemoryIntakeService } from './memory-intake.service.js';
 import { MemoryOperationsService } from './memory-operations.service.js';
-import { MemoryRecallService, type RecallQuery } from './memory-recall.service.js';
-import { MemoryReflectService, type ReflectQuery } from './memory-reflect.service.js';
-import { MemoryRetainService } from './memory-retain.service.js';
+import { recallQuery, reflectQuery } from './memory-queries.js';
+import { MemoryRecallService } from './memory-recall.service.js';
+import { MemoryReflectService } from './memory-reflect.service.js';
 import { MemoryUnitsService } from './memory-units.service.js';
 import { ClearMemoriesQueryDto, ListMemoriesQueryDto, ListOperationsQueryDto, RecallDto, ReflectDto, RetainDto } from './memory.dto.js';
 import type { BankStatsResponse, CancelOperationResponse, DeleteResponse, ListMemoryUnitsResponse, OperationStatusResponse, OperationsListResponse, RecallResponse, ReflectResponse, RetainResponse } from './memory-wire.js';
-
-/** A recall body as the service reads it. Shared with the per-bank MCP tools, which take the same fields. */
-export function recallQuery(dto: RecallDto, userId: string): RecallQuery {
-  const window = dto.temporal_window ? { start: new Date(dto.temporal_window.start), end: new Date(dto.temporal_window.end) } : undefined;
-  if (window && window.start > window.end) throw new BadRequestException(t('error.memory.windowInvalid'));
-  return {
-    query: dto.query,
-    types: dto.types ?? undefined,
-    tags: dto.tags ?? undefined,
-    tagsMatch: dto.tags_match ?? undefined,
-    budget: dto.budget ?? undefined,
-    maxTokens: dto.max_tokens ?? undefined,
-    window,
-    minScores: dto.min_scores ?? undefined,
-    prune: dto.rerank?.prune === true,
-    // On by default; the client switches it off with `include.entities: null`.
-    entities: dto.include?.entities !== null,
-    chunks: dto.include?.chunks != null,
-    sourceFacts: dto.include?.source_facts != null,
-    userId,
-  };
-}
-
-/** A reflect body as the service reads it. Shared with the per-bank MCP tools. */
-export function reflectQuery(dto: ReflectDto, principal: Pick<Principal, 'userId' | 'locale'>): ReflectQuery {
-  return {
-    query: dto.context?.trim() ? `${dto.query}\n\n${dto.context.trim()}` : dto.query,
-    types: dto.fact_types ?? undefined,
-    tags: dto.tags ?? undefined,
-    tagsMatch: dto.tags_match ?? undefined,
-    budget: dto.budget ?? undefined,
-    maxTokens: dto.max_tokens ?? undefined,
-    facts: dto.include?.facts != null,
-    responseSchema: dto.response_schema ?? undefined,
-    userId: principal.userId,
-    locale: principal.locale,
-  };
-}
 
 /**
  * What a bank holds, in Hindsight's wire shape (#986 phases 1–4): retain
@@ -66,23 +23,14 @@ export function reflectQuery(dto: ReflectDto, principal: Pick<Principal, 'userId
 @ReadKeyOk()
 @Controller('v1/default/banks/:bankId')
 export class MemoryUnitsController {
-  private readonly limits: { maxItems: number; maxChars: number };
-  private readonly ratePerMin: number;
-
   constructor(
     private readonly access: MemoryAccessService,
-    private readonly banks: MemoryBanksService,
-    private readonly retainer: MemoryRetainService,
+    private readonly intake: MemoryIntakeService,
     private readonly units: MemoryUnitsService,
     private readonly recaller: MemoryRecallService,
     private readonly operations: MemoryOperationsService,
     private readonly reflector: MemoryReflectService,
-    private readonly limiter: PublicRateLimiter,
-    config: ConfigService<Env, true>,
-  ) {
-    this.limits = { maxItems: config.get('MEMORY_RETAIN_MAX_ITEMS', { infer: true }), maxChars: config.get('MEMORY_RETAIN_MAX_CHARS', { infer: true }) };
-    this.ratePerMin = config.get('MEMORY_RETAIN_RATE_PER_MIN', { infer: true });
-  }
+  ) {}
 
   /**
    * Retain. An editor's call, and the one a `capture` key is lifted for. The
@@ -93,19 +41,7 @@ export class MemoryUnitsController {
   @Post('memories')
   @HttpCode(200)
   async retain(@CurrentPrincipal() principal: Principal, @Headers('x-workspace-id') ws: string | undefined, @Param('bankId') bankId: string, @Body() dto: RetainDto): Promise<RetainResponse> {
-    const caller = await this.access.caller(principal, ws, 'editor', { capture: true });
-    // Per key, or per person without one. Fail-open: a Redis outage must not stop an agent remembering.
-    if (!(await this.limiter.hit(`memory:retain:${principal.apiKey?.id ?? principal.userId}`, this.ratePerMin, 60_000, true))) {
-      throw new RateLimitedException(t('error.memory.rateLimited'), 60);
-    }
-    const items = readRetainItems(dto.items, dto.document_tags, this.limits);
-    const bank = await this.banks.ensure(caller, bankId);
-    if (dto.async === true) {
-      const operation_id = await this.operations.submit(bank, { items, userId: principal.userId, locale: principal.locale, operationId: dto.operation_id });
-      return { success: true, bank_id: bank.bankId, items_count: items.length, async: true, operation_id };
-    }
-    const { usage } = await this.retainer.retain({ workspaceId: caller.workspaceId, bank, userId: principal.userId, locale: principal.locale, items });
-    return { success: true, bank_id: bank.bankId, items_count: items.length, async: false, ...(usage ? { usage } : {}) };
+    return this.intake.retain(await this.access.caller(principal, ws, 'editor', { capture: true }), bankId, dto);
   }
 
   /** Recall. A viewer's call; the bank is resolved — and a missing or hidden one refused — before anything is embedded. */

@@ -2,6 +2,8 @@ import type { INestApplication } from '@nestjs/common';
 import type { AddressInfo } from 'node:net';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { HindsightClient, sdk } from '@vectorize-io/hindsight-client';
+import { Client as McpClient } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { PrismaService } from '../src/prisma/prisma.service.js';
 import type { FeaturesService } from '../src/auth/features.service.js';
 import type { GraphService } from '../src/graph/graph.service.js';
@@ -110,6 +112,8 @@ describe('Hindsight compatibility (e2e, #986)', () => {
       await prisma.workspace.upsert({ where: { id }, update: { deletedAt: null }, create: { id, name: `Hindsight e2e ${'AB-'[i]} (#986)` } });
     }
     await prisma.memoryBank.deleteMany({ where: { workspaceId: { in: WORKSPACES } } });
+    // And the vectors an interrupted earlier run left behind.
+    for (const ws of WORKSPACES) await graph.deleteMemoryUnits(ws, (await graph.memoryUnitIds(ws)).map((v) => v.unitId));
     await prisma.workspaceSettings.upsert({
       where: { workspaceId: WS_OFF },
       update: { disabledFeatures: ['memory'] },
@@ -237,7 +241,7 @@ describe('Hindsight compatibility (e2e, #986)', () => {
       const features: FeaturesService = app.get(Features);
       const unavailable = vi.spyOn(features, 'unavailable').mockReturnValue(['memory']);
       try {
-        for (const [method, path, body] of [...routes, ['GET', '/version'], ['GET', '/health']] as typeof routes) {
+        for (const [method, path, body] of [...routes, ['GET', '/version'], ['GET', '/health'], ['POST', '/mcp', {}], ['GET', '/mcp'], ['DELETE', '/mcp/x/'], ['POST', '/mcp/x/', {}]] as typeof routes) {
           expect([method, path, (await call(people.alice.key, method, path, body)).status]).toEqual([method, path, 404]);
         }
       } finally {
@@ -769,6 +773,119 @@ describe('Hindsight compatibility (e2e, #986)', () => {
       const readOnly = await mintKey(people.alice.id, { workspaceId: WS_A, scope: 'read' });
       expect((await client(readOnly).reflect(mem, 'What does Alice do?')).text).toBe(reply);
       expect((await call(people.alice.key, 'POST', `/v1/default/banks/${mem}/reflect`, { query: '' })).status).toBe(422);
+    });
+  });
+
+  describe('phase 5: an MCP endpoint per bank', () => {
+    const mem = `mcp-${nonce}`;
+    async function mcp(key: string, path: string, headers: Record<string, string> = {}) {
+      const transport = new StreamableHTTPClientTransport(new URL(`${baseUrl}${path}`), { requestInit: { headers: { Authorization: `Bearer ${key}`, ...headers } } });
+      const mcpClient = new McpClient({ name: 'hindsight-compat', version: '0' });
+      await mcpClient.connect(transport);
+      const tool = async (name: string, args: Record<string, unknown>) => {
+        const res = (await mcpClient.callTool({ name, arguments: args })) as { isError?: boolean; content: Array<{ text: string }> };
+        return { isError: res.isError === true, text: res.content[0]?.text ?? '' };
+      };
+      return { mcpClient, tool, names: async () => (await mcpClient.listTools()).tools.map((t) => t.name) };
+    }
+    const rpc = (key: string, path: string, headers: Record<string, string> = {}) =>
+      fetch(`${baseUrl}${path}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', ...headers },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+      });
+
+    it('lists four tools for a write key; sync_retain then recall returns the stored fact', async () => {
+      const { names, tool, mcpClient } = await mcp(people.alice.key, `/mcp/${mem}/`);
+      expect(await names()).toEqual(['retain', 'sync_retain', 'recall', 'reflect']);
+      expect(mcpClient.getServerVersion()?.name).toBe('knowledge-memory');
+      expect(JSON.parse((await tool('sync_retain', { content: 'Gwen maintains the deploy pipeline', tags: ['team'], context: 'mcp e2e' })).text)).toMatchObject({ status: 'success' });
+      const recalled = await tool('recall', { query: 'Who maintains the deploy pipeline?' });
+      expect(recalled.isError).toBe(false);
+      // Recalled text reaches a model wrapped untrusted.
+      expect(recalled.text).toMatch(/^<memories tool="recall">[\s\S]*Gwen maintains the deploy pipeline[\s\S]*<\/memories>$/);
+      // The same memory the REST surface serves: one store behind both.
+      expect((await client(people.alice.key).recall(mem, 'Who maintains the deploy pipeline?')).results[0]?.text).toBe('Gwen maintains the deploy pipeline');
+    });
+
+    it('retains asynchronously through `retain`, and the memory is there once the operation completes', async () => {
+      const { tool } = await mcp(people.alice.key, `/mcp/${mem}/`);
+      const accepted = JSON.parse((await tool('retain', { content: 'Hugo reviews the database migrations' })).text);
+      expect(accepted).toMatchObject({ status: 'accepted', operation_id: expect.any(String) });
+      for (let i = 0; i < 100; i++) {
+        const status = (await sdk.getOperationStatus({ client: raw(people.alice.key), path: { bank_id: mem, operation_id: accepted.operation_id } })).data!.status;
+        if (status === 'completed') break;
+        if (status === 'failed') throw new Error('operation failed');
+        await new Promise((r) => setTimeout(r, 150));
+      }
+      expect((await tool('recall', { query: 'Who reviews the database migrations?' })).text).toContain('Hugo reviews the database migrations');
+    });
+
+    it('offers a read key only recall and reflect, and refuses its retain', async () => {
+      const readOnly = await mintKey(people.alice.id, { workspaceId: WS_A, scope: 'read' });
+      const { names, tool } = await mcp(readOnly, `/mcp/${mem}/`);
+      expect(await names()).toEqual(['recall', 'reflect']);
+      const refused = await tool('sync_retain', { content: 'nope' }).catch((e: Error) => ({ isError: true, text: e.message }));
+      expect(refused.isError).toBe(true);
+      expect(await prisma.memoryUnit.count({ where: { workspaceId: WS_A, text: 'nope' } })).toBe(0);
+      expect((await tool('recall', { query: 'deploy pipeline' })).text).toContain('Gwen maintains the deploy pipeline');
+      // A capture key retains here as it does over REST.
+      const capture = await mcp(await mintKey(people.alice.id, { workspaceId: WS_A, scope: 'capture' }), `/mcp/${mem}/`);
+      expect(await capture.names()).toContain('sync_retain');
+      expect((await capture.tool('sync_retain', { content: 'Captured over MCP' })).isError).toBe(false);
+    });
+
+    it('takes the bank from X-Bank-Id on the header form, which also lists banks', async () => {
+      const { names, tool } = await mcp(people.alice.key, '/mcp', { 'X-Bank-Id': mem });
+      expect(await names()).toEqual(['retain', 'sync_retain', 'recall', 'reflect', 'list_banks']);
+      expect((await tool('recall', { query: 'deploy pipeline' })).text).toContain('Gwen maintains the deploy pipeline');
+      const listed = JSON.parse((await tool('list_banks', { query: mem })).text);
+      expect(listed.banks.map((b: { bank_id: string }) => b.bank_id)).toEqual([mem]);
+      // Another workspace's caller, same bank name: its own workspace has no such bank.
+      const other = await mcp(people.carol.key, '/mcp', { 'X-Bank-Id': mem });
+      const theirs = await other.tool('recall', { query: 'deploy pipeline' });
+      expect(theirs.isError).toBe(true);
+      expect(theirs.text).not.toContain('Gwen');
+      expect(JSON.parse((await other.tool('list_banks', {})).text).banks).toEqual([]);
+    });
+
+    it('refuses a call once the section is switched off, though the tool was listed', async () => {
+      const { FeaturesService: Features } = await import('../src/auth/features.service.js');
+      const { tool, names } = await mcp(people.alice.key, `/mcp/${mem}/`);
+      expect(await names()).toContain('recall');
+      const off = vi.spyOn(app.get(Features), 'disabled').mockResolvedValue(['memory']);
+      try {
+        const refused = await tool('recall', { query: 'deploy pipeline' }).catch((e: Error) => ({ isError: true, text: e.message }));
+        expect(refused.isError).toBe(true);
+        expect(refused.text).not.toContain('Gwen');
+      } finally {
+        off.mockRestore();
+      }
+    });
+
+    it('answers 404 with memory off, 403 to a key limited to toolsets, 400 to an unpinned key and 405 to GET, on both endpoints', async () => {
+      const toolsets = await mintKey(people.alice.id, { workspaceId: WS_A, toolsets: ['search'] });
+      const unpinned = await mintKey(people.alice.id, { workspaceId: null });
+      for (const path of [`/mcp/${mem}/`, '/mcp']) {
+        expect([path, (await rpc(people.alice.key, path)).status]).toEqual([path, 200]);
+        const off = await rpc(people.erin.key, path);
+        expect([path, off.status]).toEqual([path, 404]);
+        expect(await off.json()).toEqual({ detail: expect.any(String) });
+        expect([path, (await rpc(toolsets, path)).status]).toEqual([path, 403]);
+        expect([path, (await rpc(unpinned, path)).status]).toEqual([path, 400]);
+        expect([path, (await fetch(`${baseUrl}${path}`, { headers: { Authorization: `Bearer ${people.alice.key}` } })).status]).toEqual([path, 405]);
+        expect([path, (await fetch(`${baseUrl}${path}`, { method: 'DELETE', headers: { Authorization: `Bearer ${people.alice.key}` } })).status]).toEqual([path, 405]);
+      }
+    });
+
+    it('leaves the platform’s own MCP endpoint without a memory tool', async () => {
+      const res = await rpc(people.alice.key, '/v1/mcp');
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { result: { tools: Array<{ name: string }> } };
+      const names = body.result.tools.map((t) => t.name);
+      expect(names.length).toBeGreaterThan(20);
+      expect(names.every((n) => n.startsWith('knowledge_'))).toBe(true);
+      expect((await client(people.alice.key).getVersion()).features.mcp).toBe(true);
     });
   });
 });

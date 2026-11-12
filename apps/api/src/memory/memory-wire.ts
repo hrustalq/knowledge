@@ -79,7 +79,7 @@ export interface RetainResponse {
   usage?: TokenUsage | null;
 }
 
-/** `MemoryUnitListItem`, and what `GET …/memories/{id}` answers with (plus `type` and the entity names as a list). */
+/** `MemoryUnitListItem`, and what `GET …/memories/{id}` answers with (plus `type`). */
 export interface MemoryUnitItem {
   id: string;
   text: string;

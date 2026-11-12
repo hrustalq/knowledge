@@ -84,7 +84,6 @@ export class MinScoresDto {
 
 export class RerankDto {
   @IsOptional() @IsBoolean() prune?: boolean | null;
-  @IsOptional() @IsBoolean() dedup?: boolean | null;
 }
 
 /** `include`: each key on with an object, off with null. Their inner options are Hindsight's and are not read. */
@@ -120,7 +119,6 @@ export class ListOperationsQueryDto {
 
 export class ReflectIncludeDto {
   @IsOptional() @IsObject() facts?: Record<string, unknown> | null;
-  @IsOptional() @IsObject() tool_calls?: Record<string, unknown> | null;
 }
 
 /** `ReflectRequest`. Mental models, directives and `tag_groups` are Hindsight's and are left undeclared. */

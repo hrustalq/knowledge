@@ -80,7 +80,7 @@ export class MemoryProbeController {
       api_version: HINDSIGHT_API_VERSION,
       features: {
         observations: false,
-        mcp: false,
+        mcp: true,
         worker: true,
         bank_config_api: false,
         bank_llm_health: false,

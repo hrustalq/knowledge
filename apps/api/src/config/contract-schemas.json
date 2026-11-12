@@ -2762,7 +2762,8 @@
       "source-judge",
       "blueprint-derive",
       "blueprint-generate",
-      "blueprint-interview"
+      "blueprint-interview",
+      "purpose-interview"
     ]
   },
   "AiUsageResponse": {
@@ -19998,6 +19999,70 @@
       "allowPublicEmbeds"
     ]
   },
+  "PurposeInterviewResponse": {
+    "anyOf": [
+      {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "asking"
+            ]
+          },
+          "round": {
+            "$ref": "#/components/schemas/InterviewRound"
+          }
+        },
+        "required": [
+          "status",
+          "round"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "done"
+            ]
+          },
+          "picks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceUsePick"
+            }
+          },
+          "suggestedDisabled": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceFeature"
+            }
+          }
+        },
+        "required": [
+          "status",
+          "picks",
+          "suggestedDisabled"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "unavailable"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      }
+    ]
+  },
   "PushDocumentResponse": {
     "type": "object",
     "properties": {
@@ -26308,6 +26373,21 @@
       "meeting-notes",
       "support-kb",
       "public-docs"
+    ]
+  },
+  "WorkspaceUsePick": {
+    "type": "object",
+    "properties": {
+      "use": {
+        "$ref": "#/components/schemas/WorkspaceUse"
+      },
+      "reason": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "use",
+      "reason"
     ]
   }
 }

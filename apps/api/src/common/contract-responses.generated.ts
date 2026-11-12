@@ -289,6 +289,7 @@ import type {
   PublishBranchResponse,
   PublishedSiteSummary,
   PublishingSettingsResponse,
+  PurposeInterviewResponse,
   PushDocumentResponse,
   QaOverviewResponse,
   QualityListResponse,
@@ -660,6 +661,7 @@ export interface ContractResponses {
   PublishBranchResponse: PublishBranchResponse;
   PublishedSiteSummary: PublishedSiteSummary;
   PublishingSettingsResponse: PublishingSettingsResponse;
+  PurposeInterviewResponse: PurposeInterviewResponse;
   PushDocumentResponse: PushDocumentResponse;
   QaOverviewResponse: QaOverviewResponse;
   QualityListResponse: QualityListResponse;

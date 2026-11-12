@@ -6,6 +6,7 @@ import { SsoModule } from './auth/sso/sso.module.js';
 import { ScimModule } from './scim/scim.module.js';
 import { UsersModule } from './users/users.module.js';
 import { WorkspacesModule } from './workspaces/workspaces.module.js';
+import { WorkspacePurposeModule } from './workspace-purpose/workspace-purpose.module.js';
 import { PermissionsModule } from './permissions/permissions.module.js';
 import { CapturesModule } from './captures/captures.module.js';
 import { ProfilesModule } from './profiles/profiles.module.js';
@@ -64,6 +65,7 @@ import { ChatModule } from './chat/chat.module.js';
     ScimModule,
     UsersModule,
     WorkspacesModule,
+    WorkspacePurposeModule,
     PermissionsModule,
     ProfilesModule,
     ProjectsModule,

@@ -1381,7 +1381,9 @@ export type AiUsageOperation =
   /** The `scaffolder` drafting a whole blueprint from a person's description, with read tools (#716, Describe it). One row per model round. */
   | 'blueprint-generate'
   /** One round of the Describe it interview: the `scaffolder` asking what the brief left open (#731). The draft that ends it is `blueprint-generate`. */
-  | 'blueprint-interview';
+  | 'blueprint-interview'
+  /** One call of the workspace purpose interview (#934): a round of questions or the picked uses, on the scaffolder's model. */
+  | 'purpose-interview';
 
 export type AiUsageGroupBy = 'user' | 'model' | 'day' | 'project';
 /** The `project` breakdown's bucket for calls made for no single project (#927). */

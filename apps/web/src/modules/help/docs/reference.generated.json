@@ -6119,6 +6119,16 @@
       "source": "workspace",
       "public": false,
       "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workspaces/{id}/purpose/interview",
+      "tag": "workspaces",
+      "summary": "One round of the purpose interview (workspace admin): questions, or the uses picked from the catalogue",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
     }
   ],
   "mcpTools": [

@@ -1,5 +1,6 @@
 import type { IngestionJobStatus, Locale, RevisionStatus } from '@knowledge/contracts/core';
 import type { FactExtractor } from '@knowledge/contracts/graph';
+import type { InterviewRound } from '@knowledge/contracts/ai';
 
 // stale detection / reindex scheduling, historical fact queries
 // ---------------------------------------------------------------------------
@@ -1703,6 +1704,30 @@ export interface WorkspacePurposeResponse {
   /** The sections actually off — the switch, which a purpose only advises. */
   disabled: WorkspaceFeature[];
 }
+
+// POST /v1/workspaces/:id/purpose/interview (workspace admin)
+
+/** Rounds after which the purpose interview picks from whatever it has. Enforced by the server, not the prompt. */
+export const PURPOSE_INTERVIEW_MAX_ROUNDS = 3;
+/** Questions in one of its rounds. */
+export const PURPOSE_INTERVIEW_MAX_QUESTIONS = 3;
+
+/** A use the interview picked, with one sentence saying what in the admin's words led to it. */
+export interface WorkspaceUsePick {
+  use: WorkspaceUse;
+  reason: string;
+}
+
+/**
+ * The purpose interview's reply (#934). `asking`: one more round. `done`: the
+ * uses picked from the catalogue and the sections the map suggests off for
+ * them. `unavailable`: no model can be used here, so the caller shows the
+ * checklist. Nothing is written in any case.
+ */
+export type PurposeInterviewResponse =
+  | { status: 'asking'; round: InterviewRound }
+  | { status: 'done'; picks: WorkspaceUsePick[]; suggestedDisabled: WorkspaceFeature[] }
+  | { status: 'unavailable' };
 
 // ---------------------------------------------------------------------------
 // MCP toolsets (#945)

@@ -1056,6 +1056,26 @@ export interface paths {
         patch: operations["BlueprintsController_update"];
         trace?: never;
     };
+    "/v1/workspaces/{id}/purpose/interview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * One round of the purpose interview (workspace admin): questions, or the uses picked from the catalogue
+         * @description Writes nothing. `asking` carries the next round; `done` the uses picked, a reason for each and the sections they suggest off; `unavailable` means no model can be used here (none configured, the scaffolder agent is off, or the budget is spent) and the caller shows the checklist instead. `finish` or the third round always ends in `done`. Saving is `PUT :id/purpose`.
+         */
+        post: operations["PurposeInterviewController_interview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/groups": {
         parameters: {
             query?: never;
@@ -8568,6 +8588,16 @@ export interface components {
             };
             enabled?: boolean;
         };
+        PurposeInterviewDto: {
+            /** @description What the workspace is for, in the admin's words. */
+            description?: string;
+            /** @description Every round so far, each as it was returned with the answers added. There is no interview state on the server. */
+            rounds?: {
+                [key: string]: unknown;
+            }[];
+            /** @description Pick now from the answers so far, asking nothing more. Off unless sent. */
+            finish?: boolean;
+        };
         CreateUserGroupDto: {
             workspaceId: string;
             /** @example Security team */
@@ -11903,7 +11933,7 @@ export interface components {
             createdAt: string;
         };
         /** @enum {string} */
-        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "memo-triage" | "source-recipe" | "source-judge" | "blueprint-derive" | "blueprint-generate" | "blueprint-interview";
+        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "memo-triage" | "source-recipe" | "source-judge" | "blueprint-derive" | "blueprint-generate" | "blueprint-interview" | "purpose-interview";
         AiUsageResponse: {
             from: string;
             to: string;
@@ -15849,6 +15879,19 @@ export interface components {
             allowPublicSites: boolean;
             allowPublicEmbeds: boolean;
         };
+        PurposeInterviewResponse: {
+            /** @enum {string} */
+            status: "asking";
+            round: components["schemas"]["InterviewRound"];
+        } | {
+            /** @enum {string} */
+            status: "done";
+            picks: components["schemas"]["WorkspaceUsePick"][];
+            suggestedDisabled: components["schemas"]["WorkspaceFeature"][];
+        } | {
+            /** @enum {string} */
+            status: "unavailable";
+        };
         PushDocumentResponse: {
             run: components["schemas"]["ConnectorRunInfo"];
         };
@@ -17326,6 +17369,10 @@ export interface components {
         };
         /** @enum {string} */
         WorkspaceUse: "team-wiki" | "engineering-docs" | "api-docs" | "meeting-notes" | "support-kb" | "public-docs";
+        WorkspaceUsePick: {
+            use: components["schemas"]["WorkspaceUse"];
+            reason: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -20828,6 +20875,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BlueprintEntry"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    PurposeInterviewController_interview: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PurposeInterviewDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PurposeInterviewResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

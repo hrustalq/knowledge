@@ -6923,7 +6923,9 @@
         "member_capabilities_changed": "Member capabilities changed",
         "workspace_deleted": "Workspace deleted",
         "workspace_renamed": "Workspace renamed",
-        "workspace_editing_policy_updated": "Editing policy changed"
+        "workspace_editing_policy_updated": "Editing policy changed",
+        "memory_bank_created": "Memory bank created",
+        "memory_bank_deleted": "Memory bank deleted"
       }
     },
     "tabs": {
@@ -7764,13 +7766,15 @@
       "conflicts": "The list of contradictions between pages and resolving them.",
       "assistant": "The Assistant page, its saved conversations and the chat panel beside the editor. Review, lint and suggestion helpers stay.",
       "git": "Cloning and fetching this workspace's projects with git, over HTTPS with an API key.",
-      "sources": "Pages that follow a web page or markdown file: \"Link a source\" in the new-page menu and the Source panel on such a page."
+      "sources": "Pages that follow a web page or markdown file: \"Link a source\" in the new-page menu and the Source panel on such a page.",
+      "memory": "Memory banks for agents: the Hindsight-compatible API an agent uses to retain what it learns and recall it later."
     },
     "names": {
       "git": "Git remote",
-      "sources": "Source-backed pages"
+      "sources": "Source-backed pages",
+      "memory": "Agent memory"
     },
-    "serverOff": "Off on this server (WEB_SOURCES_ENABLED), whatever is chosen here.",
+    "serverOff": "Off on this server ({env}), whatever is chosen here.",
       "sectionsTitle": "Sections",
       "purpose": {
         "title": "Purpose",

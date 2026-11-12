@@ -43728,7 +43728,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.51.0",
+    "version": "0.52.1",
     "contact": {}
   },
   "tags": [],
@@ -44464,7 +44464,8 @@
                 "conflicts",
                 "assistant",
                 "git",
-                "sources"
+                "sources",
+                "memory"
               ]
             }
           }
@@ -44512,7 +44513,8 @@
                 "conflicts",
                 "assistant",
                 "git",
-                "sources"
+                "sources",
+                "memory"
               ]
             }
           }
@@ -78148,7 +78150,8 @@
           "conflicts",
           "assistant",
           "git",
-          "sources"
+          "sources",
+          "memory"
         ]
       },
       "WorkspaceFeaturesResponse": {

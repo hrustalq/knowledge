@@ -45,7 +45,10 @@ export class FeaturesService {
    * written into it, so turning the env on brings back what the admin chose.
    */
   unavailable(): WorkspaceFeature[] {
-    return this.config.get('WEB_SOURCES_ENABLED', { infer: true }) ? [] : ['sources'];
+    return [
+      ...(this.config.get('WEB_SOURCES_ENABLED', { infer: true }) ? [] : (['sources'] as const)),
+      ...(this.config.get('MEMORY_ENABLED', { infer: true }) ? [] : (['memory'] as const)),
+    ];
   }
 
   state(workspaceId: string): Promise<FeatureState> {

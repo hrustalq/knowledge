@@ -905,6 +905,13 @@ export type I18nTranslations = {
             "failed": string;
             "timedOut": string;
         };
+        "memory": {
+            "disabled": string;
+            "workspaceRequired": string;
+            "workspaceHeaderRequired": string;
+            "bankNotFound": string;
+            "bankIdInvalid": string;
+        };
         "memo": {
             "notFound": string;
             "plaudOff": string;

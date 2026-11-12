@@ -772,6 +772,12 @@ export const envSchema = z.object({
    */
   WEB_SOURCES_ENABLED: boolish(false),
   /**
+   * Memory banks (#986): the Hindsight-compatible routes under `/v1/default`.
+   * A ceiling over the workspace `memory` toggle: off, every memory route
+   * answers 404 and no memory table is written.
+   */
+  MEMORY_ENABLED: boolish(false),
+  /**
    * Let a `web` source fetch a private or loopback address. Separate from
    * CONNECTOR_ALLOW_PRIVATE_URLS because any editor can link a source, where
    * only an admin sets up a connector.

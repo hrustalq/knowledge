@@ -26205,7 +26205,8 @@
       "conflicts",
       "assistant",
       "git",
-      "sources"
+      "sources",
+      "memory"
     ]
   },
   "WorkspaceFeaturesResponse": {

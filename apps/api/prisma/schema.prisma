@@ -4790,3 +4790,26 @@ model PlaudImport {
   @@index([workspaceId, userId, status])
   @@map("plaud_imports")
 }
+
+/// A memory bank (#986): where an agent keeps what it learns for itself. One
+/// per (workspace, `bank_id`), the free-text id a Hindsight client names it by.
+/// Never a page: its memories are read only through the bank.
+model MemoryBank {
+  id          String  @id @default(uuid()) @db.Uuid
+  workspaceId String  @map("workspace_id") @db.Uuid
+  /// The client's name for the bank, as it appears in `/v1/default/banks/{bank_id}`.
+  bankId      String  @map("bank_id")
+  /// A bank bound to a project follows that project's restriction. Null = the whole workspace.
+  projectId   String? @map("project_id") @db.Uuid
+  name        String
+  mission     String  @default("")
+  /// `{ skepticism, literalism, empathy }`, each 1–5.
+  disposition Json    @default("{\"skepticism\":3,\"literalism\":3,\"empathy\":3}")
+  createdBy   String  @map("created_by") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@unique([workspaceId, bankId])
+  @@map("memory_banks")
+}

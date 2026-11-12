@@ -211,6 +211,13 @@
     "failed": "Import failed",
     "timedOut": "Parsing {filename} took longer than {seconds}s and was stopped"
   },
+  "memory": {
+    "disabled": "Memory banks are not enabled here",
+    "workspaceRequired": "Memory routes need an API key pinned to one workspace: the key decides which workspace \"default\" means",
+    "workspaceHeaderRequired": "With AUTH_MODE=none, name the workspace in an X-Workspace-Id header",
+    "bankNotFound": "Memory bank {bankId} not found",
+    "bankIdInvalid": "A bank id is 1 to 200 characters with no control characters"
+  },
   "memo": {
     "notFound": "Memo not found",
     "plaudOff": "Plaud import is not set up on this server.",

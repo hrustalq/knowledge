@@ -14,6 +14,7 @@ import {
   MaxLength,
   Min,
   ValidateNested,
+  ValidateIf,
 } from 'class-validator';
 import {
   API_BREAKING_CHANGE_POLICIES,
@@ -147,6 +148,19 @@ export class ApiTryRequestDto {
   @IsOptional()
   @IsString()
   body?: string | null;
+}
+
+/** PATCH /v1/projects/:id/settings/breaking-changes */
+export class UpdateProjectBreakingChangesDto {
+  @ApiProperty({
+    enum: API_BREAKING_CHANGE_POLICIES,
+    nullable: true,
+    type: String,
+    description: "The project's merge gate for breaking spec changes; null inherits the workspace's",
+  })
+  @ValidateIf((o: UpdateProjectBreakingChangesDto) => o.policy !== null)
+  @IsIn(API_BREAKING_CHANGE_POLICIES)
+  policy!: ApiBreakingChangePolicy | null;
 }
 
 export class UpdateApiSettingsDto {

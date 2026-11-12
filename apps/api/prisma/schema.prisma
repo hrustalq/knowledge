@@ -757,6 +757,8 @@ model Project {
   remindBeforeDays   Int?   @map("remind_before_days")
   inactiveAfterDays  Int?   @map("inactive_after_days")
   emptyMaxChars      Int?   @map("empty_max_chars")
+  /// off | warn | block — the breaking-API merge gate (#922); null is the workspace's.
+  apiBreakingChangePolicy String? @map("api_breaking_change_policy")
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   documents     Document[]

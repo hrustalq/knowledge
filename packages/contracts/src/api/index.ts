@@ -1,4 +1,4 @@
-import type { ApiDocumentKind } from '@knowledge/contracts/core';
+import { scopedSetting, type ApiDocumentKind, type ScopedSetting } from '@knowledge/contracts/core';
 import { normalizeEntityKey } from '@knowledge/contracts/graph';
 import type { ApiSpecDiff, ApiSpecDiffSummary } from '@knowledge/contracts/api/diff';
 import type { CodeSample } from '@knowledge/contracts/api/samples';
@@ -407,6 +407,13 @@ export interface ApiSettingsResponse {
   updatedAt: string | null;
 }
 
+/** GET/PATCH /v1/projects/:id/settings/breaking-changes (#922). A merge gate: written by workspace admins only. */
+export interface ProjectBreakingChangeSettings {
+  workspaceId: string;
+  projectId: string;
+  policy: ScopedSetting<ApiBreakingChangePolicy>;
+}
+
 export interface UpdateApiSettingsRequest {
   /** null goes back to the ceiling. */
   apiTryProxyMode?: ApiTryProxyMode | null;
@@ -552,6 +559,19 @@ export interface ApiTryResponse {
 export const API_BREAKING_CHANGE_POLICIES = ['off', 'warn', 'block'] as const;
 export type ApiBreakingChangePolicy = (typeof API_BREAKING_CHANGE_POLICIES)[number];
 export const DEFAULT_API_BREAKING_CHANGE_POLICY: ApiBreakingChangePolicy = 'warn';
+
+/**
+ * The gate policy across levels (#922): project → workspace → `warn`. A stored
+ * value outside the vocabulary reads as unset at its level, never as a policy.
+ */
+export function scopedApiBreakingChangePolicy(
+  project: string | null | undefined,
+  workspace: string | null | undefined,
+): ScopedSetting<ApiBreakingChangePolicy> {
+  const known = (value: string | null | undefined) =>
+    API_BREAKING_CHANGE_POLICIES.includes(value as ApiBreakingChangePolicy) ? (value as ApiBreakingChangePolicy) : null;
+  return scopedSetting(known(project), known(workspace), DEFAULT_API_BREAKING_CHANGE_POLICY);
+}
 
 /** A sparse setting over the code default; there is no env ceiling for this one. */
 export function resolveApiBreakingChangePolicy(requested: string | null | undefined): ApiBreakingChangePolicy {

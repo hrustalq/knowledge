@@ -265,6 +265,7 @@ import type {
   PlaudSettingsResponse,
   PostAssistantMessageResponse,
   ProjectAnalyticsResponse,
+  ProjectBreakingChangeSettings,
   ProjectDeletionPreview,
   ProjectGitResponse,
   ProjectOverviewResponse,
@@ -630,6 +631,7 @@ export interface ContractResponses {
   PlaudSettingsResponse: PlaudSettingsResponse;
   PostAssistantMessageResponse: PostAssistantMessageResponse;
   ProjectAnalyticsResponse: ProjectAnalyticsResponse;
+  ProjectBreakingChangeSettings: ProjectBreakingChangeSettings;
   ProjectDeletionPreview: ProjectDeletionPreview;
   ProjectGitResponse: ProjectGitResponse;
   ProjectOverviewResponse: ProjectOverviewResponse;

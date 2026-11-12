@@ -20,6 +20,7 @@ import type {
   ListApiTestEnvironmentsResponse,
   ListApiTestRunsResponse,
   ListTestFixturesResponse,
+  ProjectBreakingChangeSettings,
   QaOverviewResponse,
   RankApiTestFixturesResponse,
   SearchApiOperationsResponse,
@@ -55,6 +56,7 @@ import {
   SearchApiOperationsQueryDto,
   SetApiTestBindingsDto,
   UpdateApiSettingsDto,
+  UpdateProjectBreakingChangesDto,
 } from './api-specs.dto.js';
 import { Returns } from '../common/returns.decorator.js';
 
@@ -445,6 +447,33 @@ export class ApiSettingsController {
     @Body() dto: UpdateApiSettingsDto,
   ): Promise<ApiSettingsResponse> {
     return this.settings.update(id, dto, principal?.userId);
+  }
+}
+
+/**
+ * A project's breaking-change gate (#922). Read by anyone who may open the
+ * project; written by workspace admins only — a merge gate is never a
+ * maintainer's to loosen.
+ */
+@ApiTags('projects')
+@Controller('v1/projects')
+export class ProjectApiSettingsController {
+  constructor(private readonly settings: ApiSettingsService) {}
+
+  @Get(':id/settings/breaking-changes')
+  @Returns('ProjectBreakingChangeSettings')
+  @Access('viewer', 'project')
+  @ApiOperation({ summary: "A project's breaking-change gate: the workspace's policy, the project's own, and what applies" })
+  get(@Param('id', ParseUUIDPipe) id: string): Promise<ProjectBreakingChangeSettings> {
+    return this.settings.projectBreakingChanges(id);
+  }
+
+  @Patch(':id/settings/breaking-changes')
+  @Returns('ProjectBreakingChangeSettings')
+  @Access('admin', 'project')
+  @ApiOperation({ summary: "Set the project's breaking-change gate (workspace admin); null inherits the workspace's" })
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateProjectBreakingChangesDto): Promise<ProjectBreakingChangeSettings> {
+    return this.settings.setProjectBreakingChanges(id, dto.policy);
   }
 }
 

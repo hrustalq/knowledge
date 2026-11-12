@@ -6,7 +6,14 @@ import { AuthCoreModule } from '../auth/auth-core.module.js';
 import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { ApiDriftCheckService } from './api-drift-check.service.js';
-import { ApiOperationsController, ApiSettingsController, ApiSpecsController, QaController, TestFixturesController } from './api-specs.controller.js';
+import {
+  ApiOperationsController,
+  ApiSettingsController,
+  ApiSpecsController,
+  ProjectApiSettingsController,
+  QaController,
+  TestFixturesController,
+} from './api-specs.controller.js';
 import { ApiSpecsCoreModule } from './api-specs-core.module.js';
 import { ApiTestSuitesModule } from './api-test-suites.module.js';
 import { ApiRunnerCoreModule } from './api-runner-core.module.js';
@@ -19,7 +26,7 @@ import { ApiRunnerCoreModule } from './api-runner-core.module.js';
  */
 @Module({
   imports: [PrismaModule, AuthCoreModule, PermissionsCoreModule, ApiSpecsCoreModule, ApiTestSuitesModule, ApiRunnerCoreModule, AiCoreModule, AgentCoreModule, AgentQueueModule],
-  controllers: [ApiSpecsController, ApiOperationsController, ApiSettingsController, TestFixturesController, QaController],
+  controllers: [ApiSpecsController, ApiOperationsController, ApiSettingsController, ProjectApiSettingsController, TestFixturesController, QaController],
   providers: [ApiDriftCheckService],
   exports: [ApiSpecsCoreModule],
 })

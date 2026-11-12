@@ -18665,6 +18665,25 @@
       "openMergeRequest"
     ]
   },
+  "ProjectBreakingChangeSettings": {
+    "type": "object",
+    "properties": {
+      "workspaceId": {
+        "type": "string"
+      },
+      "projectId": {
+        "type": "string"
+      },
+      "policy": {
+        "$ref": "#/components/schemas/ScopedSetting%3CApiBreakingChangePolicy%3E"
+      }
+    },
+    "required": [
+      "workspaceId",
+      "projectId",
+      "policy"
+    ]
+  },
   "ProjectCascadeCounts": {
     "type": "object",
     "properties": {
@@ -21602,6 +21621,44 @@
       "prefix",
       "createdAt",
       "lastUsedAt"
+    ]
+  },
+  "ScopedSetting<ApiBreakingChangePolicy>": {
+    "type": "object",
+    "properties": {
+      "workspace": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ApiBreakingChangePolicy"
+          }
+        ],
+        "nullable": true
+      },
+      "project": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ApiBreakingChangePolicy"
+          }
+        ],
+        "nullable": true
+      },
+      "effective": {
+        "$ref": "#/components/schemas/ApiBreakingChangePolicy"
+      },
+      "source": {
+        "type": "string",
+        "enum": [
+          "project",
+          "workspace",
+          "default"
+        ]
+      }
+    },
+    "required": [
+      "workspace",
+      "project",
+      "effective",
+      "source"
     ]
   },
   "ScopedSetting<number>": {

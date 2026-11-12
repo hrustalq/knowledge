@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import {
   apiSpecSlug,
   isApiSpecKind,
-  resolveApiBreakingChangePolicy,
+  scopedApiBreakingChangePolicy,
   type ApiBreakingChangePolicy,
   type ApiSpecDiff,
 } from '@knowledge/contracts';
@@ -120,13 +120,19 @@ export class ApiSpecDiffService {
     return diff;
   }
 
-  /** The workspace's merge-gate policy: the sparse row over the `warn` default. */
-  async breakingPolicy(workspaceId: string): Promise<ApiBreakingChangePolicy> {
-    const row = await this.prisma.workspaceSettings.findUnique({
-      where: { workspaceId },
-      select: { apiBreakingChangePolicy: true },
-    });
-    return resolveApiBreakingChangePolicy(row?.apiBreakingChangePolicy);
+  /**
+   * The merge-gate policy for a spec in `projectId` (#922): the project's own
+   * value, else the workspace's sparse row, else `warn`. A project of another
+   * workspace reads as none, so it can never lend its policy.
+   */
+  async breakingPolicy(workspaceId: string, projectId: string | null): Promise<ApiBreakingChangePolicy> {
+    const [row, project] = await Promise.all([
+      this.prisma.workspaceSettings.findUnique({ where: { workspaceId }, select: { apiBreakingChangePolicy: true } }),
+      projectId
+        ? this.prisma.project.findFirst({ where: { id: projectId, workspaceId }, select: { apiBreakingChangePolicy: true } })
+        : null,
+    ]);
+    return scopedApiBreakingChangePolicy(project?.apiBreakingChangePolicy, row?.apiBreakingChangePolicy).effective;
   }
 
   private async parseRevision(revision: DocumentRevision, kind: 'openapi' | 'asyncapi'): Promise<ParsedApiSpec | null> {

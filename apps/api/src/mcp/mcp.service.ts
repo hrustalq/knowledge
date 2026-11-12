@@ -5,7 +5,8 @@ import { CAPTURE_KIT_CLIENTS, MCP_LEARNING_TARGET, SKILL_DIRS, SKILL_DIR_KEYS, t
 import type { CaptureKitResponse, McpToolSummary, SkillStackResponse, WorkspaceFeature, WorkspaceRole } from '@knowledge/contracts';
 import { t } from '../i18n/t.js';
 import { DEV_PRINCIPAL, type Principal } from '../auth/principal.js';
-import { CAPTURE_TOOLS, MCP_SERVER_NAME, featureOfTool, instructionsFor, isOffered, settleTools, trackTools } from './mcp-tools.js';
+import { CAPTURE_TOOLS, MCP_SERVER_NAME, authoringOf, featureOfTool, instructionsFor, isOffered, settleTools, trackTools } from './mcp-tools.js';
+import { publishModeOf } from '../auth/editing-policy.service.js';
 import { renderCaptureKit, renderCaptureKitInstaller } from './capture-kit.js';
 import {
   SKILL_STACK_VERSION,
@@ -148,7 +149,8 @@ export class McpService extends McpServices {
 
   /** The instructions for the tools this caller is offered, plus the team guidance it is given (#305). */
   async instructionsFor(principal: Principal, offSections?: readonly WorkspaceFeature[]): Promise<string> {
-    return instructionsFor(principal, offSections) + renderMcpLearnings(await this.learningsFor(await this.whoami(principal)), 'text');
+    const whoami = await this.whoami(principal);
+    return instructionsFor(principal, offSections, authoringOf(whoami.workspaces)) + renderMcpLearnings(await this.learningsFor(whoami), 'text');
   }
 
   /**
@@ -371,6 +373,12 @@ export class McpService extends McpServices {
         return scope ? this.projects.list({ workspaceId: w.id }, scope) : { projects: [], nextCursor: null };
       }),
     );
+    // #958: one read for every workspace. Advice for the agent only — the write path enforces the mode —
+    // so a failed read says `review`, the path that works in both.
+    const modes = await this.prisma.workspaceSettings
+      .findMany({ where: { workspaceId: { in: reachable.map((w) => w.id) } }, select: { workspaceId: true, publishMode: true } })
+      .then((rows) => new Map(rows.map((r) => [r.workspaceId, r.publishMode])))
+      .catch(() => new Map<string, string | null>());
     // A capture key proposes, it does not edit (issue #73): viewer is what it may do with a page.
     const readOnly = principal.apiKey !== undefined && principal.apiKey.scope !== 'write';
     return {
@@ -397,6 +405,7 @@ export class McpService extends McpServices {
           // What this connection may actually do, not merely the membership
           // row: a read-only key caps it, and dev/platform admin has no row.
           role: readOnly && !guest ? 'viewer' : role,
+          publishMode: publishModeOf(modes.get(w.id)),
           projects: guest
             ? []
             : projects[reachable.indexOf(w)].projects.map((p) => ({ projectId: p.projectId, name: p.name })),

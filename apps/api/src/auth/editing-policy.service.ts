@@ -21,6 +21,9 @@ const SELECT = { publishMode: true, historyAudience: true, requiredApprovals: tr
 const known = <T extends string>(list: readonly T[], value: string | null | undefined): T | null =>
   (list as readonly string[]).includes(value ?? '') ? (value as T) : null;
 
+/** A stored `publish_mode` as the mode it means: the one spelling of "null or unknown is review". */
+export const publishModeOf = (stored: string | null | undefined): PublishMode => known(PUBLISH_MODES, stored) ?? 'review';
+
 /**
  * How a workspace wants edits to reach a page (#958): publish mode, history
  * audience, required approvals. One resolved answer read at the point of each
@@ -42,7 +45,7 @@ export class EditingPolicyService {
       const row = await this.prisma.workspaceSettings.findUnique({ where: { workspaceId }, select: SELECT });
       return {
         workspaceId,
-        publishMode: scopedSetting<PublishMode>(null, known(PUBLISH_MODES, row?.publishMode), 'review'),
+        publishMode: scopedSetting<PublishMode>(null, known(PUBLISH_MODES, row?.publishMode), publishModeOf(null)),
         historyAudience: scopedSetting<HistoryAudience>(null, known(HISTORY_AUDIENCES, row?.historyAudience), 'everyone'),
         requiredApprovals: scopedSetting(null, row?.requiredApprovals, this.config.get('MR_REQUIRED_APPROVALS', { infer: true })),
       };

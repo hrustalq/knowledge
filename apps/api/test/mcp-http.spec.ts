@@ -14,7 +14,7 @@ import { DEV_PRINCIPAL, type Principal } from '../src/auth/principal.js';
 import { GraphQueryService } from '../src/graph/graph-query.service.js';
 import { McpService, type McpExtras } from '../src/mcp/mcp.service.js';
 import type { AgentLearning } from '@prisma/client';
-import { CAPTURE_TOOLS, FEATURE_TOOLS, MCP_INSTRUCTIONS, WRITE_TOOLS, instructionsFor, settleTools } from '../src/mcp/mcp-tools.js';
+import { CAPTURE_TOOLS, FEATURE_TOOLS, MCP_INSTRUCTIONS, WRITE_TOOLS, authoringOf, instructionsFor, mcpInstructions, settleTools } from '../src/mcp/mcp-tools.js';
 import { choosePromptLearnings } from '../src/ai/agent-learnings.service.js';
 import { STACK_MARKER, renderSkill, renderSkillStack, renderSkillStackInstaller, stackToolsets } from '../src/mcp/skill.js';
 import { execFileSync } from 'node:child_process';
@@ -2046,6 +2046,61 @@ describe('a key limited to toolsets (#945)', () => {
     const git = new GitAccessService({} as never, resolver(['core', 'graph']), {} as never, {} as never, { hit: async () => true } as never, config as never);
     const req = { headers: { authorization: `Basic ${Buffer.from('knowledge:kn_x').toString('base64')}` }, socket: {}, ip: '127.0.0.1' };
     await expect(git.authorize(req as never, WS_A, `${WS_B}.git`)).rejects.toMatchObject({ status: 403 });
+  });
+});
+
+describe('instructions and skill follow the publish mode (#958)', () => {
+  const all = () => true;
+  const ws = (id: string, publishMode?: 'review' | 'direct') => ({ workspaceId: id, name: id, role: 'editor' as const, publishMode, projects: [] });
+
+  it('review, direct and mixed: the three authoring lines', () => {
+    expect(authoringOf([ws(WS_A), ws(WS_B, 'review')])).toBe('review');
+    expect(authoringOf([])).toBe('review');
+    expect(authoringOf([ws(WS_A, 'direct')])).toBe('direct');
+    expect(authoringOf([ws(WS_A, 'direct'), ws(WS_B)])).toBe('mixed');
+    // Review is what every connection read before this phase, byte for byte.
+    expect(mcpInstructions(all, 'review')).toBe(MCP_INSTRUCTIONS);
+    const direct = mcpInstructions(all, 'direct');
+    expect(direct).toContain('knowledge_create_revision (or knowledge_patch_document) with no `branch`');
+    expect(direct).not.toMatch(/knowledge_create_branch|knowledge_create_merge_request/);
+    // Captures are described as in every mode.
+    expect(direct).toContain('Captures become merge requests a person reviews.');
+    const mixed = mcpInstructions(all, 'mixed');
+    expect(mixed).toContain("knowledge_whoami reports each one's publishMode");
+    expect(mixed).toContain('knowledge_create_merge_request');
+  });
+
+  it('whoami reports each workspace mode, and the instructions and skill of a direct-only connection name no merge-request step', async () => {
+    const s = service(accessWith('editor'));
+    const prisma = {
+      workspaceMember: { findMany: vi.fn(async () => [{ workspaceId: WS_A, role: 'editor' }]) },
+      workspace: { findMany: vi.fn(async () => [{ id: WS_A, name: 'Solo' }]) },
+      workspaceSettings: { findMany: vi.fn(async () => [{ workspaceId: WS_A, publishMode: 'direct', disabledFeatures: [] }]) },
+      aiLearning: { findMany: vi.fn(async () => []) },
+    };
+    const projects = { list: vi.fn(async () => ({ projects: [], nextCursor: null })) };
+    Object.assign(s.mcp as unknown as { prisma: object }, { prisma, projects, features: new FeaturesService(prisma as never, { get: () => true } as never) });
+    const principal = keyPrincipal({ id: 'k', scope: 'write', workspaceId: WS_A });
+    expect((await s.mcp.whoami(principal)).workspaces).toMatchObject([{ workspaceId: WS_A, publishMode: 'direct' }]);
+    vi.spyOn(s.mcp as unknown as { learningsFor: () => Promise<[]> }, 'learningsFor').mockResolvedValue([]);
+    const instructions = await s.mcp.instructionsFor(principal);
+    expect(instructions).not.toMatch(/knowledge_create_branch|knowledge_create_merge_request/);
+    const [playbooks] = (await s.mcp.skillFor(principal, undefined, { drafts: fakeDrafts() })).split('## Tools offered to this connection');
+    expect(playbooks).toContain('### Change an existing page — directly');
+    expect(playbooks).not.toMatch(/always through a merge request|proposes edits as merge requests|knowledge_create_branch/);
+  });
+
+  it('a workspace that set nothing reads as review, and a failed settings read does too', async () => {
+    const s = service(accessWith('editor'));
+    const prisma = {
+      workspaceMember: { findMany: vi.fn(async () => [{ workspaceId: WS_A, role: 'editor' }]) },
+      workspace: { findMany: vi.fn(async () => [{ id: WS_A, name: 'Team' }]) },
+      workspaceSettings: { findMany: vi.fn(async () => [] as object[]) },
+    };
+    Object.assign(s.mcp as unknown as { prisma: object }, { prisma, projects: { list: vi.fn(async () => ({ projects: [], nextCursor: null })) } });
+    expect((await s.mcp.whoami(keyPrincipal({ id: 'k', scope: 'write', workspaceId: WS_A }))).workspaces[0]!.publishMode).toBe('review');
+    prisma.workspaceSettings.findMany.mockRejectedValueOnce(new Error('down'));
+    expect((await s.mcp.whoami(keyPrincipal({ id: 'k', scope: 'write', workspaceId: WS_A }))).workspaces[0]!.publishMode).toBe('review');
   });
 });
 

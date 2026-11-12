@@ -3011,6 +3011,16 @@
       "platformAdmin": false
     },
     {
+      "method": "GET",
+      "path": "/v1/documents/{id}/branches/mine",
+      "tag": "documents",
+      "summary": "The caller's working branch for this page if it holds unpublished work, else null; creates nothing (#958)",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "POST",
       "path": "/v1/documents/{id}/branches/mine",
       "tag": "documents",
@@ -4354,7 +4364,7 @@
       "method": "POST",
       "path": "/v1/merge-requests/{id}/approve",
       "tag": "merge-requests",
-      "summary": "Approve as the calling principal (MR_REQUIRED_APPROVALS non-author approvals gate the merge)",
+      "summary": "Approve as the calling principal (the workspace required-approvals number, non-author, gates the merge)",
       "role": "editor",
       "source": "merge-request",
       "public": false,
@@ -6042,6 +6052,26 @@
     },
     {
       "method": "GET",
+      "path": "/v1/workspaces/{id}/editing-policy",
+      "tag": "workspaces",
+      "summary": "How edits reach a page here: publish mode, history audience, required approvals — asked and applied",
+      "role": "viewer",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/workspaces/{id}/editing-policy",
+      "tag": "workspaces",
+      "summary": "Set the editing policy (workspace admin); a field left out is unchanged, null inherits",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/workspaces/{id}/features",
       "tag": "workspaces",
       "summary": "The sections switched off in this workspace",
@@ -6134,7 +6164,7 @@
   "mcpTools": [
     {
       "name": "knowledge_approve_merge_request",
-      "description": "Approve an open merge request as the connected user. Counts toward the MR_REQUIRED_APPROVALS merge gate unless that user also authored it (self-approvals never count). Only approve when the user asks you to.",
+      "description": "Approve an open merge request as the connected user. Counts toward the workspace required-approvals merge gate unless that user also authored it (self-approvals never count). Only approve when the user asks you to.",
       "inputs": [
         {
           "name": "mergeRequestId",
@@ -6436,7 +6466,7 @@
     },
     {
       "name": "knowledge_create_revision",
-      "description": "Create a new markdown revision on a branch (immutable; parented on the branch head), upload the content and finalize it for indexing. Pass baseRevisionId for optimistic concurrency: the call is rejected if the branch head has moved past it. Content without a frontmatter block keeps the branch head's frontmatter (tags, relations); include a block to replace it. For an API spec document (kind openapi or asyncapi), content is the whole spec in YAML or JSON (say which with syntax); it is validated, and refused with the validator's messages when it does not. Its relations (what owns it: a service: or component:) go in a top-level x-knowledge-relations list shaped like frontmatter relations. A test fixture (kind test-fixture) is the same: its whole YAML or JSON body, checked against the specs you can open.",
+      "description": "Create a new markdown revision on a branch (immutable; parented on the branch head), upload the content and finalize it for indexing. Pass baseRevisionId for optimistic concurrency: the call is rejected if the branch head has moved past it. Content without a frontmatter block keeps the branch head's frontmatter (tags, relations); include a block to replace it. For an API spec document (kind openapi or asyncapi), content is the whole spec in YAML or JSON (say which with syntax); it is validated, and refused with the validator's messages when it does not. Its relations (what owns it: a service: or component:) go in a top-level x-knowledge-relations list shaped like frontmatter relations. A test fixture (kind test-fixture) is the same: its whole YAML or JSON body, checked against the specs you can open. With no `branch` the write goes to the default branch of the page: in a workspace whose publishMode is `review` (knowledge_whoami) that is refused with reason `review-required` for anyone but a workspace admin once the page is published — write to a branch and open a merge request.",
       "inputs": [
         {
           "name": "documentId",
@@ -7498,7 +7528,7 @@
     },
     {
       "name": "knowledge_merge_revision",
-      "description": "Merge an open merge request (\"merge-commit\" creates a two-parent DAG node, \"squash\" a single-parent one). A page whose target moved is merged 3-way; overlapping edits fail with 409 `conflict` naming the pages and hunks — resolve them with knowledge_update_merge_request_branch. Gated: draft MRs and MRs below MR_REQUIRED_APPROVALS non-author approvals are rejected with 409 details.",
+      "description": "Merge an open merge request (\"merge-commit\" creates a two-parent DAG node, \"squash\" a single-parent one). A page whose target moved is merged 3-way; overlapping edits fail with 409 `conflict` naming the pages and hunks — resolve them with knowledge_update_merge_request_branch. Gated: draft MRs and MRs below the workspace required-approvals (non-author) are rejected with 409 details.",
       "inputs": [
         {
           "name": "mergeRequestId",
@@ -7512,7 +7542,7 @@
     },
     {
       "name": "knowledge_patch_document",
-      "description": "Change some lines of a page instead of rewriting it: a new revision on a branch, like knowledge_create_revision. Line numbers are 1-based and count the `markdown` that knowledge_get_document_content returned for baseRevisionId (the body without its frontmatter, which is kept; a spec or fixture is numbered whole). Each edit replaces startLine..endLine (inclusive) with content; endLine = startLine - 1 inserts before startLine, startLine = line count + 1 appends, empty content deletes. Number every edit off that one read, not off each other; edits may not overlap. Refused when the branch head has moved past baseRevisionId: read again and renumber.",
+      "description": "Change some lines of a page instead of rewriting it: a new revision on a branch, like knowledge_create_revision. Line numbers are 1-based and count the `markdown` that knowledge_get_document_content returned for baseRevisionId (the body without its frontmatter, which is kept; a spec or fixture is numbered whole). Each edit replaces startLine..endLine (inclusive) with content; endLine = startLine - 1 inserts before startLine, startLine = line count + 1 appends, empty content deletes. Number every edit off that one read, not off each other; edits may not overlap. Refused when the branch head has moved past baseRevisionId: read again and renumber. The default branch is held to the workspace publish mode, as for knowledge_create_revision.",
       "inputs": [
         {
           "name": "documentId",
@@ -7952,7 +7982,7 @@
     },
     {
       "name": "knowledge_start_upload",
-      "description": "Write a new revision of a page from a local file instead of pasting it: returns a presigned PUT URL (valid 15 minutes) and a curl command. Upload the file with it, then call knowledge_finalize_upload with the revisionId. The file is the whole page, as with knowledge_create_revision: a markdown file without a frontmatter block keeps the current tags and relations. Pass baseRevisionId to be refused when the branch head has moved. For a new page, use knowledge_create_document with upload: true.",
+      "description": "Write a new revision of a page from a local file instead of pasting it: returns a presigned PUT URL (valid 15 minutes) and a curl command. Upload the file with it, then call knowledge_finalize_upload with the revisionId. The file is the whole page, as with knowledge_create_revision: a markdown file without a frontmatter block keeps the current tags and relations. Pass baseRevisionId to be refused when the branch head has moved. For a new page, use knowledge_create_document with upload: true. The default branch is held to the workspace publish mode, as for knowledge_create_revision.",
       "inputs": [
         {
           "name": "documentId",

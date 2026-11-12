@@ -4,39 +4,84 @@
 # default upstream, and an instance without it answers 403 to every API query —
 # which looks exactly like a broken integration rather than a missing option.
 
-# Text engines only. The assistant reads pages; image, video and file-sharing
-# results are noise it cannot use, and each engine not queried is one fewer
-# upstream that can rate-limit the instance.
+# The roster, by the kind of question it serves. `web_search` passes the kind as
+# SearXNG `categories` (docs/features/25): a query with no category asks only
+# the `general` engines, so an `it` or `science` engine listed here never fires
+# on its own.
+#
+# The rule for this list: an engine is on it only once it has ANSWERED from the
+# network the instance runs on. Measured 2026-11-12 from the production cluster
+# (#978): google "access denied", duckduckgo CAPTCHA, brave "too many requests",
+# qwant "access denied", yandex/baidu/yep errors, google scholar and google news
+# denied. A refusing engine is not harmless: it adds its timeout to every query
+# and, when it is one of only two general engines, the instance answers 200 with
+# an empty `results` array and looks like a working backend with nothing to say.
+#
+# Package registries (npm, crates.io, docker hub, pkg.go.dev) answer too, and
+# are left out on purpose: they match on package names, and SearXNG ranked four
+# unrelated crates above Stack Overflow for "nestjs guards execution context".
+# To try one again: `?engines=<name>` only reaches engines on this list, so add
+# it here first, then query it by name.
 #
 # This has to be `keep_only`, NOT a top-level `engines:` list. With
 # `use_default_settings: true`, a top-level list only *modifies* the engines it
-# names — it does not narrow the set, so every one of the ~80 defaults stays
-# live. The list below is the whole roster.
+# names: it does not narrow the set, so every one of the ~80 defaults stays
+# live.
 #
 # These are engine NAMES, not module names, and a name that matches nothing is
-# dropped in silence — no warning, the engine simply never appears in /config.
+# dropped in silence: no warning, the engine simply never appears in /config.
 # `stackexchange` is the module; the engine built from it is `stackoverflow`.
 use_default_settings:
   engines:
     keep_only:
-      - google
-      - duckduckgo
+      # general
+      - bing
+      - yahoo
+      - mwmbl
       - wikipedia
+      # it
       - stackoverflow
+      - github
+      - mdn
+      - hackernews
+      # science
+      - arxiv
+      - crossref
+      - openalex
+      - semantic scholar
+      # news
+      - bing news
+      - duckduckgo news
+      - wikinews
 
 # `keep_only` narrows the roster but preserves each engine's DEFAULT state, and
-# upstream ships google as `disabled: true`. Kept but disabled, it never fires
-# on a normal query — only on an explicit `?engines=google` — so the instance
-# answers 200 with an empty `results` array and looks like a working backend
-# with nothing to say. A top-level `engines:` list *modifies* what it names, so
-# this turns google on without re-widening the roster keep_only just narrowed.
-#
-# duckduckgo is kept for the day it stops serving a CAPTCHA to datacentre IPs;
-# from a VPS it answers `unresponsive_engines: [[duckduckgo, CAPTCHA]]` and
-# nothing else, which is noise in the response, not a failure.
+# upstream ships several of these as `disabled: true` (bing and yahoo among
+# them). Kept but disabled, an engine fires only on an explicit `?engines=`. A
+# top-level `engines:` list *modifies* what it names, so this turns every one
+# on without re-widening the roster. All of them are named, not just today's
+# disabled ones, so an upstream default flipping does not empty a category.
 engines:
-  - name: google
-    disabled: false
+  - { name: bing, disabled: false }
+  - { name: yahoo, disabled: false }
+  - { name: mwmbl, disabled: false }
+  - { name: wikipedia, disabled: false }
+  - { name: stackoverflow, disabled: false }
+  - { name: github, disabled: false }
+  - { name: mdn, disabled: false }
+  - { name: hackernews, disabled: false }
+  - { name: arxiv, disabled: false }
+  - { name: crossref, disabled: false }
+  - { name: openalex, disabled: false }
+  - { name: semantic scholar, disabled: false }
+  - { name: bing news, disabled: false }
+  - { name: duckduckgo news, disabled: false }
+  - { name: wikinews, disabled: false }
+
+general:
+  # The wikipedia engine refuses to register without it ("wikipedia engine
+  # requires general.contact_url"): Wikimedia asks API clients to say who they
+  # are. $SEARXNG_CONTACT_URL overrides it.
+  contact_url: "https://github.com/hrustalq/knowledge"
 
 server:
   # Dev-only value. $SEARXNG_SECRET overrides it, which is how production gets

@@ -37,7 +37,7 @@ nothing until `LEARNER_ENABLED=true` ([Learning loop](/settings/docs/learning-lo
 | `ASSISTANT_PROVIDER`                                         | `none`, `openai-compatible`, `deepseek`, `gen-api`                                                                                                 |
 | `FULLTEXT_PROVIDER`                                          | `none` or `opensearch`                                                                                                                             |
 | `SETTINGS_ENCRYPTION_KEY`                                    | required to store provider credentials, identity provider secrets included                                                                         |
-| `MR_REQUIRED_APPROVALS`                                      | merge gate, default 1, author excluded                                                                                                             |
+| `MR_REQUIRED_APPROVALS`                                      | merge gate default (1), author excluded; a workspace sets its own under Settings → Editing |
 | `STALE_*`                                                    | the reindex sweeper's timeouts and retry cap                                                                                                       |
 | `DEPENDENT_REINDEX_MAX`                                      | cap on the one-level reindex cascade                                                                                                               |
 | `LIVE_WS_ENABLED`, `LIVE_TRACKED_EVENTS`                     | the live-update WebSocket and what it fans out                                                                                                     |

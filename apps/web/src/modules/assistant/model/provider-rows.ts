@@ -187,6 +187,13 @@ export function groupModels(models: AiModelSummary[], selected?: string | null):
   return [...groups.values()].sort((a, b) => (a.providerName ?? '').localeCompare(b.providerName ?? ''))
 }
 
+/**
+ * A `:key` for a select that renders `AiModelOptions`: its trigger keeps the item
+ * text it first saw, so the select remounts when the selected model goes off or on (#930).
+ */
+export const modelOffKey = (models: AiModelSummary[], selected?: string | null) =>
+  String(models.find((m) => m.id === selected)?.available)
+
 /** "" → null (no price set); a number → that number; anything else → undefined (invalid). */
 export function parsePrice(raw: string): number | null | undefined {
   const trimmed = raw.trim()

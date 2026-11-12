@@ -27,6 +27,7 @@ import type {
 } from '@knowledge/contracts'
 import { apiQueryOptions, useApiMutation, isApiRequestError } from '@/shared/api/queries'
 import { useAuthStore } from '@/stores/auth'
+import { useFeaturesStore } from '@/stores/features'
 import { Button } from '@knowledge/ui/button'
 import {
   Dialog,
@@ -65,11 +66,15 @@ const emit = defineEmits<{ changed: []; reviewApi: [] }>()
 
 const router = useRouter()
 const auth = useAuthStore()
+const features = useFeaturesStore()
 const strategy = ref<MergeStrategy>('merge-commit')
 
 const mr = computed(() => props.mergeRequest)
 const id = computed(() => ({ path: { id: mr.value.mergeRequestId } }))
 const isOpen = computed(() => mr.value.status === 'open')
+// What the merge gate will ask (#958): the workspace's number, the author's own approval never counted.
+const requiredApprovals = computed(() => features.editing?.requiredApprovals.effective ?? null)
+const countedApprovals = computed(() => mr.value.approvedBy.filter((id) => id !== mr.value.authorId).length)
 const alreadyApproved = computed(() => !!auth.me && mr.value.approvedBy.includes(auth.me.userId))
 
 const invalidates = () => [
@@ -296,6 +301,9 @@ function toggleDraft() {
           {{ t('mr.approvedBy', { names: mr.approvedBy.map((a) => actorLabel(a)).join(', ') }) }}
         </span>
         <span v-else class="text-muted-foreground">{{ t('mr.noApprovals') }}</span>
+        <span v-if="requiredApprovals !== null" class="text-xs text-muted-foreground tabular-nums">
+          {{ requiredApprovals === 0 ? t('mr.approvalsNoneRequired') : t('mr.approvalsOf', { have: countedApprovals, required: requiredApprovals }) }}
+        </span>
         <Button
           v-if="auth.canEdit"
           variant="outline"

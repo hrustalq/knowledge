@@ -186,6 +186,13 @@ export class McpServices {
         await this.permissions.requireResource(principal, workspaceId, { type: 'document', id: documentId }, role, false);
         return workspaceId;
       },
+      /**
+       * The per-tool twin of the REST guard's history rule (#958): call it in
+       * every tool that lists or compares revisions, reads one that may not be
+       * the current page, or answers as of a point. See `requireHistory`.
+       */
+      history: (workspaceId: string, documentId?: string, revisionIds?: readonly string[]) =>
+        this.permissions.requireHistoryAs(principal, workspaceId, documentId, revisionIds),
       /** The caller's page visibility over a workspace, for tools that list pages. */
       scope: (workspaceId: string) => this.permissions.scopeFor(principal, workspaceId),
       /**

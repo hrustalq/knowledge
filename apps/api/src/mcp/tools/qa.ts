@@ -49,6 +49,7 @@ export function registerQaTools(ctx: McpToolContext): void {
     async ({ documentId, revisionId }) => {
       const workspaceId = await guard.doc(documentId, 'viewer');
       if (revisionId) await guard.branches(documentId, { revisionIds: [revisionId] }, 'viewer');
+      if (revisionId) await guard.history(workspaceId, documentId, [revisionId]);
       const scope = await guard.scope(workspaceId);
       const res = await svc.fixtures.get(scope, documentId, revisionId);
       return { content: [{ type: 'text' as const, text: wrapUntrusted(JSON.stringify(res, null, 2), 'knowledge_get_test_fixture', 'spec') }] };

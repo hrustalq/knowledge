@@ -10,6 +10,7 @@ export const MCP_KEY_OK_META = 'knowledge:mcp-key-ok';
 export const QUERY_TOKEN_OK_META = 'knowledge:query-token-ok';
 export const UNVERIFIED_OK_META = 'knowledge:unverified-ok';
 export const FEATURE_META = 'knowledge:feature';
+export const HISTORY_META = 'knowledge:history';
 
 /**
  * Where AclGuard finds the workspace id for a route (resolved in PostgreSQL):
@@ -69,6 +70,15 @@ export const Public = () => SetMetadata(PUBLIC_META, true);
  * that runs even under AUTH_MODE=none, so a toggle behaves the same in dev.
  */
 export const Feature = (feature: WorkspaceFeature) => SetMetadata(FEATURE_META, feature);
+
+/**
+ * A route whose whole answer is page history (#958): the revision list, the
+ * branch list, the facts timeline. AclGuard refuses it to a caller below
+ * editor when the workspace keeps history to editors. A route that reads
+ * history only when asked (`?revision=`, `asOf`, `knownAt`) needs no mark: the
+ * guard reads those keys itself.
+ */
+export const History = () => SetMetadata(HISTORY_META, true);
 
 /** Route restricted to platform admins (users.is_admin) — user management surface. */
 export const PlatformAdmin = () => SetMetadata(PLATFORM_ADMIN_META, true);

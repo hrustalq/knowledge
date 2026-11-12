@@ -91,7 +91,7 @@ export function registerMergeRequestsTools(ctx: McpToolContext): void {
     'knowledge_approve_merge_request',
     {
       description:
-        'Approve an open merge request as the connected user. Counts toward the MR_REQUIRED_APPROVALS merge gate ' +
+        'Approve an open merge request as the connected user. Counts toward the workspace required-approvals merge gate ' +
         'unless that user also authored it (self-approvals never count). Only approve when the user asks you to.',
       inputSchema: { mergeRequestId: z.string().uuid() },
     },
@@ -142,7 +142,7 @@ export function registerMergeRequestsTools(ctx: McpToolContext): void {
         'Merge an open merge request ("merge-commit" creates a two-parent DAG node, "squash" a single-parent one). ' +
         'A page whose target moved is merged 3-way; overlapping edits fail with 409 `conflict` naming the pages and hunks — ' +
         'resolve them with knowledge_update_merge_request_branch. ' +
-        'Gated: draft MRs and MRs below MR_REQUIRED_APPROVALS non-author approvals are rejected with 409 details.',
+        'Gated: draft MRs and MRs below the workspace required-approvals (non-author) are rejected with 409 details.',
       inputSchema: {
         mergeRequestId: z.string().uuid(),
         strategy: z.enum(['merge-commit', 'squash']).optional(),

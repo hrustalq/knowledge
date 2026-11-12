@@ -9,6 +9,7 @@ import { Reflector } from '@nestjs/core';
 import {
   ACCESS_META,
   FEATURE_META,
+  HISTORY_META,
   PLATFORM_ADMIN_META,
   PUBLIC_META,
   READ_KEY_OK_META,
@@ -34,11 +35,14 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
  * that names a branch through one of these keys is covered as it lands, and
  * one that invents a new key must be added here.
  */
-const BRANCH_REFS = {
+export const BRANCH_REFS = {
   branchNames: { query: ['branch'], body: ['branch', 'sourceBranch', 'targetBranch'] },
   branchIds: { params: ['branchId'] },
-  revisionIds: { params: ['revisionId'], query: ['revision', 'from', 'to', 'at'], body: ['revisionId', 'fromRevisionId'] },
+  revisionIds: { params: ['revisionId'], query: ['revision', 'revisionId', 'from', 'to', 'at'], body: ['revisionId', 'fromRevisionId'] },
 } as const;
+
+/** Request keys that ask for the knowledge base as of a point (#81), on any route. */
+export const HISTORY_KEYS = ['asOf', 'knownAt'] as const;
 
 type Req = { body?: Record<string, unknown>; query?: Record<string, unknown>; params?: Record<string, string> };
 
@@ -156,7 +160,23 @@ export class AclGuard implements CanActivate {
     }
     // After the membership check, so a 404 here tells only a member that the section is off.
     if (feature) await this.features.require(workspaceId, feature);
+    await this.requireHistory(ctx, spec, req, principal, workspaceId);
     return true;
+  }
+
+  /**
+   * Page history (#958), by what the request asks for, so a new route is
+   * covered as it lands: a route marked `@History()`, any read as of a point
+   * (`asOf` / `knownAt`, query or body), and a GET on a page that names a
+   * revision (`BRANCH_REFS`). `PermissionService.requireHistory` decides.
+   */
+  private async requireHistory(ctx: ExecutionContext, spec: AccessSpec, req: Req & { method?: string }, principal: Principal, workspaceId: string) {
+    const named = (key: string) => [req.query?.[key], req.body?.[key]].some((v) => typeof v === 'string' && v.length > 0);
+    const always = this.reflector.get<boolean | undefined>(HISTORY_META, ctx.getHandler()) === true || HISTORY_KEYS.some(named);
+    const onPage = spec.source === 'document';
+    const revisionIds = (onPage && req.method === 'GET' ? branchRefsOf(req).revisionIds : undefined) ?? [];
+    if (!always && revisionIds.length === 0) return;
+    await this.permissions.requireHistoryAs(principal, workspaceId, onPage ? req.params?.id : undefined, always ? undefined : revisionIds);
   }
 
   /** The workspace, plus the resource page permissions apply to when the route names one. */

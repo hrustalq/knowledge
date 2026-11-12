@@ -1,3 +1,4 @@
+import { internalWrite } from '../documents/write-authority.js';
 import { BadRequestException, ConflictException, Injectable, Logger } from '@nestjs/common';
 import { Prisma, type Connector, type ConnectorLink, type SourceRecipe as SourceRecipeRow } from '@prisma/client';
 import type {
@@ -274,6 +275,7 @@ export class SourceRecipesService {
         const written = await this.documents.writeRevision(
           link.documentId,
           { text: markdown, message: t('connector.sourceRecipeMessage'), contentType: 'text/markdown' },
+          internalWrite('connector-sync'),
           userId,
           { connectorId: row.id },
         );

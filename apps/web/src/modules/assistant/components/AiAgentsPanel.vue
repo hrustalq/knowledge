@@ -52,6 +52,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@knowledge/ui/table'
 import AgentTriggersEditor from './AgentTriggersEditor.vue'
 import AiModelOptions from './AiModelOptions.vue'
+import { modelOffKey } from '@/modules/assistant/model/provider-rows'
 import AgentRecipesDialog from './AgentRecipesDialog.vue'
 
 const { t } = useI18n()
@@ -558,6 +559,7 @@ async function remove(agent: AiAgentSummary) {
           <label class="block space-y-1">
             <span class="text-muted-foreground text-xs font-medium">{{ t('ai.agents.model') }}</span>
             <Select
+              :key="modelOffKey(models, form.modelId)"
               :model-value="form.modelId"
               @update:model-value="form.modelId = String($event ?? ROUTED)"
             >

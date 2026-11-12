@@ -2,6 +2,7 @@ import { HttpException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { PURPOSE_INTERVIEW_MAX_ROUNDS, suggestedDisabled, type InterviewRound } from '@knowledge/contracts';
 import type { Principal } from '../src/auth/principal.js';
+import { withLocale } from '../src/i18n/t.js';
 import { purposeMessages, readPicks } from '../src/workspace-purpose/purpose-interview.js';
 import { PurposeInterviewService } from '../src/workspace-purpose/purpose-interview.service.js';
 
@@ -66,6 +67,26 @@ describe('purpose interview (#934)', () => {
     const { svc, chat } = service([{ hello: 1 }, { uses: ['team-wiki'] }]);
     expect(await ask(svc)).toMatchObject({ status: 'done', picks: [{ use: 'team-wiki' }] });
     expect(chat).toHaveBeenCalledTimes(2);
+  });
+
+  it('drops a question an earlier round asked, by name or by label, and then asks for the picks instead', async () => {
+    const asked = [{ questions: [question], answers: { ship: null } }] as InterviewRound[];
+    const again = { ...question, name: 'ship2', label: '  do you SHIP an API? ' };
+    const { svc, chat } = service([{ questions: [question, again] }, { uses: ['api-docs'] }]);
+    expect(await ask(svc, asked)).toMatchObject({ status: 'done', picks: [{ use: 'api-docs' }] });
+    expect(chat).toHaveBeenCalledTimes(2);
+    expect(chat.mock.calls[0]![1][0]!.content).toContain('"(skipped)" is an answer');
+
+    const fresh = service([{ questions: [again, { ...question, name: 'other', label: 'Who reads it?' }] }]);
+    const reply = await ask(fresh.svc, asked);
+    expect(reply.status === 'asking' && reply.round.questions.map((q) => q.name)).toEqual(['other']);
+  });
+
+  it('writes in the language of the request, not the account’s stored one', async () => {
+    const { svc, chat } = service([{ questions: [question] }]);
+    await withLocale('ru', () => ask(svc));
+    expect(chat.mock.calls[0]![0]).toMatchObject({ locale: 'ru' });
+    expect(chat.mock.calls[0]![1][0]!.content).toContain('in Russian');
   });
 
   it('answers unavailable, without a model call, for no provider, a switched-off agent or a spent budget', async () => {

@@ -29,7 +29,7 @@ function service() {
     },
   };
   const permissions = { readableBranchIds: vi.fn(async (_s: unknown, list: { id: string }[]) => new Set(list.map((b) => b.id))) };
-  const svc = new MergeRequestsService(prisma as never, _, _, _, _, _, { get: () => 0 } as never, _, _, permissions as never, _, _, _);
+  const svc = new MergeRequestsService(prisma as never, _, _, _, _, _, { policy: async () => ({ requiredApprovals: { effective: 0 } }) } as never, _, _, permissions as never, _, _, _);
   return { svc, documentBranch };
 }
 

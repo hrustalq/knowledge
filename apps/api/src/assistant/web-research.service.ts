@@ -28,6 +28,22 @@ export interface WebToolResult {
 const MAX_PAGE_CHARS = 20_000;
 /** SearXNG returns dozens; the model needs a shortlist, not a results page. */
 const MAX_RESULTS = 8;
+/**
+ * What `web_search` may ask for, and the SearXNG category that answers it.
+ *
+ * A query with no category reaches only the `general` engines, so the code,
+ * science and news engines in `searxng/settings.yml` fire only when their
+ * category is named (#978). One category per kind, never a union: asked
+ * together, SearXNG interleaves a keyword engine's hits above the general web.
+ */
+export const WEB_SEARCH_KINDS = { general: 'general', code: 'it', science: 'science', news: 'news' } as const;
+export type WebSearchKind = keyof typeof WEB_SEARCH_KINDS;
+
+/** Anything the model sends that is not a kind is a general search. */
+export function webSearchKind(raw: unknown): WebSearchKind {
+  return typeof raw === 'string' && Object.hasOwn(WEB_SEARCH_KINDS, raw) ? (raw as WebSearchKind) : 'general';
+}
+
 /** Redirect hops followed by hand, each one policy-checked. */
 const MAX_REDIRECTS = 5;
 /**
@@ -71,7 +87,13 @@ export class WebResearchService {
 
   // ---- web_search -----------------------------------------------------------
 
-  async search(workspaceId: string, query: string, mode: WebAccessMode, limit = 5): Promise<WebToolResult> {
+  async search(
+    workspaceId: string,
+    query: string,
+    mode: WebAccessMode,
+    limit = 5,
+    kind: WebSearchKind = 'general',
+  ): Promise<WebToolResult> {
     if (mode === 'off') return deny('mode-off');
 
     const base = this.config.get('WEB_SEARCH_URL', { infer: true });
@@ -79,7 +101,7 @@ export class WebResearchService {
 
     let hits: WebSearchHit[];
     try {
-      hits = await this.querySearx(base, query);
+      hits = await this.querySearx(base, query, kind);
     } catch (err) {
       // SearXNG scrapes upstream engines and can be rate-limited or blocked by
       // them: free in money, not free in reliability. The model is told which
@@ -318,11 +340,12 @@ export class WebResearchService {
 
   // ---- SearXNG --------------------------------------------------------------
 
-  private async querySearx(base: string, query: string): Promise<WebSearchHit[]> {
+  private async querySearx(base: string, query: string, kind: WebSearchKind): Promise<WebSearchHit[]> {
     const url = new URL('/search', base.replace(/\/$/, ''));
     url.searchParams.set('q', query);
     url.searchParams.set('format', 'json');
     url.searchParams.set('safesearch', '1');
+    url.searchParams.set('categories', WEB_SEARCH_KINDS[kind]);
 
     const response = await fetch(url, {
       signal: AbortSignal.timeout(this.config.get('WEB_TIMEOUT_MS', { infer: true })),

@@ -12,7 +12,8 @@ import { ProviderAccountError } from '../src/assistant/assistant.client.js';
  *    site does what it did before #530. Never the inline chat config.
  * 2. **A non-Jev model asks the pinned default**, without the profile's prices.
  * 3. **One noul, one usage row**, under the caller's operation, with the model
- *    the response names and gen-api's own cost; 429 is retried, 402 stops.
+ *    the response names and tokens × the model's price, never the response's
+ *    `usage.cost` (#932); 429 is retried, 402 stops.
  * 4. **Thresholds are sparse** over DECISION_THRESHOLDS.
  */
 
@@ -82,7 +83,7 @@ describe('DecisionClient.noul', () => {
     expect(record.mock.calls[0]![0]).toMatchObject({
       operation: 'contradiction',
       ok: true,
-      cost: { micros: 17, currency: 'USD' },
+      cost: { micros: 7, currency: 'RUB' },
       config: { model: 'jev-1.13-20260917' },
       tokens: { promptTokens: 400, completionTokens: 0 },
     });

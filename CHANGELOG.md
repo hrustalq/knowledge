@@ -13,6 +13,90 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.52.0] — 2026-11-12
+
+### Breaking
+
+- In a workspace that has set no publish mode (the default, `review`), an editor who is not a workspace admin can
+  no longer add a revision to the default branch of a published page directly. `POST /v1/documents/:id/revisions`
+  and `POST /v1/documents/:id/uploads` with no `branch`, the MCP tools `knowledge_create_revision`,
+  `knowledge_patch_document` and `knowledge_start_upload` with no `branch`, and a `git push` to the default branch
+  answer 409 with `reason: review-required`. Workspace admins, merges, connector syncs, new pages and private
+  drafts are unaffected. `HTTP` `MCP` `git`
+  **Migration:** write to a branch and open a merge request (the editor already does), or have a workspace admin
+  set **Settings → Editing → Publish mode** to **Direct**, which keeps the old behaviour for every editor.
+
+### Added
+
+- **Publish mode.** A workspace admin chooses under **Settings → Editing** how a person's edit reaches a published
+  page. **Review** (the default) sends it through a merge request. **Direct** makes an editor's save live at once,
+  in the editor and over MCP, with no working branch and no merge request. What a person did not write (agent
+  findings, captures, connector proposals) stays a merge request in both modes, and in a direct workspace those
+  are listed under **Proposals**, which replaces Merge requests in the navigation. (#958)
+- **Required approvals per workspace.** The number of approvals a merge needs is set per workspace on the same
+  page; `MR_REQUIRED_APPROVALS` is now only the default for a workspace that set nothing. The merge widget shows
+  how many are required. (#960)
+- **Page history can be kept to editors.** With **Page history → Editors only**, viewers and guests read the
+  current page and are refused its revision list, comparisons, older revisions, as-of reads, the facts timeline
+  and the branch list, over the API and MCP alike (403 `history-restricted`). A merge request's diff stays
+  readable to whoever can read the merge request. (#964)
+- An agent connected over MCP is told the right way to change a page for the workspaces it reaches:
+  `knowledge_whoami` reports each workspace's `publishMode`, and the server instructions and the skill follow it.
+  (#962)
+
+### Changed
+
+- The API spec and test fixture editors save through your working branch and publish it when the workspace
+  reviews changes and you are not an admin; a gate that holds the change opens its merge request. (#965)
+
+### Fixed
+
+- The assistant's web search found nothing for any query: the two search engines it asked both refused the
+  server. It now asks engines that answer, and picks them by the kind of question (the web in general, code,
+  scientific papers or news). (#978)
+
+- The workspace purpose interview asked its questions in the language saved on your account even when the page was
+  shown in another one; it now uses the page's language. It also no longer asks a question again after you skip it:
+  a skipped question counts as answered, and a repeat ends the interview with the uses picked so far. (#972)
+
+- Usage showed Jev decision calls (citation checks, the contradiction pre-filter, harvest screening) in US dollars
+  at about 1/250 of what GenAPI charged. They are now recorded in rubles at the model's configured price, like every
+  other GenAPI call, so they count toward the ruble total. (#932)
+
+- In **Settings → AI → Configuration**, turning a provider off or on now updates the routing selects at once: a
+  select that points at one of its models reads `… (provider off)` or drops the suffix without a reload. The
+  decision route and an agent's model select do the same. At narrow widths every routing row now stacks its select
+  under its label at full width, so the rows line up. (#930)
+
+- Opening the assistant showed an empty **New chat** for a moment and then switched to the most recent chat, even
+  if you had already clicked **New chat** or started typing: a message could land in an old, unrelated chat. Your
+  choice now stands, and the page shows a chat loading until it knows which one to open. **New chat** no longer
+  creates an empty "Untitled chat" in the list; the chat appears with its first message. (#931)
+
+- The connect dialog's **Sign in** step offered "Sign in with …" and the token field about a second before it
+  listed **Your accounts**, so it was easy to start a second sign-in for an account you could have reused. The list
+  is now loaded when the dialog opens, and until it arrives the step shows a placeholder and holds the sign-in and
+  connect buttons. (#933)
+
+### Operations
+
+- **Publish mode (#958).** One additive migration, `20270117100000_editing_policy`: three nullable columns on
+  `workspace_settings`, no backfill, safe under the previous image. No new environment variable.
+  `MR_REQUIRED_APPROVALS` keeps its meaning for every workspace that sets no number of its own. Rolling back the
+  code past this release makes every workspace behave as `review` with history open to everyone again, and the
+  server stops refusing direct writes; the stored settings are kept and apply again on the next upgrade.
+  **Before upgrading**, check for automation that writes to published pages with a non-admin API key and no
+  branch (see Breaking): give it an admin's key, a branch and merge request, or set the workspace to Direct.
+
+- One migration rewrites the existing Jev usage rows in place: cost becomes input tokens × 10.5 ₽ per 1M, currency
+  `RUB`. It is not reversed by a rollback and does not need to be: the previous release reads the corrected rows as
+  they are.
+
+- `searxng/settings.yml` has a new engine list, shipped by the deploy as before. The list holds only engines that
+  answered from the production network on 2026-11-12; an instance on another network should check its own with
+  `/search?q=test&format=json&engines=<name>` and read `unresponsive_engines`. The file now sets
+  `general.contact_url`, which the Wikipedia engine requires; `SEARXNG_CONTACT_URL` overrides it.
+
 ## [0.51.0] — 2026-11-12
 
 ### Breaking
@@ -6847,7 +6931,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.51.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.52.0...HEAD
+[0.52.0]: https://github.com/hrustalq/knowledge/compare/v0.51.0...v0.52.0
 [0.51.0]: https://github.com/hrustalq/knowledge/compare/v0.50.1...v0.51.0
 [0.50.1]: https://github.com/hrustalq/knowledge/compare/v0.50.0...v0.50.1
 [0.50.0]: https://github.com/hrustalq/knowledge/compare/v0.49.2...v0.50.0

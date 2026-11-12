@@ -11436,6 +11436,33 @@
       "issues"
     ]
   },
+  "EditingPolicyResponse": {
+    "type": "object",
+    "properties": {
+      "workspaceId": {
+        "type": "string"
+      },
+      "publishMode": {
+        "$ref": "#/components/schemas/ScopedSetting%3CPublishMode%3E"
+      },
+      "historyAudience": {
+        "$ref": "#/components/schemas/ScopedSetting%3CHistoryAudience%3E"
+      },
+      "requiredApprovals": {
+        "$ref": "#/components/schemas/ScopedSetting%3Cnumber%3E"
+      },
+      "requiredApprovalsDefault": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "workspaceId",
+      "publishMode",
+      "historyAudience",
+      "requiredApprovals",
+      "requiredApprovalsDefault"
+    ]
+  },
   "EffectiveAccessEntry": {
     "type": "object",
     "properties": {
@@ -13472,6 +13499,13 @@
       "extractor",
       "confidence",
       "assertedByRevisionId"
+    ]
+  },
+  "HistoryAudience": {
+    "type": "string",
+    "enum": [
+      "everyone",
+      "editors"
     ]
   },
   "IdentityProviderView": {
@@ -17871,6 +17905,29 @@
       "pages"
     ]
   },
+  "MyLiveDraftResponse": {
+    "type": "object",
+    "properties": {
+      "branch": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/BranchInfo"
+          }
+        ],
+        "nullable": true
+      },
+      "pages": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "branch",
+      "pages"
+    ]
+  },
   "NoteCapturePayload": {
     "type": "object",
     "properties": {
@@ -19820,6 +19877,13 @@
       "merged",
       "mergedRevision",
       "reason"
+    ]
+  },
+  "PublishMode": {
+    "type": "string",
+    "enum": [
+      "review",
+      "direct"
     ]
   },
   "PublishedSiteStatus": {
@@ -21889,6 +21953,90 @@
       },
       "inherited": {
         "$ref": "#/components/schemas/ApiBreakingChangePolicy"
+      },
+      "source": {
+        "type": "string",
+        "enum": [
+          "project",
+          "workspace",
+          "default"
+        ]
+      }
+    },
+    "required": [
+      "workspace",
+      "project",
+      "effective",
+      "inherited",
+      "source"
+    ]
+  },
+  "ScopedSetting<HistoryAudience>": {
+    "type": "object",
+    "properties": {
+      "workspace": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/HistoryAudience"
+          }
+        ],
+        "nullable": true
+      },
+      "project": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/HistoryAudience"
+          }
+        ],
+        "nullable": true
+      },
+      "effective": {
+        "$ref": "#/components/schemas/HistoryAudience"
+      },
+      "inherited": {
+        "$ref": "#/components/schemas/HistoryAudience"
+      },
+      "source": {
+        "type": "string",
+        "enum": [
+          "project",
+          "workspace",
+          "default"
+        ]
+      }
+    },
+    "required": [
+      "workspace",
+      "project",
+      "effective",
+      "inherited",
+      "source"
+    ]
+  },
+  "ScopedSetting<PublishMode>": {
+    "type": "object",
+    "properties": {
+      "workspace": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/PublishMode"
+          }
+        ],
+        "nullable": true
+      },
+      "project": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/PublishMode"
+          }
+        ],
+        "nullable": true
+      },
+      "effective": {
+        "$ref": "#/components/schemas/PublishMode"
+      },
+      "inherited": {
+        "$ref": "#/components/schemas/PublishMode"
       },
       "source": {
         "type": "string",

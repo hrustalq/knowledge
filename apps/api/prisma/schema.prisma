@@ -4191,6 +4191,12 @@ model WorkspaceSettings {
   purposeDescription      String?  @map("purpose_description")
   /// When the first-visit question was confirmed or skipped; null sends the admin to the wizard once.
   purposeAskedAt          DateTime? @map("purpose_asked_at") @db.Timestamptz
+  /// #958 editing policy, each null = inherit. PUBLISH_MODES — review | direct; null is `review`.
+  publishMode             String?  @map("publish_mode")
+  /// HISTORY_AUDIENCES — everyone | editors; null is `everyone`.
+  historyAudience         String?  @map("history_audience")
+  /// Non-author approvals a merge needs; null is MR_REQUIRED_APPROVALS (a default, not a ceiling).
+  requiredApprovals       Int?     @map("required_approvals")
   updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz
   updatedBy               String?  @map("updated_by") @db.Uuid
 

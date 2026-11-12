@@ -17,6 +17,9 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { MR_PROVENANCES, type MergeRequestProvenance, UUID_RE } from '@knowledge/contracts';
+
+/** `provenance` filter value for "anything but manual" (#958). */
+export const NOT_MANUAL = 'not-manual';
 import { vmsg } from '../../common/validation.js';
 import { MAX_INLINE_TEXT_CHARS } from './documents.dto.js';
 
@@ -199,10 +202,13 @@ export class ListMergeRequestsQueryDto {
   @IsString()
   search?: string;
 
-  @ApiPropertyOptional({ enum: MR_PROVENANCES, description: 'Only merge requests opened this way, e.g. captured (issue #73)' })
+  @ApiPropertyOptional({
+    enum: [...MR_PROVENANCES, NOT_MANUAL],
+    description: 'Only merge requests opened this way, e.g. captured (issue #73). `not-manual` is every one a person did not open: the Proposals page of a direct workspace (#958)',
+  })
   @IsOptional()
-  @IsIn(MR_PROVENANCES)
-  provenance?: MergeRequestProvenance;
+  @IsIn([...MR_PROVENANCES, NOT_MANUAL])
+  provenance?: MergeRequestProvenance | typeof NOT_MANUAL;
 
   @ApiPropertyOptional({ description: 'Opaque cursor from a previous page' })
   @IsOptional()

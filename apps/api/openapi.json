@@ -3750,6 +3750,142 @@
         ]
       }
     },
+    "/v1/workspaces/{id}/editing-policy": {
+      "get": {
+        "operationId": "WorkspacesController_getEditingPolicy",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditingPolicyResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "How edits reach a page here: publish mode, history audience, required approvals — asked and applied",
+        "tags": [
+          "workspaces"
+        ]
+      },
+      "put": {
+        "operationId": "WorkspacesController_setEditingPolicy",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateEditingPolicyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditingPolicyResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Set the editing policy (workspace admin); a field left out is unchanged, null inherits",
+        "tags": [
+          "workspaces"
+        ]
+      }
+    },
     "/v1/workspaces/{id}": {
       "patch": {
         "operationId": "WorkspacesController_update",
@@ -8438,6 +8574,68 @@
         "tags": [
           "documents"
         ]
+      },
+      "get": {
+        "operationId": "DocumentsController_myLiveDraft",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyLiveDraftResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The caller's working branch for this page if it holds unpublished work, else null; creates nothing (#958)",
+        "tags": [
+          "documents"
+        ]
       }
     },
     "/v1/documents/{id}/compare": {
@@ -10271,13 +10469,14 @@
             "name": "provenance",
             "required": false,
             "in": "query",
-            "description": "Only merge requests opened this way, e.g. captured (issue #73)",
+            "description": "Only merge requests opened this way, e.g. captured (issue #73). `not-manual` is every one a person did not open: the Proposals page of a direct workspace (#958)",
             "schema": {
               "type": "string",
               "enum": [
                 "manual",
                 "agent",
-                "captured"
+                "captured",
+                "not-manual"
               ]
             }
           },
@@ -11343,7 +11542,7 @@
             }
           }
         },
-        "summary": "Approve as the calling principal (MR_REQUIRED_APPROVALS non-author approvals gate the merge)",
+        "summary": "Approve as the calling principal (the workspace required-approvals number, non-author, gates the merge)",
         "tags": [
           "merge-requests"
         ]
@@ -43529,7 +43728,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.50.1",
+    "version": "0.51.0",
     "contact": {}
   },
   "tags": [],
@@ -44322,6 +44521,36 @@
           "uses",
           "disabled"
         ]
+      },
+      "UpdateEditingPolicyDto": {
+        "type": "object",
+        "properties": {
+          "publishMode": {
+            "type": "string",
+            "enum": [
+              "review",
+              "direct"
+            ],
+            "nullable": true,
+            "description": "How a person's edit reaches a published page. Null inherits `review`."
+          },
+          "historyAudience": {
+            "type": "string",
+            "enum": [
+              "everyone",
+              "editors"
+            ],
+            "nullable": true,
+            "description": "Who reads page history. Null inherits `everyone`."
+          },
+          "requiredApprovals": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 20,
+            "description": "Non-author approvals a merge needs. Null inherits MR_REQUIRED_APPROVALS."
+          }
+        }
       },
       "UpdateWorkspaceDto": {
         "type": "object",
@@ -63150,6 +63379,33 @@
           "issues"
         ]
       },
+      "EditingPolicyResponse": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string"
+          },
+          "publishMode": {
+            "$ref": "#/components/schemas/ScopedSetting%3CPublishMode%3E"
+          },
+          "historyAudience": {
+            "$ref": "#/components/schemas/ScopedSetting%3CHistoryAudience%3E"
+          },
+          "requiredApprovals": {
+            "$ref": "#/components/schemas/ScopedSetting%3Cnumber%3E"
+          },
+          "requiredApprovalsDefault": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "publishMode",
+          "historyAudience",
+          "requiredApprovals",
+          "requiredApprovalsDefault"
+        ]
+      },
       "EffectiveAccessEntry": {
         "type": "object",
         "properties": {
@@ -65186,6 +65442,13 @@
           "extractor",
           "confidence",
           "assertedByRevisionId"
+        ]
+      },
+      "HistoryAudience": {
+        "type": "string",
+        "enum": [
+          "everyone",
+          "editors"
         ]
       },
       "IdentityProviderView": {
@@ -69585,6 +69848,29 @@
           "pages"
         ]
       },
+      "MyLiveDraftResponse": {
+        "type": "object",
+        "properties": {
+          "branch": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BranchInfo"
+              }
+            ],
+            "nullable": true
+          },
+          "pages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "branch",
+          "pages"
+        ]
+      },
       "NoteCapturePayload": {
         "type": "object",
         "properties": {
@@ -71534,6 +71820,13 @@
           "merged",
           "mergedRevision",
           "reason"
+        ]
+      },
+      "PublishMode": {
+        "type": "string",
+        "enum": [
+          "review",
+          "direct"
         ]
       },
       "PublishedSiteStatus": {
@@ -73603,6 +73896,90 @@
           },
           "inherited": {
             "$ref": "#/components/schemas/ApiBreakingChangePolicy"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "project",
+              "workspace",
+              "default"
+            ]
+          }
+        },
+        "required": [
+          "workspace",
+          "project",
+          "effective",
+          "inherited",
+          "source"
+        ]
+      },
+      "ScopedSetting<HistoryAudience>": {
+        "type": "object",
+        "properties": {
+          "workspace": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HistoryAudience"
+              }
+            ],
+            "nullable": true
+          },
+          "project": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HistoryAudience"
+              }
+            ],
+            "nullable": true
+          },
+          "effective": {
+            "$ref": "#/components/schemas/HistoryAudience"
+          },
+          "inherited": {
+            "$ref": "#/components/schemas/HistoryAudience"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "project",
+              "workspace",
+              "default"
+            ]
+          }
+        },
+        "required": [
+          "workspace",
+          "project",
+          "effective",
+          "inherited",
+          "source"
+        ]
+      },
+      "ScopedSetting<PublishMode>": {
+        "type": "object",
+        "properties": {
+          "workspace": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublishMode"
+              }
+            ],
+            "nullable": true
+          },
+          "project": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublishMode"
+              }
+            ],
+            "nullable": true
+          },
+          "effective": {
+            "$ref": "#/components/schemas/PublishMode"
+          },
+          "inherited": {
+            "$ref": "#/components/schemas/PublishMode"
           },
           "source": {
             "type": "string",

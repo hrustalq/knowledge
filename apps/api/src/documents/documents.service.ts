@@ -1,3 +1,5 @@
+import { EditingPolicyService } from '../auth/editing-policy.service.js';
+import type { WriteAuthority } from './write-authority.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import * as Y from 'yjs';
@@ -7,6 +9,7 @@ import type {
   FactExtractor,
   CreateBranchResponse,
   MyDraftBranchResponse,
+  MyLiveDraftResponse,
   CreateDocumentResponse,
   CreateUploadResponse,
   DocumentCategory,
@@ -142,6 +145,7 @@ export class DocumentsService {
     private readonly aclEvents: AclEventsService,
     private readonly cache: ReadCache,
     private readonly commits: ProjectCommitsService,
+    private readonly editing: EditingPolicyService,
   ) {}
 
   async createDocument(input: CreateDocumentDto, authorId?: string): Promise<CreateDocumentResponse>;
@@ -393,6 +397,7 @@ export class DocumentsService {
   async createUpload(
     documentId: string,
     dto: CreateUploadDto,
+    by: WriteAuthority,
     authorId: string = AUTHOR_ID_STUB,
   ): Promise<CreateUploadResponse> {
     const document = await this.getDocumentOrThrow(documentId);
@@ -409,7 +414,7 @@ export class DocumentsService {
       );
       }
     } else {
-      revision = await this.createDraftRevision(documentId, { contentType: dto.contentType, authorId });
+      revision = await this.createDraftRevision(documentId, { contentType: dto.contentType, authorId, by });
     }
 
     const objectKey = revision.s3Key;
@@ -430,12 +435,14 @@ export class DocumentsService {
   async createRevision(
     documentId: string,
     dto: CreateRevisionDto,
+    /** Who vouches for the write (#958): a person's edit is held to the publish mode. */
+    by: WriteAuthority,
     expectedHeadRevisionId?: string,
     authorId: string = AUTHOR_ID_STUB,
     /** The `web` connector writing its own source-backed page (#674); never from a request. */
     writer?: { connectorId: string },
   ): Promise<RevisionInfo> {
-    return toRevisionInfo(await this.openDraft(documentId, dto, expectedHeadRevisionId, authorId, writer));
+    return toRevisionInfo(await this.openDraft(documentId, dto, by, expectedHeadRevisionId, authorId, writer));
   }
 
   /**
@@ -448,13 +455,14 @@ export class DocumentsService {
   async writeRevision(
     documentId: string,
     input: { text: string; branch?: string; message?: string; contentType?: string; expectedHeadRevisionId?: string },
+    by: WriteAuthority,
     authorId: string = AUTHOR_ID_STUB,
     writer?: { connectorId: string },
   ): Promise<FinalizeRevisionResponse> {
     const { text, expectedHeadRevisionId, ...dto } = input;
     return this.prisma.withTransaction(
       async () => {
-        const draft = await this.openDraft(documentId, dto, expectedHeadRevisionId, authorId, writer);
+        const draft = await this.openDraft(documentId, dto, by, expectedHeadRevisionId, authorId, writer);
         await this.storage.putObjectText(draft.s3Key, text, draft.contentType);
         return this.finalizeRevision(documentId, draft.id);
       },
@@ -465,6 +473,7 @@ export class DocumentsService {
   private async openDraft(
     documentId: string,
     dto: CreateRevisionDto,
+    by: WriteAuthority,
     expectedHeadRevisionId: string | undefined,
     authorId: string,
     writer: { connectorId: string } | undefined,
@@ -502,6 +511,7 @@ export class DocumentsService {
       authorId,
       collab: dto.collabDraftId ? await this.draftOf(documentId, dto.branch ?? document.defaultBranch, dto) : undefined,
       connectorId: writer?.connectorId,
+      by,
     });
   }
 
@@ -1068,16 +1078,7 @@ export class DocumentsService {
     const spent = { mrAsSource: { some: spentMr } };
     // This page's own live draft first, so work saved before the fold stays
     // where it is even when a newer draft exists.
-    const mine = await this.prisma.documentBranch.findFirst({
-      where: {
-        documentId,
-        ownerId: userId,
-        name: { startsWith: prefix },
-        mrAsSource: { none: spentMr },
-        OR: [{ projectBranchId: null }, { projectBranch: { branches: { none: spent } } }],
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const mine = await this.liveDraftBranch(documentId, userId);
     if (!mine) {
       // Only a draft every page branch of which is the caller's: anyone may
       // name a branch `draft/<someone>`, and folding into theirs would publish
@@ -1138,6 +1139,37 @@ export class DocumentsService {
       }
     }
     return { branch: this.toBranchInfo(mine), pages: await this.draftPages(mine) };
+  }
+
+  /** The caller's working branch on this page that no merged or closed MR has spent. */
+  private liveDraftBranch(documentId: string, userId: string): Promise<DocumentBranch | null> {
+    const spentMr = { status: { in: ['merged', 'closed'] } };
+    return this.prisma.documentBranch.findFirst({
+      where: {
+        documentId,
+        ownerId: userId,
+        name: { startsWith: `${DRAFT_BRANCH_PREFIX}${userId}` },
+        mrAsSource: { none: spentMr },
+        OR: [{ projectBranchId: null }, { projectBranch: { branches: { none: { mrAsSource: { some: spentMr } } } } }],
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /**
+   * The read half of `myDraftBranch` (#958): the caller's working branch only
+   * when work was saved or typed on it, and never created. What a `direct`
+   * workspace's editor asks, so switching the mode strands nobody's draft.
+   */
+  async myLiveDraft(documentId: string, userId: string): Promise<MyLiveDraftResponse> {
+    await this.getDocumentOrThrow(documentId);
+    const mine = await this.liveDraftBranch(documentId, userId);
+    if (!mine) return { branch: null, pages: [] };
+    const [own, drafts] = await Promise.all([
+      this.prisma.documentRevision.count({ where: { branchId: mine.id } }),
+      this.prisma.collabDraft.count({ where: { branchId: mine.id } }),
+    ]);
+    return own + drafts > 0 ? { branch: this.toBranchInfo(mine), pages: await this.draftPages(mine) } : { branch: null, pages: [] };
   }
 
   /** The pages a working branch has revisions on (#636), by id: what its Publish would carry. */
@@ -2394,6 +2426,37 @@ export class DocumentsService {
     };
   }
 
+  /**
+   * The publish mode, enforced where every revision is created (#958). In a
+   * `review` workspace a person adds a revision to the default branch of a
+   * published page only by merging a merge request, unless they are a
+   * workspace admin; in `direct` any editor may. Not a person's direct edit,
+   * so never held: an `internalWrite`, a branch other than the default, a
+   * private draft page (its author's until Publish) and the first revision of
+   * a page that has none — but not of a page still behind its merge request,
+   * whose first revision is that merge. The refusal carries a reason a client
+   * branches on and no title.
+   */
+  private async assertMayWrite(
+    document: Pick<Document, 'workspaceId' | 'defaultBranch' | 'draftOwnerId' | 'pendingMergeRequestId'>,
+    branch: Pick<DocumentBranch, 'name' | 'headRevisionId'>,
+    by: WriteAuthority,
+  ): Promise<void> {
+    if ('internal' in by || !by.person || by.person.mode === 'dev') return;
+    if (branch.name !== document.defaultBranch || document.draftOwnerId) return;
+    if (!branch.headRevisionId && !document.pendingMergeRequestId) return;
+    if ((await this.editing.policy(document.workspaceId)).publishMode.effective === 'direct') return;
+    if ((await this.permissions.scopeFor(by.person, document.workspaceId)).bypass) return;
+    throw new ConflictException({ statusCode: 409, message: t('error.document.reviewRequired'), reason: 'review-required' });
+  }
+
+  /** `assertMayWrite` for a caller that writes several pages and must refuse before the first (a git push). */
+  async assertMayWriteDirect(documentId: string, branchName: string, by: WriteAuthority): Promise<void> {
+    const document = await this.getDocumentOrThrow(documentId);
+    const branch = await this.prisma.documentBranch.findUnique({ where: { documentId_name: { documentId, name: branchName } } });
+    if (branch) await this.assertMayWrite(document, branch, by);
+  }
+
   private async createDraftRevision(
     documentId: string,
     opts: {
@@ -2403,6 +2466,7 @@ export class DocumentsService {
       authorId?: string;
       collab?: { draftId: string; snapshot: Uint8Array<ArrayBuffer> };
       connectorId?: string;
+      by: WriteAuthority;
     },
   ): Promise<DocumentRevision> {
     const document = await this.getDocumentOrThrow(documentId);
@@ -2423,6 +2487,7 @@ export class DocumentsService {
       where: { documentId_name: { documentId, name: branchName } },
     });
     if (!branch) throw new NotFoundException(t('error.branch.notFound', { name: branchName, documentId }));
+    await this.assertMayWrite(document, branch, opts.by);
 
     // `withTransaction`, not `$transaction` — see the note in finalizeRevision.
     // This is the FIRST place a merge deadlocks, before finalizeRevision is even

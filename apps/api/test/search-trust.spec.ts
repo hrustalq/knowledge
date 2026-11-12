@@ -113,7 +113,7 @@ function build(
       ...knobs,
     })),
   };
-  const permissions = { documentFilterFor: vi.fn(async () => ({ kind: 'all' as const })) };
+  const permissions = { documentFilterFor: vi.fn(async () => ({ kind: 'all' as const })), requireHistory: vi.fn(async () => undefined) };
   const config = { get: vi.fn((key: string) => ({ SEARCH_ACL_OVERFETCH: 5, SEARCH_ACL_MAX_FETCH: 500 })[key]) };
   const svc = new SearchService(
     prisma as never,

@@ -698,7 +698,7 @@ describe('#811 one revision writer', () => {
       },
       finalizeRevision: boom,
     });
-    await expect(svc.writeRevision('d1', { text: 'md' })).rejects.toThrow('boom');
+    await expect(svc.writeRevision('d1', { text: 'md' }, { person: undefined })).rejects.toThrow('boom');
     expect(storage.putObjectText).toHaveBeenCalledWith('s', 'md', 'text/markdown');
     expect(committed).toEqual([]);
   });
@@ -706,7 +706,7 @@ describe('#811 one revision writer', () => {
   it('writeRevision: a moved head is the 409 with its comparison link', async () => {
     const { prisma, committed } = fakePrisma({ 'document.findUnique': doc, 'documentBranch.findUnique': { headRevisionId: 'r9' } });
     const svc = stub(Object.create(DocumentsService.prototype) as DocumentsService, { prisma });
-    const err = await svc.writeRevision('d1', { text: 'md', expectedHeadRevisionId: 'r1' }).catch((e: unknown) => e);
+    const err = await svc.writeRevision('d1', { text: 'md', expectedHeadRevisionId: 'r1' }, { person: undefined }).catch((e: unknown) => e);
     expect(err).toMatchObject({ status: 409 });
     expect((err as { getResponse: () => unknown }).getResponse()).toMatchObject({
       currentHeadRevisionId: 'r9',
@@ -721,11 +721,14 @@ describe('#811 one revision writer', () => {
       getContent: vi.fn(async () => ({ frontmatter: { tags: ['x'] } })),
       writeRevision: vi.fn(async () => ({ revisionId: 'r2', status: 'finalized' })),
     };
-    await createRevision({ prisma, documents } as never, 'd1', { baseRevisionId: 'r1', content: '# Body' }, 'u1');
+    const person = { userId: 'u1', mode: 'api-key' } as never;
+    await createRevision({ prisma, documents } as never, 'd1', { baseRevisionId: 'r1', content: '# Body' }, person);
     expect(documents.getContent).toHaveBeenCalledWith('d1', 'r1');
     expect(documents.writeRevision).toHaveBeenCalledWith(
       'd1',
       expect.objectContaining({ expectedHeadRevisionId: 'r1', branch: 'main', text: expect.stringContaining('# Body') }),
+      // The connecting person vouches for the write (#958): held to the publish mode.
+      { person },
       'u1',
     );
   });

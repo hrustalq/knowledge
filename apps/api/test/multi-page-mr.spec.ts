@@ -84,7 +84,7 @@ function fixture(over: { mergeBaseOfB?: string; denyB?: boolean; bSource?: strin
     compare as never,
     {} as never, // activity
     {} as never, // access
-    { get: () => 0 } as never,
+    { policy: async () => ({ requiredApprovals: { effective: 0 } }) } as never, // editing policy
     {} as never, // notifications
     {} as never, // events
     permissions as never,

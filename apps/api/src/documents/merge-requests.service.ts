@@ -1,5 +1,4 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { DEFAULT_API_BREAKING_CHANGE_POLICY, isApiSpecKind } from '@knowledge/contracts';
 import type {
   ApiBreakingAck,
@@ -47,13 +46,13 @@ import { visibilityWhere, type AccessScope } from '../permissions/access-scope.j
 import { ApiSpecDiffService } from '../api-specs/api-spec-diff.service.js';
 import { EntitiesService } from '../entities/entities.service.js';
 import { AuditService } from '../auth/audit.service.js';
+import { EditingPolicyService } from '../auth/editing-policy.service.js';
 import { ConflictsService } from '../conflicts/conflicts.service.js';
 import { LintChecksService } from './lint/lint-checks.service.js';
 import { lintGateEnforced, overridable } from './lint/lint-check.js';
 import { ProjectCommitsService, type PagePlace } from '../git/project-commits.service.js';
 import { sourcePages } from './mr-pages.js';
 import { hasConflictMarkers, threeWay, type ThreeWayResult } from './three-way.js';
-import type { Env } from '../config/env.js';
 import { AUTHOR_ID_STUB } from '../activity/actor.js';
 
 /** Fallback author when no principal is supplied (AUTH_MODE=none, MCP stdio). */
@@ -117,7 +116,7 @@ const behind = (p: MrPage): boolean => p.target.headRevisionId !== null && p.mer
  * Either way the merge revision goes through the normal finalize → outbox →
  * reindex pipeline.
  *
- * Merge gating: draft MRs never merge; MR_REQUIRED_APPROVALS non-author
+ * Merge gating: draft MRs never merge; the workspace's required approvals (#958, default MR_REQUIRED_APPROVALS) non-author
  * approvals are required (0 disables); merging into a protected branch
  * requires the workspace admin role; a page whose style lint is `block` waits
  * for the check of its source head and for its error-severity violations to
@@ -136,7 +135,7 @@ export class MergeRequestsService {
     private readonly compare: CompareService,
     private readonly activity: ActivityService,
     private readonly access: AccessService,
-    private readonly config: ConfigService<Env, true>,
+    private readonly editing: EditingPolicyService,
     private readonly notifications: NotificationsService,
     // See DocumentThreadsService: NotificationsService cannot publish, so the
     // frames for `assigned` and `review-requested` are announced from here.
@@ -725,7 +724,7 @@ export class MergeRequestsService {
     return mr;
   }
 
-  /** Records approval by the calling principal; merge requires MR_REQUIRED_APPROVALS of these (author's own excluded). */
+  /** Records approval by the calling principal; merge requires the workspace's required approvals of these (author's own excluded). */
   async approve(
     mergeRequestId: string,
     approverId: string = AUTHOR_ID_STUB,
@@ -965,8 +964,10 @@ export class MergeRequestsService {
     // Approval gate — enforced only for real identities: in AUTH_MODE=none the
     // dev principal IS the zeros author stub (self-approval could never pass),
     // and MCP stdio has no principal. Same trust semantics as requireRole.
+    const { pages, places, projectId, workspaceId } = await this.spanOf(mr);
+    // The workspace's own number (#958); MR_REQUIRED_APPROVALS is only its default.
     const requiredApprovals =
-      principal && principal.mode !== 'dev' ? this.config.get('MR_REQUIRED_APPROVALS', { infer: true }) : 0;
+      principal && principal.mode !== 'dev' ? (await this.editing.policy(workspaceId)).requiredApprovals.effective : 0;
     const approvals = this.approvers(mr).filter((id) => id !== mr.authorId).length;
     if (approvals < requiredApprovals) {
       throw new ConflictException({
@@ -977,7 +978,6 @@ export class MergeRequestsService {
         approvals,
       });
     }
-    const { pages, places, projectId, workspaceId } = await this.spanOf(mr);
     if (pages.length === 0 && places.length === 0) throw new BadRequestException(t('error.mergeRequest.nothingToMerge'));
     this.assertTargetsExist(pages, mr.targetBranch.name);
     // A merge writes every page it spans (#636), and every page its tree moves,

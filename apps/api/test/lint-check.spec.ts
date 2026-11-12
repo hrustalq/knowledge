@@ -826,7 +826,8 @@ describe('LintChecksService gate', () => {
 });
 
 /** MergeRequestsService with only what merge's gates and the override touch. */
-function mergeFixture(over: { gate?: Partial<ReturnType<typeof lintGate>>; check?: Record<string, unknown> | null; claimed?: number } = {}) {
+function mergeFixture(over: { gate?: Partial<ReturnType<typeof lintGate>>; check?: Record<string, unknown> | null; claimed?: number; required?: number; approvedBy?: string[] } = {}) {
+  const required = over.required ?? 0;
   const mr = {
     id: MR,
     documentId: DOC,
@@ -834,7 +835,7 @@ function mergeFixture(over: { gate?: Partial<ReturnType<typeof lintGate>>; check
     status: 'open',
     isDraft: false,
     authorId: AUTHOR,
-    approvedBy: [],
+    approvedBy: over.approvedBy ?? [],
     sourceBranch: { id: 'sb', documentId: DOC, projectBranchId: null, name: 'feature', headRevisionId: HEAD },
     targetBranch: { id: 'tb', documentId: DOC, name: 'main', headRevisionId: OLD_HEAD, protected: false },
     reviewers: [],
@@ -878,7 +879,7 @@ function mergeFixture(over: { gate?: Partial<ReturnType<typeof lintGate>>; check
   // The target head is the merge base: a fast-forward, nothing to merge 3-way.
   const compare = { findMergeBase: vi.fn(async () => OLD_HEAD) };
   const permissions = { scopeFor: vi.fn(async () => ({ workspaceId: WS })), requireLevel: vi.fn(async () => 'edit') };
-  const config = { get: vi.fn(() => 0) };
+  const editing = { policy: vi.fn(async () => ({ requiredApprovals: { effective: required } })) };
   const activity = { record: vi.fn(async () => undefined) };
   const audit = { record: vi.fn(async () => undefined) };
   const service = new MergeRequestsService(
@@ -888,7 +889,7 @@ function mergeFixture(over: { gate?: Partial<ReturnType<typeof lintGate>>; check
     compare as never,
     activity as never,
     {} as never, // access
-    config as never,
+    editing as never,
     {} as never, // notifications
     {} as never, // events
     permissions as never,
@@ -926,6 +927,26 @@ describe('MergeRequestsService lint gate', () => {
       const f = mergeFixture();
       await expect(f.service.merge(MR, 'merge-commit', principal)).rejects.toThrow('past the gates');
       expect(f.lint.gate).not.toHaveBeenCalled();
+    }
+  });
+});
+
+describe('MergeRequestsService approvals gate (#958)', () => {
+  const merge = (f: ReturnType<typeof mergeFixture>, ...as: unknown[]) =>
+    f.service.merge(MR, 'merge-commit', (as.length ? as[0] : ADMIN) as never).catch((e: unknown) => e);
+
+  it('holds a merge below the workspace\'s number and names it; the author\'s own approval never counts', async () => {
+    const error = await merge(mergeFixture({ required: 2, approvedBy: [AUTHOR, 'u-other'], gate: { blocked: false } }));
+    expect((error as ConflictException).getResponse()).toMatchObject({ reason: 'approvals', requiredApprovals: 2, approvals: 1 });
+  });
+
+  it('a workspace set to 0 merges with no approval', async () => {
+    expect(await merge(mergeFixture({ required: 0, gate: { blocked: false } }))).toMatchObject({ message: 'past the gates' });
+  });
+
+  it('is not asked for the dev principal or with no principal', async () => {
+    for (const principal of [{ userId: AUTHOR, mode: 'dev' }, undefined]) {
+      expect(await merge(mergeFixture({ required: 2 }), principal)).toMatchObject({ message: 'past the gates' });
     }
   });
 });

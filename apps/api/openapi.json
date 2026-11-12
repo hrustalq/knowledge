@@ -11479,7 +11479,7 @@
             }
           }
         },
-        "summary": "Approve as the calling principal (MR_REQUIRED_APPROVALS non-author approvals gate the merge)",
+        "summary": "Approve as the calling principal (the workspace required-approvals number, non-author, gates the merge)",
         "tags": [
           "merge-requests"
         ]

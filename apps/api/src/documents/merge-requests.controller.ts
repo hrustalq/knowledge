@@ -311,7 +311,7 @@ export class MergeRequestsController {
   @Post('merge-requests/:id/approve')
   @Returns('CreateMergeRequestResponse')
   @Access('editor', 'merge-request')
-  @ApiOperation({ summary: 'Approve as the calling principal (MR_REQUIRED_APPROVALS non-author approvals gate the merge)' })
+  @ApiOperation({ summary: 'Approve as the calling principal (the workspace required-approvals number, non-author, gates the merge)' })
   approve(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<CreateMergeRequestResponse> {
     return this.mergeRequests.approve(id, principal?.userId);
   }

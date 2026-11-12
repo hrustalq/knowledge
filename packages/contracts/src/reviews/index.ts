@@ -286,7 +286,7 @@ export interface ListSavedFiltersResponse {
 /**
  * 409 `details` vocabulary for merge gating (see RevisionConflictResponse for
  * the diverged case): `draft` — MR is flagged draft; `approvals` — fewer
- * non-author approvals than MR_REQUIRED_APPROVALS; `conflict` — a page's
+ * non-author approvals than the workspace requires; `conflict` — a page's
  * target moved past the merge base and its 3-way merge overlaps the source's
  * changes (#636), `conflicts` naming each page and hunk, the other keys
  * describing the first; `diverged` — a target head moved while the merge was

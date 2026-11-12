@@ -22,6 +22,7 @@ import {
   ShieldCheck,
   Sparkles,
   ToggleRight,
+  GitPullRequestArrow,
   UserRound,
   Workflow,
 } from 'lucide-vue-next'
@@ -74,6 +75,7 @@ const links = computed<SettingsLink[]>(() => [
         { to: '/settings/chat', label: t('nav.chatBots'), icon: MessagesSquare, hint: t('settings.chatBotsHint') },
         { to: '/settings/security', label: t('nav.security'), icon: LockKeyhole, hint: t('settings.securityHint') },
         { to: '/settings/features', label: t('nav.features'), icon: ToggleRight, hint: t('settings.featuresHint') },
+        { to: '/settings/editing', label: t('nav.editing'), icon: GitPullRequestArrow, hint: t('settings.editingHint') },
       ]
     : []),
   // Last, and open to every role: it is the section you go to when one of the

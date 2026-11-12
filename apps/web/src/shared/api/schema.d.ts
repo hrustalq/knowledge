@@ -2069,7 +2069,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Approve as the calling principal (MR_REQUIRED_APPROVALS non-author approvals gate the merge) */
+        /** Approve as the calling principal (the workspace required-approvals number, non-author, gates the merge) */
         post: operations["MergeRequestsController_approve"];
         delete?: never;
         options?: never;

@@ -1,11 +1,12 @@
 import { defineStore, type Pinia } from 'pinia'
 import type { Directive } from 'vue'
-import type { WorkspaceFeature, WorkspaceFeaturesResponse, WorkspacePurposeResponse, WorkspaceUse } from '@knowledge/contracts'
+import type { EditingPolicyResponse, HistoryAudience, PublishMode, WorkspaceFeature, WorkspaceFeaturesResponse, WorkspacePurposeResponse, WorkspaceUse } from '@knowledge/contracts'
 import { apiQueryOptions, bindStoreQuery } from '@/shared/api/queries'
 import { api } from '@/shared/api/client'
 import { DEMO_WORKSPACE_ID, getWorkspaceId } from '@/shared/api/api'
 
 const optionsFor = (id: string) => apiQueryOptions('/v1/workspaces/{id}/features', { path: { id } })
+const editingOptionsFor = (id: string) => apiQueryOptions('/v1/workspaces/{id}/editing-policy', { path: { id } })
 
 /**
  * The sections the active workspace switched off (#604). Loaded by the router
@@ -24,10 +25,14 @@ export const useFeaturesStore = defineStore('features', {
     uses: [] as WorkspaceUse[],
     /** False only for a new workspace whose admin has not yet met the purpose question. A failed read leaves it true: no redirect on a blip. */
     purposeAsked: true,
+    /** The editing policy (#958), loaded with the sections. Null after a failed read: the getters below then answer the defaults, and the API still enforces the real one. */
+    editing: null as EditingPolicyResponse | null,
     loaded: false,
   }),
   getters: {
     isOn: (s) => (feature: WorkspaceFeature): boolean => !s.disabled.includes(feature) && !s.unavailable.includes(feature),
+    publishMode: (s): PublishMode => s.editing?.publishMode.effective ?? 'review',
+    historyAudience: (s): HistoryAudience => s.editing?.historyAudience.effective ?? 'everyone',
   },
   actions: {
     async ensureLoaded(): Promise<void> {
@@ -35,7 +40,13 @@ export const useFeaturesStore = defineStore('features', {
       const id = getWorkspaceId()
       try {
         if (id) {
-          await bindStoreQuery<WorkspaceFeaturesResponse>(this, 'features', this.queryClient, optionsFor(id), (res) => this.apply(res))
+          await Promise.all([
+            bindStoreQuery<WorkspaceFeaturesResponse>(this, 'features', this.queryClient, optionsFor(id), (res) => this.apply(res)),
+            // Its own failure costs only the policy, never the sections.
+            bindStoreQuery<EditingPolicyResponse>(this, 'editing', this.queryClient, editingOptionsFor(id), (res) => {
+              this.editing = res
+            }).catch(() => undefined),
+          ])
         }
       } catch {
         // every section stays on; see above
@@ -48,6 +59,13 @@ export const useFeaturesStore = defineStore('features', {
       const res = await api.put('/v1/workspaces/{id}/features', { path: { id }, body: { disabled } })
       this.queryClient.setQueryData(optionsFor(id).queryKey, res)
       this.apply(res)
+    },
+    /** Workspace admin: a key left out is unchanged, null goes back to inheriting. */
+    async saveEditing(body: { publishMode?: PublishMode | null; historyAudience?: HistoryAudience | null; requiredApprovals?: number | null }): Promise<void> {
+      const id = getWorkspaceId()
+      const res = await api.put('/v1/workspaces/{id}/editing-policy', { path: { id }, body })
+      this.queryClient.setQueryData(editingOptionsFor(id).queryKey, res)
+      this.editing = res
     },
     apply(res: WorkspaceFeaturesResponse) {
       this.disabled = res.disabled

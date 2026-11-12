@@ -40,6 +40,7 @@ import type {
   UpdateMergeRequestBranchDto,
   UpdateMergeRequestDto,
 } from './dto/merge-requests.dto.js';
+import { NOT_MANUAL } from './dto/merge-requests.dto.js';
 import { t } from '../i18n/t.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
@@ -281,7 +282,7 @@ export class MergeRequestsService {
         ? { targetBranch: { name: { contains: query.targetBranch, mode: 'insensitive' as const } } }
         : {}),
       ...(query.search ? { title: { contains: query.search, mode: 'insensitive' as const } } : {}),
-      ...(query.provenance ? { provenance: query.provenance } : {}),
+      ...(query.provenance ? { provenance: query.provenance === NOT_MANUAL ? { not: 'manual' } : query.provenance } : {}),
     };
     const [rows, statusCounts] = await Promise.all([
       this.prisma.mergeRequest.findMany({

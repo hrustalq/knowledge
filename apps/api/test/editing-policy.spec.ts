@@ -47,3 +47,15 @@ describe('editing policy (#958)', () => {
     expect((await editing.set(WS, { requiredApprovals: null }, 'u1')).requiredApprovals).toMatchObject({ workspace: null, effective: 1 });
   });
 });
+
+describe('the Proposals list (#958)', () => {
+  it('`not-manual` lists and counts every merge request a person did not open', async () => {
+    const { MergeRequestsService } = await import('../src/documents/merge-requests.service.js');
+    const prisma = { mergeRequest: { findMany: vi.fn(async () => []), groupBy: vi.fn(async () => []) } };
+    const svc = new (MergeRequestsService as unknown as new (...a: unknown[]) => InstanceType<typeof MergeRequestsService>)(prisma);
+    const scope = { workspaceId: WS, userId: 'u', role: 'admin', bypass: true } as never;
+    await svc.listWorkspace({ workspaceId: WS, provenance: 'not-manual' }, scope);
+    expect(prisma.mergeRequest.findMany.mock.calls[0]![0].where.provenance).toEqual({ not: 'manual' });
+    expect(prisma.mergeRequest.groupBy.mock.calls[0]![0].where.provenance).toEqual({ not: 'manual' });
+  });
+});

@@ -165,7 +165,8 @@
     "pageActions": "Page actions",
     "linkSource": "Link a source",
     "blueprints": "Blueprints",
-    "editing": "Editing"
+    "editing": "Editing",
+    "proposals": "Proposals"
   },
   "role": {
     "guest": "Guest",
@@ -1852,7 +1853,12 @@
       "pageLabel": "Resolution of {title}"
     },
     "approvalsOf": "{have} of {required} required",
-    "approvalsNoneRequired": "none required"
+    "approvalsNoneRequired": "none required",
+    "proposals": {
+      "subtitle": "Changes that agents, captures and connectors proposed. Accepting one merges it onto the page.",
+      "empty": "No proposals",
+      "emptyHint": "When an agent, a capture or a connector proposes a change to a page, it waits here for a person to accept it."
+    }
   },
   "assistant": {
     "askAi": "Ask AI",

@@ -4,7 +4,7 @@
 import { useI18n } from 'vue-i18n'
 import { computed } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
-import { GitPullRequestArrow, SearchX } from 'lucide-vue-next'
+import { GitPullRequestArrow, Inbox, SearchX } from 'lucide-vue-next'
 import type { ListMergeRequestsResponse, MergeRequestInfo } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { Button } from '@knowledge/ui/button'
@@ -24,6 +24,8 @@ const props = defineProps<{
    * while they are filtering by author reads as a bug.
    */
   narrowed?: boolean
+  /** The list holds proposals only (#958, a direct workspace): the empty state says so. */
+  proposals?: boolean
 }>()
 defineEmits<{ clear: [] }>()
 
@@ -47,9 +49,9 @@ const isLoading = computed(() => props.loading ?? (!!props.documentId && documen
   <PageState
     v-else-if="mergeRequests.length === 0"
     state="empty"
-    :icon="narrowed ? SearchX : GitPullRequestArrow"
-    :title="narrowed ? t('mr.noMatches') : t('mr.noMergeRequests')"
-    :description="narrowed ? t('mr.noneMatchFilters') : t('mr.branchToPropose')"
+    :icon="narrowed ? SearchX : proposals ? Inbox : GitPullRequestArrow"
+    :title="narrowed ? t('mr.noMatches') : proposals ? t('mr.proposals.empty') : t('mr.noMergeRequests')"
+    :description="narrowed ? t('mr.noneMatchFilters') : proposals ? t('mr.proposals.emptyHint') : t('mr.branchToPropose')"
   >
     <template v-if="narrowed" #actions>
       <Button variant="outline" size="sm" @click="$emit('clear')">

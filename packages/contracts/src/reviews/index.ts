@@ -219,7 +219,8 @@ export interface ListWorkspaceMergeRequestsRequest {
   /** Case-insensitive title substring match. */
   search?: string;
   /** Only merge requests opened this way, e.g. `captured` for agent-session captures. */
-  provenance?: MergeRequestProvenance;
+  /** `not-manual` is every merge request a person did not open: the Proposals page of a direct workspace (#958). */
+  provenance?: MergeRequestProvenance | 'not-manual';
   cursor?: string;
   limit?: number;
 }

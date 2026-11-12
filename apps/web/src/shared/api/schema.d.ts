@@ -23951,8 +23951,8 @@ export interface operations {
                 targetBranch?: string;
                 /** @description Case-insensitive title substring match */
                 search?: string;
-                /** @description Only merge requests opened this way, e.g. captured (issue #73) */
-                provenance?: "manual" | "agent" | "captured";
+                /** @description Only merge requests opened this way, e.g. captured (issue #73). `not-manual` is every one a person did not open: the Proposals page of a direct workspace (#958) */
+                provenance?: "manual" | "agent" | "captured" | "not-manual";
                 /** @description Opaque cursor from a previous page */
                 cursor?: string;
                 /** @description Default: 50. */

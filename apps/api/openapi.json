@@ -10469,13 +10469,14 @@
             "name": "provenance",
             "required": false,
             "in": "query",
-            "description": "Only merge requests opened this way, e.g. captured (issue #73)",
+            "description": "Only merge requests opened this way, e.g. captured (issue #73). `not-manual` is every one a person did not open: the Proposals page of a direct workspace (#958)",
             "schema": {
               "type": "string",
               "enum": [
                 "manual",
                 "agent",
-                "captured"
+                "captured",
+                "not-manual"
               ]
             }
           },

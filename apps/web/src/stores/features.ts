@@ -33,6 +33,10 @@ export const useFeaturesStore = defineStore('features', {
     isOn: (s) => (feature: WorkspaceFeature): boolean => !s.disabled.includes(feature) && !s.unavailable.includes(feature),
     publishMode: (s): PublishMode => s.editing?.publishMode.effective ?? 'review',
     historyAudience: (s): HistoryAudience => s.editing?.historyAudience.effective ?? 'everyone',
+    /** In a `direct` workspace people open no merge requests, so the page lists what agents and captures proposed (#958). */
+    proposalsOnly(): boolean {
+      return this.publishMode === 'direct'
+    },
   },
   actions: {
     async ensureLoaded(): Promise<void> {

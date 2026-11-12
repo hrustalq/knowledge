@@ -13,6 +13,13 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.52.1] — 2026-11-12
+
+### Fixed
+
+- In v0.52.0 the ingestion worker and the git remote did not start: new and changed pages were not indexed, and
+  `git clone` / `git push` were unavailable. Both start again. The API and the web app were not affected. (#983)
+
 ## [0.52.0] — 2026-11-12
 
 ### Breaking
@@ -6931,7 +6938,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.52.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.52.1...HEAD
+[0.52.1]: https://github.com/hrustalq/knowledge/compare/v0.52.0...v0.52.1
 [0.52.0]: https://github.com/hrustalq/knowledge/compare/v0.51.0...v0.52.0
 [0.51.0]: https://github.com/hrustalq/knowledge/compare/v0.50.1...v0.51.0
 [0.50.1]: https://github.com/hrustalq/knowledge/compare/v0.50.0...v0.50.1

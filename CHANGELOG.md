@@ -13,7 +13,7 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
-## [Unreleased]
+## [0.51.0] — 2026-11-12
 
 ### Breaking
 
@@ -56,32 +56,6 @@ in the pull request that introduces them — see
 - Each workspace settings screen for a setting a project can override now names the projects that do.
   `GET /v1/projects/setting-overrides` is the list behind it. (#928)
 
-### Changed
-
-- A tracker handoff rule can be switched off for one project while it is on for the workspace, and on for one
-  project while the workspace has none. (#923)
-- Sharing a project's test environment with every project, or moving it to another project, clears its saved
-  secrets unless the same request sets them, as adding a new destination host already does. (#925)
-- A term captured from an agent session is treated as a duplicate when the workspace already defines it, not only
-  when its project does. (#926)
-
-### Operations
-
-- Migration `20270116170000_workspace_purpose` adds three columns to `workspace_settings` and marks every existing
-  workspace as already asked about its purpose. It is additive and defaulted, so a rollback to the previous image
-  runs against it unchanged. After such a rollback and a later roll forward, a workspace created in between is
-  asked on its admin's next visit. The purpose interview makes model calls (at most four per run) on the
-  `scaffolder` agent's model, recorded as `purpose-interview`; it has no env var of its own. (#934)
-
-- Seven migrations, all additive: nullable columns on `projects`, `api_test_environments`, `agent_runs` and
-  `ai_usage`, and `glossary_terms.project_id` made nullable. The last one fills `agent_runs.project_id` and
-  `ai_usage.project_id` for existing rows in single statements, one pass over each table at deploy.
-- Rolling back the code after this release has been used: the previous image ignores every project policy (the
-  workspace value applies again), lets any project use a test environment that was bound to one project, and shows
-  a workspace glossary term without a project. No data is lost, and re-deploying restores the behaviour.
-
-### Added
-
 - **API keys limited to toolsets.** `POST /v1/me/api-keys` takes `toolsets`, a list of MCP toolset keys (`core` is
   always added; an unknown one is a 400). Such a key is offered only those toolsets over MCP, and it is **MCP-only**:
   REST routes, the git remote, the live socket and the plain-markdown URLs answer 403 `apiKeyMcpOnly`. A key without
@@ -97,6 +71,13 @@ in the pull request that introduces them — see
 
 ### Changed
 
+- A tracker handoff rule can be switched off for one project while it is on for the workspace, and on for one
+  project while the workspace has none. (#923)
+- Sharing a project's test environment with every project, or moving it to another project, clears its saved
+  secrets unless the same request sets them, as adding a new destination host already does. (#925)
+- A term captured from an agent session is treated as a duplicate when the workspace already defines it, not only
+  when its project does. (#926)
+
 - **A switched-off section's MCP tools are no longer listed.** `tools/list`, the generated skill and the server
   instructions leave out the tools of a section (QA, Memos, Captures, Analytics, Conflicts, Workflows) that is off in
   every workspace the connection reaches. On in one reachable workspace still lists them, and a call naming a
@@ -108,6 +89,19 @@ in the pull request that introduces them — see
   instructions as before. `MCP` (#950, #951)
 
 ### Operations
+
+- Migration `20270116170000_workspace_purpose` adds three columns to `workspace_settings` and marks every existing
+  workspace as already asked about its purpose. It is additive and defaulted, so a rollback to the previous image
+  runs against it unchanged. After such a rollback and a later roll forward, a workspace created in between is
+  asked on its admin's next visit. The purpose interview makes model calls (at most four per run) on the
+  `scaffolder` agent's model, recorded as `purpose-interview`; it has no env var of its own. (#934)
+
+- Seven migrations, all additive: nullable columns on `projects`, `api_test_environments`, `agent_runs` and
+  `ai_usage`, and `glossary_terms.project_id` made nullable. The last one fills `agent_runs.project_id` and
+  `ai_usage.project_id` for existing rows in single statements, one pass over each table at deploy.
+- Rolling back the code after this release has been used: the previous image ignores every project policy (the
+  workspace value applies again), lets any project use a test environment that was bound to one project, and shows
+  a workspace glossary term without a project. No data is lost, and re-deploying restores the behaviour.
 
 - Migration `20270115100000_api_key_toolsets` adds the nullable column `api_keys.toolsets`. It is additive and the
   previous image runs against it. **After a rollback to an older image, a key created with a toolset list stops
@@ -6853,7 +6847,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.50.1...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.51.0...HEAD
+[0.51.0]: https://github.com/hrustalq/knowledge/compare/v0.50.1...v0.51.0
 [0.50.1]: https://github.com/hrustalq/knowledge/compare/v0.50.0...v0.50.1
 [0.50.0]: https://github.com/hrustalq/knowledge/compare/v0.49.2...v0.50.0
 [0.49.2]: https://github.com/hrustalq/knowledge/compare/v0.49.1...v0.49.2

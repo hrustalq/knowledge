@@ -90,7 +90,7 @@ defaults to `ru`, a hint gen-api says its main path barely reads, and the memo's
    chunk and stitches.
 5. Removes the temp dir, whatever the outcome.
 
-`ffmpeg` is in `Dockerfile.api`'s runtime stage; its `-version` calls fail the image build, not the
+`ffmpeg` is in `Dockerfile.api`'s `runtime-os` stage, below the app layers (#995); its `-version` calls fail the image build, not the
 first memo.
 
 ### The transcript is a JSON column, masked before it is written

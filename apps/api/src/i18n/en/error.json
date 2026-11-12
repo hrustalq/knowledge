@@ -34,6 +34,8 @@
     "apiKeyWorkspace": "This API key is limited to another workspace ({workspaceId} is outside it).",
     "apiKeyReadOnly": "This API key is read-only; {role} access needs a key with write scope.",
     "apiKeyCaptureOnly": "This API key may only read and propose captures; {role} access needs a key with write scope.",
+    "apiKeyMcpOnly": "This API key is limited to MCP toolsets, so it works only at the MCP endpoint (/v1/mcp). Use a key without a toolset list here.",
+    "apiKeyToolNotOffered": "This connection is not offered {tool}: it is outside the API key's scope or toolsets.",
     "apiKeyNeedsSession": "API keys are managed from a signed-in session, not with another API key.",
     "apiKeyNotFound": "API key {id} not found.",
     "apiKeyWorkspaceNotMember": "You can only pin a key to a workspace you belong to ({workspaceId}).",
@@ -181,6 +183,7 @@
     "queryFailed": "Graph query failed: {reason}. Positions refer to the scoped query that ran: {query}"
   },
   "glossary": {
+    "workspaceTermExists": "The workspace already has a term “{term}”. Promote with replace to put this one in its place, or delete this project's term to use the workspace's.",
     "notFound": "Glossary term {id} not found",
     "duplicate": "\"{term}\" is already in this project's glossary",
     "documentNotFound": "Document {id} not found in workspace"
@@ -255,6 +258,7 @@
     "providerNoModels": "This provider has no models yet. Add one to test it.",
     "encryptionKeyMissing": "SETTINGS_ENCRYPTION_KEY is not configured, so API keys cannot be stored. Set it (openssl rand -base64 32) and restart the API, or configure the provider through ASSISTANT_API_KEY.",
     "captureParentNotInWorkspace": "The capture parent page {id} is not a page of this workspace.",
+    "captureParentNotInProject": "The capture parent page {id} is not a page of this project that you can open.",
     "captureThresholdOrder": "The amend threshold ({amend}) cannot be above the duplicate threshold ({dedupe}).",
     "pluginUrlInvalid": "Plugin URL is not a valid URL",
     "pluginUrlNotHttps": "Plugin URL must use https (http is allowed only with AI_PLUGINS_ALLOW_PRIVATE_URLS)",
@@ -714,6 +718,7 @@
     "inFlight": "This capture is being proposed right now. Try again in a moment.",
     "messageNotAssistant": "Only an assistant reply can be saved to the knowledge base.",
     "kitClient": "There is no capture kit for \"{client}\". Kits exist for: {clients}.",
+    "skillsDir": "No skills directory \"{dir}\". Choose one of: {dirs}.",
     "kitNotOffered": "This key is offered no capture tools, so a capture kit would describe calls it cannot make. Use a capture or read-write key.",
     "keyNotHere": "This key has nothing to do with this workspace."
   },

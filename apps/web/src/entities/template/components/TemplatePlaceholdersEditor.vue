@@ -11,10 +11,10 @@
 import { useI18n } from 'vue-i18n'
 import { Plus, ScanSearch, X } from 'lucide-vue-next'
 import { TEMPLATE_PLACEHOLDER_KINDS, type TemplatePlaceholder } from '@knowledge/contracts'
-import { Button } from '@/shared/ui/button'
-import { Checkbox } from '@/shared/ui/checkbox'
-import { Input } from '@/shared/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
+import { Button } from '@knowledge/ui/button'
+import { Checkbox } from '@knowledge/ui/checkbox'
+import { Input } from '@knowledge/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
 
 defineProps<{
   disabled?: boolean

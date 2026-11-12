@@ -23,7 +23,7 @@ Three levels, and no more:
 
 ```
 Workspace  ─ the tenant. Every ACL, every graph query and every storage key is scoped to it.
-  └ Project  ─ organizational only. No members, no roles.
+  └ Project  ─ one team's pages and its policies. No members, no roles.
       └ Document  ─ a page. Belongs to exactly one project, and may nest under another page.
 ```
 

@@ -88,7 +88,8 @@ export class VerificationSweeper implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Stamps inside their reminder window, not yet reminded. The window is the
-   * workspace's `remindBeforeDays` (its settings row, else the env default),
+   * project's `remindBeforeDays`, else the workspace's (its settings row),
+   * else the env default — `VerificationPolicyService.thresholds`, in SQL,
    * resolved in SQL so one query serves every workspace. A window of 0 days
    * selects nothing: no reminders.
    */
@@ -99,6 +100,7 @@ export class VerificationSweeper implements OnModuleInit, OnModuleDestroy {
         FROM documents d
         JOIN document_branches b ON b.document_id = d.id AND b.name = d.default_branch
         LEFT JOIN knowledge_health_settings s ON s.workspace_id = d.workspace_id
+        LEFT JOIN projects p ON p.id = d.project_id
        WHERE d.archived_at IS NULL
          AND d.verification_flag IS NULL
          AND d.verified_revision_id IS NOT NULL
@@ -106,7 +108,7 @@ export class VerificationSweeper implements OnModuleInit, OnModuleDestroy {
          AND d.expiry_reminded_at IS NULL
          AND d.verification_expires_at > ${now}::timestamptz
          AND d.verification_expires_at <= ${now}::timestamptz
-             + make_interval(days => COALESCE(s.remind_before_days, ${defaultDays}::int))
+             + make_interval(days => COALESCE(p.remind_before_days, COALESCE(s.remind_before_days, ${defaultDays}::int)))
        ORDER BY d.verification_expires_at ASC
        LIMIT ${BATCH}
     `;

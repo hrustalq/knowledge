@@ -6,8 +6,10 @@ import type {
   ProjectCascadeCounts,
   ProjectDeletionCounts,
   ProjectDeletionPreview,
+  ProjectSettingOverridesResponse,
   ProjectSummary,
 } from '@knowledge/contracts';
+import { PROJECT_SETTING_KEYS } from '@knowledge/contracts';
 import type { Prisma, Project } from '@prisma/client';
 import { visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
 import { LISTED_PAGE } from '../common/listed-page.js';
@@ -125,6 +127,37 @@ export class ProjectsService {
     return {
       projects: page.map((p) => toSummary(p, p._count.documents)),
       nextCursor: hasMore ? page[page.length - 1]!.id : null,
+    };
+  }
+
+  /**
+   * Which projects override which settings (#928), for the workspace screens
+   * that say "overridden in …". Every override is a nullable column on
+   * `projects`, so this is one read; only projects `scope` may open are named.
+   */
+  async settingOverrides(scope: AccessScope): Promise<ProjectSettingOverridesResponse> {
+    const rows = await this.prisma.project.findMany({
+      where: { workspaceId: scope.workspaceId, ...projectVisibilityWhere(scope) },
+      orderBy: { name: 'asc' },
+    });
+    const set = (...values: unknown[]) => values.some((v) => v !== null);
+    return {
+      overrides: rows
+        .map((p) => ({
+          projectId: p.id,
+          name: p.name,
+          settings: PROJECT_SETTING_KEYS.filter(
+            (key) =>
+              ({
+                verification: set(p.reviewIntervalDays, p.remindBeforeDays, p.inactiveAfterDays, p.emptyMaxChars),
+                breakingChanges: set(p.apiBreakingChangePolicy),
+                lintPolicy: set(p.lintPolicy),
+                workItems: set(p.workItemIssues, p.workItemConflicts, p.workItemVerification),
+                captureParent: set(p.captureParentDocumentId),
+              })[key],
+          ),
+        }))
+        .filter((p) => p.settings.length > 0),
     };
   }
 

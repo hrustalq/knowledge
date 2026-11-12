@@ -26,9 +26,9 @@ import type { ListConnectorsResponse, VerificationFlag } from '@knowledge/contra
 import { VERIFICATION_NOTE_MAX_CHARS, connectorKindInfo } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
-import { Label } from '@/shared/ui/label'
-import { Button } from '@/shared/ui/button'
-import { Textarea } from '@/shared/ui/textarea'
+import { Label } from '@knowledge/ui/label'
+import { Button } from '@knowledge/ui/button'
+import { Textarea } from '@knowledge/ui/textarea'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,8 +38,8 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/ui/dialog'
+} from '@knowledge/ui/dropdown-menu'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@knowledge/ui/dialog'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -49,7 +49,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/shared/ui/alert-dialog'
+} from '@knowledge/ui/alert-dialog'
 import { OwnerPicker } from '@/entities/document'
 import { INTERVAL_CHOICES, intervalFromKey, intervalKey } from '@/entities/document'
 import type { HealthBulkRequest } from '../model/health-ui'

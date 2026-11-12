@@ -9,20 +9,32 @@ import type { AddressInfo } from 'node:net';
 import { McpController } from '../src/mcp/mcp.controller.js';
 import { AccessService } from '../src/auth/access.service.js';
 import { AclGuard } from '../src/auth/acl.guard.js';
-import { READ_KEY_OK_META, type AccessSpec } from '../src/auth/access.decorator.js';
+import { MCP_KEY_OK_META, READ_KEY_OK_META, type AccessSpec } from '../src/auth/access.decorator.js';
 import { DEV_PRINCIPAL, type Principal } from '../src/auth/principal.js';
 import { GraphQueryService } from '../src/graph/graph-query.service.js';
 import { McpService, type McpExtras } from '../src/mcp/mcp.service.js';
 import type { AgentLearning } from '@prisma/client';
-import { CAPTURE_TOOLS, FEATURE_TOOLS, MCP_INSTRUCTIONS, WRITE_TOOLS, settleTools } from '../src/mcp/mcp-tools.js';
+import { CAPTURE_TOOLS, FEATURE_TOOLS, MCP_INSTRUCTIONS, WRITE_TOOLS, instructionsFor, settleTools } from '../src/mcp/mcp-tools.js';
 import { choosePromptLearnings } from '../src/ai/agent-learnings.service.js';
-import { renderSkill } from '../src/mcp/skill.js';
+import { STACK_MARKER, renderSkill, renderSkillStack, renderSkillStackInstaller, stackToolsets } from '../src/mcp/skill.js';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { AiReadableService } from '../src/ai-readable/ai-readable.service.js';
 import { AiReadableController } from '../src/ai-readable/ai-readable.controller.js';
 import { ENFORCING_PROVIDER, enforcingPolicy, noAuthPolicy } from './auth-policy-fakes.js';
 import { ElicitRequestSchema, type ElicitRequest, type ElicitResult } from '@modelcontextprotocol/sdk/types.js';
-import { FLOW_NO_LINK, FLOW_OTHER_KEY, FLOW_SCOPE_SUBTREE } from '@knowledge/contracts';
+import { FLOW_NO_LINK, FLOW_OTHER_KEY, FLOW_SCOPE_SUBTREE, MCP_TOOLSETS, MCP_TOOLSET_KEYS, keyToolsetsOf, toolsetOf, type McpToolset } from '@knowledge/contracts';
 import { FlowsService } from '../src/flows/flows.service.js';
+import { FeaturesService } from '../src/auth/features.service.js';
+import { TokenAuthService } from '../src/auth/token-auth.service.js';
+import { AuthGuard } from '../src/auth/auth.guard.js';
+import { ApiKeysService } from '../src/auth/api-keys.service.js';
+import { CreateApiKeyDto } from '../src/auth/api-keys.dto.js';
+import { GitAccessService } from '../src/git/git-access.service.js';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
 
 /**
  * MCP over HTTP and named API keys (docs/features/33).
@@ -209,7 +221,7 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
     agents: {},
     access,
     // Feature toggles (#604): every section on unless a test switches one off.
-    features: { require: vi.fn(async () => undefined) },
+    features: { require: vi.fn(async () => undefined), offEverywhere: vi.fn(async () => []) },
     config,
     aiReadable,
     provenance: { decorateResults: vi.fn(async (_ws: string, results: unknown[]) => results) },
@@ -397,6 +409,11 @@ function fakeDrafts(enabled = true) {
   };
 }
 
+/** The sorted names `principal` is offered, draft tools included. */
+function mcpToolNames(mcp: McpService, principal: Principal): string[] {
+  return mcp.toolsFor(principal, { drafts: fakeDrafts() }).map((t) => t.name).sort();
+}
+
 async function connect(mcp: McpService, principal: Principal, extras: McpExtras = {}) {
   const { server } = mcp.buildServer(principal, extras);
   const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
@@ -463,6 +480,39 @@ describe('McpService over a principal', () => {
     for (const tools of Object.values(FEATURE_TOOLS)) for (const name of tools ?? []) expect(names, name).toContain(name);
   });
 
+  it('files every registered tool in exactly one toolset, and the catalogue names no other (#945)', () => {
+    // Registered, before `settleTools` drops what it cannot file.
+    const { server } = service(accessWith('admin')).mcp.buildServer(DEV_PRINCIPAL, { drafts: fakeDrafts() });
+    const offered = mcpToolNames(service(accessWith('admin')).mcp, DEV_PRINCIPAL);
+    const filed = MCP_TOOLSET_KEYS.flatMap((key) => [...MCP_TOOLSETS[key].tools]);
+    expect(new Set(filed).size, 'a tool is filed in two toolsets').toBe(filed.length);
+    expect([...filed].sort()).toEqual(offered);
+    // 93 registered: nothing was dropped for want of a toolset.
+    expect(Object.keys((server as unknown as { _registeredTools: object })._registeredTools).sort()).toEqual(offered);
+  });
+
+  it('derives the section map from the catalogue, unchanged (#945)', () => {
+    expect(FEATURE_TOOLS).toEqual({
+      workflows: ['knowledge_list_workflows', 'knowledge_start_workflow', 'knowledge_get_workflow_run'],
+      qa: [
+        'knowledge_list_test_fixtures',
+        'knowledge_get_test_fixture',
+        'knowledge_get_test_suite',
+        'knowledge_generate_test_suite',
+        'knowledge_suggest_test_fixtures',
+        'knowledge_set_test_fixtures',
+        'knowledge_get_test_run_plan',
+        'knowledge_run_test_suite',
+        'knowledge_get_test_run',
+        'knowledge_qa_overview',
+      ],
+      analytics: ['knowledge_get_page_insights', 'knowledge_list_search_gaps'],
+      captures: [...CAPTURE_TOOLS, 'knowledge_list_captures'],
+      memos: ['knowledge_list_memos', 'knowledge_get_memo'],
+      conflicts: ['knowledge_list_conflicts', 'knowledge_resolve_conflict'],
+    });
+  });
+
   it('refuses a tool of a switched-off section, after the membership check (#604)', async () => {
     const { mcp, features, analyticsQuery } = service(accessWith('editor'));
     features.require.mockRejectedValueOnce(new NotFoundException({ statusCode: 404, message: 'off', feature: 'analytics' }));
@@ -475,6 +525,77 @@ describe('McpService over a principal', () => {
     features.require.mockClear();
     await client.callTool({ name: 'knowledge_whoami', arguments: {} });
     expect(features.require).not.toHaveBeenCalled();
+  });
+
+  describe('the offer follows the sections a connection reaches (#945)', () => {
+    const QA = MCP_TOOLSETS.qa.tools;
+
+    /** Real FeaturesService and reach rule over `disabled` per workspace; `member` = the caller's workspaces. */
+    function sectioned(disabled: Record<string, string[]>, member: string[] = Object.keys(disabled)) {
+      const s = service(accessWith('editor'));
+      const findSettings = vi.fn(async ({ where }: { where: { workspaceId: { in: string[] } } }) =>
+        where.workspaceId.in.filter((id) => disabled[id]).map((workspaceId) => ({ workspaceId, disabledFeatures: disabled[workspaceId] })),
+      );
+      const prisma = {
+        workspaceMember: { findMany: vi.fn(async () => member.map((workspaceId) => ({ workspaceId, role: 'editor' }))) },
+        workspace: {
+          findMany: vi.fn(async ({ where }: { where: { id?: { in: string[] } } }) =>
+            (where.id?.in ?? Object.keys(disabled)).map((id) => ({ id, name: id })),
+          ),
+        },
+        workspaceSettings: {
+          findMany: findSettings,
+          findUnique: vi.fn(async ({ where }: { where: { workspaceId: string } }) => ({ disabledFeatures: disabled[where.workspaceId] ?? [] })),
+        },
+      };
+      const features = new FeaturesService(prisma as never, { get: () => true } as never);
+      Object.assign(s.mcp as unknown as { prisma: object; features: object }, { prisma, features });
+      const offered = async (principal: Principal) =>
+        s.mcp.toolsFor(principal, { drafts: fakeDrafts(), offSections: await s.mcp.sectionsOffFor(principal) }).map((t) => t.name);
+      return { ...s, offered, findSettings };
+    }
+    const write = (workspaceId: string | null, extra: Partial<Principal> = {}) => keyPrincipal({ id: 'k', scope: 'write', workspaceId }, extra);
+
+    it('a key pinned to a workspace with a section off is not offered its tools', async () => {
+      const { offered } = sectioned({ [WS_A]: ['qa', 'memos'] });
+      const names = await offered(write(WS_A));
+      for (const name of [...QA, ...MCP_TOOLSETS.memos.tools]) expect(names, name).not.toContain(name);
+      expect(names).toContain('knowledge_list_conflicts');
+    });
+
+    it('on in one reachable workspace is enough to offer it, and a call naming the other is still a 404', async () => {
+      const { mcp, offered } = sectioned({ [WS_A]: [], [WS_B]: ['qa'] });
+      const principal = write(null);
+      const names = await offered(principal);
+      for (const name of QA) expect(names, name).toContain(name);
+
+      const overview = vi.fn();
+      Object.assign(mcp as unknown as { testSuites: object }, { testSuites: { overview } });
+      const client = await connect(mcp, principal, { offSections: await mcp.sectionsOffFor(principal) });
+      const refused = await client.callTool({ name: 'knowledge_qa_overview', arguments: { workspaceId: WS_B } });
+      expect(refused.isError).toBe(true);
+      expect(JSON.stringify(refused.content)).toContain('"statusCode\\":404');
+      expect(overview).not.toHaveBeenCalled();
+    });
+
+    it('offers exactly the full list when nothing is switched off', async () => {
+      const { mcp, offered } = sectioned({ [WS_A]: [], [WS_B]: [] });
+      expect((await offered(write(null))).sort()).toEqual(mcpToolNames(mcp, write(null)));
+    });
+
+    it('offers no section-tied toolset to a connection that reaches no workspace', async () => {
+      const { offered } = sectioned({ [WS_A]: [] }, []);
+      const names = await offered(write(null));
+      for (const tools of Object.values(FEATURE_TOOLS)) for (const name of tools ?? []) expect(names, name).not.toContain(name);
+      expect(names).toContain('knowledge_search');
+    });
+
+    it('reads the settings of every workspace a platform admin reaches in one query', async () => {
+      const many = Object.fromEntries(Array.from({ length: 40 }, (_, i) => [`ws-${i}`, i ? ['qa'] : []]));
+      const { offered, findSettings } = sectioned(many, []);
+      expect(await offered(write(null, { isAdmin: true }))).toContain('knowledge_qa_overview');
+      expect(findSettings).toHaveBeenCalledOnce();
+    });
   });
 
   it('annotates reads read-only, and hides writes from a read-only key', async () => {
@@ -1400,10 +1521,185 @@ describe('renderSkill', () => {
       ],
     },
     tools: [
-      { name: 'knowledge_search', description: 'Semantic search. More text.', readOnly: true },
-      { name: 'knowledge_create_branch', description: 'Create a branch.', readOnly: false },
+      { name: 'knowledge_search', description: 'Semantic search. More text.', toolset: 'core' as const, readOnly: true },
+      { name: 'knowledge_create_branch', description: 'Create a branch.', toolset: 'authoring' as const, readOnly: false },
     ],
   };
+
+  /** `base` as each kind of key would get it: the tools that key is really offered, git on. */
+  const skillInputFor = (scope: 'write' | 'read' | 'capture', offSections: McpExtras['offSections'] = []) => ({
+    ...base,
+    git: true,
+    whoami: { ...base.whoami, apiKey: { scope, workspaceId: null, projectIds: null } },
+    tools: service(accessWith('admin')).mcp.toolsFor(keyPrincipal({ id: 'k', scope, workspaceId: null }), { drafts: fakeDrafts(), offSections }),
+  });
+
+  // Taken from the single template before it was split into toolset sections (#945).
+  it.each(['write', 'read', 'capture'] as const)('renders the same document as before the split for a %s key', (scope) => {
+    expect(renderSkill(skillInputFor(scope))).toMatchSnapshot();
+  });
+
+  it('renders a toolset section only when its tools are offered (#945)', () => {
+    const full = skillInputFor('write');
+    const without = (...toolsets: string[]) => renderSkill({ ...full, tools: full.tools.filter((t) => !toolsets.includes(t.toolset)) });
+    const noQa = without('qa');
+    expect(noQa).not.toContain('API tests');
+    for (const name of MCP_TOOLSETS.qa.tools) expect(noQa, name).not.toContain(name);
+    expect(without('embeds')).not.toContain('Designs embedded in pages');
+    expect(without('chat')).not.toContain('team chat');
+    // A section that reads as another's continuation opens with its own heading without it.
+    expect(without('quality')).toContain('### How pages are read\n\n- `knowledge_get_page_insights`');
+    expect(renderSkill(full)).not.toContain('How pages are read');
+  });
+
+  it('names no tool the caller is not offered, whatever the tool list (#945)', () => {
+    const sectionsOff = ['qa', 'memos', 'captures', 'analytics', 'conflicts', 'workflows', 'git'] as const;
+    const full = skillInputFor('write');
+    const only = (...toolsets: string[]) => ({ ...full, tools: full.tools.filter((t) => toolsets.includes(t.toolset)) });
+    const inputs = [
+      full,
+      skillInputFor('read'),
+      skillInputFor('capture'),
+      skillInputFor('write', sectionsOff),
+      skillInputFor('read', sectionsOff),
+      only('core', 'graph'),
+      only('core', 'authoring'),
+      only('core', 'code'),
+      only('core', 'review', 'insights', 'chat'),
+    ];
+    for (const input of inputs) {
+      const offered = new Set(input.tools.map((t) => t.name));
+      // The playbooks, not the tool table: its cells quote each tool's registered description.
+      const [playbooks] = renderSkill(input).split('## Tools offered to this connection');
+      // `mcp__knowledge__knowledge_search` is how a client prefixes a name, not another tool.
+      const named = new Set(playbooks.replaceAll('mcp__knowledge__', '').match(/knowledge_[a-z_]+/g));
+      expect([...named].filter((name) => !offered.has(name))).toEqual([]);
+    }
+  });
+
+  describe('as a stack (#945)', () => {
+    const sectionsOff = ['qa', 'memos', 'captures', 'analytics', 'conflicts', 'workflows', 'git'] as const;
+    const full = skillInputFor('write');
+    const only = (...toolsets: string[]) => ({ ...full, tools: full.tools.filter((t) => toolsets.includes(t.toolset)) });
+    const inputs = [full, skillInputFor('read'), skillInputFor('capture'), skillInputFor('write', sectionsOff), only('core', 'graph'), only('core', 'authoring', 'insights', 'chat')];
+    const headings = (md: string) => md.split('\n').filter((line) => /^#{2,3} /.test(line));
+    // Headings only the stack has: its own frame, and the two sections that open with a heading when they stand alone.
+    const STACK_ONLY = ['## More skills', '## Tools', '### How pages are read', '### Team chats'];
+
+    it('is a core skill plus one per offered toolset that has a playbook, each named after its folder', () => {
+      const stack = renderSkillStack(full);
+      expect(stack.map((s) => s.name)).toEqual([
+        'knowledge-core',
+        'knowledge-authoring',
+        'knowledge-quality',
+        'knowledge-review',
+        'knowledge-graph',
+        'knowledge-captures',
+        'knowledge-qa',
+        'knowledge-code',
+        'knowledge-insights',
+        'knowledge-embeds',
+        'knowledge-chat',
+        'knowledge-projects',
+      ]);
+      for (const skill of stack) {
+        expect(skill.content.startsWith(`---\nname: ${skill.name}\ndescription: `)).toBe(true);
+        expect(skill.content).toContain(STACK_MARKER);
+      }
+      // The core names the others, so a model knows they exist.
+      for (const skill of stack.slice(1)) expect(stack[0].content).toContain(`\`${skill.name}\``);
+    });
+
+    it('drops a toolset that is not offered, from the stack and from what the core names', () => {
+      const stack = renderSkillStack(skillInputFor('write', ['qa']));
+      expect(stack.map((s) => s.name)).not.toContain('knowledge-qa');
+      expect(stack[0].content).not.toContain('knowledge-qa');
+      expect(renderSkillStack(only('core')).map((s) => s.name)).toEqual(['knowledge-core']);
+      expect(renderSkillStack(only('core'))[0].content).not.toContain('More skills');
+    });
+
+    it('holds every playbook of the one document exactly once, and none of its own', () => {
+      for (const input of inputs) {
+        const stack = renderSkillStack(input);
+        const one = headings(renderSkill(input)).filter((h) => h !== '## Tools offered to this connection');
+        for (const heading of one) {
+          expect(stack.filter((s) => headings(s.content).includes(heading)).map((s) => s.name), heading).toHaveLength(1);
+        }
+        const extra = stack.flatMap((s) => headings(s.content)).filter((h) => !one.includes(h) && !STACK_ONLY.includes(h) && h !== '## Tools offered to this connection');
+        expect(extra).toEqual([]);
+      }
+    });
+
+    it('names no tool the caller is not offered, and lists a skill exactly when its sections render', () => {
+      for (const input of inputs) {
+        const offered = new Set(input.tools.map((t) => t.name));
+        const stack = renderSkillStack(input);
+        for (const skill of stack) {
+          const [playbooks] = skill.content.split(/^## Tools/m);
+          const named = new Set(playbooks.replaceAll('mcp__knowledge__', '').match(/knowledge_[a-z_]+/g));
+          expect([...named].filter((name) => !offered.has(name)), skill.name).toEqual([]);
+        }
+        // `needs` is the sync twin of "has a section": the resources are listed from it.
+        expect(stackToolsets((name) => offered.has(name)).map((key) => `knowledge-${key}`).sort()).toEqual(stack.slice(1).map((s) => s.name).sort());
+      }
+    });
+
+    it('lists each stack skill as a resource only when it is offered', async () => {
+      const { mcp } = service(accessWith('editor'));
+      vi.spyOn(mcp, 'whoami').mockResolvedValue(full.whoami);
+      const client = await connect(mcp, keyPrincipal({ id: 'k', scope: 'read', workspaceId: null, toolsets: ['core', 'graph'] }));
+      const uris = (await client.listResources()).resources.map((r) => r.uri).sort();
+      expect(uris).toEqual(['knowledge://skill', 'knowledge://skills/knowledge-core', 'knowledge://skills/knowledge-graph']);
+      const read = await client.readResource({ uri: 'knowledge://skills/knowledge-graph' });
+      expect((read.contents[0] as { text: string }).text).toContain('# Knowledge platform: Dependencies and impact');
+    });
+
+    it('serves the stack as files, and refuses a directory it does not know', async () => {
+      const { mcp } = service(accessWith('editor'));
+      vi.spyOn(mcp, 'whoami').mockResolvedValue(full.whoami);
+      const principal = keyPrincipal({ id: 'k', scope: 'write', workspaceId: null });
+      const res = await mcp.skillStackFor(principal, 'agents', { offSections: ['qa'] });
+      expect(res).toMatchObject({ version: 1, dir: '~/.agents/skills' });
+      expect(res.files.map((f) => f.path)).toContain('knowledge-graph/SKILL.md');
+      expect(res.files.map((f) => f.path)).not.toContain('knowledge-qa/SKILL.md');
+      await expect(mcp.skillStackFor(principal, '../etc')).rejects.toMatchObject({ status: 400, response: { reason: 'skills-dir' } });
+    });
+
+    it('installs, updates in place, removes what is no longer offered and touches nothing it did not write', () => {
+      const dir = mkdtempSync(join(tmpdir(), 'kn-skills-'));
+      const run = (input: Parameters<typeof renderSkillStack>[0]) =>
+        execFileSync('sh', { input: renderSkillStackInstaller(renderSkillStack(input), '~/.claude/skills', 'https://kb.example.com/api/v1/mcp/skills/install?dir=claude'), env: { ...process.env, KNOWLEDGE_SKILLS_DIR: dir }, stdio: ['pipe', 'pipe', 'pipe'] }).toString();
+      try {
+        // A person's own skill that happens to share the prefix, and one that shares a stack name.
+        mkdirSync(join(dir, 'knowledge-mine'));
+        writeFileSync(join(dir, 'knowledge-mine', 'SKILL.md'), 'mine');
+        mkdirSync(join(dir, 'knowledge-chat'));
+        writeFileSync(join(dir, 'knowledge-chat', 'SKILL.md'), 'also mine');
+
+        run(full);
+        const first = readdirSync(dir).sort();
+        expect(first).toContain('knowledge-core');
+        expect(first).toContain('knowledge-qa');
+        expect(readFileSync(join(dir, 'knowledge-qa', 'SKILL.md'), 'utf8')).toBe(renderSkillStack(full).find((s) => s.name === 'knowledge-qa')!.content);
+        expect(readFileSync(join(dir, 'knowledge-chat', 'SKILL.md'), 'utf8')).toBe('also mine');
+
+        run(full);
+        expect(readdirSync(dir).sort()).toEqual(first);
+
+        const out = run(skillInputFor('write', ['qa']));
+        expect(out).toContain('removed knowledge-qa');
+        expect(existsSync(join(dir, 'knowledge-qa'))).toBe(false);
+        expect(readFileSync(join(dir, 'knowledge-mine', 'SKILL.md'), 'utf8')).toBe('mine');
+        expect(readFileSync(join(dir, 'knowledge-chat', 'SKILL.md'), 'utf8')).toBe('also mine');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('pins the installer for a small stack', () => {
+      expect(renderSkillStackInstaller(renderSkillStack(only('core', 'graph')), '~/.claude/skills', 'https://kb.example.com/api/v1/mcp/skills/install?dir=claude')).toMatchSnapshot();
+    });
+  });
 
   it('is a skill with frontmatter, the caller workspaces, and escaped cells', () => {
     const md = renderSkill(base);
@@ -1438,7 +1734,7 @@ describe('renderSkill', () => {
     const md = renderSkill({
       ...base,
       whoami: { ...base.whoami, apiKey: { scope: 'capture', workspaceId: null, projectIds: [WS_B] } },
-      tools: [...base.tools.filter((t) => t.readOnly), { name: 'knowledge_capture_note', description: 'Capture.', readOnly: false }],
+      tools: [...base.tools.filter((t) => t.readOnly), { name: 'knowledge_capture_note', description: 'Capture.', toolset: 'captures' as const, readOnly: false }],
     });
     expect(md).toContain('capture-only');
     expect(md).toContain(`captures only into \`${WS_B}\``);
@@ -1449,7 +1745,7 @@ describe('renderSkill', () => {
   it('carries the capture playbook and the kit install line only when the capture tools are offered (#73)', () => {
     const capturing = renderSkill({
       ...base,
-      tools: [...base.tools, { name: 'knowledge_capture_decision', description: 'Capture.', readOnly: false }],
+      tools: [...base.tools, { name: 'knowledge_capture_decision', description: 'Capture.', toolset: 'captures' as const, readOnly: false }],
     });
     expect(capturing).toContain('## Capture memory');
     expect(capturing).toContain('knowledge_find_similar');
@@ -1469,7 +1765,7 @@ describe('renderSkill', () => {
   it('teaches the needs_input loop only to a key offered a flow-bearing tool (#425)', () => {
     const asking = renderSkill({
       ...base,
-      tools: [...base.tools, { name: 'knowledge_flag_document', description: 'Flag.', readOnly: false }],
+      tools: [...base.tools, { name: 'knowledge_flag_document', description: 'Flag.', toolset: 'authoring' as const, readOnly: false }],
     });
     expect(asking).toContain('### Questions for the person');
     expect(asking).toContain('`knowledge_flag_document` ask the person');
@@ -1578,7 +1874,7 @@ describe('mcp learnings (#305, phase 3)', () => {
     s.learnings.forPrompt.mockImplementation(async (audience: Parameters<typeof choosePromptLearnings>[1]) =>
       choosePromptLearnings(rows, audience, 20),
     );
-    const principal = keyPrincipal({ id: 'k', scope: 'read', workspaceId: WS_A, projectIds });
+    const principal = keyPrincipal({ id: 'k', scope: 'write', workspaceId: WS_A, projectIds });
     vi.spyOn(s.mcp, 'whoami').mockResolvedValue({
       userId: principal.userId,
       email: principal.email,
@@ -1625,7 +1921,7 @@ describe('mcp learnings (#305, phase 3)', () => {
 
   it('leave the instructions and the skill exactly as before when none applies', async () => {
     const s = service(accessWith('viewer'));
-    const principal = keyPrincipal({ id: 'k', scope: 'read', workspaceId: WS_A });
+    const principal = keyPrincipal({ id: 'k', scope: 'write', workspaceId: WS_A });
     vi.spyOn(s.mcp, 'whoami').mockResolvedValue({
       userId: principal.userId,
       email: principal.email,
@@ -1636,6 +1932,150 @@ describe('mcp learnings (#305, phase 3)', () => {
     });
     expect(await s.mcp.instructionsFor(principal)).toBe(MCP_INSTRUCTIONS);
     expect(await s.mcp.skillFor(principal)).not.toContain('Team guidance');
+  });
+});
+
+describe('a key limited to toolsets (#945)', () => {
+  const limited = (scope: 'read' | 'write' = 'write', toolsets: McpToolset[] = ['core', 'graph']) =>
+    keyPrincipal({ id: 'k', scope, workspaceId: null, toolsets });
+  /** A real TokenAuthService over one stored key. */
+  function resolver(toolsets: unknown) {
+    const row = { id: 'k', scope: 'write', workspaceId: null, projectIds: null, toolsets, revokedAt: null, expiresAt: null };
+    const user = { id: 'u', email: 'a@example.com', displayName: 'Ada', isAdmin: false, locale: 'en', disabledAt: null, emailVerifiedAt: new Date() };
+    const prisma = { apiKey: { findUnique: vi.fn(async () => ({ ...row, user })), updateMany: vi.fn(async () => ({ count: 0 })) } };
+    return new TokenAuthService({ get: () => 'api-key' } as never, prisma as never, {} as never, {} as never);
+  }
+
+  it('stores core with the chosen toolsets, and refuses an unknown one before anything is written', async () => {
+    const create = vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'k', createdAt: new Date(), expiresAt: null, lastUsedAt: null, ...data }));
+    const keys = new ApiKeysService({ apiKey: { count: vi.fn(async () => 0), create } } as never);
+    const session = keyPrincipal(undefined as never, { mode: 'session', apiKey: undefined });
+    const made = await keys.create(session, { name: 'Graph agent', toolsets: ['graph'] });
+    expect(create.mock.calls[0][0].data.toolsets).toEqual(['core', 'graph']);
+    expect(made.key.toolsets).toEqual(['core', 'graph']);
+    expect((await keys.create(session, { name: 'Everything' })).key.toolsets).toBeNull();
+
+    const errors = await validate(plainToInstance(CreateApiKeyDto, { name: 'x', toolsets: ['graph', 'everything'] }));
+    expect(errors.map((e) => e.property)).toEqual(['toolsets']);
+  });
+
+  it('reads a stored value the catalogue dropped as absent from the list, never as every toolset', () => {
+    expect(keyToolsetsOf(null)).toBeNull();
+    expect(keyToolsetsOf(['graph', 'retired'])).toEqual(['core', 'graph']);
+    expect(keyToolsetsOf(['retired'])).toEqual(['core']);
+    expect(keyToolsetsOf([])).toEqual(['core']);
+  });
+
+  it('is offered only its toolsets, cut again by scope, and a tool outside them never reaches its service', async () => {
+    const { mcp, documents } = service(accessWith('editor'));
+    const client = await connect(mcp, limited(), { drafts: fakeDrafts() });
+    const { tools } = await client.listTools();
+    expect(new Set(tools.map((t) => toolsetOf(t.name)))).toEqual(new Set(['core', 'graph']));
+    expect(tools.map((t) => t.name)).toContain('knowledge_create_release_tag');
+    const refused = await client.callTool({ name: 'knowledge_create_document', arguments: { workspaceId: WS_A, projectId: WS_B, title: 'T', content: 'x' } }).catch((e: Error) => ({ isError: true, content: e.message }));
+    expect(refused.isError).toBe(true);
+    expect(documents.createDocument).not.toHaveBeenCalled();
+
+    const reader = mcp.toolsFor(limited('read')).map((t) => t.name);
+    expect(reader).toContain('knowledge_find_relations');
+    expect(reader).not.toContain('knowledge_create_release_tag');
+    expect(reader).not.toContain('knowledge_feedback');
+  });
+
+  it('the call gate refuses a tool outside the list even where it is registered', async () => {
+    const { mcp, documents } = service(accessWith('editor'));
+    const gate = (mcp as unknown as { featureGate: (p: Principal, tool: string, args: object) => Promise<void> }).featureGate.bind(mcp);
+    await expect(gate(limited(), 'knowledge_create_document', { workspaceId: WS_A })).rejects.toMatchObject({ status: 403 });
+    await expect(gate(limited(), 'knowledge_find_relations', {})).resolves.toBeUndefined();
+    expect(documents.createDocument).not.toHaveBeenCalled();
+  });
+
+  it('cuts the skill and the instructions the same way, and is refused the capture kit without captures', async () => {
+    const { mcp } = service(accessWith('editor'));
+    const principal = limited();
+    vi.spyOn(mcp, 'whoami').mockResolvedValue({
+      userId: 'u',
+      email: 'a@example.com',
+      displayName: 'Ada',
+      mode: 'api-key',
+      apiKey: { scope: 'write', workspaceId: null, projectIds: null },
+      workspaces: [{ workspaceId: WS_A, name: 'Eng', role: 'editor', projects: [] }],
+    });
+    const [playbooks] = (await mcp.skillFor(principal)).split('## Tools offered to this connection');
+    expect(playbooks).toContain('### Dependencies and impact');
+    expect(playbooks).not.toMatch(/knowledge_create_document|knowledge_qa_overview|knowledge_capture_decision|API tests/);
+    expect(instructionsFor(principal)).not.toMatch(/knowledge_create_branch|knowledge_capture_decision/);
+    await expect(mcp.captureKitFor(principal, 'claude-code')).rejects.toMatchObject({ status: 403, response: { reason: 'capture-not-offered' } });
+  });
+
+  it('GET /v1/mcp/connection names the toolsets not offered and why', async () => {
+    const { mcp } = service(accessWith('editor'));
+    vi.spyOn(mcp, 'sectionsOffFor').mockResolvedValue(['qa']);
+    const controller = new McpController(mcp, { get: () => 'api-key' } as never, fakeDrafts(false) as never);
+    const info = await controller.connection(limited('write', ['core', 'graph', 'qa']));
+    expect(new Set(info.tools.map((t) => t.toolset))).toEqual(new Set(['core', 'graph']));
+    expect(info.notOffered).toContainEqual({ toolset: 'qa', reason: 'section-off' });
+    expect(info.notOffered).toContainEqual({ toolset: 'authoring', reason: 'key-toolsets' });
+    expect(info.notOffered.map((n) => n.toolset)).not.toContain('graph');
+    expect((await controller.connection(keyPrincipal({ id: 'k', scope: 'read', workspaceId: null }))).notOffered).toEqual([{ toolset: 'qa', reason: 'section-off' }]);
+  });
+
+  it('is MCP-only: refused wherever a bearer is resolved, unless the route is the MCP endpoint', async () => {
+    const auth = resolver(['core', 'graph']);
+    await expect(auth.resolve('kn_x')).rejects.toMatchObject({ status: 403, response: { reason: 'apiKeyMcpOnly' } });
+    await expect(auth.resolve('kn_x', { mcp: true })).resolves.toMatchObject({ apiKey: { toolsets: ['core', 'graph'] } });
+    // A key from before the column: no list, every door as before.
+    await expect(resolver(null).resolve('kn_x')).resolves.toMatchObject({ apiKey: { toolsets: null } });
+  });
+
+  it('AuthGuard says mcp only on a route marked @McpKeyOk, so a REST route and a page .md URL answer 403', async () => {
+    const through = (mcpRoute: boolean) => {
+      const reflector = { getAllAndOverride: (meta: string) => (meta === MCP_KEY_OK_META ? mcpRoute : false) };
+      const request: Record<string, unknown> = { headers: { authorization: 'Bearer kn_x' }, query: {} };
+      const guard = new AuthGuard(reflector as never, resolver(['core', 'graph']));
+      return guard.canActivate({ getHandler: () => undefined, getClass: () => undefined, switchToHttp: () => ({ getRequest: () => request }) } as never);
+    };
+    await expect(through(false)).rejects.toMatchObject({ status: 403 });
+    await expect(through(true)).resolves.toBe(true);
+    // The whole MCP controller is marked: connection, skill and the capture-kit routes with it.
+    expect(Reflect.getMetadata(MCP_KEY_OK_META, McpController)).toBe(true);
+  });
+
+  it('is refused by the git remote', async () => {
+    const config = { get: (key: string) => ({ GIT_REMOTE_ENABLED: true, PUBLIC_RATE_LIMIT_PER_MIN: 60, AUTH_MODE: 'api-key' })[key] };
+    const git = new GitAccessService({} as never, resolver(['core', 'graph']), {} as never, {} as never, { hit: async () => true } as never, config as never);
+    const req = { headers: { authorization: `Basic ${Buffer.from('knowledge:kn_x').toString('base64')}` }, socket: {}, ip: '127.0.0.1' };
+    await expect(git.authorize(req as never, WS_A, `${WS_B}.git`)).rejects.toMatchObject({ status: 403 });
+  });
+});
+
+describe('server instructions follow the offer (#945)', () => {
+  const key = (scope: 'read' | 'capture' | 'write') => keyPrincipal({ id: 'k', scope, workspaceId: null });
+  const namedIn = (text: string) => [...new Set(text.match(/knowledge_[a-z_]+/g))];
+
+  it.each(['read', 'capture', 'write'] as const)('a %s key is told of no tool missing from its tools/list', async (scope) => {
+    const client = await connect(service(accessWith('editor')).mcp, key(scope));
+    const offered = (await client.listTools()).tools.map((t) => t.name);
+    const named = namedIn(client.getInstructions() ?? '');
+    expect(named).toContain('knowledge_search');
+    expect(named.filter((name) => !offered.includes(name))).toEqual([]);
+  });
+
+  it('sends a write key with nothing switched off the whole text, and a read key no write flow', () => {
+    expect(instructionsFor(key('write'))).toBe(MCP_INSTRUCTIONS);
+    const read = instructionsFor(key('read'));
+    expect(read).not.toMatch(/knowledge_feedback|knowledge_create_branch|knowledge_capture_decision|needs_input/);
+    expect(read).toContain('Prefer verified pages; say so when you rely on an outdated, expired or edited one.\n');
+    expect(read).toContain('knowledge_list_release_tags');
+  });
+
+  it('leaves the capture line out where captures are off everywhere', async () => {
+    const off = ['captures'] as const;
+    const text = instructionsFor(key('write'), off);
+    expect(text).not.toContain('knowledge_capture_decision');
+    expect(text).toContain('needs_input');
+    const client = await connect(service(accessWith('editor')).mcp, key('write'), { offSections: off });
+    expect(client.getInstructions()).toBe(text);
   });
 });
 

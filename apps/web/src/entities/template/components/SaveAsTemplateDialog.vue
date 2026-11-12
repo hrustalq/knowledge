@@ -33,12 +33,12 @@ import { canWriteTemplate, unescapePlaceholders } from '@/entities/template/mode
 import { useAuthStore } from '@/stores/auth'
 import { useProjectsStore } from '@/stores/projects'
 import { useTemplatesStore } from '@/entities/template/model/templates.store'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
-import { Label } from '@/shared/ui/label'
-import { Textarea } from '@/shared/ui/textarea'
-import { RadioGroup, RadioGroupItem } from '@/shared/ui/radio-group'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
+import { Button } from '@knowledge/ui/button'
+import { Input } from '@knowledge/ui/input'
+import { Label } from '@knowledge/ui/label'
+import { Textarea } from '@knowledge/ui/textarea'
+import { RadioGroup, RadioGroupItem } from '@knowledge/ui/radio-group'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
 import {
   Dialog,
   DialogContent,
@@ -46,7 +46,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
+} from '@knowledge/ui/dialog'
 import TemplatePlaceholdersEditor from './TemplatePlaceholdersEditor.vue'
 
 /** The page as the template will start from it. */

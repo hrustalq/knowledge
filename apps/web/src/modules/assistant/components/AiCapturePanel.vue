@@ -15,6 +15,7 @@
  * placeholder is what it inherits.
  */
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { ProjectOverridesNote } from '@/entities/project'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
@@ -25,11 +26,11 @@ import { errorMessage } from '@/shared/api/errors'
 import { getProjectId, getWorkspaceId } from '@/shared/api/api'
 import { formatNumber } from '@/shared/utils/format'
 import { useProjectsStore } from '@/stores/projects'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
-import { Combobox, type ComboboxOption } from '@/shared/ui/combobox'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
-import { PageState } from '@/shared/layout'
+import { Button } from '@knowledge/ui/button'
+import { Input } from '@knowledge/ui/input'
+import { Combobox, type ComboboxOption } from '@knowledge/ui/combobox'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
+import { PageState } from '@knowledge/ui/layout'
 
 const props = defineProps<{ canManage: boolean }>()
 
@@ -288,6 +289,7 @@ const parentOptions = computed<ComboboxOption[]>(() => {
         <div class="min-w-0">
           <span class="text-sm font-medium">{{ t('ai.capture.parent.label') }}</span>
           <p class="kn-measure text-xs text-muted-foreground">{{ t('ai.capture.parent.hint') }}</p>
+          <ProjectOverridesNote setting="captureParent" class="mt-1" />
         </div>
         <Combobox
           v-model="form.parentDocumentId"

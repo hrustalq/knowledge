@@ -1,8 +1,9 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
-import { GEN_API_COST_CURRENCY } from '@knowledge/contracts';
+import { AI_USAGE_UNATTRIBUTED, GEN_API_COST_CURRENCY } from '@knowledge/contracts';
 import type {
   AiBudgetInfo,
   AiUsageBucket,
+  AiUsageGroupBy,
   AiUsageLogEntry,
   AiUsageOperation,
   AiUsageResponse,
@@ -47,6 +48,11 @@ export interface AiUsageRecordInput {
   agentRunId?: string;
   /** A cost the caller already knows; otherwise worked out from the tokens and the config's prices. */
   cost?: CostAmount | null;
+  /**
+   * The project the call is for, when the caller has it in hand (#927).
+   * Otherwise `record` takes the ambient run's, else the thread's page's.
+   */
+  projectId?: string | null;
 }
 
 const LOG_PAGE_SIZE = 50;
@@ -99,6 +105,7 @@ export class AiUsageService {
     // Read before the first await, though the store would survive one: the
     // caller does not wait for this, and the attribution is the call's.
     const run = currentAgentRun();
+    const projectId = input.projectId ?? run?.projectId ?? (await this.projectOfThread(input.threadId));
     try {
       await this.prisma.aiUsage.create({
         data: {
@@ -122,10 +129,29 @@ export class AiUsageService {
           toolCallCount: input.toolCallCount ?? 0,
           agentKey: input.agentKey ?? run?.agentKey ?? null,
           agentRunId: input.agentRunId ?? run?.agentRunId ?? null,
+          projectId,
         },
       });
     } catch (e) {
       this.logger.warn(`AI usage record failed (non-fatal): ${(e as Error).message}`);
+    }
+  }
+
+  /**
+   * The project of the page an assistant thread is on (#927) — how a chat on a
+   * page and the editor assistant are attributed with no call site passing
+   * anything. Null for a thread on no page, and on any failure: a usage row
+   * without a project is still a usage row.
+   */
+  private async projectOfThread(threadId: string | undefined): Promise<string | null> {
+    if (!threadId) return null;
+    try {
+      const thread = await this.prisma.assistantThread.findUnique({ where: { id: threadId }, select: { documentId: true } });
+      if (!thread?.documentId) return null;
+      const page = await this.prisma.document.findUnique({ where: { id: thread.documentId }, select: { projectId: true } });
+      return page?.projectId ?? null;
+    } catch {
+      return null;
     }
   }
 
@@ -345,7 +371,7 @@ export class AiUsageService {
 
   async summarize(
     workspaceId: string,
-    opts: { from?: string; to?: string; groupBy?: 'user' | 'model' | 'day' },
+    opts: { from?: string; to?: string; groupBy?: AiUsageGroupBy },
   ): Promise<AiUsageResponse> {
     const to = opts.to ? new Date(opts.to) : new Date();
     const from = opts.from ? new Date(opts.from) : new Date(to.getTime() - 30 * 24 * 3600_000);
@@ -360,6 +386,7 @@ export class AiUsageService {
       select: {
         userId: true,
         model: true,
+        projectId: true,
         promptTokens: true,
         completionTokens: true,
         totalTokens: true,
@@ -384,7 +411,9 @@ export class AiUsageService {
 
     for (const r of rows) {
       const day = r.createdAt.toISOString().slice(0, 10);
-      const key = groupBy === 'user' ? r.userId : groupBy === 'model' ? r.model : day;
+      // A row with no project is its own bucket (#927), never spread over the others: the buckets sum to the totals.
+      const key =
+        groupBy === 'user' ? r.userId : groupBy === 'model' ? r.model : groupBy === 'project' ? (r.projectId ?? AI_USAGE_UNATTRIBUTED) : day;
 
       const bucket = fold.get(key) ?? {
         key,
@@ -421,6 +450,15 @@ export class AiUsageService {
 
     const buckets = [...fold.values()].sort((a, b) => b.totalTokens - a.totalTokens);
     if (groupBy === 'user') await this.labelUsers(buckets);
+    if (groupBy === 'project') {
+      const projects = await this.prisma.project.findMany({
+        where: { workspaceId, id: { in: buckets.map((b) => b.key).filter((key) => key !== AI_USAGE_UNATTRIBUTED) } },
+        select: { id: true, name: true },
+      });
+      const names = new Map(projects.map((p) => [p.id, p.name]));
+      // A deleted project keeps its id as the label; the page names the unattributed bucket itself.
+      for (const b of buckets) b.label = names.get(b.key) ?? b.key;
+    }
 
     return {
       from: from.toISOString(),

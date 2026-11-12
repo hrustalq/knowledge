@@ -22,7 +22,7 @@ import { ConnectorQueueModule } from './connector-queue.module.js';
 import { ConnectorWebhookController } from './connector-webhook.controller.js';
 import { ConnectorWorkItemsModule } from './connector-work-items.module.js';
 import { WorkItemHandoffModule } from './handoff/work-item-handoff.module.js';
-import { WorkItemsController } from './handoff/work-items.controller.js';
+import { ProjectWorkItemRulesController, WorkItemsController } from './handoff/work-items.controller.js';
 import { WorkItemSyncSweeper } from './handoff/work-item-sync.sweeper.js';
 import { TrackerRoutesController } from './handoff/tracker-routes.controller.js';
 import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
@@ -88,6 +88,7 @@ import { RepoGuidanceService } from './guidance/repo-guidance.service.js';
     ConnectorWebhookController,
     GithubController,
     WorkItemsController,
+    ProjectWorkItemRulesController,
     TrackerRoutesController,
     // #564: workspace connections and the link screen.
     ConnectionsController,

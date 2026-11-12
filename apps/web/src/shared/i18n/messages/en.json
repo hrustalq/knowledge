@@ -15,7 +15,6 @@
     "filter": "Filter",
     "loading": "Loading…",
     "saving": "Saving…",
-    "none": "None",
     "all": "All",
     "yes": "Yes",
     "no": "No",
@@ -28,14 +27,11 @@
     "clear": "Clear",
     "loadMore": "Load more",
     "loadingMore": "Loading more…",
-    "searchIn": "Search {label}…",
-    "noneYet": "No {label} yet.",
     "noMatchFor": "No match for {query}",
     "continue": "Continue",
     "send": "Send",
     "tooLarge": "That is too large to send. Split it up, or attach it as a file instead of pasting it.",
     "unknownError": "Something went wrong. Try again.",
-    "typeAtLeast": "Type at least {n} characters",
     "creating": "Creating…",
     "deleting": "Deleting…",
     "loadEarlier": "Load earlier",
@@ -60,10 +56,6 @@
     "removeNamed": "Remove {name}",
     "deleteNamed": "Delete {name}",
     "enableNamed": "Enable {name}",
-    "noMatches": "No matches",
-    "filterPlaceholder": "Filter…",
-    "searchPlaceholder": "Search…",
-    "openLarger": "Open {title} in a larger view",
     "assistant": "Assistant"
   },
   "page": {
@@ -2452,6 +2444,7 @@
       "title": "Recipes",
       "hint": "Ready-made schedules and triggers for agents you already have. Everything a recipe adds starts off: turn it on in the agent's settings, and its runs execute as you. Applying one again keeps whatever is already set up.",
       "agent": "Agent: {name}",
+      "askMe": "Ask me a few questions instead.",
       "apply": "Apply",
       "applying": "Applying…",
       "applied": "Added to {name}, switched off — turn it on to start.",
@@ -2633,15 +2626,19 @@
     },
     "groupBy": {
       "user": "by user",
-      "model": "by model"
+      "model": "by model",
+      "project": "by project"
     },
+    "unattributed": "No single project",
     "groupHead": {
       "user": "User",
-      "model": "Model"
+      "model": "Model",
+      "project": "Project"
     },
     "breakdownBy": {
       "user": "Breakdown by user",
-      "model": "Breakdown by model"
+      "model": "Breakdown by model",
+      "project": "Breakdown by project"
     },
     "total": "Total",
     "estCost": "Est. cost",
@@ -3636,6 +3633,21 @@
     "sessionsRevokedAll": "Signed out of {n} session | Signed out of {n} sessions"
   },
   "glossary": {
+    "level": "Belongs to",
+    "levelWorkspace": "Whole workspace",
+    "levelProject": "A project",
+    "replacedHere": "Replaced by this project's entry",
+    "replacesWorkspace": "Replaces the workspace entry here",
+    "promote": "Make it a workspace term",
+    "promoteNamed": "Make {term} a workspace term",
+    "promoteTitle": "Make “{term}” a workspace term?",
+    "promoteBody": "It will be linked on the pages of every project that does not define the word itself. Only workspace admins can change it afterwards.",
+    "promoteReplaceTitle": "The workspace already defines “{term}”",
+    "promoteReplaceBody": "Replace the workspace's entry with this one? The existing entry and the places where it was switched off on a page are deleted.",
+    "promoteReplace": "Replace it",
+    "promoted": "“{term}” is now a workspace term",
+    "workspaceTerm": "Workspace term",
+    "workspaceTermHint": "Linked in every project. A project that defines the same word keeps its own entry.",
     "title": "Glossary",
     "buildFromPage": "Build the glossary from a page",
     "findPage": "Find a page…",
@@ -4717,7 +4729,17 @@
       "projectsAll": "Proposes into every project. Pick some to narrow it.",
       "projectsPinned": "Proposes into {n} project only. | Proposes into these {n} projects only.",
       "captures": "Its captures",
-      "reviewCaptures": "Review its captures"
+      "reviewCaptures": "Review its captures",
+      "toolsetPicker": {
+        "legend": "Toolsets",
+        "all": "Every toolset. Pick some to limit the key.",
+        "limit": "Limit to toolsets",
+        "always": "always included",
+        "mcpOnly": "A key limited to toolsets works over MCP only. REST routes, git and plain-markdown URLs refuse it.",
+        "chosen": "Limited to {n} toolset besides Core. | Limited to {n} toolsets besides Core."
+      },
+      "mcpOnly": "MCP only",
+      "toolsets": "Toolsets: {list}"
     },
     "clients": {
       "title": "Add the server to your client",
@@ -4749,7 +4771,9 @@
       "hide": "Hide preview",
       "installFor": "{client} → {path}",
       "noSkillDir": "{client} has no skills directory. Use the server's “guide” prompt instead, or paste the skill into the conversation or a project's instructions.",
-      "alsoServed": "The same skill is served by the MCP server itself — as the resource knowledge://skill and the prompt “guide” — so any client can load it without installing a file."
+      "alsoServed": "The same skill is served by the MCP server itself — as the resource knowledge://skill and the prompt “guide” — so any client can load it without installing a file.",
+      "stackFor": "Or as a stack for {client}, into {path}",
+      "stackHint": "A core skill plus one per toolset you are offered. The client loads each only when the task matches, so answering a question does not load the testing or repository playbooks. Run it again to update; it removes a skill you are no longer offered and never touches a folder it did not write."
     },
     "capture": {
       "title": "Capture what sessions learn",
@@ -4779,10 +4803,100 @@
     },
     "tools": {
       "title": "What a connected client gets",
-      "hint": "Tools your current sign-in would be offered. Every call is checked against your role in the workspace it touches, exactly like the web app.",
-      "read": "Read ({n})",
-      "write": "Write ({n})",
-      "noneForKey": "None."
+      "hint": "Tools your current sign-in would be offered, by toolset. Every call is checked against your role in the workspace it touches, exactly like the web app.",
+      "counts": "{read} read · {write} write",
+      "noneForKey": "None.",
+      "offHere": "Off in this workspace",
+      "offReason": {
+        "section-off": "Not offered: this section is switched off.",
+        "key-toolsets": "Not offered: outside this key's toolsets."
+      },
+      "offHereHint": "Switched off in this workspace; offered because another workspace you reach has it on. Calls here are refused.",
+      "features": "Features settings",
+      "readTag": "read",
+      "writeTag": "write"
+    },
+    "toolsets": {
+      "core": {
+        "label": "Core",
+        "description": "Search, read pages and the page tree, rate an answer, report a page."
+      },
+      "authoring": {
+        "label": "Authoring",
+        "description": "Create pages, branches and revisions, upload files, use templates, flag a page."
+      },
+      "quality": {
+        "label": "Style and quality",
+        "description": "Check a draft against the styleguide and read a page's quality score."
+      },
+      "review": {
+        "label": "Merge requests",
+        "description": "Open, read, comment on, approve and merge merge requests."
+      },
+      "graph": {
+        "label": "Graph",
+        "description": "Relations, impact analysis, paths between entities, history and release tags."
+      },
+      "conflicts": {
+        "label": "Conflicts",
+        "description": "Contradictions between pages: list and resolve them."
+      },
+      "captures": {
+        "label": "Agent memory",
+        "description": "Propose what a session learned (decisions, notes, terms, relations) for review."
+      },
+      "qa": {
+        "label": "API tests",
+        "description": "QA suites, fixtures and runs for API operations."
+      },
+      "api-reference": {
+        "label": "API reference",
+        "description": "Operations of the API specs, and what changed between two versions."
+      },
+      "code": {
+        "label": "Code",
+        "description": "Where code is used, component pages, and the repo wiki."
+      },
+      "connectors": {
+        "label": "Connectors",
+        "description": "List and sync connectors, and hand work to a tracker."
+      },
+      "workflows": {
+        "label": "Workflows",
+        "description": "List workflows, start one on a page and follow its run."
+      },
+      "agents": {
+        "label": "Agents",
+        "description": "The workspace's agents and what they were taught."
+      },
+      "insights": {
+        "label": "Insights",
+        "description": "How often a page is read, and searches that found nothing."
+      },
+      "memos": {
+        "label": "Memos",
+        "description": "Your recordings: transcripts, summaries and proposals."
+      },
+      "sharing": {
+        "label": "Sharing and access",
+        "description": "Share links, exports, who can open a page, access requests."
+      },
+      "embeds": {
+        "label": "Design embeds",
+        "description": "Figma frames embedded in pages."
+      },
+      "chat": {
+        "label": "Chat search",
+        "description": "Search the team chats a workspace made searchable."
+      },
+      "projects": {
+        "label": "Projects",
+        "description": "Start a project from a blueprint."
+      },
+      "drafts": {
+        "label": "Shared drafts",
+        "description": "Read a page's shared draft and suggest edits into it."
+      }
     }
   },
   "editorAi": {
@@ -4964,6 +5078,12 @@
       "name": "Name",
       "server": "Server",
       "serverHint": "Used only for steps whose spec declares this server; the try-it proxy's rules apply.",
+      "secretOrigins": "Other hosts that may receive secrets",
+      "secretOriginsHint": "A secret is sent only to the server above and to these hosts, such as a login service. One per line.",
+      "secretsCleared": "Secrets will go somewhere new, or more people will be able to use them, so the saved ones are cleared on save. Enter them again.",
+      "project": "Used by",
+      "shared": "Every project",
+      "projectHint": "Only suites of this project's API pages can run with it.",
       "inputs": "Inputs",
       "value": "Value",
       "addInput": "Add an input",
@@ -6419,6 +6539,7 @@
         "capture": "The response has no {name} to capture",
         "setup": "Its setup failed",
         "skipped": "Setup never captured what this step sends",
+        "withheld": "Not sent: the environment does not allow {names} to go to this host",
         "cors": "No response reached this page from {host}: the API may not allow requests from a browser (CORS), or it could not be reached. Try the proxy."
       },
       "summary": "{passed} passed · {failed} failed · {notRun} not run",
@@ -7341,28 +7462,6 @@
       "stopped": "This deployment has handoff rules switched off (WORK_ITEM_AUTOCREATE_MAX_PER_TICK=0 or WORK_ITEM_SYNC_ENABLED=false). Saved rules apply once they are back on."
     }
   },
-  "imageViewer": {
-    "title": "Image preview",
-    "hint": "Click the image to see it at full size, drag to move around it, and use the arrow keys to go to the next or previous image.",
-    "open": "Open image",
-    "openNamed": "Open image: {name}",
-    "position": "Image {n} of {total}",
-    "fit": "Fit to screen",
-    "actualSize": "Actual size",
-    "previous": "Previous image",
-    "next": "Next image"
-  },
-  "diagramViewer": {
-    "title": "Diagram preview",
-    "hint": "Click the diagram to see it at its own size, drag to move around it, use + and − or Ctrl and the wheel to zoom, 0 to fit, and the arrow keys to go to the next or previous diagram.",
-    "open": "Open diagram",
-    "position": "Diagram {n} of {total}",
-    "zoomIn": "Zoom in",
-    "zoomOut": "Zoom out",
-    "fit": "Fit to screen ({percent}%)",
-    "previous": "Previous diagram",
-    "next": "Next diagram"
-  },
   "pwa": {
     "updateReady": "A new version is available.",
     "updateDescription": "Reload to switch to it.",
@@ -7613,6 +7712,30 @@
       }
     }
   },
+  "purposeSetup": {
+    "title": "What is this workspace for?",
+    "body": "A few questions, then you see which sections that switches on and off. Nothing changes until you confirm, and you can change any of it later in Settings → Features.",
+    "describeLabel": "In a sentence or two (optional)",
+    "describeHint": "Say what your team writes and who reads it. Only workspace admins see this.",
+    "start": "Continue",
+    "chooseMyself": "Choose from a list instead",
+    "thinking": "Reading your answer…",
+    "picking": "Picking from what you said…",
+    "pickNow": "Pick now",
+    "reviewTitle": "Here is what that sets up",
+    "reviewBody": "Check what the workspace is used for, then the sections below. Untick a use that is wrong, or switch any section yourself.",
+    "sectionsBody": "A section no ticked use needs is switched off. Everyone in the workspace sees the result.",
+    "sectionsNoUse": "With no use ticked, every section stays as it is.",
+    "nothingPicked": "Nothing in your answers matched a use for certain. Tick what fits.",
+    "fallback": {
+      "unavailable": "No assistant model is set up here, so there are no questions. Tick what the workspace is used for.",
+      "failed": "The questions could not be loaded. Tick what the workspace is used for instead."
+    },
+    "confirm": "Confirm",
+    "startOver": "Start over",
+    "skip": "Skip for now",
+    "skipNote": "Skipping leaves every section on. This question will not come back; it stays in Settings → Features."
+  },
   "features": {
     "title": "Features",
     "subtitle": "Switch off the sections this workspace does not use. An off section disappears from the navigation and its pages for everyone here, and its API routes and MCP tools answer as if it did not exist.",
@@ -7635,7 +7758,47 @@
       "git": "Git remote",
       "sources": "Source-backed pages"
     },
-    "serverOff": "Off on this server (WEB_SOURCES_ENABLED), whatever is chosen here."
+    "serverOff": "Off on this server (WEB_SOURCES_ENABLED), whatever is chosen here.",
+      "sectionsTitle": "Sections",
+      "purpose": {
+        "title": "Purpose",
+        "subtitle": "Tick what this workspace is used for. The sections below follow: one no chosen use needs is suggested off, and a section you set yourself stays as you left it. Nothing changes until you apply.",
+        "descriptionLabel": "In your own words (optional)",
+        "descriptionPlaceholder": "We document our public REST API and hold a weekly design review.",
+        "askMe": "Ask me a few questions instead.",
+        "descriptionHint": "Only workspace admins see this.",
+        "apply": "Apply",
+        "switchesOn": "Will switch on.",
+        "switchesOff": "Will switch off.",
+        "suggestsOn": "Your purpose suggests this on.",
+        "suggestsOff": "Your purpose suggests this off.",
+        "uses": {
+          "team-wiki": {
+            "name": "Team wiki",
+            "description": "How the team works: processes, onboarding, decisions and how-tos."
+          },
+          "engineering-docs": {
+            "name": "Engineering docs",
+            "description": "Architecture, services and runbooks, kept next to the code they describe."
+          },
+          "api-docs": {
+            "name": "API product docs",
+            "description": "Reference for an API or SDK: specs, test suites and try-it."
+          },
+          "meeting-notes": {
+            "name": "Meeting notes",
+            "description": "Recordings and notes from meetings, turned into pages."
+          },
+          "support-kb": {
+            "name": "Support knowledge base",
+            "description": "The answers a support team and its bots give customers."
+          },
+          "public-docs": {
+            "name": "Public docs",
+            "description": "Documentation published for readers outside the team."
+          }
+        }
+      }
   },
   "git": {
     "clone": {
@@ -8151,5 +8314,56 @@
       "builtIn": "Built-in",
       "saved": "Saved"
     }
+  },
+  "projectSettings": {
+    "title": "Policies",
+    "readOnly": "Read-only",
+    "intro": "What {project} follows. Each setting comes from the workspace unless the project sets its own; clearing a value goes back to the workspace's.",
+    "back": "Back to the project",
+    "source": {
+      "project": "set by this project",
+      "workspace": "from the workspace",
+      "default": "the default"
+    },
+    "workspaceValue": "Otherwise: {value}",
+    "reset": "Reset to the workspace's",
+    "inherit": "Workspace ({value})",
+    "saved": "Project policies saved",
+    "verification": {
+      "title": "Freshness",
+      "intro": "When this project's pages need a new look. Stored expiry dates do not move when an interval changes."
+    },
+    "gates": {
+      "title": "Merge gates",
+      "intro": "What can hold a merge request of this project.",
+      "adminOnly": "Merge gates are set by workspace admins.",
+      "breakingHint": "What a merge request that breaks an API contract does.",
+      "lint": "Style lint",
+      "lintHint": "What the style check of a merge request does with violations.",
+      "lintCeiling": "The deployment caps this at {value}."
+    },
+    "rules": {
+      "intro": "Which of this project's issues, conflicts and flagged pages become tracker tickets on their own. Off here opts the project out while the workspace is on.",
+      "noRoute": "This project has no tracker route, so no rule creates a ticket here yet."
+    },
+    "capture": {
+      "title": "Agent memory",
+      "intro": "Where pages captured from agent sessions land in this project.",
+      "label": "Parent page for captures",
+      "placeholder": "Find a page of this project…",
+      "root": "The project root",
+      "unknownPage": "A page you cannot open",
+      "stale": "The page this project chose is gone or has left the project, so the next level applies."
+    },
+    "links": {
+      "title": "Kept elsewhere",
+      "intro": "These belong to the project too, each on its own screen.",
+      "glossary": "Glossary",
+      "styleguide": "Styleguide",
+      "templates": "Templates",
+      "environments": "Test environments",
+      "site": "Published site"
+    },
+    "overriddenIn": "Overridden in: "
   }
 }

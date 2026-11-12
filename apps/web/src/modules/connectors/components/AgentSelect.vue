@@ -11,7 +11,7 @@ import { useQuery } from '@tanstack/vue-query'
 import type { ListAiAgentChoicesResponse } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
 
 const props = defineProps<{ defaultLabel: string; compact?: boolean }>()
 const model = defineModel<string | null>({ default: null })

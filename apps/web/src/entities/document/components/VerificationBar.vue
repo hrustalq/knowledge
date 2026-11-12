@@ -26,11 +26,11 @@ import { formatDate, formatDateTime } from '@/shared/utils/format'
 import { errorMessage } from '@/shared/api/errors'
 import { useAuthStore } from '@/stores/auth'
 import { useMembers } from '@/entities/person'
-import { Button } from '@/shared/ui/button'
-import { Badge } from '@/shared/ui/badge'
-import { Checkbox } from '@/shared/ui/checkbox'
-import { Label } from '@/shared/ui/label'
-import { Textarea } from '@/shared/ui/textarea'
+import { Button } from '@knowledge/ui/button'
+import { Badge } from '@knowledge/ui/badge'
+import { Checkbox } from '@knowledge/ui/checkbox'
+import { Label } from '@knowledge/ui/label'
+import { Textarea } from '@knowledge/ui/textarea'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,8 +40,8 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/ui/dialog'
+} from '@knowledge/ui/dropdown-menu'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@knowledge/ui/dialog'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,7 +51,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/shared/ui/alert-dialog'
+} from '@knowledge/ui/alert-dialog'
 import OwnerPicker from './OwnerPicker.vue'
 import WorkItemChips from '@/entities/document/components/WorkItemChips.vue'
 import { INTERVAL_CHOICES, flagSourceWho, intervalFromKey, intervalKey, verificationDotClass } from '../model/verification-ui'

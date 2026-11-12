@@ -751,6 +751,24 @@ model Project {
   restricted      Boolean   @default(false)
   /// off | warn | block — the style lint of its merge requests (#74); null is the workspace's.
   lintPolicy      String?   @map("lint_policy")
+  /// Freshness thresholds (#921): each null inherits the workspace's
+  /// knowledge_health_settings value, which inherits the env default.
+  reviewIntervalDays Int?   @map("review_interval_days")
+  remindBeforeDays   Int?   @map("remind_before_days")
+  inactiveAfterDays  Int?   @map("inactive_after_days")
+  emptyMaxChars      Int?   @map("empty_max_chars")
+  /// off | warn | block — the breaking-API merge gate (#922); null is the workspace's.
+  apiBreakingChangePolicy String? @map("api_breaking_change_policy")
+  /// Tracker handoff rules (#923), the vocabulary of workspace_settings'
+  /// work_item_* columns. Null inherits the workspace's; an explicit `off`
+  /// opts the project out while the workspace is on.
+  workItemIssues       String? @map("work_item_issues")
+  workItemConflicts    String? @map("work_item_conflicts")
+  workItemVerification String? @map("work_item_verification")
+  /// The page new captured pages of this project nest under (#924); null is
+  /// the workspace's ai_settings.capture_parent_document_id. No FK: a page
+  /// that is deleted or leaves the project is skipped at read time.
+  captureParentDocumentId String? @map("capture_parent_document_id") @db.Uuid
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   documents     Document[]
@@ -825,6 +843,9 @@ model ApiKey {
   /// string[] — a `capture` key's project pin (issue #73); null for every
   /// project. Json, not uuid[]: the schema uses no Postgres arrays.
   projectIds  Json?     @map("project_ids")
+  /// string[] — the MCP toolsets the key is limited to (#945, MCP_TOOLSETS in
+  /// contracts); null for every toolset. A key with a list works over MCP only.
+  toolsets    Json?
   expiresAt   DateTime? @map("expires_at") @db.Timestamptz
   lastUsedAt  DateTime? @map("last_used_at") @db.Timestamptz
   revokedAt   DateTime? @map("revoked_at") @db.Timestamptz
@@ -1633,6 +1654,9 @@ model AgentRun {
   /// What the run is about — `doc:<id>`, `mr:<id>`, `connector:<id>`. The key
   /// the in-flight and cooldown guards read; null for an unscoped run.
   subjectKey String? @map("subject_key")
+  /// The one project the run is about (#927), from `projectOfRun` when the run
+  /// starts; null for a workspace-wide run or one spanning projects. No FK.
+  projectId  String? @map("project_id") @db.Uuid
   /// pending → running → succeeded | failed | cancelled
   status     String  @default("pending")
 
@@ -1852,6 +1876,10 @@ model AiUsage {
   /// for a call outside a background run. No FK: usage outlives its run.
   agentKey      String? @map("agent_key")
   agentRunId    String? @map("agent_run_id") @db.Uuid
+  /// The project the call was made for (#927): its run's, else its thread's
+  /// page's, resolved once in `AiUsageService.record`. Null = unattributed,
+  /// which is the truth for a workspace-wide call. No FK: usage outlives a project.
+  projectId     String? @map("project_id") @db.Uuid
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
@@ -1940,7 +1968,11 @@ model GlossaryTerm {
   // the same word means different things in two bodies of work. Denormalized
   // against projects.workspace_id exactly like documents.workspace_id, because
   // the ACL and the activity feed key off the workspace.
-  projectId   String  @map("project_id") @db.Uuid
+  /// Null is a workspace term (#926): it links on every project's pages unless
+  /// the project defines the same word. Two workspace terms may not share a
+  /// name — `@@unique([projectId, term])` cannot say so for nulls, so the
+  /// writer checks under a lock (`GlossaryService.assertNameFree`).
+  projectId   String? @map("project_id") @db.Uuid
   term        String
   /// string[] — abbreviations and inflections that link to this entry. Json,
   /// not text[]: the schema uses no Postgres arrays (AiSkill.triggers precedent).
@@ -1969,7 +2001,9 @@ model GlossaryTerm {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  project Project @relation(fields: [projectId], references: [id])
+  // Restrict, spelled out: an optional relation would default to SET NULL, and a
+  // deleted project's terms would silently become the whole workspace's (#926).
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Restrict)
 
   // Per project, not per workspace: two projects may legitimately define the
   // same word, and neither should block the other.
@@ -4049,6 +4083,12 @@ model ApiTestEnvironment {
   /// `gcm$…` envelope of `{ name: value }`; null for none.
   secretsCipher String?  @map("secrets_cipher")
   secretNames   String[] @default([]) @map("secret_names")
+  /// Origins besides the server's that a run may send a secret to.
+  secretOrigins String[] @default([]) @map("secret_origins")
+  /// The one project whose suites may use it (#925); null is shared with
+  /// every project of the workspace. No FK, house policy: a deleted project's
+  /// environments simply stop matching any suite.
+  projectId     String?  @map("project_id") @db.Uuid
   /// No FK, house policy.
   createdBy     String   @map("created_by") @db.Uuid
   updatedBy     String   @map("updated_by") @db.Uuid
@@ -4145,6 +4185,12 @@ model WorkspaceSettings {
   workItemVerification    String?  @map("work_item_verification")
   /// #604 feature toggles: WORKSPACE_FEATURES values switched off here; empty (no row) is every feature on.
   disabledFeatures        String[] @default([]) @map("disabled_features")
+  /// #934 workspace purpose: WORKSPACE_USES values. Advice only — `disabledFeatures` stays the one switch.
+  purposeUses             String[] @default([]) @map("purpose_uses")
+  /// The admin's own words; admin-only on read, and no prompt but the purpose interview's sees it.
+  purposeDescription      String?  @map("purpose_description")
+  /// When the first-visit question was confirmed or skipped; null sends the admin to the wizard once.
+  purposeAskedAt          DateTime? @map("purpose_asked_at") @db.Timestamptz
   updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz
   updatedBy               String?  @map("updated_by") @db.Uuid
 

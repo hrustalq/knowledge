@@ -3,10 +3,10 @@ import { ApiOperation, ApiProduces, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { Request, Response } from 'express';
-import { CAPTURE_KIT_CLIENTS, type CaptureKitResponse, type McpConnectionInfo } from '@knowledge/contracts';
-import { CurrentPrincipal, ReadKeyOk } from '../auth/access.decorator.js';
+import { CAPTURE_KIT_CLIENTS, SKILL_DIR_KEYS, type CaptureKitResponse, type McpConnectionInfo, type SkillStackResponse } from '@knowledge/contracts';
+import { CurrentPrincipal, McpKeyOk, ReadKeyOk } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
-import { MCP_SERVER_NAME } from './mcp-tools.js';
+import { MCP_SERVER_NAME, toolsetsNotOffered } from './mcp-tools.js';
 import { noTrackOf } from '../analytics/analytics.recorder.js';
 import { CollabDraftToolsService } from '../collab/collab-draft-tools.service.js';
 import { McpService, type McpExtras } from './mcp.service.js';
@@ -29,8 +29,12 @@ import { Returns } from '../common/returns.decorator.js';
  * tool, inside McpService — this route has no `@Access` because a JSON-RPC
  * POST has no single workspace to check. That is also why it is `@ReadKeyOk`:
  * for a read-only key, POST here is transport, not intent.
+ *
+ * `@McpKeyOk` on the whole controller: these are the only routes a key limited
+ * to toolsets may call (#945).
  */
 @ApiTags('mcp')
+@McpKeyOk()
 @Controller('v1/mcp')
 export class McpController {
   private readonly logger = new Logger(McpController.name);
@@ -52,16 +56,19 @@ export class McpController {
     summary: 'MCP Streamable HTTP endpoint (JSON-RPC). Point an MCP client here with a Bearer API key',
   })
   async handle(@CurrentPrincipal() principal: Principal, @Req() req: Request, @Res() res: Response): Promise<void> {
-    // Only `initialize` carries the instructions, so only it pays for the learnings read (#305).
-    const initialize = [req.body as unknown].flat().some((m) => (m as { method?: unknown } | null)?.method === 'initialize');
-    // Guidance is advisory: a failed read falls back to the static instructions rather than refusing the client.
+    const asks = (method: string) => [req.body as unknown].flat().some((m) => (m as { method?: unknown } | null)?.method === method);
+    const initialize = asks('initialize');
+    // Only a listing is cut by section (#945): a call to a switched-off section's tool meets the per-call gate either way.
+    const offSections = initialize || asks('tools/list') ? await this.offSections(principal) : undefined;
+    // Only `initialize` carries the instructions, so only it pays for the learnings read (#305). Guidance is
+    // advisory: a failed read falls back to this caller's instructions without it rather than refusing the client.
     const instructions = initialize
-      ? await this.mcp.instructionsFor(principal).catch((err: unknown) => {
-          this.logger.warn({ err }, 'MCP learnings unavailable; static instructions sent');
+      ? await this.mcp.instructionsFor(principal, offSections).catch((err: unknown) => {
+          this.logger.warn({ err }, 'MCP learnings unavailable; instructions sent without team guidance');
           return undefined;
         })
       : undefined;
-    const { server } = this.mcp.buildServer(principal, { ...this.extras, noTrack: noTrackOf(req.headers), instructions });
+    const { server } = this.mcp.buildServer(principal, { ...this.extras, noTrack: noTrackOf(req.headers), instructions, offSections });
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     res.on('close', () => {
       void transport.close();
@@ -83,14 +90,24 @@ export class McpController {
   @Get('connection')
   @Returns('McpConnectionInfo')
   @ApiOperation({ summary: 'What an MCP client needs to connect: endpoint URL, auth mode, and the tools it would get' })
-  connection(@CurrentPrincipal() principal: Principal): McpConnectionInfo {
+  async connection(@CurrentPrincipal() principal: Principal): Promise<McpConnectionInfo> {
+    const offSections = await this.offSections(principal);
     return {
       url: this.mcp.publicUrl(),
       serverName: MCP_SERVER_NAME,
       authMode: this.config.get('AUTH_MODE') === 'api-key' ? 'api-key' : 'none',
       version: PRODUCT_VERSION,
-      tools: this.mcp.toolsFor(principal, this.extras),
+      tools: this.mcp.toolsFor(principal, { ...this.extras, offSections }),
+      notOffered: toolsetsNotOffered(principal, offSections),
     };
+  }
+
+  /** A failed read offers every section's tools, which the per-call gate still refuses where they are off. */
+  private offSections(principal: Principal) {
+    return this.mcp.sectionsOffFor(principal).catch((err: unknown) => {
+      this.logger.warn({ err }, 'MCP sections unavailable; every toolset offered');
+      return undefined;
+    });
   }
 
   @Get('skill')
@@ -102,6 +119,33 @@ export class McpController {
   })
   skill(@CurrentPrincipal() principal: Principal): Promise<string> {
     return this.mcp.skillFor(principal, undefined, this.extras);
+  }
+
+  /*
+   * The skill as a stack (#945): a core skill and one per offered toolset that
+   * has a playbook, for a client with a skills directory. JSON for a person or
+   * a tool; `install` is the same files as a script. `GET skill` above stays
+   * the one-file default.
+   */
+  @Get('skills')
+  @Returns('SkillStackResponse')
+  @ApiQuery({ name: 'dir', enum: SKILL_DIR_KEYS, required: false })
+  @ApiOperation({
+    summary: 'The skill as a stack of SKILL.md files for the caller: a core skill plus one per offered toolset that has a playbook',
+  })
+  skills(@CurrentPrincipal() principal: Principal, @Query('dir') dir?: string): Promise<SkillStackResponse> {
+    return this.mcp.skillStackFor(principal, dir, this.extras);
+  }
+
+  @Get('skills/install')
+  @Header('Content-Type', 'text/x-shellscript; charset=utf-8')
+  @ApiProduces('text/x-shellscript')
+  @ApiQuery({ name: 'dir', enum: SKILL_DIR_KEYS, required: false })
+  @ApiOperation({
+    summary: "The skill stack as a POSIX shell script that installs it into a client's skills directory and removes a skill no longer offered",
+  })
+  skillsInstaller(@CurrentPrincipal() principal: Principal, @Query('dir') dir?: string): Promise<string> {
+    return this.mcp.skillStackInstallerFor(principal, dir, this.extras);
   }
 
   /*

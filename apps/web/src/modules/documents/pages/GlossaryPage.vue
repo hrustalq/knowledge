@@ -3,6 +3,12 @@
  * Glossary (docs/features/14): the project's shared vocabulary, and the one
  * place a definition is written.
  *
+ * A term belongs to a project or to the whole workspace (#926). Scoped to a
+ * project, the roster shows what that project's pages link: its own terms and
+ * the workspace's, with a note on either side where the project's entry
+ * replaces a workspace one. Workspace terms are an admin's to write; an admin
+ * can also promote a project's term.
+ *
  * Two ways in. Someone writes a term by hand, or the assistant reads a page
  * and drafts the entries the project is missing — and a draft is never a fact:
  * nothing from the model reaches the glossary until a person accepts it, which
@@ -20,7 +26,8 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
-import { BookMarked, FolderKanban, Plus, Sparkles, Trash2, Type, Wand2 } from 'lucide-vue-next'
+import { ArrowUpFromLine, BookMarked, FolderKanban, Layers, Plus, Sparkles, Trash2, Type, Wand2 } from 'lucide-vue-next'
+import { glossaryTermKeys } from '@knowledge/contracts'
 import type {
   GlossaryTerm,
   GlossaryTermSuggestion,
@@ -28,25 +35,27 @@ import type {
   SuggestGlossaryTermsResponse,
 } from '@knowledge/contracts'
 import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
+import { errorMessage, errorReason } from '@/shared/api/errors'
 import { getProjectId, getWorkspaceId } from '@/shared/api/api'
 import { useAuthStore } from '@/stores/auth'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
 import { useGlossaryStore } from '@/entities/document'
 import { MAX_LINKS_PER_TERM, buildMatcher } from '@/entities/document'
-import { Badge } from '@/shared/ui/badge'
-import { Button } from '@/shared/ui/button'
-import { Checkbox } from '@/shared/ui/checkbox'
-import { Input } from '@/shared/ui/input'
-import { Skeleton } from '@/shared/ui/skeleton'
-import { Autocomplete } from '@/shared/ui/autocomplete'
+import { Badge } from '@knowledge/ui/badge'
+import { Button } from '@knowledge/ui/button'
+import { Checkbox } from '@knowledge/ui/checkbox'
+import { confirm } from '@knowledge/ui/confirm'
+import { Input } from '@knowledge/ui/input'
+import { Skeleton } from '@knowledge/ui/skeleton'
+import { Autocomplete } from '@knowledge/ui/autocomplete'
 import {
   FilterBar,
   filterRows,
   type ActiveFilter,
   type FilterAccessors,
   type FilterField,
-} from '@/shared/ui/filter-bar'
+} from '@knowledge/ui/filter-bar'
 import {
   Dialog,
   DialogContent,
@@ -54,8 +63,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
+} from '@knowledge/ui/dialog'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@knowledge/ui/table'
 import { RichEditor } from '@/entities/rich-editor'
 import { MarkdownView } from '@/entities/document'
 
@@ -69,6 +78,9 @@ const glossaryStore = useGlossaryStore()
 const workspaceId = getWorkspaceId()
 
 const canEdit = computed(() => auth.canEdit)
+/** A workspace term is the whole workspace's vocabulary: an admin's to change, as the API enforces. */
+const canWrite = (term: GlossaryTerm) => (term.projectId === null ? auth.canAdminWorkspace : canEdit.value)
+const projectName = (id: string) => projects.items.find((p) => p.projectId === id)?.name ?? ''
 
 // --- filters -----------------------------------------------------------------
 // Project is a scope: it decides which roster is fetched. Everything else is a
@@ -91,6 +103,15 @@ const filterFields = computed<FilterField[]>(() => [
     multiple: false,
     operators: ['is'],
     options: projects.items.map((p) => ({ value: p.projectId, label: p.name })),
+  },
+  {
+    key: 'level',
+    label: t('glossary.level'),
+    icon: Layers,
+    options: [
+      { value: 'workspace', label: t('glossary.levelWorkspace') },
+      { value: 'project', label: t('glossary.levelProject') },
+    ],
   },
   {
     key: 'source',
@@ -124,6 +145,7 @@ const filterFields = computed<FilterField[]>(() => [
 ])
 
 const filterAccessors: FilterAccessors<GlossaryTerm> = {
+  level: (t) => (t.projectId === null ? 'workspace' : 'project'),
   source: (t) => t.source,
   enabled: (t) => t.enabled,
   text: (t) => [t.term, t.definition, ...t.aliases],
@@ -140,6 +162,23 @@ const terms = computed(() => (query.data.value as ListGlossaryResponse | undefin
 const visibleTerms = computed(() => filterRows(terms.value, filters.value, filterAccessors))
 
 /**
+ * Where a project's entry and a workspace one claim the same word (#926), by
+ * term id: the project's wins on its own pages. Only meaningful while the
+ * roster is scoped to one project — the workspace view has no "here".
+ */
+const replacement = computed(() => {
+  const out = new Map<string, 'replaces' | 'replaced'>()
+  if (!scopedProjectId.value) return out
+  const own = terms.value.filter((x) => x.projectId !== null)
+  const taken = new Set(own.flatMap((x) => [...glossaryTermKeys(x.term, x.aliases)]))
+  const shared = terms.value.filter((x) => x.projectId === null)
+  const sharedKeys = new Set(shared.flatMap((x) => [...glossaryTermKeys(x.term, x.aliases)]))
+  for (const x of shared) if ([...glossaryTermKeys(x.term, x.aliases)].some((k) => taken.has(k))) out.set(x.termId, 'replaced')
+  for (const x of own) if ([...glossaryTermKeys(x.term, x.aliases)].some((k) => sharedKeys.has(k))) out.set(x.termId, 'replaces')
+  return out
+})
+
+/**
  * Every write also refreshes the pinia roster, not just the query cache: the
  * roster is what already-open pages link against, so a definition edited here
  * has to reach them without a reload.
@@ -149,8 +188,9 @@ const afterWrite = () => void glossaryStore.refresh()
 const createTerm = useApiMutation('post', '/v1/glossary', { invalidates })
 const updateTerm = useApiMutation('patch', '/v1/glossary/{id}', { invalidates })
 const deleteTerm = useApiMutation('delete', '/v1/glossary/{id}', { invalidates })
+const promoteTerm = useApiMutation('post', '/v1/glossary/{id}/promote', { invalidates })
 const busy = computed(
-  () => createTerm.isPending.value || updateTerm.isPending.value || deleteTerm.isPending.value,
+  () => createTerm.isPending.value || updateTerm.isPending.value || deleteTerm.isPending.value || promoteTerm.isPending.value,
 )
 
 // --- page picker -------------------------------------------------------------
@@ -171,6 +211,8 @@ const form = ref({
   matchAliases: true,
   caseSensitive: false,
   maxLinksPerPage: '' as string,
+  /** Create only: write a workspace term instead of the scoped project's (admins). */
+  workspace: false,
 })
 /** Autocomplete carries 0-or-1 entry in single-select mode. */
 const formDocument = ref<string[]>([])
@@ -185,13 +227,14 @@ function openNew(seed?: Partial<GlossaryTermSuggestion>) {
     matchAliases: true,
     caseSensitive: false,
     maxLinksPerPage: '',
+    workspace: false,
   }
   formDocument.value = sourceDocument.value.length ? [...sourceDocument.value] : []
   open.value = true
 }
 
 function openEdit(term: GlossaryTerm) {
-  if (!canEdit.value) return
+  if (!canWrite(term)) return
   editing.value = term
   form.value = {
     term: term.term,
@@ -201,6 +244,7 @@ function openEdit(term: GlossaryTerm) {
     matchAliases: term.matchAliases,
     caseSensitive: term.caseSensitive,
     maxLinksPerPage: term.maxLinksPerPage === null ? '' : String(term.maxLinksPerPage),
+    workspace: term.projectId === null,
   }
   formDocument.value = term.documentId ? [term.documentId] : []
   open.value = true
@@ -215,7 +259,8 @@ function openEdit(term: GlossaryTerm) {
  * matcher. The demo workspace has exactly this: `Order` and `Заказ (Order)`
  * both list "Order" and "Заказ".
  */
-const contested = computed(() => buildMatcher(terms.value)?.ambiguous ?? [])
+// A workspace term the scoped project replaces is not a clash: its pages link the project's entry.
+const contested = computed(() => buildMatcher(terms.value.filter((x) => replacement.value.get(x.termId) !== 'replaced'))?.ambiguous ?? [])
 
 const targetProjectId = computed(() => scopedProjectId.value ?? projects.activeId)
 
@@ -240,12 +285,12 @@ async function submit() {
       await updateTerm.mutateAsync({ path: { id: editing.value.termId }, body })
       toast.success(t('glossary.termUpdated'))
     } else {
-      if (!targetProjectId.value) {
+      if (!f.workspace && !targetProjectId.value) {
         toast.error(t('glossary.pickProjectFirst'))
         return
       }
       await createTerm.mutateAsync({
-        body: { workspaceId, projectId: targetProjectId.value, ...body },
+        body: { workspaceId, projectId: f.workspace ? null : targetProjectId.value, ...body },
       })
       toast.success(t('glossary.termAdded', { term: body.term }))
     }
@@ -275,6 +320,39 @@ async function remove(term: GlossaryTerm) {
   } catch (e) {
     toast.error((e as Error).message)
   }
+}
+
+/**
+ * Promote a project's term to the workspace (admins). The API refuses when the
+ * workspace already defines the word; replacing that entry is a second,
+ * explicit confirmation, never a default.
+ */
+async function promote(term: GlossaryTerm) {
+  const ok = await confirm({
+    title: t('glossary.promoteTitle', { term: term.term }),
+    description: t('glossary.promoteBody'),
+    action: t('glossary.promote'),
+  })
+  if (!ok) return
+  try {
+    await promoteTerm.mutateAsync({ path: { id: term.termId }, body: {} })
+  } catch (e) {
+    if (errorReason(e) !== 'workspace-term-exists') return void toast.error(errorMessage(e, t))
+    const replace = await confirm({
+      title: t('glossary.promoteReplaceTitle', { term: term.term }),
+      description: t('glossary.promoteReplaceBody'),
+      action: t('glossary.promoteReplace'),
+      destructive: true,
+    })
+    if (!replace) return
+    try {
+      await promoteTerm.mutateAsync({ path: { id: term.termId }, body: { onClash: 'replace' } })
+    } catch (again) {
+      return void toast.error(errorMessage(again, t))
+    }
+  }
+  afterWrite()
+  toast.success(t('glossary.promoted', { term: term.term }))
 }
 
 // --- AI extraction -----------------------------------------------------------
@@ -439,9 +517,10 @@ watch(highlighted, (id) => {
         <TableRow>
           <TableHead>{{ t('glossary.term') }}</TableHead>
           <TableHead>{{ t('glossary.definition') }}</TableHead>
+          <TableHead class="w-40">{{ t('glossary.level') }}</TableHead>
           <TableHead class="w-40">{{ t('glossary.definedIn') }}</TableHead>
           <TableHead class="w-24">{{ t('glossary.linked') }}</TableHead>
-          <TableHead class="w-12"></TableHead>
+          <TableHead class="w-20"></TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -451,8 +530,8 @@ watch(highlighted, (id) => {
           :class="highlighted === term.termId ? 'bg-primary/5' : ''"
         >
           <TableCell class="align-top">
-            <button class="text-left" :disabled="!canEdit" @click="openEdit(term)">
-              <span class="font-medium" :class="canEdit && 'hover:text-primary'">{{ term.term }}</span>
+            <button class="text-left" :disabled="!canWrite(term)" @click="openEdit(term)">
+              <span class="font-medium" :class="canWrite(term) && 'hover:text-primary'">{{ term.term }}</span>
               <span v-if="term.aliases.length" class="text-muted-foreground block text-xs">
                 {{ term.aliases.join(', ') }}
               </span>
@@ -462,6 +541,12 @@ watch(highlighted, (id) => {
           </TableCell>
           <TableCell class="align-top text-sm">
             <MarkdownView :markdown="term.definition" />
+          </TableCell>
+          <TableCell class="align-top text-sm">
+            {{ term.projectId === null ? t('glossary.levelWorkspace') : projectName(term.projectId) || t('glossary.levelProject') }}
+            <span v-if="replacement.get(term.termId)" class="text-muted-foreground block text-xs">
+              {{ replacement.get(term.termId) === 'replaced' ? t('glossary.replacedHere') : t('glossary.replacesWorkspace') }}
+            </span>
           </TableCell>
           <TableCell class="align-top">
             <RouterLink
@@ -476,14 +561,25 @@ watch(highlighted, (id) => {
           <TableCell class="align-top">
             <Checkbox
               :model-value="term.enabled"
-              :disabled="!canEdit"
+              :disabled="!canWrite(term)"
               :aria-label="t('glossary.linkTermInDocuments', { term: term.term })"
               @update:model-value="toggle(term, $event === true)"
             />
           </TableCell>
-          <TableCell class="align-top text-right">
+          <TableCell class="align-top text-right whitespace-nowrap">
             <Button
-              v-if="canEdit"
+              v-if="term.projectId !== null && auth.canAdminWorkspace"
+              variant="ghost"
+              size="sm"
+              :disabled="busy"
+              :title="t('glossary.promote')"
+              :aria-label="t('glossary.promoteNamed', { term: term.term })"
+              @click="promote(term)"
+            >
+              <ArrowUpFromLine class="size-3.5" />
+            </Button>
+            <Button
+              v-if="canWrite(term)"
               variant="ghost"
               size="sm"
               :aria-label="t('common.deleteNamed', { name: term.term })"
@@ -537,6 +633,13 @@ watch(highlighted, (id) => {
             :fallback-label="pageLabel"
             :empty-hint="t('hints.noPagesToLink')"
           />
+          <label v-if="!editing && auth.canAdminWorkspace" class="flex items-start gap-2">
+            <Checkbox class="mt-0.5" :model-value="form.workspace" @update:model-value="form.workspace = $event === true" />
+            <span class="text-sm">
+              {{ t('glossary.workspaceTerm') }}
+              <span class="text-muted-foreground block text-xs">{{ t('glossary.workspaceTermHint') }}</span>
+            </span>
+          </label>
           <label class="flex items-center gap-2">
             <Checkbox :model-value="form.enabled" @update:model-value="form.enabled = $event === true" />
             <span class="text-sm">{{ t('glossary.linkInDocuments') }}</span>

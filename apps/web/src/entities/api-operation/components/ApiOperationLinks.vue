@@ -17,7 +17,7 @@ import { Check, Copy } from 'lucide-vue-next'
 import type { EntityNeighborsResponse } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { useCopy } from '@/shared/composables/use-copy'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 
 const props = defineProps<{ workspaceId: string; entityKey: string; specDocumentId: string }>()
 const { t } = useI18n()

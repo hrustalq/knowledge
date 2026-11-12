@@ -3594,7 +3594,7 @@
       "method": "POST",
       "path": "/v1/glossary",
       "tag": "glossary",
-      "summary": "Add a term to a project (409 when that project already defines it)",
+      "summary": "Add a term to a project (409 when that project already defines it). Without projectId it is a workspace term, linked in every project that does not define the word itself — workspace admins only",
       "role": "editor",
       "source": "body",
       "public": false,
@@ -3626,6 +3626,16 @@
       "tag": "glossary",
       "summary": "Edit a term, its aliases, its definition or its defining page",
       "role": "editor",
+      "source": "glossary-term",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/glossary/{id}/promote",
+      "tag": "glossary",
+      "summary": "Make a project's term the workspace's: same entry, now linked in every project that does not define the word itself. 409 when the workspace already has a term of that name, unless onClash says replace",
+      "role": "admin",
       "source": "glossary-term",
       "public": false,
       "platformAdmin": false
@@ -3995,6 +4005,26 @@
       "path": "/v1/mcp/skill",
       "tag": "mcp",
       "summary": "SKILL.md for an AI agent using this knowledge base over MCP, generated for the caller (workspaces, projects, offered tools)",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/mcp/skills",
+      "tag": "mcp",
+      "summary": "The skill as a stack of SKILL.md files for the caller: a core skill plus one per offered toolset that has a playbook",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/mcp/skills/install",
+      "tag": "mcp",
+      "summary": "The skill stack as a POSIX shell script that installs it into a client's skills directory and removes a skill no longer offered",
       "role": null,
       "source": null,
       "public": false,
@@ -4791,12 +4821,112 @@
       "platformAdmin": false
     },
     {
+      "method": "GET",
+      "path": "/v1/projects/{id}/settings/access",
+      "tag": "projects",
+      "summary": "What the caller may change on the project's settings page: the non-gate settings, and the merge gates",
+      "role": "viewer",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{id}/settings/breaking-changes",
+      "tag": "projects",
+      "summary": "A project's breaking-change gate: the workspace's policy, the project's own, and what applies",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/projects/{id}/settings/breaking-changes",
+      "tag": "projects",
+      "summary": "Set the project's breaking-change gate (workspace admin); null inherits the workspace's",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{id}/settings/capture-parent",
+      "tag": "projects",
+      "summary": "Where this project's new captured pages nest: the workspace's page, the project's own, and what applies",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/projects/{id}/settings/capture-parent",
+      "tag": "projects",
+      "summary": "Set the project's capture parent page (workspace admin or the project's maintainer); null inherits the workspace's",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{id}/settings/verification",
+      "tag": "projects",
+      "summary": "A project's freshness thresholds: what the workspace set, what the project set, and what applies",
+      "role": "viewer",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/projects/{id}/settings/verification",
+      "tag": "projects",
+      "summary": "Override thresholds for this project (workspace admin or the project's maintainer); null inherits the workspace's",
+      "role": "editor",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{id}/settings/work-items",
+      "tag": "projects",
+      "summary": "A project's handoff rules: the workspace's, the project's own, and what applies",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/projects/{id}/settings/work-items",
+      "tag": "projects",
+      "summary": "Set a project's handoff rules (workspace admin or the project's maintainer); null inherits, off opts out",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "POST",
       "path": "/v1/projects/scaffold",
       "tag": "projects",
       "summary": "Create a project from a blueprint: pages, styleguide, templates and glossary in one go",
       "role": "editor",
       "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/setting-overrides",
+      "tag": "projects",
+      "summary": "Which projects override which workspace settings; only projects the caller may open",
+      "role": "viewer",
+      "source": "query",
       "public": false,
       "platformAdmin": false
     },
@@ -5965,6 +6095,36 @@
       "path": "/v1/workspaces/{id}/members/{userId}",
       "tag": "workspaces",
       "summary": "Change a member role / trusted-operator flag / capabilities (workspace admin)",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workspaces/{id}/purpose",
+      "tag": "workspaces",
+      "summary": "What this workspace is used for, and the sections that suggests off (workspace admin)",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/workspaces/{id}/purpose",
+      "tag": "workspaces",
+      "summary": "Save the purpose and the confirmed section list in one write (workspace admin); no uses and an untouched list is Skip",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workspaces/{id}/purpose/interview",
+      "tag": "workspaces",
+      "summary": "One round of the purpose interview (workspace admin): questions, or the uses picked from the catalogue",
       "role": "admin",
       "source": "workspace",
       "public": false,

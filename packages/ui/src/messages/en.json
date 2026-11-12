@@ -1,0 +1,61 @@
+{
+  "ui": {
+    "common": {
+      "cancel": "Cancel",
+      "close": "Close",
+      "filter": "Filter",
+      "none": "None",
+      "clear": "Clear",
+      "loadMore": "Load more",
+      "loadingMore": "Loading more…",
+      "searchIn": "Search {label}…",
+      "noneYet": "No {label} yet.",
+      "noMatchFor": "No match for {query}",
+      "typeAtLeast": "Type at least {n} characters",
+      "removeNamed": "Remove {name}",
+      "noMatches": "No matches",
+      "filterPlaceholder": "Filter…",
+      "searchPlaceholder": "Search…",
+      "openLarger": "Open {title} in a larger view"
+    },
+    "page": {
+      "empty": "Nothing here yet",
+      "errorTitle": "This did not load",
+      "forbiddenTitle": "You do not have access to this",
+      "forbiddenHint": "Ask a workspace admin for a role that can see it."
+    },
+    "filter": {
+      "noFiltersLeft": "No filters left",
+      "changeOperator": "Change operator ({options})",
+      "removeFilter": "Remove {field} filter",
+      "operator": {
+        "is": "is",
+        "isNot": "is not",
+        "contains": "contains",
+        "notContains": "excludes"
+      }
+    },
+    "imageViewer": {
+      "title": "Image preview",
+      "hint": "Click the image to see it at full size, drag to move around it, and use the arrow keys to go to the next or previous image.",
+      "open": "Open image",
+      "openNamed": "Open image: {name}",
+      "position": "Image {n} of {total}",
+      "fit": "Fit to screen",
+      "actualSize": "Actual size",
+      "previous": "Previous image",
+      "next": "Next image"
+    },
+    "diagramViewer": {
+      "title": "Diagram preview",
+      "hint": "Click the diagram to see it at its own size, drag to move around it, use + and − or Ctrl and the wheel to zoom, 0 to fit, and the arrow keys to go to the next or previous diagram.",
+      "open": "Open diagram",
+      "position": "Diagram {n} of {total}",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "fit": "Fit to screen ({percent}%)",
+      "previous": "Previous diagram",
+      "next": "Next diagram"
+    }
+  }
+}

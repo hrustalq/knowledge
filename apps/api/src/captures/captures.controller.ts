@@ -1,6 +1,12 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { BulkRejectCapturesResponse, CaptureInfo, CaptureResult, ListCapturesResponse } from '@knowledge/contracts';
+import type {
+  BulkRejectCapturesResponse,
+  CaptureInfo,
+  CaptureResult,
+  ListCapturesResponse,
+  ProjectCaptureParentSettings,
+} from '@knowledge/contracts';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { Access, CurrentPrincipal, Feature } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
@@ -10,6 +16,7 @@ import { CaptureInboxService } from './capture-inbox.service.js';
 import {
   BulkRejectCapturesDto,
   CaptureAssistantMessageDto,
+  UpdateProjectCaptureParentDto,
   CreateCaptureDto,
   ListCapturesQueryDto,
   RejectCaptureDto,
@@ -140,5 +147,42 @@ export class AssistantCaptureController {
     @CurrentPrincipal() principal: Principal,
   ): Promise<CaptureResult> {
     return this.inbox.fromAssistantMessage(id, dto, principal);
+  }
+}
+
+/**
+ * A project's capture parent page (#924), over the workspace's. Written by a
+ * workspace admin or the project's maintainer; gone with the `captures`
+ * section, like the inbox.
+ */
+@ApiTags('projects')
+@Feature('captures')
+@Controller('v1/projects')
+export class ProjectCaptureSettingsController {
+  constructor(
+    private readonly captures: CaptureService,
+    private readonly permissions: PermissionService,
+  ) {}
+
+  @Get(':id/settings/capture-parent')
+  @Returns('ProjectCaptureParentSettings')
+  @Access('viewer', 'project')
+  @ApiOperation({ summary: "Where this project's new captured pages nest: the workspace's page, the project's own, and what applies" })
+  get(@Param('id', ParseUUIDPipe) id: string): Promise<ProjectCaptureParentSettings> {
+    return this.captures.projectCaptureParent(id);
+  }
+
+  @Patch(':id/settings/capture-parent')
+  @Returns('ProjectCaptureParentSettings')
+  @Access('editor', 'project')
+  @ApiOperation({ summary: "Set the project's capture parent page (workspace admin or the project's maintainer); null inherits the workspace's" })
+  async update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateProjectCaptureParentDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<ProjectCaptureParentSettings> {
+    await this.permissions.requireProjectManage(principal, id);
+    const { workspaceId } = await this.captures.projectCaptureParent(id);
+    return this.captures.setProjectCaptureParent(await this.permissions.scopeFor(principal, workspaceId), id, dto.parentDocumentId);
   }
 }

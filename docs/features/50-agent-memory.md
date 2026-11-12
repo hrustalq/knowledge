@@ -385,6 +385,11 @@ is not reversible.
 
 ## Configuration
 
+The parent page new captured pages nest under can also be set per project
+(`projects.capture_parent_document_id`, [76](76-project-settings.md)):
+`CaptureService.captureParent` takes the project's page, else the workspace's,
+each only while it is a live page of that project.
+
 All have defaults. The switch and the two limits are **ceilings**: the
 workspace setting can only lower them, and the settings page shows what was
 asked beside what applies. The thresholds are overrides, and amend ≤ dedupe is

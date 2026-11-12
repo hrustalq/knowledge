@@ -638,7 +638,8 @@ export class MergeRequestsService {
     const specPages = pages.filter((p) => specIds.has(p.documentId));
     if (specPages.length === 0) return { policy: DEFAULT_API_BREAKING_CHANGE_POLICY, headCommit: null, specs: [], blocking: null };
     const [policy, headCommit, specs] = await Promise.all([
-      this.apiDiffs.breakingPolicy(docs[0].workspaceId),
+      // One merge request is one project's branch, so its pages share a policy (#922).
+      this.apiDiffs.breakingPolicy(docs[0].workspaceId, docs[0].projectId),
       this.commits.headCommit(docs[0].projectId, mr.sourceBranch.name),
       Promise.all(
         specPages.map(async (p) => {

@@ -12,6 +12,15 @@
  * The server is the one a run uses for any step whose spec declares it in
  * `servers` — the proxy's own target rule — so the form says so instead of
  * promising it reaches any host.
+ *
+ * A secret goes only to that server and to the hosts listed under it. Adding
+ * either makes the API drop the saved secrets the request does not set again,
+ * so the form says so before Save instead of after.
+ *
+ * An environment is shared by every project or belongs to one (#925), whose
+ * suites alone may run with it. Letting someone new use it (sharing a
+ * project's environment, moving it to another project) clears the saved
+ * secrets the same way.
  */
 import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -25,15 +34,20 @@ import { apiQueryOptions } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
 import type { Row } from '@/modules/api-reference/model/test-fixture'
 import { useAuthStore } from '@/stores/auth'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
-import { confirm } from '@/shared/ui/confirm'
-import { PageState } from '@/shared/layout'
+import { useProjectsStore } from '@/stores/projects'
+import { Button } from '@knowledge/ui/button'
+import { Input } from '@knowledge/ui/input'
+import { Textarea } from '@knowledge/ui/textarea'
+import { confirm } from '@knowledge/ui/confirm'
+import { PageState } from '@knowledge/ui/layout'
 import FixtureRows from '@/modules/api-reference/components/FixtureRows.vue'
 
 const props = defineProps<{ workspaceId: string; runnerOn: boolean }>()
 const { t } = useI18n()
 const auth = useAuthStore()
+const projects = useProjectsStore()
+/** A project the roster does not list (restricted from the caller) never reaches this page: the API leaves its environments out. */
+const projectName = (id: string) => projects.items.find((p) => p.projectId === id)?.name ?? id
 const queryClient = useQueryClient()
 const canEdit = computed(() => auth.canEdit)
 
@@ -46,6 +60,10 @@ const editing = ref<string | 'new' | null>(null)
 const draft = reactive({
   name: '',
   server: '',
+  /** '' = shared by every project. */
+  projectId: '',
+  /** One origin per line. */
+  origins: '',
   inputs: [] as Row[],
   /** Stored secret names, each kept, replaced (a value) or removed. */
   kept: [] as Array<{ name: string; replace: string; remove: boolean }>,
@@ -53,10 +71,30 @@ const draft = reactive({
 })
 const saving = ref(false)
 
+const originOf = (url: string) => {
+  try {
+    return new URL(url).origin
+  } catch {
+    return null
+  }
+}
+const originLines = () => draft.origins.split(/\s+/u).filter(Boolean)
+/** Saving would send secrets somewhere the saved environment does not: the API keeps only the ones typed now. */
+const clearsSecrets = computed(() => {
+  const env = environments.value.find((e) => e.id === editing.value)
+  if (!env || !draft.kept.some((k) => !k.remove && !k.replace)) return false
+  const before = new Set([originOf(env.server ?? ''), ...env.secretOrigins])
+  // Binding a shared environment narrows who may use it; any other change of project widens.
+  const shared = env.projectId !== null && (draft.projectId || null) !== env.projectId
+  return shared || [draft.server.trim(), ...originLines()].some((url) => url && !before.has(originOf(url)))
+})
+
 function open(env: ApiTestEnvironment | null) {
   editing.value = env?.id ?? 'new'
   draft.name = env?.name ?? ''
   draft.server = env?.server ?? ''
+  draft.projectId = env?.projectId ?? ''
+  draft.origins = (env?.secretOrigins ?? []).join('\n')
   draft.inputs = Object.entries(env?.inputs ?? {}).map(([name, value]) => ({ name, value }))
   draft.kept = (env?.secrets ?? []).map((name) => ({ name, replace: '', remove: false }))
   draft.added = []
@@ -72,6 +110,8 @@ function body(): SaveApiTestEnvironmentRequest {
   return {
     name: draft.name.trim(),
     server: draft.server.trim() || null,
+    projectId: draft.projectId || null,
+    secretOrigins: originLines(),
     inputs: Object.fromEntries(draft.inputs.filter((r) => r.name.trim()).map((r) => [r.name.trim(), r.value])),
     secrets,
   }
@@ -147,7 +187,10 @@ async function remove(env: ApiTestEnvironment) {
         <template v-for="env in [...environments, ...(editing === 'new' ? [null] : [])]" :key="env?.id ?? 'new'">
           <li v-if="editing !== (env?.id ?? 'new')" class="flex min-w-0 flex-col gap-1.5 px-3 py-2.5 sm:flex-row sm:items-start sm:gap-4">
             <div class="min-w-0 flex-1">
-              <p class="text-sm font-medium">{{ env!.name }}</p>
+              <p class="text-sm font-medium">
+                {{ env!.name }}
+                <span class="text-ui text-muted-foreground font-normal">· {{ env!.projectId ? projectName(env!.projectId) : t('qa.env.shared') }}</span>
+              </p>
               <p class="text-ui text-muted-foreground font-mono [overflow-wrap:anywhere]">{{ env!.server ?? t('qa.env.specServer') }}</p>
               <p v-if="Object.keys(env!.inputs).length || env!.secrets.length" class="mt-1 flex flex-wrap gap-1.5">
                 <code v-for="(value, name) in env!.inputs" :key="name" class="qa-chip">{{ name }} = {{ value }}</code>
@@ -178,6 +221,19 @@ async function remove(env: ApiTestEnvironment) {
               </div>
               <p class="text-caption text-muted-foreground -mt-2">{{ t('qa.env.serverHint') }}</p>
 
+              <label class="grid gap-1 sm:max-w-xs">
+                <span class="text-caption text-muted-foreground font-medium">{{ t('qa.env.project') }}</span>
+                <select
+                  v-model="draft.projectId"
+                  aria-describedby="qa-env-project-hint"
+                  class="h-8 w-full rounded-md border bg-transparent px-2 text-sm focus-visible:outline-2 focus-visible:outline-ring"
+                >
+                  <option value="">{{ t('qa.env.shared') }}</option>
+                  <option v-for="p in projects.items" :key="p.projectId" :value="p.projectId">{{ p.name }}</option>
+                </select>
+                <span id="qa-env-project-hint" class="text-caption text-muted-foreground">{{ t('qa.env.projectHint') }}</span>
+              </label>
+
               <FixtureRows
                 v-model="draft.inputs"
                 :legend="t('qa.env.inputs')"
@@ -190,6 +246,19 @@ async function remove(env: ApiTestEnvironment) {
               <fieldset class="grid min-w-0 gap-1.5">
                 <legend class="text-caption text-muted-foreground mb-1 font-medium">{{ t('qa.env.secrets') }}</legend>
                 <p class="text-caption text-muted-foreground">{{ t('qa.env.secretsHint') }}</p>
+                <label class="grid gap-1">
+                  <span class="text-caption text-muted-foreground font-medium">{{ t('qa.env.secretOrigins') }}</span>
+                  <Textarea
+                    v-model="draft.origins"
+                    rows="2"
+                    spellcheck="false"
+                    placeholder="https://auth.example.com"
+                    aria-describedby="qa-env-origins-hint"
+                    class="min-h-0 font-mono text-sm"
+                  />
+                  <span id="qa-env-origins-hint" class="text-caption text-muted-foreground">{{ t('qa.env.secretOriginsHint') }}</span>
+                </label>
+                <p v-if="clearsSecrets" role="status" class="text-caption text-destructive">{{ t('qa.env.secretsCleared') }}</p>
                 <div v-for="k in draft.kept" :key="k.name" class="flex min-w-0 items-center gap-1.5">
                   <code class="text-ui w-[38%] min-w-0 truncate font-mono" :class="k.remove && 'text-muted-foreground line-through'">{{ k.name }}</code>
                   <Input

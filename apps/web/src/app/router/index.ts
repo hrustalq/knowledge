@@ -60,7 +60,7 @@ export function createRouter() {
             // Third rail: the roster lives in the shell, the selection here. A
             // project's site settings are publishing's page; nesting it is the
             // router's job, since modules never import each other.
-            children: [...publishing.projectSiteRoutes, projects.projectDetailRoute],
+            children: [...publishing.projectSiteRoutes, projects.projectPoliciesRoute, projects.projectDetailRoute],
           },
           ...documents.settingsRoutes,
           ...templates.settingsRoutes,
@@ -91,6 +91,7 @@ export function createRouter() {
  * - unconfirmed address under AUTH_REQUIRE_VERIFIED_EMAIL → /verify-email
  *   (docs/features/41); every other route would only answer 403 anyway
  * - a route whose `meta.feature` the workspace switched off (#604) → /documents
+ * - the admin of a workspace whose purpose was never asked (#934) → /setup/purpose, once
  */
 export function installAuthGuard(router: Router, pinia: Pinia) {
   router.beforeEach(async (to) => {
@@ -117,16 +118,22 @@ export function installAuthGuard(router: Router, pinia: Pinia) {
  * never fetched for a route the guard would turn away.
  */
 export function refusal(
-  to: Pick<RouteLocationNormalized, 'meta' | 'matched'>,
+  to: Pick<RouteLocationNormalized, 'meta' | 'matched' | 'path' | 'fullPath'>,
   auth: ReturnType<typeof useAuthStore>,
   features: ReturnType<typeof useFeaturesStore>,
-): { path: string } | null {
+): { path: string; query?: Record<string, string> } | null {
   if (auth.verificationPending) return { path: '/verify-email' }
   if (to.meta.platformAdmin && !auth.isAdmin && !auth.isDev) return { path: '/403' }
   // A section the workspace switched off (#604) is not there: home, not a 404,
   // since the link that led here was the app's own until the switch.
   const feature = to.matched.map((r) => r.meta.feature).find(isWorkspaceFeature)
   if (feature && !features.isOn(feature)) return { path: '/documents' }
+  // A workspace nobody has said the purpose of (#934): its admin is asked once,
+  // and `next` carries them on to where they were heading. Confirm and Skip both
+  // set the flag in the store before navigating, so this cannot loop.
+  if (!features.purposeAsked && auth.canAdminWorkspace && to.path !== access.PURPOSE_SETUP_PATH) {
+    return { path: access.PURPOSE_SETUP_PATH, query: to.fullPath === '/documents' ? {} : { next: to.fullPath } }
+  }
   return null
 }
 

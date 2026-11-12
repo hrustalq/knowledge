@@ -32,12 +32,12 @@ import { errorMessage, errorReason } from '@/shared/api/errors'
 import { formatDate } from '@/shared/utils/format'
 import { useCopy } from '@/shared/composables/use-copy'
 import { useAuthStore } from '@/stores/auth'
-import { Badge } from '@/shared/ui/badge'
-import { Button } from '@/shared/ui/button'
-import { Checkbox } from '@/shared/ui/checkbox'
-import { Input } from '@/shared/ui/input'
-import { ResponsivePopover } from '@/shared/ui/popover'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
+import { Badge } from '@knowledge/ui/badge'
+import { Button } from '@knowledge/ui/button'
+import { Checkbox } from '@knowledge/ui/checkbox'
+import { Input } from '@knowledge/ui/input'
+import { ResponsivePopover } from '@knowledge/ui/popover'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
 
 const props = defineProps<{
   documentId: string

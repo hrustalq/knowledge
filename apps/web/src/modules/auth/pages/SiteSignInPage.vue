@@ -15,7 +15,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { api } from '@/shared/api/client'
 import { ApiRequestError } from '@/shared/api/http'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 
 const { t } = useI18n()
 const route = useRoute()

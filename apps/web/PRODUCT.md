@@ -59,7 +59,8 @@ All four are binding. Future work may not quietly drop one to simplify a surface
 ## Operating Context
 
 Containment is **Workspace > Project > Document**; the workspace is the tenant and
-ACL boundary, the project is organizational. Documents nest into a tree and carry a
+ACL boundary; the project is where one team's policy lives (review intervals,
+merge gates, handoff rules), each a sparse override of the workspace's. Documents nest into a tree and carry a
 category (process, use case, contract, ERD…).
 
 The daily loop:
@@ -120,7 +121,7 @@ landing on the API and has no web surface yet.
   assumptions in onboarding).
 - Existing identity artifacts are incumbent, not committed: `favicon.svg`, a Sora
   display face loaded from Google Fonts, and an OKLCH token palette described in
-  `src/assets/style.css` as "ink on paper, graph glow."
+  `packages/ui/src/styles/tokens.css` as "ink on paper, graph glow."
 - Voice in the interface today is plain, technical and unhurried, with GitLab and
   Confluence as the vocabulary users are expected to already know.
 

@@ -95,6 +95,11 @@ offered it; the run plan (`knowledge_get_test_run_plan`) is the read-side way
 for an agent to send with its own client. No tool hands out a test
 environment's secret ([62](62-qa-fixtures-runs.md)).
 
+**Toolsets.** Every tool is filed in one toolset, and the offer, the skill and
+the server instructions are cut by toolset: by the key's own list and by the
+sections its workspaces switched off. The skill can also be installed as a
+stack of skills. All of it is in [78 — MCP toolsets](78-mcp-toolsets.md).
+
 **Keys are managed from a session, never by a key.** Every `/v1/me/api-keys`
 route refuses an API-key principal: a leaked key that could mint its own
 replacement would survive being revoked.
@@ -132,7 +137,7 @@ capture tool gets 403 `capture-not-offered`. The installer never overwrites
 `jq`, or prints them when `jq` is missing. The exact hook behaviour is in
 [50 §The capture kit](50-agent-memory.md#the-capture-kit).
 
-**Per-client snippets, not one JSON blob.** `apps/web/src/modules/access/model/mcp-clients.ts`
+**Per-client snippets, not one JSON blob.** `apps/web/src/entities/access/model/mcp-clients.ts`
 has a generator per client because the differences break connections, silently:
 the env-var syntax differs in every client (`${VAR}`, `${env:VAR}`,
 `{env:VAR}`, `$VAR`, a named TOML field) and a wrong one is sent literally;
@@ -160,7 +165,7 @@ drops it in a later release.
 | Key narrowing                                          | `AccessService.requireKeyAllows`, `AclGuard` (read keys on unscoped routes) |
 | Key resolution + `last_used_at`                        | `apps/api/src/auth/token-auth.service.ts`                                   |
 | Key CRUD                                               | `apps/api/src/auth/api-keys.service.ts`, `MeController`                     |
-| Client snippets                                        | `apps/web/src/modules/access/model/mcp-clients.ts`                                           |
+| Client snippets                                        | `apps/web/src/entities/access/model/mcp-clients.ts`                                          |
 | Page                                                   | `apps/web/src/modules/access/pages/ConnectAiPage.vue`                                      |
 | Tests                                                  | `apps/api/test/mcp-http.spec.ts`                                            |
 
@@ -176,8 +181,8 @@ Behind the production Caddyfile that is `https://<host>/api`.
   native connectors, claude.ai) connect through `mcp-remote` for now. An OAuth
   authorization server would let them connect natively and is the obvious next
   step.
-- **Per-tool key scopes.** There are three scopes: read, capture (reads plus
-  the agent-memory tools, [50](50-agent-memory.md)) and write. A key limited to
-  an arbitrary tool set, say search only, is still not expressible.
+- **Per-tool key lists.** A key can be limited to chosen toolsets, and is then
+  valid over MCP only ([78](78-mcp-toolsets.md)). A list finer than a toolset
+  is not expressible.
 - **Server push.** Stateless mode has no SSE stream, so no `tools/list_changed`
   notifications; clients see a new tool on reconnect.

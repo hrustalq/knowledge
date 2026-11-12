@@ -11,9 +11,9 @@ import { useQueryClient } from '@tanstack/vue-query'
 import { Check, GitMerge } from 'lucide-vue-next'
 import type { MergeGateConflictDetails, MergeRequestConflictPage } from '@knowledge/contracts'
 import { isApiRequestError, useApiMutation } from '@/shared/api/queries'
-import { Button } from '@/shared/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/ui/dialog'
-import { Textarea } from '@/shared/ui/textarea'
+import { Button } from '@knowledge/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@knowledge/ui/dialog'
+import { Textarea } from '@knowledge/ui/textarea'
 
 const props = defineProps<{
   mergeRequestId: string

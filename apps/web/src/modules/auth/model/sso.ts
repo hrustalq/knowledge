@@ -27,10 +27,9 @@ export function ssoErrorOf(raw: unknown): SsoLoginError | null {
   return typeof raw === 'string' && (SSO_LOGIN_ERRORS as readonly string[]).includes(raw) ? (raw as SsoLoginError) : null
 }
 
-/** A return path from the query string, if it stays on this app. */
-export function ownPath(raw: unknown, fallback = '/documents'): string {
-  return typeof raw === 'string' && raw.startsWith('/') && !raw.startsWith('//') && !raw.startsWith('/\\') ? raw : fallback
-}
+import { ownPath } from '@/shared/utils/own-path'
+
+export { ownPath }
 
 export interface CompleteSsoSteps {
   /** `window.location.hash`, where the callback put the code. */

@@ -38,11 +38,11 @@ import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
 import { useAuthStore } from '@/stores/auth'
 import { useMembers } from '@/entities/person'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
-import { Label } from '@/shared/ui/label'
-import { Skeleton } from '@/shared/ui/skeleton'
-import { Textarea } from '@/shared/ui/textarea'
+import { Button } from '@knowledge/ui/button'
+import { Input } from '@knowledge/ui/input'
+import { Label } from '@knowledge/ui/label'
+import { Skeleton } from '@knowledge/ui/skeleton'
+import { Textarea } from '@knowledge/ui/textarea'
 import {
   Dialog,
   DialogContent,
@@ -50,7 +50,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
+} from '@knowledge/ui/dialog'
 import { MarkdownView } from '@/entities/document'
 import TemplatePlaceholderForm from './TemplatePlaceholderForm.vue'
 

@@ -17,9 +17,9 @@ import { getWorkspaceId } from '@/shared/api/api'
 import { errorMessage } from '@/shared/api/errors'
 import { useAuthStore } from '@/stores/auth'
 import { useProjectsStore } from '@/stores/projects'
-import { Autocomplete, type AutocompleteOption } from '@/shared/ui/autocomplete'
-import { Button } from '@/shared/ui/button'
-import { Skeleton } from '@/shared/ui/skeleton'
+import { Autocomplete, type AutocompleteOption } from '@knowledge/ui/autocomplete'
+import { Button } from '@knowledge/ui/button'
+import { Skeleton } from '@knowledge/ui/skeleton'
 
 const { t } = useI18n()
 

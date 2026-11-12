@@ -218,9 +218,14 @@ the prose is already on screen by then.
 - The linker runs per render over the page's text nodes. That is fine for
   documentation-sized pages and a normal glossary; a roster in the thousands
   would want an index rather than one alternation.
-- Terms are project-scoped with no inheritance: a word every project shares
-  has to be defined in each. A workspace-wide tier (`project_id NULL` meaning
-  "everywhere") is the obvious extension and is deliberately not built yet.
+- A term belongs to a project or, since #926, to the whole workspace
+  (`project_id NULL`, [76](76-project-settings.md)). A workspace term links on
+  every project's pages; a project's term sharing a folded name or alias with it
+  replaces it there, whole (`effectiveGlossary` in contracts, the one rule the
+  linker and the roster read). Workspace terms are written and promoted
+  (`POST /v1/glossary/:id/promote`) by workspace admins; a promotion onto an
+  existing workspace term is refused unless it says `replace`. No term was moved
+  by the migration, and identical terms across projects are not merged for you.
 - Suggestions read one page at a time. There is no corpus-wide sweep yet.
 - An exclusion is per page. The same false positive on twenty pages is twenty
   rows; a per-project exclusion would be the obvious extension.

@@ -774,7 +774,7 @@ export class DocumentsService {
     const [heads, issues, settings, sources] = await Promise.all([
       this.prisma.documentRevision.findMany({ where: { id: { in: headIds } } }),
       this.provenance.openIssueCounts(page.map((d) => d.id)),
-      this.policy.effective(workspaceId),
+      this.policy.thresholds(workspaceId),
       sourceSyncOf(this.prisma, page.map((d) => d.id)),
     ]);
     const headById = new Map(heads.map((r) => [r.id, r]));
@@ -793,7 +793,7 @@ export class DocumentsService {
         headRevisionId: headId,
         headRevisionStatus: (head?.status as RevisionStatus) ?? null,
         createdAt: d.createdAt.toISOString(),
-        ...this.trustFields(d, headId, issues.get(d.id) ?? 0, settings.inactiveAfterDays, sources.get(d.id)),
+        ...this.trustFields(d, headId, issues.get(d.id) ?? 0, settings(d.projectId).inactiveAfterDays, sources.get(d.id)),
       };
     });
 
@@ -956,7 +956,7 @@ export class DocumentsService {
     // predicate ProvenanceService applies to a cited source.
     const [issues, settings, sources] = await Promise.all([
       this.provenance.openIssueCounts([documentId]),
-      this.policy.effective(document.workspaceId),
+      this.policy.effectiveFor(document.workspaceId, document.projectId),
       sourceSyncOf(this.prisma, [documentId]),
     ]);
     const source = sources.get(documentId);
@@ -1451,7 +1451,7 @@ export class DocumentsService {
       // A stamped page's deadline moves with its interval, from the same
       // arithmetic VerificationService.verify uses.
       if (document.verifiedAt) {
-        const settings = await this.policy.effective(document.workspaceId);
+        const settings = await this.policy.effectiveFor(document.workspaceId, document.projectId);
         data.verificationExpiresAt = expiryFor(document.verifiedAt, dto.reviewIntervalDays, settings.reviewIntervalDays);
       }
     }
@@ -2343,7 +2343,7 @@ export class DocumentsService {
       : null;
     const [issues, settings, sources] = await Promise.all([
       this.provenance.openIssueCounts([d.id]),
-      this.policy.effective(d.workspaceId),
+      this.policy.effectiveFor(d.workspaceId, d.projectId),
       sourceSyncOf(this.prisma, [d.id]),
     ]);
     return {

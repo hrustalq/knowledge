@@ -12,9 +12,9 @@ import { toast } from 'vue-sonner'
 import type { SourceCrawlLimits, SourceSettingsResponse } from '@knowledge/contracts'
 import { api, apiQueryOptions } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
-import { PageState } from '@/shared/layout'
+import { Button } from '@knowledge/ui/button'
+import { Input } from '@knowledge/ui/input'
+import { PageState } from '@knowledge/ui/layout'
 
 const props = defineProps<{ workspaceId: string }>()
 

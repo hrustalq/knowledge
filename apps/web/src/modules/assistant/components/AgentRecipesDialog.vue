@@ -18,8 +18,8 @@ import {
 import { useApiMutation } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
 import { formatCalendarPart, formatList } from '@/shared/utils/format'
-import { Button } from '@/shared/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/shared/ui/dialog'
+import { Button } from '@knowledge/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@knowledge/ui/dialog'
 
 const props = defineProps<{ agents: AiAgentSummary[] }>()
 const open = defineModel<boolean>('open', { required: true })

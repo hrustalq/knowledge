@@ -9,7 +9,7 @@ import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import type { ConnectionBranchesResponse } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/shared/api/queries'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
 
 const props = defineProps<{ connectionId: string; repo: string; defaultBranch: string | null; modelValue: string; label: string }>()
 const emit = defineEmits<{ 'update:modelValue': [string] }>()

@@ -6,7 +6,7 @@
 // in prose. No bespoke chat-only widget logic lives here, only a label +
 // existing Card chrome around whichever component the backend picked.
 import type { AssistantUiBlock } from '@knowledge/contracts'
-import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@knowledge/ui/card'
 import { useI18n } from 'vue-i18n'
 import { GraphView } from '@/entities/graph'
 import { ActivityFeed } from '@/entities/document'

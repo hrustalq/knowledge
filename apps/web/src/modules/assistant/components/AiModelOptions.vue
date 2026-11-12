@@ -3,7 +3,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AiModelSummary } from '@knowledge/contracts'
-import { SelectGroup, SelectItem, SelectLabel } from '@/shared/ui/select'
+import { SelectGroup, SelectItem, SelectLabel } from '@knowledge/ui/select'
 import { groupModels } from '@/modules/assistant/model/provider-rows'
 
 const props = defineProps<{ models: AiModelSummary[]; selected?: string | null }>()

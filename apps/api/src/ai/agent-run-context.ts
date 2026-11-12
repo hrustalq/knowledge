@@ -12,6 +12,8 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 export interface AgentRunContext {
   agentKey: string;
   agentRunId: string;
+  /** The one project the run is about (#927), from `projectOfRun`; null when it names none or several. */
+  projectId?: string | null;
 }
 
 const store = new AsyncLocalStorage<AgentRunContext>();

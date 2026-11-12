@@ -7,7 +7,7 @@ import { renderPublicMarkdown, type PublicRenderOptions } from './core/markdown/
 // The reader's catalog: an export is read by whoever it is handed to, like a share.
 import en from './shared/i18n/reader/en.json'
 import ruCatalog from './shared/i18n/reader/ru.json'
-import tokensCss from './assets/styles/tokens.css?raw'
+import tokensCss from '@knowledge/ui/tokens.css?raw'
 import editorCss from './assets/styles/editor.css?raw'
 import exportCss from './assets/styles/export.css?raw'
 

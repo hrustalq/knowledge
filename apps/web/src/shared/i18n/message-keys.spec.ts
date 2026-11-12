@@ -1,7 +1,9 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { MCP_TOOLSET_KEYS } from '@knowledge/contracts'
 import app from './messages/en.json'
+import ru from './messages/ru.json'
 import reader from './reader/en.json'
 
 /**
@@ -19,7 +21,9 @@ import reader from './reader/en.json'
 const SRC = join(import.meta.dirname, '../..')
 
 // The public reader's catalog is separate (docs/features/43) but resolves the same way.
-// Merged per namespace: both carry `common` (the reader for the shared Sheet's close label).
+// Merged per namespace: both carry `search`, `export` and `category` for the components they share.
+// The UI kit's catalogue (`ui.*`) is merged into every app instance, but app code reads none
+// of it: the kit checks its own keys (packages/ui/src/messages/messages.spec.ts).
 const en: Record<string, unknown> = { ...app }
 for (const [ns, keys] of Object.entries(reader)) {
   en[ns] = { ...((en[ns] as object | undefined) ?? {}), ...keys }
@@ -97,6 +101,18 @@ describe('web i18n message keys', () => {
         !Array.from(literals).some((literal) => key.startsWith(`${literal}.`)),
     )
     expect(unused).toEqual([])
+  })
+
+  // Read through a runtime key (`connect.toolsets.${key}.label`), so the scan above cannot see a gap (#945).
+  it('every MCP toolset has an en and a ru label and description', () => {
+    for (const [lang, catalog] of [['en', app], ['ru', ru]] as const) {
+      const toolsets = catalog.connect.toolsets as Record<string, { label?: string; description?: string }>
+      for (const key of MCP_TOOLSET_KEYS) {
+        expect(toolsets[key]?.label, `${lang} ${key} label`).toBeTruthy()
+        expect(toolsets[key]?.description, `${lang} ${key} description`).toBeTruthy()
+      }
+      expect(Object.keys(toolsets).sort()).toEqual([...MCP_TOOLSET_KEYS].sort())
+    }
   })
 })
 

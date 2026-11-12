@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { AgentRun } from '@prisma/client';
 import { t } from '../i18n/t.js';
 import { withAgentRun } from '../ai/agent-run-context.js';
+import { projectOfRun } from '../ai/run-project.js';
 import type { Principal } from '../auth/principal.js';
 import type { ResolvedAgent } from './agent-registry.service.js';
 import { AgentServices, type AgentReporter, type AgentRunResult } from './agent-services.js';
@@ -33,13 +34,31 @@ export class AgentExecutor extends AgentServices {
   async run(run: AgentRun, agent: ResolvedAgent, principal: Principal, report: AgentReporter): Promise<AgentRunResult> {
     // Every model call below is billed to this run (#305), and the run is
     // stamped with what produced it whether it succeeds or fails.
-    return withAgentRun({ agentKey: agent.key, agentRunId: run.id }, async () => {
+    const projectId = await this.attribute(run);
+    return withAgentRun({ agentKey: agent.key, agentRunId: run.id, projectId }, async () => {
       try {
         return await this.dispatch(run, agent, principal, report);
       } finally {
         await this.stamp(run, agent);
       }
     });
+  }
+
+  /**
+   * The project this run is about (#927), stamped on the row the first time it
+   * starts. Attribution is bookkeeping: a failed lookup leaves the run
+   * unattributed and never stops it.
+   */
+  private async attribute(run: AgentRun): Promise<string | null> {
+    if (run.projectId) return run.projectId;
+    try {
+      const projectId = await projectOfRun(this.prisma, run);
+      if (projectId) await this.prisma.agentRun.updateMany({ where: { id: run.id, projectId: null }, data: { projectId } });
+      return projectId;
+    } catch (error) {
+      this.logger.warn(`Agent run ${run.id} could not be attributed to a project: ${String(error)}`);
+      return null;
+    }
   }
 
   private async dispatch(run: AgentRun, agent: ResolvedAgent, principal: Principal, report: AgentReporter): Promise<AgentRunResult> {

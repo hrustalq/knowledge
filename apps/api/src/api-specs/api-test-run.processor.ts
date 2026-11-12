@@ -7,6 +7,7 @@ import {
   runTestPlan,
   testRunCounts,
   type TestRunPlan,
+  type TestRunRequest,
   type TestRunResult,
   type TestRunTarget,
 } from '@knowledge/contracts';
@@ -59,7 +60,8 @@ export class ApiTestRunProcessor extends WorkerHost {
       for (const id of new Set([plan.documentId, ...targets.map((x) => x.documentId)])) {
         await this.permissions.requireLevel(scope, { type: 'document', id }, 'view');
       }
-      const env = run.environmentId ? await this.environments.values(run.workspaceId, run.environmentId) : null;
+      // Asked again here, not trusted from the start: the environment may have been bound to another project since.
+      const env = run.environmentId ? await this.environments.values(run.workspaceId, run.environmentId, run.documentId) : null;
       if (!env) throw new Error(t('error.apiTestRun.environmentGone'));
 
       const servers = new Map<string, string[]>();
@@ -74,7 +76,19 @@ export class ApiTestRunProcessor extends WorkerHost {
           ? env.server + url.slice(target.server.length)
           : url;
 
-      const results = await runTestPlan(plan, env.values, async (_key, target, req) => {
+      // A secret goes only to the environment's own origins, judged on the URL the request will really have.
+      const origins = new Set(env.secretOrigins);
+      const guarded = {
+        values: env.secrets,
+        allow: (target: TestRunTarget, url: string) => {
+          try {
+            return origins.has(new URL(rebase(target, url)).origin);
+          } catch {
+            return false;
+          }
+        },
+      };
+      const send = async (_key: string, target: TestRunTarget, req: TestRunRequest) => {
         const res = await this.tries.sendAs(
           run.createdBy,
           target.documentId,
@@ -89,7 +103,8 @@ export class ApiTestRunProcessor extends WorkerHost {
           false,
         );
         return { status: res.status, headers: res.headers, body: res.encoding === 'utf8' ? res.body : '', durationMs: res.durationMs };
-      });
+      };
+      const results = await runTestPlan(plan, env.values, send, undefined, undefined, guarded);
       const stored = withoutSecrets(Object.fromEntries(results));
       const counts = testRunCounts(plan, stored);
       await this.runs.finish(run.id, { status: counts.failed || counts.notRun ? 'failed' : 'passed', results: stored, counts });

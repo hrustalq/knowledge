@@ -2,8 +2,8 @@
 /** What one model costs per 1M tokens, in a currency, over the list price. */
 import { useI18n } from 'vue-i18n'
 import { COST_CURRENCIES, type CostCurrency } from '@knowledge/contracts'
-import { Input } from '@/shared/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
+import { Input } from '@knowledge/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
 import { formatPrice } from '@/shared/utils/format'
 import type { PriceFields } from '@/modules/assistant/model/use-price-fields'
 

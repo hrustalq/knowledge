@@ -1,4 +1,4 @@
-import type { ApiDocumentKind } from '@knowledge/contracts/core';
+import { scopedSetting, type ApiDocumentKind, type ScopedSetting } from '@knowledge/contracts/core';
 import { normalizeEntityKey } from '@knowledge/contracts/graph';
 import type { ApiSpecDiff, ApiSpecDiffSummary } from '@knowledge/contracts/api/diff';
 import type { CodeSample } from '@knowledge/contracts/api/samples';
@@ -407,6 +407,13 @@ export interface ApiSettingsResponse {
   updatedAt: string | null;
 }
 
+/** GET/PATCH /v1/projects/:id/settings/breaking-changes (#922). A merge gate: written by workspace admins only. */
+export interface ProjectBreakingChangeSettings {
+  workspaceId: string;
+  projectId: string;
+  policy: ScopedSetting<ApiBreakingChangePolicy>;
+}
+
 export interface UpdateApiSettingsRequest {
   /** null goes back to the ceiling. */
   apiTryProxyMode?: ApiTryProxyMode | null;
@@ -451,6 +458,10 @@ export interface ApiTestEnvironment {
   inputs: Record<string, string>;
   /** The names of the stored secrets (`secret.qaPassword`, `TOKEN`). */
   secrets: string[];
+  /** Origins besides the server's that a run may send a secret to (a login service). */
+  secretOrigins: string[];
+  /** The one project whose suites may use it (#925); null is shared by every project. */
+  projectId: string | null;
   updatedAt: string;
 }
 
@@ -458,12 +469,22 @@ export interface ListApiTestEnvironmentsResponse {
   environments: ApiTestEnvironment[];
 }
 
-/** POST creates (name required); PATCH merges. A secret set to null is removed. */
+/**
+ * POST creates (name required); PATCH merges. A secret set to null is removed.
+ * A PATCH that adds somewhere secrets may go (a new server origin, a new entry
+ * in `secretOrigins`) or someone new who may use them (sharing a project's
+ * environment, or moving it to another project) keeps only the secrets it
+ * sets itself.
+ */
 export interface SaveApiTestEnvironmentRequest {
   name?: string;
   server?: string | null;
   inputs?: Record<string, string>;
   secrets?: Record<string, string | null>;
+  /** Replaces the list. */
+  secretOrigins?: string[];
+  /** Bind to one project's suites; null shares it with every project. */
+  projectId?: string | null;
 }
 
 export const API_TEST_RUN_STATUSES = ['queued', 'running', 'passed', 'failed', 'error'] as const;
@@ -544,6 +565,19 @@ export interface ApiTryResponse {
 export const API_BREAKING_CHANGE_POLICIES = ['off', 'warn', 'block'] as const;
 export type ApiBreakingChangePolicy = (typeof API_BREAKING_CHANGE_POLICIES)[number];
 export const DEFAULT_API_BREAKING_CHANGE_POLICY: ApiBreakingChangePolicy = 'warn';
+
+/**
+ * The gate policy across levels (#922): project → workspace → `warn`. A stored
+ * value outside the vocabulary reads as unset at its level, never as a policy.
+ */
+export function scopedApiBreakingChangePolicy(
+  project: string | null | undefined,
+  workspace: string | null | undefined,
+): ScopedSetting<ApiBreakingChangePolicy> {
+  const known = (value: string | null | undefined) =>
+    API_BREAKING_CHANGE_POLICIES.includes(value as ApiBreakingChangePolicy) ? (value as ApiBreakingChangePolicy) : null;
+  return scopedSetting(known(project), known(workspace), DEFAULT_API_BREAKING_CHANGE_POLICY);
+}
 
 /** A sparse setting over the code default; there is no env ceiling for this one. */
 export function resolveApiBreakingChangePolicy(requested: string | null | undefined): ApiBreakingChangePolicy {

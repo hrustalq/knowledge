@@ -53,6 +53,7 @@ COPY packages/observability/package.json packages/observability/
 COPY packages/workflow/package.json      packages/workflow/
 COPY packages/editor-schema/package.json packages/editor-schema/
 COPY packages/tsconfig/package.json      packages/tsconfig/
+COPY packages/ui/package.json            packages/ui/
 
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter "@knowledge/api..."
@@ -78,6 +79,7 @@ COPY packages/observability/package.json packages/observability/
 COPY packages/workflow/package.json      packages/workflow/
 COPY packages/editor-schema/package.json packages/editor-schema/
 COPY packages/tsconfig/package.json      packages/tsconfig/
+COPY packages/ui/package.json            packages/ui/
 
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
     pnpm install --prod --frozen-lockfile --filter "@knowledge/api..."

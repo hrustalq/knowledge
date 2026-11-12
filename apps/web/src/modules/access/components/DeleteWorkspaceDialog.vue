@@ -29,8 +29,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/shared/ui/alert-dialog'
-import { Input } from '@/shared/ui/input'
+} from '@knowledge/ui/alert-dialog'
+import { Input } from '@knowledge/ui/input'
 
 const { t } = useI18n()
 

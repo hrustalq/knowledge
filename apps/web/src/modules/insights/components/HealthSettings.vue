@@ -21,6 +21,7 @@
  * The community prior and layered expansion (#475) join it, both off by default.
  */
 import { computed, reactive, ref, watch } from 'vue'
+import { ProjectOverridesNote } from '@/entities/project'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
@@ -37,11 +38,11 @@ import { apiQueryOptions } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
 import { getWorkspaceId } from '@/shared/api/api'
 import { formatNumber } from '@/shared/utils/format'
-import { Badge } from '@/shared/ui/badge'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
-import { PageState } from '@/shared/layout'
+import { Badge } from '@knowledge/ui/badge'
+import { Button } from '@knowledge/ui/button'
+import { Input } from '@knowledge/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
+import { PageState } from '@knowledge/ui/layout'
 
 const props = defineProps<{ canManage: boolean }>()
 
@@ -227,6 +228,7 @@ async function save() {
       <div>
         <h2 class="text-base font-semibold">{{ t('health.settings.title') }}</h2>
         <p class="kn-measure mt-0.5 text-sm text-muted-foreground">{{ t('health.settings.intro') }}</p>
+        <ProjectOverridesNote setting="verification" class="mt-1" />
       </div>
       <Badge v-if="!props.canManage" variant="outline">{{ t('health.settings.readOnly') }}</Badge>
     </div>

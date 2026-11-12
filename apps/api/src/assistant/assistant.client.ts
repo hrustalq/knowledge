@@ -23,6 +23,8 @@ export interface AiCallContext {
   userId: string;
   operation: AiUsageOperation;
   threadId?: string;
+  /** The project the call is for, when the caller knows it (#927); a run or a thread's page is found without it. */
+  projectId?: string | null;
   /**
    * Language the model must answer in (docs/features/18). Applied centrally in
    * `create`/`createStream`, so every caller gets it without editing prompts.
@@ -629,6 +631,7 @@ export class AssistantClient {
       userId: ctx.userId,
       operation: ctx.operation,
       threadId: ctx.threadId,
+      projectId: ctx.projectId,
       tokens,
       durationMs: Date.now() - startedAt,
       ok: outcome.ok,

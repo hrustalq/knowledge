@@ -20,8 +20,8 @@ import { ArrowUp, Bot, Loader2, Plus, TriangleAlert } from 'lucide-vue-next'
 import type { WorkflowGraph } from '@knowledge/contracts'
 import { api, type Op, type RequestOptions } from '@/shared/api/client'
 import { getProjectId, getWorkspaceId } from '@/shared/api/api'
-import { Button } from '@/shared/ui/button'
-import { Textarea } from '@/shared/ui/textarea'
+import { Button } from '@knowledge/ui/button'
+import { Textarea } from '@knowledge/ui/textarea'
 import type { WizardTurn } from '../model/wizard-machine'
 
 const props = defineProps<{

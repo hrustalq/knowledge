@@ -21,9 +21,9 @@
  * The card is mounted only while open, and `UserCard` only fetches then.
  */
 import { computed, ref } from 'vue'
-import { useHydratedMediaQuery } from '@/shared/composables/use-hydrated'
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/shared/ui/hover-card'
-import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
+import { useHydratedMediaQuery } from '@knowledge/ui/use-hydrated'
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@knowledge/ui/hover-card'
+import { Popover, PopoverContent, PopoverTrigger } from '@knowledge/ui/popover'
 import UserAvatar from '@/entities/person/components/UserAvatar.vue'
 import { useMembers } from '@/entities/person/model/use-members'
 import { actorLabel } from '@/entities/person/model/actor'

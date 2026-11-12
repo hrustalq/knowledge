@@ -104,10 +104,8 @@ describe('ComponentsService.rebuild', () => {
 });
 
 describe('the missing-paths health filter', () => {
-  const settings = { reviewIntervalDays: 90, inactiveAfterDays: 180, emptyMaxChars: 200, expiringSoonDays: 14 };
-
   it('selects live pages with a missing declared path', () => {
-    const sql = healthFilterSql('missing-paths', settings as never, new Date()).sql;
+    const sql = healthFilterSql('missing-paths', new Date(), new Date()).sql;
     expect(sql).toContain('r.archived_at IS NULL');
     expect(sql).toContain('cardinality(r.missing_paths) > 0');
   });

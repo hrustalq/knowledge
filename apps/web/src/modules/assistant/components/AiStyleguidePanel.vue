@@ -8,6 +8,7 @@
 // The scope's lint policy sits beside its rules: whether merge requests on its
 // pages are checked. It shows what the scope asks for and what applies, since
 // the deployment's STYLE_LINT_POLICY and a disabled linter can both clamp it.
+import { ProjectOverridesNote } from '@/entities/project'
 import { useI18n } from 'vue-i18n'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
@@ -35,13 +36,13 @@ import { STYLE_RULE_SEVERITIES, STYLE_RULE_TEXT_MAX } from '@knowledge/contracts
 import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
 import { useProjectsStore } from '@/stores/projects'
-import { Badge } from '@/shared/ui/badge'
-import { Button } from '@/shared/ui/button'
-import { Checkbox } from '@/shared/ui/checkbox'
-import { Input } from '@/shared/ui/input'
-import { Skeleton } from '@/shared/ui/skeleton'
-import { Textarea } from '@/shared/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
+import { Badge } from '@knowledge/ui/badge'
+import { Button } from '@knowledge/ui/button'
+import { Checkbox } from '@knowledge/ui/checkbox'
+import { Input } from '@knowledge/ui/input'
+import { Skeleton } from '@knowledge/ui/skeleton'
+import { Textarea } from '@knowledge/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,8 +52,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/shared/ui/alert-dialog'
-import { AiEmptyState } from '@/shared/ui/empty-state'
+} from '@knowledge/ui/alert-dialog'
+import { AiEmptyState } from '@knowledge/ui/empty-state'
 
 const { t } = useI18n()
 const props = defineProps<{ canManage: boolean }>()
@@ -287,6 +288,7 @@ const readOnlyRules = computed(() => own.value?.rules ?? inherited.value?.rules 
       <div class="min-w-0 flex-1 basis-64">
         <h2 id="kn-sg-policy" class="text-sm font-medium">{{ t('ai.styleguide.policy.title') }}</h2>
         <p class="text-muted-foreground mt-0.5 text-xs">{{ policyNote }}</p>
+        <ProjectOverridesNote v-if="!projectId" setting="lintPolicy" class="mt-1" />
       </div>
       <Select
         v-if="canManage"

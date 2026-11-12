@@ -17,7 +17,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ImagePlus, Loader2, Trash2 } from 'lucide-vue-next'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 import { useAvatarUpload } from '../model/use-avatar-upload'
 
 const props = withDefaults(

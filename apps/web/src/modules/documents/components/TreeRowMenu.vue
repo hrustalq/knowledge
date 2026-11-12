@@ -20,7 +20,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
+} from '@knowledge/ui/dropdown-menu'
 import { useDocumentsStore } from '@/stores/documents'
 import { useTemplatesStore } from '@/entities/template'
 import { LazyPageAccessDialog as PageAccessDialog } from '@/entities/access'

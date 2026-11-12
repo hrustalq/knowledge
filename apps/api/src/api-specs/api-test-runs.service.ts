@@ -13,6 +13,7 @@ import {
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ApiSettingsService } from './api-settings.service.js';
+import { ApiTestEnvironmentsService } from './api-test-environments.service.js';
 import { ApiTestRunProducer } from './api-test-run.producer.js';
 
 type RunRow = ApiTestRun & { environment: Pick<ApiTestEnvironment, 'id' | 'name'> | null };
@@ -29,6 +30,7 @@ export class ApiTestRunsService {
     private readonly prisma: PrismaService,
     private readonly settings: ApiSettingsService,
     private readonly producer: ApiTestRunProducer,
+    private readonly environments: ApiTestEnvironmentsService,
   ) {}
 
   /** 403 unless the runner applies here: the deployment's ceiling and the workspace's switch both on. */
@@ -40,7 +42,8 @@ export class ApiTestRunsService {
 
   async start(input: { workspaceId: string; plan: TestRunPlan; environmentId: string; createdBy: string }): Promise<ApiTestRunSummary> {
     await this.assertOn(input.workspaceId);
-    const env = await this.prisma.apiTestEnvironment.findFirst({ where: { id: input.environmentId, workspaceId: input.workspaceId } });
+    // Shared, or bound to the project of the suite's document (#925).
+    const env = await this.environments.usableBy(input.workspaceId, input.environmentId, input.plan.documentId);
     if (!env) throw new NotFoundException(t('error.apiTestEnvironment.notFound', { id: input.environmentId }));
     const row = await this.prisma.apiTestRun.create({
       data: {

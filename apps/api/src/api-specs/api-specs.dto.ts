@@ -14,6 +14,7 @@ import {
   MaxLength,
   Min,
   ValidateNested,
+  ValidateIf,
 } from 'class-validator';
 import {
   API_BREAKING_CHANGE_POLICIES,
@@ -147,6 +148,19 @@ export class ApiTryRequestDto {
   @IsOptional()
   @IsString()
   body?: string | null;
+}
+
+/** PATCH /v1/projects/:id/settings/breaking-changes */
+export class UpdateProjectBreakingChangesDto {
+  @ApiProperty({
+    enum: API_BREAKING_CHANGE_POLICIES,
+    nullable: true,
+    type: String,
+    description: "The project's merge gate for breaking spec changes; null inherits the workspace's",
+  })
+  @ValidateIf((o: UpdateProjectBreakingChangesDto) => o.policy !== null)
+  @IsIn(API_BREAKING_CHANGE_POLICIES)
+  policy!: ApiBreakingChangePolicy | null;
 }
 
 export class UpdateApiSettingsDto {
@@ -322,4 +336,40 @@ export class SaveApiTestEnvironmentDto {
   @IsOptional()
   @IsObject()
   secrets?: Record<string, string | null>;
+
+  @ApiPropertyOptional({
+    type: [String],
+    description:
+      "Origins besides the server's that a run may send a secret to (a login service); replaces the list. A change that adds one, or a new server origin, keeps only the secrets this request sets",
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  @MaxLength(2000, { each: true, message: vmsg('maxLength') })
+  secretOrigins?: string[];
+
+  @ApiPropertyOptional({
+    type: String,
+    format: 'uuid',
+    nullable: true,
+    description:
+      "Bind the environment to one project's suites; null shares it with every project. Sharing a bound one, or moving it to another project, keeps only the secrets this request sets",
+  })
+  @IsOptional()
+  @IsUUID()
+  projectId?: string | null;
+}
+
+/** GET /v1/workspaces/:id/test-environments */
+export class ListTestEnvironmentsQueryDto {
+  @ApiPropertyOptional({ format: 'uuid', description: "Only the environments a suite of this project may use: the shared ones and the project's own" })
+  @IsOptional()
+  @IsUUID()
+  projectId?: string;
+
+  @ApiPropertyOptional({ format: 'uuid', description: "The same, by a spec document: the environments its suites may run with" })
+  @IsOptional()
+  @IsUUID()
+  documentId?: string;
 }

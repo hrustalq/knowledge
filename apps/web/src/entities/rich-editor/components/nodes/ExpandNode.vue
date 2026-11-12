@@ -6,7 +6,7 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { NodeViewContent, NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import { ChevronRight } from 'lucide-vue-next'
-import { Collapse } from '@/shared/ui/collapse'
+import { Collapse } from '@knowledge/ui/collapse'
 
 const props = defineProps(nodeViewProps)
 const { t } = useI18n()

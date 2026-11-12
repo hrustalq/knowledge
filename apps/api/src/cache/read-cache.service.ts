@@ -26,6 +26,8 @@ export const READ_CACHE_FAMILIES = {
   },
   /** The sparse knowledge-health settings row. Invalidated by `VerificationPolicyService.update`. */
   healthSettings: { key: () => 'health-settings', ttlMs: null },
+  /** The projects overriding a freshness threshold (#921). Invalidated by `VerificationPolicyService.updateProject`, and by a project's deletion. */
+  projectHealthSettings: { key: () => 'health-settings:projects', ttlMs: null },
 } as const;
 
 /** `global` for an answer no workspace owns (an embedding of a query text). */

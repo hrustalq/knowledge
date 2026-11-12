@@ -18,10 +18,10 @@ import { getWorkspaceId } from '@/shared/api/api'
 import { formatDateTime } from '@/shared/utils/format'
 import { labelFor } from '@/shared/i18n/labels'
 import { useAuthStore } from '@/stores/auth'
-import { Button } from '@/shared/ui/button'
-import { PageState } from '@/shared/layout'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
+import { Button } from '@knowledge/ui/button'
+import { PageState } from '@knowledge/ui/layout'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@knowledge/ui/table'
 
 const { t } = useI18n()
 const auth = useAuthStore()

@@ -3,13 +3,13 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Languages } from 'lucide-vue-next'
 import { SUPPORTED_LOCALES, type Locale } from '@knowledge/contracts'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
+} from '@knowledge/ui/dropdown-menu'
 import { getLocale, setLocale } from '@/shared/api/api'
 import { ensureLocaleMessages } from '@/shared/i18n'
 import { useAuthStore } from '@/stores/auth'

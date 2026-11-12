@@ -7,9 +7,9 @@ import { useQuery } from '@tanstack/vue-query'
 import { GitPullRequestArrow, SearchX } from 'lucide-vue-next'
 import type { ListMergeRequestsResponse, MergeRequestInfo } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/shared/api/queries'
-import { Button } from '@/shared/ui/button'
-import { Skeleton } from '@/shared/ui/skeleton'
-import { PageState } from '@/shared/layout'
+import { Button } from '@knowledge/ui/button'
+import { Skeleton } from '@knowledge/ui/skeleton'
+import { PageState } from '@knowledge/ui/layout'
 import MergeRequestCard from './MergeRequestCard.vue'
 
 const { t } = useI18n()

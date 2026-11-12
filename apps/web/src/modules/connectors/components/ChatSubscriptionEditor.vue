@@ -24,10 +24,10 @@ import { errorMessage } from '@/shared/api/errors'
 import { formatRelative } from '@/shared/utils/format'
 import { tagLabel, useTagOptions } from '@/entities/document'
 import { useProjectsStore } from '@/stores/projects'
-import { Autocomplete } from '@/shared/ui/autocomplete'
-import { Button } from '@/shared/ui/button'
-import { Checkbox } from '@/shared/ui/checkbox'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
+import { Autocomplete } from '@knowledge/ui/autocomplete'
+import { Button } from '@knowledge/ui/button'
+import { Checkbox } from '@knowledge/ui/checkbox'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
 
 const loadTagOptions = useTagOptions()
 

@@ -52,8 +52,8 @@ import { errorMessage } from '@/shared/api/errors'
 import { isApiRequestError } from '@/shared/api/http'
 import { formatNumber, formatRelative } from '@/shared/utils/format'
 import { statusTone } from '@/entities/api-operation/model/api-spec'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
+import { Button } from '@knowledge/ui/button'
+import { Input } from '@knowledge/ui/input'
 import ApiTone from './ApiTone.vue'
 import { credentialSlots, useTryEnv, type TryVia } from '../model/use-try-env'
 
@@ -138,7 +138,11 @@ const allCalls = (p: TestRunPlan): TestRunCall[] =>
 
 const envQuery = useQuery(
   computed(() => ({
-    ...apiQueryOptions('/v1/workspaces/{id}/test-environments', { path: { id: props.workspaceId } }),
+    // Only the ones this spec's suites may run with: the shared ones and its project's own (#925).
+    ...apiQueryOptions('/v1/workspaces/{id}/test-environments', {
+      path: { id: props.workspaceId },
+      query: { documentId: props.operation.documentId },
+    }),
     enabled: runnerOn.value,
   })),
 )
@@ -373,6 +377,7 @@ function reasonText(r: TestRunResult | undefined): string | null {
   if (reason.startsWith('missing:')) {
     return r.outcome === 'skipped' ? t('apiTests.run.reason.skipped') : t('apiTests.run.reason.missing', { names: reason.slice(8).split(',').join(', ') })
   }
+  if (reason.startsWith('withheld:')) return t('apiTests.run.reason.withheld', { names: reason.slice(9).split(',').join(', ') })
   if (reason.startsWith('capture:')) return t('apiTests.run.reason.capture', { name: reason.slice(8) })
   if (reason === 'setup') return t('apiTests.run.reason.setup')
   return reason

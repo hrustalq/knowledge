@@ -8,7 +8,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Pause, Play } from 'lucide-vue-next'
 import { memoClock } from '@knowledge/contracts'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 import { memoBars, type MemoListPlayer } from '../model/memo-player'
 
 const props = defineProps<{ memoId: string; title: string; durationSeconds: number | null; player: MemoListPlayer }>()

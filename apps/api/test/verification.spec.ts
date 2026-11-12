@@ -121,15 +121,16 @@ describe('vocabularies the feature joins', () => {
 
   it('has a SQL clause for every health filter', () => {
     const since = new Date(NOW.getTime() - 90 * 86_400_000);
-    for (const f of HEALTH_FILTERS) expect(healthFilterSql(f, settings, NOW, since).sql, f).toContain('r.');
-    expect(healthFilterSql(undefined, settings, NOW, since).sql).toContain('archived_at IS NULL');
-    expect(healthFilterSql('archived', settings, NOW, since).sql).toContain('IS NOT NULL');
-    // Inactivity off: the clause can never match.
-    expect(healthFilterSql('inactive', { ...settings, inactiveAfterDays: 0 }, NOW, since).sql).toContain('false');
+    for (const f of HEALTH_FILTERS) expect(healthFilterSql(f, NOW, since).sql, f).toContain('r.');
+    expect(healthFilterSql(undefined, NOW, since).sql).toContain('archived_at IS NULL');
+    expect(healthFilterSql('archived', NOW, since).sql).toContain('IS NOT NULL');
+    // Inactivity is the row's own threshold (#921), and 0 turns it off for that row.
+    expect(healthFilterSql('inactive', NOW, since).sql).toContain('r.inactive_after_days > 0');
+    expect(healthFilterSql('empty', NOW, since).sql).toContain('r.body_chars <= r.empty_max_chars');
     // Read filters (#79): unread is gated on coverage; dead is unread and never surfaced by search.
-    expect(healthFilterSql('unread', settings, NOW, since).sql).toContain('r.reads_covered');
-    expect(healthFilterSql('unread', settings, NOW, since).sql).not.toContain('surfaced');
-    expect(healthFilterSql('dead', settings, NOW, since).sql).toContain('NOT r.surfaced');
+    expect(healthFilterSql('unread', NOW, since).sql).toContain('r.reads_covered');
+    expect(healthFilterSql('unread', NOW, since).sql).not.toContain('surfaced');
+    expect(healthFilterSql('dead', NOW, since).sql).toContain('NOT r.surfaced');
   });
 });
 
@@ -170,7 +171,7 @@ function harness(row: Record<string, unknown>, updateCount = 1) {
   const commits = { lock: vi.fn(async () => undefined), recordState: vi.fn(async () => undefined) };
   const activity = { record: vi.fn(async () => undefined) };
   const notifications = { notify: vi.fn(async () => []) };
-  const policy = { effective: vi.fn(async () => settings) };
+  const policy = { effective: vi.fn(async () => settings), effectiveFor: vi.fn(async () => settings) };
   const documents = { getDocument: vi.fn(async () => ({ document: { documentId: 'doc-1' } })), setOwner: vi.fn(async () => ({})), breadcrumbsFor: vi.fn(async () => new Map()) };
   const svc = new VerificationService(prisma as never, activity as never, notifications as never, policy as never, documents as never, commits as never);
   return { svc, prisma, activity, notifications, documents, commits };

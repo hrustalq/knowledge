@@ -2,18 +2,19 @@
 // Token spend per user, with a daily bar chart (DailyBars).
 import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
-import { formatCosts, formatNumber } from '@/shared/utils/format'
+import { formatCosts, formatNumber, formatDayMonth } from '@/shared/utils/format'
 import { useQuery } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
+import { AI_USAGE_UNATTRIBUTED } from '@knowledge/contracts'
 import type { AiBudgetInfo, AiUsageResponse, ListAiBudgetsResponse } from '@knowledge/contracts'
 import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
-import { Badge } from '@/shared/ui/badge'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
-import { Skeleton } from '@/shared/ui/skeleton'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table'
-import { DailyBars } from '@/shared/ui/daily-bars'
+import { Badge } from '@knowledge/ui/badge'
+import { Button } from '@knowledge/ui/button'
+import { Input } from '@knowledge/ui/input'
+import { Skeleton } from '@knowledge/ui/skeleton'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@knowledge/ui/table'
+import { DailyBars } from '@knowledge/ui/daily-bars'
 
 const { t } = useI18n()
 
@@ -27,7 +28,7 @@ const RANGES = [
   { days: 90, label: 'ai.range.d90' },
 ] as const
 const days = ref<number>(30)
-const groupBy = ref<'user' | 'model'>('user')
+const groupBy = ref<'user' | 'model' | 'project'>('user')
 
 const from = computed(() => new Date(Date.now() - days.value * 24 * 3600_000).toISOString())
 
@@ -109,7 +110,7 @@ function labelFor(userId: string): string {
       </div>
       <div class="flex gap-1">
         <Button
-          v-for="g in (['user', 'model'] as const)"
+          v-for="g in (['user', 'model', 'project'] as const)"
           :key="g"
           :variant="groupBy === g ? 'secondary' : 'ghost'"
           size="sm"
@@ -170,6 +171,7 @@ function labelFor(userId: string): string {
             :to="data.to"
             :points="chartPoints"
             :segments="[{ class: 'bg-primary/60 hover:bg-primary' }]"
+            :day-label="formatDayMonth"
             :label="t('ai.tokensChartLabel', { n: days, peak: fmtTokens(chartMax) })"
             :point-title="
               (date, [tokens]) =>
@@ -199,7 +201,9 @@ function labelFor(userId: string): string {
             <TableBody>
               <TableRow v-for="b in data.buckets" :key="b.key">
                 <TableCell class="font-medium">
-                  {{ b.label }}
+                  <!-- Calls made for no single project (#927): named here, never spread over the others. -->
+                  <span v-if="groupBy === 'project' && b.key === AI_USAGE_UNATTRIBUTED" class="text-muted-foreground font-normal">{{ t('ai.unattributed') }}</span>
+                  <template v-else>{{ b.label }}</template>
                   <Badge v-if="b.errors > 0" variant="outline" class="text-destructive ml-1.5 font-normal">
                     {{ t('ai.nFailed', { n: b.errors }) }}
                   </Badge>

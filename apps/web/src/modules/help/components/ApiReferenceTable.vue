@@ -12,7 +12,7 @@ import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import { Search } from 'lucide-vue-next'
 import { accessLabel, endpoints } from '@/modules/help/docs/bundle'
-import { Input } from '@/shared/ui/input'
+import { Input } from '@knowledge/ui/input'
 
 const { t } = useI18n()
 

@@ -14,9 +14,9 @@ import { Loader2 } from 'lucide-vue-next'
 import type { ProjectSummary } from '@knowledge/contracts'
 import { isApiRequestError } from '@/shared/api/queries'
 import { createProject } from '@/modules/projects/model/scopes'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
-import { DialogFooter } from '@/shared/ui/dialog'
+import { Button } from '@knowledge/ui/button'
+import { Input } from '@knowledge/ui/input'
+import { DialogFooter } from '@knowledge/ui/dialog'
 
 const { t } = useI18n()
 

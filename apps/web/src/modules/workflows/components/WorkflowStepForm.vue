@@ -12,10 +12,10 @@ import {
   type WorkflowStepKind,
   type WorkflowValidationIssue,
 } from '@knowledge/contracts'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
-import { Textarea } from '@/shared/ui/textarea'
+import { Button } from '@knowledge/ui/button'
+import { Input } from '@knowledge/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
+import { Textarea } from '@knowledge/ui/textarea'
 import { useTemplatesStore } from '@/entities/template'
 import { STEP_KINDS, stepKind } from '@/entities/workflow'
 

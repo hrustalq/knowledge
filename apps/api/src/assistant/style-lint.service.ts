@@ -50,7 +50,7 @@ export class StyleLintService {
     await this.aiUsage.assertWithinBudget(input.workspaceId, principal.userId);
     const text = input.markdown.slice(0, LINT_TEXT_MAX);
     const raw = await this.client.chat(
-      { config: agent.config, userId: principal.userId, operation: 'lint', locale: principal.locale },
+      { config: agent.config, userId: principal.userId, operation: 'lint', locale: principal.locale, projectId: input.projectId ?? null },
       lintMessages(agent.instructions, found.rules, input.title, text),
       { json: true },
     );

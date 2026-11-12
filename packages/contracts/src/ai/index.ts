@@ -11,6 +11,7 @@ import type { RelationInput } from '@knowledge/contracts/documents';
 import type { AiActionId } from '@knowledge/contracts/content';
 import type { ApiDriftSpec } from '@knowledge/contracts/api';
 import type { FlowAnswer, FlowKey } from '@knowledge/contracts/flows';
+import type { WorkspaceFeature, WorkspaceUse } from '@knowledge/contracts/identity';
 import type { ReviewThreadAnchor } from '@knowledge/contracts/reviews';
 
 // (docs/features/09 follow-up). The chat is an append-only intent log; the
@@ -87,6 +88,50 @@ export type AssistantPromptField =
   | { type: 'checklist'; name: string; label: string; options: AssistantPromptOption[]; required?: boolean }
   /** Free text, for what the options cannot cover. */
   | { type: 'text'; name: string; label: string; placeholder?: string; multiline?: boolean; required?: boolean };
+
+/** Rounds after which an interview settles on whatever the model says (#731). Enforced by the server, not the prompt. */
+export const INTERVIEW_MAX_ROUNDS = 5;
+/** Questions in one round. */
+export const INTERVIEW_MAX_QUESTIONS = 4;
+/** Options on one question. */
+export const INTERVIEW_MAX_OPTIONS = 6;
+
+/** A question's answer: an option value, the ticked values, the person's own words, or `null` when skipped. */
+export type InterviewAnswer = string | string[] | null;
+
+/**
+ * One round of a model-led interview (#731, #934): the questions asked and,
+ * once answered, the person's answers keyed by question `name`. The client
+ * sends every round back on each call; there is no interview table.
+ */
+export interface InterviewRound {
+  questions: AssistantPromptField[];
+  answers?: Record<string, InterviewAnswer>;
+}
+
+// POST /v1/workspaces/:id/purpose/interview (workspace admin)
+
+/** Rounds after which the purpose interview picks from whatever it has. Enforced by the server, not the prompt. */
+export const PURPOSE_INTERVIEW_MAX_ROUNDS = 3;
+/** Questions in one of its rounds. */
+export const PURPOSE_INTERVIEW_MAX_QUESTIONS = 3;
+
+/** A use the interview picked, with one sentence saying what in the admin's words led to it. */
+export interface WorkspaceUsePick {
+  use: WorkspaceUse;
+  reason: string;
+}
+
+/**
+ * The purpose interview's reply (#934). `asking`: one more round. `done`: the
+ * uses picked from the catalogue and the sections the map suggests off for
+ * them. `unavailable`: no model can be used here, so the caller shows the
+ * checklist. Nothing is written in any case.
+ */
+export type PurposeInterviewResponse =
+  | { status: 'asking'; round: InterviewRound }
+  | { status: 'done'; picks: WorkspaceUsePick[]; suggestedDisabled: WorkspaceFeature[] }
+  | { status: 'unavailable' };
 
 export interface AssistantFormPrompt {
   kind: 'form';
@@ -1361,11 +1406,17 @@ export type AiUsageOperation =
   /** The `scaffolder` drafting a whole blueprint from a person's description, with read tools (#716, Describe it). One row per model round. */
   | 'blueprint-generate'
   /** One round of the Describe it interview: the `scaffolder` asking what the brief left open (#731). The draft that ends it is `blueprint-generate`. */
-  | 'blueprint-interview';
+  | 'blueprint-interview'
+  /** One call of the workspace purpose interview (#934): a round of questions or the picked uses, on the scaffolder's model. */
+  | 'purpose-interview';
 
-/** One row of the per-user (or per-model) usage breakdown. */
+export type AiUsageGroupBy = 'user' | 'model' | 'day' | 'project';
+/** The `project` breakdown's bucket for calls made for no single project (#927). */
+export const AI_USAGE_UNATTRIBUTED = 'unattributed';
+
+/** One row of the per-user (or per-model, or per-project) usage breakdown. */
 export interface AiUsageBucket {
-  /** userId, model name, or ISO date — depending on `groupBy`. */
+  /** userId, model name, ISO date, or project id ({@link AI_USAGE_UNATTRIBUTED} for none) — depending on `groupBy`. */
   key: string;
   /** Display label resolved server-side (an email for a user bucket). */
   label: string;
@@ -1386,11 +1437,11 @@ export interface AiUsageSeriesPoint {
   costs: CostAmount[];
 }
 
-// GET /v1/ai/usage?workspaceId=&from=&to=&groupBy=user|model|day
+// GET /v1/ai/usage?workspaceId=&from=&to=&groupBy=user|model|day|project
 export interface AiUsageResponse {
   from: string;
   to: string;
-  groupBy: 'user' | 'model' | 'day';
+  groupBy: AiUsageGroupBy;
   totals: {
     calls: number;
     promptTokens: number;
@@ -2952,6 +3003,7 @@ export interface FlagFindingOutdatedResponse {
 export interface AddFindingTermResponse {
   termId: string;
   term: string;
+  /** Always a project: a finding's term is filed where its page lives, never as a workspace term. */
   projectId: string;
 }
 

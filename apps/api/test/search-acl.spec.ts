@@ -114,7 +114,7 @@ function build(opts: {
     { enabled: false, search: vi.fn(async () => []) } as never,
     { openIssueCounts: vi.fn(async () => new Map<string, number>()) } as never,
     {
-      effective: vi.fn(async () => ({ reviewIntervalDays: 90, remindBeforeDays: 7, inactiveAfterDays: 180, emptyMaxChars: 40, trustRanking: false, minCosine: 0, minCosineShare: 0 })),
+      effective: vi.fn(async () => ({ reviewIntervalDays: 90, remindBeforeDays: 7, inactiveAfterDays: 180, emptyMaxChars: 40, trustRanking: false, minCosine: 0, minCosineShare: 0 })), thresholds: vi.fn(async () => () => ({ reviewIntervalDays: 90, remindBeforeDays: 7, inactiveAfterDays: 180, emptyMaxChars: 40 })),
     } as never,
     permissions,
     config as never,

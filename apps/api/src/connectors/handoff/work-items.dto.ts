@@ -86,12 +86,8 @@ export class WorkItemRulesQueryDto {
   workspaceId!: string;
 }
 
-/** PUT /v1/work-items/rules — each null or `off` is off. */
-export class PutWorkItemRulesDto {
-  @ApiProperty()
-  @IsUUID()
-  workspaceId!: string;
-
+/** PATCH /v1/projects/:id/settings/work-items (#923): each key optional, null inherits the workspace's rule. */
+export class UpdateProjectWorkItemRulesDto {
   @ApiPropertyOptional({ type: String, enum: WORK_ITEM_ISSUE_RULES, nullable: true, description: 'Reported issues to hand off: by rank, or all' })
   @IsOptional()
   @IsIn(WORK_ITEM_ISSUE_RULES as unknown as string[])
@@ -106,4 +102,11 @@ export class PutWorkItemRulesDto {
   @IsOptional()
   @IsIn(WORK_ITEM_VERIFICATION_RULES as unknown as string[])
   verification?: WorkItemVerificationRule | null;
+}
+
+/** PUT /v1/work-items/rules — each null or `off` is off. */
+export class PutWorkItemRulesDto extends UpdateProjectWorkItemRulesDto {
+  @ApiProperty()
+  @IsUUID()
+  workspaceId!: string;
 }

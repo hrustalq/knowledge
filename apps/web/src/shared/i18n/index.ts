@@ -1,7 +1,6 @@
 import { createI18n, type Composer, type I18n } from 'vue-i18n'
 import type { Locale } from '@knowledge/contracts'
-import type en from './messages/en.json'
-import type ru from './messages/ru.json'
+import type en from './catalog.en'
 import { russianPluralRule } from '@/shared/i18n/plural'
 
 /**
@@ -10,16 +9,14 @@ import { russianPluralRule } from '@/shared/i18n/plural'
  * people who do not read TypeScript.
  *
  * Type safety survives the format: `resolveJsonModule` gives the English
- * catalog an exact structural type, `MessageSchema` names it, and `ru.json` is
- * checked against it below — so a missing Russian key fails `vue-tsc` rather
- * than falling back silently in front of a user.
+ * catalog an exact structural type, `MessageSchema` names it, and the Russian
+ * one is checked against it in catalog.ru.ts — so a missing Russian key fails
+ * `vue-tsc` rather than falling back silently in front of a user.
+ *
+ * A catalogue is the app's messages plus the UI kit's own (`ui.*`, in
+ * packages/ui/src/messages), merged per language in catalog.<locale>.ts.
  */
 export type MessageSchema = typeof en
-
-// English is the key vocabulary; this is what makes a gap in ru a build error.
-// Type-only: the assignment is never emitted, so it costs no bytes.
-type AssertRussianComplete<T extends MessageSchema> = T
-export type RussianSchema = AssertRussianComplete<typeof ru>
 
 /**
  * Each catalog is its own chunk, loaded only for the language in use: the two
@@ -30,8 +27,8 @@ export type RussianSchema = AssertRussianComplete<typeof ru>
  * Per-request state (the `locale`) stays on the per-app instance below.
  */
 const LOADERS: Record<Locale, () => Promise<{ default: MessageSchema }>> = {
-  en: () => import('./messages/en.json'),
-  ru: () => import('./messages/ru.json'),
+  en: () => import('./catalog.en'),
+  ru: () => import('./catalog.ru'),
 }
 
 /**

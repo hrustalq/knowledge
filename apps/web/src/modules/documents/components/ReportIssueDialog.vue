@@ -19,7 +19,7 @@ import type { KnowledgeIssueKind, ReportKnowledgeIssueResponse } from '@knowledg
 import { KNOWLEDGE_ISSUE_KINDS } from '@knowledge/contracts'
 import { errorMessage } from '@/shared/api/errors'
 import { getWorkspaceId } from '@/shared/api/api'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -27,9 +27,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
-import { Textarea } from '@/shared/ui/textarea'
+} from '@knowledge/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
+import { Textarea } from '@knowledge/ui/textarea'
 import { useAuthStore } from '@/stores/auth'
 import { useFeedbackStore } from '@/entities/assistant'
 

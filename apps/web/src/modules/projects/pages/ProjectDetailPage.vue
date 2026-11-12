@@ -12,9 +12,9 @@ import { relativeTime } from '@/shared/api/api'
 import { useAuthStore } from '@/stores/auth'
 import { useProjectsStore } from '@/stores/projects'
 import { useDocumentsStore } from '@/stores/documents'
-import { Badge } from '@/shared/ui/badge'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
+import { Badge } from '@knowledge/ui/badge'
+import { Button } from '@knowledge/ui/button'
+import { Input } from '@knowledge/ui/input'
 import { AvatarPicker } from '@/entities/person'
 import { EMOJI_CHOICES } from '@/modules/projects/model/avatar'
 import DeleteProjectDialog from '@/modules/projects/components/DeleteProjectDialog.vue'
@@ -209,6 +209,12 @@ async function onDeleted(result: DeleteProjectResponse) {
             class="text-primary text-xs hover:underline"
           >
             {{ t('site.title') }}
+          </RouterLink>
+          <RouterLink
+            :to="`/settings/projects/${project.projectId}/policies`"
+            class="text-primary text-xs hover:underline"
+          >
+            {{ t('projectSettings.title') }}
           </RouterLink>
         </div>
         <div class="flex flex-wrap items-center gap-2">

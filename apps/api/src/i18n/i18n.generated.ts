@@ -728,6 +728,8 @@ export type I18nTranslations = {
             "apiKeyWorkspace": string;
             "apiKeyReadOnly": string;
             "apiKeyCaptureOnly": string;
+            "apiKeyMcpOnly": string;
+            "apiKeyToolNotOffered": string;
             "apiKeyNeedsSession": string;
             "apiKeyNotFound": string;
             "apiKeyWorkspaceNotMember": string;
@@ -875,6 +877,7 @@ export type I18nTranslations = {
             "queryFailed": string;
         };
         "glossary": {
+            "workspaceTermExists": string;
             "notFound": string;
             "duplicate": string;
             "documentNotFound": string;
@@ -949,6 +952,7 @@ export type I18nTranslations = {
             "providerNoModels": string;
             "encryptionKeyMissing": string;
             "captureParentNotInWorkspace": string;
+            "captureParentNotInProject": string;
             "captureThresholdOrder": string;
             "pluginUrlInvalid": string;
             "pluginUrlNotHttps": string;
@@ -1410,6 +1414,7 @@ export type I18nTranslations = {
             "inFlight": string;
             "messageNotAssistant": string;
             "kitClient": string;
+            "skillsDir": string;
             "kitNotOffered": string;
             "keyNotHere": string;
         };

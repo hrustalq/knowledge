@@ -1,34 +1,9 @@
 @import "tailwindcss";
-@import "tw-animate-css";
-@import "./styles/tokens.css";
+/* The palette, the dark variant and the kit's theme (packages/ui/src/styles). */
+@import "@knowledge/ui/theme.css";
 @import "./styles/editor.css";
 
-@custom-variant dark (&:is(.dark *));
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent: var(--sidebar-accent);
   /* The panel ramp (editor.css) as utilities: the colours a new state takes,
      since emerald/amber/red are spoken for by the indexing dot. */
   --color-panel-note: var(--kn-panel-note);
@@ -45,22 +20,6 @@
   --color-panel-important-ink: color-mix(in oklab, var(--kn-panel-important) 70%, var(--foreground));
   --color-panel-warning-ink: color-mix(in oklab, var(--kn-panel-warning) 70%, var(--foreground));
   --color-panel-caution-ink: color-mix(in oklab, var(--kn-panel-caution) 70%, var(--foreground));
-  /* Per-glyph fallback: Latin from Sora, Cyrillic from Manrope (Sora has no
-     Cyrillic). See index.html. */
-  --font-display: "Sora", "Manrope", ui-sans-serif, system-ui, sans-serif;
-  /* The UI ramp between Tailwind's xs and the prose body (tokens.css holds
-     the values): text-micro 10px, text-caption 11px, text-xs 12px,
-     text-ui 13px, text-sm 14px. Arbitrary text-[…px] sizes are drift. */
-  --text-micro: var(--kn-text-micro);
-  --text-micro--line-height: 0.875rem;
-  --text-caption: var(--kn-text-caption);
-  --text-caption--line-height: 1rem;
-  --text-ui: var(--kn-text-ui);
-  --text-ui--line-height: 1.25rem;
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
 }
 
 @layer base {

@@ -19,7 +19,8 @@ import { TemplatesService } from '../templates/templates.service.js';
 import { titleLocale } from './derive-rules.js';
 import { keyed, outlineOf, readDraftedTree, readStyleguide } from './drafted-blueprint.js';
 import { parseBlueprint } from './blueprint.schema.js';
-import { readRound, readTerms, transcriptOf } from './interview-round.js';
+import { readRound, transcriptOf } from '../assistant/interview-round.js';
+import { readTerms } from './interview-round.js';
 
 /** The read tools Describe it may use. Intersected with the agent's own list, never widened by it. */
 const GENERATE_TOOLS: ReadonlySet<string> = new Set(['list_document_tree', 'search_knowledge']);

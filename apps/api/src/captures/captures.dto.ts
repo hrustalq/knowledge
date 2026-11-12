@@ -10,6 +10,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUUID,
   Matches,
   Max,
   MaxLength,
@@ -374,4 +375,12 @@ export class CaptureAssistantMessageDto {
   @IsString()
   @MaxLength(CAPTURE_TITLE_MAX_CHARS, { message: vmsg('maxLength') })
   title?: string;
+}
+
+/** PATCH /v1/projects/:id/settings/capture-parent */
+export class UpdateProjectCaptureParentDto {
+  @ApiProperty({ type: String, format: 'uuid', nullable: true, description: "A live page of this project; null inherits the workspace's capture parent" })
+  @ValidateIf((o: UpdateProjectCaptureParentDto) => o.parentDocumentId !== null)
+  @IsUUID()
+  parentDocumentId!: string | null;
 }

@@ -16,7 +16,7 @@ import { computed, ref } from 'vue'
 import { Check, Copy, X } from 'lucide-vue-next'
 import { buildBundle, buildSkill, endpoints, mcpTools } from '@/modules/help/docs/bundle'
 import { articles } from '@/modules/help/docs/registry'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 import { useCopy } from '@/shared/composables/use-copy'
 
 const { t } = useI18n()

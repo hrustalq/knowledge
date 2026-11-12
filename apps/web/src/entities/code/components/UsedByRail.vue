@@ -21,7 +21,7 @@ import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { errorDetails, errorMessage, errorReason } from '@/shared/api/errors'
 import { getWorkspaceId } from '@/shared/api/api'
 import { useAuthStore } from '@/stores/auth'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 import ComponentDraftStatus from './ComponentDraftStatus.vue'
 
 const props = defineProps<{ documentId: string; projectId?: string | null; parentId?: string | null }>()

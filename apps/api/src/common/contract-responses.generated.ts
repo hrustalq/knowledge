@@ -265,11 +265,17 @@ import type {
   PlaudSettingsResponse,
   PostAssistantMessageResponse,
   ProjectAnalyticsResponse,
+  ProjectBreakingChangeSettings,
+  ProjectCaptureParentSettings,
   ProjectDeletionPreview,
   ProjectGitResponse,
   ProjectOverviewResponse,
+  ProjectSettingOverridesResponse,
+  ProjectSettingsAccess,
   ProjectSiteResponse,
   ProjectSummary,
+  ProjectVerificationSettings,
+  ProjectWorkItemRules,
   ProposeAgentFindingResponse,
   ProposeRelationsResponse,
   PublicShareExport,
@@ -283,6 +289,7 @@ import type {
   PublishBranchResponse,
   PublishedSiteSummary,
   PublishingSettingsResponse,
+  PurposeInterviewResponse,
   PushDocumentResponse,
   QaOverviewResponse,
   QualityListResponse,
@@ -318,6 +325,7 @@ import type {
   SiteSignInResponse,
   SiteVersionSummary,
   SiteVisitorSecretResponse,
+  SkillStackResponse,
   SourcePolicy,
   SourceRecipePreview,
   SourceSettingsResponse,
@@ -358,6 +366,7 @@ import type {
   WorkspaceDeletionPreviewResponse,
   WorkspaceFeaturesResponse,
   WorkspaceGraphResponse,
+  WorkspacePurposeResponse,
   WorkspaceShareLinksResponse,
 } from '@knowledge/contracts';
 
@@ -628,11 +637,17 @@ export interface ContractResponses {
   PlaudSettingsResponse: PlaudSettingsResponse;
   PostAssistantMessageResponse: PostAssistantMessageResponse;
   ProjectAnalyticsResponse: ProjectAnalyticsResponse;
+  ProjectBreakingChangeSettings: ProjectBreakingChangeSettings;
+  ProjectCaptureParentSettings: ProjectCaptureParentSettings;
   ProjectDeletionPreview: ProjectDeletionPreview;
   ProjectGitResponse: ProjectGitResponse;
   ProjectOverviewResponse: ProjectOverviewResponse;
+  ProjectSettingOverridesResponse: ProjectSettingOverridesResponse;
+  ProjectSettingsAccess: ProjectSettingsAccess;
   ProjectSiteResponse: ProjectSiteResponse;
   ProjectSummary: ProjectSummary;
+  ProjectVerificationSettings: ProjectVerificationSettings;
+  ProjectWorkItemRules: ProjectWorkItemRules;
   ProposeAgentFindingResponse: ProposeAgentFindingResponse;
   ProposeRelationsResponse: ProposeRelationsResponse;
   PublicShareExport: PublicShareExport;
@@ -646,6 +661,7 @@ export interface ContractResponses {
   PublishBranchResponse: PublishBranchResponse;
   PublishedSiteSummary: PublishedSiteSummary;
   PublishingSettingsResponse: PublishingSettingsResponse;
+  PurposeInterviewResponse: PurposeInterviewResponse;
   PushDocumentResponse: PushDocumentResponse;
   QaOverviewResponse: QaOverviewResponse;
   QualityListResponse: QualityListResponse;
@@ -681,6 +697,7 @@ export interface ContractResponses {
   SiteSignInResponse: SiteSignInResponse;
   SiteVersionSummary: SiteVersionSummary;
   SiteVisitorSecretResponse: SiteVisitorSecretResponse;
+  SkillStackResponse: SkillStackResponse;
   SourcePolicy: SourcePolicy;
   SourceRecipePreview: SourceRecipePreview;
   SourceSettingsResponse: SourceSettingsResponse;
@@ -721,5 +738,6 @@ export interface ContractResponses {
   WorkspaceDeletionPreviewResponse: WorkspaceDeletionPreviewResponse;
   WorkspaceFeaturesResponse: WorkspaceFeaturesResponse;
   WorkspaceGraphResponse: WorkspaceGraphResponse;
+  WorkspacePurposeResponse: WorkspacePurposeResponse;
   WorkspaceShareLinksResponse: WorkspaceShareLinksResponse;
 }

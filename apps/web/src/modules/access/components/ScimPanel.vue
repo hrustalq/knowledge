@@ -22,11 +22,11 @@ import { errorMessage } from '@/shared/api/errors'
 import { getWorkspaceId } from '@/shared/api/api'
 import { formatDateTime, formatRelative } from '@/shared/utils/format'
 import { CopyBlock } from '@/entities/access'
-import { Button } from '@/shared/ui/button'
-import { confirm } from '@/shared/ui/confirm'
-import { Input } from '@/shared/ui/input'
-import { PageState } from '@/shared/layout'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
+import { Button } from '@knowledge/ui/button'
+import { confirm } from '@knowledge/ui/confirm'
+import { Input } from '@knowledge/ui/input'
+import { PageState } from '@knowledge/ui/layout'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
 
 const { t } = useI18n()
 const workspaceId = getWorkspaceId()

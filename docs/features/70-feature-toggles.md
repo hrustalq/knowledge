@@ -7,13 +7,19 @@ sections nobody used.
 
 A workspace admin can now switch a section off. While it is off, the section
 is not there for anyone in the workspace: the app does not draw it, its API
-routes answer 404 and its MCP tools refuse.
+routes answer 404, and its MCP tools refuse and are no longer offered
+([78 — MCP toolsets](78-mcp-toolsets.md)).
 
 ## Decisions
 
 - **Per workspace, admin-owned.** The toggle is a workspace setting, not an env
-  var, because sections are a team's choice. There is no env ceiling: nothing
-  here widens access, so there is nothing to clamp.
+  var, because sections are a team's choice. One section has an env ceiling
+  over it: `sources` is off on a server without `WEB_SOURCES_ENABLED`
+  (`FeaturesService.unavailable()`), reported beside the stored choice and
+  never written into it.
+- **A purpose may suggest the list.** What a workspace is used for proposes
+  which sections are on ([77 — Workspace purpose](77-workspace-purpose.md)).
+  It is advice: this list stays the only switch.
 - **Absent, not forbidden.** A switched-off route is a 404 with
   `details.feature`, the same as a route that does not exist. A 403 would
   invite an access request for something no role can open.
@@ -29,7 +35,7 @@ routes answer 404 and its MCP tools refuse.
 `WORKSPACE_FEATURES` in `@knowledge/contracts` (identity) is the closed list
 that the form, the guard and the MCP gate all read:
 
-| Feature            | Web                                                       | REST (`@Feature`)                                                                  | MCP (`FEATURE_TOOLS`)                         |
+| Feature            | Web                                                       | REST (`@Feature`)                                                                  | MCP (its toolset in `MCP_TOOLSETS`)           |
 | ------------------ | --------------------------------------------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------- |
 | `workflows`        | `/workflows*`, Settings → Workflows, the page rail widget | `WorkflowsController`, `DocumentWorkflowsController`                               | list / start / get run                        |
 | `knowledge-health` | `/knowledge-health`                                       | `KnowledgeHealthController`                                                        | —                                             |
@@ -39,6 +45,8 @@ that the form, the guard and the MCP gate all read:
 | `memos`            | `/memos*`                                                 | `MemosController`                                                                  | `list_memos`, `get_memo`                      |
 | `conflicts`        | `/conflicts`, the page Contradictions widget              | `ConflictsController`                                                              | `list_conflicts`, `resolve_conflict`          |
 | `assistant`        | `/assistant`, the editor's chat panel (⌘J)                | `v1/assistant/threads*`                                                            | —                                             |
+| `git`              | The Clone dialog on a project                             | the clone-key route in `ProjectsController`; the git remote itself (`GitAccessService`) | —                                             |
+| `sources`          | "Link a source" in the new-page menu, the page Source panel | `WebSourcesController`; also under the `WEB_SOURCES_ENABLED` ceiling             | —                                             |
 
 Review, lint, suggest, ask and related (`POST /v1/assistant/{review,lint,…}`)
 are not part of `assistant`. They are helpers inside other surfaces, and the
@@ -60,9 +68,9 @@ catch up within the TTL.
 
 | Surface                                | What it does                                                                                    |
 | -------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `GET /v1/workspaces/:id/features`      | `@Access('viewer','workspace',{guests:true})`: `{ workspaceId, disabled }`. The app reads it for every member |
+| `GET /v1/workspaces/:id/features`      | `@Access('viewer','workspace',{guests:true})`: `{ workspaceId, disabled, unavailable, uses, purposeAsked }`. The app reads it for every member |
 | `PUT /v1/workspaces/:id/features`      | `@Access('admin','workspace')`: replaces the whole list; an unknown value is a 400              |
-| Settings → **Features**                | Admin-only row: one checkbox per section, then Save (`FeaturesSettingsPage.vue`)                |
+| Settings → **Features**                | Admin-only: the purpose block ([77](77-workspace-purpose.md)), then one checkbox per section and Save (`FeaturesSettingsPage.vue`) |
 
 ## Enforcement
 
@@ -77,9 +85,15 @@ read, so `@Feature` does nothing there. Every marked route has one.
 **MCP.** `trackTools` takes a gate that runs before every call. `McpService.featureGate`
 finds the workspace from `workspaceId`, else `documentId`, else the run id of
 `knowledge_get_workflow_run`. It checks membership (viewer, guests allowed) and
-then the toggle. A tool missing from `FEATURE_TOOLS` keeps working while its
-section is off, so a new tool of a toggleable section must join the map. The
-spec fails if the map names a tool that does not exist.
+then the toggle. `FEATURE_TOOLS` is derived from `MCP_TOOLSETS`
+([78](78-mcp-toolsets.md)): a tool belongs to a section by being filed in that
+section's toolset, and the spec fails for a registered tool filed in none.
+
+A switched-off section's tools are also not offered: `tools/list`, the skill
+and the server instructions leave them out when the section is off in every
+workspace the connection reaches. A connection that reaches another workspace
+with the section on is still offered them, and a call naming the workspace
+where it is off is the 404 above.
 
 **Web.** `stores/features.ts` holds the list. The router guard loads it before
 the first route resolves, on the server too, so the nav, the routes and the
@@ -93,7 +107,7 @@ its query would 404. Queries a page owns for a section's widget are
 
 ## Not built
 
-- No per-project toggles. A project is organizational; the workspace is the
+- No per-project toggles. A project overrides policy ([76](76-project-settings.md)), not navigation; the workspace is the
   boundary.
 - No live push of a change to other open tabs: they pick it up on their next
   load. The API refuses at once either way.

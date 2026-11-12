@@ -104,7 +104,7 @@ export class VerificationService {
       });
     }
     const interval = opts.intervalDays !== undefined ? opts.intervalDays : document.reviewIntervalDays;
-    const settings = await this.policy.effective(document.workspaceId);
+    const settings = await this.policy.effectiveFor(document.workspaceId, document.projectId);
     const verifiedAt = new Date();
     const expiresAt = expiryFor(verifiedAt, interval, settings.reviewIntervalDays);
 

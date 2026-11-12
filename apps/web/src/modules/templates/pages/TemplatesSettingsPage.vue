@@ -40,10 +40,10 @@ import { labelFor } from '@/shared/i18n/labels'
 import { canWriteTemplate, groupTemplates, matchesTemplate } from '@/entities/template'
 import { useAuthStore } from '@/stores/auth'
 import { useTemplatesStore } from '@/entities/template'
-import { Badge } from '@/shared/ui/badge'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
-import { Skeleton } from '@/shared/ui/skeleton'
+import { Badge } from '@knowledge/ui/badge'
+import { Button } from '@knowledge/ui/button'
+import { Input } from '@knowledge/ui/input'
+import { Skeleton } from '@knowledge/ui/skeleton'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -53,11 +53,11 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/shared/ui/alert-dialog'
+} from '@knowledge/ui/alert-dialog'
 import { MarkdownView } from '@/entities/document'
 import TemplateEditor from '@/modules/templates/components/TemplateEditor.vue'
 import TemplateHistory from '@/modules/templates/components/TemplateHistory.vue'
-import { PageTabs, panelId, tabId, type PageTab } from '@/shared/layout'
+import { PageTabs, panelId, tabId, type PageTab } from '@knowledge/ui/layout'
 
 const { t } = useI18n()
 const route = useRoute()

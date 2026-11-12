@@ -87,20 +87,20 @@ import { useTemplatesStore } from '@/entities/template'
 import { useEventsStore } from '@/stores/events'
 import { useAuthStore } from '@/stores/auth'
 import { useFeaturesStore } from '@/stores/features'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
-import { Label } from '@/shared/ui/label'
-import { Checkbox } from '@/shared/ui/checkbox'
-import { Skeleton } from '@/shared/ui/skeleton'
-import { PageState } from '@/shared/layout'
-import { Autocomplete, type AutocompleteOption } from '@/shared/ui/autocomplete'
+import { Button } from '@knowledge/ui/button'
+import { Input } from '@knowledge/ui/input'
+import { Label } from '@knowledge/ui/label'
+import { Checkbox } from '@knowledge/ui/checkbox'
+import { Skeleton } from '@knowledge/ui/skeleton'
+import { PageState } from '@knowledge/ui/layout'
+import { Autocomplete, type AutocompleteOption } from '@knowledge/ui/autocomplete'
 import {
   Sheet,
   SheetContent,
   SheetDescription,
   SheetHeader,
   SheetTitle,
-} from '@/shared/ui/sheet'
+} from '@knowledge/ui/sheet'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -110,7 +110,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/shared/ui/alert-dialog'
+} from '@knowledge/ui/alert-dialog'
 import {
   Dialog,
   DialogContent,
@@ -118,7 +118,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
+} from '@knowledge/ui/dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -128,7 +128,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
+} from '@knowledge/ui/dropdown-menu'
 import { RichEditor } from '@/entities/rich-editor'
 import { EMBED_DOCUMENT } from '@/entities/rich-editor'
 import { ApiOperationPicker, type PickedOperation } from '@/entities/api-operation'

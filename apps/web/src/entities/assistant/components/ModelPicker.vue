@@ -12,14 +12,14 @@ import { Check, ChevronDown } from 'lucide-vue-next'
 import type { AiModelChoice, ListAiModelChoicesResponse } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
-import { Button } from '@/shared/ui/button'
+import { Button } from '@knowledge/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
+} from '@knowledge/ui/dropdown-menu'
 import { useAssistantStore } from '@/entities/assistant/model/assistant.store'
 
 const { t } = useI18n()

@@ -307,6 +307,11 @@ Env (all with defaults): `WORK_ITEM_SYNC_ENABLED` (`true`, the kill switch),
 
 ## Setup
 
+Handoff rules can be set per project since #923 ([76](76-project-settings.md)):
+a project's own rule replaces the workspace's for its objects, and an explicit
+`off` opts it out. The sweep resolves the rule of each candidate's project in
+SQL.
+
 **GitHub App**, on `https://github.com/settings/apps/<your-app>`:
 
 | Section                  | Setting                                                              |

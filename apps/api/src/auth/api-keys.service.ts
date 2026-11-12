@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, type ApiKey } from '@prisma/client';
-import { apiKeyScopeOf, type ApiKeyInfo, type CreateApiKeyResponse, type ListApiKeysResponse } from '@knowledge/contracts';
+import { apiKeyScopeOf, keyToolsetsOf, type ApiKeyInfo, type CreateApiKeyResponse, type ListApiKeysResponse } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { Principal } from './principal.js';
 import type { CreateApiKeyDto } from './api-keys.dto.js';
@@ -59,6 +59,8 @@ export class ApiKeysService {
         scope: dto.scope ?? 'write',
         workspaceId: dto.workspaceId ?? null,
         projectIds: projectIds ?? Prisma.DbNull,
+        // No list, or an empty one, is every toolset; a list always holds `core` (#945).
+        toolsets: dto.toolsets?.length ? keyToolsetsOf(dto.toolsets)! : Prisma.DbNull,
         expiresAt: dto.expiresInDays ? new Date(Date.now() + dto.expiresInDays * 86_400_000) : null,
       },
     });
@@ -137,6 +139,7 @@ function toInfo(row: ApiKey): ApiKeyInfo {
     scope: apiKeyScopeOf(row.scope),
     workspaceId: row.workspaceId,
     projectIds: projectPinOf(row.projectIds),
+    toolsets: keyToolsetsOf(row.toolsets),
     expiresAt: row.expiresAt?.toISOString() ?? null,
     lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),

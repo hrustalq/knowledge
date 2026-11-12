@@ -27,9 +27,9 @@ import type {
 } from '@knowledge/contracts'
 import { apiInfiniteQueryOptions, apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
-import { Badge } from '@/shared/ui/badge'
-import { Button } from '@/shared/ui/button'
-import { Skeleton } from '@/shared/ui/skeleton'
+import { Badge } from '@knowledge/ui/badge'
+import { Button } from '@knowledge/ui/button'
+import { Skeleton } from '@knowledge/ui/skeleton'
 import {
   PageLayout,
   PageScrollList,
@@ -38,8 +38,8 @@ import {
   panelId,
   tabId,
   usePageTabs,
-} from '@/shared/layout'
-import type { PageTab } from '@/shared/layout'
+} from '@knowledge/ui/layout'
+import type { PageTab } from '@knowledge/ui/layout'
 import ConnectorAccessMirroring from '@/modules/connectors/components/ConnectorAccessMirroring.vue'
 import ConnectorReleases from '@/modules/connectors/components/ConnectorReleases.vue'
 import ConnectorWiki from '@/modules/connectors/components/ConnectorWiki.vue'

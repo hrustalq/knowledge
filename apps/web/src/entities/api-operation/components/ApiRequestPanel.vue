@@ -21,8 +21,8 @@ import {
   type SampleInputs,
 } from '@knowledge/contracts'
 import type { OperationView } from '@/entities/api-operation/model/api-spec'
-import { Button } from '@/shared/ui/button'
-import { Collapse } from '@/shared/ui/collapse'
+import { Button } from '@knowledge/ui/button'
+import { Collapse } from '@knowledge/ui/collapse'
 import ApiCodeSamples from './ApiCodeSamples.vue'
 import ApiTryConsole from './ApiTryConsole.vue'
 import { useTryEnv, type TryDraft } from '../model/use-try-env'

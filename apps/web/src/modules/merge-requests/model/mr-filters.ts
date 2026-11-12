@@ -1,7 +1,7 @@
 import { computed, type ComputedRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Bot, GitBranch, GitMerge, UserRound, UserRoundCheck, UserRoundPlus } from 'lucide-vue-next'
-import type { ActiveFilter, FilterField, FilterOperator } from '@/shared/ui/filter-bar'
+import type { ActiveFilter, FilterField, FilterOperator } from '@knowledge/ui/filter-bar'
 import { MR_PROVENANCES, type MergeRequestStatus, type SavedFilterQuery } from '@knowledge/contracts'
 import { useMembers } from '@/entities/person'
 

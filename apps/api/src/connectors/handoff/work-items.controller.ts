@@ -1,11 +1,19 @@
-import { Body, Controller, Get, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { ConnectorWorkItemResponse, ListAnchorWorkItemsResponse, WorkItemRulesResponse } from '@knowledge/contracts';
+import type { ConnectorWorkItemResponse, ListAnchorWorkItemsResponse, ProjectWorkItemRules, WorkItemRulesResponse } from '@knowledge/contracts';
 import { Access, CurrentPrincipal } from '../../auth/access.decorator.js';
 import type { Principal } from '../../auth/principal.js';
 import { WorkItemHandoffService } from './work-item-handoff.service.js';
 import { WorkItemRulesService } from './work-item-rules.service.js';
-import { AnchorWorkItemsQueryDto, PutWorkItemRulesDto, WorkItemHandoffDto, WorkItemRulesQueryDto } from './work-items.dto.js';
+import {
+  AnchorWorkItemsQueryDto,
+  PutWorkItemRulesDto,
+  UpdateProjectWorkItemRulesDto,
+  WorkItemHandoffDto,
+  WorkItemRulesQueryDto,
+} from './work-items.dto.js';
+import { ParseUuidPipe as ParseUUIDPipe } from '../../common/validation.js';
+import { PermissionService } from '../../permissions/permission.service.js';
 import { Returns } from '../../common/returns.decorator.js';
 
 /**
@@ -56,5 +64,41 @@ export class WorkItemsController {
   @ApiOperation({ summary: 'Create a ticket for a knowledge object in its tracker, or attach an existing one (idempotent per connector)' })
   async handoff(@Body() dto: WorkItemHandoffDto, @CurrentPrincipal() principal: Principal): Promise<ConnectorWorkItemResponse> {
     return { workItem: await this.handoffs.handoff(principal, dto) };
+  }
+}
+
+/**
+ * A project's handoff rules (#923), over the workspace's. Anyone who may open
+ * the project reads them (the workspace rules stay admin-only to read: this
+ * shows one project's effective answer, not the workspace's configuration
+ * screen); a workspace admin or the project's maintainer writes them.
+ */
+@ApiTags('projects')
+@Controller('v1/projects')
+export class ProjectWorkItemRulesController {
+  constructor(
+    private readonly rules: WorkItemRulesService,
+    private readonly permissions: PermissionService,
+  ) {}
+
+  @Get(':id/settings/work-items')
+  @Returns('ProjectWorkItemRules')
+  @Access('viewer', 'project')
+  @ApiOperation({ summary: "A project's handoff rules: the workspace's, the project's own, and what applies" })
+  get(@Param('id', ParseUUIDPipe) id: string): Promise<ProjectWorkItemRules> {
+    return this.rules.getProject(id);
+  }
+
+  @Patch(':id/settings/work-items')
+  @Returns('ProjectWorkItemRules')
+  @Access('editor', 'project')
+  @ApiOperation({ summary: "Set a project's handoff rules (workspace admin or the project's maintainer); null inherits, off opts out" })
+  async update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateProjectWorkItemRulesDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<ProjectWorkItemRules> {
+    await this.permissions.requireProjectManage(principal, id);
+    return this.rules.setProject(id, dto);
   }
 }

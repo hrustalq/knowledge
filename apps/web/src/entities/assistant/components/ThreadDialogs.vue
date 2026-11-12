@@ -8,8 +8,8 @@ import { ref } from 'vue'
 import { toast } from 'vue-sonner'
 import type { AssistantThreadSummary } from '@knowledge/contracts'
 import { useAssistantStore } from '@/entities/assistant/model/assistant.store'
-import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
+import { Button } from '@knowledge/ui/button'
+import { Input } from '@knowledge/ui/input'
 import {
   Dialog,
   DialogContent,
@@ -17,7 +17,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/shared/ui/dialog'
+} from '@knowledge/ui/dialog'
 import { threadLabel } from '../model/thread-label'
 
 const { t } = useI18n()

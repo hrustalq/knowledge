@@ -7,6 +7,7 @@
  * rule that silently creates nothing reads as a broken rule.
  */
 import { computed, ref, watch } from 'vue'
+import { ProjectOverridesNote } from '@/entities/project'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
@@ -16,9 +17,9 @@ import { api } from '@/shared/api/client'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
 import { getWorkspaceId } from '@/shared/api/api'
-import { Button } from '@/shared/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select'
-import { PageState } from '@/shared/layout'
+import { Button } from '@knowledge/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
+import { PageState } from '@knowledge/ui/layout'
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
@@ -88,6 +89,7 @@ async function save() {
     <div>
       <h2 class="text-base font-semibold">{{ t('workItems.rules.title') }}</h2>
       <p class="kn-measure mt-0.5 text-sm text-muted-foreground">{{ t('workItems.rules.intro') }}</p>
+      <ProjectOverridesNote setting="workItems" class="mt-1" />
     </div>
 
     <div class="divide-y rounded-md border">

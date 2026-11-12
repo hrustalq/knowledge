@@ -2762,7 +2762,8 @@
       "source-judge",
       "blueprint-derive",
       "blueprint-generate",
-      "blueprint-interview"
+      "blueprint-interview",
+      "purpose-interview"
     ]
   },
   "AiUsageResponse": {
@@ -6287,39 +6288,8 @@
       "definition"
     ]
   },
-  "BlueprintInterviewAnswer": {
-    "anyOf": [
-      {
-        "type": "string"
-      },
-      {
-        "type": "array",
-        "items": {
-          "type": "string"
-        }
-      }
-    ],
-    "nullable": true
-  },
   "BlueprintInterviewRound": {
-    "type": "object",
-    "properties": {
-      "questions": {
-        "type": "array",
-        "items": {
-          "$ref": "#/components/schemas/AssistantPromptField"
-        }
-      },
-      "answers": {
-        "type": "object",
-        "additionalProperties": {
-          "$ref": "#/components/schemas/BlueprintInterviewAnswer"
-        }
-      }
-    },
-    "required": [
-      "questions"
-    ]
+    "$ref": "#/components/schemas/InterviewRound"
   },
   "BlueprintNode": {
     "type": "object",
@@ -14008,6 +13978,40 @@
       "grantCount"
     ]
   },
+  "InterviewAnswer": {
+    "anyOf": [
+      {
+        "type": "string"
+      },
+      {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    ],
+    "nullable": true
+  },
+  "InterviewRound": {
+    "type": "object",
+    "properties": {
+      "questions": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/AssistantPromptField"
+        }
+      },
+      "answers": {
+        "type": "object",
+        "additionalProperties": {
+          "$ref": "#/components/schemas/InterviewAnswer"
+        }
+      }
+    },
+    "required": [
+      "questions"
+    ]
+  },
   "KnowledgeConflictDto": {
     "type": "object",
     "properties": {
@@ -19993,6 +19997,70 @@
       "allowPasswordlessShares",
       "allowPublicSites",
       "allowPublicEmbeds"
+    ]
+  },
+  "PurposeInterviewResponse": {
+    "anyOf": [
+      {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "asking"
+            ]
+          },
+          "round": {
+            "$ref": "#/components/schemas/InterviewRound"
+          }
+        },
+        "required": [
+          "status",
+          "round"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "done"
+            ]
+          },
+          "picks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceUsePick"
+            }
+          },
+          "suggestedDisabled": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceFeature"
+            }
+          }
+        },
+        "required": [
+          "status",
+          "picks",
+          "suggestedDisabled"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "unavailable"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      }
     ]
   },
   "PushDocumentResponse": {
@@ -26009,12 +26077,23 @@
         "items": {
           "$ref": "#/components/schemas/WorkspaceFeature"
         }
+      },
+      "uses": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/WorkspaceUse"
+        }
+      },
+      "purposeAsked": {
+        "type": "boolean"
       }
     },
     "required": [
       "workspaceId",
       "disabled",
-      "unavailable"
+      "unavailable",
+      "uses",
+      "purposeAsked"
     ]
   },
   "WorkspaceGraphNode": {
@@ -26188,6 +26267,48 @@
       "source"
     ]
   },
+  "WorkspacePurposeResponse": {
+    "type": "object",
+    "properties": {
+      "workspaceId": {
+        "type": "string"
+      },
+      "uses": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/WorkspaceUse"
+        }
+      },
+      "description": {
+        "type": "string",
+        "nullable": true
+      },
+      "askedAt": {
+        "type": "string",
+        "nullable": true
+      },
+      "suggestedDisabled": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/WorkspaceFeature"
+        }
+      },
+      "disabled": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/WorkspaceFeature"
+        }
+      }
+    },
+    "required": [
+      "workspaceId",
+      "uses",
+      "description",
+      "askedAt",
+      "suggestedDisabled",
+      "disabled"
+    ]
+  },
   "WorkspaceRole": {
     "type": "string",
     "enum": [
@@ -26241,6 +26362,32 @@
       "createdAt",
       "memberCount",
       "myRole"
+    ]
+  },
+  "WorkspaceUse": {
+    "type": "string",
+    "enum": [
+      "team-wiki",
+      "engineering-docs",
+      "api-docs",
+      "meeting-notes",
+      "support-kb",
+      "public-docs"
+    ]
+  },
+  "WorkspaceUsePick": {
+    "type": "object",
+    "properties": {
+      "use": {
+        "$ref": "#/components/schemas/WorkspaceUse"
+      },
+      "reason": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "use",
+      "reason"
     ]
   }
 }

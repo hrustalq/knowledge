@@ -1,6 +1,12 @@
 import type { RouteRecordRaw } from 'vue-router'
 
+import { PURPOSE_SETUP_PATH } from './model/purpose-setup-path'
+
+export { PURPOSE_SETUP_PATH }
+
 export const routes: RouteRecordRaw[] = [
+  // No `meta.feature`: this is how the sections get chosen, so none of them gates it.
+  { path: PURPOSE_SETUP_PATH, component: () => import('./pages/PurposeSetupPage.vue') },
   // A person, inside this workspace. `/u` with no id is your own — the
   // avatar menu's target, and a link that stays right after a rename.
   { path: '/u', component: () => import('./pages/ProfilePage.vue') },

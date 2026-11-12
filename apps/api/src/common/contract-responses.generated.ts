@@ -289,6 +289,7 @@ import type {
   PublishBranchResponse,
   PublishedSiteSummary,
   PublishingSettingsResponse,
+  PurposeInterviewResponse,
   PushDocumentResponse,
   QaOverviewResponse,
   QualityListResponse,
@@ -365,6 +366,7 @@ import type {
   WorkspaceDeletionPreviewResponse,
   WorkspaceFeaturesResponse,
   WorkspaceGraphResponse,
+  WorkspacePurposeResponse,
   WorkspaceShareLinksResponse,
 } from '@knowledge/contracts';
 
@@ -659,6 +661,7 @@ export interface ContractResponses {
   PublishBranchResponse: PublishBranchResponse;
   PublishedSiteSummary: PublishedSiteSummary;
   PublishingSettingsResponse: PublishingSettingsResponse;
+  PurposeInterviewResponse: PurposeInterviewResponse;
   PushDocumentResponse: PushDocumentResponse;
   QaOverviewResponse: QaOverviewResponse;
   QualityListResponse: QualityListResponse;
@@ -735,5 +738,6 @@ export interface ContractResponses {
   WorkspaceDeletionPreviewResponse: WorkspaceDeletionPreviewResponse;
   WorkspaceFeaturesResponse: WorkspaceFeaturesResponse;
   WorkspaceGraphResponse: WorkspaceGraphResponse;
+  WorkspacePurposeResponse: WorkspacePurposeResponse;
   WorkspaceShareLinksResponse: WorkspaceShareLinksResponse;
 }

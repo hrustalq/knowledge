@@ -24,6 +24,16 @@ in the pull request that introduces them — see
 
 ### Added
 
+- **Workspace purpose.** A workspace can record what it is used for: team wiki, engineering docs, API product docs,
+  meeting notes, support knowledge base, public docs. The uses suggest which sections are on: one that no chosen use
+  needs is suggested off, and the admin sees every change before it is saved. The admin of a **new** workspace is
+  asked once, on their first visit, by a short interview (at most three rounds) that picks the uses and explains
+  each; without an AI provider the same page is a checklist, and Skip leaves every section on. **Settings →
+  Features** shows the purpose above the section list, previews what a change would switch, and keeps a section you
+  set by hand. Workspaces that already exist are not asked and nothing in them is switched. New routes, all
+  workspace-admin: `GET` / `PUT /v1/workspaces/:id/purpose` and `POST /v1/workspaces/:id/purpose/interview`;
+  `GET /v1/workspaces/:id/features` also returns `uses` and `purposeAsked`. (#934)
+
 - **Project policies.** A project can override workspace settings for its own pages: the review interval, reminder
   window, inactivity threshold and empty-page size; the breaking-API merge gate; the tracker handoff rules; and the
   page captured pages land under. Each is empty until someone sets it, and an empty value follows the workspace. The
@@ -56,6 +66,12 @@ in the pull request that introduces them — see
   when its project does. (#926)
 
 ### Operations
+
+- Migration `20270116170000_workspace_purpose` adds three columns to `workspace_settings` and marks every existing
+  workspace as already asked about its purpose. It is additive and defaulted, so a rollback to the previous image
+  runs against it unchanged. After such a rollback and a later roll forward, a workspace created in between is
+  asked on its admin's next visit. The purpose interview makes model calls (at most four per run) on the
+  `scaffolder` agent's model, recorded as `purpose-interview`; it has no env var of its own. (#934)
 
 - Seven migrations, all additive: nullable columns on `projects`, `api_test_environments`, `agent_runs` and
   `ai_usage`, and `glossary_terms.project_id` made nullable. The last one fills `agent_runs.project_id` and

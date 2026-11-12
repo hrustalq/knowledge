@@ -749,6 +749,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{id}/purpose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What this workspace is used for, and the sections that suggests off (workspace admin) */
+        get: operations["WorkspacesController_getPurpose"];
+        /** Save the purpose and the confirmed section list in one write (workspace admin); no uses and an untouched list is Skip */
+        put: operations["WorkspacesController_setPurpose"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces/{id}": {
         parameters: {
             query?: never;
@@ -1036,6 +1054,26 @@ export interface paths {
         head?: never;
         /** Change a saved blueprint or an override; a changed blueprint appends a version */
         patch: operations["BlueprintsController_update"];
+        trace?: never;
+    };
+    "/v1/workspaces/{id}/purpose/interview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * One round of the purpose interview (workspace admin): questions, or the uses picked from the catalogue
+         * @description Writes nothing. `asking` carries the next round; `done` the uses picked, a reason for each and the sections they suggest off; `unavailable` means no model can be used here (none configured, the scaffolder agent is off, or the budget is spent) and the caller shows the checklist instead. `finish` or the third round always ends in `done`. Saving is `PUT :id/purpose`.
+         */
+        post: operations["PurposeInterviewController_interview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/groups": {
@@ -8422,6 +8460,14 @@ export interface components {
             /** @description The sections to switch off; every one not listed is on. An empty list turns everything back on. */
             disabled: ("workflows" | "knowledge-health" | "qa" | "analytics" | "captures" | "memos" | "conflicts" | "assistant" | "git" | "sources")[];
         };
+        UpdateWorkspacePurposeDto: {
+            /** @description What the workspace is used for. Empty with an untouched `disabled` is the Skip. */
+            uses: ("team-wiki" | "engineering-docs" | "api-docs" | "meeting-notes" | "support-kb" | "public-docs")[];
+            /** @description The admin's own words. Only admins read it back. */
+            description?: string | null;
+            /** @description The sections to leave switched off, as the admin confirmed them; replaces the stored list in the same write. */
+            disabled: ("workflows" | "knowledge-health" | "qa" | "analytics" | "captures" | "memos" | "conflicts" | "assistant" | "git" | "sources")[];
+        };
         UpdateWorkspaceDto: {
             /** @example Platform Team */
             name: string;
@@ -8541,6 +8587,16 @@ export interface components {
                 [key: string]: unknown;
             };
             enabled?: boolean;
+        };
+        PurposeInterviewDto: {
+            /** @description What the workspace is for, in the admin's words. */
+            description?: string;
+            /** @description Every round so far, each as it was returned with the answers added. There is no interview state on the server. */
+            rounds?: {
+                [key: string]: unknown;
+            }[];
+            /** @description Pick now from the answers so far, asking nothing more. Off unless sent. */
+            finish?: boolean;
         };
         CreateUserGroupDto: {
             workspaceId: string;
@@ -11877,7 +11933,7 @@ export interface components {
             createdAt: string;
         };
         /** @enum {string} */
-        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "memo-triage" | "source-recipe" | "source-judge" | "blueprint-derive" | "blueprint-generate" | "blueprint-interview";
+        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "memo-triage" | "source-recipe" | "source-judge" | "blueprint-derive" | "blueprint-generate" | "blueprint-interview" | "purpose-interview";
         AiUsageResponse: {
             from: string;
             to: string;
@@ -12694,13 +12750,7 @@ export interface components {
             definition: string;
             aliases?: string[];
         };
-        BlueprintInterviewAnswer: (string | string[]) | null;
-        BlueprintInterviewRound: {
-            questions: components["schemas"]["AssistantPromptField"][];
-            answers?: {
-                [key: string]: components["schemas"]["BlueprintInterviewAnswer"];
-            };
-        };
+        BlueprintInterviewRound: components["schemas"]["InterviewRound"];
         BlueprintNode: {
             title: components["schemas"]["BlueprintText"];
             category?: components["schemas"]["DocumentCategory"];
@@ -14460,6 +14510,13 @@ export interface components {
             title: string | null;
             grantCount: number;
         };
+        InterviewAnswer: (string | string[]) | null;
+        InterviewRound: {
+            questions: components["schemas"]["AssistantPromptField"][];
+            answers?: {
+                [key: string]: components["schemas"]["InterviewAnswer"];
+            };
+        };
         KnowledgeConflictDto: {
             id: string;
             workspaceId: string;
@@ -15821,6 +15878,19 @@ export interface components {
             allowPasswordlessShares: boolean;
             allowPublicSites: boolean;
             allowPublicEmbeds: boolean;
+        };
+        PurposeInterviewResponse: {
+            /** @enum {string} */
+            status: "asking";
+            round: components["schemas"]["InterviewRound"];
+        } | {
+            /** @enum {string} */
+            status: "done";
+            picks: components["schemas"]["WorkspaceUsePick"][];
+            suggestedDisabled: components["schemas"]["WorkspaceFeature"][];
+        } | {
+            /** @enum {string} */
+            status: "unavailable";
         };
         PushDocumentResponse: {
             run: components["schemas"]["ConnectorRunInfo"];
@@ -17235,6 +17305,8 @@ export interface components {
             workspaceId: string;
             disabled: components["schemas"]["WorkspaceFeature"][];
             unavailable: components["schemas"]["WorkspaceFeature"][];
+            uses: components["schemas"]["WorkspaceUse"][];
+            purposeAsked: boolean;
         };
         WorkspaceGraphNode: {
             id: string;
@@ -17275,6 +17347,14 @@ export interface components {
             capabilities: components["schemas"]["MemberCapability"][];
             source: components["schemas"]["MembershipSource"];
         };
+        WorkspacePurposeResponse: {
+            workspaceId: string;
+            uses: components["schemas"]["WorkspaceUse"][];
+            description: string | null;
+            askedAt: string | null;
+            suggestedDisabled: components["schemas"]["WorkspaceFeature"][];
+            disabled: components["schemas"]["WorkspaceFeature"][];
+        };
         /** @enum {string} */
         WorkspaceRole: "guest" | "viewer" | "editor" | "admin";
         WorkspaceShareLinksResponse: {
@@ -17286,6 +17366,12 @@ export interface components {
             createdAt: string;
             memberCount: number;
             myRole: components["schemas"]["WorkspaceRole"] | null;
+        };
+        /** @enum {string} */
+        WorkspaceUse: "team-wiki" | "engineering-docs" | "api-docs" | "meeting-notes" | "support-kb" | "public-docs";
+        WorkspaceUsePick: {
+            use: components["schemas"]["WorkspaceUse"];
+            reason: string;
         };
     };
     responses: never;
@@ -19659,6 +19745,94 @@ export interface operations {
             };
         };
     };
+    WorkspacesController_getPurpose: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspacePurposeResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkspacesController_setPurpose: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWorkspacePurposeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspacePurposeResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     WorkspacesController_remove: {
         parameters: {
             query?: {
@@ -20701,6 +20875,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BlueprintEntry"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    PurposeInterviewController_interview: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PurposeInterviewDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PurposeInterviewResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

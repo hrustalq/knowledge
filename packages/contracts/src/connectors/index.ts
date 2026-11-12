@@ -1,3 +1,4 @@
+import type { ScopedSetting } from '@knowledge/contracts/core';
 import type { DocumentCategory } from '@knowledge/contracts/documents';
 import type { ApiSpecKind } from '@knowledge/contracts/api';
 import { FIGMA_ALLOWLIST_CONFIG_KEY, FIGMA_TOKEN_EXPIRES_CONFIG_KEY } from '@knowledge/contracts/embeds';
@@ -2029,6 +2030,29 @@ export interface WorkItemRulesResponse {
   requested: WorkItemRules;
   /** WORK_ITEM_AUTOCREATE_MAX_PER_TICK and WORK_ITEM_SYNC_ENABLED: what actually runs. */
   ceiling: { maxPerTick: number; syncEnabled: boolean };
+}
+
+/**
+ * GET/PATCH /v1/projects/:id/settings/work-items (#923): a project's own
+ * handoff rules over the workspace's. A project may say `off` while the
+ * workspace is on, or turn a rule on that the workspace leaves off; either
+ * way tickets go only into the project's tracker route.
+ */
+export interface ProjectWorkItemRules {
+  workspaceId: string;
+  projectId: string;
+  issues: ScopedSetting<WorkItemIssueRule>;
+  conflicts: ScopedSetting<WorkItemConflictRule>;
+  verification: ScopedSetting<WorkItemVerificationRule>;
+  /** Whether the project has a tracker route; without one no rule creates anything. */
+  routed: boolean;
+  ceiling: { maxPerTick: number; syncEnabled: boolean };
+}
+/** Each key optional; null goes back to the workspace's rule. */
+export interface UpdateProjectWorkItemRulesRequest {
+  issues?: WorkItemIssueRule | null;
+  conflicts?: WorkItemConflictRule | null;
+  verification?: WorkItemVerificationRule | null;
 }
 
 /** POST /v1/work-items/handoff — create a ticket for an anchor, or attach an existing one. */

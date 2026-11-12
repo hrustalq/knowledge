@@ -1363,9 +1363,13 @@ export type AiUsageOperation =
   /** One round of the Describe it interview: the `scaffolder` asking what the brief left open (#731). The draft that ends it is `blueprint-generate`. */
   | 'blueprint-interview';
 
-/** One row of the per-user (or per-model) usage breakdown. */
+export type AiUsageGroupBy = 'user' | 'model' | 'day' | 'project';
+/** The `project` breakdown's bucket for calls made for no single project (#927). */
+export const AI_USAGE_UNATTRIBUTED = 'unattributed';
+
+/** One row of the per-user (or per-model, or per-project) usage breakdown. */
 export interface AiUsageBucket {
-  /** userId, model name, or ISO date — depending on `groupBy`. */
+  /** userId, model name, ISO date, or project id ({@link AI_USAGE_UNATTRIBUTED} for none) — depending on `groupBy`. */
   key: string;
   /** Display label resolved server-side (an email for a user bucket). */
   label: string;
@@ -1386,11 +1390,11 @@ export interface AiUsageSeriesPoint {
   costs: CostAmount[];
 }
 
-// GET /v1/ai/usage?workspaceId=&from=&to=&groupBy=user|model|day
+// GET /v1/ai/usage?workspaceId=&from=&to=&groupBy=user|model|day|project
 export interface AiUsageResponse {
   from: string;
   to: string;
-  groupBy: 'user' | 'model' | 'day';
+  groupBy: AiUsageGroupBy;
   totals: {
     calls: number;
     promptTokens: number;
@@ -2952,6 +2956,7 @@ export interface FlagFindingOutdatedResponse {
 export interface AddFindingTermResponse {
   termId: string;
   term: string;
+  /** Always a project: a finding's term is filed where its page lives, never as a workspace term. */
   projectId: string;
 }
 

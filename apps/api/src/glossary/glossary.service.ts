@@ -30,6 +30,7 @@ import type {
 } from './glossary.dto.js';
 import { t } from '../i18n/t.js';
 import { parseModelJson } from '../common/model-json.js';
+import { withSubjectLock } from '../common/subject-lock.js';
 
 /** How much of a page the extractor sees — the same ceiling `review` uses. */
 const MAX_SOURCE_CHARS = 60_000;
@@ -45,6 +46,12 @@ const MAX_SUGGESTIONS = 25;
  * glossary that could not say so would be wrong in at least one of them. The
  * workspace stays the ACL boundary — `workspace_id` rides along denormalized,
  * exactly as it does on `documents`.
+ *
+ * A term with no project is a **workspace term** (#926): it links on the pages
+ * of every project, unless that project defines the same word — then the
+ * project's entry replaces it there (`effectiveGlossary`, contracts). Workspace
+ * terms are written by workspace admins (the controller's check); nothing
+ * becomes one except by an admin writing it or promoting a project's term.
  *
  * Two layers, deliberately separable — the same split as frontmatter relations
  * versus inferred ones. The **linking** is deterministic and happens on the
@@ -75,13 +82,18 @@ export class GlossaryService {
       where: {
         workspaceId: query.workspaceId,
         // Absent projectId means the whole workspace — the roster page's view,
-        // and the same convention as GET /v1/documents.
-        ...(query.projectId ? { projectId: query.projectId } : {}),
+        // and the same convention as GET /v1/documents. With one, the project's
+        // terms and the workspace's own (#926): what its pages may link.
+        ...(query.projectId ? { OR: [{ projectId: query.projectId }, { projectId: null }] } : {}),
         ...(search
           ? {
-              OR: [
-                { term: { contains: search, mode: 'insensitive' as const } },
-                { definition: { contains: search, mode: 'insensitive' as const } },
+              AND: [
+                {
+                  OR: [
+                    { term: { contains: search, mode: 'insensitive' as const } },
+                    { definition: { contains: search, mode: 'insensitive' as const } },
+                  ],
+                },
               ],
             }
           : {}),
@@ -101,32 +113,48 @@ export class GlossaryService {
     return (await this.withDocumentTitles([row], scope))[0]!;
   }
 
-  /** `source: 'captured'` is the captures inbox approving a term (#73); the REST DTO only admits manual/ai. */
+  /** Whether a term is the workspace's own — the routes ask before a write, which then needs an admin. */
+  async isWorkspaceTerm(termId: string): Promise<boolean> {
+    const row = await this.prisma.glossaryTerm.findUnique({ where: { id: termId }, select: { projectId: true } });
+    if (!row) throw new NotFoundException(t('error.glossary.notFound', { id: termId }));
+    return row.projectId === null;
+  }
+
+  /**
+   * `source: 'captured'` is the captures inbox approving a term (#73); the REST DTO only admits manual/ai.
+   * No `projectId` writes a workspace term (#926), which the route allows admins only.
+   */
   async create(
-    dto: Omit<CreateGlossaryTermDto, 'source'> & { source?: GlossaryTermSource },
+    dto: Omit<CreateGlossaryTermDto, 'source' | 'projectId'> & { source?: GlossaryTermSource; projectId: string | null },
     scope: AccessScope,
     actorId?: string,
   ): Promise<GlossaryTerm> {
     const term = dto.term.trim();
-    await this.projects.requireProjectInWorkspace(dto.projectId, dto.workspaceId);
-    await this.assertNameFree(dto.projectId, term);
+    // Required and explicit: a caller that forgot the project must not have written a workspace term.
+    const { projectId } = dto;
+    if (projectId) await this.projects.requireProjectInWorkspace(projectId, dto.workspaceId);
     if (dto.documentId) await this.assertDefiningPage(dto.documentId, dto.workspaceId, scope);
 
-    const row = await this.prisma.glossaryTerm.create({
-      data: {
-        workspaceId: dto.workspaceId,
-        projectId: dto.projectId,
-        term,
-        definition: dto.definition.trim(),
-        aliases: normalizeAliases(dto.aliases, term),
-        documentId: dto.documentId ?? null,
-        source: dto.source ?? 'manual',
-        enabled: dto.enabled ?? true,
-        matchAliases: dto.matchAliases ?? true,
-        caseSensitive: dto.caseSensitive ?? false,
-        maxLinksPerPage: dto.maxLinksPerPage ?? null,
-        createdBy: actorId ?? null,
-      },
+    // Check and insert under one lock: for a workspace term there is no unique
+    // index to refuse a second writer (project_id is null in both rows).
+    const row = await withSubjectLock(this.prisma, nameLock(dto.workspaceId, projectId), async () => {
+      await this.assertNameFree(dto.workspaceId, projectId, term);
+      return this.prisma.glossaryTerm.create({
+        data: {
+          workspaceId: dto.workspaceId,
+          projectId,
+          term,
+          definition: dto.definition.trim(),
+          aliases: normalizeAliases(dto.aliases, term),
+          documentId: dto.documentId ?? null,
+          source: dto.source ?? 'manual',
+          enabled: dto.enabled ?? true,
+          matchAliases: dto.matchAliases ?? true,
+          caseSensitive: dto.caseSensitive ?? false,
+          maxLinksPerPage: dto.maxLinksPerPage ?? null,
+          createdBy: actorId ?? null,
+        },
+      });
     });
     await this.activity.record({
       workspaceId: row.workspaceId,
@@ -149,23 +177,25 @@ export class GlossaryService {
     if (!current) throw new NotFoundException(t('error.glossary.notFound', { id: termId }));
 
     const term = dto.term?.trim();
-    if (term && term.toLowerCase() !== current.term.toLowerCase()) {
-      await this.assertNameFree(current.projectId, term);
-    }
     if (dto.documentId) await this.assertDefiningPage(dto.documentId, current.workspaceId, scope);
 
-    const row = await this.prisma.glossaryTerm.update({
-      where: { id: termId },
-      data: {
-        ...(term === undefined ? {} : { term }),
-        ...(dto.definition === undefined ? {} : { definition: dto.definition.trim() }),
-        ...(dto.aliases === undefined ? {} : { aliases: normalizeAliases(dto.aliases, term ?? current.term) }),
-        ...(dto.documentId === undefined ? {} : { documentId: dto.documentId }),
-        ...(dto.enabled === undefined ? {} : { enabled: dto.enabled }),
-        ...(dto.matchAliases === undefined ? {} : { matchAliases: dto.matchAliases }),
-        ...(dto.caseSensitive === undefined ? {} : { caseSensitive: dto.caseSensitive }),
-        ...(dto.maxLinksPerPage === undefined ? {} : { maxLinksPerPage: dto.maxLinksPerPage }),
-      },
+    const row = await withSubjectLock(this.prisma, nameLock(current.workspaceId, current.projectId), async () => {
+      if (term && term.toLowerCase() !== current.term.toLowerCase()) {
+        await this.assertNameFree(current.workspaceId, current.projectId, term);
+      }
+      return this.prisma.glossaryTerm.update({
+        where: { id: termId },
+        data: {
+          ...(term === undefined ? {} : { term }),
+          ...(dto.definition === undefined ? {} : { definition: dto.definition.trim() }),
+          ...(dto.aliases === undefined ? {} : { aliases: normalizeAliases(dto.aliases, term ?? current.term) }),
+          ...(dto.documentId === undefined ? {} : { documentId: dto.documentId }),
+          ...(dto.enabled === undefined ? {} : { enabled: dto.enabled }),
+          ...(dto.matchAliases === undefined ? {} : { matchAliases: dto.matchAliases }),
+          ...(dto.caseSensitive === undefined ? {} : { caseSensitive: dto.caseSensitive }),
+          ...(dto.maxLinksPerPage === undefined ? {} : { maxLinksPerPage: dto.maxLinksPerPage }),
+        },
+      });
     });
     await this.activity.record({
       workspaceId: row.workspaceId,
@@ -198,6 +228,51 @@ export class GlossaryService {
   }
 
   /**
+   * Make a project's term the workspace's (#926, an admin's act): the same
+   * row, so its id, its exclusions and every link to it survive. When the
+   * workspace already has a term of that name the promotion is refused, unless
+   * the caller says `replace` — then that term and its exclusions go in the
+   * same transaction. Never two workspace terms with one name.
+   */
+  async promote(termId: string, onClash: 'replace' | undefined, scope: AccessScope, actorId?: string): Promise<GlossaryTerm> {
+    const current = await this.prisma.glossaryTerm.findUnique({ where: { id: termId } });
+    if (!current) throw new NotFoundException(t('error.glossary.notFound', { id: termId }));
+    if (current.projectId === null) return (await this.withDocumentTitles([current], scope))[0]!;
+
+    const row = await withSubjectLock(this.prisma, nameLock(current.workspaceId, null), async () => {
+      const clash = await this.prisma.glossaryTerm.findFirst({
+        where: { workspaceId: current.workspaceId, projectId: null, term: { equals: current.term, mode: 'insensitive' } },
+        select: { id: true },
+      });
+      if (clash && onClash !== 'replace') {
+        throw new ConflictException({
+          statusCode: 409,
+          message: t('error.glossary.workspaceTermExists', { term: current.term }),
+          reason: 'workspace-term-exists',
+          termId: clash.id,
+        });
+      }
+      if (clash) {
+        await this.prisma.glossaryExclusion.deleteMany({ where: { termId: clash.id } });
+        await this.prisma.glossaryTerm.delete({ where: { id: clash.id } });
+      }
+      // Guarded on the project it was read with: a concurrent promote or a project move loses cleanly.
+      const { count } = await this.prisma.glossaryTerm.updateMany({ where: { id: termId, projectId: current.projectId }, data: { projectId: null } });
+      if (count === 0) throw new ConflictException(t('error.glossary.duplicate', { term: current.term }));
+      return { ...current, projectId: null };
+    });
+    await this.activity.record({
+      workspaceId: row.workspaceId,
+      actor: actorId,
+      action: 'glossary.term.updated',
+      subjectId: row.id,
+      documentId: row.documentId ?? undefined,
+      metadata: { term: row.term, fields: ['projectId'], promotedFrom: current.projectId },
+    });
+    return (await this.withDocumentTitles([row], scope))[0]!;
+  }
+
+  /**
    * Draft the entries a page implies but the glossary does not have yet.
    *
    * The model proposes terms and definitions; the *counting* is done here,
@@ -220,9 +295,9 @@ export class GlossaryService {
 
     // "Already defined" is a question about the project the term would land
     // in, not about the workspace: the same word may be defined next door and
-    // still be missing here.
+    // still be missing here. A workspace term (#926) is defined everywhere.
     const existing = await this.prisma.glossaryTerm.findMany({
-      where: projectId ? { projectId } : { workspaceId: dto.workspaceId },
+      where: projectId ? { workspaceId: dto.workspaceId, OR: [{ projectId }, { projectId: null }] } : { workspaceId: dto.workspaceId },
       select: { id: true, term: true, aliases: true },
     });
     const known = new Map<string, string>();
@@ -232,7 +307,7 @@ export class GlossaryService {
     }
 
     const raw = await this.client.chat(
-      { config, userId: principal.userId, operation: 'glossary', locale: principal.locale },
+      { config, userId: principal.userId, operation: 'glossary', locale: principal.locale, projectId },
       [
         {
           role: 'system',
@@ -309,9 +384,10 @@ export class GlossaryService {
     }
   }
 
-  private async assertNameFree(projectId: string, term: string): Promise<void> {
+  /** One name per level: within a project, or among the workspace's own terms. Called under `nameLock`. */
+  private async assertNameFree(workspaceId: string, projectId: string | null, term: string): Promise<void> {
     const clash = await this.prisma.glossaryTerm.findFirst({
-      where: { projectId, term: { equals: term, mode: 'insensitive' } },
+      where: { workspaceId, projectId, term: { equals: term, mode: 'insensitive' } },
       select: { id: true },
     });
     if (clash) throw new ConflictException(t('error.glossary.duplicate', { term }));
@@ -428,6 +504,9 @@ export class GlossaryService {
     }));
   }
 }
+
+/** Serializes writers of one level's names; the workspace level has no unique index to fall back on. */
+const nameLock = (workspaceId: string, projectId: string | null) => `glossary-names:${projectId ?? workspaceId}`;
 
 /** `aliases` is Json (the schema uses no Postgres arrays) — read it defensively. */
 function readAliases(raw: unknown): string[] {

@@ -7,6 +7,7 @@
  * rule that silently creates nothing reads as a broken rule.
  */
 import { computed, ref, watch } from 'vue'
+import { ProjectOverridesNote } from '@/entities/project'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
@@ -88,6 +89,7 @@ async function save() {
     <div>
       <h2 class="text-base font-semibold">{{ t('workItems.rules.title') }}</h2>
       <p class="kn-measure mt-0.5 text-sm text-muted-foreground">{{ t('workItems.rules.intro') }}</p>
+      <ProjectOverridesNote setting="workItems" class="mt-1" />
     </div>
 
     <div class="divide-y rounded-md border">

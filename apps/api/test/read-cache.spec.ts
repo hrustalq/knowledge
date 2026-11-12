@@ -72,6 +72,13 @@ describe('ReadCache (#472)', () => {
     // A new family is a review: it must answer the same for every caller (no
     // AccessScope, no page list, no search result) and carry no credential.
     // Add it here with that argument in the PR, or do not add it.
-    expect(Object.keys(READ_CACHE_FAMILIES).sort()).toEqual(['content', 'embedding', 'healthSettings']);
+    expect(Object.keys(READ_CACHE_FAMILIES).sort()).toEqual([
+      'content',
+      'embedding',
+      'healthSettings',
+      // #921: four numbers per overriding project, the same for every caller;
+      // never returned as a list — a reader looks up one page's project in it.
+      'projectHealthSettings',
+    ]);
   });
 });

@@ -265,11 +265,17 @@ import type {
   PlaudSettingsResponse,
   PostAssistantMessageResponse,
   ProjectAnalyticsResponse,
+  ProjectBreakingChangeSettings,
+  ProjectCaptureParentSettings,
   ProjectDeletionPreview,
   ProjectGitResponse,
   ProjectOverviewResponse,
+  ProjectSettingOverridesResponse,
+  ProjectSettingsAccess,
   ProjectSiteResponse,
   ProjectSummary,
+  ProjectVerificationSettings,
+  ProjectWorkItemRules,
   ProposeAgentFindingResponse,
   ProposeRelationsResponse,
   PublicShareExport,
@@ -629,11 +635,17 @@ export interface ContractResponses {
   PlaudSettingsResponse: PlaudSettingsResponse;
   PostAssistantMessageResponse: PostAssistantMessageResponse;
   ProjectAnalyticsResponse: ProjectAnalyticsResponse;
+  ProjectBreakingChangeSettings: ProjectBreakingChangeSettings;
+  ProjectCaptureParentSettings: ProjectCaptureParentSettings;
   ProjectDeletionPreview: ProjectDeletionPreview;
   ProjectGitResponse: ProjectGitResponse;
   ProjectOverviewResponse: ProjectOverviewResponse;
+  ProjectSettingOverridesResponse: ProjectSettingOverridesResponse;
+  ProjectSettingsAccess: ProjectSettingsAccess;
   ProjectSiteResponse: ProjectSiteResponse;
   ProjectSummary: ProjectSummary;
+  ProjectVerificationSettings: ProjectVerificationSettings;
+  ProjectWorkItemRules: ProjectWorkItemRules;
   ProposeAgentFindingResponse: ProposeAgentFindingResponse;
   ProposeRelationsResponse: ProposeRelationsResponse;
   PublicShareExport: PublicShareExport;

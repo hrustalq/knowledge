@@ -92,6 +92,12 @@ the route's floor is `editor`.
 
 ## Settings
 
+Since #921 a project may override the four freshness thresholds
+([76](76-project-settings.md)). The health CTE carries each row's own
+`inactive_after_days` and `empty_max_chars` (`COALESCE(p.col, workspace)`), and
+`healthFilterSql` reads the row, so two projects in one dashboard are judged
+each by its own value. The search knobs below stay workspace-only.
+
 `knowledge_health_settings` is a **sparse override** of the env block: one row
 per workspace, every column nullable, `null` = inherit. An empty table
 reproduces the env behaviour exactly. The response always carries both

@@ -20,6 +20,7 @@ import type { Principal } from '../auth/principal.js';
 import { GlossaryService } from './glossary.service.js';
 import {
   CreateGlossaryTermDto,
+  PromoteGlossaryTermDto,
   ListGlossaryQueryDto,
   SuggestGlossaryTermsDto,
   UpdateGlossaryTermDto,
@@ -49,6 +50,17 @@ export class GlossaryController {
     return this.permissions.scopeFor(principal, await this.access.workspaceOf('glossary-term', termId));
   }
 
+  /**
+   * `termScope` for a write. A workspace term (#926) is the whole workspace's
+   * vocabulary, so changing or removing one takes a workspace admin; a
+   * project's term stays an editor's, as the route's `@Access` already checked.
+   */
+  private async writeScope(principal: Principal, termId: string): Promise<AccessScope> {
+    const workspaceId = await this.access.workspaceOf('glossary-term', termId);
+    if (await this.glossary.isWorkspaceTerm(termId)) await this.access.requireRole(principal, workspaceId, 'admin');
+    return this.permissions.scopeFor(principal, workspaceId);
+  }
+
   @Get()
   @Returns('ListGlossaryResponse')
   @Access('viewer', 'query')
@@ -69,12 +81,21 @@ export class GlossaryController {
   @Post()
   @Returns('GlossaryTerm')
   @Access('editor', 'body')
-  @ApiOperation({ summary: 'Add a term to a project (409 when that project already defines it)' })
+  @ApiOperation({
+    summary:
+      'Add a term to a project (409 when that project already defines it). Without projectId it is a workspace term, ' +
+      'linked in every project that does not define the word itself — workspace admins only',
+  })
   async create(
     @Body() dto: CreateGlossaryTermDto,
     @CurrentPrincipal() principal: Principal,
   ): Promise<GlossaryTerm> {
-    return this.glossary.create(dto, await this.permissions.scopeFor(principal, dto.workspaceId), principal?.userId);
+    if (!dto.projectId) await this.access.requireRole(principal, dto.workspaceId, 'admin');
+    return this.glossary.create(
+      { ...dto, projectId: dto.projectId ?? null },
+      await this.permissions.scopeFor(principal, dto.workspaceId),
+      principal?.userId,
+    );
   }
 
   /**
@@ -121,16 +142,33 @@ export class GlossaryController {
     @Body() dto: UpdateGlossaryTermDto,
     @CurrentPrincipal() principal: Principal,
   ): Promise<GlossaryTerm> {
-    return this.glossary.update(id, dto, await this.termScope(principal, id), principal?.userId);
+    return this.glossary.update(id, dto, await this.writeScope(principal, id), principal?.userId);
+  }
+
+  @Post(':id/promote')
+  @Returns('GlossaryTerm')
+  @Access('admin', 'glossary-term')
+  @ApiOperation({
+    summary:
+      "Make a project's term the workspace's: same entry, now linked in every project that does not define the word itself. " +
+      '409 when the workspace already has a term of that name, unless onClash says replace',
+  })
+  async promote(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: PromoteGlossaryTermDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<GlossaryTerm> {
+    return this.glossary.promote(id, dto.onClash, await this.termScope(principal, id), principal?.userId);
   }
 
   @Delete(':id')
   @Access('editor', 'glossary-term')
   @ApiOperation({ summary: 'Remove a term; pages that mention it simply stop linking it' })
-  remove(
+  async remove(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentPrincipal() principal: Principal,
   ): Promise<{ deleted: true }> {
+    await this.writeScope(principal, id);
     return this.glossary.remove(id, principal?.userId);
   }
 }

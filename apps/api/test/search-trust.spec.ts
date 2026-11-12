@@ -95,6 +95,7 @@ function build(
   const fulltext = { enabled: textHits.length > 0, search: vi.fn(async (_ws: string, _q: string, k: number) => textHits.slice(0, k)) };
   const provenance = { openIssueCounts: vi.fn(async () => new Map<string, number>()) };
   const policy = {
+    thresholds: vi.fn(async () => () => ({ reviewIntervalDays: 90, remindBeforeDays: 7, inactiveAfterDays: 180, emptyMaxChars: 40 })),
     effective: vi.fn(async () => ({
       reviewIntervalDays: 90,
       remindBeforeDays: 7,

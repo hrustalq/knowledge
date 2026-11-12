@@ -855,6 +855,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/projects/setting-overrides": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Which projects override which workspace settings; only projects the caller may open */
+        get: operations["ProjectsController_settingOverrides"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{id}/settings/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What the caller may change on the project's settings page: the non-gate settings, and the merge gates */
+        get: operations["ProjectsController_settingsAccess"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/projects/{id}": {
         parameters: {
             query?: never;
@@ -4613,6 +4647,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/projects/{id}/settings/work-items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A project's handoff rules: the workspace's, the project's own, and what applies */
+        get: operations["ProjectWorkItemRulesController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Set a project's handoff rules (workspace admin or the project's maintainer); null inherits, off opts out */
+        patch: operations["ProjectWorkItemRulesController_update"];
+        trace?: never;
+    };
     "/v1/projects/{id}/tracker-route": {
         parameters: {
             query?: never;
@@ -4833,7 +4885,7 @@ export interface paths {
         /** The glossary — the roster the read-side term linker matches against. Scoped to one project with projectId; without it, the whole workspace. */
         get: operations["GlossaryController_list"];
         put?: never;
-        /** Add a term to a project (409 when that project already defines it) */
+        /** Add a term to a project (409 when that project already defines it). Without projectId it is a workspace term, linked in every project that does not define the word itself — workspace admins only */
         post: operations["GlossaryController_create"];
         delete?: never;
         options?: never;
@@ -4875,6 +4927,23 @@ export interface paths {
         head?: never;
         /** Edit a term, its aliases, its definition or its defining page */
         patch: operations["GlossaryController_update"];
+        trace?: never;
+    };
+    "/v1/glossary/{id}/promote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Make a project's term the workspace's: same entry, now linked in every project that does not define the word itself. 409 when the workspace already has a term of that name, unless onClash says replace */
+        post: operations["GlossaryController_promote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/imports": {
@@ -5982,6 +6051,24 @@ export interface paths {
         patch: operations["ApiSettingsController_update"];
         trace?: never;
     };
+    "/v1/projects/{id}/settings/breaking-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A project's breaking-change gate: the workspace's policy, the project's own, and what applies */
+        get: operations["ProjectApiSettingsController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Set the project's breaking-change gate (workspace admin); null inherits the workspace's */
+        patch: operations["ProjectApiSettingsController_update"];
+        trace?: never;
+    };
     "/v1/test-fixtures": {
         parameters: {
             query?: never;
@@ -6409,6 +6496,24 @@ export interface paths {
         head?: never;
         /** Override part of the policy for this workspace; null on a key goes back to the env default */
         patch: operations["KnowledgeHealthController_updateSettings"];
+        trace?: never;
+    };
+    "/v1/projects/{id}/settings/verification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A project's freshness thresholds: what the workspace set, what the project set, and what applies */
+        get: operations["ProjectVerificationSettingsController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Override thresholds for this project (workspace admin or the project's maintainer); null inherits the workspace's */
+        patch: operations["ProjectVerificationSettingsController_update"];
         trace?: never;
     };
     "/v1/quality/summary": {
@@ -7719,6 +7824,24 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{id}/settings/capture-parent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Where this project's new captured pages nest: the workspace's page, the project's own, and what applies */
+        get: operations["ProjectCaptureSettingsController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Set the project's capture parent page (workspace admin or the project's maintainer); null inherits the workspace's */
+        patch: operations["ProjectCaptureSettingsController_update"];
         trace?: never;
     };
     "/v1/mcp": {
@@ -9900,7 +10023,6 @@ export interface components {
             installationId: string;
         };
         PutWorkItemRulesDto: {
-            workspaceId: string;
             /**
              * @description Reported issues to hand off: by rank, or all
              * @enum {string|null}
@@ -9913,6 +10035,7 @@ export interface components {
              * @enum {string|null}
              */
             verification?: "off" | "outdated" | "all" | null;
+            workspaceId: string;
         };
         WorkItemHandoffDto: {
             workspaceId: string;
@@ -9927,6 +10050,20 @@ export interface components {
             connectorId?: string;
             /** @description Attach this existing ticket instead of creating one: BILL-123, #45, org/repo#45 or its URL */
             attach?: string;
+        };
+        UpdateProjectWorkItemRulesDto: {
+            /**
+             * @description Reported issues to hand off: by rank, or all
+             * @enum {string|null}
+             */
+            issues?: "off" | "high" | "medium" | "all" | null;
+            /** @enum {string|null} */
+            conflicts?: "off" | "on" | null;
+            /**
+             * @description outdated pages only, or every flagged page
+             * @enum {string|null}
+             */
+            verification?: "off" | "outdated" | "all" | null;
         };
         PutTrackerRouteDto: {
             /** @description The tracker connector this project hands off to */
@@ -9996,8 +10133,8 @@ export interface components {
         };
         CreateGlossaryTermDto: {
             workspaceId: string;
-            /** @description Project the term belongs to (must be in the same workspace) */
-            projectId: string;
+            /** @description Project the term belongs to (must be in the same workspace). Absent or null writes a workspace term, which needs a workspace admin */
+            projectId?: string | null;
             /** @example Merge base */
             term: string;
             /** @example The nearest common ancestor of two revisions in the DAG. */
@@ -10043,6 +10180,13 @@ export interface components {
             caseSensitive?: boolean;
             /** @description Occurrences linked per page; null uses the shared default */
             maxLinksPerPage?: number | null;
+        };
+        PromoteGlossaryTermDto: {
+            /**
+             * @description When the workspace already has a term of that name: replace it. Without this the promotion is refused (409)
+             * @enum {string}
+             */
+            onClash?: "replace";
         };
         CreateImportDto: {
             /** Format: uuid */
@@ -10460,6 +10604,11 @@ export interface components {
             };
             /** @description Origins besides the server's that a run may send a secret to (a login service); replaces the list. A change that adds one, or a new server origin, keeps only the secrets this request sets */
             secretOrigins?: string[];
+            /**
+             * Format: uuid
+             * @description Bind the environment to one project's suites; null shares it with every project. Sharing a bound one, or moving it to another project, keeps only the secrets this request sets
+             */
+            projectId?: string | null;
         };
         UpdateApiSettingsDto: {
             /**
@@ -10477,6 +10626,13 @@ export interface components {
              * @enum {string|null}
              */
             apiTestRunner?: "off" | "on" | null;
+        };
+        UpdateProjectBreakingChangesDto: {
+            /**
+             * @description The project's merge gate for breaking spec changes; null inherits the workspace's
+             * @enum {string|null}
+             */
+            policy: "off" | "warn" | "block" | null;
         };
         SetMessageFeedbackDto: {
             /** @enum {string} */
@@ -10617,6 +10773,14 @@ export interface components {
             layeredExpansion?: boolean | null;
             /** @description Per-state search weights; a state left out keeps its default, null resets them all */
             trustWeights?: components["schemas"]["TrustWeightsDto"] | null;
+        };
+        UpdateProjectVerificationSettingsDto: {
+            /** @description Days a stamp holds; 0 = never */
+            reviewIntervalDays?: number | null;
+            remindBeforeDays?: number | null;
+            /** @description 0 disables inactivity */
+            inactiveAfterDays?: number | null;
+            emptyMaxChars?: number | null;
         };
         CreateReleaseTagDto: {
             /** Format: uuid */
@@ -11005,6 +11169,13 @@ export interface components {
             projectId?: string;
             /** @description Defaults to the question */
             title?: string;
+        };
+        UpdateProjectCaptureParentDto: {
+            /**
+             * Format: uuid
+             * @description A live page of this project; null inherits the workspace's capture parent
+             */
+            parentDocumentId: string | null;
         };
         UpdateAnalyticsSettingsDto: {
             /** Format: uuid */
@@ -11680,6 +11851,8 @@ export interface components {
             costs: components["schemas"]["CostAmount"][];
             errors: number;
         };
+        /** @enum {string} */
+        AiUsageGroupBy: "user" | "model" | "day" | "project";
         AiUsageLogEntry: {
             id: string;
             userId: string;
@@ -11708,8 +11881,7 @@ export interface components {
         AiUsageResponse: {
             from: string;
             to: string;
-            /** @enum {string} */
-            groupBy: "user" | "model" | "day";
+            groupBy: components["schemas"]["AiUsageGroupBy"];
             totals: {
                 calls: number;
                 promptTokens: number;
@@ -12137,6 +12309,7 @@ export interface components {
             };
             secrets: string[];
             secretOrigins: string[];
+            projectId: string | null;
             updatedAt: string;
         };
         ApiTestFixtureCandidate: {
@@ -14102,7 +14275,7 @@ export interface components {
         GlossaryTerm: {
             termId: string;
             workspaceId: string;
-            projectId: string;
+            projectId: string | null;
             term: string;
             aliases: string[];
             definition: string;
@@ -15342,6 +15515,16 @@ export interface components {
                 isDraft: boolean;
             } | null;
         };
+        ProjectBreakingChangeSettings: {
+            workspaceId: string;
+            projectId: string;
+            policy: components["schemas"]["ScopedSetting<ApiBreakingChangePolicy>"];
+        };
+        ProjectCaptureParentSettings: {
+            workspaceId: string;
+            projectId: string;
+            parentDocumentId: components["schemas"]["ScopedSetting<(string|null)>"];
+        };
         ProjectCascadeCounts: {
             documents: number;
             revisions: number;
@@ -15397,6 +15580,20 @@ export interface components {
                 updatedAt: string;
             }[];
         };
+        /** @enum {string} */
+        ProjectSettingKey: "verification" | "breakingChanges" | "lintPolicy" | "workItems" | "captureParent";
+        ProjectSettingOverridesResponse: {
+            overrides: {
+                projectId: string;
+                name: string;
+                settings: components["schemas"]["ProjectSettingKey"][];
+            }[];
+        };
+        ProjectSettingsAccess: {
+            projectId: string;
+            canWrite: boolean;
+            canWriteGates: boolean;
+        };
         ProjectSiteResponse: {
             site: components["schemas"]["PublishedSiteSummary"] | null;
             policy: {
@@ -15420,6 +15617,26 @@ export interface components {
             documentCount: number;
             createdAt: string;
             restricted?: boolean;
+        };
+        ProjectVerificationSettings: {
+            workspaceId: string;
+            projectId: string;
+            reviewIntervalDays: components["schemas"]["ScopedSetting<number>"];
+            remindBeforeDays: components["schemas"]["ScopedSetting<number>"];
+            inactiveAfterDays: components["schemas"]["ScopedSetting<number>"];
+            emptyMaxChars: components["schemas"]["ScopedSetting<number>"];
+        };
+        ProjectWorkItemRules: {
+            workspaceId: string;
+            projectId: string;
+            issues: components["schemas"]["ScopedSetting<WorkItemIssueRule>"];
+            conflicts: components["schemas"]["ScopedSetting<WorkItemConflictRule>"];
+            verification: components["schemas"]["ScopedSetting<WorkItemVerificationRule>"];
+            routed: boolean;
+            ceiling: {
+                maxPerTick: number;
+                syncEnabled: boolean;
+            };
         };
         ProposeAgentFindingResponse: {
             mergeRequestId: string;
@@ -16026,6 +16243,54 @@ export interface components {
             prefix: string;
             createdAt: string;
             lastUsedAt: string | null;
+        };
+        "ScopedSetting<(string|null)>": {
+            workspace: string | null;
+            project: string | null;
+            effective: string | null;
+            inherited: string | null;
+            /** @enum {string} */
+            source: "project" | "workspace" | "default";
+        };
+        "ScopedSetting<ApiBreakingChangePolicy>": {
+            workspace: components["schemas"]["ApiBreakingChangePolicy"] | null;
+            project: components["schemas"]["ApiBreakingChangePolicy"] | null;
+            effective: components["schemas"]["ApiBreakingChangePolicy"];
+            inherited: components["schemas"]["ApiBreakingChangePolicy"];
+            /** @enum {string} */
+            source: "project" | "workspace" | "default";
+        };
+        "ScopedSetting<WorkItemConflictRule>": {
+            workspace: components["schemas"]["WorkItemConflictRule"] | null;
+            project: components["schemas"]["WorkItemConflictRule"] | null;
+            effective: components["schemas"]["WorkItemConflictRule"];
+            inherited: components["schemas"]["WorkItemConflictRule"];
+            /** @enum {string} */
+            source: "project" | "workspace" | "default";
+        };
+        "ScopedSetting<WorkItemIssueRule>": {
+            workspace: components["schemas"]["WorkItemIssueRule"] | null;
+            project: components["schemas"]["WorkItemIssueRule"] | null;
+            effective: components["schemas"]["WorkItemIssueRule"];
+            inherited: components["schemas"]["WorkItemIssueRule"];
+            /** @enum {string} */
+            source: "project" | "workspace" | "default";
+        };
+        "ScopedSetting<WorkItemVerificationRule>": {
+            workspace: components["schemas"]["WorkItemVerificationRule"] | null;
+            project: components["schemas"]["WorkItemVerificationRule"] | null;
+            effective: components["schemas"]["WorkItemVerificationRule"];
+            inherited: components["schemas"]["WorkItemVerificationRule"];
+            /** @enum {string} */
+            source: "project" | "workspace" | "default";
+        };
+        "ScopedSetting<number>": {
+            workspace: number | null;
+            project: number | null;
+            effective: number;
+            inherited: number;
+            /** @enum {string} */
+            source: "project" | "workspace" | "default";
         };
         SearchApiOperationsResponse: {
             operations: {
@@ -19824,6 +20089,90 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScaffoldProjectResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ProjectsController_settingOverrides: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectSettingOverridesResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ProjectsController_settingsAccess: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectSettingsAccess"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
@@ -29464,7 +29813,7 @@ export interface operations {
                 from?: string;
                 /** @description ISO timestamp; defaults to now */
                 to?: string;
-                groupBy?: "user" | "model" | "day";
+                groupBy?: "user" | "model" | "day" | "project";
             };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
@@ -32422,6 +32771,94 @@ export interface operations {
             };
         };
     };
+    ProjectWorkItemRulesController_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectWorkItemRules"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ProjectWorkItemRulesController_update: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProjectWorkItemRulesDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectWorkItemRules"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     TrackerRoutesController_get: {
         parameters: {
             query?: never;
@@ -33433,6 +33870,52 @@ export interface operations {
         };
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GlossaryTerm"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    GlossaryController_promote: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PromoteGlossaryTermDto"];
+            };
+        };
+        responses: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -36873,7 +37356,12 @@ export interface operations {
     };
     ApiSettingsController_listEnvironments: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Only the environments a suite of this project may use: the shared ones and the project's own */
+                projectId?: string;
+                /** @description The same, by a spec document: the environments its suites may run with */
+                documentId?: string;
+            };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
                 "Accept-Language"?: "en" | "ru";
@@ -37113,6 +37601,94 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiSettingsResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ProjectApiSettingsController_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectBreakingChangeSettings"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ProjectApiSettingsController_update: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProjectBreakingChangesDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectBreakingChangeSettings"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
@@ -38435,6 +39011,94 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KnowledgeHealthSettingsResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ProjectVerificationSettingsController_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectVerificationSettings"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ProjectVerificationSettingsController_update: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProjectVerificationSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectVerificationSettings"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
@@ -42840,6 +43504,94 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaptureResult"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ProjectCaptureSettingsController_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectCaptureParentSettings"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ProjectCaptureSettingsController_update: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProjectCaptureParentDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectCaptureParentSettings"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

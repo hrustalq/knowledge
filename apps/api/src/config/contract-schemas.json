@@ -2619,6 +2619,15 @@
       "errors"
     ]
   },
+  "AiUsageGroupBy": {
+    "type": "string",
+    "enum": [
+      "user",
+      "model",
+      "day",
+      "project"
+    ]
+  },
   "AiUsageLogEntry": {
     "type": "object",
     "properties": {
@@ -2766,12 +2775,7 @@
         "type": "string"
       },
       "groupBy": {
-        "type": "string",
-        "enum": [
-          "user",
-          "model",
-          "day"
-        ]
+        "$ref": "#/components/schemas/AiUsageGroupBy"
       },
       "totals": {
         "type": "object",
@@ -4658,6 +4662,10 @@
           "type": "string"
         }
       },
+      "projectId": {
+        "type": "string",
+        "nullable": true
+      },
       "updatedAt": {
         "type": "string"
       }
@@ -4669,6 +4677,7 @@
       "inputs",
       "secrets",
       "secretOrigins",
+      "projectId",
       "updatedAt"
     ]
   },
@@ -13187,7 +13196,8 @@
         "type": "string"
       },
       "projectId": {
-        "type": "string"
+        "type": "string",
+        "nullable": true
       },
       "term": {
         "type": "string"
@@ -18665,6 +18675,44 @@
       "openMergeRequest"
     ]
   },
+  "ProjectBreakingChangeSettings": {
+    "type": "object",
+    "properties": {
+      "workspaceId": {
+        "type": "string"
+      },
+      "projectId": {
+        "type": "string"
+      },
+      "policy": {
+        "$ref": "#/components/schemas/ScopedSetting%3CApiBreakingChangePolicy%3E"
+      }
+    },
+    "required": [
+      "workspaceId",
+      "projectId",
+      "policy"
+    ]
+  },
+  "ProjectCaptureParentSettings": {
+    "type": "object",
+    "properties": {
+      "workspaceId": {
+        "type": "string"
+      },
+      "projectId": {
+        "type": "string"
+      },
+      "parentDocumentId": {
+        "$ref": "#/components/schemas/ScopedSetting%3C(string%7Cnull)%3E"
+      }
+    },
+    "required": [
+      "workspaceId",
+      "projectId",
+      "parentDocumentId"
+    ]
+  },
   "ProjectCascadeCounts": {
     "type": "object",
     "properties": {
@@ -18888,6 +18936,68 @@
       "recentPages"
     ]
   },
+  "ProjectSettingKey": {
+    "type": "string",
+    "enum": [
+      "verification",
+      "breakingChanges",
+      "lintPolicy",
+      "workItems",
+      "captureParent"
+    ]
+  },
+  "ProjectSettingOverridesResponse": {
+    "type": "object",
+    "properties": {
+      "overrides": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "projectId": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "settings": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/ProjectSettingKey"
+              }
+            }
+          },
+          "required": [
+            "projectId",
+            "name",
+            "settings"
+          ]
+        }
+      }
+    },
+    "required": [
+      "overrides"
+    ]
+  },
+  "ProjectSettingsAccess": {
+    "type": "object",
+    "properties": {
+      "projectId": {
+        "type": "string"
+      },
+      "canWrite": {
+        "type": "boolean"
+      },
+      "canWriteGates": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "projectId",
+      "canWrite",
+      "canWriteGates"
+    ]
+  },
   "ProjectSiteResponse": {
     "type": "object",
     "properties": {
@@ -18988,6 +19098,84 @@
       "avatarColor",
       "documentCount",
       "createdAt"
+    ]
+  },
+  "ProjectVerificationSettings": {
+    "type": "object",
+    "properties": {
+      "workspaceId": {
+        "type": "string"
+      },
+      "projectId": {
+        "type": "string"
+      },
+      "reviewIntervalDays": {
+        "$ref": "#/components/schemas/ScopedSetting%3Cnumber%3E"
+      },
+      "remindBeforeDays": {
+        "$ref": "#/components/schemas/ScopedSetting%3Cnumber%3E"
+      },
+      "inactiveAfterDays": {
+        "$ref": "#/components/schemas/ScopedSetting%3Cnumber%3E"
+      },
+      "emptyMaxChars": {
+        "$ref": "#/components/schemas/ScopedSetting%3Cnumber%3E"
+      }
+    },
+    "required": [
+      "workspaceId",
+      "projectId",
+      "reviewIntervalDays",
+      "remindBeforeDays",
+      "inactiveAfterDays",
+      "emptyMaxChars"
+    ]
+  },
+  "ProjectWorkItemRules": {
+    "type": "object",
+    "properties": {
+      "workspaceId": {
+        "type": "string"
+      },
+      "projectId": {
+        "type": "string"
+      },
+      "issues": {
+        "$ref": "#/components/schemas/ScopedSetting%3CWorkItemIssueRule%3E"
+      },
+      "conflicts": {
+        "$ref": "#/components/schemas/ScopedSetting%3CWorkItemConflictRule%3E"
+      },
+      "verification": {
+        "$ref": "#/components/schemas/ScopedSetting%3CWorkItemVerificationRule%3E"
+      },
+      "routed": {
+        "type": "boolean"
+      },
+      "ceiling": {
+        "type": "object",
+        "properties": {
+          "maxPerTick": {
+            "type": "number"
+          },
+          "syncEnabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "maxPerTick",
+          "syncEnabled"
+        ]
+      }
+    },
+    "required": [
+      "workspaceId",
+      "projectId",
+      "issues",
+      "conflicts",
+      "verification",
+      "routed",
+      "ceiling"
     ]
   },
   "ProposeAgentFindingResponse": {
@@ -21571,6 +21759,244 @@
       "prefix",
       "createdAt",
       "lastUsedAt"
+    ]
+  },
+  "ScopedSetting<(string|null)>": {
+    "type": "object",
+    "properties": {
+      "workspace": {
+        "type": "string",
+        "nullable": true
+      },
+      "project": {
+        "type": "string",
+        "nullable": true
+      },
+      "effective": {
+        "type": "string",
+        "nullable": true
+      },
+      "inherited": {
+        "type": "string",
+        "nullable": true
+      },
+      "source": {
+        "type": "string",
+        "enum": [
+          "project",
+          "workspace",
+          "default"
+        ]
+      }
+    },
+    "required": [
+      "workspace",
+      "project",
+      "effective",
+      "inherited",
+      "source"
+    ]
+  },
+  "ScopedSetting<ApiBreakingChangePolicy>": {
+    "type": "object",
+    "properties": {
+      "workspace": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ApiBreakingChangePolicy"
+          }
+        ],
+        "nullable": true
+      },
+      "project": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ApiBreakingChangePolicy"
+          }
+        ],
+        "nullable": true
+      },
+      "effective": {
+        "$ref": "#/components/schemas/ApiBreakingChangePolicy"
+      },
+      "inherited": {
+        "$ref": "#/components/schemas/ApiBreakingChangePolicy"
+      },
+      "source": {
+        "type": "string",
+        "enum": [
+          "project",
+          "workspace",
+          "default"
+        ]
+      }
+    },
+    "required": [
+      "workspace",
+      "project",
+      "effective",
+      "inherited",
+      "source"
+    ]
+  },
+  "ScopedSetting<WorkItemConflictRule>": {
+    "type": "object",
+    "properties": {
+      "workspace": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/WorkItemConflictRule"
+          }
+        ],
+        "nullable": true
+      },
+      "project": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/WorkItemConflictRule"
+          }
+        ],
+        "nullable": true
+      },
+      "effective": {
+        "$ref": "#/components/schemas/WorkItemConflictRule"
+      },
+      "inherited": {
+        "$ref": "#/components/schemas/WorkItemConflictRule"
+      },
+      "source": {
+        "type": "string",
+        "enum": [
+          "project",
+          "workspace",
+          "default"
+        ]
+      }
+    },
+    "required": [
+      "workspace",
+      "project",
+      "effective",
+      "inherited",
+      "source"
+    ]
+  },
+  "ScopedSetting<WorkItemIssueRule>": {
+    "type": "object",
+    "properties": {
+      "workspace": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/WorkItemIssueRule"
+          }
+        ],
+        "nullable": true
+      },
+      "project": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/WorkItemIssueRule"
+          }
+        ],
+        "nullable": true
+      },
+      "effective": {
+        "$ref": "#/components/schemas/WorkItemIssueRule"
+      },
+      "inherited": {
+        "$ref": "#/components/schemas/WorkItemIssueRule"
+      },
+      "source": {
+        "type": "string",
+        "enum": [
+          "project",
+          "workspace",
+          "default"
+        ]
+      }
+    },
+    "required": [
+      "workspace",
+      "project",
+      "effective",
+      "inherited",
+      "source"
+    ]
+  },
+  "ScopedSetting<WorkItemVerificationRule>": {
+    "type": "object",
+    "properties": {
+      "workspace": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/WorkItemVerificationRule"
+          }
+        ],
+        "nullable": true
+      },
+      "project": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/WorkItemVerificationRule"
+          }
+        ],
+        "nullable": true
+      },
+      "effective": {
+        "$ref": "#/components/schemas/WorkItemVerificationRule"
+      },
+      "inherited": {
+        "$ref": "#/components/schemas/WorkItemVerificationRule"
+      },
+      "source": {
+        "type": "string",
+        "enum": [
+          "project",
+          "workspace",
+          "default"
+        ]
+      }
+    },
+    "required": [
+      "workspace",
+      "project",
+      "effective",
+      "inherited",
+      "source"
+    ]
+  },
+  "ScopedSetting<number>": {
+    "type": "object",
+    "properties": {
+      "workspace": {
+        "type": "number",
+        "nullable": true
+      },
+      "project": {
+        "type": "number",
+        "nullable": true
+      },
+      "effective": {
+        "type": "number"
+      },
+      "inherited": {
+        "type": "number"
+      },
+      "source": {
+        "type": "string",
+        "enum": [
+          "project",
+          "workspace",
+          "default"
+        ]
+      }
+    },
+    "required": [
+      "workspace",
+      "project",
+      "effective",
+      "inherited",
+      "source"
     ]
   },
   "SearchApiOperationsResponse": {

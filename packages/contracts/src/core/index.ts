@@ -982,6 +982,90 @@ export type KnowledgeHealthSettingsOverride = {
   [K in Exclude<keyof KnowledgeHealthSettingsValues, 'trustWeights'>]: KnowledgeHealthSettingsValues[K] | null;
 } & { trustWeights: Partial<TrustWeights> | null };
 
+/**
+ * A setting resolved across levels (#919): project → workspace → the code or
+ * env default. Each level's own ask beside what applies, so a settings page
+ * never shows an inherited value as the project's. The one shape for every
+ * project override; a deployment ceiling on top stays {@link CeilingSetting}.
+ */
+export interface ScopedSetting<T> {
+  /** What the workspace set. Null = inherit the default. */
+  workspace: T | null;
+  /** What the project set. Null = inherit the workspace; always null when no project is named. */
+  project: T | null;
+  /** What applies. */
+  effective: T;
+  /** What would apply without the project's value: the workspace's, else the default. What "reset" goes back to. */
+  inherited: T;
+  /** The level that decided `effective`. */
+  source: 'project' | 'workspace' | 'default';
+}
+
+/** Resolve one {@link ScopedSetting}: the first level that set a value wins. */
+export function scopedSetting<T>(project: T | null | undefined, workspace: T | null | undefined, fallback: T): ScopedSetting<T> {
+  const p = project ?? null;
+  const w = workspace ?? null;
+  const inherited = w ?? fallback;
+  return { workspace: w, project: p, effective: p ?? inherited, inherited, source: p !== null ? 'project' : w !== null ? 'workspace' : 'default' };
+}
+
+/**
+ * Every setting a project may override (#919), as the settings page groups
+ * them. `verification` and `workItems` are groups of columns; a project
+ * overrides the group when it sets any of them.
+ */
+export const PROJECT_SETTING_KEYS = ['verification', 'breakingChanges', 'lintPolicy', 'workItems', 'captureParent'] as const;
+export type ProjectSettingKey = (typeof PROJECT_SETTING_KEYS)[number];
+
+// GET /v1/projects/setting-overrides?workspaceId= — which projects override what, for the workspace settings screens.
+export interface ProjectSettingOverridesResponse {
+  /** Only projects the caller may open, and only those that override something. */
+  overrides: { projectId: string; name: string; settings: ProjectSettingKey[] }[];
+}
+
+// GET /v1/projects/:id/settings/access — what the caller may change on the project's settings page.
+export interface ProjectSettingsAccess {
+  projectId: string;
+  /** Workspace admin, or a workspace editor holding `manage` on the project: the non-gate settings. */
+  canWrite: boolean;
+  /** Workspace admin: the two merge gates, `breakingChanges` and `lintPolicy`. */
+  canWriteGates: boolean;
+}
+
+/**
+ * GET/PATCH /v1/projects/:id/settings/capture-parent (#924): the page new
+ * captured pages of the project nest under. `workspace` and `project` are what
+ * each level stored; `effective` is the first of them that is still a live
+ * page of this project — a deleted or moved parent is skipped, never an error
+ * — and null means the project root. Ids only: a title here would reach
+ * readers who may not open the page.
+ */
+export interface ProjectCaptureParentSettings {
+  workspaceId: string;
+  projectId: string;
+  parentDocumentId: ScopedSetting<string | null>;
+}
+
+/**
+ * The freshness thresholds a project may override (#921). The search knobs in
+ * the same settings row stay workspace-only: search spans projects.
+ */
+export const PROJECT_VERIFICATION_KEYS = ['reviewIntervalDays', 'remindBeforeDays', 'inactiveAfterDays', 'emptyMaxChars'] as const;
+export type ProjectVerificationKey = (typeof PROJECT_VERIFICATION_KEYS)[number];
+export type VerificationThresholds = Pick<KnowledgeHealthSettingsValues, ProjectVerificationKey>;
+/** Sparse: `null` inherits the workspace's value. */
+export type ProjectVerificationOverride = { [K in ProjectVerificationKey]: number | null };
+
+// GET/PATCH /v1/projects/:id/settings/verification
+export interface ProjectVerificationSettings {
+  workspaceId: string;
+  projectId: string;
+  reviewIntervalDays: ScopedSetting<number>;
+  remindBeforeDays: ScopedSetting<number>;
+  inactiveAfterDays: ScopedSetting<number>;
+  emptyMaxChars: ScopedSetting<number>;
+}
+
 // POST /v1/documents/:id/archive | /unarchive
 export interface ArchiveDocumentResponse {
   documentId: string;

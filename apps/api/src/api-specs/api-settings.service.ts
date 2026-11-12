@@ -5,11 +5,13 @@ import {
   API_TRY_PROXY_MODES,
   resolveApiBreakingChangePolicy,
   resolveApiTestRunner,
+  scopedApiBreakingChangePolicy,
   type ApiBreakingChangePolicy,
   type ApiTestRunnerSettings,
   type ApiSettingsResponse,
   type ApiTryProxyMode,
   type ApiTryProxySettings,
+  type ProjectBreakingChangeSettings,
   type UpdateApiSettingsRequest,
 } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
@@ -81,6 +83,29 @@ export class ApiSettingsService {
       testRunner: resolveApiTestRunner(row?.apiTestRunner, this.config.get('API_TEST_RUNNER_MODE', { infer: true })),
       updatedAt: row?.updatedAt.toISOString() ?? null,
     };
+  }
+
+  /** A project's breaking-change gate (#922): what each level asked for and what applies. */
+  async projectBreakingChanges(projectId: string): Promise<ProjectBreakingChangeSettings> {
+    const project = await this.prisma.project.findUniqueOrThrow({
+      where: { id: projectId },
+      select: { workspaceId: true, apiBreakingChangePolicy: true },
+    });
+    const row = await this.prisma.workspaceSettings.findUnique({
+      where: { workspaceId: project.workspaceId },
+      select: { apiBreakingChangePolicy: true },
+    });
+    return {
+      workspaceId: project.workspaceId,
+      projectId,
+      policy: scopedApiBreakingChangePolicy(project.apiBreakingChangePolicy, row?.apiBreakingChangePolicy),
+    };
+  }
+
+  /** null goes back to the workspace's policy. */
+  async setProjectBreakingChanges(projectId: string, policy: ApiBreakingChangePolicy | null): Promise<ProjectBreakingChangeSettings> {
+    await this.prisma.project.update({ where: { id: projectId }, data: { apiBreakingChangePolicy: policy } });
+    return this.projectBreakingChanges(projectId);
   }
 
   async update(workspaceId: string, patch: UpdateApiSettingsRequest, actorId?: string): Promise<ApiSettingsResponse> {

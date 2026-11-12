@@ -12,6 +12,7 @@ import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type {
   AiBudgetInfo,
   AiMyUsageResponse,
+  AiUsageGroupBy,
   AiUsageResponse,
   ListAiBudgetsResponse,
   ListAiUsageLogsResponse,
@@ -39,13 +40,13 @@ export class AiUsageController {
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiQuery({ name: 'from', required: false, description: 'ISO timestamp; defaults to 30 days ago' })
   @ApiQuery({ name: 'to', required: false, description: 'ISO timestamp; defaults to now' })
-  @ApiQuery({ name: 'groupBy', required: false, enum: ['user', 'model', 'day'] })
+  @ApiQuery({ name: 'groupBy', required: false, enum: ['user', 'model', 'day', 'project'] })
   @ApiOperation({ summary: 'Token usage totals, per-bucket breakdown and a daily series' })
   summarize(
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
-    @Query('groupBy') groupBy?: 'user' | 'model' | 'day',
+    @Query('groupBy') groupBy?: AiUsageGroupBy,
   ): Promise<AiUsageResponse> {
     return this.usage.summarize(workspaceId, { from, to, groupBy });
   }

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { CAPTURE_PAGE_KINDS, normalizeEntityKey, type CaptureKind, type CaptureSimilar } from '@knowledge/contracts';
+import { CAPTURE_PAGE_KINDS, type CaptureKind, type CaptureSimilar } from '@knowledge/contracts';
 
 /**
  * The pure half of capture dedupe (issue #73): what counts as the same
@@ -106,7 +106,5 @@ export function decidePage(
   return { outcome: 'new-page', targetDocumentId: null };
 }
 
-/** A term and its aliases as one set of folded keys — the glossary's sense of "the same word". */
-export function foldTermKeys(term: string, aliases: readonly string[] = []): Set<string> {
-  return new Set([term, ...aliases].map((s) => normalizeEntityKey(s.trim())).filter(Boolean));
-}
+/** The glossary's sense of "the same word", shared with the page linker. */
+export { glossaryTermKeys as foldTermKeys } from '@knowledge/contracts';

@@ -19,6 +19,7 @@
  * was deleted with the `MarkdownView` prop that was its only entry point.
  */
 import {
+  effectiveGlossary,
   GLOSSARY_BOUNDARY_AFTER,
   GLOSSARY_BOUNDARY_BEFORE,
   type GlossaryTerm,
@@ -45,18 +46,20 @@ export function spellingMatches(candidate: Candidate, matched: string): boolean 
 }
 
 /**
- * The terms one page may link (#702): enabled, from the page's own project,
- * and not defined by the page itself (the link would go where the reader
- * already is). The page decides, never the project switcher, so a page reached
- * from search or a link gets its own project's vocabulary. A page whose project
- * is unknown links nothing rather than guessing.
+ * The terms one page may link (#702): enabled, from the page's own project or
+ * the workspace's own (#926, a project's term replacing a workspace term of
+ * the same name — `effectiveGlossary`), and not defined by the page itself
+ * (the link would go where the reader already is). The page decides, never
+ * the project switcher, so a page reached from search or a link gets its own
+ * project's vocabulary. A page whose project is unknown links nothing rather
+ * than guessing.
  */
 export function pageTerms(
   terms: GlossaryTerm[],
   page: { projectId?: string | null; documentId: string },
 ): GlossaryTerm[] {
   if (!page.projectId) return []
-  return terms.filter((t) => t.enabled && t.projectId === page.projectId && t.documentId !== page.documentId)
+  return effectiveGlossary(terms, page.projectId).filter((t) => t.enabled && t.documentId !== page.documentId)
 }
 
 export const GLOSSARY_ATTR = 'data-kn-glossary'

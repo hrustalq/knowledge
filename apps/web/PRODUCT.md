@@ -59,7 +59,8 @@ All four are binding. Future work may not quietly drop one to simplify a surface
 ## Operating Context
 
 Containment is **Workspace > Project > Document**; the workspace is the tenant and
-ACL boundary, the project is organizational. Documents nest into a tree and carry a
+ACL boundary; the project is where one team's policy lives (review intervals,
+merge gates, handoff rules), each a sparse override of the workspace's. Documents nest into a tree and carry a
 category (process, use case, contract, ERD…).
 
 The daily loop:

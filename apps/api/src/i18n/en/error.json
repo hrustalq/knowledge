@@ -183,6 +183,7 @@
     "queryFailed": "Graph query failed: {reason}. Positions refer to the scoped query that ran: {query}"
   },
   "glossary": {
+    "workspaceTermExists": "The workspace already has a term “{term}”. Promote with replace to put this one in its place, or delete this project's term to use the workspace's.",
     "notFound": "Glossary term {id} not found",
     "duplicate": "\"{term}\" is already in this project's glossary",
     "documentNotFound": "Document {id} not found in workspace"
@@ -257,6 +258,7 @@
     "providerNoModels": "This provider has no models yet. Add one to test it.",
     "encryptionKeyMissing": "SETTINGS_ENCRYPTION_KEY is not configured, so API keys cannot be stored. Set it (openssl rand -base64 32) and restart the API, or configure the provider through ASSISTANT_API_KEY.",
     "captureParentNotInWorkspace": "The capture parent page {id} is not a page of this workspace.",
+    "captureParentNotInProject": "The capture parent page {id} is not a page of this project that you can open.",
     "captureThresholdOrder": "The amend threshold ({amend}) cannot be above the duplicate threshold ({dedupe}).",
     "pluginUrlInvalid": "Plugin URL is not a valid URL",
     "pluginUrlNotHttps": "Plugin URL must use https (http is allowed only with AI_PLUGINS_ALLOW_PRIVATE_URLS)",

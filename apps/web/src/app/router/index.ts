@@ -60,7 +60,7 @@ export function createRouter() {
             // Third rail: the roster lives in the shell, the selection here. A
             // project's site settings are publishing's page; nesting it is the
             // router's job, since modules never import each other.
-            children: [...publishing.projectSiteRoutes, projects.projectDetailRoute],
+            children: [...publishing.projectSiteRoutes, projects.projectPoliciesRoute, projects.projectDetailRoute],
           },
           ...documents.settingsRoutes,
           ...templates.settingsRoutes,

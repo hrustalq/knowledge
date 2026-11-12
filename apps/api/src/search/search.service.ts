@@ -196,7 +196,7 @@ export class SearchService {
         return !isScaffoldStub(d.revisions.find((r) => r.id === head));
       });
       docById = new Map(pages.map((d) => [d.id, d]));
-      trustOf = await this.trustOf(pages, settings.inactiveAfterDays);
+      trustOf = await this.trustOf(pages, await this.policy.thresholds(dto.workspaceId));
       aclFiltered = new Set(pool.filter((h) => !docById.has(h.documentId)).map((h) => h.chunkId)).size;
     };
     // Archived pages drop first, whatever the switch says: they are put away,
@@ -419,7 +419,7 @@ export class SearchService {
   /** What each page says about how much to trust it, by the same predicate every surface reads. */
   private async trustOf(
     docs: Awaited<ReturnType<SearchService['loadDocs']>>,
-    inactiveAfterDays: number,
+    thresholds: Awaited<ReturnType<VerificationPolicyService['thresholds']>>,
   ): Promise<Map<string, DocumentTrust>> {
     const [issues, sources] = await Promise.all([
       this.provenance.openIssueCounts(docs.map((d) => d.id)),
@@ -434,7 +434,7 @@ export class SearchService {
           verifiedAt: d.verifiedAt?.toISOString() ?? null,
           expiresAt: d.verificationExpiresAt?.toISOString() ?? null,
           ownerId: d.ownerId,
-          inactive: isInactive(d.lastActivityAt, inactiveAfterDays, now),
+          inactive: isInactive(d.lastActivityAt, thresholds(d.projectId).inactiveAfterDays, now),
         };
         return [d.id, trust];
       }),

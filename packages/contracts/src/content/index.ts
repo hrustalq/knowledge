@@ -1,4 +1,5 @@
 import type { DocumentCategory } from '@knowledge/contracts/documents';
+import { normalizeEntityKey } from '@knowledge/contracts/graph';
 
 // ---------------------------------------------------------------------------
 
@@ -29,8 +30,12 @@ export type GlossaryTermSource = 'manual' | 'ai' | 'captured';
 export interface GlossaryTerm {
   termId: string;
   workspaceId: string;
-  /** Workspace > Project > Document: vocabulary belongs to a project. */
-  projectId: string;
+  /**
+   * The project the term belongs to, or null for a workspace term (#926),
+   * which links on every project's pages unless that project defines the same
+   * word — see {@link effectiveGlossary}.
+   */
+  projectId: string | null;
   term: string;
   /** Alternative spellings, abbreviations and inflections that link to this entry. */
   aliases: string[];
@@ -60,8 +65,42 @@ export interface GlossaryTerm {
 
 export interface ListGlossaryResponse {
   workspaceId: string;
+  /** Null: every term of the workspace. Otherwise that project's terms and the workspace's own. */
   projectId: string | null;
   terms: GlossaryTerm[];
+}
+
+/** A term and its aliases as one set of folded keys — the glossary's sense of "the same word". */
+export function glossaryTermKeys(term: string, aliases: readonly string[] = []): Set<string> {
+  return new Set([term, ...aliases].map((s) => normalizeEntityKey(s.trim())).filter(Boolean));
+}
+
+/**
+ * The vocabulary of one project's pages (#926): the project's own terms, plus
+ * every workspace term none of them replaces. A project term replaces a
+ * workspace term that shares a folded name or alias with it — whole, not
+ * spelling by spelling, and whether or not the project's term is enabled: the
+ * project has said what the word means there. With no workspace terms this is
+ * the project's own roster, exactly as before.
+ */
+export function effectiveGlossary<T extends { projectId: string | null; term: string; aliases: readonly string[] }>(
+  terms: readonly T[],
+  projectId: string,
+): T[] {
+  const own = terms.filter((t) => t.projectId === projectId);
+  const taken = new Set(own.flatMap((t) => [...glossaryTermKeys(t.term, t.aliases)]));
+  const inherited = terms.filter((t) => t.projectId === null && ![...glossaryTermKeys(t.term, t.aliases)].some((key) => taken.has(key)));
+  return [...own, ...inherited];
+}
+
+// POST /v1/glossary/:id/promote
+export interface PromoteGlossaryTermRequest {
+  /**
+   * What to do when the workspace already has a term of that name: without
+   * this the promotion is refused (409, `reason: 'workspace-term-exists'`);
+   * `replace` deletes the existing workspace term and its exclusions.
+   */
+  onClash?: 'replace';
 }
 
 

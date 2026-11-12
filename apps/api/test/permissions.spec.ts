@@ -312,6 +312,53 @@ describe('PermissionService.requireResource', () => {
   });
 });
 
+describe('PermissionService.requireProjectManage (#919)', () => {
+  const OTHER = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  const manage = (role: string, grants: GrantRow[] = [], who: Principal = alice, projectId = PROJECT) =>
+    permissionsAs(role, grants).service.requireProjectManage(who, WS, projectId);
+
+  it('lets a workspace admin through with no grant', async () => {
+    await expect(manage('admin')).resolves.toBeUndefined();
+  });
+
+  it('lets an editor holding manage on the project through, by their own grant or a group', async () => {
+    await expect(manage('editor', [grant(PROJECT, ALICE, 'manage')])).resolves.toBeUndefined();
+    const { service, prisma } = permissionsAs('editor', [grant(PROJECT, SECURITY, 'manage', 'group')]);
+    prisma.userGroupMember.findMany.mockResolvedValue([{ groupId: SECURITY }] as never);
+    await expect(service.requireProjectManage(alice, WS, PROJECT)).resolves.toBeUndefined();
+  });
+
+  it('refuses an editor without the grant, although an unmanaged project lets every editor restrict it', async () => {
+    for (const grants of [[], [grant(PROJECT, ALICE, 'edit')], [grant(PROJECT, BOB, 'manage')]]) {
+      const error = await manage('editor', grants).catch((e) => e);
+      expect(error).toBeInstanceOf(ForbiddenException);
+      expect(error.getResponse()).toMatchObject({ resourceType: 'project', resourceId: PROJECT, required: 'manage' });
+      expect(JSON.stringify(error.getResponse())).not.toContain('People');
+    }
+  });
+
+  it('keeps the workspace role as the ceiling: a viewer or guest holding manage is refused', async () => {
+    await expect(manage('viewer', [grant(PROJECT, ALICE, 'manage')])).rejects.toThrow(/roleRequired/);
+    await expect(manage('guest', [grant(PROJECT, ALICE, 'manage')])).rejects.toThrow(/roleRequired/);
+  });
+
+  it("refuses another project's maintainer", async () => {
+    await expect(manage('editor', [grant(OTHER, ALICE, 'manage')])).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('refuses a project of another workspace as not found', async () => {
+    const { service, prisma } = permissionsAs('admin');
+    prisma.project.findUnique.mockResolvedValue({ workspaceId: OTHER, name: 'Elsewhere', restricted: false });
+    await expect(service.requireProjectManage(alice, WS, PROJECT)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('refuses a read-only or capture key as on any write', async () => {
+    const key = (scope: 'read' | 'capture'): Principal => ({ ...alice, apiKey: { id: 'k', scope, workspaceId: null } });
+    await expect(manage('editor', [grant(PROJECT, ALICE, 'manage')], key('read'))).rejects.toThrow(/apiKeyReadOnly/);
+    await expect(manage('admin', [], key('capture'))).rejects.toThrow(/apiKeyCaptureOnly/);
+  });
+});
+
 describe('ResourceAccessService.update', () => {
   it('refuses a change that would leave the caller unable to manage the page', async () => {
     const { service, prisma } = permissionsAs('editor', [grant(CHILD, ALICE, 'manage')]);

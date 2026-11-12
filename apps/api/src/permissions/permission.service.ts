@@ -339,6 +339,38 @@ export class PermissionService {
   }
 
   /**
+   * "May this caller write this project's settings" (#919), the only place the
+   * rule is spelled: a workspace admin, or a workspace editor who holds a
+   * `manage` grant on the project (their own or a group's) — its maintainer.
+   *
+   * Not `requireLevel(…, 'manage')`: on a project nobody manages, `levelOn`
+   * hands manage to every editor (they may restrict an open page), and a
+   * setting is not theirs to write. The workspace role stays the ceiling, so a
+   * viewer's grant buys nothing, and a read-only or capture key is refused as
+   * on any write. The merge gates (lint, breaking-API) never ask this — they
+   * are `@Access('admin')`.
+   */
+  async requireProjectManage(principal: Principal, workspaceId: string, projectId: string): Promise<void> {
+    await this.access.requireRole(principal, workspaceId, 'editor');
+    if (principal.mode === 'dev') return;
+    const resource: AccessResource = { type: 'project', id: projectId };
+    const resolved = await this.resolveChain(resource);
+    if (resolved.workspaceId !== workspaceId) throw new NotFoundException(t('error.project.notFound', { id: projectId }));
+    const scope = await this.scopeFor(principal, workspaceId);
+    const level = levelOn(scope, resolved.chain, resolved.grants);
+    const holdsGrant = resolved.grants.some(
+      (g) =>
+        g.resourceId === projectId &&
+        g.level === 'manage' &&
+        ((g.subjectType === 'user' && g.subjectId === scope.userId) ||
+          (g.subjectType === 'group' && scope.groupIds.has(g.subjectId))),
+    );
+    if (level === 'manage' && (scope.bypass || holdsGrant)) return;
+    // An editor's implicit manage on an unmanaged project reads as `edit` here.
+    throw this.refusal(scope, resource, level === 'manage' ? 'edit' : level, 'manage');
+  }
+
+  /**
    * Whether `scope`'s holder may place a new page here: edit on the parent, or
    * on the project for a root page. A page created under a node inherits its
    * restrictions, so this is the same question as editing the node — and it

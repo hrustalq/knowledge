@@ -529,4 +529,136 @@ describe('Hindsight compatibility (e2e, #986)', () => {
       expect(JSON.stringify(await page.json())).not.toContain('software engineer');
     });
   });
+
+  describe('phase 3: async retain and operations', () => {
+    const mem = `async-${nonce}`;
+    const secret = `sk-${'z9Y8x7W6'.repeat(4)}`;
+    const texts = (r: { results: Array<{ text: string }> }) => r.results.map((x) => x.text);
+    const statusOf = async (id: string, key = people.alice.key) => (await sdk.getOperationStatus({ client: raw(key), path: { bank_id: mem, operation_id: id } })).data!;
+    async function settled(id: string) {
+      for (let i = 0; i < 100; i++) {
+        const status = await statusOf(id);
+        if (status.status !== 'pending' && status.status !== 'processing') return status;
+        await new Promise((r) => setTimeout(r, 150));
+      }
+      throw new Error(`operation ${id} did not settle`);
+    }
+    const unitsOf = (documentId: string) => prisma.memoryUnit.findMany({ where: { workspaceId: WS_A, documentId, bank: { bankId: mem } } });
+    /** The queue never hears of the next operation: what a Redis outage at submit leaves behind. */
+    async function withQueueDown<T>(fn: () => Promise<T>): Promise<T> {
+      const { MemoryProducer } = await import('../src/memory/memory.producer.js');
+      const enqueue = vi.spyOn(app.get(MemoryProducer), 'enqueue').mockRejectedValue(new Error('redis down'));
+      try {
+        return await fn();
+      } finally {
+        enqueue.mockRestore();
+      }
+    }
+    const sweep = async (now?: number) => {
+      const { MemoryOperationsService } = await import('../src/memory/memory-operations.service.js');
+      return app.get(MemoryOperationsService).sweep(now);
+    };
+
+    it('retains asynchronously: an operation id at once, the memory recallable once it reads completed', async () => {
+      const hs = client(people.alice.key);
+      const res = await hs.retain(mem, 'Dana leads the platform team', { async: true, documentId: 'dana' });
+      expect(res).toMatchObject({ success: true, bank_id: mem, items_count: 1, async: true, operation_id: expect.any(String) });
+      const done = await settled(res.operation_id!);
+      expect(done).toMatchObject({ operation_id: res.operation_id, status: 'completed', operation_type: 'retain', completed_at: expect.any(String) });
+      expect(texts(await hs.recall(mem, 'Who leads the platform team?'))[0]).toBe('Dana leads the platform team');
+
+      const listed = await sdk.listOperations({ client: raw(people.alice.key), path: { bank_id: mem } });
+      expect(listed.data).toMatchObject({ bank_id: mem, total: 1, operations: [{ id: res.operation_id, task_type: 'retain', status: 'completed', items_count: 1, error_message: null }] });
+      // The memories hold the text now; the settled row keeps no second copy.
+      expect((await prisma.memoryOperation.findUniqueOrThrow({ where: { id: res.operation_id! } })).payload).toEqual([]);
+    });
+
+    it('makes one operation and one set of units from an operation_id sent twice', async () => {
+      const hs = client(people.alice.key);
+      const operationId = randomUUID();
+      const items = [{ content: 'Erin runs the on-call rota', document_id: 'erin', update_mode: 'append' as const }];
+      const [a, b] = await Promise.all([hs.retainBatch(mem, items, { async: true, operationId }), hs.retainBatch(mem, items, { async: true, operationId })]);
+      expect([a.operation_id, b.operation_id]).toEqual([operationId, operationId]);
+      expect((await settled(operationId)).status).toBe('completed');
+      await hs.retainBatch(mem, items, { async: true, operationId });
+      expect(await prisma.memoryOperation.count({ where: { id: operationId } })).toBe(1);
+      expect(await unitsOf('erin')).toHaveLength(1);
+      // The id is one operation's: another bank cannot take it.
+      const other = await call(people.alice.key, 'POST', `/v1/default/banks/other-${nonce}/memories`, { items: [{ content: 'x' }], async: true, operation_id: operationId });
+      expect(other.status).toBe(409);
+    });
+
+    it('stores the payload masked, and the sweeper picks up a job the queue never received', async () => {
+      const hs = client(people.alice.key);
+      const res = await withQueueDown(() => hs.retain(mem, `The deploy key is ${secret}`, { async: true, documentId: 'key' }));
+      const row = await prisma.memoryOperation.findUniqueOrThrow({ where: { id: res.operation_id! } });
+      expect(row.status).toBe('queued');
+      expect(JSON.stringify(row.payload)).toContain('[SECRET_1]');
+      expect(JSON.stringify(row.payload)).not.toContain(secret);
+      expect((await statusOf(res.operation_id!)).status).toBe('pending');
+      const stats = await sdk.getAgentStats({ client: raw(people.alice.key), path: { bank_id: mem } });
+      expect(stats.data?.pending_operations).toBe(1);
+
+      // Too fresh to be taken for lost; old enough, it is enqueued again.
+      expect((await sweep())!.enqueued).toBe(0);
+      expect((await sweep(Date.now() + 3 * 60_000))!.enqueued).toBe(1);
+      expect((await settled(res.operation_id!)).status).toBe('completed');
+      expect((await unitsOf('key')).map((u) => u.text)).toEqual(['The deploy key is [SECRET_1]']);
+    });
+
+    it('finishes an operation whose worker died mid-job, without a second set of units', async () => {
+      const { MemoryRetainService } = await import('../src/memory/memory-retain.service.js');
+      const bankRow = await prisma.memoryBank.findUniqueOrThrow({ where: { workspaceId_bankId: { workspaceId: WS_A, bankId: mem } } });
+      const items = [{ content: 'Finn owns the billing runbook', context: null, timestamp: null, metadata: {}, documentId: 'finn', entities: [], tags: [], append: true }];
+      const op = await prisma.memoryOperation.create({
+        data: { workspaceId: WS_A, bankId: bankRow.id, payload: items, itemsCount: 1, createdBy: people.alice.id, status: 'running', attempts: 1, startedAt: new Date() },
+      });
+      // The dead worker got as far as writing the units, and never settled the row.
+      await app.get(MemoryRetainService).retain({ workspaceId: WS_A, bank: bankRow, userId: people.alice.id, locale: 'en', items, operationId: op.id });
+      expect(await unitsOf('finn')).toHaveLength(1);
+      await prisma.$executeRaw`UPDATE memory_operations SET updated_at = now() - interval '1 hour' WHERE id = ${op.id}::uuid`;
+
+      expect(await sweep()).toMatchObject({ requeued: 1, failed: 0 });
+      expect(await settled(op.id)).toMatchObject({ status: 'completed', retry_count: 1 });
+      expect(await unitsOf('finn')).toHaveLength(1);
+
+      // Out of attempts, a claimed row is failed rather than left running forever.
+      const spent = await prisma.memoryOperation.create({
+        data: { workspaceId: WS_A, bankId: bankRow.id, payload: items, itemsCount: 1, createdBy: people.alice.id, status: 'running', attempts: 3 },
+      });
+      await prisma.$executeRaw`UPDATE memory_operations SET updated_at = now() - interval '1 hour' WHERE id = ${spent.id}::uuid`;
+      expect(await sweep()).toMatchObject({ requeued: 0, failed: 1 });
+      expect(await statusOf(spent.id)).toMatchObject({ status: 'failed', error_message: expect.stringContaining('stopped responding') });
+    });
+
+    it('cancels a pending operation, once, and reads an unknown id as not_found', async () => {
+      const hs = client(people.alice.key);
+      const res = await withQueueDown(() => hs.retain(mem, 'Never stored', { async: true, documentId: 'never' }));
+      const capture = await mintKey(people.alice.id, { workspaceId: WS_A, scope: 'capture' });
+      expect((await call(capture, 'DELETE', `/v1/default/banks/${mem}/operations/${res.operation_id}`)).status).toBe(403);
+      const cancelled = await sdk.cancelOperation({ client: raw(people.alice.key), path: { bank_id: mem, operation_id: res.operation_id! } });
+      expect(cancelled.data).toMatchObject({ success: true, operation_id: res.operation_id });
+      expect((await statusOf(res.operation_id!)).status).toBe('cancelled');
+      expect((await call(people.alice.key, 'DELETE', `/v1/default/banks/${mem}/operations/${res.operation_id}`)).status).toBe(409);
+      // Cancelled is final: a sweep long after does not bring it back.
+      await sweep(Date.now() + 3 * 60_000);
+      expect(await unitsOf('never')).toEqual([]);
+      expect((await statusOf(randomUUID())).status).toBe('not_found');
+
+      const pending = await sdk.listOperations({ client: raw(people.alice.key), path: { bank_id: mem }, query: { status: 'cancelled' } });
+      expect(pending.data?.operations.map((o) => o.id)).toEqual([res.operation_id]);
+    });
+
+    it('keeps operations inside the workspace, and purges finished ones after their retention', async () => {
+      const [op] = await prisma.memoryOperation.findMany({ where: { workspaceId: WS_A, status: 'completed' }, take: 1 });
+      for (const [method, path] of [['GET', '/operations'], ['GET', `/operations/${op!.id}`], ['DELETE', `/operations/${op!.id}`]]) {
+        expect([path, (await call(people.carol.key, method!, `/v1/default/banks/${mem}${path}`)).status]).toEqual([path, 404]);
+      }
+      const before = await prisma.memoryOperation.count({ where: { workspaceId: WS_A } });
+      expect((await sweep(Date.now() + 8 * 86_400_000))!.purged).toBeGreaterThanOrEqual(before - 1);
+      expect((await statusOf(op!.id)).status).toBe('not_found');
+      // Purging the record of a retain does not touch what it retained.
+      expect(texts(await client(people.alice.key).recall(mem, 'Who leads the platform team?'))[0]).toBe('Dana leads the platform team');
+    });
+  });
 });

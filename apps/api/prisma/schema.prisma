@@ -4810,7 +4810,8 @@ model MemoryBank {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  units MemoryUnit[]
+  units      MemoryUnit[]
+  operations MemoryOperation[]
 
   @@unique([workspaceId, bankId])
   @@map("memory_banks")
@@ -4843,11 +4844,16 @@ model MemoryUnit {
   /// is. Never written by Prisma; the GIN index is raw SQL as well.
   searchTsv   Unsupported("tsvector")? @map("search_tsv")
   createdBy   String     @map("created_by") @db.Uuid
+  /// The async retain that wrote it. A re-run of that operation replaces its
+  /// own units, so a worker killed mid-job never leaves a second set.
+  operationId String?    @map("operation_id") @db.Uuid
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   entities MemoryUnitEntity[]
+
+  @@index([operationId])
 
   @@index([bankId, documentId])
   @@index([bankId, createdAt])
@@ -4870,4 +4876,34 @@ model MemoryUnitEntity {
   @@unique([unitId, entityKey])
   @@index([bankId, entityKey])
   @@map("memory_unit_entities")
+}
+
+/// An async retain (#986): the items wait here, masked, until the worker
+/// stores them. `id` is the client's `operation_id` when it sent one, so a
+/// re-submit finds the row instead of making a second.
+model MemoryOperation {
+  id          String     @id @default(uuid()) @db.Uuid
+  workspaceId String     @map("workspace_id") @db.Uuid
+  bankId      String     @map("bank_id") @db.Uuid
+  bank        MemoryBank @relation(fields: [bankId], references: [id], onDelete: Cascade)
+  /// `retain`.
+  type        String     @default("retain")
+  /// queued → running → completed | failed, or cancelled while queued.
+  status      String     @default("queued")
+  /// The request's items as `RetainItem[]`, masked before this row is written. Emptied once the operation settles.
+  payload     Json
+  itemsCount  Int        @map("items_count")
+  createdBy   String     @map("created_by") @db.Uuid
+  locale      String     @default("en")
+  attempts    Int        @default(0)
+  error       String?
+  startedAt   DateTime?  @map("started_at") @db.Timestamptz
+  completedAt DateTime?  @map("completed_at") @db.Timestamptz
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([bankId, createdAt])
+  @@index([status, updatedAt])
+  @@map("memory_operations")
 }

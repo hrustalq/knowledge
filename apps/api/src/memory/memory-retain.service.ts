@@ -26,6 +26,18 @@ export interface RetainInput {
   userId: string;
   locale: Locale;
   items: RetainItem[];
+  /**
+   * The async retain this run belongs to. Its items were masked before its row
+   * was written (`maskItems`), so they are not masked again; and its units
+   * replace whatever an earlier, interrupted run of it wrote.
+   */
+  operationId?: string;
+}
+
+/** One masker for a whole request, over each item's content and context: the same value gets the same placeholder throughout. */
+export function maskItems(items: RetainItem[]): RetainItem[] {
+  const mask = createMasker();
+  return items.map((item) => ({ ...item, content: mask(item.content), context: item.context ? mask(item.context) : null }));
 }
 
 interface Unit {
@@ -45,7 +57,8 @@ interface Unit {
  * an async one — so it takes ids, never a principal.
  *
  * - **Masked first.** One masker per request, over content and context, before
- *   a model or a store sees either.
+ *   a model or a store sees either. An async retain's items arrive masked:
+ *   its operation row must not hold a secret either.
  * - **Never fails for want of a model.** Facts are extracted only when a model
  *   is routed at `extraction` and the budget allows; a missing route, a spent
  *   budget, a failed call or an unreadable answer all store the masked text
@@ -76,8 +89,7 @@ export class MemoryRetainService {
     if (!(await this.graph.memoryIndexReady(this.embeddings.dimension))) {
       throw new ServiceUnavailableException(t('error.memory.storeNotReady'));
     }
-    const mask = createMasker();
-    const items = input.items.map((item) => ({ ...item, content: mask(item.content), context: item.context ? mask(item.context) : null }));
+    const items = input.operationId ? input.items : maskItems(input.items);
     const { facts, usage } = await this.extract(input, items);
 
     const units: Unit[] = items.flatMap((item, i) =>
@@ -99,7 +111,10 @@ export class MemoryRetainService {
     let replaced: string[];
     try {
       replaced = await withSubjectLock(this.prisma, `memory-bank:${input.bank.id}`, async () => {
-        const old = await this.prisma.memoryUnit.findMany({ where: { bankId: input.bank.id, documentId: { in: replaces } }, select: { id: true } });
+        const old = await this.prisma.memoryUnit.findMany({
+          where: { bankId: input.bank.id, OR: [{ documentId: { in: replaces } }, ...(input.operationId ? [{ operationId: input.operationId }] : [])] },
+          select: { id: true },
+        });
         await this.prisma.memoryUnit.deleteMany({ where: { id: { in: old.map((o) => o.id) } } });
         await this.prisma.memoryUnit.createMany({ data: units.map((u) => this.row(input, u)) });
         await this.prisma.memoryUnitEntity.createMany({ data: entities });
@@ -131,6 +146,7 @@ export class MemoryRetainService {
       occurredEnd: u.fact?.occurredEnd ?? null,
       mentionedAt: at,
       createdBy: input.userId,
+      operationId: input.operationId ?? null,
     };
   }
 

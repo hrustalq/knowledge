@@ -783,6 +783,10 @@ export const envSchema = z.object({
   MEMORY_RETAIN_MAX_CHARS: z.coerce.number().int().min(1).default(50_000),
   /** Retain requests one API key (or person) may send a minute. */
   MEMORY_RETAIN_RATE_PER_MIN: z.coerce.number().int().min(1).default(120),
+  /** How long an async retain may stay claimed before the sweeper takes it for a dead worker's. */
+  MEMORY_OPERATION_TIMEOUT_MS: z.coerce.number().int().min(1000).default(600_000),
+  /** Days a finished operation's row is kept before it is purged. */
+  MEMORY_OPERATION_RETENTION_DAYS: z.coerce.number().int().min(1).default(7),
   /**
    * Let a `web` source fetch a private or loopback address. Separate from
    * CONNECTOR_ALLOW_PRIVATE_URLS because any editor can link a source, where

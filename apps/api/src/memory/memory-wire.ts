@@ -150,3 +150,46 @@ export interface RecallResponse {
   chunks?: Record<string, never>;
   source_facts?: Record<string, never>;
 }
+
+export type OperationWireStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'not_found';
+
+export interface OperationResponse {
+  id: string;
+  task_type: string;
+  operation_id: string;
+  operation_type: string;
+  items_count: number;
+  document_id: null;
+  created_at: string;
+  updated_at: string;
+  status: OperationWireStatus;
+  error_message: string | null;
+  retry_count: number;
+}
+
+export interface OperationsListResponse {
+  bank_id: string;
+  total: number;
+  limit: number;
+  offset: number;
+  operations: OperationResponse[];
+}
+
+export interface OperationStatusResponse {
+  operation_id: string;
+  status: OperationWireStatus;
+  id?: string;
+  operation_type?: string;
+  task_type?: string;
+  created_at?: string;
+  updated_at?: string;
+  completed_at?: string | null;
+  error_message?: string | null;
+  retry_count?: number;
+}
+
+export interface CancelOperationResponse {
+  success: boolean;
+  message: string;
+  operation_id: string;
+}

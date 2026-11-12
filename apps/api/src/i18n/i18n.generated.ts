@@ -922,6 +922,8 @@ export type I18nTranslations = {
             "memoryNotFound": string;
             "noReranker": string;
             "windowInvalid": string;
+            "operationIdTaken": string;
+            "operationNotPending": string;
         };
         "memo": {
             "notFound": string;

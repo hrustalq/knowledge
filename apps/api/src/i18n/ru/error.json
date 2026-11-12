@@ -225,7 +225,9 @@
     "storeNotReady": "Векторного индекса памяти ещё нет: он создаётся при запуске воркера. Запустите воркер один раз и повторите",
     "memoryNotFound": "Запись памяти {id} не найдена",
     "noReranker": "Для `min_scores.reranker` нужен реранкер, а здесь его нет: используйте `semantic`, `keyword` или `final`",
-    "windowInvalid": "В `temporal_window` нужны `start` и `end`, причём начало раньше конца"
+    "windowInvalid": "В `temporal_window` нужны `start` и `end`, причём начало раньше конца",
+    "operationIdTaken": "Этот operation_id уже принадлежит другой операции",
+    "operationNotPending": "Операция {id} не ожидает выполнения, отменить её нельзя"
   },
   "memo": {
     "notFound": "Запись не найдена",

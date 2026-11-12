@@ -112,6 +112,7 @@ export const WORKSPACE_TEARDOWN = {
   ImportJob: 'workspace',
   Memo: 'workspace',
   // Memory banks (#986), leaves to root.
+  MemoryOperation: 'workspace',
   MemoryUnitEntity: 'workspace',
   MemoryUnit: 'workspace',
   MemoryBank: 'workspace',

@@ -110,3 +110,10 @@ export class RecallDto {
   @IsOptional() @ValidateNested() @Type(() => RerankDto) rerank?: RerankDto | null;
   @IsOptional() @ValidateNested() @Type(() => RecallIncludeDto) include?: RecallIncludeDto | null;
 }
+
+export class ListOperationsQueryDto {
+  @IsOptional() @IsString() @MaxLength(40) status?: string;
+  @IsOptional() @IsString() @MaxLength(40) type?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(1000) limit?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) offset?: number;
+}

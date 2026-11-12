@@ -10,11 +10,12 @@ import { PublicRateLimiter, RateLimitedException } from '../public/public-rate-l
 import { MemoryAccessService } from './memory-access.service.js';
 import { MemoryBanksService } from './memory-banks.service.js';
 import { readRetainItems } from './memory-facts.js';
+import { MemoryOperationsService } from './memory-operations.service.js';
 import { MemoryRecallService, type RecallQuery } from './memory-recall.service.js';
 import { MemoryRetainService } from './memory-retain.service.js';
 import { MemoryUnitsService } from './memory-units.service.js';
-import { ClearMemoriesQueryDto, ListMemoriesQueryDto, RecallDto, RetainDto } from './memory.dto.js';
-import type { BankStatsResponse, DeleteResponse, ListMemoryUnitsResponse, RecallResponse, RetainResponse } from './memory-wire.js';
+import { ClearMemoriesQueryDto, ListMemoriesQueryDto, ListOperationsQueryDto, RecallDto, RetainDto } from './memory.dto.js';
+import type { BankStatsResponse, CancelOperationResponse, DeleteResponse, ListMemoryUnitsResponse, OperationStatusResponse, OperationsListResponse, RecallResponse, RetainResponse } from './memory-wire.js';
 
 /** A recall body as the service reads it. Shared with the per-bank MCP tools, which take the same fields. */
 export function recallQuery(dto: RecallDto, userId: string): RecallQuery {
@@ -39,8 +40,8 @@ export function recallQuery(dto: RecallDto, userId: string): RecallQuery {
 }
 
 /**
- * What a bank holds, in Hindsight's wire shape (#986 phases 1–2): retain,
- * recall, list, get, clear, stats. Resolved per handler by `MemoryAccessService`, as the
+ * What a bank holds, in Hindsight's wire shape (#986 phases 1–3): retain
+ * (sync and async), recall, list, get, clear, stats, operations. Resolved per handler by `MemoryAccessService`, as the
  * bank routes are.
  */
 @ApiExcludeController()
@@ -57,6 +58,7 @@ export class MemoryUnitsController {
     private readonly retainer: MemoryRetainService,
     private readonly units: MemoryUnitsService,
     private readonly recaller: MemoryRecallService,
+    private readonly operations: MemoryOperationsService,
     private readonly limiter: PublicRateLimiter,
     config: ConfigService<Env, true>,
   ) {
@@ -67,7 +69,8 @@ export class MemoryUnitsController {
   /**
    * Retain. An editor's call, and the one a `capture` key is lifted for. The
    * bank is created on a first retain. Sync: every item is stored before this
-   * answers.
+   * answers. `async: true`: the items are stored masked in an operation row,
+   * the worker retains them, and this answers at once with the operation's id.
    */
   @Post('memories')
   @HttpCode(200)
@@ -79,6 +82,10 @@ export class MemoryUnitsController {
     }
     const items = readRetainItems(dto.items, dto.document_tags, this.limits);
     const bank = await this.banks.ensure(caller, bankId);
+    if (dto.async === true) {
+      const operation_id = await this.operations.submit(bank, { items, userId: principal.userId, locale: principal.locale, operationId: dto.operation_id });
+      return { success: true, bank_id: bank.bankId, items_count: items.length, async: true, operation_id };
+    }
     const { usage } = await this.retainer.retain({ workspaceId: caller.workspaceId, bank, userId: principal.userId, locale: principal.locale, items });
     return { success: true, bank_id: bank.bankId, items_count: items.length, async: false, ...(usage ? { usage } : {}) };
   }
@@ -113,6 +120,27 @@ export class MemoryUnitsController {
   @Get('stats')
   async stats(@CurrentPrincipal() principal: Principal, @Headers('x-workspace-id') ws: string | undefined, @Param('bankId') bankId: string): Promise<BankStatsResponse> {
     const caller = await this.access.caller(principal, ws, 'viewer');
-    return this.units.stats(await this.access.bank(caller, bankId));
+    const bank = await this.access.bank(caller, bankId);
+    const [stats, operations] = await Promise.all([this.units.stats(bank), this.operations.counts(bank.id)]);
+    return { ...stats, pending_operations: operations.pending, failed_operations: operations.failed };
+  }
+
+  @Get('operations')
+  async listOperations(@CurrentPrincipal() principal: Principal, @Headers('x-workspace-id') ws: string | undefined, @Param('bankId') bankId: string, @Query() query: ListOperationsQueryDto): Promise<OperationsListResponse> {
+    const caller = await this.access.caller(principal, ws, 'viewer');
+    return this.operations.list(await this.access.bank(caller, bankId), query);
+  }
+
+  @Get('operations/:operationId')
+  async operationStatus(@CurrentPrincipal() principal: Principal, @Headers('x-workspace-id') ws: string | undefined, @Param('bankId') bankId: string, @Param('operationId') operationId: string): Promise<OperationStatusResponse> {
+    const caller = await this.access.caller(principal, ws, 'viewer');
+    return this.operations.status(await this.access.bank(caller, bankId), operationId);
+  }
+
+  /** Cancel a pending operation. A write key's call: a `capture` key retains and nothing more. */
+  @Delete('operations/:operationId')
+  async cancelOperation(@CurrentPrincipal() principal: Principal, @Headers('x-workspace-id') ws: string | undefined, @Param('bankId') bankId: string, @Param('operationId') operationId: string): Promise<CancelOperationResponse> {
+    const caller = await this.access.caller(principal, ws, 'editor');
+    return this.operations.cancel(await this.access.bank(caller, bankId), operationId);
   }
 }

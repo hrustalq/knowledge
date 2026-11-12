@@ -81,7 +81,7 @@ export class MemoryProbeController {
       features: {
         observations: false,
         mcp: false,
-        worker: false,
+        worker: true,
         bank_config_api: false,
         bank_llm_health: false,
         file_upload_api: false,

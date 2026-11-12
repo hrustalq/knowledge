@@ -777,6 +777,12 @@ export const envSchema = z.object({
    * answers 404 and no memory table is written.
    */
   MEMORY_ENABLED: boolish(false),
+  /** Items one retain request may carry. */
+  MEMORY_RETAIN_MAX_ITEMS: z.coerce.number().int().min(1).max(1000).default(100),
+  /** Characters one retained item may hold. */
+  MEMORY_RETAIN_MAX_CHARS: z.coerce.number().int().min(1).default(50_000),
+  /** Retain requests one API key (or person) may send a minute. */
+  MEMORY_RETAIN_RATE_PER_MIN: z.coerce.number().int().min(1).default(120),
   /**
    * Let a `web` source fetch a private or loopback address. Separate from
    * CONNECTOR_ALLOW_PRIVATE_URLS because any editor can link a source, where

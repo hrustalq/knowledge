@@ -15,6 +15,7 @@ import { AnalyticsWorkerModule } from './analytics/analytics-worker.module.js';
 import { ChatWorkerModule } from './chat/chat-worker.module.js';
 import { ApiTestRunWorkerModule } from './api-specs/api-test-run-worker.module.js';
 import { MemosWorkerModule } from './memos/memos-worker.module.js';
+import { MemoryWorkerModule } from './memory/memory-worker.module.js';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { MemosWorkerModule } from './memos/memos-worker.module.js';
     ChatWorkerModule,
     ApiTestRunWorkerModule,
     MemosWorkerModule,
+    MemoryWorkerModule,
   ],
 })
 export class WorkerModule {}

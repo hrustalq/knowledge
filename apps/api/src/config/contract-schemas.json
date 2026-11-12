@@ -2751,6 +2751,7 @@
       "harvest",
       "citation_check",
       "coach",
+      "memory-extract",
       "extraction",
       "public_ask",
       "test-suite",

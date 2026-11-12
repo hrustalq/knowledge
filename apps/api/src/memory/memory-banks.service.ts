@@ -3,6 +3,7 @@ import { Prisma, type MemoryBank } from '@prisma/client';
 import { AuditService } from '../auth/audit.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { MemoryAccessService, type MemoryCaller } from './memory-access.service.js';
+import { MemoryUnitsService } from './memory-units.service.js';
 import type { BankBodyDto, DispositionDto } from './memory.dto.js';
 import { DEFAULT_DISPOSITION, type BankListResponse, type BankProfileResponse, type DeleteResponse, type Disposition } from './memory-wire.js';
 
@@ -34,6 +35,7 @@ export class MemoryBanksService {
     private readonly prisma: PrismaService,
     private readonly access: MemoryAccessService,
     private readonly audit: AuditService,
+    private readonly units: MemoryUnitsService,
   ) {}
 
   async list(caller: MemoryCaller, query: { q?: string; limit?: number; offset?: number }): Promise<BankListResponse> {
@@ -49,15 +51,17 @@ export class MemoryBanksService {
     const visible = await this.access.visible(caller.scope, rows);
     const limit = query.limit ?? 100;
     const offset = query.offset ?? 0;
+    const page = visible.slice(offset, offset + limit);
+    const counts = await this.units.counts(page.map((b) => b.id));
     return {
-      banks: visible.slice(offset, offset + limit).map((b) => ({
+      banks: page.map((b) => ({
         bank_id: b.bankId,
         name: b.name,
         disposition: dispositionOf(b),
         mission: b.mission,
         created_at: b.createdAt.toISOString(),
         updated_at: b.updatedAt.toISOString(),
-        fact_count: 0,
+        fact_count: counts.get(b.id) ?? 0,
       })),
       total: visible.length,
       limit,
@@ -108,16 +112,19 @@ export class MemoryBanksService {
 
   async delete(caller: MemoryCaller, bankId: string): Promise<DeleteResponse> {
     const bank = await this.access.bank(caller, bankId);
+    // Its memories cascade with the row; their vectors are dropped right after.
+    const unitIds = (await this.prisma.memoryUnit.findMany({ where: { bankId: bank.id }, select: { id: true } })).map((u) => u.id);
     await this.prisma.memoryBank.delete({ where: { id: bank.id } });
+    await this.units.dropVectors(bank.workspaceId, unitIds);
     void this.audit.record({
       workspaceId: caller.workspaceId,
       actor: caller.principal.userId,
       action: 'memory.bank_deleted',
-      params: { name: bank.name },
+      params: { name: bank.name, memories: unitIds.length },
       target: bankId,
       ok: true,
     });
-    return { success: true, message: `Bank '${bankId}' deleted`, deleted_count: 0 };
+    return { success: true, message: `Bank '${bankId}' deleted`, deleted_count: unitIds.length };
   }
 
   private async update(bank: MemoryBank, dto: BankBodyDto): Promise<BankProfileResponse> {

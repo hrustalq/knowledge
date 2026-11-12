@@ -299,6 +299,8 @@ export type I18nTranslations = {
         "interpreterDesc": string;
         "scaffolder": string;
         "scaffolderDesc": string;
+        "memorist": string;
+        "memoristDesc": string;
         "testerRun": {
             "noOperation": string;
             "summary": string;
@@ -911,6 +913,13 @@ export type I18nTranslations = {
             "workspaceHeaderRequired": string;
             "bankNotFound": string;
             "bankIdInvalid": string;
+            "contentNotText": string;
+            "itemsRequired": string;
+            "itemTooLong": string;
+            "timestampInvalid": string;
+            "rateLimited": string;
+            "storeNotReady": string;
+            "memoryNotFound": string;
         };
         "memo": {
             "notFound": string;

@@ -4810,6 +4810,64 @@ model MemoryBank {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
+  units MemoryUnit[]
+
   @@unique([workspaceId, bankId])
   @@map("memory_banks")
+}
+
+/// One fact an agent retained (#986): live the moment it is written, read only
+/// through its bank. The vector lives in ArcadeDB (`MemoryUnit`, vector only);
+/// this row is the truth and has the final say on every hit.
+model MemoryUnit {
+  id          String     @id @default(uuid()) @db.Uuid
+  workspaceId String     @map("workspace_id") @db.Uuid
+  bankId      String     @map("bank_id") @db.Uuid
+  bank        MemoryBank @relation(fields: [bankId], references: [id], onDelete: Cascade)
+  /// Masked. One fact, or the whole item when nothing extracted it.
+  text        String
+  /// `world` | `experience` (| `observation`, written by consolidation).
+  factType    String     @default("world") @map("fact_type")
+  context     String?
+  /// Sorted and deduplicated at write, so set equality is array equality.
+  tags        String[]   @default([])
+  metadata    Json       @default("{}")
+  /// The client's grouping id: a re-post of the same one replaces its units.
+  documentId  String     @map("document_id")
+  /// The masked item this unit was extracted from.
+  sourceText  String     @map("source_text")
+  occurredStart DateTime? @map("occurred_start") @db.Timestamptz
+  occurredEnd   DateTime? @map("occurred_end") @db.Timestamptz
+  mentionedAt   DateTime? @map("mentioned_at") @db.Timestamptz
+  /// to_tsvector('russian', text), generated in the migration as chat_chunks'
+  /// is. Never written by Prisma; the GIN index is raw SQL as well.
+  searchTsv   Unsupported("tsvector")? @map("search_tsv")
+  createdBy   String     @map("created_by") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  entities MemoryUnitEntity[]
+
+  @@index([bankId, documentId])
+  @@index([bankId, createdAt])
+  @@map("memory_units")
+}
+
+/// An entity a memory names (#986), under the canonical key format and
+/// resolved through `entity_aliases` at write. Rows only: memory writes no
+/// vertex and no edge into the workspace relation graph.
+model MemoryUnitEntity {
+  id          String     @id @default(uuid()) @db.Uuid
+  workspaceId String     @map("workspace_id") @db.Uuid
+  bankId      String     @map("bank_id") @db.Uuid
+  unitId      String     @map("unit_id") @db.Uuid
+  unit        MemoryUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  entityKey   String     @map("entity_key")
+  /// As the client or the extractor wrote it.
+  name        String
+
+  @@unique([unitId, entityKey])
+  @@index([bankId, entityKey])
+  @@map("memory_unit_entities")
 }

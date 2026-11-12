@@ -1373,6 +1373,8 @@ export type AiUsageOperation =
    * zeros stub, since no one asked for it.
    */
   | 'coach'
+  /** Splitting retained text into facts for a memory bank (#986). One row per extraction call. */
+  | 'memory-extract'
   /**
    * Inferring graph relations from a chunk during ingestion. One row per chunk
    * call, so a reindex of a large corpus is visible as the spend it is.
@@ -1585,6 +1587,8 @@ export const BUILT_IN_AGENT_KEYS = [
   'interpreter',
   /** Drafts a project blueprint's styleguide and page guidance from a derived tree (#716). Never from the Run button. */
   'scaffolder',
+  /** Splits what an agent retains into facts for its memory bank (#986). Called only by retain, never from the Run button. */
+  'memorist',
 ] as const;
 export type BuiltInAgentKey = (typeof BUILT_IN_AGENT_KEYS)[number];
 

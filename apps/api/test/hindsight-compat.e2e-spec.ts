@@ -4,6 +4,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { HindsightClient, sdk } from '@vectorize-io/hindsight-client';
 import type { PrismaService } from '../src/prisma/prisma.service.js';
 import type { FeaturesService } from '../src/auth/features.service.js';
+import type { GraphService } from '../src/graph/graph.service.js';
 
 /**
  * #986 acceptance, end to end against live infra: the official Hindsight
@@ -19,6 +20,9 @@ import type { FeaturesService } from '../src/auth/features.service.js';
  *   carol — editor of B, a second workspace with memory on
  *   erin  — editor of OFF, a workspace with the `memory` section switched off
  *
+ * Embeddings are the stub provider and no extraction model is routed, so no
+ * model is called: what is asserted is the wire, the store and the boundary.
+ *
  * Needs `make infra-up`. Not part of `make verify`:
  * `pnpm --filter @knowledge/api run test:e2e hindsight-compat`.
  */
@@ -33,6 +37,7 @@ type Person = { id: string; key: string };
 describe('Hindsight compatibility (e2e, #986)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
+  let graph: GraphService;
   let baseUrl: string;
   const nonce = randomUUID().slice(0, 8);
   const bank = `agent-${nonce}`;
@@ -84,9 +89,19 @@ describe('Hindsight compatibility (e2e, #986)', () => {
   beforeAll(async () => {
     process.env.AUTH_MODE = 'api-key';
     process.env.MEMORY_ENABLED = 'true';
-    const [{ createE2eApp }, { PrismaService }] = await Promise.all([import('./e2e-app.js'), import('../src/prisma/prisma.service.js')]);
-    app = await createE2eApp();
+    process.env.EMBEDDINGS_PROVIDER = 'stub';
+    const [{ createE2eApp }, { PrismaService }, { GraphService }, { EMBEDDING_PROVIDER }, { MemoryWorkerModule }] = await Promise.all([
+      import('./e2e-app.js'),
+      import('../src/prisma/prisma.service.js'),
+      import('../src/graph/graph.service.js'),
+      import('../src/embedding/embedding.provider.js'),
+      import('../src/memory/memory-worker.module.js'),
+    ]);
+    app = await createE2eApp([MemoryWorkerModule]);
     prisma = app.get(PrismaService);
+    graph = app.get(GraphService);
+    // What the worker does on boot: the MemoryUnit vector type and its index.
+    await graph.ensureSchema(app.get<{ dimension: number }>(EMBEDDING_PROVIDER).dimension);
     // The official client speaks fetch, so it needs a real port.
     await app.listen(0, '127.0.0.1');
     baseUrl = `http://127.0.0.1:${(app.getHttpServer().address() as AddressInfo).port}`;
@@ -110,6 +125,7 @@ describe('Hindsight compatibility (e2e, #986)', () => {
   afterAll(async () => {
     if (!app) return;
     await prisma.memoryBank.deleteMany({ where: { workspaceId: { in: WORKSPACES } } });
+    for (const ws of WORKSPACES) await graph.deleteMemoryUnits(ws, (await graph.memoryUnitIds(ws)).map((v) => v.unitId));
     await prisma.apiKey.deleteMany({ where: { id: { in: keyIds } } });
     await app.close();
   });
@@ -234,6 +250,166 @@ describe('Hindsight compatibility (e2e, #986)', () => {
       await expect(client(people.alice.key).getBankProfile(bank)).rejects.toMatchObject({ statusCode: 404 });
       const audit = await prisma.auditLog.findMany({ where: { workspaceId: WS_A, target: bank }, select: { action: true } });
       expect(audit.map((a) => a.action).sort()).toEqual(['memory.bank_created', 'memory.bank_deleted']);
+    });
+  });
+
+  describe('phase 1: sync retain', () => {
+    const mem = `mem-${nonce}`;
+    const word = `zorblat${nonce}`;
+    const secret = `sk-${'a1B2c3D4'.repeat(4)}`;
+    const units = (bankId = mem) => prisma.memoryUnit.findMany({ where: { workspaceId: WS_A, bank: { bankId } }, orderBy: { createdAt: 'asc' }, include: { entities: true } });
+
+    it('retains one item, creating the bank, and stores it verbatim with no extraction model', async () => {
+      const hs = client(people.alice.key);
+      const res = await hs.retain(mem, `The ${word} deploy runs on Tuesdays.`, {
+        context: 'ops standup',
+        tags: ['ops', 'deploy', 'ops'],
+        metadata: { source: 'e2e' },
+        documentId: 'standup-1',
+        timestamp: '2026-11-10T09:00:00Z',
+        entities: [{ text: 'Billing Service', type: 'service' }],
+      });
+      expect(res).toEqual({ success: true, bank_id: mem, items_count: 1, async: false });
+      expect((await hs.getBankProfile(mem)).name).toBe(mem);
+
+      const [unit] = await units();
+      expect(unit).toMatchObject({
+        text: `The ${word} deploy runs on Tuesdays.`,
+        factType: 'world',
+        context: 'ops standup',
+        tags: ['deploy', 'ops'],
+        metadata: { source: 'e2e' },
+        documentId: 'standup-1',
+        createdBy: people.alice.id,
+      });
+      expect(unit!.occurredStart?.toISOString()).toBe('2026-11-10T09:00:00.000Z');
+      expect(unit!.entities.map((e) => e.entityKey)).toEqual(['service:billing-service']);
+    });
+
+    it('retains a batch of three, and memories/list returns the stored units', async () => {
+      const hs = client(people.alice.key);
+      const res = await hs.retainBatch(mem, [
+        { content: `Alice owns the ${word} runbook.`, tags: ['ops'] },
+        { content: `The ${word} staging key is ${secret}, mail ops@example.com.`, document_id: 'keys' },
+        { content: `Rollbacks of ${word} need two approvals.`, timestamp: 'unset' as unknown as Date },
+      ]);
+      expect(res).toMatchObject({ success: true, items_count: 3, async: false });
+
+      const listed = await hs.listMemories(mem);
+      expect(listed.total).toBe(4);
+      expect(listed.items.map((i) => i.text)).toEqual(expect.arrayContaining([`Alice owns the ${word} runbook.`, `Rollbacks of ${word} need two approvals.`]));
+      expect(listed.items[0]).toMatchObject({ id: expect.any(String), fact_type: 'world', state: 'valid' });
+
+      expect((await hs.listMemories(mem, { tags: ['ops'], tagsMatch: 'any_strict' })).total).toBe(2);
+      expect((await hs.listMemories(mem, { tags: ['ops'] })).total).toBe(4);
+      expect((await hs.listMemories(mem, { tags: ['deploy', 'ops'], tagsMatch: 'exact' })).total).toBe(1);
+      expect((await hs.listMemories(mem, { q: 'rollbacks', limit: 1 })).items).toHaveLength(1);
+      expect((await hs.listMemories(mem, { documentId: 'keys' })).total).toBe(1);
+    });
+
+    it('masks a secret and an address before anything is stored', async () => {
+      const stored = await units();
+      expect(JSON.stringify(stored)).not.toContain(secret);
+      expect(JSON.stringify(stored)).not.toContain('ops@example.com');
+      expect(stored.find((u) => u.documentId === 'keys')!.text).toBe(`The ${word} staging key is [SECRET_1], mail [EMAIL_1].`);
+    });
+
+    it('replaces a document_id retained before, and appends when asked', async () => {
+      const hs = client(people.alice.key);
+      const before = (await units()).find((u) => u.documentId === 'standup-1')!;
+      await hs.retain(mem, `The ${word} deploy moved to Wednesdays.`, { documentId: 'standup-1' });
+      const after = (await units()).filter((u) => u.documentId === 'standup-1');
+      expect(after.map((u) => u.text)).toEqual([`The ${word} deploy moved to Wednesdays.`]);
+      // The replaced unit's vector went with its row.
+      expect((await graph.memoryUnitIds(WS_A)).map((v) => v.unitId)).not.toContain(before.id);
+
+      await hs.retain(mem, `And ${word} hotfixes any day.`, { documentId: 'standup-1', updateMode: 'append' });
+      expect((await units()).filter((u) => u.documentId === 'standup-1')).toHaveLength(2);
+    });
+
+    it('folds two spellings of an entity to one key', async () => {
+      const hs = client(people.alice.key);
+      await hs.retain(mem, `${word} bills through it.`, { documentId: 'entities', entities: [{ text: 'Billing  SERVICE', type: 'Service' }, { text: 'billing service', type: 'service' }] });
+      const keys = (await units()).flatMap((u) => u.entities.map((e) => e.entityKey));
+      expect([...new Set(keys)]).toEqual(['service:billing-service']);
+      // Rows only: memory writes nothing into the workspace relation graph.
+      const page = await call(people.alice.key, 'POST', '/v1/search', { workspaceId: WS_A, query: `${word} deploy`, limit: 10 });
+      expect(page.status).toBe(200);
+      expect((await page.json()).results).toEqual([]);
+    });
+
+    it('lets a capture key and a write key retain, never a read key', async () => {
+      const capture = await mintKey(people.alice.id, { workspaceId: WS_A, scope: 'capture' });
+      expect((await client(capture).retain(mem, `${word} captured.`, { documentId: 'capture' })).success).toBe(true);
+      // A capture key retains and nothing more: it cannot clear the bank.
+      expect((await call(capture, 'DELETE', `/v1/default/banks/${mem}/memories`)).status).toBe(403);
+      const readOnly = await mintKey(people.alice.id, { workspaceId: WS_A, scope: 'read' });
+      await expect(client(readOnly).retain(mem, 'nope')).rejects.toMatchObject({ statusCode: 403 });
+      expect((await client(readOnly).listMemories(mem)).total).toBeGreaterThan(0);
+    });
+
+    it('refuses what is not text, too many items, and a bad timestamp, as a 400', async () => {
+      const post = (body: unknown) => call(people.alice.key, 'POST', `/v1/default/banks/${mem}/memories`, body);
+      const blocks = await post({ items: [{ content: [{ type: 'text', text: 'hi' }] }] });
+      expect(blocks.status).toBe(400);
+      expect((await blocks.json()).detail).toMatch(/must be a string/);
+      expect((await post({ items: [] })).status).toBe(400);
+      expect((await post({ items: [{ content: 'x', timestamp: 'yesterday' }] })).status).toBe(400);
+      expect((await post({ items: 'x' })).status).toBe(422);
+    });
+
+    it('reads one memory and the bank stats, and keeps both inside the workspace', async () => {
+      const [first] = await units();
+      const got = await sdk.getMemory({ client: raw(people.alice.key), path: { bank_id: mem, memory_id: first!.id } });
+      expect(got.data).toMatchObject({ id: first!.id, text: first!.text, type: 'world' });
+      const stats = await sdk.getAgentStats({ client: raw(people.alice.key), path: { bank_id: mem } });
+      const total = (await units()).length;
+      expect(stats.data).toMatchObject({ bank_id: mem, total_nodes: total, nodes_by_fact_type: { world: total }, pending_operations: 0 });
+      const listed = await sdk.listBanks({ client: raw(people.alice.key) });
+      expect(listed.data?.banks.find((b) => b.bank_id === mem)?.fact_count).toBe(total);
+
+      for (const path of [`/memories/list`, `/memories/${first!.id}`, `/stats`]) {
+        expect([path, (await call(people.carol.key, 'GET', `/v1/default/banks/${mem}${path}`)).status]).toEqual([path, 404]);
+      }
+      expect((await call(people.carol.key, 'DELETE', `/v1/default/banks/${mem}/memories`)).status).toBe(404);
+      expect((await units()).length).toBe(total);
+    });
+
+    it('deletes memories at once, their vectors with them, and reaps a vector with no row', async () => {
+      const { MemoryReapSweeper } = await import('../src/memory/memory-reap.sweeper.js');
+      const { EMBEDDING_PROVIDER } = await import('../src/embedding/embedding.provider.js');
+      const orphan = randomUUID();
+      const embedding = await app.get<{ embed(t: string): Promise<number[]> }>(EMBEDDING_PROVIDER).embed('orphan');
+      await graph.upsertMemoryUnits(WS_A, randomUUID(), [{ unitId: orphan, embedding }], Date.now() - 60 * 60_000);
+      const fresh = randomUUID();
+      await graph.upsertMemoryUnits(WS_A, randomUUID(), [{ unitId: fresh, embedding }], Date.now());
+
+      const total = (await units()).length;
+      const cleared = await sdk.clearBankMemories({ client: raw(people.alice.key), path: { bank_id: mem } });
+      expect(cleared.data).toMatchObject({ success: true, deleted_count: total });
+      expect(await units()).toEqual([]);
+      expect((await graph.memoryUnitIds(WS_A)).map((v) => v.unitId).sort()).toEqual([orphan, fresh].sort());
+
+      expect(await app.get(MemoryReapSweeper).sweep()).toBeGreaterThanOrEqual(1);
+      // Old enough to be an orphan: gone. Written a moment ago: left for the retain that may still commit its row.
+      expect((await graph.memoryUnitIds(WS_A)).map((v) => v.unitId)).toEqual([fresh]);
+    });
+
+    it('removes a deleted workspace’s banks, memories and vectors', async () => {
+      const { WorkspaceTeardownService } = await import('../src/workspaces/workspace-teardown.service.js');
+      const doomed = randomUUID();
+      await prisma.workspace.create({ data: { id: doomed, name: `Hindsight doomed ${nonce}` } });
+      const dana = await person(`dana-${nonce}`, doomed, 'editor');
+      await client(dana.key).retain(`gone-${nonce}`, `${word} will not survive.`, { entities: [{ text: 'Ghost' }] });
+      expect((await graph.memoryUnitIds(doomed)).length).toBe(1);
+
+      await prisma.workspace.update({ where: { id: doomed }, data: { deletedAt: new Date() } });
+      for (let i = 0; i < 20 && !(await app.get(WorkspaceTeardownService).teardown(doomed)); i++);
+      expect(await prisma.memoryBank.count({ where: { workspaceId: doomed } })).toBe(0);
+      expect(await prisma.memoryUnit.count({ where: { workspaceId: doomed } })).toBe(0);
+      expect(await prisma.memoryUnitEntity.count({ where: { workspaceId: doomed } })).toBe(0);
+      expect(await graph.memoryUnitIds(doomed)).toEqual([]);
+      await prisma.user.delete({ where: { id: dana.id } });
     });
   });
 });

@@ -63,3 +63,65 @@ export interface VersionResponse {
     boolean
   >;
 }
+
+export interface TokenUsage {
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+}
+
+export interface RetainResponse {
+  success: boolean;
+  bank_id: string;
+  items_count: number;
+  async: boolean;
+  operation_id?: string | null;
+  usage?: TokenUsage | null;
+}
+
+/** `MemoryUnitListItem`, and what `GET …/memories/{id}` answers with (plus `type` and the entity names as a list). */
+export interface MemoryUnitItem {
+  id: string;
+  text: string;
+  context: string;
+  /** The event date, empty when unknown. */
+  date: string;
+  fact_type: string;
+  document_id: string;
+  mentioned_at: string | null;
+  occurred_start: string | null;
+  occurred_end: string | null;
+  /** Comma-separated names, as Hindsight lists them. */
+  entities: string;
+  chunk_id: null;
+  proof_count: number;
+  tags: string[];
+  metadata: Record<string, unknown>;
+  state: 'valid';
+  updated_at: string;
+  source_memory_ids: string[];
+}
+
+export interface ListMemoryUnitsResponse {
+  items: MemoryUnitItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface BankStatsResponse {
+  bank_id: string;
+  total_nodes: number;
+  total_links: number;
+  total_documents: number;
+  nodes_by_fact_type: Record<string, number>;
+  links_by_link_type: Record<string, number>;
+  links_by_fact_type: Record<string, number>;
+  links_breakdown: Record<string, Record<string, number>>;
+  pending_operations: number;
+  failed_operations: number;
+  last_memory_write_at: string | null;
+  pending_consolidation: number;
+  failed_consolidation: number;
+  total_observations: number;
+}

@@ -216,7 +216,14 @@
     "workspaceRequired": "Memory routes need an API key pinned to one workspace: the key decides which workspace \"default\" means",
     "workspaceHeaderRequired": "With AUTH_MODE=none, name the workspace in an X-Workspace-Id header",
     "bankNotFound": "Memory bank {bankId} not found",
-    "bankIdInvalid": "A bank id is 1 to 200 characters with no control characters"
+    "bankIdInvalid": "A bank id is 1 to 200 characters with no control characters",
+    "contentNotText": "Only text can be retained: `content` must be a string",
+    "itemsRequired": "A retain request carries 1 to {max} items",
+    "itemTooLong": "An item holds at most {max} characters",
+    "timestampInvalid": "`timestamp` must be an ISO 8601 date or \"unset\"",
+    "rateLimited": "Too many retain requests; try again in a minute",
+    "storeNotReady": "The memory vector index does not exist yet: it is built when the worker starts. Start the worker once, then retry",
+    "memoryNotFound": "Memory {id} not found"
   },
   "memo": {
     "notFound": "Memo not found",

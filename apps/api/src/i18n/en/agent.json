@@ -282,6 +282,8 @@
   "interpreterDesc": "Drafts the extraction recipe a linked web page is read with, when a new version of it no longer reads the way its recipe expects. A person approves every recipe against a preview.",
   "scaffolder": "Scaffolder",
   "scaffolderDesc": "Shapes a new project's outline: drafts one from your description (Describe it), or the styleguide and page guidance of one derived from an existing project.",
+  "memorist": "Memorist",
+  "memoristDesc": "Splits what an agent retains in a memory bank into separate facts. Runs only when a model is routed at extraction; otherwise the text is stored as it is.",
   "testerRun": {
     "noOperation": "The tester was started without an operation; only Generate test requests on an operation can start it.",
     "summary": "Wrote {count} test cases for {method} {path}.",

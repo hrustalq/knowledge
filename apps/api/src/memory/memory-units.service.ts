@@ -1,0 +1,136 @@
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import type { MemoryBank, MemoryUnit, Prisma } from '@prisma/client';
+import { UUID_RE } from '@knowledge/contracts';
+import { GraphService } from '../graph/graph.service.js';
+import { t } from '../i18n/t.js';
+import { PrismaService } from '../prisma/prisma.service.js';
+import { MEMORY_TIME_FIELDS, tagsWhere, type MemoryTimeField, type TagsMatch } from './memory-facts.js';
+import type { BankStatsResponse, DeleteResponse, ListMemoryUnitsResponse, MemoryUnitItem } from './memory-wire.js';
+
+
+export interface ListMemoriesQuery {
+  type?: string;
+  q?: string;
+  document_id?: string;
+  tags?: string[];
+  tags_match?: TagsMatch;
+  time_field?: MemoryTimeField;
+  start_date?: string;
+  end_date?: string;
+  limit?: number;
+  offset?: number;
+}
+
+type UnitWithNames = MemoryUnit & { entities: Array<{ name: string }> };
+
+export function memoryItem(row: UnitWithNames): MemoryUnitItem {
+  const iso = (d: Date | null) => d?.toISOString() ?? null;
+  return {
+    id: row.id,
+    text: row.text,
+    context: row.context ?? '',
+    date: iso(row.occurredStart ?? row.mentionedAt) ?? '',
+    fact_type: row.factType,
+    document_id: row.documentId,
+    mentioned_at: iso(row.mentionedAt),
+    occurred_start: iso(row.occurredStart),
+    occurred_end: iso(row.occurredEnd),
+    entities: row.entities.map((e) => e.name).join(', '),
+    chunk_id: null,
+    proof_count: 1,
+    tags: row.tags,
+    metadata: (row.metadata ?? {}) as Record<string, unknown>,
+    state: 'valid',
+    updated_at: row.updatedAt.toISOString(),
+    source_memory_ids: [],
+  };
+}
+
+/**
+ * Reading and deleting what a bank holds (#986 phase 1). Every method takes
+ * the bank row `MemoryAccessService.bank` resolved — the only way to one — so
+ * each query is by that bank's id and nothing reaches across banks.
+ */
+@Injectable()
+export class MemoryUnitsService {
+  private readonly logger = new Logger(MemoryUnitsService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly graph: GraphService,
+  ) {}
+
+  async list(bank: MemoryBank, query: ListMemoriesQuery): Promise<ListMemoryUnitsResponse> {
+    const field = MEMORY_TIME_FIELDS[query.time_field ?? 'created_at'];
+    const q = query.q?.trim();
+    const span = query.start_date || query.end_date ? { [field]: { ...(query.start_date ? { gte: new Date(query.start_date) } : {}), ...(query.end_date ? { lt: new Date(query.end_date) } : {}) } } : {};
+    const where: Prisma.MemoryUnitWhereInput = {
+      bankId: bank.id,
+      ...(query.type ? { factType: query.type } : {}),
+      ...(query.document_id ? { documentId: query.document_id } : {}),
+      ...(q ? { OR: [{ text: { contains: q, mode: 'insensitive' } }, { context: { contains: q, mode: 'insensitive' } }] } : {}),
+      AND: [tagsWhere(query.tags, query.tags_match), span],
+    };
+    const limit = query.limit ?? 100;
+    const offset = query.offset ?? 0;
+    const [rows, total] = await Promise.all([
+      this.prisma.memoryUnit.findMany({ where, orderBy: [{ [field]: 'desc' }, { id: 'asc' }], skip: offset, take: limit, include: { entities: { select: { name: true } } } }),
+      this.prisma.memoryUnit.count({ where }),
+    ]);
+    return { items: rows.map(memoryItem), total, limit, offset };
+  }
+
+  async get(bank: MemoryBank, memoryId: string): Promise<MemoryUnitItem & { type: string; entity_names: string[] }> {
+    const row = UUID_RE.test(memoryId)
+      ? await this.prisma.memoryUnit.findFirst({ where: { id: memoryId, bankId: bank.id }, include: { entities: { select: { name: true } } } })
+      : null;
+    if (!row) throw new NotFoundException(t('error.memory.memoryNotFound', { id: memoryId }));
+    return { ...memoryItem(row), type: row.factType, entity_names: row.entities.map((e) => e.name) };
+  }
+
+  /** `DELETE …/memories`: every memory of the bank, or those of one fact type. Rows at once, vectors right after. */
+  async clear(bank: MemoryBank, type?: string): Promise<DeleteResponse> {
+    const where = { bankId: bank.id, ...(type ? { factType: type } : {}) };
+    const ids = (await this.prisma.memoryUnit.findMany({ where, select: { id: true } })).map((r) => r.id);
+    await this.prisma.memoryUnit.deleteMany({ where: { id: { in: ids } } });
+    await this.dropVectors(bank.workspaceId, ids);
+    return { success: true, message: null, deleted_count: ids.length };
+  }
+
+  /** The vectors of rows already deleted. A failure leaves orphans no recall returns; the reap removes them. */
+  async dropVectors(workspaceId: string, unitIds: string[]): Promise<void> {
+    await this.graph.deleteMemoryUnits(workspaceId, unitIds).catch((e: Error) => this.logger.warn(`Memory vectors not deleted, the reap will: ${e.message}`));
+  }
+
+  async stats(bank: MemoryBank): Promise<BankStatsResponse> {
+    const [byType, documents, last] = await Promise.all([
+      this.prisma.memoryUnit.groupBy({ by: ['factType'], where: { bankId: bank.id }, _count: { _all: true } }),
+      this.prisma.memoryUnit.findMany({ where: { bankId: bank.id }, distinct: ['documentId'], select: { documentId: true } }),
+      this.prisma.memoryUnit.findFirst({ where: { bankId: bank.id }, orderBy: { updatedAt: 'desc' }, select: { updatedAt: true } }),
+    ]);
+    const counts = Object.fromEntries(byType.map((r) => [r.factType, r._count._all]));
+    return {
+      bank_id: bank.bankId,
+      total_nodes: byType.reduce((n, r) => n + r._count._all, 0),
+      total_links: 0,
+      total_documents: documents.length,
+      nodes_by_fact_type: counts,
+      links_by_link_type: {},
+      links_by_fact_type: {},
+      links_breakdown: {},
+      pending_operations: 0,
+      failed_operations: 0,
+      last_memory_write_at: last?.updatedAt.toISOString() ?? null,
+      pending_consolidation: 0,
+      failed_consolidation: 0,
+      total_observations: counts.observation ?? 0,
+    };
+  }
+
+  /** How many memories each of these banks holds, by bank row id. */
+  async counts(bankIds: string[]): Promise<Map<string, number>> {
+    if (!bankIds.length) return new Map();
+    const rows = await this.prisma.memoryUnit.groupBy({ by: ['bankId'], where: { bankId: { in: bankIds } }, _count: { _all: true } });
+    return new Map(rows.map((r) => [r.bankId, r._count._all]));
+  }
+}

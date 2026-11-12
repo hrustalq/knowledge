@@ -54,7 +54,7 @@ export interface StoredChunk {
  */
 const VECTOR_INDEX = 'Chunk[embedding]';
 /** The vertex types with a vector index: pages' chunks (#304) and chat windows (#339). Code constants, never input. */
-type VectorType = 'Chunk' | 'ChatChunk';
+type VectorType = 'Chunk' | 'ChatChunk' | 'MemoryUnit';
 /**
  * The HNSW search beam (`efSearch`), never below `k`. Measured on the demo
  * corpus (5,936 eligible bge-m3 chunks, 120 title queries, docs/architecture/
@@ -279,7 +279,7 @@ export interface WorkspaceRelationGraph {
  * point for the mandatory server-side workspace predicate (plan.md §6).
  */
 /** Every vertex type that carries `workspaceId` — what a workspace's teardown removes (#479). */
-export const WORKSPACE_VERTEX_TYPES = ['Chunk', 'DocumentRevision', 'Document', 'Entity', 'Community', 'ChatChunk'] as const;
+export const WORKSPACE_VERTEX_TYPES = ['Chunk', 'DocumentRevision', 'Document', 'Entity', 'Community', 'ChatChunk', 'MemoryUnit'] as const;
 
 @Injectable()
 export class GraphService {
@@ -332,6 +332,14 @@ export class GraphService {
       'CREATE PROPERTY ChatChunk.embedding IF NOT EXISTS ARRAY_OF_FLOATS',
       'CREATE INDEX IF NOT EXISTS ON ChatChunk (chunkId) UNIQUE',
       'CREATE INDEX IF NOT EXISTS ON ChatChunk (workspaceId) NOTUNIQUE',
+      // #986: one retained memory's vector, and nothing a reader could show.
+      'CREATE VERTEX TYPE MemoryUnit IF NOT EXISTS',
+      'CREATE PROPERTY MemoryUnit.unitId IF NOT EXISTS STRING',
+      'CREATE PROPERTY MemoryUnit.workspaceId IF NOT EXISTS STRING',
+      'CREATE PROPERTY MemoryUnit.bankId IF NOT EXISTS STRING',
+      'CREATE PROPERTY MemoryUnit.embedding IF NOT EXISTS ARRAY_OF_FLOATS',
+      'CREATE INDEX IF NOT EXISTS ON MemoryUnit (unitId) UNIQUE',
+      'CREATE INDEX IF NOT EXISTS ON MemoryUnit (workspaceId) NOTUNIQUE',
     ];
     for (const s of statements) {
       try {
@@ -368,6 +376,7 @@ export class GraphService {
 
     await this.ensureVectorIndex('Chunk', vectorDimension);
     await this.ensureVectorIndex('ChatChunk', vectorDimension);
+    await this.ensureVectorIndex('MemoryUnit', vectorDimension);
   }
 
   /**
@@ -732,6 +741,83 @@ export class GraphService {
       workspaceId,
       chunkIds,
     });
+  }
+
+  /**
+   * Whether a memory's vector can be stored and found (#986): the `MemoryUnit`
+   * index exists for this dimension. Only the worker builds it, on boot — an
+   * install that never started one has none, and retain says so rather than
+   * storing rows no recall could rank.
+   */
+  memoryIndexReady(dimension: number): Promise<boolean> {
+    return this.vectorIndexFits(dimension, 'MemoryUnit');
+  }
+
+  /**
+   * Retained memories' vectors (#986) — vector only, as a chat window's: the
+   * text, the tags and every ACL fact live in PG (`memory_units`), which a
+   * recall joins as the final say. Written before their PG rows, so a crash
+   * leaves vectors with no row, which no recall returns and the reap removes.
+   * `bankId` is the bank's row id, never the client's name for it.
+   */
+  async upsertMemoryUnits(
+    workspaceId: string,
+    bankId: string,
+    units: Array<{ unitId: string; embedding: number[] }>,
+    writtenAt: number,
+  ): Promise<void> {
+    for (const unit of units) {
+      await this.arcade.command(
+        'sql',
+        'UPDATE MemoryUnit SET unitId = :unitId, workspaceId = :workspaceId, bankId = :bankId, embedding = :embedding, writtenAt = :writtenAt UPSERT WHERE unitId = :unitId',
+        { ...unit, workspaceId, bankId, writtenAt },
+      );
+    }
+  }
+
+  /**
+   * The memories of one bank nearest a query. The bank filter is inside the
+   * HNSW walk, so another bank's memory never takes a slot; the workspace
+   * predicate leads it and is repeated outside. Empty when there is no index
+   * of the query's dimension: the full-text leg still answers.
+   */
+  async nearestMemoryUnits(
+    workspaceId: string,
+    bankId: string,
+    queryEmbedding: number[],
+    k: number,
+  ): Promise<Array<{ chunkId: string; score: number }>> {
+    if (k <= 0 || !(await this.vectorIndexFits(queryEmbedding.length, 'MemoryUnit'))) return [];
+    try {
+      const rows = await this.arcade.query<{ unitId: string; workspaceId: string; distance: number }>(
+        'sql',
+        `SELECT unitId, workspaceId, distance FROM (SELECT expand(vector.neighbors('MemoryUnit[embedding]', :queryVector, :k, { efSearch: ${Math.max(VECTOR_EF_SEARCH, Math.floor(k))}, filter: (SELECT @rid FROM MemoryUnit WHERE workspaceId = :workspaceId AND bankId = :bankId) }))) WHERE workspaceId = :workspaceId`,
+        { workspaceId, bankId, queryVector: queryEmbedding, k: Math.floor(k) },
+      );
+      return rows
+        .filter((r) => r.workspaceId === workspaceId)
+        .map((r) => ({ chunkId: r.unitId, score: 1 - r.distance }))
+        .sort((a, b) => b.score - a.score);
+    } catch (e) {
+      this.logger.warn(`Memory vector query failed, full text only: ${(e as Error).message}`);
+      this.vectorIndex.delete('MemoryUnit');
+      return [];
+    }
+  }
+
+  /** Every memory vector of a workspace, by id and write time (epoch ms) — what the reap compares with PG. */
+  async memoryUnitIds(workspaceId: string): Promise<Array<{ unitId: string; writtenAt: number }>> {
+    const rows = await this.arcade.query<{ unitId?: string; writtenAt?: number }>(
+      'sql',
+      'SELECT unitId, writtenAt FROM MemoryUnit WHERE workspaceId = :workspaceId',
+      { workspaceId },
+    );
+    return rows.flatMap((r) => (typeof r.unitId === 'string' ? [{ unitId: r.unitId, writtenAt: Number(r.writtenAt ?? 0) }] : []));
+  }
+
+  async deleteMemoryUnits(workspaceId: string, unitIds: string[]): Promise<void> {
+    if (unitIds.length === 0) return;
+    await this.arcade.command('sql', 'DELETE FROM MemoryUnit WHERE workspaceId = :workspaceId AND unitId IN :unitIds', { workspaceId, unitIds });
   }
 
   async deleteDocumentGraph(workspaceId: string, documentId: string): Promise<void> {

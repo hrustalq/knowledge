@@ -751,6 +751,12 @@ model Project {
   restricted      Boolean   @default(false)
   /// off | warn | block — the style lint of its merge requests (#74); null is the workspace's.
   lintPolicy      String?   @map("lint_policy")
+  /// Freshness thresholds (#921): each null inherits the workspace's
+  /// knowledge_health_settings value, which inherits the env default.
+  reviewIntervalDays Int?   @map("review_interval_days")
+  remindBeforeDays   Int?   @map("remind_before_days")
+  inactiveAfterDays  Int?   @map("inactive_after_days")
+  emptyMaxChars      Int?   @map("empty_max_chars")
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   documents     Document[]

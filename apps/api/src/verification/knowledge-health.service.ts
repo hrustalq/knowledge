@@ -10,7 +10,7 @@ import type {
   KnowledgeHealthRow,
   KnowledgeHealthSettingsOverride,
   KnowledgeHealthSettingsResponse,
-  KnowledgeHealthSettingsValues,
+  VerificationThresholds,
   KnowledgeHealthSummaryResponse,
   SourceVerificationState,
   VerificationFlag,
@@ -78,6 +78,8 @@ interface HealthSqlRow {
   last_activity_at: Date;
   archived_at: Date | null;
   body_chars: number | null;
+  inactive_after_days: number;
+  empty_max_chars: number;
   child_count: number;
   missing_paths: string[];
   broken_calls: string[];
@@ -135,7 +137,7 @@ export class KnowledgeHealthService {
     const rows = await this.prisma.$queryRaw<HealthSqlRow[]>`
       WITH r AS (${this.rowsCte(access, query, settings, now)})
       SELECT r.* FROM r
-       WHERE ${healthFilterSql(query.filter, settings, now, this.readSince(now))}
+       WHERE ${healthFilterSql(query.filter, now, this.readSince(now))}
        ${after}
        ${order}
        LIMIT ${limit + 1}
@@ -150,7 +152,7 @@ export class KnowledgeHealthService {
     const last = page[page.length - 1];
     return {
       workspaceId,
-      rows: page.map((r) => ({ ...this.toRow(r, trails.get(r.id) ?? '', settings, now), workItem: tickets.get(r.id) ?? null })),
+      rows: page.map((r) => ({ ...this.toRow(r, trails.get(r.id) ?? '', now), workItem: tickets.get(r.id) ?? null })),
       nextCursor:
         hasMore && last
           ? encodeCursor({ v: sort === 'title' ? last.title : last.last_activity_at.toISOString(), id: last.id })
@@ -164,7 +166,7 @@ export class KnowledgeHealthService {
     const now = new Date();
     const counted = HEALTH_FILTERS.map(
       (f) =>
-        Prisma.sql`count(*) FILTER (WHERE ${healthFilterSql(f, settings, now, this.readSince(now))})::int AS ${Prisma.raw(`"${f}"`)}`,
+        Prisma.sql`count(*) FILTER (WHERE ${healthFilterSql(f, now, this.readSince(now))})::int AS ${Prisma.raw(`"${f}"`)}`,
     );
     const [row] = await this.prisma.$queryRaw<Array<Record<string, number>>>`
       WITH r AS (${this.rowsCte(access, { projectId }, settings, now)})
@@ -260,7 +262,7 @@ export class KnowledgeHealthService {
   private rowsCte(
     access: AccessScope,
     scope: { projectId?: string; ownerId?: string; q?: string },
-    _settings: KnowledgeHealthSettingsValues,
+    settings: VerificationThresholds,
     now: Date,
   ): Prisma.Sql {
     const project = scope.projectId ? Prisma.sql`AND d.project_id = ${scope.projectId}::uuid` : Prisma.empty;
@@ -270,6 +272,10 @@ export class KnowledgeHealthService {
       SELECT d.id, d.project_id, d.title, d.owner_id, d.verified_by, d.verified_at, d.verification_expires_at,
              d.verification_flag, d.verification_note, d.last_activity_at, d.archived_at,
              rev.body_chars,
+             -- #921: the page's own thresholds — its project's, else the
+             -- workspace's. VerificationPolicyService.thresholds, in SQL.
+             COALESCE(p.inactive_after_days, ${settings.inactiveAfterDays}::int) AS inactive_after_days,
+             COALESCE(p.empty_max_chars, ${settings.emptyMaxChars}::int) AS empty_max_chars,
              (SELECT count(*)::int FROM documents c WHERE c.parent_id = d.id AND ${listedSql('c')} AND ${visibilitySql(access, 'c')}) AS child_count,
              -- Only a declaration that still resolves: a connector deleted
              -- since the last pull leaves a stale list behind its null id.
@@ -293,6 +299,7 @@ export class KnowledgeHealthService {
                ELSE 'verified'
              END AS status
         FROM documents d
+        LEFT JOIN projects p ON p.id = d.project_id
         LEFT JOIN document_branches b ON b.document_id = d.id AND b.name = d.default_branch
         LEFT JOIN document_revisions rev ON rev.id = b.head_revision_id
         LEFT JOIN component_declarations cd ON cd.document_id = d.id AND cd.connector_id IS NOT NULL
@@ -334,7 +341,7 @@ export class KnowledgeHealthService {
     return out;
   }
 
-  private toRow(r: HealthSqlRow, breadcrumb: string, settings: KnowledgeHealthSettingsValues, now: Date): Omit<KnowledgeHealthRow, 'workItem'> {
+  private toRow(r: HealthSqlRow, breadcrumb: string, now: Date): Omit<KnowledgeHealthRow, 'workItem'> {
     return {
       documentId: r.id,
       projectId: r.project_id,
@@ -346,9 +353,9 @@ export class KnowledgeHealthService {
       verifiedAt: r.verified_at?.toISOString() ?? null,
       expiresAt: r.verification_expires_at?.toISOString() ?? null,
       lastActivityAt: r.last_activity_at.toISOString(),
-      inactive: isInactive(r.last_activity_at, settings.inactiveAfterDays, now),
+      inactive: isInactive(r.last_activity_at, r.inactive_after_days, now),
       lastReadAt: r.last_read_at?.toISOString() ?? null,
-      empty: r.body_chars === null ? null : r.body_chars <= settings.emptyMaxChars,
+      empty: r.body_chars === null ? null : r.body_chars <= r.empty_max_chars,
       archivedAt: r.archived_at?.toISOString() ?? null,
       childCount: r.child_count,
       verificationFlag: (r.verification_flag as VerificationFlag | null) ?? null,
@@ -365,17 +372,10 @@ export class KnowledgeHealthService {
  * Every filter but `archived` is implicitly "and not archived": an archived
  * page is neither stale nor unowned, it is put away.
  */
-export function healthFilterSql(
-  filter: HealthFilter | undefined,
-  settings: KnowledgeHealthSettingsValues,
-  now: Date,
-  readSince: Date,
-): Prisma.Sql {
+export function healthFilterSql(filter: HealthFilter | undefined, now: Date, readSince: Date): Prisma.Sql {
   const live = Prisma.sql`r.archived_at IS NULL`;
-  const inactive =
-    settings.inactiveAfterDays > 0
-      ? Prisma.sql`r.last_activity_at < ${new Date(now.getTime() - settings.inactiveAfterDays * 86_400_000)}::timestamptz`
-      : Prisma.sql`false`;
+  // `isInactive` over the row's own threshold (#921): 0 disables it.
+  const inactive = Prisma.sql`(r.inactive_after_days > 0 AND r.last_activity_at < ${now}::timestamptz - make_interval(days => r.inactive_after_days))`;
   switch (filter) {
     case undefined:
       return live;
@@ -384,7 +384,7 @@ export function healthFilterSql(
     case 'unowned':
       return Prisma.sql`${live} AND r.owner_id IS NULL`;
     case 'empty':
-      return Prisma.sql`${live} AND r.body_chars IS NOT NULL AND r.body_chars <= ${settings.emptyMaxChars}`;
+      return Prisma.sql`${live} AND r.body_chars IS NOT NULL AND r.body_chars <= r.empty_max_chars`;
     case 'inactive':
       return Prisma.sql`${live} AND ${inactive}`;
     case 'stale':

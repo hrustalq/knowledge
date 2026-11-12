@@ -982,6 +982,50 @@ export type KnowledgeHealthSettingsOverride = {
   [K in Exclude<keyof KnowledgeHealthSettingsValues, 'trustWeights'>]: KnowledgeHealthSettingsValues[K] | null;
 } & { trustWeights: Partial<TrustWeights> | null };
 
+/**
+ * A setting resolved across levels (#919): project → workspace → the code or
+ * env default. Each level's own ask beside what applies, so a settings page
+ * never shows an inherited value as the project's. The one shape for every
+ * project override; a deployment ceiling on top stays {@link CeilingSetting}.
+ */
+export interface ScopedSetting<T> {
+  /** What the workspace set. Null = inherit the default. */
+  workspace: T | null;
+  /** What the project set. Null = inherit the workspace; always null when no project is named. */
+  project: T | null;
+  /** What applies. */
+  effective: T;
+  /** The level that decided `effective`. */
+  source: 'project' | 'workspace' | 'default';
+}
+
+/** Resolve one {@link ScopedSetting}: the first level that set a value wins. */
+export function scopedSetting<T>(project: T | null | undefined, workspace: T | null | undefined, fallback: T): ScopedSetting<T> {
+  const p = project ?? null;
+  const w = workspace ?? null;
+  return { workspace: w, project: p, effective: p ?? w ?? fallback, source: p !== null ? 'project' : w !== null ? 'workspace' : 'default' };
+}
+
+/**
+ * The freshness thresholds a project may override (#921). The search knobs in
+ * the same settings row stay workspace-only: search spans projects.
+ */
+export const PROJECT_VERIFICATION_KEYS = ['reviewIntervalDays', 'remindBeforeDays', 'inactiveAfterDays', 'emptyMaxChars'] as const;
+export type ProjectVerificationKey = (typeof PROJECT_VERIFICATION_KEYS)[number];
+export type VerificationThresholds = Pick<KnowledgeHealthSettingsValues, ProjectVerificationKey>;
+/** Sparse: `null` inherits the workspace's value. */
+export type ProjectVerificationOverride = { [K in ProjectVerificationKey]: number | null };
+
+// GET/PATCH /v1/projects/:id/settings/verification
+export interface ProjectVerificationSettings {
+  workspaceId: string;
+  projectId: string;
+  reviewIntervalDays: ScopedSetting<number>;
+  remindBeforeDays: ScopedSetting<number>;
+  inactiveAfterDays: ScopedSetting<number>;
+  emptyMaxChars: ScopedSetting<number>;
+}
+
 // POST /v1/documents/:id/archive | /unarchive
 export interface ArchiveDocumentResponse {
   documentId: string;

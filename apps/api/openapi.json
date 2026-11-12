@@ -34416,6 +34416,142 @@
         ]
       }
     },
+    "/v1/projects/{id}/settings/verification": {
+      "get": {
+        "operationId": "ProjectVerificationSettingsController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectVerificationSettings"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A project's freshness thresholds: what the workspace set, what the project set, and what applies",
+        "tags": [
+          "projects"
+        ]
+      },
+      "patch": {
+        "operationId": "ProjectVerificationSettingsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProjectVerificationSettingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectVerificationSettings"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Override thresholds for this project (workspace admin or the project's maintainer); null inherits the workspace's",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
     "/v1/quality/summary": {
       "get": {
         "operationId": "QualityController_summary",
@@ -49390,6 +49526,29 @@
                 "$ref": "#/components/schemas/TrustWeightsDto"
               }
             ]
+          }
+        }
+      },
+      "UpdateProjectVerificationSettingsDto": {
+        "type": "object",
+        "properties": {
+          "reviewIntervalDays": {
+            "type": "number",
+            "nullable": true,
+            "description": "Days a stamp holds; 0 = never"
+          },
+          "remindBeforeDays": {
+            "type": "number",
+            "nullable": true
+          },
+          "inactiveAfterDays": {
+            "type": "number",
+            "nullable": true,
+            "description": "0 disables inactivity"
+          },
+          "emptyMaxChars": {
+            "type": "number",
+            "nullable": true
           }
         }
       },
@@ -69546,6 +69705,37 @@
           "createdAt"
         ]
       },
+      "ProjectVerificationSettings": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "reviewIntervalDays": {
+            "$ref": "#/components/schemas/ScopedSetting%3Cnumber%3E"
+          },
+          "remindBeforeDays": {
+            "$ref": "#/components/schemas/ScopedSetting%3Cnumber%3E"
+          },
+          "inactiveAfterDays": {
+            "$ref": "#/components/schemas/ScopedSetting%3Cnumber%3E"
+          },
+          "emptyMaxChars": {
+            "$ref": "#/components/schemas/ScopedSetting%3Cnumber%3E"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "projectId",
+          "reviewIntervalDays",
+          "remindBeforeDays",
+          "inactiveAfterDays",
+          "emptyMaxChars"
+        ]
+      },
       "ProposeAgentFindingResponse": {
         "type": "object",
         "properties": {
@@ -72127,6 +72317,36 @@
           "prefix",
           "createdAt",
           "lastUsedAt"
+        ]
+      },
+      "ScopedSetting<number>": {
+        "type": "object",
+        "properties": {
+          "workspace": {
+            "type": "number",
+            "nullable": true
+          },
+          "project": {
+            "type": "number",
+            "nullable": true
+          },
+          "effective": {
+            "type": "number"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "project",
+              "workspace",
+              "default"
+            ]
+          }
+        },
+        "required": [
+          "workspace",
+          "project",
+          "effective",
+          "source"
         ]
       },
       "SearchApiOperationsResponse": {

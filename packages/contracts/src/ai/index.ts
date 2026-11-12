@@ -621,30 +621,6 @@ export interface OverrideSetting<T> {
 }
 
 /**
- * A setting resolved across levels (#919): project → workspace → the code or
- * env default. Each level's own ask beside what applies, so a settings page
- * never shows an inherited value as the project's. The one shape for every
- * project override; a deployment ceiling on top stays {@link CeilingSetting}.
- */
-export interface ScopedSetting<T> {
-  /** What the workspace set. Null = inherit the default. */
-  workspace: T | null;
-  /** What the project set. Null = inherit the workspace; always null when no project is named. */
-  project: T | null;
-  /** What applies. */
-  effective: T;
-  /** The level that decided `effective`. */
-  source: 'project' | 'workspace' | 'default';
-}
-
-/** Resolve one {@link ScopedSetting}: the first level that set a value wins. */
-export function scopedSetting<T>(project: T | null | undefined, workspace: T | null | undefined, fallback: T): ScopedSetting<T> {
-  const p = project ?? null;
-  const w = workspace ?? null;
-  return { workspace: w, project: p, effective: p ?? w ?? fallback, source: p !== null ? 'project' : w !== null ? 'workspace' : 'default' };
-}
-
-/**
  * Agent-session memory settings (issue #73). The switch and the two rate
  * limits are capped by CAPTURE_*; the thresholds are tuning — an embedding
  * model's cosine scale differs, and moving them widens nothing.

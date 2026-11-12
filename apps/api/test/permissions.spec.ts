@@ -315,7 +315,7 @@ describe('PermissionService.requireResource', () => {
 describe('PermissionService.requireProjectManage (#919)', () => {
   const OTHER = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
   const manage = (role: string, grants: GrantRow[] = [], who: Principal = alice, projectId = PROJECT) =>
-    permissionsAs(role, grants).service.requireProjectManage(who, WS, projectId);
+    permissionsAs(role, grants).service.requireProjectManage(who, projectId);
 
   it('lets a workspace admin through with no grant', async () => {
     await expect(manage('admin')).resolves.toBeUndefined();
@@ -325,7 +325,7 @@ describe('PermissionService.requireProjectManage (#919)', () => {
     await expect(manage('editor', [grant(PROJECT, ALICE, 'manage')])).resolves.toBeUndefined();
     const { service, prisma } = permissionsAs('editor', [grant(PROJECT, SECURITY, 'manage', 'group')]);
     prisma.userGroupMember.findMany.mockResolvedValue([{ groupId: SECURITY }] as never);
-    await expect(service.requireProjectManage(alice, WS, PROJECT)).resolves.toBeUndefined();
+    await expect(service.requireProjectManage(alice, PROJECT)).resolves.toBeUndefined();
   });
 
   it('refuses an editor without the grant, although an unmanaged project lets every editor restrict it', async () => {
@@ -344,12 +344,6 @@ describe('PermissionService.requireProjectManage (#919)', () => {
 
   it("refuses another project's maintainer", async () => {
     await expect(manage('editor', [grant(OTHER, ALICE, 'manage')])).rejects.toBeInstanceOf(ForbiddenException);
-  });
-
-  it('refuses a project of another workspace as not found', async () => {
-    const { service, prisma } = permissionsAs('admin');
-    prisma.project.findUnique.mockResolvedValue({ workspaceId: OTHER, name: 'Elsewhere', restricted: false });
-    await expect(service.requireProjectManage(alice, WS, PROJECT)).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('refuses a read-only or capture key as on any write', async () => {

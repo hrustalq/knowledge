@@ -348,14 +348,14 @@ export class PermissionService {
    * setting is not theirs to write. The workspace role stays the ceiling, so a
    * viewer's grant buys nothing, and a read-only or capture key is refused as
    * on any write. The merge gates (lint, breaking-API) never ask this — they
-   * are `@Access('admin')`.
+   * are `@Access('admin')`. The workspace is the project's own, read in PG.
    */
-  async requireProjectManage(principal: Principal, workspaceId: string, projectId: string): Promise<void> {
-    await this.access.requireRole(principal, workspaceId, 'editor');
-    if (principal.mode === 'dev') return;
+  async requireProjectManage(principal: Principal, projectId: string): Promise<void> {
     const resource: AccessResource = { type: 'project', id: projectId };
     const resolved = await this.resolveChain(resource);
-    if (resolved.workspaceId !== workspaceId) throw new NotFoundException(t('error.project.notFound', { id: projectId }));
+    const { workspaceId } = resolved;
+    await this.access.requireRole(principal, workspaceId, 'editor');
+    if (principal.mode === 'dev') return;
     const scope = await this.scopeFor(principal, workspaceId);
     const level = levelOn(scope, resolved.chain, resolved.grants);
     const holdsGrant = resolved.grants.some(

@@ -270,6 +270,7 @@ import type {
   ProjectOverviewResponse,
   ProjectSiteResponse,
   ProjectSummary,
+  ProjectVerificationSettings,
   ProposeAgentFindingResponse,
   ProposeRelationsResponse,
   PublicShareExport,
@@ -634,6 +635,7 @@ export interface ContractResponses {
   ProjectOverviewResponse: ProjectOverviewResponse;
   ProjectSiteResponse: ProjectSiteResponse;
   ProjectSummary: ProjectSummary;
+  ProjectVerificationSettings: ProjectVerificationSettings;
   ProposeAgentFindingResponse: ProposeAgentFindingResponse;
   ProposeRelationsResponse: ProposeRelationsResponse;
   PublicShareExport: PublicShareExport;

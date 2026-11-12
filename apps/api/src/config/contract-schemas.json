@@ -18990,6 +18990,37 @@
       "createdAt"
     ]
   },
+  "ProjectVerificationSettings": {
+    "type": "object",
+    "properties": {
+      "workspaceId": {
+        "type": "string"
+      },
+      "projectId": {
+        "type": "string"
+      },
+      "reviewIntervalDays": {
+        "$ref": "#/components/schemas/ScopedSetting%3Cnumber%3E"
+      },
+      "remindBeforeDays": {
+        "$ref": "#/components/schemas/ScopedSetting%3Cnumber%3E"
+      },
+      "inactiveAfterDays": {
+        "$ref": "#/components/schemas/ScopedSetting%3Cnumber%3E"
+      },
+      "emptyMaxChars": {
+        "$ref": "#/components/schemas/ScopedSetting%3Cnumber%3E"
+      }
+    },
+    "required": [
+      "workspaceId",
+      "projectId",
+      "reviewIntervalDays",
+      "remindBeforeDays",
+      "inactiveAfterDays",
+      "emptyMaxChars"
+    ]
+  },
   "ProposeAgentFindingResponse": {
     "type": "object",
     "properties": {
@@ -21571,6 +21602,36 @@
       "prefix",
       "createdAt",
       "lastUsedAt"
+    ]
+  },
+  "ScopedSetting<number>": {
+    "type": "object",
+    "properties": {
+      "workspace": {
+        "type": "number",
+        "nullable": true
+      },
+      "project": {
+        "type": "number",
+        "nullable": true
+      },
+      "effective": {
+        "type": "number"
+      },
+      "source": {
+        "type": "string",
+        "enum": [
+          "project",
+          "workspace",
+          "default"
+        ]
+      }
+    },
+    "required": [
+      "workspace",
+      "project",
+      "effective",
+      "source"
     ]
   },
   "SearchApiOperationsResponse": {

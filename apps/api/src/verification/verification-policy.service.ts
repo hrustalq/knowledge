@@ -1,8 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
-import type { KnowledgeHealthSettingsOverride, KnowledgeHealthSettingsValues, TrustWeights } from '@knowledge/contracts';
+import type {
+  KnowledgeHealthSettingsOverride,
+  KnowledgeHealthSettingsValues,
+  ProjectVerificationOverride,
+  ProjectVerificationSettings,
+  TrustWeights,
+  VerificationThresholds,
+} from '@knowledge/contracts';
 import {
+  PROJECT_VERIFICATION_KEYS,
+  scopedSetting,
   SEARCH_COMMUNITY_PRIOR_FLOOR,
   SEARCH_COMMUNITY_PRIOR_WEIGHT,
   SEARCH_MIN_COSINE_SHARE,
@@ -91,6 +100,68 @@ export class VerificationPolicyService {
       layeredExpansion: override.layeredExpansion ?? defaults.layeredExpansion,
       trustWeights: { ...defaults.trustWeights, ...override.trustWeights },
     };
+  }
+
+  /**
+   * The projects carrying a threshold of their own (#921), by id. One cached
+   * read per workspace beside the settings row; `updateProject` is its writer.
+   * Most workspaces answer `{}`.
+   */
+  projectOverrides(workspaceId: string): Promise<Record<string, ProjectVerificationOverride>> {
+    return this.cache.wrap(workspaceId, READ_CACHE_FAMILIES.projectHealthSettings.key(), async () => {
+      const rows = await this.prisma.project.findMany({
+        where: { workspaceId, OR: PROJECT_VERIFICATION_KEYS.map((key) => ({ [key]: { not: null } })) },
+        select: { id: true, reviewIntervalDays: true, remindBeforeDays: true, inactiveAfterDays: true, emptyMaxChars: true },
+      });
+      return Object.fromEntries(rows.map(({ id, ...override }) => [id, override]));
+    });
+  }
+
+  /**
+   * The thresholds of any project in the workspace, for a path that reads many
+   * pages: project → workspace → env, resolved in memory after two cached
+   * reads. A page with no project (or a project with no override) gets the
+   * workspace's values, exactly as before projects could override.
+   */
+  async thresholds(workspaceId: string): Promise<(projectId: string | null | undefined) => VerificationThresholds> {
+    const [workspace, projects] = await Promise.all([this.effective(workspaceId), this.projectOverrides(workspaceId)]);
+    return (projectId) => {
+      const own = projectId ? projects[projectId] : undefined;
+      return {
+        reviewIntervalDays: own?.reviewIntervalDays ?? workspace.reviewIntervalDays,
+        remindBeforeDays: own?.remindBeforeDays ?? workspace.remindBeforeDays,
+        inactiveAfterDays: own?.inactiveAfterDays ?? workspace.inactiveAfterDays,
+        emptyMaxChars: own?.emptyMaxChars ?? workspace.emptyMaxChars,
+      };
+    };
+  }
+
+  /** {@link thresholds} for one project. */
+  async effectiveFor(workspaceId: string, projectId: string | null | undefined): Promise<VerificationThresholds> {
+    return (await this.thresholds(workspaceId))(projectId);
+  }
+
+  /** What each level asked for and what applies, for the project's settings rows. Uncached: a settings page, not a hot path. */
+  async projectSettings(projectId: string): Promise<ProjectVerificationSettings> {
+    const own = await this.prisma.project.findUniqueOrThrow({ where: { id: projectId } });
+    const [defaults, workspace] = [this.defaults(), await this.override(own.workspaceId)];
+    const setting = (key: (typeof PROJECT_VERIFICATION_KEYS)[number]) => scopedSetting(own[key], workspace[key], defaults[key]);
+    return {
+      workspaceId: own.workspaceId,
+      projectId,
+      reviewIntervalDays: setting('reviewIntervalDays'),
+      remindBeforeDays: setting('remindBeforeDays'),
+      inactiveAfterDays: setting('inactiveAfterDays'),
+      emptyMaxChars: setting('emptyMaxChars'),
+    };
+  }
+
+  /** Write a project's thresholds; `null` on a key goes back to the workspace's. Stored expiry stamps do not move. */
+  async updateProject(projectId: string, patch: Partial<ProjectVerificationOverride>): Promise<ProjectVerificationSettings> {
+    const data = Object.fromEntries(PROJECT_VERIFICATION_KEYS.filter((key) => patch[key] !== undefined).map((key) => [key, patch[key]]));
+    const { workspaceId } = await this.prisma.project.update({ where: { id: projectId }, data, select: { workspaceId: true } });
+    await this.cache.invalidate(workspaceId, READ_CACHE_FAMILIES.projectHealthSettings.key());
+    return this.projectSettings(projectId);
   }
 
   /** Write the sparse row. Every key is optional; `null` resets that key to "inherit". */

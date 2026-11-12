@@ -5,6 +5,7 @@ import { NotificationsCoreModule } from '../notifications/notifications-core.mod
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { KnowledgeHealthController } from './knowledge-health.controller.js';
+import { ProjectVerificationSettingsController } from './project-verification-settings.controller.js';
 import { VerificationController } from './verification.controller.js';
 import { VerificationCoreModule } from './verification-core.module.js';
 import { VerificationSweeper } from './verification.sweeper.js';
@@ -16,7 +17,7 @@ import { VerificationSweeper } from './verification.sweeper.js';
  */
 @Module({
   imports: [VerificationCoreModule, PrismaModule, ActivityCoreModule, NotificationsCoreModule, StorageModule, PermissionsCoreModule],
-  controllers: [VerificationController, KnowledgeHealthController],
+  controllers: [VerificationController, KnowledgeHealthController, ProjectVerificationSettingsController],
   providers: [VerificationSweeper],
   exports: [VerificationCoreModule],
 })

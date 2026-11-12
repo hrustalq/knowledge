@@ -183,36 +183,43 @@ for (const key of TRUST_WEIGHT_KEYS) {
   }
 }
 
-/** Every field nullable: `null` resets that key to "inherit the env default". */
-export class UpdateKnowledgeHealthSettingsDto {
+/**
+ * The freshness thresholds a project may override (#921): `null` resets a key
+ * to the workspace's value. The workspace DTO below extends it with the knobs
+ * that stay workspace-only, where `null` means the env default.
+ */
+export class UpdateProjectVerificationSettingsDto {
   @ApiPropertyOptional({ type: Number, nullable: true, description: 'Days a stamp holds; 0 = never' })
-  @ValidateIf((o: UpdateKnowledgeHealthSettingsDto) => o.reviewIntervalDays !== undefined && o.reviewIntervalDays !== null)
+  @ValidateIf((o: UpdateProjectVerificationSettingsDto) => o.reviewIntervalDays !== undefined && o.reviewIntervalDays !== null)
   @IsInt()
   @Min(0, { message: vmsg('min') })
   @Max(MAX_INTERVAL_DAYS, { message: vmsg('max') })
   reviewIntervalDays?: number | null;
 
   @ApiPropertyOptional({ type: Number, nullable: true })
-  @ValidateIf((o: UpdateKnowledgeHealthSettingsDto) => o.remindBeforeDays !== undefined && o.remindBeforeDays !== null)
+  @ValidateIf((o: UpdateProjectVerificationSettingsDto) => o.remindBeforeDays !== undefined && o.remindBeforeDays !== null)
   @IsInt()
   @Min(0, { message: vmsg('min') })
   @Max(MAX_INTERVAL_DAYS, { message: vmsg('max') })
   remindBeforeDays?: number | null;
 
   @ApiPropertyOptional({ type: Number, nullable: true, description: '0 disables inactivity' })
-  @ValidateIf((o: UpdateKnowledgeHealthSettingsDto) => o.inactiveAfterDays !== undefined && o.inactiveAfterDays !== null)
+  @ValidateIf((o: UpdateProjectVerificationSettingsDto) => o.inactiveAfterDays !== undefined && o.inactiveAfterDays !== null)
   @IsInt()
   @Min(0, { message: vmsg('min') })
   @Max(MAX_INTERVAL_DAYS, { message: vmsg('max') })
   inactiveAfterDays?: number | null;
 
   @ApiPropertyOptional({ type: Number, nullable: true })
-  @ValidateIf((o: UpdateKnowledgeHealthSettingsDto) => o.emptyMaxChars !== undefined && o.emptyMaxChars !== null)
+  @ValidateIf((o: UpdateProjectVerificationSettingsDto) => o.emptyMaxChars !== undefined && o.emptyMaxChars !== null)
   @IsInt()
   @Min(0, { message: vmsg('min') })
   @Max(100_000, { message: vmsg('max') })
   emptyMaxChars?: number | null;
+}
 
+/** Every field nullable: `null` resets that key to "inherit the env default". */
+export class UpdateKnowledgeHealthSettingsDto extends UpdateProjectVerificationSettingsDto {
   @ApiPropertyOptional({ type: Boolean, nullable: true, description: 'Multiply search scores by the page\'s verification state' })
   @ValidateIf((o: UpdateKnowledgeHealthSettingsDto) => o.trustRanking !== undefined && o.trustRanking !== null)
   @IsBoolean()

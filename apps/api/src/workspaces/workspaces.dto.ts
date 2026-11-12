@@ -15,11 +15,15 @@ import {
   Min,
 } from 'class-validator';
 import {
+  HISTORY_AUDIENCES,
   MEMBER_CAPABILITIES,
+  PUBLISH_MODES,
   WORKSPACE_FEATURES,
   WORKSPACE_ROLES,
   WORKSPACE_USE_KEYS,
+  type HistoryAudience,
   type MemberCapability,
+  type PublishMode,
   type WorkspaceFeature,
   type WorkspaceUse,
 } from '@knowledge/contracts';
@@ -156,4 +160,24 @@ export class UpdateWorkspacePurposeDto {
   @ArrayMaxSize(WORKSPACE_FEATURES.length)
   @IsIn(WORKSPACE_FEATURES, { each: true })
   disabled!: WorkspaceFeature[];
+}
+
+/** PUT /v1/workspaces/:id/editing-policy (#958): a field left out is unchanged, null goes back to inheriting. */
+export class UpdateEditingPolicyDto {
+  @ApiPropertyOptional({ enum: PUBLISH_MODES, type: String, nullable: true, description: 'How a person\'s edit reaches a published page. Null inherits `review`.' })
+  @IsOptional()
+  @IsIn(PUBLISH_MODES)
+  publishMode?: PublishMode | null;
+
+  @ApiPropertyOptional({ enum: HISTORY_AUDIENCES, type: String, nullable: true, description: 'Who reads page history. Null inherits `everyone`.' })
+  @IsOptional()
+  @IsIn(HISTORY_AUDIENCES)
+  historyAudience?: HistoryAudience | null;
+
+  @ApiPropertyOptional({ type: Number, nullable: true, minimum: 0, maximum: 20, description: 'Non-author approvals a merge needs. Null inherits MR_REQUIRED_APPROVALS.' })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(20)
+  requiredApprovals?: number | null;
 }

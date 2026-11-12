@@ -6912,7 +6912,8 @@
         "chat_auto_harvest_disabled": "Automatic thread harvest turned off",
         "member_capabilities_changed": "Member capabilities changed",
         "workspace_deleted": "Workspace deleted",
-        "workspace_renamed": "Workspace renamed"
+        "workspace_renamed": "Workspace renamed",
+        "workspace_editing_policy_updated": "Editing policy changed"
       }
     },
     "tabs": {

@@ -1,4 +1,4 @@
-import type { IngestionJobStatus, Locale, RevisionStatus } from '@knowledge/contracts/core';
+import type { IngestionJobStatus, Locale, RevisionStatus, ScopedSetting } from '@knowledge/contracts/core';
 import type { FactExtractor } from '@knowledge/contracts/graph';
 
 // stale detection / reindex scheduling, historical fact queries
@@ -146,6 +146,8 @@ export const AUDIT_ACTIONS = [
   'workspace.deleted',
   /** A workspace was renamed (#478): `params` holds `from` and `to`. */
   'workspace.renamed',
+  /** The editing policy changed (#958): `params` holds the columns written, null = back to inheriting. */
+  'workspace.editing_policy_updated',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -1689,6 +1691,28 @@ export interface WorkspaceFeaturesResponse {
   uses: WorkspaceUse[];
   /** False until an admin confirmed or skipped the first-visit purpose question. */
   purposeAsked: boolean;
+}
+
+/**
+ * The path a person's edit takes to the default branch of a published page
+ * (#958). `review`: through a merge request. `direct`: the save is live. What
+ * a person did not write (an agent finding, a capture, a connector proposal)
+ * is a merge request in both.
+ */
+export const PUBLISH_MODES = ['review', 'direct'] as const;
+export type PublishMode = (typeof PUBLISH_MODES)[number];
+
+/** Who may read a page's history (#958): everyone who can open it, or editors and up. The current page is never hidden. */
+export const HISTORY_AUDIENCES = ['everyone', 'editors'] as const;
+export type HistoryAudience = (typeof HISTORY_AUDIENCES)[number];
+
+// GET / PUT /v1/workspaces/:id/editing-policy. Every member reads it; `project` is always null (no project override yet).
+export interface EditingPolicyResponse {
+  workspaceId: string;
+  publishMode: ScopedSetting<PublishMode>;
+  historyAudience: ScopedSetting<HistoryAudience>;
+  /** Non-author approvals a merge needs; the default is MR_REQUIRED_APPROVALS. */
+  requiredApprovals: ScopedSetting<number>;
 }
 
 // GET / PUT /v1/workspaces/:id/purpose (workspace admin)

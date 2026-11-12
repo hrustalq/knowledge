@@ -6042,6 +6042,26 @@
     },
     {
       "method": "GET",
+      "path": "/v1/workspaces/{id}/editing-policy",
+      "tag": "workspaces",
+      "summary": "How edits reach a page here: publish mode, history audience, required approvals — asked and applied",
+      "role": "viewer",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/workspaces/{id}/editing-policy",
+      "tag": "workspaces",
+      "summary": "Set the editing policy (workspace admin); a field left out is unchanged, null inherits",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/workspaces/{id}/features",
       "tag": "workspaces",
       "summary": "The sections switched off in this workspace",

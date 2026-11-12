@@ -767,6 +767,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{id}/editing-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How edits reach a page here: publish mode, history audience, required approvals — asked and applied */
+        get: operations["WorkspacesController_getEditingPolicy"];
+        /** Set the editing policy (workspace admin); a field left out is unchanged, null inherits */
+        put: operations["WorkspacesController_setEditingPolicy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces/{id}": {
         parameters: {
             query?: never;
@@ -8468,6 +8486,20 @@ export interface components {
             /** @description The sections to leave switched off, as the admin confirmed them; replaces the stored list in the same write. */
             disabled: ("workflows" | "knowledge-health" | "qa" | "analytics" | "captures" | "memos" | "conflicts" | "assistant" | "git" | "sources")[];
         };
+        UpdateEditingPolicyDto: {
+            /**
+             * @description How a person's edit reaches a published page. Null inherits `review`.
+             * @enum {string|null}
+             */
+            publishMode?: "review" | "direct" | null;
+            /**
+             * @description Who reads page history. Null inherits `everyone`.
+             * @enum {string|null}
+             */
+            historyAudience?: "everyone" | "editors" | null;
+            /** @description Non-author approvals a merge needs. Null inherits MR_REQUIRED_APPROVALS. */
+            requiredApprovals?: number | null;
+        };
         UpdateWorkspaceDto: {
             /** @example Platform Team */
             name: string;
@@ -13933,6 +13965,12 @@ export interface components {
             description: string | null;
             issues: components["schemas"]["WorkflowValidationIssue"][];
         };
+        EditingPolicyResponse: {
+            workspaceId: string;
+            publishMode: components["schemas"]["ScopedSetting<PublishMode>"];
+            historyAudience: components["schemas"]["ScopedSetting<HistoryAudience>"];
+            requiredApprovals: components["schemas"]["ScopedSetting<number>"];
+        };
         EffectiveAccessEntry: {
             userId: string;
             displayName: string;
@@ -14396,6 +14434,8 @@ export interface components {
             confidence: number;
             assertedByRevisionId: string | null;
         };
+        /** @enum {string} */
+        HistoryAudience: "everyone" | "editors";
         IdentityProviderView: {
             id: string;
             workspaceId: string;
@@ -15838,6 +15878,8 @@ export interface components {
             reason: "draft" | "approvals" | "conflict" | "diverged" | "breaking-api" | "lint" | "protected" | null;
         };
         /** @enum {string} */
+        PublishMode: "review" | "direct";
+        /** @enum {string} */
         PublishedSiteStatus: "draft" | "live" | "unpublished";
         PublishedSiteSummary: {
             id: string;
@@ -16327,6 +16369,22 @@ export interface components {
             project: components["schemas"]["ApiBreakingChangePolicy"] | null;
             effective: components["schemas"]["ApiBreakingChangePolicy"];
             inherited: components["schemas"]["ApiBreakingChangePolicy"];
+            /** @enum {string} */
+            source: "project" | "workspace" | "default";
+        };
+        "ScopedSetting<HistoryAudience>": {
+            workspace: components["schemas"]["HistoryAudience"] | null;
+            project: components["schemas"]["HistoryAudience"] | null;
+            effective: components["schemas"]["HistoryAudience"];
+            inherited: components["schemas"]["HistoryAudience"];
+            /** @enum {string} */
+            source: "project" | "workspace" | "default";
+        };
+        "ScopedSetting<PublishMode>": {
+            workspace: components["schemas"]["PublishMode"] | null;
+            project: components["schemas"]["PublishMode"] | null;
+            effective: components["schemas"]["PublishMode"];
+            inherited: components["schemas"]["PublishMode"];
             /** @enum {string} */
             source: "project" | "workspace" | "default";
         };
@@ -19811,6 +19869,94 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkspacePurposeResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkspacesController_getEditingPolicy: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EditingPolicyResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkspacesController_setEditingPolicy: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateEditingPolicyDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EditingPolicyResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

@@ -128,6 +128,7 @@ import type {
   DocumentWorkflowRunsResponse,
   DraftComponentResponse,
   DraftWorkflowResponse,
+  EditingPolicyResponse,
   EffectiveAccessResponse,
   EmbedUsagesResponse,
   EntityNeighborsResponse,
@@ -500,6 +501,7 @@ export interface ContractResponses {
   DocumentWorkflowRunsResponse: DocumentWorkflowRunsResponse;
   DraftComponentResponse: DraftComponentResponse;
   DraftWorkflowResponse: DraftWorkflowResponse;
+  EditingPolicyResponse: EditingPolicyResponse;
   EffectiveAccessResponse: EffectiveAccessResponse;
   EmbedUsagesResponse: EmbedUsagesResponse;
   EntityNeighborsResponse: EntityNeighborsResponse;

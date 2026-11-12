@@ -6912,7 +6912,8 @@
         "chat_auto_harvest_disabled": "Выключен автоматический сбор тредов",
         "member_capabilities_changed": "Изменены разрешения участника",
         "workspace_deleted": "Рабочее пространство удалено",
-        "workspace_renamed": "Рабочее пространство переименовано"
+        "workspace_renamed": "Рабочее пространство переименовано",
+        "workspace_editing_policy_updated": "Правила редактирования изменены"
       }
     },
     "tabs": {

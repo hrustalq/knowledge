@@ -10,7 +10,6 @@
 import { useI18n } from 'vue-i18n'
 import { computed, ref, watch } from 'vue'
 import { refDebounced, useInfiniteScroll, useVirtualList } from '@vueuse/core'
-import { toast } from 'vue-sonner'
 import { MoreHorizontal, Pencil, Plus, Search, Trash2, X } from 'lucide-vue-next'
 import type { AssistantThreadSummary } from '@knowledge/contracts'
 import { relativeTime } from '@/shared/api/api'
@@ -27,8 +26,6 @@ import {
 import { threadLabel } from '../model/thread-label'
 
 const { t } = useI18n()
-
-const props = defineProps<{ documentId?: string }>()
 
 const assistant = useAssistantStore()
 
@@ -50,13 +47,10 @@ useInfiniteScroll(containerProps.ref, async () => { await assistant.loadMoreThre
   canLoadMore: () => assistant.nextCursor !== null && !assistant.threadsLoading,
 })
 
-async function startNewThread() {
-  try {
-    await assistant.newThread(props.documentId)
-    emit('opened')
-  } catch (e) {
-    toast.error((e as Error).message)
-  }
+// Blank until the first message: a click that is abandoned leaves no empty chat in the roster (#931).
+function startNewThread() {
+  assistant.startBlank()
+  emit('opened')
 }
 
 // Rename and delete are confirmed in dialogs the page owns, because the chat

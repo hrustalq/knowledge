@@ -119,6 +119,13 @@ export const useAssistantStore = defineStore('assistant', {
     activeThread: null as AssistantThreadSummary | null,
     messages: [] as AssistantMessageInfo[],
     messagesLoading: false,
+    /**
+     * An opening move (`openLatest`, `openForDocument`) is waiting for the
+     * roster. The pane shows loading rather than an empty chat about to be
+     * replaced, and anything the person does meanwhile clears this, which is
+     * how the opening move knows to stand down (#931).
+     */
+    resuming: false,
     sending: false,
     /** Present only while a turn is in flight. */
     live: null as LiveTurn | null,
@@ -208,7 +215,7 @@ export const useAssistantStore = defineStore('assistant', {
      * conversation that old.
      */
     async openForDocument(documentId: string | null) {
-      if (!this.threadsLoaded) await this.fetchThreads()
+      if (!(await this.rosterForOpening())) return
       if (this.activeThread && this.activeThread.documentId === documentId) return
       const existing = documentId ? this.threads.find((t) => t.documentId === documentId) : undefined
       if (existing) return this.openThread(existing.id)
@@ -221,6 +228,7 @@ export const useAssistantStore = defineStore('assistant', {
      * away leaves nothing behind in the roster.
      */
     startBlank() {
+      this.resuming = false
       if (this.sending) return
       this.activeThread = null
       this.messages = []
@@ -228,15 +236,34 @@ export const useAssistantStore = defineStore('assistant', {
       this.error = null
     },
 
-    /** Opens the most recently active thread for this workspace, creating one if none exists. */
-    async openOrCreateThread(documentId?: string) {
-      if (!this.threadsLoaded) await this.fetchThreads()
+    /**
+     * The assistant page's opening move: the most recently active thread. With
+     * none, the chat stays blank and the first message creates it.
+     */
+    async openLatest() {
+      if (!(await this.rosterForOpening())) return
       const existing = this.threads[0]
-      if (existing) return this.openThread(existing.id)
-      return this.newThread(documentId)
+      if (existing) await this.openThread(existing.id)
+    },
+
+    /**
+     * Loads the roster for an opening move. False when the person chose
+     * something while it loaded: their choice stands (#931).
+     */
+    async rosterForOpening(): Promise<boolean> {
+      this.resuming = true
+      try {
+        if (!this.threadsLoaded) await this.fetchThreads()
+      } catch (e) {
+        this.error = (e as Error).message
+      }
+      const stillOurs = this.resuming
+      this.resuming = false
+      return stillOurs
     },
 
     async newThread(documentId?: string) {
+      this.resuming = false
       const res = await api.post('/v1/assistant/threads', {
         body: { workspaceId: getWorkspaceId(), ...(documentId ? { documentId } : {}) },
       })
@@ -249,6 +276,7 @@ export const useAssistantStore = defineStore('assistant', {
     },
 
     async openThread(threadId: string) {
+      this.resuming = false
       if (this.activeThread?.id === threadId) return
       this.messagesLoading = true
       this.error = null
@@ -297,7 +325,6 @@ export const useAssistantStore = defineStore('assistant', {
       this.live = null
       const fallback = this.threads[Math.min(index, this.threads.length - 1)]
       if (fallback) await this.openThread(fallback.id)
-      else await this.newThread()
     },
 
     // ---- Rewinding --------------------------------------------------------
@@ -392,6 +419,7 @@ export const useAssistantStore = defineStore('assistant', {
         answer?: AssistantFlowAnswer
       } = {},
     ) {
+      this.resuming = false
       if (!this.activeThread) await this.newThread(documentId)
       const thread = this.activeThread!
       this.sending = true

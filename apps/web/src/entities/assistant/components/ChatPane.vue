@@ -61,6 +61,8 @@ const auth = useAuthStore()
 const composerEl = ref<InstanceType<typeof ChatComposer> | null>(null)
 const transcriptEl = ref<InstanceType<typeof ChatTranscript> | null>(null)
 
+/** No thread yet and one is on its way: the header says nothing rather than "New chat" (#931). */
+const opening = computed(() => !assistant.activeThread && (assistant.resuming || assistant.messagesLoading))
 const title = computed(() => (assistant.activeThread ? threadLabel(assistant.activeThread, t('chat.untitled')) : t('chat.newChat')))
 
 const placeholder = computed(() =>
@@ -195,13 +197,9 @@ async function send(text: string) {
 
 defineExpose({ prefill, send, focus: () => composerEl.value?.focus() })
 
-async function startNewThread() {
-  try {
-    await assistant.newThread(props.documentId)
-    void nextTick(() => composerEl.value?.focus())
-  } catch (e) {
-    toast.error((e as Error).message)
-  }
+function startNewThread() {
+  assistant.startBlank()
+  void nextTick(() => composerEl.value?.focus())
 }
 </script>
 
@@ -221,7 +219,7 @@ async function startNewThread() {
       </Button>
 
       <div class="min-w-0 flex-1">
-        <h1 class="truncate text-sm font-semibold">{{ title }}</h1>
+        <h1 class="truncate text-sm font-semibold" :class="{ invisible: opening }">{{ title }}</h1>
         <p class="truncate text-caption text-muted-foreground">
           {{ t('chat.headerHint') }}
         </p>
@@ -255,7 +253,7 @@ async function startNewThread() {
       ref="transcriptEl"
       :messages="assistant.messages"
       :live="assistant.live"
-      :loading="assistant.messagesLoading"
+      :loading="assistant.messagesLoading || assistant.resuming"
       :error="assistant.error"
       :thread-id="assistant.activeThread?.id ?? null"
       @answer="handlePromptAnswer"

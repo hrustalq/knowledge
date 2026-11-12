@@ -150,7 +150,6 @@ defineExpose({ focus: () => pane.value?.focus(), fill })
 
     <ChatRail
       v-if="view === 'threads'"
-      :document-id="documentId ?? undefined"
       class="kn-ai-threads"
       @rename="dialogs?.rename($event)"
       @delete="dialogs?.remove($event)"

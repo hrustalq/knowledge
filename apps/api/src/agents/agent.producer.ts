@@ -23,12 +23,16 @@ export class AgentProducer {
     );
   }
 
-  /** A retry needs a fresh jobId: the kept failed job blocks reuse of the old one. */
+  /**
+   * A retry needs a fresh jobId: the kept failed job blocks reuse of the old one.
+   * Joined with `#`, as the connector and ingestion producers do: BullMQ refuses
+   * a custom id that contains `:` (#997).
+   */
   async enqueueRetry(runId: string, attempt: number): Promise<void> {
     await this.queue.add(
       'run',
       { runId },
-      { jobId: `${runId}:${attempt}`, attempts: 1, removeOnComplete: true, removeOnFail: false },
+      { jobId: `${runId}#${attempt}`, attempts: 1, removeOnComplete: true, removeOnFail: false },
     );
   }
 }

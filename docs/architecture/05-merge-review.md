@@ -103,7 +103,7 @@ the client can branch on. They run in this order: `draft`, `approvals`, `lint`,
 | `reason`       | Gate                                                                      |
 | -------------- | ------------------------------------------------------------------------- |
 | `draft`        | `merge_requests.is_draft` — PATCH-toggleable, never merges while set        |
-| `approvals`    | fewer than `MR_REQUIRED_APPROVALS` (default 1) non-author approvals         |
+| `approvals`    | fewer non-author approvals than the workspace requires: `workspace_settings.required_approvals`, else `MR_REQUIRED_APPROVALS` (default 1) |
 | `lint`         | under the `block` lint policy, the source head's style check is still to come or has an unresolved error-severity violation, and no admin overrode it; with `checkStatus`, `blockingCount`, `checkId` ([below](#style-lint)) |
 | `conflict`     | the 3-way merge of a page overlaps, with `conflicts` (page ids and hunks) and the first page's `documentId`, heads and `comparisonUrl` |
 | `diverged`     | a target head moved while the merge landed (the lock above), or an Update-branch resolution names an old target head |
@@ -116,14 +116,28 @@ the dev principal and for MCP**: in
 (`00000000-0000-0000-0000-000000000000`), so every dev-created MR is authored by
 the only identity that can approve it — self-approval exclusion would deadlock
 every merge in a dev environment. MCP stdio has no principal at all. The
-implementation reads `MR_REQUIRED_APPROVALS` only when
-`principal && principal.mode !== 'dev'`, and otherwise requires 0. Same trust
+implementation reads the workspace's number (`EditingPolicyService`,
+[features/79](../features/79-publish-mode.md); the env var is its default, not a
+ceiling) only when `principal && principal.mode !== 'dev'`, and otherwise
+requires 0. Same trust
 semantics as `AccessService.requireRole`, documented in
 [06-auth-acl.md](06-auth-acl.md).
 
 Merging into a **protected** target branch additionally requires the workspace
 `admin` role — checked through `requireRole`, and likewise short-circuited for
 the dev principal and skipped when there is no principal.
+
+### Writes that are not a merge
+
+A merge request is the only way a non-admin changes a published page in a
+workspace whose publish mode is `review` (the default):
+`DocumentsService.assertMayWrite` refuses a person's revision on the default
+branch with a 409 `review-required`, on REST, MCP, an upload and a git push
+alike. A workspace set to `direct` lets any editor write there, and a workspace
+admin may in both. A merge itself writes as `internalWrite('merge')`, so it is
+never held to the mode it implements. The rule, its exemptions and the
+`WriteAuthority` argument every revision writer takes are in
+[features/79](../features/79-publish-mode.md).
 
 ## The flat-extras error pattern
 

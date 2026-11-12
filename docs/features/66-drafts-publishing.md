@@ -26,6 +26,11 @@ what an author does and what each step writes.
 
 ## Decisions
 
+> This flow is the **`review`** publish mode, the default. A workspace set to `direct`
+> skips the working branch and the merge request for a person's own edit: see
+> [79 — Publish mode](79-publish-mode.md). Since #965 the server also holds `review`: a
+> non-admin's direct write to a published page is refused, not just unoffered.
+
 Taken with the user before building:
 
 - **Every Publish of an edit leaves a merge request.** Publish opens one from
@@ -33,10 +38,13 @@ Taken with the user before building:
   `MergeRequestsService.merge` and every gate it has. The lint gate can only
   judge an MR, so a direct merge would have needed its own exemption. The cost
   is one MR row per published edit, and each one keeps its diff.
-- **Merge gates apply**, approvals included. With `MR_REQUIRED_APPROVALS ≥ 1`
-  (the default), a non-admin's Publish waits for a reviewer. Before this, the
-  editor wrote straight to the default branch and asked nobody. Set it to `0`
-  to keep direct publishing.
+- **Merge gates apply**, approvals included. With one or more required
+  approvals (the default is `MR_REQUIRED_APPROVALS`, 1), a non-admin's Publish
+  waits for a reviewer. The number is the workspace's own
+  (**Settings → Editing**, [79](79-publish-mode.md)). Setting it to `0` lets an
+  author merge their own change and still leaves a merge request for each one;
+  a workspace that wants no merge request at all sets its publish mode to
+  `direct`.
 - **Someone a branch is shared with at view reads it on the page view**, at
   `/documents/:id?branch=<name>`. The share notification links there.
 - **One working branch per person and project** (#636, decided 2026-10-30).

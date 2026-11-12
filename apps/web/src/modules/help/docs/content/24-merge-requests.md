@@ -39,7 +39,7 @@ Merge is refused, with a reason, when:
 | Reason | Fix |
 | --- | --- |
 | `draft` | it is marked draft — untick it |
-| `approvals` | fewer than `MR_REQUIRED_APPROVALS`; the author's own approval never counts |
+| `approvals` | fewer approvals than the workspace requires (**Settings → Editing**; the server default is `MR_REQUIRED_APPROVALS`); the author's own approval never counts |
 | protected branch | the target is protected and you are not a workspace admin |
 | `conflict` | the target changed the same lines the branch did — **Resolve conflicts** |
 

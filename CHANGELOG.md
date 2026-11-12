@@ -15,6 +15,40 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Breaking
+
+- In a workspace that has set no publish mode (the default, `review`), an editor who is not a workspace admin can
+  no longer add a revision to the default branch of a published page directly. `POST /v1/documents/:id/revisions`
+  and `POST /v1/documents/:id/uploads` with no `branch`, the MCP tools `knowledge_create_revision`,
+  `knowledge_patch_document` and `knowledge_start_upload` with no `branch`, and a `git push` to the default branch
+  answer 409 with `reason: review-required`. Workspace admins, merges, connector syncs, new pages and private
+  drafts are unaffected. `HTTP` `MCP` `git`
+  **Migration:** write to a branch and open a merge request (the editor already does), or have a workspace admin
+  set **Settings → Editing → Publish mode** to **Direct**, which keeps the old behaviour for every editor.
+
+### Added
+
+- **Publish mode.** A workspace admin chooses under **Settings → Editing** how a person's edit reaches a published
+  page. **Review** (the default) sends it through a merge request. **Direct** makes an editor's save live at once,
+  in the editor and over MCP, with no working branch and no merge request. What a person did not write (agent
+  findings, captures, connector proposals) stays a merge request in both modes, and in a direct workspace those
+  are listed under **Proposals**, which replaces Merge requests in the navigation. (#958)
+- **Required approvals per workspace.** The number of approvals a merge needs is set per workspace on the same
+  page; `MR_REQUIRED_APPROVALS` is now only the default for a workspace that set nothing. The merge widget shows
+  how many are required. (#960)
+- **Page history can be kept to editors.** With **Page history → Editors only**, viewers and guests read the
+  current page and are refused its revision list, comparisons, older revisions, as-of reads, the facts timeline
+  and the branch list, over the API and MCP alike (403 `history-restricted`). A merge request's diff stays
+  readable to whoever can read the merge request. (#964)
+- An agent connected over MCP is told the right way to change a page for the workspaces it reaches:
+  `knowledge_whoami` reports each workspace's `publishMode`, and the server instructions and the skill follow it.
+  (#962)
+
+### Changed
+
+- The API spec and test fixture editors save through your working branch and publish it when the workspace
+  reviews changes and you are not an admin; a gate that holds the change opens its merge request. (#965)
+
 ### Fixed
 
 - The assistant's web search found nothing for any query: the two search engines it asked both refused the
@@ -45,6 +79,14 @@ in the pull request that introduces them — see
   connect buttons. (#933)
 
 ### Operations
+
+- **Publish mode (#958).** One additive migration, `20270117100000_editing_policy`: three nullable columns on
+  `workspace_settings`, no backfill, safe under the previous image. No new environment variable.
+  `MR_REQUIRED_APPROVALS` keeps its meaning for every workspace that sets no number of its own. Rolling back the
+  code past this release makes every workspace behave as `review` with history open to everyone again, and the
+  server stops refusing direct writes; the stored settings are kept and apply again on the next upgrade.
+  **Before upgrading**, check for automation that writes to published pages with a non-admin API key and no
+  branch (see Breaking): give it an admin's key, a branch and merge request, or set the workspace to Direct.
 
 - One migration rewrites the existing Jev usage rows in place: cost becomes input tokens × 10.5 ₽ per 1M, currency
   `RUB`. It is not reversed by a rollback and does not need to be: the previous release reads the corrected rows as

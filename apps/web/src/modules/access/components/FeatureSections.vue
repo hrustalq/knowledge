@@ -34,7 +34,12 @@ const NAV_LABEL: Record<WorkspaceFeature, string> = {
   git: 'features.names.git',
   // Reached from "Add page", not the nav.
   sources: 'features.names.sources',
+  // No page: agents reach it over the Hindsight API.
+  memory: 'features.names.memory',
 }
+
+/** The env ceiling that takes a section off this server, named so the admin knows what to ask for. */
+const SERVER_SWITCH: Partial<Record<WorkspaceFeature, string>> = { sources: 'WEB_SOURCES_ENABLED', memory: 'MEMORY_ENABLED' }
 
 const isOff = (f: WorkspaceFeature) => props.off.includes(f)
 const switches = (f: WorkspaceFeature) => isOff(f) !== features.disabled.includes(f)
@@ -56,7 +61,7 @@ const differs = (f: WorkspaceFeature) => props.suggested !== null && isOff(f) !=
         <p :id="`feature-${feature}-hint`" class="kn-measure text-xs text-muted-foreground">
           {{ t(`features.items.${feature}`) }}
           <!-- An env ceiling: what is asked for and what applies, both shown. -->
-          <span v-if="features.unavailable.includes(feature)" class="text-foreground">{{ t('features.serverOff') }}</span>
+          <span v-if="features.unavailable.includes(feature)" class="text-foreground">{{ t('features.serverOff', { env: SERVER_SWITCH[feature] ?? '' }) }}</span>
           <span v-if="switches(feature)" class="mt-0.5 block font-medium text-foreground">
             {{ isOff(feature) ? t('features.purpose.switchesOff') : t('features.purpose.switchesOn') }}
           </span>

@@ -299,6 +299,10 @@ export type I18nTranslations = {
         "interpreterDesc": string;
         "scaffolder": string;
         "scaffolderDesc": string;
+        "memorist": string;
+        "memoristDesc": string;
+        "reflector": string;
+        "reflectorDesc": string;
         "testerRun": {
             "noOperation": string;
             "summary": string;
@@ -904,6 +908,26 @@ export type I18nTranslations = {
             "noParser": string;
             "failed": string;
             "timedOut": string;
+        };
+        "memory": {
+            "disabled": string;
+            "workspaceRequired": string;
+            "workspaceHeaderRequired": string;
+            "bankNotFound": string;
+            "bankIdInvalid": string;
+            "contentNotText": string;
+            "itemsRequired": string;
+            "itemTooLong": string;
+            "timestampInvalid": string;
+            "rateLimited": string;
+            "storeNotReady": string;
+            "memoryNotFound": string;
+            "noReranker": string;
+            "windowInvalid": string;
+            "operationIdTaken": string;
+            "operationNotPending": string;
+            "noReflectModel": string;
+            "reflectFailed": string;
         };
         "memo": {
             "notFound": string;

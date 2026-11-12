@@ -4790,3 +4790,120 @@ model PlaudImport {
   @@index([workspaceId, userId, status])
   @@map("plaud_imports")
 }
+
+/// A memory bank (#986): where an agent keeps what it learns for itself. One
+/// per (workspace, `bank_id`), the free-text id a Hindsight client names it by.
+/// Never a page: its memories are read only through the bank.
+model MemoryBank {
+  id          String  @id @default(uuid()) @db.Uuid
+  workspaceId String  @map("workspace_id") @db.Uuid
+  /// The client's name for the bank, as it appears in `/v1/default/banks/{bank_id}`.
+  bankId      String  @map("bank_id")
+  /// A bank bound to a project follows that project's restriction. Null = the whole workspace.
+  projectId   String? @map("project_id") @db.Uuid
+  name        String
+  mission     String  @default("")
+  /// `{ skepticism, literalism, empathy }`, each 1–5.
+  disposition Json    @default("{\"skepticism\":3,\"literalism\":3,\"empathy\":3}")
+  createdBy   String  @map("created_by") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  units      MemoryUnit[]
+  operations MemoryOperation[]
+
+  @@unique([workspaceId, bankId])
+  @@map("memory_banks")
+}
+
+/// One fact an agent retained (#986): live the moment it is written, read only
+/// through its bank. The vector lives in ArcadeDB (`MemoryUnit`, vector only);
+/// this row is the truth and has the final say on every hit.
+model MemoryUnit {
+  id          String     @id @default(uuid()) @db.Uuid
+  workspaceId String     @map("workspace_id") @db.Uuid
+  bankId      String     @map("bank_id") @db.Uuid
+  bank        MemoryBank @relation(fields: [bankId], references: [id], onDelete: Cascade)
+  /// Masked. One fact, or the whole item when nothing extracted it.
+  text        String
+  /// `world` | `experience` (| `observation`, written by consolidation).
+  factType    String     @default("world") @map("fact_type")
+  context     String?
+  /// Sorted and deduplicated at write, so set equality is array equality.
+  tags        String[]   @default([])
+  metadata    Json       @default("{}")
+  /// The client's grouping id: a re-post of the same one replaces its units.
+  documentId  String     @map("document_id")
+  /// The masked item this unit was extracted from.
+  sourceText  String     @map("source_text")
+  occurredStart DateTime? @map("occurred_start") @db.Timestamptz
+  occurredEnd   DateTime? @map("occurred_end") @db.Timestamptz
+  mentionedAt   DateTime? @map("mentioned_at") @db.Timestamptz
+  /// to_tsvector('russian', text), generated in the migration as chat_chunks'
+  /// is. Never written by Prisma; the GIN index is raw SQL as well.
+  searchTsv   Unsupported("tsvector")? @map("search_tsv")
+  createdBy   String     @map("created_by") @db.Uuid
+  /// The async retain that wrote it. A re-run of that operation replaces its
+  /// own units, so a worker killed mid-job never leaves a second set.
+  operationId String?    @map("operation_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  entities MemoryUnitEntity[]
+
+  @@index([operationId])
+
+  @@index([bankId, documentId])
+  @@index([bankId, createdAt])
+  @@map("memory_units")
+}
+
+/// An entity a memory names (#986), under the canonical key format and
+/// resolved through `entity_aliases` at write. Rows only: memory writes no
+/// vertex and no edge into the workspace relation graph.
+model MemoryUnitEntity {
+  id          String     @id @default(uuid()) @db.Uuid
+  workspaceId String     @map("workspace_id") @db.Uuid
+  bankId      String     @map("bank_id") @db.Uuid
+  unitId      String     @map("unit_id") @db.Uuid
+  unit        MemoryUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  entityKey   String     @map("entity_key")
+  /// As the client or the extractor wrote it.
+  name        String
+
+  @@unique([unitId, entityKey])
+  @@index([bankId, entityKey])
+  @@map("memory_unit_entities")
+}
+
+/// An async retain (#986): the items wait here, masked, until the worker
+/// stores them. `id` is the client's `operation_id` when it sent one, so a
+/// re-submit finds the row instead of making a second.
+model MemoryOperation {
+  id          String     @id @default(uuid()) @db.Uuid
+  workspaceId String     @map("workspace_id") @db.Uuid
+  bankId      String     @map("bank_id") @db.Uuid
+  bank        MemoryBank @relation(fields: [bankId], references: [id], onDelete: Cascade)
+  /// `retain`.
+  type        String     @default("retain")
+  /// queued → running → completed | failed, or cancelled while queued.
+  status      String     @default("queued")
+  /// The request's items as `RetainItem[]`, masked before this row is written. Emptied once the operation settles.
+  payload     Json
+  itemsCount  Int        @map("items_count")
+  createdBy   String     @map("created_by") @db.Uuid
+  locale      String     @default("en")
+  attempts    Int        @default(0)
+  error       String?
+  startedAt   DateTime?  @map("started_at") @db.Timestamptz
+  completedAt DateTime?  @map("completed_at") @db.Timestamptz
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([bankId, createdAt])
+  @@index([status, updatedAt])
+  @@map("memory_operations")
+}

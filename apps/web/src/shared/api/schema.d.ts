@@ -8477,7 +8477,7 @@ export interface components {
         };
         UpdateWorkspaceFeaturesDto: {
             /** @description The sections to switch off; every one not listed is on. An empty list turns everything back on. */
-            disabled: ("workflows" | "knowledge-health" | "qa" | "analytics" | "captures" | "memos" | "conflicts" | "assistant" | "git" | "sources")[];
+            disabled: ("workflows" | "knowledge-health" | "qa" | "analytics" | "captures" | "memos" | "conflicts" | "assistant" | "git" | "sources" | "memory")[];
         };
         UpdateWorkspacePurposeDto: {
             /** @description What the workspace is used for. Empty with an untouched `disabled` is the Skip. */
@@ -8485,7 +8485,7 @@ export interface components {
             /** @description The admin's own words. Only admins read it back. */
             description?: string | null;
             /** @description The sections to leave switched off, as the admin confirmed them; replaces the stored list in the same write. */
-            disabled: ("workflows" | "knowledge-health" | "qa" | "analytics" | "captures" | "memos" | "conflicts" | "assistant" | "git" | "sources")[];
+            disabled: ("workflows" | "knowledge-health" | "qa" | "analytics" | "captures" | "memos" | "conflicts" | "assistant" | "git" | "sources" | "memory")[];
         };
         UpdateEditingPolicyDto: {
             /**
@@ -11966,7 +11966,7 @@ export interface components {
             createdAt: string;
         };
         /** @enum {string} */
-        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "memo-triage" | "source-recipe" | "source-judge" | "blueprint-derive" | "blueprint-generate" | "blueprint-interview" | "purpose-interview";
+        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "memory-extract" | "memory-recall" | "memory-reflect" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "memo-triage" | "source-recipe" | "source-judge" | "blueprint-derive" | "blueprint-generate" | "blueprint-interview" | "purpose-interview";
         AiUsageResponse: {
             from: string;
             to: string;
@@ -17364,7 +17364,7 @@ export interface components {
             counts: components["schemas"]["WorkspaceDeletionCounts"];
         };
         /** @enum {string} */
-        WorkspaceFeature: "workflows" | "knowledge-health" | "qa" | "analytics" | "captures" | "memos" | "conflicts" | "assistant" | "git" | "sources";
+        WorkspaceFeature: "workflows" | "knowledge-health" | "qa" | "analytics" | "captures" | "memos" | "conflicts" | "assistant" | "git" | "sources" | "memory";
         WorkspaceFeaturesResponse: {
             workspaceId: string;
             disabled: components["schemas"]["WorkspaceFeature"][];

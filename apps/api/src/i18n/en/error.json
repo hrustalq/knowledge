@@ -211,6 +211,26 @@
     "failed": "Import failed",
     "timedOut": "Parsing {filename} took longer than {seconds}s and was stopped"
   },
+  "memory": {
+    "disabled": "Memory banks are not enabled here",
+    "workspaceRequired": "Memory routes need an API key pinned to one workspace: the key decides which workspace \"default\" means",
+    "workspaceHeaderRequired": "With AUTH_MODE=none, name the workspace in an X-Workspace-Id header",
+    "bankNotFound": "Memory bank {bankId} not found",
+    "bankIdInvalid": "A bank id is 1 to 200 characters with no control characters",
+    "contentNotText": "Only text can be retained: `content` must be a string",
+    "itemsRequired": "A retain request carries 1 to {max} items",
+    "itemTooLong": "An item holds at most {max} characters",
+    "timestampInvalid": "`timestamp` must be an ISO 8601 date or \"unset\"",
+    "rateLimited": "Too many retain requests; try again in a minute",
+    "storeNotReady": "The memory vector index does not exist yet: it is built when the worker starts. Start the worker once, then retry",
+    "memoryNotFound": "Memory {id} not found",
+    "noReranker": "`min_scores.reranker` needs a reranker, and none runs here: use `semantic`, `keyword` or `final`",
+    "windowInvalid": "`temporal_window` needs a `start` and an `end`, with the start first",
+    "operationIdTaken": "That operation_id already belongs to another operation",
+    "operationNotPending": "Operation {id} is not pending, so it cannot be cancelled",
+    "noReflectModel": "Reflect needs a model and none is configured for this workspace: set one up in AI settings, or switch the reflector agent on",
+    "reflectFailed": "The model could not be reached for this reflect; try again"
+  },
   "memo": {
     "notFound": "Memo not found",
     "plaudOff": "Plaud import is not set up on this server.",

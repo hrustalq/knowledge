@@ -11,20 +11,20 @@ describe('workspace purpose (#934): the catalogue and its map', () => {
 
   it('suggests nothing off without a use, and never a section every use needs', () => {
     expect(suggestedDisabled([])).toEqual([]);
-    expect(suggestedDisabled(['meeting-notes'])).toEqual(['workflows', 'qa', 'analytics', 'conflicts', 'git', 'sources']);
+    expect(suggestedDisabled(['meeting-notes'])).toEqual(['workflows', 'qa', 'analytics', 'conflicts', 'git', 'sources', 'memory']);
     expect(suggestedDisabled([...WORKSPACE_USE_KEYS])).toEqual([]);
   });
 
   it('reconcile: a section still on the old suggestion follows the new one, one set by hand is kept and reported', () => {
     const current = [...suggestedDisabled(['meeting-notes']), 'memos'] as const;
     const next = reconcilePurpose(['meeting-notes'], ['meeting-notes', 'api-docs'], current);
-    expect(next.disabled).toEqual(['workflows', 'analytics', 'memos', 'conflicts']);
+    expect(next.disabled).toEqual(['workflows', 'analytics', 'memos', 'conflicts', 'memory']);
     expect(next.kept).toEqual(['memos']);
   });
 
   it('reconcile: a first purpose leaves a hand-disabled section off, and clearing the uses switches nothing off', () => {
     expect(reconcilePurpose([], ['meeting-notes'], ['captures'])).toEqual({
-      disabled: ['workflows', 'qa', 'analytics', 'captures', 'conflicts', 'git', 'sources'],
+      disabled: ['workflows', 'qa', 'analytics', 'captures', 'conflicts', 'git', 'sources', 'memory'],
       kept: ['captures'],
     });
     expect(reconcilePurpose(['meeting-notes'], [], [...suggestedDisabled(['meeting-notes']), 'memos'])).toEqual({ disabled: ['memos'], kept: ['memos'] });

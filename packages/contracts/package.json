@@ -32,6 +32,7 @@
     "./flows": "./src/flows/index.ts",
     "./embeds": "./src/embeds/index.ts",
     "./memos": "./src/memos/index.ts",
+    "./memory": "./src/memory/index.ts",
     "./blueprints": "./src/blueprints/index.ts"
   },
   "scripts": {

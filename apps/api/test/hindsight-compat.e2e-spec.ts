@@ -73,7 +73,7 @@ describe('Hindsight compatibility (e2e, #986)', () => {
     return key;
   }
 
-  async function person(name: string, workspaceId: string, role: 'admin' | 'editor'): Promise<Person> {
+  async function person(name: string, workspaceId: string, role: 'admin' | 'editor' | 'viewer'): Promise<Person> {
     const email = `hindsight-e2e-${name}@example.test`;
     const user = await prisma.user.upsert({
       where: { email },
@@ -1120,6 +1120,93 @@ describe('Hindsight compatibility (e2e, #986)', () => {
       const back = await call(people.alice.key, 'PATCH', `/v1/default/banks/${mem}/config`, { updates: { HINDSIGHT_API_ENABLE_OBSERVATIONS: null } });
       expect(await back.json()).toMatchObject({ config: { enable_observations: true }, overrides: {} });
       expect((await call(people.carol.key, 'GET', `/v1/default/banks/${mem}/config`)).status).toBe(404);
+    });
+  });
+
+  describe('phase 7: the web routes', () => {
+    const mem = `web-${nonce}`;
+    let vera: Person;
+    let bankRowId: string;
+    const web = (key: string, method: string, path: string, body?: unknown) => call(key, method, `/v1/memory${path}`, body);
+    const listFor = async (key: string) => (await (await web(key, 'GET', `/banks?workspaceId=${WS_A}`)).json()) as { banks: Array<{ id: string; bankId: string; facts: number; observations: number; projectId: string | null }>; apiUrl: string; consolidation: boolean };
+
+    beforeAll(async () => {
+      vera = await person('vera', WS_A, 'viewer');
+      await client(people.alice.key).retainBatch(mem, [
+        { content: 'Grace maintains the billing service', document_id: 'g1' },
+        { content: 'Grace prefers async reviews', document_id: 'g2' },
+      ]);
+      bankRowId = (await prisma.memoryBank.findUniqueOrThrow({ where: { workspaceId_bankId: { workspaceId: WS_A, bankId: mem } } })).id;
+    });
+
+    it('lists the banks a viewer may read, with their size and how to connect', async () => {
+      const list = await listFor(vera.key);
+      expect(list.banks.find((b) => b.bankId === mem)).toMatchObject({ id: bankRowId, facts: 2, observations: 0, projectId: null });
+      expect(list.apiUrl).toMatch(/^https?:\/\//);
+      const units = await (await web(vera.key, 'GET', `/banks/${bankRowId}/memories`)).json();
+      expect(units).toMatchObject({ bank: { bankId: mem }, total: 2 });
+      expect(units.items.map((u: { text: string }) => u.text).sort()).toEqual(['Grace maintains the billing service', 'Grace prefers async reviews']);
+      expect((await web(people.carol.key, 'GET', `/banks/${bankRowId}/memories`)).status).toBe(403);
+    });
+
+    it('refuses a viewer every write: delete, bind, promote', async () => {
+      const [unit] = await prisma.memoryUnit.findMany({ where: { bankId: bankRowId }, take: 1 });
+      expect((await web(vera.key, 'DELETE', `/banks/${bankRowId}/memories/${unit!.id}`)).status).toBe(403);
+      expect((await web(vera.key, 'DELETE', `/banks/${bankRowId}?confirm=${mem}`)).status).toBe(403);
+      expect((await web(vera.key, 'PATCH', `/banks/${bankRowId}`, { projectId: null })).status).toBe(403);
+      expect((await web(vera.key, 'POST', `/banks/${bankRowId}/memories/${unit!.id}/promote`, { projectId: randomUUID(), title: 'x', kind: 'howto' })).status).toBe(403);
+    });
+
+    it('promotes a memory to a merge request whose page is the memory and whose origin names the bank', async () => {
+      const { CaptureService } = await import('../src/captures/capture.service.js');
+      const rate = vi.spyOn(app.get(CaptureService) as unknown as { assertWithinRate(...a: unknown[]): Promise<void> }, 'assertWithinRate');
+      try {
+        const project = await prisma.project.create({ data: { workspaceId: WS_A, name: `Promote ${nonce}` } });
+        const unit = await prisma.memoryUnit.findFirstOrThrow({ where: { bankId: bankRowId, documentId: 'g1' } });
+        const res = await web(people.alice.key, 'POST', `/banks/${bankRowId}/memories/${unit.id}/promote`, { projectId: project.id, title: 'Who maintains billing', kind: 'howto' });
+        expect(res.status).toBe(201);
+        const result = await res.json();
+        expect(result).toMatchObject({ mergeRequestId: expect.any(String) });
+        expect(rate).toHaveBeenCalled();
+        const capture = await prisma.knowledgeCapture.findUniqueOrThrow({ where: { id: result.captureId } });
+        expect(capture.origin).toMatchObject({ platform: 'memory', chatTitle: mem });
+        const mrRow = await prisma.mergeRequest.findUniqueOrThrow({ where: { id: result.mergeRequestId } });
+        expect(mrRow.provenance).toBe('captured');
+        expect(mrRow.description).toContain(mem);
+        // The memory stays in the bank.
+        expect(await prisma.memoryUnit.count({ where: { id: unit.id } })).toBe(1);
+      } finally {
+        rate.mockRestore();
+      }
+    });
+
+    it('binds a bank to a project only for someone who manages it, and hides it from who cannot see that project', async () => {
+      const project = await prisma.project.create({ data: { workspaceId: WS_A, name: `Bound ${nonce}` } });
+      const set = await call(people.admin.key, 'PUT', `/v1/projects/${project.id}/access`, { restricted: true, grants: [{ subjectType: 'user', subjectId: people.alice.id, level: 'view' }] });
+      expect(set.status).toBe(200);
+      // An editor without manage on the project may not move the bank into it.
+      expect((await web(people.bob.key, 'PATCH', `/banks/${bankRowId}`, { projectId: project.id })).status).toBe(403);
+      const bound = await web(people.admin.key, 'PATCH', `/banks/${bankRowId}`, { projectId: project.id });
+      expect(bound.status).toBe(200);
+      expect((await bound.json()).projectId).toBe(project.id);
+      expect((await listFor(people.bob.key)).banks.map((b) => b.bankId)).not.toContain(mem);
+      expect((await listFor(people.alice.key)).banks.map((b) => b.bankId)).toContain(mem);
+      expect((await web(people.bob.key, 'GET', `/banks/${bankRowId}/memories`)).status).toBe(404);
+      expect((await web(people.admin.key, 'PATCH', `/banks/${bankRowId}`, { projectId: null })).status).toBe(200);
+    });
+
+    it('deletes one memory, and a bank only with its id typed', async () => {
+      const unit = await prisma.memoryUnit.findFirstOrThrow({ where: { bankId: bankRowId, documentId: 'g2' } });
+      expect((await web(people.alice.key, 'DELETE', `/banks/${bankRowId}/memories/${unit.id}`)).status).toBe(204);
+      expect(await prisma.memoryUnit.count({ where: { id: unit.id } })).toBe(0);
+      expect((await web(people.alice.key, 'DELETE', `/banks/${bankRowId}/memories/${unit.id}`)).status).toBe(404);
+      expect((await web(people.admin.key, 'DELETE', `/banks/${bankRowId}?confirm=wrong`)).status).toBe(400);
+      expect((await web(people.admin.key, 'DELETE', `/banks/${bankRowId}?confirm=${mem}`)).status).toBe(204);
+      expect(await prisma.memoryBank.count({ where: { id: bankRowId } })).toBe(0);
+    });
+
+    it('answers 404 with the section off', async () => {
+      expect((await web(people.erin.key, 'GET', `/banks?workspaceId=${WS_OFF}`)).status).toBe(404);
     });
   });
 });

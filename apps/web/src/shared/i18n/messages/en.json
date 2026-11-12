@@ -166,7 +166,8 @@
     "linkSource": "Link a source",
     "blueprints": "Blueprints",
     "editing": "Editing",
-    "proposals": "Proposals"
+    "proposals": "Proposals",
+    "memory": "Memory banks"
   },
   "role": {
     "guest": "Guest",
@@ -340,7 +341,8 @@
     "releasesHint": "Named points in time",
     "featuresHint": "Sections this workspace shows",
     "blueprintsHint": "Page trees a new project starts from",
-    "editingHint": "How an edit reaches a page"
+    "editingHint": "How an edit reaches a page",
+    "memoryHint": "What agents remember between sessions, and how to connect one."
   },
   "connectors": {
     "pageSubtitle": "Keep pages in step with Confluence, Jira, Notion and markdown in git — in both directions.",
@@ -6212,7 +6214,9 @@
       "directMessage": "Direct message",
       "span": "Messages from {from} to {to}",
       "thread": "thread",
-      "openThread": "Open the thread in {platform}"
+      "openThread": "Open the thread in {platform}",
+      "memoryBank": "Memory bank",
+      "written": "Written {at}"
     }
   },
   "component": {
@@ -8420,6 +8424,98 @@
         "label": "Editors only",
         "hint": "Viewers and guests read the current page. The API and MCP refuse them its history."
       }
+    }
+  },
+  "memory": {
+    "title": "Memory banks",
+    "subtitle": "What agents keep for themselves between sessions, through the Hindsight-compatible memory API. A memory is readable only through its bank and never appears in page search; to share one, promote it to a page.",
+    "unavailableTitle": "Memory banks are off on this server",
+    "unavailable": "The server's MEMORY_ENABLED setting is off, so every memory route answers 404 and nothing here can be switched on. Whoever runs this server turns it on.",
+    "switch": "Memory banks in this workspace",
+    "switchHint": "Off, every memory route answers 404 for this workspace and agents cannot retain or recall. What the banks hold is kept.",
+    "switchedOn": "Memory banks switched on",
+    "switchedOff": "Memory banks switched off",
+    "offForMember": "Memory banks are switched off in this workspace. An admin can switch them on here.",
+    "wholeWorkspace": "Whole workspace",
+    "hiddenProject": "A project you cannot see",
+    "deleted": "Deleted bank {bank}",
+    "connect": {
+      "title": "Connect an agent",
+      "hint": "Point a Hindsight client at the base URL, or an MCP client at a bank's endpoint, with an API key pinned to this workspace from {keys}. A bank is created on its first retain.",
+      "keys": "Connect AI",
+      "baseUrl": "Hindsight base URL",
+      "mcpUrl": "MCP endpoint per bank",
+      "copy": "Copy the {what}",
+      "copyShort": "Copy",
+      "copied": "Copied",
+      "copyFailed": "Copy failed"
+    },
+    "banks": {
+      "title": "Banks",
+      "noConsolidation": "Observations are not being made: no model is routed to the consolidator. Route an extraction model under AI settings to have facts folded into observations.",
+      "emptyTitle": "No banks yet",
+      "empty": "An agent's first retain creates its bank. Connect one with the details above.",
+      "bank": "Bank",
+      "project": "Readable by",
+      "facts": "Facts",
+      "observations": "Observations",
+      "lastWrite": "Last write",
+      "never": "Never",
+      "actions": "Actions"
+    },
+    "delete": {
+      "action": "Delete bank {bank}",
+      "title": "Delete bank {bank}?",
+      "body": "{facts} and {observations} go with it, and an agent using the bank starts from nothing. This cannot be undone.",
+      "typeId": "Type {bank} to confirm",
+      "confirm": "Delete bank",
+      "deleting": "Deleting…"
+    },
+    "types": {
+      "world": "World",
+      "experience": "Experience",
+      "observation": "Observation"
+    },
+    "bank": {
+      "all": "All",
+      "factsN": "{n} facts | {n} fact | {n} facts",
+      "observationsN": "{n} observations | {n} observation | {n} observations",
+      "project": "Readable by",
+      "projectHint": "A bank bound to a project is readable only by people who can see that project. Moving it needs the right to manage both projects.",
+      "bound": "Bank moved",
+      "filter": "Memory type",
+      "search": "Search memories",
+      "emptyTitle": "Nothing here",
+      "empty": "The bank holds no memories of this type.",
+      "noMatchTitle": "No match",
+      "noMatch": "No memory of this type contains those words.",
+      "proof": "no facts | {n} fact | {n} facts",
+      "deleteMemory": "Delete this memory",
+      "memoryDeleted": "Memory deleted",
+      "more": "Show more",
+      "shown": "{shown} of {total}",
+      "shownSearch": "{shown} of {total}. Search to find the rest."
+    },
+    "promote": {
+      "action": "Promote to a page",
+      "title": "Promote to a page",
+      "body": "The memory becomes a proposed page: a merge request someone reviews before it reaches the knowledge base. The memory stays in the bank.",
+      "pageTitle": "Page title",
+      "project": "Project",
+      "pickProject": "Pick a project",
+      "kind": "Written as",
+      "kinds": {
+        "gotcha": "Gotcha",
+        "convention": "Convention",
+        "howto": "How-to"
+      },
+      "review": "It goes through the same checks as an agent's capture, and appears in",
+      "inbox": "Captures",
+      "submit": "Propose page",
+      "working": "Proposing…",
+      "proposed": "Page proposed for review",
+      "duplicate": "An identical capture was already proposed",
+      "open": "Open"
     }
   }
 }

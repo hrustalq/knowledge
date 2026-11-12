@@ -36,6 +36,12 @@ in the pull request that introduces them — see
   and `GET`/`PATCH …/banks/{bank_id}/config` (`enable_observations`, `reflect_mission`, the disposition traits) and
   `POST …/consolidate` answer as Hindsight's do. Runs only while a model is routed to the new `consolidator` agent
   (purpose extraction), within a daily cap per bank; see Operations. (#993)
+- **Settings → Memory banks.** Admins switch the `memory` section on or off there, everyone sees the banks they may
+  read with their size and last write, and how to point a Hindsight or MCP client at them. A bank's page lists its
+  facts and observations; an editor can delete one, delete the bank after typing its id, bind it to a project
+  (which then decides who can read it, and needs the right to manage that project), and **promote** a memory to a
+  page: it becomes a capture, so a merge request someone reviews, whose origin names the bank. The memory stays in
+  the bank. The section is not shown while the server has memory off. (#994)
 
 ### Fixed
 

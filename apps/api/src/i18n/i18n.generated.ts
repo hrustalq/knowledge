@@ -382,9 +382,11 @@ export type I18nTranslations = {
             "newPage": string;
             "similar": string;
             "rationale": string;
+            "introMemory": string;
         };
         "origin": {
             "directMessage": string;
+            "memoryBank": string;
         };
     };
     "chat": {
@@ -941,6 +943,8 @@ export type I18nTranslations = {
                 "budget": string;
                 "failed": string;
             };
+            "bankRowNotFound": string;
+            "confirmBankId": string;
         };
         "memo": {
             "notFound": string;
@@ -2047,6 +2051,7 @@ export type I18nTranslations = {
         "capture": string;
         "releaseTag": string;
         "conflict": string;
+        "memoryBank": string;
     };
     "validation": {
         "isDefined": string;

@@ -79,6 +79,8 @@ const ROWS = {
   import: { subject: 'import', missing: 'error.import.notFound', find: own((db) => db.importJob) },
   // Only the workspace: whether the caller uploaded it is the service's question (#551).
   memo: { subject: 'memo', missing: 'error.memo.notFound', find: own((db) => db.memo) },
+  // Only the workspace: a bank bound to a hidden project is MemoryWebService's 404 (#994).
+  'memory-bank': { subject: 'memoryBank', missing: 'error.memory.bankRowNotFound', find: own((db) => db.memoryBank) },
   'workflow-definition': { subject: 'workflow', missing: 'error.workflow.notFound', find: own((db) => db.workflowDefinition) },
   'workflow-run': { subject: 'workflowRun', missing: 'error.workflow.runNotFound', find: own((db) => db.workflowRun) },
   template: { subject: 'template', missing: 'error.template.notFound', arg: 'ref', find: own((db) => db.pageTemplate) },

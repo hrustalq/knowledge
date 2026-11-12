@@ -6,7 +6,7 @@
 import { useI18n } from 'vue-i18n'
 import { computed } from 'vue'
 import { ArrowUpRight } from 'lucide-vue-next'
-import type { CaptureOrigin } from '@knowledge/contracts'
+import { MEMORY_ORIGIN_PLATFORM, type CaptureOrigin } from '@knowledge/contracts'
 import { formatDateTime } from '@/shared/utils/format'
 import { platformName } from '../model/capture-ui'
 
@@ -14,12 +14,16 @@ const { t } = useI18n()
 
 const props = defineProps<{ origin: CaptureOrigin }>()
 
-const platform = computed(() => platformName(props.origin.platform))
+// A promoted memory (#994) names its bank where a chat names its group.
+const memory = computed(() => props.origin.platform === MEMORY_ORIGIN_PLATFORM)
+const platform = computed(() => (memory.value ? t('captures.origin.memoryBank') : platformName(props.origin.platform)))
 const span = computed(() =>
-  t('captures.origin.span', {
-    from: formatDateTime(props.origin.from),
-    to: formatDateTime(props.origin.to),
-  }),
+  memory.value
+    ? t('captures.origin.written', { at: formatDateTime(props.origin.from) })
+    : t('captures.origin.span', {
+        from: formatDateTime(props.origin.from),
+        to: formatDateTime(props.origin.to),
+      }),
 )
 </script>
 

@@ -240,7 +240,9 @@
       "cap": "The bank has used its consolidation calls for today; it resumes tomorrow (UTC)",
       "budget": "The workspace AI budget is spent",
       "failed": "The consolidation model call failed"
-    }
+    },
+    "bankRowNotFound": "Memory bank {id} not found",
+    "confirmBankId": "Type the bank id, {bankId}, to delete it"
   },
   "memo": {
     "notFound": "Memo not found",

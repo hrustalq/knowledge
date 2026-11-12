@@ -109,6 +109,16 @@ export class MemoryUnitsService {
     return { success: true, message: null, deleted_count: ids.length };
   }
 
+  /** One memory of the bank, deleted (#994): a fact also leaves the observations it supported, which go too once they have no evidence. False when the bank holds no such memory. */
+  async deleteOne(bank: MemoryBank, memoryId: string): Promise<boolean> {
+    const ids = await withSubjectLock(this.prisma, `memory-bank:${bank.id}`, async () => {
+      const gone = await this.prisma.memoryUnit.deleteMany({ where: { id: memoryId, bankId: bank.id } });
+      return gone.count ? [memoryId, ...(await this.deleteBareObservations(bank.id))] : [];
+    });
+    await this.dropVectors(bank.workspaceId, ids);
+    return ids.length > 0;
+  }
+
   /**
    * The bank's observations left with no evidence (#993) — their last fact was
    * deleted — deleted in turn. Call it in the transaction that deleted the

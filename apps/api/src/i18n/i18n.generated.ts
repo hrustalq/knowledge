@@ -951,6 +951,7 @@ export type I18nTranslations = {
             "providerNoModels": string;
             "encryptionKeyMissing": string;
             "captureParentNotInWorkspace": string;
+            "captureParentNotInProject": string;
             "captureThresholdOrder": string;
             "pluginUrlInvalid": string;
             "pluginUrlNotHttps": string;

@@ -765,6 +765,10 @@ model Project {
   workItemIssues       String? @map("work_item_issues")
   workItemConflicts    String? @map("work_item_conflicts")
   workItemVerification String? @map("work_item_verification")
+  /// The page new captured pages of this project nest under (#924); null is
+  /// the workspace's ai_settings.capture_parent_document_id. No FK: a page
+  /// that is deleted or leaves the project is skipped at read time.
+  captureParentDocumentId String? @map("capture_parent_document_id") @db.Uuid
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   documents     Document[]

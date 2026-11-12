@@ -1007,6 +1007,20 @@ export function scopedSetting<T>(project: T | null | undefined, workspace: T | n
 }
 
 /**
+ * GET/PATCH /v1/projects/:id/settings/capture-parent (#924): the page new
+ * captured pages of the project nest under. `workspace` and `project` are what
+ * each level stored; `effective` is the first of them that is still a live
+ * page of this project — a deleted or moved parent is skipped, never an error
+ * — and null means the project root. Ids only: a title here would reach
+ * readers who may not open the page.
+ */
+export interface ProjectCaptureParentSettings {
+  workspaceId: string;
+  projectId: string;
+  parentDocumentId: ScopedSetting<string | null>;
+}
+
+/**
  * The freshness thresholds a project may override (#921). The search knobs in
  * the same settings row stay workspace-only: search spans projects.
  */

@@ -8,7 +8,7 @@ import { DocumentsModule } from '../documents/documents.module.js';
 import { CapturesCoreModule } from './captures-core.module.js';
 import { CaptureInboxService } from './capture-inbox.service.js';
 import { CaptureSweeper } from './capture.sweeper.js';
-import { AssistantCaptureController, CapturesController } from './captures.controller.js';
+import { AssistantCaptureController, CapturesController, ProjectCaptureSettingsController } from './captures.controller.js';
 
 /**
  * Captures over REST, the inbox and the stranded-capture sweeper (issue #73,
@@ -26,7 +26,7 @@ import { AssistantCaptureController, CapturesController } from './captures.contr
     DocumentsModule,
     CapturesCoreModule,
   ],
-  controllers: [CapturesController, AssistantCaptureController],
+  controllers: [CapturesController, AssistantCaptureController, ProjectCaptureSettingsController],
   providers: [CaptureInboxService, CaptureSweeper],
   // The chat bots' Save (#82) is the assistant's "Save to knowledge base", from a chat.
   exports: [CaptureInboxService, CapturesCoreModule],

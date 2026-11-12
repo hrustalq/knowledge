@@ -257,6 +257,7 @@
     "providerNoModels": "У этого провайдера пока нет моделей. Добавьте модель, чтобы проверить его.",
     "encryptionKeyMissing": "SETTINGS_ENCRYPTION_KEY не задан, поэтому API-ключи негде хранить. Задайте его (openssl rand -base64 32) и перезапустите API либо настройте провайдера через ASSISTANT_API_KEY.",
     "captureParentNotInWorkspace": "Родительская страница для записей памяти {id} не принадлежит этому рабочему пространству.",
+    "captureParentNotInProject": "Родительская страница для записей памяти {id} не является страницей этого проекта, доступной вам.",
     "captureThresholdOrder": "Порог дополнения ({amend}) не может быть выше порога дубликата ({dedupe}).",
     "pluginUrlInvalid": "Адрес плагина не является корректным URL",
     "pluginUrlNotHttps": "Адрес плагина должен использовать https (http допустим только при AI_PLUGINS_ALLOW_PRIVATE_URLS)",

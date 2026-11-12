@@ -18684,6 +18684,25 @@
       "policy"
     ]
   },
+  "ProjectCaptureParentSettings": {
+    "type": "object",
+    "properties": {
+      "workspaceId": {
+        "type": "string"
+      },
+      "projectId": {
+        "type": "string"
+      },
+      "parentDocumentId": {
+        "$ref": "#/components/schemas/ScopedSetting%3C(string%7Cnull)%3E"
+      }
+    },
+    "required": [
+      "workspaceId",
+      "projectId",
+      "parentDocumentId"
+    ]
+  },
   "ProjectCascadeCounts": {
     "type": "object",
     "properties": {
@@ -21668,6 +21687,37 @@
       "prefix",
       "createdAt",
       "lastUsedAt"
+    ]
+  },
+  "ScopedSetting<(string|null)>": {
+    "type": "object",
+    "properties": {
+      "workspace": {
+        "type": "string",
+        "nullable": true
+      },
+      "project": {
+        "type": "string",
+        "nullable": true
+      },
+      "effective": {
+        "type": "string",
+        "nullable": true
+      },
+      "source": {
+        "type": "string",
+        "enum": [
+          "project",
+          "workspace",
+          "default"
+        ]
+      }
+    },
+    "required": [
+      "workspace",
+      "project",
+      "effective",
+      "source"
     ]
   },
   "ScopedSetting<ApiBreakingChangePolicy>": {

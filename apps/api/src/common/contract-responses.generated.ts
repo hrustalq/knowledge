@@ -266,6 +266,7 @@ import type {
   PostAssistantMessageResponse,
   ProjectAnalyticsResponse,
   ProjectBreakingChangeSettings,
+  ProjectCaptureParentSettings,
   ProjectDeletionPreview,
   ProjectGitResponse,
   ProjectOverviewResponse,
@@ -633,6 +634,7 @@ export interface ContractResponses {
   PostAssistantMessageResponse: PostAssistantMessageResponse;
   ProjectAnalyticsResponse: ProjectAnalyticsResponse;
   ProjectBreakingChangeSettings: ProjectBreakingChangeSettings;
+  ProjectCaptureParentSettings: ProjectCaptureParentSettings;
   ProjectDeletionPreview: ProjectDeletionPreview;
   ProjectGitResponse: ProjectGitResponse;
   ProjectOverviewResponse: ProjectOverviewResponse;

@@ -35,7 +35,9 @@ import {
   type GlossaryCapturePayload,
   type ListCapturesResponse,
   type NoteCapturePayload,
+  type ProjectCaptureParentSettings,
   type RelationCapturePayload,
+  type ScopedSetting,
 } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -655,7 +657,7 @@ export class CaptureService {
     // Option A (#73, phase 0): the page is created head-less, its content on a
     // branch behind the merge request, and hidden from every list until a
     // person merges it.
-    const parentId = await this.parentFor(settings.parentDocumentId, row.projectId);
+    const parentId = (await this.captureParent(row.projectId, settings.parentDocumentId)).effective;
     const category = CATEGORY_BY_KIND[kind];
     const description = this.describe(session, origin, similar, lang, t('capture.mergeRequest.newPage', undefined, lang));
     const h = this.headings(captured, row.title);
@@ -816,14 +818,50 @@ export class CaptureService {
     }
   }
 
-  /** The workspace's parent page for new captures, when it is a live page of this project. */
-  private async parentFor(parentId: string | null, projectId: string): Promise<string | null> {
-    if (!parentId) return null;
-    const parent = await this.prisma.document.findFirst({
-      where: { id: parentId, projectId, archivedAt: null },
-      select: { id: true },
-    });
-    return parent?.id ?? null;
+  /**
+   * Where a new captured page of `projectId` nests (#924): the project's own
+   * parent, else the workspace's — each only while it is a live page of this
+   * project, so a deleted, archived or moved parent falls back instead of
+   * failing the capture. The one predicate the capture and the settings read.
+   */
+  async captureParent(projectId: string, workspaceParentId: string | null): Promise<ScopedSetting<string | null>> {
+    const project = await this.prisma.project.findFirst({ where: { id: projectId }, select: { captureParentDocumentId: true } });
+    const own = project?.captureParentDocumentId ?? null;
+    const asked = [own, workspaceParentId].filter((id): id is string => !!id);
+    const live = asked.length
+      ? await this.prisma.document.findMany({ where: { id: { in: asked }, projectId, archivedAt: null }, select: { id: true } })
+      : [];
+    const usable = (id: string | null) => id !== null && live.some((d) => d.id === id);
+    const source = usable(own) ? 'project' : usable(workspaceParentId) ? 'workspace' : 'default';
+    return {
+      workspace: workspaceParentId,
+      project: own,
+      effective: source === 'project' ? own : source === 'workspace' ? workspaceParentId : null,
+      source,
+    };
+  }
+
+  async projectCaptureParent(projectId: string): Promise<ProjectCaptureParentSettings> {
+    const { workspaceId } = await this.prisma.project.findUniqueOrThrow({ where: { id: projectId }, select: { workspaceId: true } });
+    const settings = await this.aiConfig.captureSettings(workspaceId);
+    return { workspaceId, projectId, parentDocumentId: await this.captureParent(projectId, settings.parentDocumentId) };
+  }
+
+  /**
+   * Set or clear (`null`) the project's capture parent. The page must be a
+   * live page of this project that the person setting it may open — otherwise
+   * a maintainer could point captures under a page they cannot see.
+   */
+  async setProjectCaptureParent(scope: AccessScope, projectId: string, documentId: string | null): Promise<ProjectCaptureParentSettings> {
+    if (documentId) {
+      const page = await this.prisma.document.findFirst({
+        where: { id: documentId, projectId, archivedAt: null, AND: [LISTED_PAGE, visibilityWhere(scope)] },
+        select: { id: true },
+      });
+      if (!page) throw new BadRequestException(t('error.ai.captureParentNotInProject', { id: documentId }));
+    }
+    await this.prisma.project.update({ where: { id: projectId }, data: { captureParentDocumentId: documentId } });
+    return this.projectCaptureParent(projectId);
   }
 
   private async bodyInput(kind: CaptureKind, payload: StoredPayload): Promise<CaptureBodyInput> {

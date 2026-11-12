@@ -14,6 +14,7 @@ import { GraphService } from '../graph/graph.service.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { extractionBatches, extractionPrompt, readFacts, type Fact, type RetainItem } from './memory-facts.js';
+import { MemoryUnitsService } from './memory-units.service.js';
 import type { TokenUsage } from './memory-wire.js';
 
 /** Retained text one extraction call reads, at most. Batches fill up to it. */
@@ -81,6 +82,7 @@ export class MemoryRetainService {
     private readonly agents: AgentRegistryService,
     private readonly usage: AiUsageService,
     private readonly client: AssistantClient,
+    private readonly units: MemoryUnitsService,
   ) {}
 
   async retain(input: RetainInput): Promise<{ units: number; usage: TokenUsage | null }> {
@@ -112,13 +114,14 @@ export class MemoryRetainService {
     try {
       replaced = await withSubjectLock(this.prisma, `memory-bank:${input.bank.id}`, async () => {
         const old = await this.prisma.memoryUnit.findMany({
-          where: { bankId: input.bank.id, OR: [{ documentId: { in: replaces } }, ...(input.operationId ? [{ operationId: input.operationId }] : [])] },
+          // Facts only: an observation is consolidation's, and a client's document_id never names one.
+          where: { bankId: input.bank.id, factType: { not: 'observation' }, OR: [{ documentId: { in: replaces } }, ...(input.operationId ? [{ operationId: input.operationId }] : [])] },
           select: { id: true },
         });
         await this.prisma.memoryUnit.deleteMany({ where: { id: { in: old.map((o) => o.id) } } });
         await this.prisma.memoryUnit.createMany({ data: units.map((u) => this.row(input, u)) });
         await this.prisma.memoryUnitEntity.createMany({ data: entities });
-        return old.map((o) => o.id);
+        return [...old.map((o) => o.id), ...(old.length ? await this.units.deleteBareObservations(input.bank.id) : [])];
       });
     } catch (e) {
       await this.graph.deleteMemoryUnits(input.workspaceId, units.map((u) => u.id)).catch(() => undefined);

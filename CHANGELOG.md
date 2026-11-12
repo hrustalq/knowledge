@@ -29,6 +29,13 @@ in the pull request that introduces them — see
 - A `memory` section under **Settings → Features**, and two built-in agents: `memorist`, which splits what an
   agent retains into facts when a model is routed at extraction (otherwise the text is stored as written), and
   `reflector`, which answers a reflect. (#987, #988, #991)
+- **Memory observations.** A bank folds the facts it holds into observations in the background: one statement, the
+  facts that support it, a quote from each and a proof count. A later fact refines an observation and the earlier
+  wording is kept; deleting a fact removes it from the evidence, and an observation left with none is deleted.
+  `recall` returns observations with `source_fact_ids`, honours `prefer_observations` and `include.source_facts`,
+  and `GET`/`PATCH …/banks/{bank_id}/config` (`enable_observations`, `reflect_mission`, the disposition traits) and
+  `POST …/consolidate` answer as Hindsight's do. Runs only while a model is routed to the new `consolidator` agent
+  (purpose extraction), within a daily cap per bank; see Operations. (#993)
 
 ### Fixed
 
@@ -47,6 +54,13 @@ in the pull request that introduces them — see
   create tables, so the previous release runs against the migrated database and a rollback needs no step.
 - The worker creates the `MemoryUnit` vector type and its index in ArcadeDB when it starts. Until a worker of
   this release has started once, a retain answers 503 and says the index is missing.
+- `MEMORY_CONSOLIDATION_DAILY_CALLS` (default `20`) caps the model calls one memory bank may spend a UTC day on
+  observations; `0` turns them off for the server. Consolidation calls nothing until a model is routed to the
+  `consolidator` (the extraction route, or a pin on the agent), and is billed as `memory-consolidate` in AI usage
+  to no person. When a decision model is routed, it screens each fact–observation pair first
+  (`memory-consolidate-screen`, a new *Memory consolidation* threshold under AI settings → Decisions).
+- A fourth memory migration adds `memory_observation_evidence`, `memory_observation_history` and nullable columns
+  on `memory_banks`, `memory_units` and `ai_settings`. Additive: the previous release runs against it.
 - Retained text is masked before it is stored, but extraction and reflect send it to the model routed for the
   workspace, as the assistant does with pages. Neither runs with no model routed.
 

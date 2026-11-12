@@ -47038,6 +47038,13 @@
             "minimum": 0,
             "maximum": 1,
             "description": "Decision probability at or above which the harvest lets an item through (#530). Null inherits the code default (0.5)."
+          },
+          "decisionMemoryThreshold": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Decision probability at or above which memory consolidation sends a fact–observation pair to its model (#993). Null inherits the code default (0.2)."
           }
         },
         "required": [
@@ -54699,6 +54706,8 @@
           "memory-extract",
           "memory-recall",
           "memory-reflect",
+          "memory-consolidate",
+          "memory-consolidate-screen",
           "extraction",
           "public_ask",
           "test-suite",
@@ -62004,12 +62013,29 @@
                   "requested",
                   "effective"
                 ]
+              },
+              "memory": {
+                "type": "object",
+                "properties": {
+                  "requested": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "effective": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "requested",
+                  "effective"
+                ]
               }
             },
             "required": [
               "arbiter",
               "citation",
-              "harvest"
+              "harvest",
+              "memory"
             ]
           },
           "tunedOn": {

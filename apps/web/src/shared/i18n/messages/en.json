@@ -2999,11 +2999,12 @@
       "noGenApi": "Add a model of a GenAPI provider to route decisions: Jev is reached only through gen-api.",
       "dataPath": "Decisions send page passages and masked chat threads to gen-api, which keeps request content and forwards it to TypeSafe in the US.",
       "thresholds": "Thresholds, tuned on {model}",
-      "thresholdsHint": "An item at or above its threshold goes on to the model; below it, the arbiter skips the pair, harvest replies with nothing to keep and a cited sentence is marked unsupported. Leave a field empty to use the default shown.",
+      "thresholdsHint": "An item at or above its threshold goes on to the model; below it, the arbiter skips the pair, harvest replies with nothing to keep, a cited sentence is marked unsupported and memory consolidation leaves the fact out of that observation. Leave a field empty to use the default shown.",
       "site": {
         "arbiter": "Arbiter",
         "citation": "Citation support",
-        "harvest": "Harvest"
+        "harvest": "Harvest",
+        "memory": "Memory consolidation"
       },
       "invalid": "A number from 0 to 1",
       "saved": "Decision thresholds saved"

@@ -11,6 +11,12 @@ import type { RecallDto, ReflectDto } from './memory.dto.js';
  * MCP tools their arguments, which carry the same names.
  */
 
+/** `include.source_facts`' budgets, as Hindsight defaults them: 4096 tokens in all, none per observation; -1 is unlimited. */
+function sourceFactsBudget(options: Record<string, unknown>): { maxTokens: number; perObservation: number } {
+  const int = (v: unknown, fallback: number) => (typeof v === 'number' && Number.isInteger(v) && v >= -1 ? v : fallback);
+  return { maxTokens: int(options.max_tokens, 4096), perObservation: int(options.max_tokens_per_observation, -1) };
+}
+
 /** A recall request as the service reads it. */
 export function recallQuery(dto: RecallDto, userId: string): RecallQuery {
   const window = dto.temporal_window ? { start: new Date(dto.temporal_window.start), end: new Date(dto.temporal_window.end) } : undefined;
@@ -28,7 +34,8 @@ export function recallQuery(dto: RecallDto, userId: string): RecallQuery {
     // On by default; the client switches it off with `include.entities: null`.
     entities: dto.include?.entities !== null,
     chunks: dto.include?.chunks != null,
-    sourceFacts: dto.include?.source_facts != null,
+    sourceFacts: dto.include?.source_facts != null ? sourceFactsBudget(dto.include.source_facts) : null,
+    preferObservations: dto.prefer_observations === true,
     userId,
   };
 }

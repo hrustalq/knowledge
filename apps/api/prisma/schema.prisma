@@ -1352,6 +1352,8 @@ model AiSettings {
   decisionArbiterThreshold  Float?  @map("decision_arbiter_threshold")
   decisionCitationThreshold Float?  @map("decision_citation_threshold")
   decisionHarvestThreshold  Float?  @map("decision_harvest_threshold")
+  /// #993 — memory consolidation's pair screen.
+  decisionMemoryThreshold   Float?  @map("decision_memory_threshold")
   decisionTunedModel        String? @map("decision_tuned_model")
 
   /// Relation-extraction tuning. Null = inherit EXTRACTOR_MIN_CONFIDENCE /
@@ -4805,6 +4807,14 @@ model MemoryBank {
   mission     String  @default("")
   /// `{ skepticism, literalism, empathy }`, each 1–5.
   disposition Json    @default("{\"skepticism\":3,\"literalism\":3,\"empathy\":3}")
+  /// #993 — Hindsight's `enable_observations`. Null inherits the code default
+  /// (on): consolidation still runs only while a model is routed to it.
+  enableObservations Boolean? @map("enable_observations")
+  /// #993 — the per-bank daily cap on consolidation calls: the UTC day the
+  /// counter belongs to and the calls made on it, both moved by one guarded
+  /// UPDATE (`MemoryConsolidationService.takeCall`), so two workers never pass it.
+  consolidationDay   DateTime? @map("consolidation_day") @db.Date
+  consolidationCalls Int       @default(0) @map("consolidation_calls")
   createdBy   String  @map("created_by") @db.Uuid
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
@@ -4847,13 +4857,23 @@ model MemoryUnit {
   /// The async retain that wrote it. A re-run of that operation replaces its
   /// own units, so a worker killed mid-job never leaves a second set.
   operationId String?    @map("operation_id") @db.Uuid
+  /// #993 — when consolidation read this fact. Null = not yet; never set on an observation.
+  consolidatedAt         DateTime? @map("consolidated_at") @db.Timestamptz
+  /// #993 — a worker's claim on the fact while it consolidates it; a stale one is taken over.
+  consolidationClaimedAt DateTime? @map("consolidation_claimed_at") @db.Timestamptz
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   entities MemoryUnitEntity[]
+  /// On an observation: the facts that support it.
+  evidence MemoryObservationEvidence[] @relation("ObservationEvidence")
+  /// On a fact: the observations it supports.
+  supports MemoryObservationEvidence[] @relation("EvidenceFact")
+  history  MemoryObservationHistory[]
 
   @@index([operationId])
+  @@index([bankId, consolidatedAt])
 
   @@index([bankId, documentId])
   @@index([bankId, createdAt])
@@ -4878,6 +4898,43 @@ model MemoryUnitEntity {
   @@map("memory_unit_entities")
 }
 
+/// One fact an observation stands on (#993), with the quote from it the
+/// consolidator gave — kept only when verbatim in the fact. Deleting either
+/// side deletes the row; an observation left with none is deleted with it
+/// (`MemoryUnitsService.dropBareObservations`). Proof count = these rows, derived.
+model MemoryObservationEvidence {
+  id            String     @id @default(uuid()) @db.Uuid
+  workspaceId   String     @map("workspace_id") @db.Uuid
+  bankId        String     @map("bank_id") @db.Uuid
+  observationId String     @map("observation_id") @db.Uuid
+  observation   MemoryUnit @relation("ObservationEvidence", fields: [observationId], references: [id], onDelete: Cascade)
+  factId        String     @map("fact_id") @db.Uuid
+  fact          MemoryUnit @relation("EvidenceFact", fields: [factId], references: [id], onDelete: Cascade)
+  quote         String
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([observationId, factId])
+  @@index([factId])
+  @@map("memory_observation_evidence")
+}
+
+/// An observation's earlier wording (#993): new evidence refines an
+/// observation, and the text it replaced is kept here.
+model MemoryObservationHistory {
+  id            String     @id @default(uuid()) @db.Uuid
+  workspaceId   String     @map("workspace_id") @db.Uuid
+  bankId        String     @map("bank_id") @db.Uuid
+  observationId String     @map("observation_id") @db.Uuid
+  observation   MemoryUnit @relation(fields: [observationId], references: [id], onDelete: Cascade)
+  text          String
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([observationId, createdAt])
+  @@map("memory_observation_history")
+}
+
 /// An async retain (#986): the items wait here, masked, until the worker
 /// stores them. `id` is the client's `operation_id` when it sent one, so a
 /// re-submit finds the row instead of making a second.
@@ -4886,7 +4943,7 @@ model MemoryOperation {
   workspaceId String     @map("workspace_id") @db.Uuid
   bankId      String     @map("bank_id") @db.Uuid
   bank        MemoryBank @relation(fields: [bankId], references: [id], onDelete: Cascade)
-  /// `retain`.
+  /// `retain` | `consolidation` (#993: one pass asked for by `POST …/consolidate`, no payload).
   type        String     @default("retain")
   /// queued → running → completed | failed, or cancelled while queued.
   status      String     @default("queued")

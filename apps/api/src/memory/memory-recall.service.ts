@@ -25,13 +25,17 @@ export interface RecallQuery {
   /** `include.entities`: the map of entities the results name. On unless the client sent null. */
   entities?: boolean;
   chunks?: boolean;
-  sourceFacts?: boolean;
+  /** `include.source_facts`: the facts the returned observations stand on, within these budgets (-1 = none). */
+  sourceFacts?: { maxTokens: number; perObservation: number } | null;
+  /** `prefer_observations`: drop a raw fact a returned observation stands on, and backfill. */
+  preferObservations?: boolean;
   /** Who asks: the person a prune's decision calls are billed to. */
   userId: string;
 }
 
 type Hit = { chunkId: string; score: number };
-type Row = MemoryUnit & { entities: Array<{ entityKey: string; name: string }> };
+type Row = MemoryUnit & { entities: Array<{ entityKey: string; name: string }>; evidence: Array<{ factId: string }> };
+const ROW_INCLUDE = { entities: { select: { entityKey: true, name: true } }, evidence: { select: { factId: true } } } as const;
 
 /** How many candidates each leg fetches, by the request's `budget`. */
 export const BUDGET_FETCH = { low: 20, mid: 50, high: 100 } as const;
@@ -57,6 +61,7 @@ const PRUNE_QUESTION = {
  * estimate (~4 characters a token, `estimateTokens`), not a tokenizer count.
  */
 export function cutToTokens<T extends { text: string }>(rows: T[], maxTokens: number): T[] {
+  if (maxTokens < 0) return rows;
   const kept: T[] = [];
   let used = 0;
   for (const row of rows) {
@@ -100,13 +105,45 @@ export class MemoryRecallService {
     // No reranker runs here, so a floor on its score can keep nothing meaningful: refused, as Hindsight does.
     if (q.minScores?.reranker != null) throw new BadRequestException(t('error.memory.noReranker'));
     const rows = await this.ranked(bank, q);
-    const kept = cutToTokens(rows, q.maxTokens ?? DEFAULT_MAX_TOKENS);
+    const kept = q.preferObservations && mixesRaw(q.types) ? preferObservations(rows, q.maxTokens ?? DEFAULT_MAX_TOKENS) : cutToTokens(rows, q.maxTokens ?? DEFAULT_MAX_TOKENS);
     return {
       results: kept.map(({ row, scores }) => result(row, scores)),
       ...(q.entities === false ? {} : { entities: entityStates(kept.map((k) => k.row)) }),
       ...(q.chunks ? { chunks: {} } : {}),
-      ...(q.sourceFacts ? { source_facts: {} } : {}),
+      ...(q.sourceFacts ? await this.sourceFacts(bank, kept.map((k) => k.row), q.sourceFacts) : {}),
     };
+  }
+
+  /**
+   * The facts the observations among `rows` stand on, observation by
+   * observation in rank order, each within its own budget and all within the
+   * total. Loaded by id from this bank, as every result is.
+   */
+  private async sourceFacts(bank: MemoryBank, rows: Row[], budget: { maxTokens: number; perObservation: number }): Promise<Pick<RecallResponse, 'source_facts' | 'source_facts_truncated'>> {
+    const wanted = [...new Set(rows.flatMap((r) => (r.factType === 'observation' ? r.evidence.map((e) => e.factId) : [])))];
+    const found = wanted.length
+      ? await this.prisma.memoryUnit.findMany({ where: { id: { in: wanted }, workspaceId: bank.workspaceId, bankId: bank.id }, include: ROW_INCLUDE })
+      : [];
+    const byId = new Map(found.map((r) => [r.id, r]));
+    const out: Record<string, RecallResult> = {};
+    let used = 0;
+    let truncated = false;
+    for (const obs of rows.filter((r) => r.factType === 'observation')) {
+      let mine = 0;
+      for (const { factId } of obs.evidence) {
+        const fact = byId.get(factId);
+        if (!fact || out[factId]) continue;
+        const cost = estimateTokens(fact.text);
+        if ((budget.perObservation >= 0 && mine + cost > budget.perObservation) || (budget.maxTokens >= 0 && used + cost > budget.maxTokens)) {
+          truncated = true;
+          continue;
+        }
+        mine += cost;
+        used += cost;
+        out[factId] = result(fact);
+      }
+    }
+    return { source_facts: out, source_facts_truncated: truncated };
   }
 
   /** The bank's memories for a query, best first and uncut, as text a model may read: wrapped untrusted. */
@@ -175,7 +212,7 @@ export class MemoryRecallService {
     // The final say: rows that exist, in this bank of this workspace, and pass the filter.
     const rows = await this.prisma.memoryUnit.findMany({
       where: { id: { in: fused.map((h) => h.chunkId) }, workspaceId: bank.workspaceId, bankId: bank.id, ...filter },
-      include: { entities: { select: { entityKey: true, name: true } } },
+      include: ROW_INCLUDE,
     });
     const byId = new Map(rows.map((r) => [r.id, r]));
     const semanticOf = new Map(semantic.map((h) => [h.chunkId, h.score]));
@@ -207,7 +244,25 @@ export class MemoryRecallService {
   }
 }
 
-function result(row: Row, scores: RecallResult['scores']): RecallResult {
+/** Whether a request's types ask for observations and a raw type together: `prefer_observations` does nothing otherwise. No types = all of them. */
+const mixesRaw = (types: string[] | undefined): boolean => !types?.length || (types.includes('observation') && types.some((t) => t !== 'observation'));
+
+/**
+ * `prefer_observations`: cut to the budget, drop the raw facts the kept
+ * observations stand on, and cut again so the freed room is backfilled. Each
+ * round can only add observations, so it settles.
+ */
+export function preferObservations<T extends { text: string; row: { id: string; factType: string; evidence: Array<{ factId: string }> } }>(rows: T[], maxTokens: number): T[] {
+  let kept = cutToTokens(rows, maxTokens);
+  for (;;) {
+    const covered = new Set(kept.flatMap((k) => (k.row.factType === 'observation' ? k.row.evidence.map((e) => e.factId) : [])));
+    const next = cutToTokens(rows.filter((r) => r.row.factType === 'observation' || !covered.has(r.row.id)), maxTokens);
+    if (next.length === kept.length && next.every((r, i) => r === kept[i])) return kept;
+    kept = next;
+  }
+}
+
+function result(row: Row, scores?: RecallResult['scores']): RecallResult {
   const iso = (d: Date | null) => d?.toISOString() ?? null;
   return {
     id: row.id,
@@ -222,14 +277,19 @@ function result(row: Row, scores: RecallResult['scores']): RecallResult {
     metadata: (row.metadata ?? {}) as Record<string, string>,
     chunk_id: null,
     tags: row.tags,
-    source_fact_ids: [],
-    scores,
+    source_fact_ids: row.evidence.map((e) => e.factId),
+    ...(scores ? { scores } : {}),
   };
 }
 
-/** The entities the results name, keyed by name. Their observations arrive with consolidation (phase 6). */
+/** The entities the results name, keyed by name, each with the returned observations that name it. */
 function entityStates(rows: Row[]): NonNullable<RecallResponse['entities']> {
   const out: NonNullable<RecallResponse['entities']> = {};
-  for (const e of rows.flatMap((r) => r.entities)) out[e.name] ??= { entity_id: e.entityKey, canonical_name: e.name, observations: [] };
+  for (const r of rows) {
+    for (const e of r.entities) {
+      const state = (out[e.name] ??= { entity_id: e.entityKey, canonical_name: e.name, observations: [] });
+      if (r.factType === 'observation') state.observations.push({ text: r.text, mentioned_at: r.mentionedAt?.toISOString() ?? null });
+    }
+  }
   return out;
 }

@@ -113,7 +113,7 @@ describe('DecisionClient.noul', () => {
 describe('resolveDecisionSettings', () => {
   it('overrides one site and inherits the rest', () => {
     const s = resolveDecisionSettings(
-      { decisionArbiterThreshold: 0.3, decisionCitationThreshold: null, decisionHarvestThreshold: null, decisionTunedModel: 'jev-latest' },
+      { decisionArbiterThreshold: 0.3, decisionCitationThreshold: null, decisionHarvestThreshold: null, decisionMemoryThreshold: null, decisionTunedModel: 'jev-latest' },
       false,
     );
     expect(s.available).toBe(false);

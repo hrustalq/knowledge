@@ -10,6 +10,7 @@ import { PermissionsCoreModule } from '../permissions/permissions-core.module.js
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { MemoryAccessService } from './memory-access.service.js';
 import { MemoryBanksService } from './memory-banks.service.js';
+import { MemoryConsolidationService } from './memory-consolidation.service.js';
 import { MemoryOperationsService } from './memory-operations.service.js';
 import { MemoryQueueModule } from './memory-queue.module.js';
 import { MemoryRecallService } from './memory-recall.service.js';
@@ -24,7 +25,7 @@ import { MemoryUnitsService } from './memory-units.service.js';
  */
 @Module({
   imports: [PrismaModule, AuthCoreModule, PermissionsCoreModule, GraphModule, EmbeddingModule, AgentCoreModule, AiCoreModule, AssistantClientModule, DecisionClientModule, MemoryQueueModule],
-  providers: [MemoryAccessService, MemoryBanksService, MemoryOperationsService, MemoryRecallService, MemoryReflectService, MemoryRetainService, MemoryUnitsService],
-  exports: [MemoryAccessService, MemoryBanksService, MemoryOperationsService, MemoryRecallService, MemoryReflectService, MemoryRetainService, MemoryUnitsService],
+  providers: [MemoryAccessService, MemoryBanksService, MemoryConsolidationService, MemoryOperationsService, MemoryRecallService, MemoryReflectService, MemoryRetainService, MemoryUnitsService],
+  exports: [MemoryAccessService, MemoryBanksService, MemoryConsolidationService, MemoryOperationsService, MemoryRecallService, MemoryReflectService, MemoryRetainService, MemoryUnitsService],
 })
 export class MemoryCoreModule {}

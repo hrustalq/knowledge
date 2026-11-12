@@ -72,6 +72,7 @@ export class DecisionClient {
       arbiter: settings.thresholds.arbiter.effective,
       citation: settings.thresholds.citation.effective,
       harvest: settings.thresholds.harvest.effective,
+      memory: settings.thresholds.memory.effective,
     };
     // A gen-api chat profile routed here keeps its key but not its model, nor
     // the prices an admin set for that model.

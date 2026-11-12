@@ -9388,6 +9388,8 @@ export interface components {
             decisionCitationThreshold?: number | null;
             /** @description Decision probability at or above which the harvest lets an item through (#530). Null inherits the code default (0.5). */
             decisionHarvestThreshold?: number | null;
+            /** @description Decision probability at or above which memory consolidation sends a fact–observation pair to its model (#993). Null inherits the code default (0.2). */
+            decisionMemoryThreshold?: number | null;
         };
         TestAiConnectionDto: {
             /** Format: uuid */
@@ -11966,7 +11968,7 @@ export interface components {
             createdAt: string;
         };
         /** @enum {string} */
-        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "memory-extract" | "memory-recall" | "memory-reflect" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "memo-triage" | "source-recipe" | "source-judge" | "blueprint-derive" | "blueprint-generate" | "blueprint-interview" | "purpose-interview";
+        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "memory-extract" | "memory-recall" | "memory-reflect" | "memory-consolidate" | "memory-consolidate-screen" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "memo-triage" | "source-recipe" | "source-judge" | "blueprint-derive" | "blueprint-generate" | "blueprint-interview" | "purpose-interview";
         AiUsageResponse: {
             from: string;
             to: string;
@@ -13652,6 +13654,10 @@ export interface components {
                     effective: number;
                 };
                 harvest: {
+                    requested: number | null;
+                    effective: number;
+                };
+                memory: {
                     requested: number | null;
                     effective: number;
                 };

@@ -27,6 +27,11 @@ export class BankBodyDto {
   @IsOptional() @IsInt() @Min(1) @Max(5) disposition_empathy?: number | null;
 }
 
+/** `BankConfigUpdate`: the keys are read by `readConfigUpdates`, which names any it does not keep. */
+export class BankConfigUpdateDto {
+  @IsObject() updates!: Record<string, unknown>;
+}
+
 /** `UpdateDispositionRequest`. */
 export class UpdateDispositionDto {
   @IsDefined() @ValidateNested() @Type(() => DispositionDto) disposition!: DispositionDto;
@@ -86,7 +91,7 @@ export class RerankDto {
   @IsOptional() @IsBoolean() prune?: boolean | null;
 }
 
-/** `include`: each key on with an object, off with null. Their inner options are Hindsight's and are not read. */
+/** `include`: each key on with an object, off with null. Of their inner options only `source_facts`' token budgets are read. */
 export class RecallIncludeDto {
   @IsOptional() @IsObject() entities?: Record<string, unknown> | null;
   @IsOptional() @IsObject() chunks?: Record<string, unknown> | null;
@@ -94,11 +99,12 @@ export class RecallIncludeDto {
 }
 
 /**
- * `RecallRequest`. `tag_groups`, `trace`, `prefer_observations` and
- * `query_timestamp` are Hindsight's and are accepted by being left undeclared.
+ * `RecallRequest`. `tag_groups`, `trace` and `query_timestamp` are
+ * Hindsight's and are accepted by being left undeclared.
  */
 export class RecallDto {
   @IsString() @MinLength(1) @MaxLength(4000) query!: string;
+  @IsOptional() @IsBoolean() prefer_observations?: boolean | null;
   @IsOptional() @IsArray() @IsIn([...FACT_TYPES, 'observation'], { each: true }) types?: string[] | null;
   @IsOptional() @IsIn(['low', 'mid', 'high']) budget?: 'low' | 'mid' | 'high' | null;
   @IsOptional() @IsInt() @Min(1) @Max(200_000) max_tokens?: number | null;

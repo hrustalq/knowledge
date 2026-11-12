@@ -105,7 +105,8 @@ describe('MemoryRetainService (#986)', () => {
         return { content: opts.answer ?? '{}', tokens: { promptTokens: 10, completionTokens: 5, totalTokens: 15, estimated: false } };
       }),
     };
-    const svc = new MemoryRetainService(prisma as never, graph as never, aliases as never, embeddings as never, agents as never, usage as never, client as never);
+    const units = { deleteBareObservations: vi.fn(async () => [] as string[]) };
+    const svc = new MemoryRetainService(prisma as never, graph as never, aliases as never, embeddings as never, agents as never, usage as never, client as never, units as never);
     const retain = (items: RetainItem[]) => svc.retain({ workspaceId: WS, bank: { id: 'bank-1', mission: '' }, userId: 'u1', locale: 'en', items });
     return { svc, retain, created, prisma, graph, client, embeddings };
   }
@@ -163,7 +164,7 @@ describe('MemoryRetainService (#986)', () => {
   it('keeps an appended document’s earlier units', async () => {
     const { retain, prisma } = service();
     await retain([item({ append: true })]);
-    expect(prisma.memoryUnit.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { bankId: 'bank-1', OR: [{ documentId: { in: [] } }] } }));
+    expect(prisma.memoryUnit.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { bankId: 'bank-1', factType: { not: 'observation' }, OR: [{ documentId: { in: [] } }] } }));
   });
 
   it('an async retain’s run does not mask twice, and replaces what an interrupted run of it wrote', async () => {
@@ -171,6 +172,6 @@ describe('MemoryRetainService (#986)', () => {
     await svc.retain({ workspaceId: WS, bank: { id: 'bank-1', mission: '' }, userId: 'u1', locale: 'en', operationId: 'op-1', items: [item({ content: 'пароль [SECRET_2] и [SECRET_1]', append: true })] });
     // Masked when its row was written: a second pass would renumber the placeholders.
     expect(created.units[0]).toMatchObject({ text: 'пароль [SECRET_2] и [SECRET_1]', operationId: 'op-1' });
-    expect(prisma.memoryUnit.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { bankId: 'bank-1', OR: [{ documentId: { in: [] } }, { operationId: 'op-1' }] } }));
+    expect(prisma.memoryUnit.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { bankId: 'bank-1', factType: { not: 'observation' }, OR: [{ documentId: { in: [] } }, { operationId: 'op-1' }] } }));
   });
 });

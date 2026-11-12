@@ -11817,6 +11817,8 @@ export interface components {
             costs: components["schemas"]["CostAmount"][];
             errors: number;
         };
+        /** @enum {string} */
+        AiUsageGroupBy: "user" | "model" | "day" | "project";
         AiUsageLogEntry: {
             id: string;
             userId: string;
@@ -11845,8 +11847,7 @@ export interface components {
         AiUsageResponse: {
             from: string;
             to: string;
-            /** @enum {string} */
-            groupBy: "user" | "model" | "day";
+            groupBy: components["schemas"]["AiUsageGroupBy"];
             totals: {
                 calls: number;
                 promptTokens: number;
@@ -29674,7 +29675,7 @@ export interface operations {
                 from?: string;
                 /** @description ISO timestamp; defaults to now */
                 to?: string;
-                groupBy?: "user" | "model" | "day";
+                groupBy?: "user" | "model" | "day" | "project";
             };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */

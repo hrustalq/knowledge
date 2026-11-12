@@ -19950,7 +19950,8 @@
               "enum": [
                 "user",
                 "model",
-                "day"
+                "day",
+                "project"
               ],
               "type": "string"
             }
@@ -53920,6 +53921,15 @@
           "errors"
         ]
       },
+      "AiUsageGroupBy": {
+        "type": "string",
+        "enum": [
+          "user",
+          "model",
+          "day",
+          "project"
+        ]
+      },
       "AiUsageLogEntry": {
         "type": "object",
         "properties": {
@@ -54067,12 +54077,7 @@
             "type": "string"
           },
           "groupBy": {
-            "type": "string",
-            "enum": [
-              "user",
-              "model",
-              "day"
-            ]
+            "$ref": "#/components/schemas/AiUsageGroupBy"
           },
           "totals": {
             "type": "object",

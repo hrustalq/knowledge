@@ -307,7 +307,7 @@ export class GlossaryService {
     }
 
     const raw = await this.client.chat(
-      { config, userId: principal.userId, operation: 'glossary', locale: principal.locale },
+      { config, userId: principal.userId, operation: 'glossary', locale: principal.locale, projectId },
       [
         {
           role: 'system',

@@ -2625,15 +2625,19 @@
     },
     "groupBy": {
       "user": "by user",
-      "model": "by model"
+      "model": "by model",
+      "project": "by project"
     },
+    "unattributed": "No single project",
     "groupHead": {
       "user": "User",
-      "model": "Model"
+      "model": "Model",
+      "project": "Project"
     },
     "breakdownBy": {
       "user": "Breakdown by user",
-      "model": "Breakdown by model"
+      "model": "Breakdown by model",
+      "project": "Breakdown by project"
     },
     "total": "Total",
     "estCost": "Est. cost",

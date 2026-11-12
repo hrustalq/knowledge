@@ -5,6 +5,7 @@ import { computed, ref } from 'vue'
 import { formatCosts, formatNumber, formatDayMonth } from '@/shared/utils/format'
 import { useQuery } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
+import { AI_USAGE_UNATTRIBUTED } from '@knowledge/contracts'
 import type { AiBudgetInfo, AiUsageResponse, ListAiBudgetsResponse } from '@knowledge/contracts'
 import { apiQueryOptions, useApiMutation } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
@@ -27,7 +28,7 @@ const RANGES = [
   { days: 90, label: 'ai.range.d90' },
 ] as const
 const days = ref<number>(30)
-const groupBy = ref<'user' | 'model'>('user')
+const groupBy = ref<'user' | 'model' | 'project'>('user')
 
 const from = computed(() => new Date(Date.now() - days.value * 24 * 3600_000).toISOString())
 
@@ -109,7 +110,7 @@ function labelFor(userId: string): string {
       </div>
       <div class="flex gap-1">
         <Button
-          v-for="g in (['user', 'model'] as const)"
+          v-for="g in (['user', 'model', 'project'] as const)"
           :key="g"
           :variant="groupBy === g ? 'secondary' : 'ghost'"
           size="sm"
@@ -200,7 +201,9 @@ function labelFor(userId: string): string {
             <TableBody>
               <TableRow v-for="b in data.buckets" :key="b.key">
                 <TableCell class="font-medium">
-                  {{ b.label }}
+                  <!-- Calls made for no single project (#927): named here, never spread over the others. -->
+                  <span v-if="groupBy === 'project' && b.key === AI_USAGE_UNATTRIBUTED" class="text-muted-foreground font-normal">{{ t('ai.unattributed') }}</span>
+                  <template v-else>{{ b.label }}</template>
                   <Badge v-if="b.errors > 0" variant="outline" class="text-destructive ml-1.5 font-normal">
                     {{ t('ai.nFailed', { n: b.errors }) }}
                   </Badge>

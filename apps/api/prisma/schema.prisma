@@ -1654,6 +1654,9 @@ model AgentRun {
   /// What the run is about — `doc:<id>`, `mr:<id>`, `connector:<id>`. The key
   /// the in-flight and cooldown guards read; null for an unscoped run.
   subjectKey String? @map("subject_key")
+  /// The one project the run is about (#927), from `projectOfRun` when the run
+  /// starts; null for a workspace-wide run or one spanning projects. No FK.
+  projectId  String? @map("project_id") @db.Uuid
   /// pending → running → succeeded | failed | cancelled
   status     String  @default("pending")
 
@@ -1873,6 +1876,10 @@ model AiUsage {
   /// for a call outside a background run. No FK: usage outlives its run.
   agentKey      String? @map("agent_key")
   agentRunId    String? @map("agent_run_id") @db.Uuid
+  /// The project the call was made for (#927): its run's, else its thread's
+  /// page's, resolved once in `AiUsageService.record`. Null = unattributed,
+  /// which is the truth for a workspace-wide call. No FK: usage outlives a project.
+  projectId     String? @map("project_id") @db.Uuid
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
@@ -1994,7 +2001,9 @@ model GlossaryTerm {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  project Project? @relation(fields: [projectId], references: [id])
+  // Restrict, spelled out: an optional relation would default to SET NULL, and a
+  // deleted project's terms would silently become the whole workspace's (#926).
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Restrict)
 
   // Per project, not per workspace: two projects may legitimately define the
   // same word, and neither should block the other.

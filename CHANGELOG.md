@@ -30,6 +30,12 @@ in the pull request that introduces them — see
   agent retains into facts when a model is routed at extraction (otherwise the text is stored as written), and
   `reflector`, which answers a reflect. (#987, #988, #991)
 
+### Fixed
+
+- An agent run or a workflow step whose worker died could not be picked up again, and **Retry** on a failed
+  workflow step did nothing: the retry was refused when it was queued, and the run stayed "queued" with nothing
+  working on it. Both are queued again. (#997)
+
 ### Operations
 
 - `MEMORY_ENABLED` (default `false`) switches memory banks on for the server. Off, every memory route answers 404

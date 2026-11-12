@@ -60,10 +60,10 @@ describe('VerificationPolicyService.thresholds', () => {
 
   it('shows each level beside what applies, and clearing a value returns to the workspace one', async () => {
     const { policy, cache } = policyOver([{ id: A, workspaceId: WS, ...NONE, reviewIntervalDays: 14 }], { reviewIntervalDays: 30 });
-    expect((await policy.projectSettings(A)).reviewIntervalDays).toEqual({ workspace: 30, project: 14, effective: 14, source: 'project' });
-    expect((await policy.projectSettings(A)).remindBeforeDays).toEqual({ workspace: null, project: null, effective: 7, source: 'default' });
+    expect((await policy.projectSettings(A)).reviewIntervalDays).toEqual({ workspace: 30, project: 14, effective: 14, inherited: 30, source: 'project' });
+    expect((await policy.projectSettings(A)).remindBeforeDays).toEqual({ workspace: null, project: null, effective: 7, inherited: 7, source: 'default' });
     const cleared = await policy.updateProject(A, { reviewIntervalDays: null });
-    expect(cleared.reviewIntervalDays).toEqual({ workspace: 30, project: null, effective: 30, source: 'workspace' });
+    expect(cleared.reviewIntervalDays).toEqual({ workspace: 30, project: null, effective: 30, inherited: 30, source: 'workspace' });
     expect(cache.invalidate).toHaveBeenCalledWith(WS, 'health-settings:projects');
     expect((await policy.thresholds(WS))(A).reviewIntervalDays).toBe(30);
   });

@@ -45,8 +45,8 @@ describe('CaptureService.captureParent', () => {
 
   it("lands a capture in A under A's parent, and one in B where it lands today", async () => {
     const { svc } = harness({ projectParents: { [A]: A_PARENT }, pages });
-    expect(await svc.captureParent(A, WS_PARENT)).toEqual({ workspace: WS_PARENT, project: A_PARENT, effective: A_PARENT, source: 'project' });
-    expect(await svc.captureParent(B, WS_PARENT)).toEqual({ workspace: WS_PARENT, project: null, effective: WS_PARENT, source: 'workspace' });
+    expect(await svc.captureParent(A, WS_PARENT)).toEqual({ workspace: WS_PARENT, project: A_PARENT, effective: A_PARENT, inherited: null, source: 'project' });
+    expect(await svc.captureParent(B, WS_PARENT)).toEqual({ workspace: WS_PARENT, project: null, effective: WS_PARENT, inherited: WS_PARENT, source: 'workspace' });
     // The workspace's parent is a page of B, so A without its own falls to the project root — as before #924.
     expect((await harness({ pages }).svc.captureParent(A, WS_PARENT)).effective).toBeNull();
   });
@@ -54,7 +54,7 @@ describe('CaptureService.captureParent', () => {
   it('falls back rather than failing when the parent is deleted, archived or moved away', async () => {
     for (const gone of [[], [{ id: A_PARENT, projectId: A, archivedAt: new Date() }], [{ id: A_PARENT, projectId: B }]]) {
       const { svc } = harness({ projectParents: { [A]: A_PARENT }, pages: gone });
-      expect(await svc.captureParent(A, null)).toEqual({ workspace: null, project: A_PARENT, effective: null, source: 'default' });
+      expect(await svc.captureParent(A, null)).toEqual({ workspace: null, project: A_PARENT, effective: null, inherited: null, source: 'default' });
     }
   });
 

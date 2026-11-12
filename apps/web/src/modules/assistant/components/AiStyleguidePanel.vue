@@ -8,6 +8,7 @@
 // The scope's lint policy sits beside its rules: whether merge requests on its
 // pages are checked. It shows what the scope asks for and what applies, since
 // the deployment's STYLE_LINT_POLICY and a disabled linter can both clamp it.
+import { ProjectOverridesNote } from '@/entities/project'
 import { useI18n } from 'vue-i18n'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
@@ -287,6 +288,7 @@ const readOnlyRules = computed(() => own.value?.rules ?? inherited.value?.rules 
       <div class="min-w-0 flex-1 basis-64">
         <h2 id="kn-sg-policy" class="text-sm font-medium">{{ t('ai.styleguide.policy.title') }}</h2>
         <p class="text-muted-foreground mt-0.5 text-xs">{{ policyNote }}</p>
+        <ProjectOverridesNote v-if="!projectId" setting="lintPolicy" class="mt-1" />
       </div>
       <Select
         v-if="canManage"

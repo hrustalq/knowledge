@@ -15,6 +15,55 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Breaking
+
+- `GlossaryTerm.projectId` may now be `null`: a glossary term can belong to the whole workspace. `HTTP`
+  **Migration:** treat a term with `projectId: null` as a workspace term. A client that filters the roster by
+  `projectId === <page's project>` should also keep the workspace terms that project does not define itself;
+  `GET /v1/glossary?projectId=` now returns both. (#926)
+
+### Added
+
+- **Project policies.** A project can override workspace settings for its own pages: the review interval, reminder
+  window, inactivity threshold and empty-page size; the breaking-API merge gate; the tracker handoff rules; and the
+  page captured pages land under. Each is empty until someone sets it, and an empty value follows the workspace. The
+  new page **Settings → Projects → a project → Policies** shows, for every setting, what applies, which level
+  decided it and what the project would otherwise follow. Routes: `GET/PATCH /v1/projects/:id/settings/verification`,
+  `/breaking-changes`, `/work-items`, `/capture-parent`. (#921, #922, #923, #924, #928)
+- **Project maintainers.** An editor who holds a *Manage* grant on a project can change that project's policies,
+  except the two merge gates (style lint, breaking API), which stay with workspace admins. Until now every project
+  setting needed a workspace admin. (#920)
+- **Workspace glossary terms.** A workspace admin can write a term for the whole workspace, or promote a project's
+  term (`POST /v1/glossary/:id/promote`). It links on the pages of every project; a project that defines the same
+  word keeps its own entry on its own pages. The glossary shows whose each term is and where one replaces another.
+  (#926)
+- **Test environments for one project.** A QA test environment can be bound to a project
+  (`projectId` on `POST/PATCH /v1/workspaces/:id/test-environments`); only suites of that project's API pages can
+  run with it, over REST and MCP alike. Existing environments stay shared. (#925)
+- **AI usage by project.** Settings → AI → Usage can break usage down by project
+  (`GET /v1/ai/usage?groupBy=project`). Calls made for no single project are shown as their own line, never spread
+  over the others. Past usage is attributed where its agent run or assistant thread names a page. (#927)
+- Each workspace settings screen for a setting a project can override now names the projects that do.
+  `GET /v1/projects/setting-overrides` is the list behind it. (#928)
+
+### Changed
+
+- A tracker handoff rule can be switched off for one project while it is on for the workspace, and on for one
+  project while the workspace has none. (#923)
+- Sharing a project's test environment with every project, or moving it to another project, clears its saved
+  secrets unless the same request sets them, as adding a new destination host already does. (#925)
+- A term captured from an agent session is treated as a duplicate when the workspace already defines it, not only
+  when its project does. (#926)
+
+### Operations
+
+- Seven migrations, all additive: nullable columns on `projects`, `api_test_environments`, `agent_runs` and
+  `ai_usage`, and `glossary_terms.project_id` made nullable. The last one fills `agent_runs.project_id` and
+  `ai_usage.project_id` for existing rows in single statements, one pass over each table at deploy.
+- Rolling back the code after this release has been used: the previous image ignores every project policy (the
+  workspace value applies again), lets any project use a test environment that was bound to one project, and shows
+  a workspace glossary term without a project. No data is lost, and re-deploying restores the behaviour.
+
 ### Added
 
 - **API keys limited to toolsets.** `POST /v1/me/api-keys` takes `toolsets`, a list of MCP toolset keys (`core` is

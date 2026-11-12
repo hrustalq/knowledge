@@ -602,6 +602,11 @@ shown only when the merge request is on a spec. In the graph view, `op:` and
 
 ## Operations
 
+- The breaking-change gate can be set per project since #922
+  (`projects.api_breaking_change_policy`, [76](76-project-settings.md)): the gate
+  reads the policy of the merge request's project, then the workspace's, then
+  `warn`. Admin-only at both levels.
+
 - Migrations `20261103100000_api_reference_kind` (`documents.kind`,
   `documents.spec_slug`, `api_operations`), `20261104100000_workspace_settings`
   and `20261105100000_api_breaking_changes` are additive. The previous image

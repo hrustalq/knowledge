@@ -270,6 +270,8 @@ import type {
   ProjectDeletionPreview,
   ProjectGitResponse,
   ProjectOverviewResponse,
+  ProjectSettingOverridesResponse,
+  ProjectSettingsAccess,
   ProjectSiteResponse,
   ProjectSummary,
   ProjectVerificationSettings,
@@ -638,6 +640,8 @@ export interface ContractResponses {
   ProjectDeletionPreview: ProjectDeletionPreview;
   ProjectGitResponse: ProjectGitResponse;
   ProjectOverviewResponse: ProjectOverviewResponse;
+  ProjectSettingOverridesResponse: ProjectSettingOverridesResponse;
+  ProjectSettingsAccess: ProjectSettingsAccess;
   ProjectSiteResponse: ProjectSiteResponse;
   ProjectSummary: ProjectSummary;
   ProjectVerificationSettings: ProjectVerificationSettings;

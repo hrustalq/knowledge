@@ -123,6 +123,12 @@ Settled with the user, phase by phase (each posted on #483):
 
 ## Configuration
 
+A test environment is shared by every project or bound to one
+(`api_test_environments.project_id`, #925, [76](76-project-settings.md)). A
+bound one is listed for and usable by suites of that project's documents only;
+`ApiTestEnvironmentsService.usableBy` is asked when a run starts and again when
+the worker opens the secrets.
+
 | Variable | Default | Effect |
 | --- | --- | --- |
 | `API_TEST_RUNNER_MODE` | `off` | Ceiling for server runs; a workspace still opts in on Settings → API |

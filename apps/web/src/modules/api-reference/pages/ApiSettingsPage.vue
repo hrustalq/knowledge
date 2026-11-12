@@ -18,6 +18,7 @@
  * allows it and the workspace asks, and the clamp gets its sentence too.
  */
 import { computed } from 'vue'
+import { ProjectOverridesNote } from '@/entities/project'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
@@ -180,6 +181,7 @@ async function save(body: UpdateApiSettingsRequest) {
       <header class="space-y-1 border-b pb-3">
         <h2 class="text-sm font-semibold">{{ t('apiSettings.breaking.title') }}</h2>
         <p class="kn-measure text-sm leading-relaxed text-muted-foreground">{{ t('apiSettings.breaking.subtitle') }}</p>
+        <ProjectOverridesNote setting="breakingChanges" class="mt-1" />
       </header>
 
       <RadioGroup

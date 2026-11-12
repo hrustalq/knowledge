@@ -25,7 +25,7 @@ function prismaOver(workspace: string | null, projects: Record<string, string | 
 
 describe('the breaking-change policy across levels', () => {
   it('resolves project → workspace → warn, and ignores a value outside the vocabulary', () => {
-    expect(scopedApiBreakingChangePolicy(null, null)).toEqual({ workspace: null, project: null, effective: 'warn', source: 'default' });
+    expect(scopedApiBreakingChangePolicy(null, null)).toEqual({ workspace: null, project: null, effective: 'warn', inherited: 'warn', source: 'default' });
     expect(scopedApiBreakingChangePolicy(null, 'block')).toMatchObject({ effective: 'block', source: 'workspace' });
     expect(scopedApiBreakingChangePolicy('off', 'block')).toMatchObject({ effective: 'off', source: 'project' });
     expect(scopedApiBreakingChangePolicy('strict', 'block')).toMatchObject({ project: null, effective: 'block', source: 'workspace' });
@@ -47,7 +47,7 @@ describe('the breaking-change policy across levels', () => {
   it('reports each level and goes back to inheriting on null', async () => {
     const prisma = prismaOver('warn', { [PUBLIC_API]: null });
     const settings = new ApiSettingsService(prisma as never, { get: () => 'off' } as never, {} as never);
-    expect((await settings.setProjectBreakingChanges(PUBLIC_API, 'block')).policy).toEqual({ workspace: 'warn', project: 'block', effective: 'block', source: 'project' });
-    expect((await settings.setProjectBreakingChanges(PUBLIC_API, null)).policy).toEqual({ workspace: 'warn', project: null, effective: 'warn', source: 'workspace' });
+    expect((await settings.setProjectBreakingChanges(PUBLIC_API, 'block')).policy).toEqual({ workspace: 'warn', project: 'block', effective: 'block', inherited: 'warn', source: 'project' });
+    expect((await settings.setProjectBreakingChanges(PUBLIC_API, null)).policy).toEqual({ workspace: 'warn', project: null, effective: 'warn', inherited: 'warn', source: 'workspace' });
   });
 });

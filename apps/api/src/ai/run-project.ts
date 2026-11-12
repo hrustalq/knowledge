@@ -19,7 +19,9 @@ export async function projectOfRun(
 ): Promise<string | null> {
   const { workspaceId } = run;
   const input = (run.input ?? {}) as AgentRunInput;
-  const [kind, subject] = splitSubject(run.subjectKey);
+  // `doc:<id>` → 'doc' and the id; a webhook delivery or a component draft names no single row.
+  const [kind, ...rest] = (run.subjectKey ?? '').split(':');
+  const subject = rest.join(':') || null;
   const uuid = (id: string | null | undefined): string | null => (id && UUID_RE.test(id) ? id : null);
 
   const pages = new Set<string>();
@@ -59,11 +61,4 @@ export async function projectOfRun(
     if (connector) return connector.projectId;
   }
   return null;
-}
-
-/** `doc:<id>` → ['doc', '<id>']; anything else (a webhook delivery, a component draft) → its prefix and the rest. */
-function splitSubject(key: string | null): [string, string | null] {
-  if (!key) return ['', null];
-  const at = key.indexOf(':');
-  return at === -1 ? [key, null] : [key.slice(0, at), key.slice(at + 1)];
 }

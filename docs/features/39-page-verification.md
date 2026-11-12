@@ -298,7 +298,9 @@ its own, which is also what gave the chip words for `edited`, `expired` and
 ## Configuration
 
 All defaults, not ceilings — a `knowledge_health_settings` row overrides each
-per workspace (feature 40):
+per workspace (feature 40), and a project may override the four thresholds for
+its own pages ([76](76-project-settings.md)): page (interval only) → project →
+workspace → env, read through `VerificationPolicyService.thresholds`:
 
 | var                                | default |
 | ---------------------------------- | ------- |

@@ -8249,5 +8249,56 @@
       "builtIn": "Built-in",
       "saved": "Saved"
     }
+  },
+  "projectSettings": {
+    "title": "Policies",
+    "readOnly": "Read-only",
+    "intro": "What {project} follows. Each setting comes from the workspace unless the project sets its own; clearing a value goes back to the workspace's.",
+    "back": "Back to the project",
+    "source": {
+      "project": "set by this project",
+      "workspace": "from the workspace",
+      "default": "the default"
+    },
+    "workspaceValue": "Otherwise: {value}",
+    "reset": "Reset to the workspace's",
+    "inherit": "Workspace ({value})",
+    "saved": "Project policies saved",
+    "verification": {
+      "title": "Freshness",
+      "intro": "When this project's pages need a new look. Stored expiry dates do not move when an interval changes."
+    },
+    "gates": {
+      "title": "Merge gates",
+      "intro": "What can hold a merge request of this project.",
+      "adminOnly": "Merge gates are set by workspace admins.",
+      "breakingHint": "What a merge request that breaks an API contract does.",
+      "lint": "Style lint",
+      "lintHint": "What the style check of a merge request does with violations.",
+      "lintCeiling": "The deployment caps this at {value}."
+    },
+    "rules": {
+      "intro": "Which of this project's issues, conflicts and flagged pages become tracker tickets on their own. Off here opts the project out while the workspace is on.",
+      "noRoute": "This project has no tracker route, so no rule creates a ticket here yet."
+    },
+    "capture": {
+      "title": "Agent memory",
+      "intro": "Where pages captured from agent sessions land in this project.",
+      "label": "Parent page for captures",
+      "placeholder": "Find a page of this project…",
+      "root": "The project root",
+      "unknownPage": "A page you cannot open",
+      "stale": "The page this project chose is gone or has left the project, so the next level applies."
+    },
+    "links": {
+      "title": "Kept elsewhere",
+      "intro": "These belong to the project too, each on its own screen.",
+      "glossary": "Glossary",
+      "styleguide": "Styleguide",
+      "templates": "Templates",
+      "environments": "Test environments",
+      "site": "Published site"
+    },
+    "overriddenIn": "Overridden in: "
   }
 }

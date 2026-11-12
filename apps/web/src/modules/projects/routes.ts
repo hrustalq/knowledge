@@ -22,5 +22,8 @@ export const blueprintsSettingsRoute = {
   component: () => import('./pages/BlueprintsSettingsPage.vue'),
 } satisfies RouteRecordRaw
 
+/** `/settings/projects/:id/policies` (#928): every workspace setting the project may override. Before `projectDetailRoute`. */
+export const projectPoliciesRoute: RouteRecordRaw = { path: ':id/policies', component: () => import('./pages/ProjectSettingsPage.vue') }
+
 /** The selected project's form: the last child of `settingsRoute`. */
 export const projectDetailRoute: RouteRecordRaw = { path: ':id?', component: () => import('./pages/ProjectDetailPage.vue') }

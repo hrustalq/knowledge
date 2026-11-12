@@ -17,6 +17,8 @@ import type {
   ProjectDeletionPreview,
   ProjectGitResponse,
   ProjectOverviewResponse,
+  ProjectSettingOverridesResponse,
+  ProjectSettingsAccess,
   ProjectSummary,
   ScaffoldProjectResponse,
 } from '@knowledge/contracts';
@@ -29,6 +31,7 @@ import {
   DeleteProjectQueryDto,
   DeletionPreviewQueryDto,
   ListProjectsQueryDto,
+  ProjectSettingOverridesQueryDto,
   ScaffoldProjectDto,
   UpdateProjectDto,
 } from './projects.dto.js';
@@ -98,6 +101,26 @@ export class ProjectsController {
     const blueprint = await this.scaffolder.resolve(dto);
     if (blueprint.conventions?.styleguide && !dto.parentId) await this.access.requireRole(principal, dto.workspaceId, 'admin');
     return this.scaffolder.scaffold(dto, blueprint, principal);
+  }
+
+  // A literal segment, so before `:id`.
+  @Get('setting-overrides')
+  @Returns('ProjectSettingOverridesResponse')
+  @Access('viewer', 'query')
+  @ApiOperation({ summary: 'Which projects override which workspace settings; only projects the caller may open' })
+  async settingOverrides(
+    @Query() query: ProjectSettingOverridesQueryDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<ProjectSettingOverridesResponse> {
+    return this.projects.settingOverrides(await this.permissions.scopeFor(principal, query.workspaceId));
+  }
+
+  @Get(':id/settings/access')
+  @Returns('ProjectSettingsAccess')
+  @Access('viewer', 'project')
+  @ApiOperation({ summary: "What the caller may change on the project's settings page: the non-gate settings, and the merge gates" })
+  async settingsAccess(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<ProjectSettingsAccess> {
+    return { projectId: id, ...(await this.permissions.projectSettingsAccess(principal, id)) };
   }
 
   @Get(':id')

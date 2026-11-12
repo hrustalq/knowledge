@@ -18936,6 +18936,68 @@
       "recentPages"
     ]
   },
+  "ProjectSettingKey": {
+    "type": "string",
+    "enum": [
+      "verification",
+      "breakingChanges",
+      "lintPolicy",
+      "workItems",
+      "captureParent"
+    ]
+  },
+  "ProjectSettingOverridesResponse": {
+    "type": "object",
+    "properties": {
+      "overrides": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "projectId": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "settings": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/ProjectSettingKey"
+              }
+            }
+          },
+          "required": [
+            "projectId",
+            "name",
+            "settings"
+          ]
+        }
+      }
+    },
+    "required": [
+      "overrides"
+    ]
+  },
+  "ProjectSettingsAccess": {
+    "type": "object",
+    "properties": {
+      "projectId": {
+        "type": "string"
+      },
+      "canWrite": {
+        "type": "boolean"
+      },
+      "canWriteGates": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "projectId",
+      "canWrite",
+      "canWriteGates"
+    ]
+  },
   "ProjectSiteResponse": {
     "type": "object",
     "properties": {
@@ -21714,6 +21776,10 @@
         "type": "string",
         "nullable": true
       },
+      "inherited": {
+        "type": "string",
+        "nullable": true
+      },
       "source": {
         "type": "string",
         "enum": [
@@ -21727,6 +21793,7 @@
       "workspace",
       "project",
       "effective",
+      "inherited",
       "source"
     ]
   },
@@ -21752,6 +21819,9 @@
       "effective": {
         "$ref": "#/components/schemas/ApiBreakingChangePolicy"
       },
+      "inherited": {
+        "$ref": "#/components/schemas/ApiBreakingChangePolicy"
+      },
       "source": {
         "type": "string",
         "enum": [
@@ -21765,6 +21835,7 @@
       "workspace",
       "project",
       "effective",
+      "inherited",
       "source"
     ]
   },
@@ -21790,6 +21861,9 @@
       "effective": {
         "$ref": "#/components/schemas/WorkItemConflictRule"
       },
+      "inherited": {
+        "$ref": "#/components/schemas/WorkItemConflictRule"
+      },
       "source": {
         "type": "string",
         "enum": [
@@ -21803,6 +21877,7 @@
       "workspace",
       "project",
       "effective",
+      "inherited",
       "source"
     ]
   },
@@ -21828,6 +21903,9 @@
       "effective": {
         "$ref": "#/components/schemas/WorkItemIssueRule"
       },
+      "inherited": {
+        "$ref": "#/components/schemas/WorkItemIssueRule"
+      },
       "source": {
         "type": "string",
         "enum": [
@@ -21841,6 +21919,7 @@
       "workspace",
       "project",
       "effective",
+      "inherited",
       "source"
     ]
   },
@@ -21866,6 +21945,9 @@
       "effective": {
         "$ref": "#/components/schemas/WorkItemVerificationRule"
       },
+      "inherited": {
+        "$ref": "#/components/schemas/WorkItemVerificationRule"
+      },
       "source": {
         "type": "string",
         "enum": [
@@ -21879,6 +21961,7 @@
       "workspace",
       "project",
       "effective",
+      "inherited",
       "source"
     ]
   },
@@ -21896,6 +21979,9 @@
       "effective": {
         "type": "number"
       },
+      "inherited": {
+        "type": "number"
+      },
       "source": {
         "type": "string",
         "enum": [
@@ -21909,6 +21995,7 @@
       "workspace",
       "project",
       "effective",
+      "inherited",
       "source"
     ]
   },

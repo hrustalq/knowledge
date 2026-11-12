@@ -995,6 +995,8 @@ export interface ScopedSetting<T> {
   project: T | null;
   /** What applies. */
   effective: T;
+  /** What would apply without the project's value: the workspace's, else the default. What "reset" goes back to. */
+  inherited: T;
   /** The level that decided `effective`. */
   source: 'project' | 'workspace' | 'default';
 }
@@ -1003,7 +1005,31 @@ export interface ScopedSetting<T> {
 export function scopedSetting<T>(project: T | null | undefined, workspace: T | null | undefined, fallback: T): ScopedSetting<T> {
   const p = project ?? null;
   const w = workspace ?? null;
-  return { workspace: w, project: p, effective: p ?? w ?? fallback, source: p !== null ? 'project' : w !== null ? 'workspace' : 'default' };
+  const inherited = w ?? fallback;
+  return { workspace: w, project: p, effective: p ?? inherited, inherited, source: p !== null ? 'project' : w !== null ? 'workspace' : 'default' };
+}
+
+/**
+ * Every setting a project may override (#919), as the settings page groups
+ * them. `verification` and `workItems` are groups of columns; a project
+ * overrides the group when it sets any of them.
+ */
+export const PROJECT_SETTING_KEYS = ['verification', 'breakingChanges', 'lintPolicy', 'workItems', 'captureParent'] as const;
+export type ProjectSettingKey = (typeof PROJECT_SETTING_KEYS)[number];
+
+// GET /v1/projects/setting-overrides?workspaceId= — which projects override what, for the workspace settings screens.
+export interface ProjectSettingOverridesResponse {
+  /** Only projects the caller may open, and only those that override something. */
+  overrides: { projectId: string; name: string; settings: ProjectSettingKey[] }[];
+}
+
+// GET /v1/projects/:id/settings/access — what the caller may change on the project's settings page.
+export interface ProjectSettingsAccess {
+  projectId: string;
+  /** Workspace admin, or a workspace editor holding `manage` on the project: the non-gate settings. */
+  canWrite: boolean;
+  /** Workspace admin: the two merge gates, `breakingChanges` and `lintPolicy`. */
+  canWriteGates: boolean;
 }
 
 /**

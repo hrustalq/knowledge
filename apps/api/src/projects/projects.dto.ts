@@ -24,6 +24,14 @@ import {
 } from '@knowledge/contracts';
 import { vmsg } from '../common/validation.js';
 
+/** GET /v1/projects/setting-overrides */
+export class ProjectSettingOverridesQueryDto {
+  // Field name must stay `workspaceId`: @Access('viewer','query') resolves it.
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+}
+
 export class ListProjectsQueryDto {
   // Field name must stay `workspaceId`: @Access('viewer','query') resolves it.
   @ApiProperty({ format: 'uuid' })

@@ -100,7 +100,7 @@ its query would 404. Queries a page owns for a section's widget are
 
 ## Not built
 
-- No per-project toggles. A project is organizational; the workspace is the
+- No per-project toggles. A project overrides policy ([76](76-project-settings.md)), not navigation; the workspace is the
   boundary.
 - No live push of a change to other open tabs: they pick it up on their next
   load. The API refuses at once either way.

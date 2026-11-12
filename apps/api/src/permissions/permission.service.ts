@@ -370,6 +370,24 @@ export class PermissionService {
     throw this.refusal(scope, resource, level === 'manage' ? 'edit' : level, 'manage');
   }
 
+  /** What the caller may change on a project's settings page (#928): the answers of the two guards, asked without throwing. */
+  async projectSettingsAccess(principal: Principal, projectId: string): Promise<{ canWrite: boolean; canWriteGates: boolean }> {
+    const allowed = (check: Promise<void>) =>
+      check.then(
+        () => true,
+        (error: unknown) => {
+          if (error instanceof ForbiddenException) return false;
+          throw error;
+        },
+      );
+    const { workspaceId } = await this.resolveChain({ type: 'project', id: projectId });
+    const [canWrite, canWriteGates] = await Promise.all([
+      allowed(this.requireProjectManage(principal, projectId)),
+      allowed(this.access.requireRole(principal, workspaceId, 'admin')),
+    ]);
+    return { canWrite, canWriteGates };
+  }
+
   /**
    * Whether `scope`'s holder may place a new page here: edit on the parent, or
    * on the project for a root page. A page created under a node inherits its

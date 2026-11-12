@@ -15,6 +15,7 @@
  * placeholder is what it inherits.
  */
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { ProjectOverridesNote } from '@/entities/project'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
@@ -288,6 +289,7 @@ const parentOptions = computed<ComboboxOption[]>(() => {
         <div class="min-w-0">
           <span class="text-sm font-medium">{{ t('ai.capture.parent.label') }}</span>
           <p class="kn-measure text-xs text-muted-foreground">{{ t('ai.capture.parent.hint') }}</p>
+          <ProjectOverridesNote setting="captureParent" class="mt-1" />
         </div>
         <Combobox
           v-model="form.parentDocumentId"

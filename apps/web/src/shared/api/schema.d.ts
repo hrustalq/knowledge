@@ -855,6 +855,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/projects/setting-overrides": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Which projects override which workspace settings; only projects the caller may open */
+        get: operations["ProjectsController_settingOverrides"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{id}/settings/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What the caller may change on the project's settings page: the non-gate settings, and the merge gates */
+        get: operations["ProjectsController_settingsAccess"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/projects/{id}": {
         parameters: {
             query?: never;
@@ -15546,6 +15580,20 @@ export interface components {
                 updatedAt: string;
             }[];
         };
+        /** @enum {string} */
+        ProjectSettingKey: "verification" | "breakingChanges" | "lintPolicy" | "workItems" | "captureParent";
+        ProjectSettingOverridesResponse: {
+            overrides: {
+                projectId: string;
+                name: string;
+                settings: components["schemas"]["ProjectSettingKey"][];
+            }[];
+        };
+        ProjectSettingsAccess: {
+            projectId: string;
+            canWrite: boolean;
+            canWriteGates: boolean;
+        };
         ProjectSiteResponse: {
             site: components["schemas"]["PublishedSiteSummary"] | null;
             policy: {
@@ -16200,6 +16248,7 @@ export interface components {
             workspace: string | null;
             project: string | null;
             effective: string | null;
+            inherited: string | null;
             /** @enum {string} */
             source: "project" | "workspace" | "default";
         };
@@ -16207,6 +16256,7 @@ export interface components {
             workspace: components["schemas"]["ApiBreakingChangePolicy"] | null;
             project: components["schemas"]["ApiBreakingChangePolicy"] | null;
             effective: components["schemas"]["ApiBreakingChangePolicy"];
+            inherited: components["schemas"]["ApiBreakingChangePolicy"];
             /** @enum {string} */
             source: "project" | "workspace" | "default";
         };
@@ -16214,6 +16264,7 @@ export interface components {
             workspace: components["schemas"]["WorkItemConflictRule"] | null;
             project: components["schemas"]["WorkItemConflictRule"] | null;
             effective: components["schemas"]["WorkItemConflictRule"];
+            inherited: components["schemas"]["WorkItemConflictRule"];
             /** @enum {string} */
             source: "project" | "workspace" | "default";
         };
@@ -16221,6 +16272,7 @@ export interface components {
             workspace: components["schemas"]["WorkItemIssueRule"] | null;
             project: components["schemas"]["WorkItemIssueRule"] | null;
             effective: components["schemas"]["WorkItemIssueRule"];
+            inherited: components["schemas"]["WorkItemIssueRule"];
             /** @enum {string} */
             source: "project" | "workspace" | "default";
         };
@@ -16228,6 +16280,7 @@ export interface components {
             workspace: components["schemas"]["WorkItemVerificationRule"] | null;
             project: components["schemas"]["WorkItemVerificationRule"] | null;
             effective: components["schemas"]["WorkItemVerificationRule"];
+            inherited: components["schemas"]["WorkItemVerificationRule"];
             /** @enum {string} */
             source: "project" | "workspace" | "default";
         };
@@ -16235,6 +16288,7 @@ export interface components {
             workspace: number | null;
             project: number | null;
             effective: number;
+            inherited: number;
             /** @enum {string} */
             source: "project" | "workspace" | "default";
         };
@@ -20035,6 +20089,90 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScaffoldProjectResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ProjectsController_settingOverrides: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectSettingOverridesResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ProjectsController_settingsAccess: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectSettingsAccess"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

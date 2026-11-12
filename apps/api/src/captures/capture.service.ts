@@ -834,12 +834,8 @@ export class CaptureService {
       : [];
     const usable = (id: string | null) => id !== null && live.some((d) => d.id === id);
     const source = usable(own) ? 'project' : usable(workspaceParentId) ? 'workspace' : 'default';
-    return {
-      workspace: workspaceParentId,
-      project: own,
-      effective: source === 'project' ? own : source === 'workspace' ? workspaceParentId : null,
-      source,
-    };
+    const inherited = usable(workspaceParentId) ? workspaceParentId : null;
+    return { workspace: workspaceParentId, project: own, effective: source === 'project' ? own : inherited, inherited, source };
   }
 
   async projectCaptureParent(projectId: string): Promise<ProjectCaptureParentSettings> {

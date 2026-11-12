@@ -1,5 +1,5 @@
 import { Transform, Type } from 'class-transformer';
-import { IsArray, IsBoolean, IsDefined, IsIn, IsInt, IsISO8601, IsOptional, IsString, IsUUID, Max, MaxLength, Min, ValidateNested } from 'class-validator';
+import { IsArray, IsBoolean, IsDefined, IsIn, IsInt, IsISO8601, IsNumber, IsObject, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
 import { FACT_TYPES, MEMORY_TIME_FIELDS, TAGS_MATCH, type MemoryTimeField, type TagsMatch } from './memory-facts.js';
 
 /**
@@ -68,4 +68,45 @@ export class ListMemoriesQueryDto {
 
 export class ClearMemoriesQueryDto {
   @IsOptional() @IsIn([...FACT_TYPES, 'observation']) type?: string;
+}
+
+export class TemporalWindowDto {
+  @IsISO8601() start!: string;
+  @IsISO8601() end!: string;
+}
+
+export class MinScoresDto {
+  @IsOptional() @IsNumber() semantic?: number | null;
+  @IsOptional() @IsNumber() keyword?: number | null;
+  @IsOptional() @IsNumber() reranker?: number | null;
+  @IsOptional() @IsNumber() final?: number | null;
+}
+
+export class RerankDto {
+  @IsOptional() @IsBoolean() prune?: boolean | null;
+  @IsOptional() @IsBoolean() dedup?: boolean | null;
+}
+
+/** `include`: each key on with an object, off with null. Their inner options are Hindsight's and are not read. */
+export class RecallIncludeDto {
+  @IsOptional() @IsObject() entities?: Record<string, unknown> | null;
+  @IsOptional() @IsObject() chunks?: Record<string, unknown> | null;
+  @IsOptional() @IsObject() source_facts?: Record<string, unknown> | null;
+}
+
+/**
+ * `RecallRequest`. `tag_groups`, `trace`, `prefer_observations` and
+ * `query_timestamp` are Hindsight's and are accepted by being left undeclared.
+ */
+export class RecallDto {
+  @IsString() @MinLength(1) @MaxLength(4000) query!: string;
+  @IsOptional() @IsArray() @IsIn([...FACT_TYPES, 'observation'], { each: true }) types?: string[] | null;
+  @IsOptional() @IsIn(['low', 'mid', 'high']) budget?: 'low' | 'mid' | 'high' | null;
+  @IsOptional() @IsInt() @Min(1) @Max(200_000) max_tokens?: number | null;
+  @IsOptional() @IsArray() @IsString({ each: true }) tags?: string[] | null;
+  @IsOptional() @IsIn(TAGS_MATCH) tags_match?: TagsMatch | null;
+  @IsOptional() @ValidateNested() @Type(() => TemporalWindowDto) temporal_window?: TemporalWindowDto | null;
+  @IsOptional() @ValidateNested() @Type(() => MinScoresDto) min_scores?: MinScoresDto | null;
+  @IsOptional() @ValidateNested() @Type(() => RerankDto) rerank?: RerankDto | null;
+  @IsOptional() @ValidateNested() @Type(() => RecallIncludeDto) include?: RecallIncludeDto | null;
 }

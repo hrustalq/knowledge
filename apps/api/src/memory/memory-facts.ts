@@ -25,8 +25,8 @@ export interface RetainItem {
   timestamp: string | null;
   metadata: Record<string, string>;
   documentId: string;
-  /** Names the client supplied, `TYPE:name` when it gave a type. */
-  entities: string[];
+  /** Entities the client supplied: the name as written, and the key to fold — `type:name` when it gave a type. */
+  entities: Array<{ name: string; key: string }>;
   tags: string[];
   append: boolean;
 }
@@ -93,11 +93,11 @@ export function readRetainItems(
       timestamp,
       metadata: Object.fromEntries(Object.entries(metadata).slice(0, 50).map(([k, v]) => [k.slice(0, 100), String(v).slice(0, 2000)])),
       documentId: typeof item.document_id === 'string' && item.document_id ? item.document_id.slice(0, 500) : (shared ?? randomUUID()),
-      entities: cleanNames(
-        entities.map((e: { text?: unknown; type?: unknown } | null) =>
-          typeof e?.text === 'string' && e.text.trim() ? (typeof e.type === 'string' && e.type.trim() ? `${e.type.trim()}:${e.text.trim()}` : e.text) : null,
-        ),
-      ),
+      entities: entities.slice(0, MAX_ENTITIES).flatMap((e: { text?: unknown; type?: unknown } | null) => {
+        const name = typeof e?.text === 'string' ? e.text.trim().slice(0, MAX_ENTITY_CHARS) : '';
+        if (!name) return [];
+        return [{ name, key: typeof e?.type === 'string' && e.type.trim() ? `${e.type.trim().slice(0, 40)}:${name}` : name }];
+      }),
       tags: cleanTags([...(Array.isArray(item.tags) ? item.tags : []), ...extraTags]),
       append: item.update_mode === 'append',
     };

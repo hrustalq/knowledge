@@ -223,7 +223,9 @@
     "timestampInvalid": "`timestamp` must be an ISO 8601 date or \"unset\"",
     "rateLimited": "Too many retain requests; try again in a minute",
     "storeNotReady": "The memory vector index does not exist yet: it is built when the worker starts. Start the worker once, then retry",
-    "memoryNotFound": "Memory {id} not found"
+    "memoryNotFound": "Memory {id} not found",
+    "noReranker": "`min_scores.reranker` needs a reranker, and none runs here: use `semantic`, `keyword` or `final`",
+    "windowInvalid": "`temporal_window` needs a `start` and an `end`, with the start first"
   },
   "memo": {
     "notFound": "Memo not found",

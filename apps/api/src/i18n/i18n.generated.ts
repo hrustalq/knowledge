@@ -920,6 +920,8 @@ export type I18nTranslations = {
             "rateLimited": string;
             "storeNotReady": string;
             "memoryNotFound": string;
+            "noReranker": string;
+            "windowInvalid": string;
         };
         "memo": {
             "notFound": string;

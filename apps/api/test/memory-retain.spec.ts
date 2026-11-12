@@ -28,7 +28,7 @@ describe('retain items (#986)', () => {
       LIMITS,
       now,
     );
-    expect(a).toMatchObject({ tags: ['a', 'b', 'doc'], entities: ['service:Billing', 'Alice'], append: true, timestamp: now.toISOString() });
+    expect(a).toMatchObject({ tags: ['a', 'b', 'doc'], entities: [{ name: 'Billing', key: 'service:Billing' }, { name: 'Alice', key: 'Alice' }], append: true, timestamp: now.toISOString() });
     expect(b!.timestamp).toBeNull();
     expect(c!.timestamp).toBe('2026-01-02T00:04:05.000Z');
   });
@@ -112,12 +112,12 @@ describe('MemoryRetainService (#986)', () => {
 
   it('stores the masked text verbatim, calling no model, when none is routed at extraction', async () => {
     const { retain, created, client, graph, prisma } = service();
-    const out = await retain([item({ content: 'Mail bob@example.com about billing.', context: 'from bob@example.com', entities: ['Bill', 'bill'] })]);
+    const out = await retain([item({ content: 'Mail bob@example.com about billing.', context: 'from bob@example.com', entities: [{ name: 'Bill', key: 'Bill' }, { name: 'bill', key: 'bill' }] })]);
     expect(out).toEqual({ units: 1, usage: null });
     expect(client.chatWithUsage).not.toHaveBeenCalled();
     expect(created.units[0]).toMatchObject({ text: 'Mail [EMAIL_1] about billing.', sourceText: 'Mail [EMAIL_1] about billing.', context: 'from [EMAIL_1]', factType: 'world', bankId: 'bank-1', workspaceId: WS, createdBy: 'u1' });
     // Two spellings the alias table resolves to one key are one entity row.
-    expect(created.entities.map((e) => e.entityKey)).toEqual(['person:william']);
+    expect(created.entities.map((e) => [e.entityKey, e.name])).toEqual([['person:william', 'Bill']]);
     // Vector before row, and the document's previous units replaced with their vectors.
     expect(graph.upsertMemoryUnits.mock.invocationCallOrder[0]!).toBeLessThan(prisma.memoryUnit.createMany.mock.invocationCallOrder[0]!);
     expect(graph.deleteMemoryUnits).toHaveBeenCalledWith(WS, ['old-1']);

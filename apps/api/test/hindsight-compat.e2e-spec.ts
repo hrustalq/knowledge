@@ -412,4 +412,121 @@ describe('Hindsight compatibility (e2e, #986)', () => {
       await prisma.user.delete({ where: { id: dana.id } });
     });
   });
+
+  describe('phase 2: recall', () => {
+    const mem = `recall-${nonce}`;
+    const texts = (r: { results: Array<{ text: string }> }) => r.results.map((x) => x.text);
+    // The stub embedder ranks by shared words, never meaning, and always returns its nearest: a floor no
+    // stub vector reaches takes the semantic leg out, so a test can see what another leg adds on its own.
+    const noSemantic = { minScores: { semantic: 0.999 } };
+
+    beforeAll(async () => {
+      const hs = client(people.alice.key);
+      await hs.retainBatch(mem, [
+        { content: 'Alice works at Google as a software engineer', document_id: 'alice', entities: [{ text: 'Google', type: 'org' }], timestamp: '2026-06-15T10:00:00Z' },
+        { content: 'The campus has a climbing gym', document_id: 'gym', entities: [{ text: 'google', type: 'ORG' }], timestamp: '2026-06-16T10:00:00Z' },
+        { content: 'Bob prefers tea over coffee', document_id: 'bob', tags: ['user:a'], timestamp: '2026-01-10T10:00:00Z' },
+        { content: 'Carol prefers coffee over tea', document_id: 'carol', tags: ['user:b'], timestamp: '2026-06-20T10:00:00Z' },
+        { content: 'The office closes at six', document_id: 'office', timestamp: '2026-06-21T10:00:00Z' },
+      ]);
+    });
+
+    it('recalls what was retained, in Hindsight’s shape', async () => {
+      const res = await client(people.alice.key).recall(mem, 'What does Alice do?');
+      expect(res.results[0]).toMatchObject({
+        id: expect.any(String),
+        text: 'Alice works at Google as a software engineer',
+        type: 'world',
+        entities: ['Google'],
+        document_id: 'alice',
+        occurred_start: '2026-06-15T10:00:00.000Z',
+        tags: [],
+        scores: { final: expect.any(Number), keyword: expect.any(Number) },
+      });
+      expect(res.entities).toMatchObject({ Google: { entity_id: 'org:google', canonical_name: 'Google', observations: [] } });
+      const bare = await client(people.alice.key).recall(mem, 'What does Alice do?', { includeEntities: false, includeChunks: true });
+      expect(bare.entities).toBeUndefined();
+      expect(bare.chunks).toEqual({});
+    });
+
+    it('filters by tags the way Hindsight does, untagged memories included or not', async () => {
+      const hs = client(people.alice.key);
+      const strict = texts(await hs.recall(mem, 'who prefers tea or coffee', { tags: ['user:b'], tagsMatch: 'any_strict' }));
+      expect(strict).toEqual(['Carol prefers coffee over tea']);
+      const any = texts(await hs.recall(mem, 'who prefers tea or coffee', { tags: ['user:b'], tagsMatch: 'any' }));
+      expect(any).toContain('Carol prefers coffee over tea');
+      expect(any).toContain('The office closes at six');
+      expect(any).not.toContain('Bob prefers tea over coffee');
+      expect(texts(await hs.recall(mem, 'who prefers tea or coffee', { tags: ['user:a', 'user:b'], tagsMatch: 'all_strict' }))).toEqual([]);
+      expect(texts(await hs.recall(mem, 'tea', { types: ['observation'] }))).toEqual([]);
+      expect(texts(await hs.recall(mem, 'tea', { types: ['world'], ...noSemantic })).sort()).toEqual(['Bob prefers tea over coffee', 'Carol prefers coffee over tea']);
+    });
+
+    it('adds memories inside a time window, and none outside it', async () => {
+      const hs = client(people.alice.key);
+      const none = await hs.recall(mem, 'zzzunmatched', noSemantic);
+      expect(none.results).toEqual([]);
+      const january = await hs.recall(mem, 'zzzunmatched', { ...noSemantic, temporalWindow: { start: '2026-01-01T00:00:00Z', end: '2026-01-31T23:59:59Z' } });
+      expect(texts(january)).toEqual(['Bob prefers tea over coffee']);
+      // Surfaced by the temporal leg alone: neither retrieval leg scored it.
+      expect(january.results[0]!.scores).toEqual({ final: expect.any(Number) });
+    });
+
+    it('adds memories that share an entity with the best hits', async () => {
+      const res = await client(people.alice.key).recall(mem, 'Alice', noSemantic);
+      expect(texts(res)).toEqual(['Alice works at Google as a software engineer', 'The campus has a climbing gym']);
+      expect(res.results[1]!.scores?.keyword).toBeUndefined();
+    });
+
+    it('cuts the results to max_tokens, best first', async () => {
+      const hs = client(people.alice.key);
+      const all = await hs.recall(mem, 'Alice Bob Carol office campus');
+      const cut = await hs.recall(mem, 'Alice Bob Carol office campus', { maxTokens: 20 });
+      expect(all.results.length).toBe(5);
+      expect(cut.results.length).toBeGreaterThan(0);
+      expect(cut.results.length).toBeLessThan(all.results.length);
+      expect(texts(cut)).toEqual(texts(all).slice(0, cut.results.length));
+    });
+
+    it('never serves a vector whose row is gone', async () => {
+      const row = await prisma.memoryUnit.findFirstOrThrow({ where: { workspaceId: WS_A, documentId: 'office', bank: { bankId: mem } } });
+      await prisma.memoryUnit.delete({ where: { id: row.id } });
+      expect((await graph.memoryUnitIds(WS_A)).map((v) => v.unitId)).toContain(row.id);
+      expect(texts(await client(people.alice.key).recall(mem, 'when does the office close'))).not.toContain('The office closes at six');
+    });
+
+    it('refuses a bank that is not the caller’s before anything is embedded', async () => {
+      const { EMBEDDING_PROVIDER } = await import('../src/embedding/embedding.provider.js');
+      const embed = vi.spyOn(app.get<{ embed(t: string): Promise<number[]> }>(EMBEDDING_PROVIDER), 'embed');
+      try {
+        await expect(client(people.carol.key).recall(mem, 'What does Alice do?')).rejects.toMatchObject({ statusCode: 404 });
+        await expect(client(people.alice.key).recall(`missing-${nonce}`, 'anything')).rejects.toMatchObject({ statusCode: 404 });
+        expect(embed).not.toHaveBeenCalled();
+        // A read-only key recalls: it is a viewer's call.
+        const readOnly = await mintKey(people.alice.id, { workspaceId: WS_A, scope: 'read' });
+        expect(texts(await client(readOnly).recall(mem, 'What does Alice do?'))[0]).toBe('Alice works at Google as a software engineer');
+        expect(embed).toHaveBeenCalledTimes(1);
+      } finally {
+        embed.mockRestore();
+      }
+    });
+
+    it('refuses a floor on a reranker that does not run, and a window that ends before it starts', async () => {
+      const post = (body: unknown) => call(people.alice.key, 'POST', `/v1/default/banks/${mem}/memories/recall`, body);
+      const reranker = await post({ query: 'Alice', min_scores: { reranker: 0.5 } });
+      expect(reranker.status).toBe(400);
+      expect((await reranker.json()).detail).toMatch(/reranker/);
+      expect((await post({ query: 'Alice', temporal_window: { start: '2026-02-01T00:00:00Z', end: '2026-01-01T00:00:00Z' } })).status).toBe(400);
+      expect((await post({ query: '' })).status).toBe(422);
+      // Asked to prune with no decision model routed: the flag is ignored.
+      const pruned = await post({ query: 'What does Alice do?', rerank: { prune: true }, tag_groups: [], trace: true });
+      expect(pruned.status).toBe(200);
+      expect((await pruned.json()).results.length).toBeGreaterThan(0);
+    });
+
+    it('keeps memory out of page search', async () => {
+      const page = await call(people.alice.key, 'POST', '/v1/search', { workspaceId: WS_A, query: 'Alice works at Google as a software engineer', limit: 10 });
+      expect(JSON.stringify(await page.json())).not.toContain('software engineer');
+    });
+  });
 });

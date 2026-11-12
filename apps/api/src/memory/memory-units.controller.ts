@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Headers, HttpCode, Param, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Headers, HttpCode, Param, Post, Query } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiExcludeController } from '@nestjs/swagger';
 import { CurrentPrincipal, ReadKeyOk } from '../auth/access.decorator.js';
@@ -10,14 +10,37 @@ import { PublicRateLimiter, RateLimitedException } from '../public/public-rate-l
 import { MemoryAccessService } from './memory-access.service.js';
 import { MemoryBanksService } from './memory-banks.service.js';
 import { readRetainItems } from './memory-facts.js';
+import { MemoryRecallService, type RecallQuery } from './memory-recall.service.js';
 import { MemoryRetainService } from './memory-retain.service.js';
 import { MemoryUnitsService } from './memory-units.service.js';
-import { ClearMemoriesQueryDto, ListMemoriesQueryDto, RetainDto } from './memory.dto.js';
-import type { BankStatsResponse, DeleteResponse, ListMemoryUnitsResponse, RetainResponse } from './memory-wire.js';
+import { ClearMemoriesQueryDto, ListMemoriesQueryDto, RecallDto, RetainDto } from './memory.dto.js';
+import type { BankStatsResponse, DeleteResponse, ListMemoryUnitsResponse, RecallResponse, RetainResponse } from './memory-wire.js';
+
+/** A recall body as the service reads it. Shared with the per-bank MCP tools, which take the same fields. */
+export function recallQuery(dto: RecallDto, userId: string): RecallQuery {
+  const window = dto.temporal_window ? { start: new Date(dto.temporal_window.start), end: new Date(dto.temporal_window.end) } : undefined;
+  if (window && window.start > window.end) throw new BadRequestException(t('error.memory.windowInvalid'));
+  return {
+    query: dto.query,
+    types: dto.types ?? undefined,
+    tags: dto.tags ?? undefined,
+    tagsMatch: dto.tags_match ?? undefined,
+    budget: dto.budget ?? undefined,
+    maxTokens: dto.max_tokens ?? undefined,
+    window,
+    minScores: dto.min_scores ?? undefined,
+    prune: dto.rerank?.prune === true,
+    // On by default; the client switches it off with `include.entities: null`.
+    entities: dto.include?.entities !== null,
+    chunks: dto.include?.chunks != null,
+    sourceFacts: dto.include?.source_facts != null,
+    userId,
+  };
+}
 
 /**
- * What a bank holds, in Hindsight's wire shape (#986 phase 1): retain, list,
- * get, clear, stats. Resolved per handler by `MemoryAccessService`, as the
+ * What a bank holds, in Hindsight's wire shape (#986 phases 1–2): retain,
+ * recall, list, get, clear, stats. Resolved per handler by `MemoryAccessService`, as the
  * bank routes are.
  */
 @ApiExcludeController()
@@ -33,6 +56,7 @@ export class MemoryUnitsController {
     private readonly banks: MemoryBanksService,
     private readonly retainer: MemoryRetainService,
     private readonly units: MemoryUnitsService,
+    private readonly recaller: MemoryRecallService,
     private readonly limiter: PublicRateLimiter,
     config: ConfigService<Env, true>,
   ) {
@@ -57,6 +81,15 @@ export class MemoryUnitsController {
     const bank = await this.banks.ensure(caller, bankId);
     const { usage } = await this.retainer.retain({ workspaceId: caller.workspaceId, bank, userId: principal.userId, locale: principal.locale, items });
     return { success: true, bank_id: bank.bankId, items_count: items.length, async: false, ...(usage ? { usage } : {}) };
+  }
+
+  /** Recall. A viewer's call; the bank is resolved — and a missing or hidden one refused — before anything is embedded. */
+  @Post('memories/recall')
+  @HttpCode(200)
+  async recall(@CurrentPrincipal() principal: Principal, @Headers('x-workspace-id') ws: string | undefined, @Param('bankId') bankId: string, @Body() dto: RecallDto): Promise<RecallResponse> {
+    const caller = await this.access.caller(principal, ws, 'viewer');
+    const bank = await this.access.bank(caller, bankId);
+    return this.recaller.recall(bank, recallQuery(dto, principal.userId));
   }
 
   @Get('memories/list')

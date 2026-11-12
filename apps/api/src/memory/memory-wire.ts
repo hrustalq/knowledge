@@ -125,3 +125,28 @@ export interface BankStatsResponse {
   failed_consolidation: number;
   total_observations: number;
 }
+
+export interface RecallResult {
+  id: string;
+  text: string;
+  type: string;
+  entities: string[];
+  context: string | null;
+  occurred_start: string | null;
+  occurred_end: string | null;
+  mentioned_at: string | null;
+  document_id: string;
+  metadata: Record<string, string>;
+  chunk_id: null;
+  tags: string[];
+  source_fact_ids: string[];
+  /** What was computed for this result; a leg that did not surface it is left out. */
+  scores: { final: number; semantic?: number; keyword?: number };
+}
+
+export interface RecallResponse {
+  results: RecallResult[];
+  entities?: Record<string, { entity_id: string; canonical_name: string; observations: Array<{ text: string; mentioned_at?: string | null }> }>;
+  chunks?: Record<string, never>;
+  source_facts?: Record<string, never>;
+}

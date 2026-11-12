@@ -778,21 +778,24 @@ export class GraphService {
   /**
    * The memories of one bank nearest a query. The bank filter is inside the
    * HNSW walk, so another bank's memory never takes a slot; the workspace
-   * predicate leads it and is repeated outside. Empty when there is no index
-   * of the query's dimension: the full-text leg still answers.
+   * predicate leads it and is repeated outside. `unitIds`, when given, are
+   * the only memories that may answer — a tag or type filter PG decided
+   * before this ran — and sit inside the walk too. Empty when there is no
+   * index of the query's dimension: the full-text leg still answers.
    */
   async nearestMemoryUnits(
     workspaceId: string,
     bankId: string,
     queryEmbedding: number[],
     k: number,
+    unitIds: string[] | null = null,
   ): Promise<Array<{ chunkId: string; score: number }>> {
-    if (k <= 0 || !(await this.vectorIndexFits(queryEmbedding.length, 'MemoryUnit'))) return [];
+    if (k <= 0 || unitIds?.length === 0 || !(await this.vectorIndexFits(queryEmbedding.length, 'MemoryUnit'))) return [];
     try {
       const rows = await this.arcade.query<{ unitId: string; workspaceId: string; distance: number }>(
         'sql',
-        `SELECT unitId, workspaceId, distance FROM (SELECT expand(vector.neighbors('MemoryUnit[embedding]', :queryVector, :k, { efSearch: ${Math.max(VECTOR_EF_SEARCH, Math.floor(k))}, filter: (SELECT @rid FROM MemoryUnit WHERE workspaceId = :workspaceId AND bankId = :bankId) }))) WHERE workspaceId = :workspaceId`,
-        { workspaceId, bankId, queryVector: queryEmbedding, k: Math.floor(k) },
+        `SELECT unitId, workspaceId, distance FROM (SELECT expand(vector.neighbors('MemoryUnit[embedding]', :queryVector, :k, { efSearch: ${Math.max(VECTOR_EF_SEARCH, Math.floor(k))}, filter: (SELECT @rid FROM MemoryUnit WHERE workspaceId = :workspaceId AND bankId = :bankId${unitIds ? ' AND unitId IN :unitIds' : ''}) }))) WHERE workspaceId = :workspaceId`,
+        { workspaceId, bankId, queryVector: queryEmbedding, k: Math.floor(k), ...(unitIds ? { unitIds } : {}) },
       );
       return rows
         .filter((r) => r.workspaceId === workspaceId)

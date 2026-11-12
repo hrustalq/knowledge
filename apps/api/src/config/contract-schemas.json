@@ -2752,6 +2752,7 @@
       "citation_check",
       "coach",
       "memory-extract",
+      "memory-recall",
       "extraction",
       "public_ask",
       "test-suite",

@@ -35,7 +35,8 @@ interface Unit {
   sourceText: string;
   context: string | null;
   fact: Fact | null;
-  names: string[];
+  /** The client's entities, then the extractor's: a name as written and the key it folds from. */
+  entities: Array<{ name: string; key: string }>;
 }
 
 /**
@@ -87,7 +88,7 @@ export class MemoryRetainService {
         sourceText: item.content,
         context: item.context,
         fact,
-        names: [...item.entities, ...(fact?.entities ?? [])],
+        entities: [...item.entities, ...(fact?.entities ?? []).map((name) => ({ name, key: name }))],
       })),
     );
     const vectors = await this.embeddings.embedBatch(units.map((u) => (u.context ? `${u.context}\n${u.text}` : u.text)));
@@ -135,13 +136,13 @@ export class MemoryRetainService {
 
   /** One row per (unit, canonical key): folded, then resolved through the workspace's aliases, so two spellings are one entity. */
   private async entityRows(input: RetainInput, units: Unit[]): Promise<Prisma.MemoryUnitEntityCreateManyInput[]> {
-    const names = [...new Set(units.flatMap((u) => u.names))];
-    const keys = await this.aliases.resolveAll(input.workspaceId, names);
-    const keyOf = new Map(names.map((n, i) => [n, keys[i]!]));
+    const raw = [...new Set(units.flatMap((u) => u.entities.map((e) => e.key)))];
+    const resolved = await this.aliases.resolveAll(input.workspaceId, raw);
+    const keyOf = new Map(raw.map((r, i) => [r, resolved[i]!]));
     return units.flatMap((u) => {
       const seen = new Set<string>();
-      return u.names.flatMap((name) => {
-        const entityKey = keyOf.get(name)!;
+      return u.entities.flatMap(({ name, key }) => {
+        const entityKey = keyOf.get(key)!;
         if (!entityKey || seen.has(entityKey)) return [];
         seen.add(entityKey);
         return [{ workspaceId: input.workspaceId, bankId: input.bank.id, unitId: u.id, entityKey, name }];

@@ -1375,6 +1375,8 @@ export type AiUsageOperation =
   | 'coach'
   /** Splitting retained text into facts for a memory bank (#986). One row per extraction call. */
   | 'memory-extract'
+  /** Asking the decision model whether a recalled memory helps the query (#986), when the request asks to prune. One row per candidate. */
+  | 'memory-recall'
   /**
    * Inferring graph relations from a chunk during ingestion. One row per chunk
    * call, so a reindex of a large corpus is visible as the spend it is.

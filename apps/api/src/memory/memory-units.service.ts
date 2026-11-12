@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { MemoryBank, MemoryUnit, Prisma } from '@prisma/client';
 import { UUID_RE } from '@knowledge/contracts';
+import { withSubjectLock } from '../common/subject-lock.js';
 import { GraphService } from '../graph/graph.service.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -21,7 +22,10 @@ export interface ListMemoriesQuery {
   offset?: number;
 }
 
-type UnitWithNames = MemoryUnit & { entities: Array<{ name: string }> };
+type UnitWithNames = MemoryUnit & { entities: Array<{ name: string }>; evidence: Array<{ factId: string }> };
+
+/** What a list or get reads of a memory beside its row: its entity names and, on an observation, its evidence. */
+export const UNIT_INCLUDE = { entities: { select: { name: true } }, evidence: { select: { factId: true } } } as const;
 
 export function memoryItem(row: UnitWithNames): MemoryUnitItem {
   const iso = (d: Date | null) => d?.toISOString() ?? null;
@@ -37,12 +41,13 @@ export function memoryItem(row: UnitWithNames): MemoryUnitItem {
     occurred_end: iso(row.occurredEnd),
     entities: row.entities.map((e) => e.name).join(', '),
     chunk_id: null,
-    proof_count: 1,
+    // An observation's proof is its evidence; a fact is its own.
+    proof_count: row.factType === 'observation' ? row.evidence.length : 1,
     tags: row.tags,
     metadata: (row.metadata ?? {}) as Record<string, unknown>,
     state: 'valid',
     updated_at: row.updatedAt.toISOString(),
-    source_memory_ids: [],
+    source_memory_ids: row.evidence.map((e) => e.factId),
   };
 }
 
@@ -74,7 +79,7 @@ export class MemoryUnitsService {
     const limit = query.limit ?? 100;
     const offset = query.offset ?? 0;
     const [rows, total] = await Promise.all([
-      this.prisma.memoryUnit.findMany({ where, orderBy: [{ [field]: 'desc' }, { id: 'asc' }], skip: offset, take: limit, include: { entities: { select: { name: true } } } }),
+      this.prisma.memoryUnit.findMany({ where, orderBy: [{ [field]: 'desc' }, { id: 'asc' }], skip: offset, take: limit, include: UNIT_INCLUDE }),
       this.prisma.memoryUnit.count({ where }),
     ]);
     return { items: rows.map(memoryItem), total, limit, offset };
@@ -82,19 +87,50 @@ export class MemoryUnitsService {
 
   async get(bank: MemoryBank, memoryId: string): Promise<MemoryUnitItem & { type: string }> {
     const row = UUID_RE.test(memoryId)
-      ? await this.prisma.memoryUnit.findFirst({ where: { id: memoryId, bankId: bank.id }, include: { entities: { select: { name: true } } } })
+      ? await this.prisma.memoryUnit.findFirst({ where: { id: memoryId, bankId: bank.id }, include: UNIT_INCLUDE })
       : null;
     if (!row) throw new NotFoundException(t('error.memory.memoryNotFound', { id: memoryId }));
     return { ...memoryItem(row), type: row.factType };
   }
 
-  /** `DELETE …/memories`: every memory of the bank, or those of one fact type. Rows at once, vectors right after. */
+  /**
+   * `DELETE …/memories`: every memory of the bank, or those of one fact type.
+   * Rows at once, vectors right after. Clearing facts leaves the observations
+   * they supported with less evidence, and deletes those left with none.
+   */
   async clear(bank: MemoryBank, type?: string): Promise<DeleteResponse> {
     const where = { bankId: bank.id, ...(type ? { factType: type } : {}) };
-    const ids = (await this.prisma.memoryUnit.findMany({ where, select: { id: true } })).map((r) => r.id);
-    await this.prisma.memoryUnit.deleteMany({ where: { id: { in: ids } } });
+    const ids = await withSubjectLock(this.prisma, `memory-bank:${bank.id}`, async () => {
+      const ids = (await this.prisma.memoryUnit.findMany({ where, select: { id: true } })).map((r) => r.id);
+      await this.prisma.memoryUnit.deleteMany({ where: { id: { in: ids } } });
+      return [...ids, ...(await this.deleteBareObservations(bank.id))];
+    });
     await this.dropVectors(bank.workspaceId, ids);
     return { success: true, message: null, deleted_count: ids.length };
+  }
+
+  /** One memory of the bank, deleted (#994): a fact also leaves the observations it supported, which go too once they have no evidence. False when the bank holds no such memory. */
+  async deleteOne(bank: MemoryBank, memoryId: string): Promise<boolean> {
+    const ids = await withSubjectLock(this.prisma, `memory-bank:${bank.id}`, async () => {
+      const gone = await this.prisma.memoryUnit.deleteMany({ where: { id: memoryId, bankId: bank.id } });
+      return gone.count ? [memoryId, ...(await this.deleteBareObservations(bank.id))] : [];
+    });
+    await this.dropVectors(bank.workspaceId, ids);
+    return ids.length > 0;
+  }
+
+  /**
+   * The bank's observations left with no evidence (#993) — their last fact was
+   * deleted — deleted in turn. Call it in the transaction that deleted the
+   * facts; drop the returned ids' vectors after it commits.
+   */
+  async deleteBareObservations(bankId: string): Promise<string[]> {
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      DELETE FROM memory_units o
+       WHERE o.bank_id = ${bankId}::uuid AND o.fact_type = 'observation'
+         AND NOT EXISTS (SELECT 1 FROM memory_observation_evidence e WHERE e.observation_id = o.id)
+      RETURNING o.id`;
+    return rows.map((r) => r.id);
   }
 
   /** The vectors of rows already deleted. A failure leaves orphans no recall returns; the reap removes them. */
@@ -103,10 +139,11 @@ export class MemoryUnitsService {
   }
 
   async stats(bank: MemoryBank): Promise<BankStatsResponse> {
-    const [byType, documents, last] = await Promise.all([
+    const [byType, documents, last, pending] = await Promise.all([
       this.prisma.memoryUnit.groupBy({ by: ['factType'], where: { bankId: bank.id }, _count: { _all: true } }),
       this.prisma.memoryUnit.findMany({ where: { bankId: bank.id }, distinct: ['documentId'], select: { documentId: true } }),
       this.prisma.memoryUnit.findFirst({ where: { bankId: bank.id }, orderBy: { updatedAt: 'desc' }, select: { updatedAt: true } }),
+      this.prisma.memoryUnit.count({ where: { bankId: bank.id, factType: { not: 'observation' }, consolidatedAt: null } }),
     ]);
     const counts = Object.fromEntries(byType.map((r) => [r.factType, r._count._all]));
     return {
@@ -121,7 +158,7 @@ export class MemoryUnitsService {
       pending_operations: 0,
       failed_operations: 0,
       last_memory_write_at: last?.updatedAt.toISOString() ?? null,
-      pending_consolidation: 0,
+      pending_consolidation: pending,
       failed_consolidation: 0,
       total_observations: counts.observation ?? 0,
     };

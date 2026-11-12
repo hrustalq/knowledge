@@ -33,6 +33,7 @@ export interface UpdateAiSettingsInput {
   decisionArbiterThreshold?: number | null;
   decisionCitationThreshold?: number | null;
   decisionHarvestThreshold?: number | null;
+  decisionMemoryThreshold?: number | null;
   provider?: AiProvider | null;
   baseUrl?: string | null;
   model?: string | null;
@@ -190,6 +191,7 @@ export class AiSettingsService {
       ...pick(input, 'decisionArbiterThreshold'),
       ...pick(input, 'decisionCitationThreshold'),
       ...pick(input, 'decisionHarvestThreshold'),
+      ...pick(input, 'decisionMemoryThreshold'),
       ...(tunedModel === undefined ? {} : { decisionTunedModel: tunedModel }),
       ...(input.agentModeEnabled === undefined ? {} : { agentModeEnabled: input.agentModeEnabled }),
       ...pick(input, 'webAccessMode'),

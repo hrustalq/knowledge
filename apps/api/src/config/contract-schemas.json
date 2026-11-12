@@ -2754,6 +2754,8 @@
       "memory-extract",
       "memory-recall",
       "memory-reflect",
+      "memory-consolidate",
+      "memory-consolidate-screen",
       "extraction",
       "public_ask",
       "test-suite",
@@ -10059,12 +10061,29 @@
               "requested",
               "effective"
             ]
+          },
+          "memory": {
+            "type": "object",
+            "properties": {
+              "requested": {
+                "type": "number",
+                "nullable": true
+              },
+              "effective": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "requested",
+              "effective"
+            ]
           }
         },
         "required": [
           "arbiter",
           "citation",
-          "harvest"
+          "harvest",
+          "memory"
         ]
       },
       "tunedOn": {
@@ -17207,6 +17226,150 @@
     },
     "required": [
       "types"
+    ]
+  },
+  "MemoryBankListResponse": {
+    "type": "object",
+    "properties": {
+      "banks": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/MemoryBankSummary"
+        }
+      },
+      "apiUrl": {
+        "type": "string"
+      },
+      "consolidation": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "banks",
+      "apiUrl",
+      "consolidation"
+    ]
+  },
+  "MemoryBankSummary": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "bankId": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "projectId": {
+        "type": "string",
+        "nullable": true
+      },
+      "facts": {
+        "type": "number"
+      },
+      "observations": {
+        "type": "number"
+      },
+      "lastWriteAt": {
+        "type": "string",
+        "nullable": true
+      },
+      "createdAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "bankId",
+      "name",
+      "projectId",
+      "facts",
+      "observations",
+      "lastWriteAt",
+      "createdAt"
+    ]
+  },
+  "MemoryUnitListResponse": {
+    "type": "object",
+    "properties": {
+      "bank": {
+        "$ref": "#/components/schemas/MemoryBankSummary"
+      },
+      "items": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/MemoryUnitSummary"
+        }
+      },
+      "total": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "bank",
+      "items",
+      "total"
+    ]
+  },
+  "MemoryUnitSummary": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "type": {
+        "$ref": "#/components/schemas/MemoryUnitType"
+      },
+      "text": {
+        "type": "string"
+      },
+      "context": {
+        "type": "string",
+        "nullable": true
+      },
+      "tags": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "entities": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "proofCount": {
+        "type": "number"
+      },
+      "occurredAt": {
+        "type": "string",
+        "nullable": true
+      },
+      "createdAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "type",
+      "text",
+      "context",
+      "tags",
+      "entities",
+      "proofCount",
+      "occurredAt",
+      "createdAt"
+    ]
+  },
+  "MemoryUnitType": {
+    "type": "string",
+    "enum": [
+      "world",
+      "experience",
+      "observation"
     ]
   },
   "MergeConflictHunk": {

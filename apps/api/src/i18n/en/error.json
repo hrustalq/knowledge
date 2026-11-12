@@ -229,7 +229,20 @@
     "operationNotPending": "Operation {id} is not pending, so it cannot be cancelled",
     "noReflectModel": "Reflect needs a model and none is configured for this workspace: set one up in AI settings, or switch the reflector agent on",
     "reflectFailed": "The model could not be reached for this reflect; try again",
-    "rateLimited": "Too many {verb} requests; try again in a minute"
+    "rateLimited": "Too many {verb} requests; try again in a minute",
+    "observationsOff": "Observations are switched off for this bank, or on this server: set enable_observations on the bank's config",
+    "noConsolidationModel": "Consolidation needs a model routed at extraction and none is: route one in AI settings, or switch the consolidator agent on",
+    "configKeyUnknown": "This server does not keep {keys} per bank. It accepts: {allowed}",
+    "configValueInvalid": "{key} must be {type}",
+    "consolidationStopped": {
+      "disabled": "Observations are switched off for this bank",
+      "noModel": "No model is routed to the consolidator",
+      "cap": "The bank has used its consolidation calls for today; it resumes tomorrow (UTC)",
+      "budget": "The workspace AI budget is spent",
+      "failed": "The consolidation model call failed"
+    },
+    "bankRowNotFound": "Memory bank {id} not found",
+    "confirmBankId": "Type the bank id, {bankId}, to delete it"
   },
   "memo": {
     "notFound": "Memo not found",

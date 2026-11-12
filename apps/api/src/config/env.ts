@@ -792,6 +792,12 @@ export const envSchema = z.object({
   /** Days a finished operation's row is kept before it is purged. */
   MEMORY_OPERATION_RETENTION_DAYS: z.coerce.number().int().min(1).default(7),
   /**
+   * Consolidation (#993): model calls one bank may make a UTC day to fold its
+   * facts into observations. Low on purpose: each is a paid call, and the
+   * backlog waits for the next day rather than the budget.
+   */
+  MEMORY_CONSOLIDATION_DAILY_CALLS: z.coerce.number().int().min(0).default(20),
+  /**
    * Let a `web` source fetch a private or loopback address. Separate from
    * CONNECTOR_ALLOW_PRIVATE_URLS because any editor can link a source, where
    * only an admin sets up a connector.

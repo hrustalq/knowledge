@@ -4,14 +4,16 @@ import { Prisma, type MemoryBank, type MemoryOperation } from '@prisma/client';
 import { UUID_RE, type Locale } from '@knowledge/contracts';
 import { randomUUID } from 'node:crypto';
 import { requeueStale, staleFailure } from '../common/requeue-stale.js';
+import { withSubjectLock } from '../common/subject-lock.js';
 import type { Env } from '../config/env.js';
 import { asLocale } from '../i18n/locale.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { MemoryConsolidationService } from './memory-consolidation.service.js';
 import type { RetainItem } from './memory-facts.js';
 import { maskItems, MemoryRetainService } from './memory-retain.service.js';
 import { MemoryProducer } from './memory.producer.js';
-import type { CancelOperationResponse, OperationResponse, OperationStatusResponse, OperationsListResponse } from './memory-wire.js';
+import type { CancelOperationResponse, ConsolidationResponse, OperationResponse, OperationStatusResponse, OperationsListResponse } from './memory-wire.js';
 
 /** Our row status, as Hindsight names it on the wire. */
 const WIRE_STATUS = { queued: 'pending', running: 'processing', completed: 'completed', failed: 'failed', cancelled: 'cancelled' } as const;
@@ -23,6 +25,8 @@ const wireStatus = (row: Pick<MemoryOperation, 'status'>) => WIRE_STATUS[row.sta
 const LOST_JOB_MS = 2 * 60_000;
 const MAX_ATTEMPTS = 3;
 const SWEEP_PAGE = 50;
+/** Calls one `POST …/consolidate` may spend, at most; the daily cap still applies. */
+const CONSOLIDATE_BATCHES = 10;
 
 function operation(row: MemoryOperation): OperationResponse {
   return {
@@ -58,6 +62,7 @@ export class MemoryOperationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly retainer: MemoryRetainService,
+    private readonly consolidation: MemoryConsolidationService,
     private readonly producer: MemoryProducer,
     config: ConfigService<Env, true>,
   ) {
@@ -96,6 +101,28 @@ export class MemoryOperationsService {
     return id;
   }
 
+  /**
+   * `POST …/consolidate` (#993): one pass of the bank's backlog, as an
+   * operation the worker runs. Refused (409) while consolidation cannot run for
+   * the bank, so a client is told why instead of polling an operation that
+   * does nothing. A pass already waiting is returned, not doubled.
+   */
+  async consolidate(bank: MemoryBank, input: { userId: string; locale: Locale }): Promise<ConsolidationResponse> {
+    const blocked = await this.consolidation.blocker(bank);
+    if (blocked) throw new ConflictException(t(blocked === 'disabled' ? 'error.memory.observationsOff' : 'error.memory.noConsolidationModel'));
+    const pending = await this.consolidation.pending(bank.id);
+    const { id, deduplicated } = await withSubjectLock(this.prisma, `memory-consolidate:${bank.id}`, async () => {
+      const waiting = await this.prisma.memoryOperation.findFirst({ where: { bankId: bank.id, type: 'consolidation', status: 'queued' }, select: { id: true } });
+      if (waiting) return { id: waiting.id, deduplicated: true };
+      const row = await this.prisma.memoryOperation.create({
+        data: { workspaceId: bank.workspaceId, bankId: bank.id, type: 'consolidation', payload: [], itemsCount: pending, createdBy: input.userId, locale: input.locale },
+      });
+      return { id: row.id, deduplicated: false };
+    });
+    if (!deduplicated) await this.producer.enqueue(id).catch((e: Error) => this.logger.warn(`Memory operation ${id} not enqueued, the sweeper will: ${e.message}`));
+    return { operation_id: id, deduplicated };
+  }
+
   /** The worker's half: claim, retain, settle. A row another worker claimed, or that is no longer queued, is left alone. */
   async run(operationId: string): Promise<void> {
     const claimed = await this.prisma.memoryOperation.updateMany({
@@ -105,6 +132,7 @@ export class MemoryOperationsService {
     if (claimed.count === 0) return;
     const row = await this.prisma.memoryOperation.findUnique({ where: { id: operationId }, include: { bank: true } });
     if (!row) return;
+    if (row.type === 'consolidation') return this.runConsolidation(row);
     try {
       await this.retainer.retain({
         workspaceId: row.workspaceId,
@@ -116,6 +144,18 @@ export class MemoryOperationsService {
       });
       // The memories hold the text now; the row keeps no second copy of it.
       await this.settle(row.id, { status: 'completed', payload: [] });
+    } catch (e) {
+      this.logger.warn(`Memory operation ${row.id} failed: ${(e as Error).message}`);
+      await this.settle(row.id, { status: 'failed', error: (e as Error).message.slice(0, 1000), payload: [] });
+    }
+  }
+
+  /** A pass that read nothing because something stopped it failed, and says what; one that read facts completed. */
+  private async runConsolidation(row: MemoryOperation & { bank: MemoryBank }): Promise<void> {
+    try {
+      const done = await this.consolidation.pass(row.bank, { maxBatches: CONSOLIDATE_BATCHES });
+      if (done.facts === 0 && done.stopped) await this.settle(row.id, { status: 'failed', error: t(`error.memory.consolidationStopped.${done.stopped === 'no-model' ? 'noModel' : done.stopped}`), payload: [] });
+      else await this.settle(row.id, { status: 'completed', payload: [] });
     } catch (e) {
       this.logger.warn(`Memory operation ${row.id} failed: ${(e as Error).message}`);
       await this.settle(row.id, { status: 'failed', error: (e as Error).message.slice(0, 1000), payload: [] });

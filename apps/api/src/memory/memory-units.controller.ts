@@ -12,7 +12,7 @@ import { MemoryRecallService } from './memory-recall.service.js';
 import { MemoryReflectService } from './memory-reflect.service.js';
 import { MemoryUnitsService } from './memory-units.service.js';
 import { ClearMemoriesQueryDto, ListMemoriesQueryDto, ListOperationsQueryDto, RecallDto, ReflectDto, RetainDto } from './memory.dto.js';
-import type { BankStatsResponse, CancelOperationResponse, DeleteResponse, ListMemoryUnitsResponse, OperationStatusResponse, OperationsListResponse, RecallResponse, ReflectResponse, RetainResponse } from './memory-wire.js';
+import type { BankStatsResponse, CancelOperationResponse, ConsolidationResponse, DeleteResponse, ListMemoryUnitsResponse, OperationStatusResponse, OperationsListResponse, RecallResponse, ReflectResponse, RetainResponse } from './memory-wire.js';
 
 /**
  * What a bank holds, in Hindsight's wire shape (#986 phases 1–4): retain
@@ -64,6 +64,19 @@ export class MemoryUnitsController {
     const bank = await this.access.bank(caller, bankId);
     await this.rate.check('reflect', principal);
     return this.reflector.reflect(bank, reflectQuery(dto, principal));
+  }
+
+  /**
+   * One consolidation pass on demand (#993), run by the worker as an
+   * operation. An editor's call; refused with the reason while consolidation
+   * cannot run for the bank. `observation_scopes` is Hindsight's and is not read:
+   * every pass consolidates each tag scope on its own.
+   */
+  @Post('consolidate')
+  @HttpCode(200)
+  async consolidate(@CurrentPrincipal() principal: Principal, @Headers('x-workspace-id') ws: string | undefined, @Param('bankId') bankId: string): Promise<ConsolidationResponse> {
+    const caller = await this.access.caller(principal, ws, 'editor');
+    return this.operations.consolidate(await this.access.bank(caller, bankId), { userId: principal.userId, locale: principal.locale });
   }
 
   @Get('memories/list')

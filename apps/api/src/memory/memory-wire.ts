@@ -140,15 +140,32 @@ export interface RecallResult {
   chunk_id: null;
   tags: string[];
   source_fact_ids: string[];
-  /** What was computed for this result; a leg that did not surface it is left out. */
-  scores: { final: number; semantic?: number; keyword?: number };
+  /** What was computed for this result; a leg that did not surface it is left out. Absent on a source fact. */
+  scores?: { final: number; semantic?: number; keyword?: number };
 }
 
 export interface RecallResponse {
   results: RecallResult[];
   entities?: Record<string, { entity_id: string; canonical_name: string; observations: Array<{ text: string; mentioned_at?: string | null }> }>;
   chunks?: Record<string, never>;
-  source_facts?: Record<string, never>;
+  /** `include.source_facts`: the facts the returned observations stand on, by id, within their token budget. */
+  source_facts?: Record<string, RecallResult>;
+  /** True when that budget cut the map short: an id in `source_fact_ids` with no entry here was cut, not lost. */
+  source_facts_truncated?: boolean;
+}
+
+/** `POST …/consolidate`: the operation that runs the pass. */
+export interface ConsolidationResponse {
+  operation_id: string;
+  /** True when a pass already waiting was returned instead of a new one. */
+  deduplicated: boolean;
+}
+
+/** `GET`/`PATCH …/config`: the bank settings this server keeps, resolved, and the ones the bank sets itself. */
+export interface BankConfigResponse {
+  bank_id: string;
+  config: Record<string, unknown>;
+  overrides: Record<string, unknown>;
 }
 
 export type OperationWireStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'not_found';

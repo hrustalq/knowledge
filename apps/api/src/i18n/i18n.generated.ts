@@ -303,6 +303,8 @@ export type I18nTranslations = {
         "memoristDesc": string;
         "reflector": string;
         "reflectorDesc": string;
+        "consolidator": string;
+        "consolidatorDesc": string;
         "testerRun": {
             "noOperation": string;
             "summary": string;
@@ -380,9 +382,11 @@ export type I18nTranslations = {
             "newPage": string;
             "similar": string;
             "rationale": string;
+            "introMemory": string;
         };
         "origin": {
             "directMessage": string;
+            "memoryBank": string;
         };
     };
     "chat": {
@@ -919,7 +923,6 @@ export type I18nTranslations = {
             "itemsRequired": string;
             "itemTooLong": string;
             "timestampInvalid": string;
-            "rateLimited": string;
             "storeNotReady": string;
             "memoryNotFound": string;
             "noReranker": string;
@@ -928,6 +931,20 @@ export type I18nTranslations = {
             "operationNotPending": string;
             "noReflectModel": string;
             "reflectFailed": string;
+            "rateLimited": string;
+            "observationsOff": string;
+            "noConsolidationModel": string;
+            "configKeyUnknown": string;
+            "configValueInvalid": string;
+            "consolidationStopped": {
+                "disabled": string;
+                "noModel": string;
+                "cap": string;
+                "budget": string;
+                "failed": string;
+            };
+            "bankRowNotFound": string;
+            "confirmBankId": string;
         };
         "memo": {
             "notFound": string;
@@ -2034,6 +2051,7 @@ export type I18nTranslations = {
         "capture": string;
         "releaseTag": string;
         "conflict": string;
+        "memoryBank": string;
     };
     "validation": {
         "isDefined": string;

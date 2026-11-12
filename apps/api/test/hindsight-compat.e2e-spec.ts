@@ -73,7 +73,7 @@ describe('Hindsight compatibility (e2e, #986)', () => {
     return key;
   }
 
-  async function person(name: string, workspaceId: string, role: 'admin' | 'editor'): Promise<Person> {
+  async function person(name: string, workspaceId: string, role: 'admin' | 'editor' | 'viewer'): Promise<Person> {
     const email = `hindsight-e2e-${name}@example.test`;
     const user = await prisma.user.upsert({
       where: { email },
@@ -138,7 +138,7 @@ describe('Hindsight compatibility (e2e, #986)', () => {
     it('answers the probes a client sends first', async () => {
       const version = await client(people.alice.key).getVersion();
       expect(version.api_version).toBe('1.2.1');
-      expect(version.features).toMatchObject({ file_upload_api: false, bank_config_api: false });
+      expect(version.features).toMatchObject({ file_upload_api: false, bank_config_api: true, observations: true });
       expect((await sdk.healthEndpointHealthGet({ client: raw(people.alice.key) })).data).toMatchObject({ status: 'healthy' });
     });
 
@@ -918,6 +918,295 @@ describe('Hindsight compatibility (e2e, #986)', () => {
       expect(names.length).toBeGreaterThan(20);
       expect(names.every((n) => n.startsWith('knowledge_'))).toBe(true);
       expect((await client(people.alice.key).getVersion()).features.mcp).toBe(true);
+    });
+  });
+
+  describe('phase 6: observations', () => {
+    const mem = `obs-${nonce}`;
+    type Message = { role: string; content: string };
+    type Reply = (facts: string[], observations: string[]) => unknown;
+    const DAY = 86_400_000;
+    let configured = true;
+    let reply: Reply = () => ({ observations: [] });
+    let calls: Array<{ ctx: { operation: string; userId: string }; facts: string[]; observations: string[] }> = [];
+    let restore: Array<{ mockRestore(): void }> = [];
+    let consolidation: import('../src/memory/memory-consolidation.service.js').MemoryConsolidationService;
+    /** The labelled lines of a section the consolidator was shown, in order. */
+    const shown = (content: string, prefix: 'F' | 'O') => [...content.matchAll(new RegExp(`^${prefix}\\d+: (.*)$`, 'gm'))].map((m) => m[1]!);
+    const bankRow = (bankId = mem) => prisma.memoryBank.findUniqueOrThrow({ where: { workspaceId_bankId: { workspaceId: WS_A, bankId } } });
+    const pass = async (bankId = mem, now?: number) => consolidation.pass(await bankRow(bankId), { maxBatches: 5, now });
+    const observations = (bankId = mem) =>
+      prisma.memoryUnit.findMany({ where: { workspaceId: WS_A, bank: { bankId }, factType: 'observation' }, include: { evidence: { include: { fact: true } }, history: true } });
+
+    // A stubbed consolidator: routed and on while `configured`, its call answers `reply` over what it was shown. No provider is reached.
+    beforeAll(async () => {
+      const [{ AgentRegistryService }, { AssistantClient }, { MemoryConsolidationService }, { MemoryConsolidationSweeper }] = await Promise.all([
+        import('../src/agents/agent-registry.service.js'),
+        import('../src/assistant/assistant.client.js'),
+        import('../src/memory/memory-consolidation.service.js'),
+        import('../src/memory/memory-consolidation.sweeper.js'),
+      ]);
+      // The tick would race the passes this block runs by hand.
+      app.get(MemoryConsolidationSweeper).onModuleDestroy();
+      consolidation = app.get(MemoryConsolidationService);
+      const registry = app.get(AgentRegistryService);
+      const resolve = registry.resolve.bind(registry);
+      restore = [
+        vi.spyOn(registry, 'resolve').mockImplementation(async (workspaceId, key, pinned) => {
+          const agent = await resolve(workspaceId, key, pinned);
+          return key === 'consolidator' && configured ? { ...agent, enabled: true, config: { ...agent.config, enabled: true, modelId: 'stub-model-id', model: 'stub-model' } } : agent;
+        }),
+        vi.spyOn(app.get(AssistantClient), 'chatWithUsage').mockImplementation(async (ctx, messages) => {
+          const user = (messages as Message[])[1]!.content;
+          const facts = shown(user, 'F');
+          const obs = shown(user, 'O');
+          calls.push({ ctx, facts, observations: obs });
+          return { content: JSON.stringify(reply(facts, obs)), tokens: { promptTokens: 200, completionTokens: 40, totalTokens: 240, estimated: false } };
+        }),
+      ];
+    });
+    afterAll(() => restore.forEach((r) => r.mockRestore()));
+    beforeEach(() => {
+      calls = [];
+      configured = true;
+      reply = () => ({ observations: [] });
+    });
+
+    it('makes no call and changes no recall while no model is routed', async () => {
+      const hs = client(people.alice.key);
+      await hs.retainBatch(mem, [
+        { content: 'Alice prefers tea over coffee', document_id: 't1' },
+        { content: 'Alice drinks green tea every morning', document_id: 't2' },
+        { content: 'Alice always orders tea at team lunches', document_id: 't3' },
+      ]);
+      configured = false;
+      const before = await hs.recall(mem, 'What does Alice drink?');
+      expect(await pass()).toMatchObject({ facts: 0, stopped: 'no-model' });
+      expect(calls).toEqual([]);
+      expect(await observations()).toEqual([]);
+      expect(await hs.recall(mem, 'What does Alice drink?')).toEqual(before);
+      const res = await call(people.alice.key, 'POST', `/v1/default/banks/${mem}/consolidate`, {});
+      expect(res.status).toBe(409);
+      expect((await res.json()).detail).toMatch(/routed at extraction/);
+      expect((await hs.getBankConfig(mem)).config).toMatchObject({ enable_observations: true });
+    });
+
+    it('folds three facts stating one thing into one observation, a verbatim quote from each', async () => {
+      reply = (facts) => ({
+        observations: [
+          {
+            observation: null,
+            text: 'Alice prefers tea.',
+            // F3's paraphrase is not in the fact: the reader drops that quote, never the observation.
+            evidence: [...facts.map((f, i) => ({ fact: `F${i + 1}`, quote: f.slice(f.indexOf('tea') - 0, f.indexOf('tea') + 3) })), { fact: 'F3', quote: 'orders tea at lunch' }],
+          },
+        ],
+      });
+      expect(await pass()).toMatchObject({ facts: 3, created: 1, stopped: null });
+      expect(calls).toHaveLength(1);
+      expect(calls[0]!.ctx).toMatchObject({ operation: 'memory-consolidate', userId: '00000000-0000-0000-0000-000000000000' });
+      expect(calls[0]!.facts).toHaveLength(3);
+      const [obs] = await observations();
+      expect(obs!.text).toBe('Alice prefers tea.');
+      expect(obs!.evidence).toHaveLength(3);
+      for (const ev of obs!.evidence) expect(ev.fact.text).toContain(ev.quote);
+
+      const listed = await client(people.alice.key).listMemories(mem, { type: 'observation' });
+      expect(listed.items).toMatchObject([{ id: obs!.id, fact_type: 'observation', proof_count: 3 }]);
+      expect([...listed.items[0]!.source_memory_ids!].sort()).toEqual(obs!.evidence.map((e) => e.factId).sort());
+      // Read once: the next pass has nothing to do.
+      expect(await pass()).toMatchObject({ facts: 0, stopped: null });
+      expect(calls).toHaveLength(1);
+    });
+
+    it('refines the observation with a later fact and keeps the earlier text in its history', async () => {
+      await client(people.alice.key).retain(mem, 'Alice switched from tea to coffee in June', { documentId: 't4' });
+      reply = (facts, obs) => ({ observations: [{ observation: 'O1', text: 'Alice preferred tea until June, when she switched to coffee.', evidence: [{ fact: 'F1', quote: 'switched from tea to coffee' }] }] });
+      expect(await pass()).toMatchObject({ facts: 1, refined: 1 });
+      expect(calls[0]!.observations).toEqual(['Alice prefers tea.']);
+      const [obs] = await observations();
+      expect(obs!.text).toBe('Alice preferred tea until June, when she switched to coffee.');
+      expect(obs!.history.map((h) => h.text)).toEqual(['Alice prefers tea.']);
+      expect(obs!.evidence).toHaveLength(4);
+    });
+
+    it('recalls observations with their source facts, and prefer_observations drops the facts they cover', async () => {
+      const hs = client(people.alice.key);
+      const [obs] = await observations();
+      const factIds = obs!.evidence.map((e) => e.factId).sort();
+      const only = await hs.recall(mem, 'What does Alice drink?', { types: ['observation'] });
+      expect(only.results.map((r) => r.id)).toEqual([obs!.id]);
+      expect([...only.results[0]!.source_fact_ids!].sort()).toEqual(factIds);
+
+      const mixed = await hs.recall(mem, 'What does Alice drink?', { types: ['world', 'observation'] });
+      expect(mixed.results.some((r) => factIds.includes(r.id))).toBe(true);
+      const preferred = await hs.recall(mem, 'What does Alice drink?', { types: ['world', 'observation'], preferObservations: true });
+      expect(preferred.results.map((r) => r.id)).toContain(obs!.id);
+      expect(preferred.results.filter((r) => factIds.includes(r.id))).toEqual([]);
+
+      const withFacts = await hs.recall(mem, 'What does Alice drink?', { types: ['observation'], includeSourceFacts: true });
+      expect(Object.keys(withFacts.source_facts ?? {}).sort()).toEqual(factIds);
+      expect(withFacts.source_facts_truncated).toBe(false);
+      const tight = await hs.recall(mem, 'What does Alice drink?', { types: ['observation'], includeSourceFacts: true, maxSourceFactsTokens: 10 });
+      expect(Object.keys(tight.source_facts ?? {}).length).toBeLessThan(factIds.length);
+      expect(tight.source_facts_truncated).toBe(true);
+    });
+
+    it('drops a deleted fact from the evidence, and deletes the observation with its last one', async () => {
+      const hs = client(people.alice.key);
+      // Re-retaining a document replaces its facts, which deletes them.
+      await hs.retainBatch(mem, ['t1', 't2', 't3'].map((d) => ({ content: `An unrelated note ${d}`, document_id: d })));
+      const [obs] = await observations();
+      expect(obs!.evidence.map((e) => e.fact.documentId)).toEqual(['t4']);
+      expect((await hs.listMemories(mem, { type: 'observation' })).items[0]!.proof_count).toBe(1);
+      await hs.retain(mem, 'Another unrelated note', { documentId: 't4' });
+      expect(await observations()).toEqual([]);
+      expect((await graph.memoryUnitIds(WS_A)).some((v) => v.unitId === obs!.id)).toBe(false);
+    });
+
+    it('stops at the bank’s daily cap without calling, and resumes the next day', async () => {
+      const bank = await bankRow();
+      const now = Date.now();
+      await prisma.memoryBank.update({ where: { id: bank.id }, data: { consolidationDay: new Date(new Date(now).toISOString().slice(0, 10)), consolidationCalls: 20 } });
+      expect(await pass(mem, now)).toMatchObject({ facts: 0, stopped: 'cap' });
+      expect(calls).toEqual([]);
+      // The claim was released: tomorrow's pass reads the same facts.
+      const next = await pass(mem, now + DAY);
+      expect(next.facts).toBeGreaterThan(0);
+      expect(calls).toHaveLength(1);
+      expect((await bankRow()).consolidationCalls).toBe(1);
+    });
+
+    it('never lets two workers consolidate the same facts, and keeps each tag scope to itself', async () => {
+      const bankId = `obs2-${nonce}`;
+      await client(people.alice.key).retainBatch(bankId, [
+        { content: 'Bob is on the billing team', document_id: 'b1' },
+        { content: 'Bob owns the invoice service', document_id: 'b2' },
+        { content: 'Bob is on call this week', document_id: 'b3', tags: ['user:b'] },
+      ]);
+      const [a, b] = await Promise.all([pass(bankId), pass(bankId)]);
+      expect(a.facts + b.facts).toBe(3);
+      const seen = calls.flatMap((c) => c.facts);
+      expect(seen.sort()).toEqual(['Bob is on call this week', 'Bob is on the billing team', 'Bob owns the invoice service']);
+      // The tagged fact is read in a call of its own.
+      expect(calls.find((c) => c.facts.includes('Bob is on call this week'))!.facts).toEqual(['Bob is on call this week']);
+    });
+
+    it('runs a pass on demand as an operation, and honours the bank’s switch', async () => {
+      const hs = client(people.alice.key);
+      await hs.retain(mem, 'Alice visits Berlin in March', { documentId: 'berlin' });
+      const res = await sdk.triggerConsolidation({ client: raw(people.alice.key), path: { bank_id: mem }, body: {} });
+      expect(res.data).toMatchObject({ operation_id: expect.any(String), deduplicated: false });
+      let status = '';
+      for (let i = 0; i < 100 && !['completed', 'failed'].includes(status); i++) {
+        status = (await sdk.getOperationStatus({ client: raw(people.alice.key), path: { bank_id: mem, operation_id: res.data!.operation_id } })).data!.status;
+        if (status !== 'completed') await new Promise((r) => setTimeout(r, 150));
+      }
+      expect(status).toBe('completed');
+      expect(calls.flatMap((c) => c.facts)).toContain('Alice visits Berlin in March');
+
+      // A viewer reads the config; an editor switches it.
+      const readOnly = await mintKey(people.alice.id, { workspaceId: WS_A, scope: 'read' });
+      expect((await call(readOnly, 'PATCH', `/v1/default/banks/${mem}/config`, { updates: { enable_observations: false } })).status).toBe(403);
+      const off = await hs.updateBankConfig(mem, { enableObservations: false });
+      expect(off).toMatchObject({ config: { enable_observations: false }, overrides: { enable_observations: false } });
+      expect((await client(readOnly).getBankConfig(mem)).config).toMatchObject({ enable_observations: false });
+      expect((await call(people.alice.key, 'POST', `/v1/default/banks/${mem}/consolidate`, {})).status).toBe(409);
+      expect(await pass()).toMatchObject({ stopped: 'disabled' });
+      // A key this server does not keep is refused by name; the env form of a known one is read.
+      const bad = await call(people.alice.key, 'PATCH', `/v1/default/banks/${mem}/config`, { updates: { retain_extraction_mode: 'verbose' } });
+      expect(bad.status).toBe(400);
+      expect((await bad.json()).detail).toMatch(/retain_extraction_mode/);
+      const back = await call(people.alice.key, 'PATCH', `/v1/default/banks/${mem}/config`, { updates: { HINDSIGHT_API_ENABLE_OBSERVATIONS: null } });
+      expect(await back.json()).toMatchObject({ config: { enable_observations: true }, overrides: {} });
+      expect((await call(people.carol.key, 'GET', `/v1/default/banks/${mem}/config`)).status).toBe(404);
+    });
+  });
+
+  describe('phase 7: the web routes', () => {
+    const mem = `web-${nonce}`;
+    let vera: Person;
+    let bankRowId: string;
+    const web = (key: string, method: string, path: string, body?: unknown) => call(key, method, `/v1/memory${path}`, body);
+    const listFor = async (key: string) => (await (await web(key, 'GET', `/banks?workspaceId=${WS_A}`)).json()) as { banks: Array<{ id: string; bankId: string; facts: number; observations: number; projectId: string | null }>; apiUrl: string; consolidation: boolean };
+
+    beforeAll(async () => {
+      vera = await person('vera', WS_A, 'viewer');
+      await client(people.alice.key).retainBatch(mem, [
+        { content: 'Grace maintains the billing service', document_id: 'g1' },
+        { content: 'Grace prefers async reviews', document_id: 'g2' },
+      ]);
+      bankRowId = (await prisma.memoryBank.findUniqueOrThrow({ where: { workspaceId_bankId: { workspaceId: WS_A, bankId: mem } } })).id;
+    });
+
+    it('lists the banks a viewer may read, with their size and how to connect', async () => {
+      const list = await listFor(vera.key);
+      expect(list.banks.find((b) => b.bankId === mem)).toMatchObject({ id: bankRowId, facts: 2, observations: 0, projectId: null });
+      expect(list.apiUrl).toMatch(/^https?:\/\//);
+      const units = await (await web(vera.key, 'GET', `/banks/${bankRowId}/memories`)).json();
+      expect(units).toMatchObject({ bank: { bankId: mem }, total: 2 });
+      expect(units.items.map((u: { text: string }) => u.text).sort()).toEqual(['Grace maintains the billing service', 'Grace prefers async reviews']);
+      expect((await web(people.carol.key, 'GET', `/banks/${bankRowId}/memories`)).status).toBe(403);
+    });
+
+    it('refuses a viewer every write: delete, bind, promote', async () => {
+      const [unit] = await prisma.memoryUnit.findMany({ where: { bankId: bankRowId }, take: 1 });
+      expect((await web(vera.key, 'DELETE', `/banks/${bankRowId}/memories/${unit!.id}`)).status).toBe(403);
+      expect((await web(vera.key, 'DELETE', `/banks/${bankRowId}?confirm=${mem}`)).status).toBe(403);
+      expect((await web(vera.key, 'PATCH', `/banks/${bankRowId}`, { projectId: null })).status).toBe(403);
+      expect((await web(vera.key, 'POST', `/banks/${bankRowId}/memories/${unit!.id}/promote`, { projectId: randomUUID(), title: 'x', kind: 'howto' })).status).toBe(403);
+    });
+
+    it('promotes a memory to a merge request whose page is the memory and whose origin names the bank', async () => {
+      const { CaptureService } = await import('../src/captures/capture.service.js');
+      const rate = vi.spyOn(app.get(CaptureService) as unknown as { assertWithinRate(...a: unknown[]): Promise<void> }, 'assertWithinRate');
+      try {
+        const project = await prisma.project.create({ data: { workspaceId: WS_A, name: `Promote ${nonce}` } });
+        const unit = await prisma.memoryUnit.findFirstOrThrow({ where: { bankId: bankRowId, documentId: 'g1' } });
+        const res = await web(people.alice.key, 'POST', `/banks/${bankRowId}/memories/${unit.id}/promote`, { projectId: project.id, title: 'Who maintains billing', kind: 'howto' });
+        expect(res.status).toBe(201);
+        const result = await res.json();
+        expect(result).toMatchObject({ mergeRequestId: expect.any(String) });
+        expect(rate).toHaveBeenCalled();
+        const capture = await prisma.knowledgeCapture.findUniqueOrThrow({ where: { id: result.captureId } });
+        expect(capture.origin).toMatchObject({ platform: 'memory', chatTitle: mem });
+        const mrRow = await prisma.mergeRequest.findUniqueOrThrow({ where: { id: result.mergeRequestId } });
+        expect(mrRow.provenance).toBe('captured');
+        expect(mrRow.description).toContain(mem);
+        // The memory stays in the bank.
+        expect(await prisma.memoryUnit.count({ where: { id: unit.id } })).toBe(1);
+      } finally {
+        rate.mockRestore();
+      }
+    });
+
+    it('binds a bank to a project only for someone who manages it, and hides it from who cannot see that project', async () => {
+      const project = await prisma.project.create({ data: { workspaceId: WS_A, name: `Bound ${nonce}` } });
+      const set = await call(people.admin.key, 'PUT', `/v1/projects/${project.id}/access`, { restricted: true, grants: [{ subjectType: 'user', subjectId: people.alice.id, level: 'view' }] });
+      expect(set.status).toBe(200);
+      // An editor without manage on the project may not move the bank into it.
+      expect((await web(people.bob.key, 'PATCH', `/banks/${bankRowId}`, { projectId: project.id })).status).toBe(403);
+      const bound = await web(people.admin.key, 'PATCH', `/banks/${bankRowId}`, { projectId: project.id });
+      expect(bound.status).toBe(200);
+      expect((await bound.json()).projectId).toBe(project.id);
+      expect((await listFor(people.bob.key)).banks.map((b) => b.bankId)).not.toContain(mem);
+      expect((await listFor(people.alice.key)).banks.map((b) => b.bankId)).toContain(mem);
+      expect((await web(people.bob.key, 'GET', `/banks/${bankRowId}/memories`)).status).toBe(404);
+      expect((await web(people.admin.key, 'PATCH', `/banks/${bankRowId}`, { projectId: null })).status).toBe(200);
+    });
+
+    it('deletes one memory, and a bank only with its id typed', async () => {
+      const unit = await prisma.memoryUnit.findFirstOrThrow({ where: { bankId: bankRowId, documentId: 'g2' } });
+      expect((await web(people.alice.key, 'DELETE', `/banks/${bankRowId}/memories/${unit.id}`)).status).toBe(204);
+      expect(await prisma.memoryUnit.count({ where: { id: unit.id } })).toBe(0);
+      expect((await web(people.alice.key, 'DELETE', `/banks/${bankRowId}/memories/${unit.id}`)).status).toBe(404);
+      expect((await web(people.admin.key, 'DELETE', `/banks/${bankRowId}?confirm=wrong`)).status).toBe(400);
+      expect((await web(people.admin.key, 'DELETE', `/banks/${bankRowId}?confirm=${mem}`)).status).toBe(204);
+      expect(await prisma.memoryBank.count({ where: { id: bankRowId } })).toBe(0);
+    });
+
+    it('answers 404 with the section off', async () => {
+      expect((await web(people.erin.key, 'GET', `/banks?workspaceId=${WS_OFF}`)).status).toBe(404);
     });
   });
 });

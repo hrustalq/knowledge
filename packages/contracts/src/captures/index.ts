@@ -64,9 +64,13 @@ export interface CaptureSession {
  * {@link CaptureSession}, it is a fact rather than a report.
  */
 export interface CaptureOrigin {
-  /** CHAT_PLATFORM_KINDS, or a harvest connector's kind (`linear`, #382). */
+  /**
+   * CHAT_PLATFORM_KINDS, a harvest connector's kind (`linear`, #382), or
+   * `MEMORY_ORIGIN_PLATFORM` (`memory`) for a memory a person promoted to a
+   * page (#994).
+   */
   platform: string;
-  /** The group's title, or the item's key and title; null in a direct message. */
+  /** The group's title, the item's key and title, or the memory bank's name; null in a direct message. */
   chatTitle: string | null;
   /** A link to the thread, where the platform has one. */
   threadUrl?: string;

@@ -30,7 +30,7 @@ function service(opts: { held?: { bankId: string }; claim?: number; row?: Record
   const retainer = { retain: vi.fn(async () => { if (opts.retain) throw opts.retain; return { units: 1, usage: null }; }) };
   const producer = { enqueue: vi.fn(async () => undefined) };
   const config = { get: (key: string) => (key === 'MEMORY_OPERATION_TIMEOUT_MS' ? 600_000 : 7) };
-  return { svc: new MemoryOperationsService(prisma as never, retainer as never, producer as never, config as never), prisma, retainer, producer, created, updates };
+  return { svc: new MemoryOperationsService(prisma as never, retainer as never, {} as never, producer as never, config as never), prisma, retainer, producer, created, updates };
 }
 
 describe('MemoryOperationsService (#986)', () => {

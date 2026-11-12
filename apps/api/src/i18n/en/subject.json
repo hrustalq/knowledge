@@ -39,5 +39,6 @@
   "accessRequest": "access request id",
   "capture": "capture id",
   "releaseTag": "release tag id",
-  "conflict": "conflict id"
+  "conflict": "conflict id",
+  "memoryBank": "memory bank id"
 }

@@ -3,7 +3,7 @@ import { BadRequestException } from '@nestjs/common';
 import { BUDGET_FETCH, MemoryRecallService, cutToTokens, fuseLegs } from '../src/memory/memory-recall.service.js';
 
 const bank = { id: 'bank-1', workspaceId: 'ws-1', bankId: 'agent' } as never;
-const unit = (id: string, text = id) => ({ id, text, factType: 'world', context: null, tags: [], metadata: {}, documentId: 'd', occurredStart: null, occurredEnd: null, mentionedAt: null, entities: [] });
+const unit = (id: string, text = id) => ({ id, text, factType: 'world', context: null, tags: [], metadata: {}, documentId: 'd', occurredStart: null, occurredEnd: null, mentionedAt: null, entities: [], evidence: [] });
 
 describe('recall, the pure half (#986)', () => {
   it('keeps results best first while the estimate fits', () => {

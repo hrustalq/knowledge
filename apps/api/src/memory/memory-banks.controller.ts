@@ -5,8 +5,8 @@ import type { Principal } from '../auth/principal.js';
 import { CachePolicy } from '../common/http-cache.js';
 import { MemoryAccessService } from './memory-access.service.js';
 import { MemoryBanksService } from './memory-banks.service.js';
-import { BankBodyDto, ListBanksQueryDto, UpdateDispositionDto } from './memory.dto.js';
-import { HINDSIGHT_API_VERSION, type BankListResponse, type BankProfileResponse, type DeleteResponse, type VersionResponse } from './memory-wire.js';
+import { BankBodyDto, BankConfigUpdateDto, ListBanksQueryDto, UpdateDispositionDto } from './memory.dto.js';
+import { HINDSIGHT_API_VERSION, type BankConfigResponse, type BankListResponse, type BankProfileResponse, type DeleteResponse, type VersionResponse } from './memory-wire.js';
 
 /**
  * Banks in Hindsight's wire shape (#986 phase 0). `default` is Hindsight's
@@ -49,6 +49,17 @@ export class MemoryBanksController {
     return this.banks.delete(await this.access.caller(principal, ws, 'editor'), bankId);
   }
 
+  /** The bank's settings (#993): a viewer reads them, as Hindsight's read is always open to a reader. */
+  @Get(':bankId/config')
+  async config(@CurrentPrincipal() principal: Principal, @Headers('x-workspace-id') ws: string | undefined, @Param('bankId') bankId: string): Promise<BankConfigResponse> {
+    return this.banks.config(await this.access.caller(principal, ws, 'viewer'), bankId);
+  }
+
+  @Patch(':bankId/config')
+  async updateConfig(@CurrentPrincipal() principal: Principal, @Headers('x-workspace-id') ws: string | undefined, @Param('bankId') bankId: string, @Body() dto: BankConfigUpdateDto): Promise<BankConfigResponse> {
+    return this.banks.updateConfig(await this.access.caller(principal, ws, 'editor'), bankId, dto.updates);
+  }
+
   @Get(':bankId/profile')
   async profile(@CurrentPrincipal() principal: Principal, @Headers('x-workspace-id') ws: string | undefined, @Param('bankId') bankId: string): Promise<BankProfileResponse> {
     return this.banks.profile(await this.access.caller(principal, ws, 'viewer'), bankId);
@@ -79,10 +90,10 @@ export class MemoryProbeController {
     return {
       api_version: HINDSIGHT_API_VERSION,
       features: {
-        observations: false,
+        observations: true,
         mcp: true,
         worker: true,
-        bank_config_api: false,
+        bank_config_api: true,
         bank_llm_health: false,
         file_upload_api: false,
         document_export_api: false,

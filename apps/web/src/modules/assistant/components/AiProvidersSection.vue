@@ -22,7 +22,7 @@ import { getWorkspaceId } from '@/shared/api/api'
 import { confirm } from '@knowledge/ui/confirm'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
 import { Skeleton } from '@knowledge/ui/skeleton'
-import { buildProviderRows, type ProviderDialogTarget, type ProviderRow } from '@/modules/assistant/model/provider-rows'
+import { buildProviderRows, modelOffKey, type ProviderDialogTarget, type ProviderRow } from '@/modules/assistant/model/provider-rows'
 import AiSettingsSection from './AiSettingsSection.vue'
 import AiDecisionRoute from './AiDecisionRoute.vue'
 import AiProviderRowItem from './AiProviderRow.vue'
@@ -185,17 +185,19 @@ async function route(field: string, value: string) {
   <!-- Routing only means anything once there is something to route to. -->
   <AiSettingsSection v-if="models.length" :title="t('ai.routing')" :description="t('ai.routingDesc')">
     <div class="space-y-3">
-      <label v-for="p in PURPOSES" :key="p.key" class="flex flex-wrap items-center justify-between gap-2">
+      <label v-for="p in PURPOSES" :key="p.key" class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_16rem] sm:items-center">
         <span class="text-sm">
           {{ t(`ai.purpose.${p.key}`) }}
           <span class="text-muted-foreground block text-xs">{{ t(`ai.purpose.${p.key}Hint`) }}</span>
         </span>
+        <!-- Keyed: the trigger keeps the item text it first saw, so "(provider off)" would outlive a toggle (#930). -->
         <Select
+          :key="modelOffKey(models, settings.routing[p.key])"
           :model-value="settings.routing[p.key] ?? UNROUTED"
           :disabled="!canManage"
           @update:model-value="route(p.field, String($event ?? UNROUTED))"
         >
-          <SelectTrigger class="w-64 max-w-full"><SelectValue :placeholder="t('ai.default')" /></SelectTrigger>
+          <SelectTrigger class="w-full"><SelectValue :placeholder="t('ai.default')" /></SelectTrigger>
           <SelectContent>
             <SelectItem :value="UNROUTED">{{ t('ai.routeToDefault', { name: defaultRowName }) }}</SelectItem>
             <AiModelOptions :models="models" :selected="settings.routing[p.key]" />

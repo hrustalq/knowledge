@@ -24,6 +24,7 @@ import { Button } from '@knowledge/ui/button'
 import { Input } from '@knowledge/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@knowledge/ui/select'
 import AiModelOptions from './AiModelOptions.vue'
+import { modelOffKey } from '@/modules/assistant/model/provider-rows'
 
 const props = defineProps<{
   canManage: boolean
@@ -96,17 +97,18 @@ async function saveThresholds() {
 
 <template>
   <div class="space-y-3">
-    <label class="flex flex-wrap items-center justify-between gap-2">
+    <label class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_16rem] sm:items-center">
       <span class="text-sm">
         {{ t('ai.purpose.decision') }}
         <span class="text-muted-foreground block text-xs">{{ t('ai.purpose.decisionHint') }}</span>
       </span>
       <Select
+        :key="modelOffKey(options, routed)"
         :model-value="routed ?? OFF"
         :disabled="!canManage || !decision.available"
         @update:model-value="route(String($event ?? OFF))"
       >
-        <SelectTrigger class="w-56"><SelectValue :placeholder="t('ai.decision.off')" /></SelectTrigger>
+        <SelectTrigger class="w-full"><SelectValue :placeholder="t('ai.decision.off')" /></SelectTrigger>
         <SelectContent>
           <SelectItem :value="OFF">{{ t('ai.decision.off') }}</SelectItem>
           <AiModelOptions :models="options" :selected="routed" />

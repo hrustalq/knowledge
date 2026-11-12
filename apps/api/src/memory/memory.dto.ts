@@ -117,3 +117,22 @@ export class ListOperationsQueryDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(1000) limit?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) offset?: number;
 }
+
+export class ReflectIncludeDto {
+  @IsOptional() @IsObject() facts?: Record<string, unknown> | null;
+  @IsOptional() @IsObject() tool_calls?: Record<string, unknown> | null;
+}
+
+/** `ReflectRequest`. Mental models, directives and `tag_groups` are Hindsight's and are left undeclared. */
+export class ReflectDto {
+  @IsString() @MinLength(1) @MaxLength(4000) query!: string;
+  /** Deprecated by Hindsight: appended to the query. */
+  @IsOptional() @IsString() @MaxLength(4000) context?: string | null;
+  @IsOptional() @IsIn(['low', 'mid', 'high']) budget?: 'low' | 'mid' | 'high' | null;
+  @IsOptional() @IsInt() @Min(1) @Max(200_000) max_tokens?: number | null;
+  @IsOptional() @IsArray() @IsString({ each: true }) tags?: string[] | null;
+  @IsOptional() @IsIn(TAGS_MATCH) tags_match?: TagsMatch | null;
+  @IsOptional() @IsArray() @IsIn([...FACT_TYPES, 'observation'], { each: true }) fact_types?: string[] | null;
+  @IsOptional() @IsObject() response_schema?: Record<string, unknown> | null;
+  @IsOptional() @ValidateNested() @Type(() => ReflectIncludeDto) include?: ReflectIncludeDto | null;
+}

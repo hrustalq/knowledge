@@ -12,10 +12,11 @@ import { MemoryBanksService } from './memory-banks.service.js';
 import { readRetainItems } from './memory-facts.js';
 import { MemoryOperationsService } from './memory-operations.service.js';
 import { MemoryRecallService, type RecallQuery } from './memory-recall.service.js';
+import { MemoryReflectService, type ReflectQuery } from './memory-reflect.service.js';
 import { MemoryRetainService } from './memory-retain.service.js';
 import { MemoryUnitsService } from './memory-units.service.js';
-import { ClearMemoriesQueryDto, ListMemoriesQueryDto, ListOperationsQueryDto, RecallDto, RetainDto } from './memory.dto.js';
-import type { BankStatsResponse, CancelOperationResponse, DeleteResponse, ListMemoryUnitsResponse, OperationStatusResponse, OperationsListResponse, RecallResponse, RetainResponse } from './memory-wire.js';
+import { ClearMemoriesQueryDto, ListMemoriesQueryDto, ListOperationsQueryDto, RecallDto, ReflectDto, RetainDto } from './memory.dto.js';
+import type { BankStatsResponse, CancelOperationResponse, DeleteResponse, ListMemoryUnitsResponse, OperationStatusResponse, OperationsListResponse, RecallResponse, ReflectResponse, RetainResponse } from './memory-wire.js';
 
 /** A recall body as the service reads it. Shared with the per-bank MCP tools, which take the same fields. */
 export function recallQuery(dto: RecallDto, userId: string): RecallQuery {
@@ -39,9 +40,25 @@ export function recallQuery(dto: RecallDto, userId: string): RecallQuery {
   };
 }
 
+/** A reflect body as the service reads it. Shared with the per-bank MCP tools. */
+export function reflectQuery(dto: ReflectDto, principal: Pick<Principal, 'userId' | 'locale'>): ReflectQuery {
+  return {
+    query: dto.context?.trim() ? `${dto.query}\n\n${dto.context.trim()}` : dto.query,
+    types: dto.fact_types ?? undefined,
+    tags: dto.tags ?? undefined,
+    tagsMatch: dto.tags_match ?? undefined,
+    budget: dto.budget ?? undefined,
+    maxTokens: dto.max_tokens ?? undefined,
+    facts: dto.include?.facts != null,
+    responseSchema: dto.response_schema ?? undefined,
+    userId: principal.userId,
+    locale: principal.locale,
+  };
+}
+
 /**
- * What a bank holds, in Hindsight's wire shape (#986 phases 1–3): retain
- * (sync and async), recall, list, get, clear, stats, operations. Resolved per handler by `MemoryAccessService`, as the
+ * What a bank holds, in Hindsight's wire shape (#986 phases 1–4): retain
+ * (sync and async), recall, reflect, list, get, clear, stats, operations. Resolved per handler by `MemoryAccessService`, as the
  * bank routes are.
  */
 @ApiExcludeController()
@@ -59,6 +76,7 @@ export class MemoryUnitsController {
     private readonly units: MemoryUnitsService,
     private readonly recaller: MemoryRecallService,
     private readonly operations: MemoryOperationsService,
+    private readonly reflector: MemoryReflectService,
     private readonly limiter: PublicRateLimiter,
     config: ConfigService<Env, true>,
   ) {
@@ -97,6 +115,15 @@ export class MemoryUnitsController {
     const caller = await this.access.caller(principal, ws, 'viewer');
     const bank = await this.access.bank(caller, bankId);
     return this.recaller.recall(bank, recallQuery(dto, principal.userId));
+  }
+
+  /** Reflect: one answer over what a recall returns. A viewer's call, like the recall it starts with. */
+  @Post('reflect')
+  @HttpCode(200)
+  async reflect(@CurrentPrincipal() principal: Principal, @Headers('x-workspace-id') ws: string | undefined, @Param('bankId') bankId: string, @Body() dto: ReflectDto): Promise<ReflectResponse> {
+    const caller = await this.access.caller(principal, ws, 'viewer');
+    const bank = await this.access.bank(caller, bankId);
+    return this.reflector.reflect(bank, reflectQuery(dto, principal));
   }
 
   @Get('memories/list')

@@ -13,6 +13,7 @@ import { MemoryBanksService } from './memory-banks.service.js';
 import { MemoryOperationsService } from './memory-operations.service.js';
 import { MemoryQueueModule } from './memory-queue.module.js';
 import { MemoryRecallService } from './memory-recall.service.js';
+import { MemoryReflectService } from './memory-reflect.service.js';
 import { MemoryRetainService } from './memory-retain.service.js';
 import { MemoryUnitsService } from './memory-units.service.js';
 
@@ -23,7 +24,7 @@ import { MemoryUnitsService } from './memory-units.service.js';
  */
 @Module({
   imports: [PrismaModule, AuthCoreModule, PermissionsCoreModule, GraphModule, EmbeddingModule, AgentCoreModule, AiCoreModule, AssistantClientModule, DecisionClientModule, MemoryQueueModule],
-  providers: [MemoryAccessService, MemoryBanksService, MemoryOperationsService, MemoryRecallService, MemoryRetainService, MemoryUnitsService],
-  exports: [MemoryAccessService, MemoryBanksService, MemoryOperationsService, MemoryRecallService, MemoryRetainService, MemoryUnitsService],
+  providers: [MemoryAccessService, MemoryBanksService, MemoryOperationsService, MemoryRecallService, MemoryReflectService, MemoryRetainService, MemoryUnitsService],
+  exports: [MemoryAccessService, MemoryBanksService, MemoryOperationsService, MemoryRecallService, MemoryReflectService, MemoryRetainService, MemoryUnitsService],
 })
 export class MemoryCoreModule {}

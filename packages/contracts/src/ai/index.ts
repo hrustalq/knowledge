@@ -1377,6 +1377,8 @@ export type AiUsageOperation =
   | 'memory-extract'
   /** Asking the decision model whether a recalled memory helps the query (#986), when the request asks to prune. One row per candidate. */
   | 'memory-recall'
+  /** Answering a question over a memory bank's recalled memories (#986): one row per reflect. */
+  | 'memory-reflect'
   /**
    * Inferring graph relations from a chunk during ingestion. One row per chunk
    * call, so a reindex of a large corpus is visible as the spend it is.
@@ -1591,6 +1593,8 @@ export const BUILT_IN_AGENT_KEYS = [
   'scaffolder',
   /** Splits what an agent retains into facts for its memory bank (#986). Called only by retain, never from the Run button. */
   'memorist',
+  /** Answers a question from a memory bank's recalled memories (#986). Called only by reflect, never from the Run button. */
+  'reflector',
 ] as const;
 export type BuiltInAgentKey = (typeof BUILT_IN_AGENT_KEYS)[number];
 

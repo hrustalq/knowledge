@@ -227,7 +227,9 @@
     "noReranker": "Для `min_scores.reranker` нужен реранкер, а здесь его нет: используйте `semantic`, `keyword` или `final`",
     "windowInvalid": "В `temporal_window` нужны `start` и `end`, причём начало раньше конца",
     "operationIdTaken": "Этот operation_id уже принадлежит другой операции",
-    "operationNotPending": "Операция {id} не ожидает выполнения, отменить её нельзя"
+    "operationNotPending": "Операция {id} не ожидает выполнения, отменить её нельзя",
+    "noReflectModel": "Для reflect нужна модель, а в этом пространстве она не настроена: настройте её в параметрах ИИ или включите агента «Рефлектор»",
+    "reflectFailed": "Не удалось обратиться к модели для reflect; повторите попытку"
   },
   "memo": {
     "notFound": "Запись не найдена",

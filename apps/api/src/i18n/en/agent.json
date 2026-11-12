@@ -284,6 +284,8 @@
   "scaffolderDesc": "Shapes a new project's outline: drafts one from your description (Describe it), or the styleguide and page guidance of one derived from an existing project.",
   "memorist": "Memorist",
   "memoristDesc": "Splits what an agent retains in a memory bank into separate facts. Runs only when a model is routed at extraction; otherwise the text is stored as it is.",
+  "reflector": "Reflector",
+  "reflectorDesc": "Answers a question from the memories a memory bank recalled for it. Called by reflect on a bank; it reads no pages and has no tools.",
   "testerRun": {
     "noOperation": "The tester was started without an operation; only Generate test requests on an operation can start it.",
     "summary": "Wrote {count} test cases for {method} {path}.",

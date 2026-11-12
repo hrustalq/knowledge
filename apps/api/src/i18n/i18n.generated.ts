@@ -301,6 +301,8 @@ export type I18nTranslations = {
         "scaffolderDesc": string;
         "memorist": string;
         "memoristDesc": string;
+        "reflector": string;
+        "reflectorDesc": string;
         "testerRun": {
             "noOperation": string;
             "summary": string;
@@ -924,6 +926,8 @@ export type I18nTranslations = {
             "windowInvalid": string;
             "operationIdTaken": string;
             "operationNotPending": string;
+            "noReflectModel": string;
+            "reflectFailed": string;
         };
         "memo": {
             "notFound": string;

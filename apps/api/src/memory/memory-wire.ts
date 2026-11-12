@@ -193,3 +193,12 @@ export interface CancelOperationResponse {
   message: string;
   operation_id: string;
 }
+
+export interface ReflectResponse {
+  /** The answer, as markdown. */
+  text: string;
+  based_on?: { memories: Array<Omit<RecallResult, 'entities' | 'source_fact_ids' | 'scores'>>; mental_models: never[]; directives: never[] };
+  structured_output?: Record<string, unknown> | null;
+  structured_output_error?: string | null;
+  usage?: TokenUsage;
+}

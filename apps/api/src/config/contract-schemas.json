@@ -2753,6 +2753,7 @@
       "coach",
       "memory-extract",
       "memory-recall",
+      "memory-reflect",
       "extraction",
       "public_ask",
       "test-suite",

@@ -26155,7 +26155,7 @@
             }
           }
         },
-        "summary": "Add a term to a project (409 when that project already defines it)",
+        "summary": "Add a term to a project (409 when that project already defines it). Without projectId it is a workspace term, linked in every project that does not define the word itself — workspace admins only",
         "tags": [
           "glossary"
         ]
@@ -26413,6 +26413,80 @@
           }
         },
         "summary": "Remove a term; pages that mention it simply stop linking it",
+        "tags": [
+          "glossary"
+        ]
+      }
+    },
+    "/v1/glossary/{id}/promote": {
+      "post": {
+        "operationId": "GlossaryController_promote",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromoteGlossaryTermDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlossaryTerm"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Make a project's term the workspace's: same entry, now linked in every project that does not define the word itself. 409 when the workspace already has a term of that name, unless onClash says replace",
         "tags": [
           "glossary"
         ]
@@ -48404,7 +48478,8 @@
           },
           "projectId": {
             "type": "string",
-            "description": "Project the term belongs to (must be in the same workspace)"
+            "nullable": true,
+            "description": "Project the term belongs to (must be in the same workspace). Absent or null writes a workspace term, which needs a workspace admin"
           },
           "term": {
             "type": "string",
@@ -48454,7 +48529,6 @@
         },
         "required": [
           "workspaceId",
-          "projectId",
           "term",
           "definition"
         ]
@@ -48520,6 +48594,18 @@
             "type": "number",
             "nullable": true,
             "description": "Occurrences linked per page; null uses the shared default"
+          }
+        }
+      },
+      "PromoteGlossaryTermDto": {
+        "type": "object",
+        "properties": {
+          "onClash": {
+            "type": "string",
+            "enum": [
+              "replace"
+            ],
+            "description": "When the workspace already has a term of that name: replace it. Without this the promotion is refused (409)"
           }
         }
       },
@@ -64407,7 +64493,8 @@
             "type": "string"
           },
           "projectId": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "term": {
             "type": "string"

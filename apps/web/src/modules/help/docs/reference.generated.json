@@ -3594,7 +3594,7 @@
       "method": "POST",
       "path": "/v1/glossary",
       "tag": "glossary",
-      "summary": "Add a term to a project (409 when that project already defines it)",
+      "summary": "Add a term to a project (409 when that project already defines it). Without projectId it is a workspace term, linked in every project that does not define the word itself — workspace admins only",
       "role": "editor",
       "source": "body",
       "public": false,
@@ -3626,6 +3626,16 @@
       "tag": "glossary",
       "summary": "Edit a term, its aliases, its definition or its defining page",
       "role": "editor",
+      "source": "glossary-term",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/glossary/{id}/promote",
+      "tag": "glossary",
+      "summary": "Make a project's term the workspace's: same entry, now linked in every project that does not define the word itself. 409 when the workspace already has a term of that name, unless onClash says replace",
+      "role": "admin",
       "source": "glossary-term",
       "public": false,
       "platformAdmin": false

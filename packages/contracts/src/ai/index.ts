@@ -2952,6 +2952,7 @@ export interface FlagFindingOutdatedResponse {
 export interface AddFindingTermResponse {
   termId: string;
   term: string;
+  /** Always a project: a finding's term is filed where its page lives, never as a workspace term. */
   projectId: string;
 }
 

@@ -304,7 +304,7 @@ export class AgentFindingsService {
            SET findings = jsonb_set(findings, ARRAY[${String(index)}::text, 'termId'], to_jsonb(${created.termId}::text), true)
          WHERE id = ${runId}::uuid
       `;
-      return { termId: created.termId, term: created.term, projectId: created.projectId };
+      return { termId: created.termId, term: created.term, projectId: proposed.projectId };
     });
   }
 

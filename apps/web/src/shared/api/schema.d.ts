@@ -4851,7 +4851,7 @@ export interface paths {
         /** The glossary — the roster the read-side term linker matches against. Scoped to one project with projectId; without it, the whole workspace. */
         get: operations["GlossaryController_list"];
         put?: never;
-        /** Add a term to a project (409 when that project already defines it) */
+        /** Add a term to a project (409 when that project already defines it). Without projectId it is a workspace term, linked in every project that does not define the word itself — workspace admins only */
         post: operations["GlossaryController_create"];
         delete?: never;
         options?: never;
@@ -4893,6 +4893,23 @@ export interface paths {
         head?: never;
         /** Edit a term, its aliases, its definition or its defining page */
         patch: operations["GlossaryController_update"];
+        trace?: never;
+    };
+    "/v1/glossary/{id}/promote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Make a project's term the workspace's: same entry, now linked in every project that does not define the word itself. 409 when the workspace already has a term of that name, unless onClash says replace */
+        post: operations["GlossaryController_promote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/imports": {
@@ -10082,8 +10099,8 @@ export interface components {
         };
         CreateGlossaryTermDto: {
             workspaceId: string;
-            /** @description Project the term belongs to (must be in the same workspace) */
-            projectId: string;
+            /** @description Project the term belongs to (must be in the same workspace). Absent or null writes a workspace term, which needs a workspace admin */
+            projectId?: string | null;
             /** @example Merge base */
             term: string;
             /** @example The nearest common ancestor of two revisions in the DAG. */
@@ -10129,6 +10146,13 @@ export interface components {
             caseSensitive?: boolean;
             /** @description Occurrences linked per page; null uses the shared default */
             maxLinksPerPage?: number | null;
+        };
+        PromoteGlossaryTermDto: {
+            /**
+             * @description When the workspace already has a term of that name: replace it. Without this the promotion is refused (409)
+             * @enum {string}
+             */
+            onClash?: "replace";
         };
         CreateImportDto: {
             /** Format: uuid */
@@ -14216,7 +14240,7 @@ export interface components {
         GlossaryTerm: {
             termId: string;
             workspaceId: string;
-            projectId: string;
+            projectId: string | null;
             term: string;
             aliases: string[];
             definition: string;
@@ -33707,6 +33731,52 @@ export interface operations {
         };
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GlossaryTerm"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    GlossaryController_promote: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PromoteGlossaryTermDto"];
+            };
+        };
+        responses: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };

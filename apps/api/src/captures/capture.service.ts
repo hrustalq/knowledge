@@ -727,7 +727,7 @@ export class CaptureService {
   /**
    * A term is a row, not a revision, so there is no merge request to open: it
    * waits in the captures inbox, `staged` with outcome `glossary`, until an
-   * editor approves it (`CaptureInboxService.approve`). A term or alias the project already has, or
+   * editor approves it (`CaptureInboxService.approve`). A term or alias the project or the workspace already has, or
    * one already waiting, is a duplicate.
    */
   private async stageTerm(row: KnowledgeCapture, claimedAt: Date): Promise<void> {
@@ -736,8 +736,9 @@ export class CaptureService {
     const overlaps = (term: string, aliases: unknown) =>
       [...foldTermKeys(term, Array.isArray(aliases) ? aliases.filter((a): a is string => typeof a === 'string') : [])].some((k) => keys.has(k));
 
+    // The project's own terms and the workspace's (#926): a word the workspace already defines is defined here too.
     const terms = await this.prisma.glossaryTerm.findMany({
-      where: { projectId: row.projectId },
+      where: { workspaceId: row.workspaceId, OR: [{ projectId: row.projectId }, { projectId: null }] },
       select: { id: true, term: true, aliases: true },
     });
     const existing = terms.find((term) => overlaps(term.term, term.aliases));

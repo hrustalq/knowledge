@@ -36,7 +36,7 @@ export class ListGlossaryQueryDto {
   @Matches(UUID_RE)
   workspaceId!: string;
 
-  @ApiPropertyOptional({ description: 'Restrict to one project; absent = every project in the workspace' })
+  @ApiPropertyOptional({ description: "One project's vocabulary: its own terms and the workspace's. Absent = every term in the workspace" })
   @IsOptional()
   @Matches(UUID_RE)
   projectId?: string;
@@ -53,10 +53,14 @@ export class CreateGlossaryTermDto {
   @Matches(UUID_RE)
   workspaceId!: string;
 
-  @ApiProperty({ description: 'Project the term belongs to (must be in the same workspace)' })
-  @IsString()
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Project the term belongs to (must be in the same workspace). Absent or null writes a workspace term, which needs a workspace admin',
+  })
+  @IsOptional()
   @Matches(UUID_RE)
-  projectId!: string;
+  projectId?: string | null;
 
   @ApiProperty({ example: 'Merge base' })
   @IsString()
@@ -242,4 +246,12 @@ export class CreateGlossaryExclusionDto {
   @ValidateNested()
   @Type(() => GlossaryExclusionAnchorDto)
   anchor!: GlossaryExclusionAnchorDto;
+}
+
+/** POST /v1/glossary/:id/promote */
+export class PromoteGlossaryTermDto {
+  @ApiPropertyOptional({ enum: ['replace'], description: 'When the workspace already has a term of that name: replace it. Without this the promotion is refused (409)' })
+  @IsOptional()
+  @IsIn(['replace'])
+  onClash?: 'replace';
 }

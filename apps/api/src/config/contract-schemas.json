@@ -13192,7 +13192,8 @@
         "type": "string"
       },
       "projectId": {
-        "type": "string"
+        "type": "string",
+        "nullable": true
       },
       "term": {
         "type": "string"

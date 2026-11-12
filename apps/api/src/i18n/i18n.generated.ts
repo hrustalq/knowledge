@@ -877,6 +877,7 @@ export type I18nTranslations = {
             "queryFailed": string;
         };
         "glossary": {
+            "workspaceTermExists": string;
             "notFound": string;
             "duplicate": string;
             "documentNotFound": string;

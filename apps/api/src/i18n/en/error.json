@@ -183,6 +183,7 @@
     "queryFailed": "Graph query failed: {reason}. Positions refer to the scoped query that ran: {query}"
   },
   "glossary": {
+    "workspaceTermExists": "The workspace already has a term “{term}”. Promote with replace to put this one in its place, or delete this project's term to use the workspace's.",
     "notFound": "Glossary term {id} not found",
     "duplicate": "\"{term}\" is already in this project's glossary",
     "documentNotFound": "Document {id} not found in workspace"

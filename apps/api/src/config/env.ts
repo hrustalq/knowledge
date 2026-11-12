@@ -783,6 +783,10 @@ export const envSchema = z.object({
   MEMORY_RETAIN_MAX_CHARS: z.coerce.number().int().min(1).default(50_000),
   /** Retain requests one API key (or person) may send a minute. */
   MEMORY_RETAIN_RATE_PER_MIN: z.coerce.number().int().min(1).default(120),
+  /** Recall requests one API key (or person) may send a minute. */
+  MEMORY_RECALL_RATE_PER_MIN: z.coerce.number().int().min(1).default(300),
+  /** Reflect requests one API key (or person) may send a minute. Each is a model call. */
+  MEMORY_REFLECT_RATE_PER_MIN: z.coerce.number().int().min(1).default(30),
   /** How long an async retain may stay claimed before the sweeper takes it for a dead worker's. */
   MEMORY_OPERATION_TIMEOUT_MS: z.coerce.number().int().min(1000).default(600_000),
   /** Days a finished operation's row is kept before it is purged. */

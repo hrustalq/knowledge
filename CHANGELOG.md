@@ -39,9 +39,10 @@ in the pull request that introduces them — see
 ### Operations
 
 - `MEMORY_ENABLED` (default `false`) switches memory banks on for the server. Off, every memory route answers 404
-  and no memory table is written; a workspace can also switch its `memory` section off. Five more values tune it,
-  each with a default: `MEMORY_RETAIN_MAX_ITEMS`, `MEMORY_RETAIN_MAX_CHARS`, `MEMORY_RETAIN_RATE_PER_MIN`,
-  `MEMORY_OPERATION_TIMEOUT_MS` and `MEMORY_OPERATION_RETENTION_DAYS`.
+  and no memory table is written; a workspace can also switch its `memory` section off. Seven more values tune it,
+  each with a default: `MEMORY_RETAIN_MAX_ITEMS`, `MEMORY_RETAIN_MAX_CHARS`, the per-key rates
+  `MEMORY_RETAIN_RATE_PER_MIN`, `MEMORY_RECALL_RATE_PER_MIN` and `MEMORY_REFLECT_RATE_PER_MIN` (a request over
+  the rate is a 429), `MEMORY_OPERATION_TIMEOUT_MS` and `MEMORY_OPERATION_RETENTION_DAYS`.
 - Three migrations add `memory_banks`, `memory_units`, `memory_unit_entities` and `memory_operations`. They only
   create tables, so the previous release runs against the migrated database and a rollback needs no step.
 - The worker creates the `MemoryUnit` vector type and its index in ArcadeDB when it starts. Until a worker of

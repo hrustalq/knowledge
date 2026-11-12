@@ -221,7 +221,6 @@
     "itemsRequired": "A retain request carries 1 to {max} items",
     "itemTooLong": "An item holds at most {max} characters",
     "timestampInvalid": "`timestamp` must be an ISO 8601 date or \"unset\"",
-    "rateLimited": "Too many retain requests; try again in a minute",
     "storeNotReady": "The memory vector index does not exist yet: it is built when the worker starts. Start the worker once, then retry",
     "memoryNotFound": "Memory {id} not found",
     "noReranker": "`min_scores.reranker` needs a reranker, and none runs here: use `semantic`, `keyword` or `final`",
@@ -229,7 +228,8 @@
     "operationIdTaken": "That operation_id already belongs to another operation",
     "operationNotPending": "Operation {id} is not pending, so it cannot be cancelled",
     "noReflectModel": "Reflect needs a model and none is configured for this workspace: set one up in AI settings, or switch the reflector agent on",
-    "reflectFailed": "The model could not be reached for this reflect; try again"
+    "reflectFailed": "The model could not be reached for this reflect; try again",
+    "rateLimited": "Too many {verb} requests; try again in a minute"
   },
   "memo": {
     "notFound": "Memo not found",

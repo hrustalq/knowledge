@@ -6,6 +6,7 @@ import { CachePolicy } from '../common/http-cache.js';
 import { MemoryAccessService } from './memory-access.service.js';
 import { MemoryIntakeService } from './memory-intake.service.js';
 import { MemoryOperationsService } from './memory-operations.service.js';
+import { MemoryRateService } from './memory-rate.service.js';
 import { recallQuery, reflectQuery } from './memory-queries.js';
 import { MemoryRecallService } from './memory-recall.service.js';
 import { MemoryReflectService } from './memory-reflect.service.js';
@@ -30,6 +31,7 @@ export class MemoryUnitsController {
     private readonly recaller: MemoryRecallService,
     private readonly operations: MemoryOperationsService,
     private readonly reflector: MemoryReflectService,
+    private readonly rate: MemoryRateService,
   ) {}
 
   /**
@@ -50,6 +52,7 @@ export class MemoryUnitsController {
   async recall(@CurrentPrincipal() principal: Principal, @Headers('x-workspace-id') ws: string | undefined, @Param('bankId') bankId: string, @Body() dto: RecallDto): Promise<RecallResponse> {
     const caller = await this.access.caller(principal, ws, 'viewer');
     const bank = await this.access.bank(caller, bankId);
+    await this.rate.check('recall', principal);
     return this.recaller.recall(bank, recallQuery(dto, principal.userId));
   }
 
@@ -59,6 +62,7 @@ export class MemoryUnitsController {
   async reflect(@CurrentPrincipal() principal: Principal, @Headers('x-workspace-id') ws: string | undefined, @Param('bankId') bankId: string, @Body() dto: ReflectDto): Promise<ReflectResponse> {
     const caller = await this.access.caller(principal, ws, 'viewer');
     const bank = await this.access.bank(caller, bankId);
+    await this.rate.check('reflect', principal);
     return this.reflector.reflect(bank, reflectQuery(dto, principal));
   }
 

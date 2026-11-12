@@ -6,6 +6,7 @@ import type { MemoryAccessService } from './memory-access.service.js';
 import type { MemoryBanksService } from './memory-banks.service.js';
 import { FACT_TYPES, TAGS_MATCH } from './memory-facts.js';
 import type { MemoryIntakeService } from './memory-intake.service.js';
+import type { MemoryRateService } from './memory-rate.service.js';
 import { recallQuery, reflectQuery } from './memory-queries.js';
 import type { MemoryRecallService } from './memory-recall.service.js';
 import type { MemoryReflectService } from './memory-reflect.service.js';
@@ -20,6 +21,7 @@ export interface MemoryMcpServices {
   intake: MemoryIntakeService;
   recall: MemoryRecallService;
   reflect: MemoryReflectService;
+  rate: MemoryRateService;
 }
 
 export interface MemoryMcpRequest {
@@ -61,7 +63,7 @@ const RETAIN_INPUT = {
  * calls one anyway.
  */
 export function buildMemoryMcpServer(services: MemoryMcpServices, request: MemoryMcpRequest): McpServer {
-  const { access, banks, intake, recall, reflect } = services;
+  const { access, banks, intake, recall, reflect, rate } = services;
   const { principal, workspaceHeader, pathBank } = request;
   const headerForm = pathBank === null;
   const server = new McpServer(
@@ -131,6 +133,7 @@ export function buildMemoryMcpServer(services: MemoryMcpServices, request: Memor
     },
     async (args) => {
       const bank = await access.bank(await caller('viewer'), bankOf(args));
+      await rate.check('recall', principal);
       // Wrapped untrusted: what was retained came from sources nobody reviewed.
       return text((await recall.recallForModel(bank, recallQuery({ ...args, budget: args.budget ?? 'high' }, principal.userId), 'recall')).text);
     },
@@ -155,6 +158,7 @@ export function buildMemoryMcpServer(services: MemoryMcpServices, request: Memor
     },
     async (args) => {
       const bank = await access.bank(await caller('viewer'), bankOf(args));
+      await rate.check('reflect', principal);
       const answer = await reflect.reflect(bank, reflectQuery({ ...args, budget: args.budget ?? 'low' }, principal));
       return text(args.response_schema ? { text: answer.text, structured_output: answer.structured_output ?? null, structured_output_error: answer.structured_output_error ?? null } : answer.text);
     },

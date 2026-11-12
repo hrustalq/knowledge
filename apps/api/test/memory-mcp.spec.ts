@@ -6,12 +6,14 @@ import { MCP_KEY_OK_META, READ_KEY_OK_META } from '../src/auth/access.decorator.
 import { DEV_PRINCIPAL, type Principal } from '../src/auth/principal.js';
 import { MemoryMcpController } from '../src/memory/memory-mcp.controller.js';
 import { buildMemoryMcpServer } from '../src/memory/memory-mcp.js';
+import { MemoryRateService } from '../src/memory/memory-rate.service.js';
+import { RateLimitedException } from '../src/public/public-rate-limit.js';
 import { MCP_TOOLSETS } from '@knowledge/contracts';
 
 const keyed = (scope: 'read' | 'capture' | 'write'): Principal => ({ ...DEV_PRINCIPAL, mode: 'api-key', isAdmin: false, userId: 'u1', apiKey: { id: 'k1', scope, workspaceId: 'ws-1' } });
 const bankRow = { id: 'bank-row', bankId: 'agent', workspaceId: 'ws-1' };
 
-async function connect(principal: Principal, opts: { pathBank?: string | null; headerBank?: string; off?: () => boolean } = {}) {
+async function connect(principal: Principal, opts: { pathBank?: string | null; headerBank?: string; off?: () => boolean; limited?: string[] } = {}) {
   const access = {
     caller: vi.fn(async (p: Principal, _ws: unknown, role: string, o: { capture?: boolean }) => {
       if (opts.off?.()) throw new NotFoundException('The memory feature is switched off in this workspace.');
@@ -24,7 +26,8 @@ async function connect(principal: Principal, opts: { pathBank?: string | null; h
   const intake = { retain: vi.fn(async (_c: unknown, _b: string, req: { async?: boolean }) => ({ success: true, async: req.async === true, operation_id: req.async ? 'op-1' : undefined })) };
   const recall = { recallForModel: vi.fn(async () => ({ text: '<memories tool="recall">\n[M1] Alice works at Google\n</memories>', results: [] })) };
   const reflect = { reflect: vi.fn(async () => ({ text: 'She is an engineer.', structured_output: { role: 'engineer' } })) };
-  const server = buildMemoryMcpServer({ access, banks, intake, recall, reflect } as never, {
+  const rate = { check: vi.fn(async (verb: string) => { if (opts.limited?.includes(verb)) throw new RateLimitedException(`Too many ${verb} requests`, 60); }) };
+  const server = buildMemoryMcpServer({ access, banks, intake, recall, reflect, rate } as never, {
     principal,
     workspaceHeader: undefined,
     pathBank: opts.pathBank === undefined ? 'agent' : opts.pathBank,
@@ -37,7 +40,7 @@ async function connect(principal: Principal, opts: { pathBank?: string | null; h
     const res = (await client.callTool({ name, arguments: args })) as { isError?: boolean; content: Array<{ text: string }> };
     return { isError: res.isError === true, text: res.content[0]?.text ?? '' };
   };
-  return { client, call, access, banks, intake, recall, reflect };
+  return { client, call, access, banks, intake, recall, reflect, rate };
 }
 
 describe('per-bank memory MCP server (#986)', () => {
@@ -107,6 +110,33 @@ describe('per-bank memory MCP server (#986)', () => {
     }
     expect(recall.recallForModel).not.toHaveBeenCalled();
     expect(intake.retain).not.toHaveBeenCalled();
+  });
+
+  it('refuses recall and reflect over their rate, after the resolver and before the work', async () => {
+    const { call, recall, reflect, rate, access } = await connect(keyed('read'), { limited: ['recall', 'reflect'] });
+    for (const name of ['recall', 'reflect']) {
+      const res = await call(name, { query: 'q' });
+      expect([name, res.isError, res.text]).toEqual([name, true, `Too many ${name} requests`]);
+    }
+    expect(rate.check.mock.calls.map((c) => c[0])).toEqual(['recall', 'reflect']);
+    expect(access.bank).toHaveBeenCalledTimes(2);
+    expect(recall.recallForModel).not.toHaveBeenCalled();
+    expect(reflect.reflect).not.toHaveBeenCalled();
+  });
+
+  it('counts each verb per key, and fails closed only for reflect', async () => {
+    const hit = vi.fn(async () => true);
+    const svc = new MemoryRateService({ hit } as never, { get: (k: string) => ({ MEMORY_RETAIN_RATE_PER_MIN: 120, MEMORY_RECALL_RATE_PER_MIN: 300, MEMORY_REFLECT_RATE_PER_MIN: 30 })[k] } as never);
+    for (const verb of ['retain', 'recall', 'reflect'] as const) await svc.check(verb, keyed('write'));
+    await svc.check('recall', { ...keyed('write'), apiKey: undefined });
+    expect(hit.mock.calls).toEqual([
+      ['memory:retain:k1', 120, 60_000, true],
+      ['memory:recall:k1', 300, 60_000, true],
+      ['memory:reflect:k1', 30, 60_000, false],
+      ['memory:recall:u1', 300, 60_000, true],
+    ]);
+    hit.mockResolvedValueOnce(false);
+    await expect(svc.check('reflect', keyed('read'))).rejects.toMatchObject({ status: 429, retryAfterSec: 60 });
   });
 
   it('is a server of its own: no tool shares a name with the platform’s, and a toolset key is not admitted', () => {

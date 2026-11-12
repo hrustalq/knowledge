@@ -30,6 +30,11 @@ in the pull request that introduces them — see
   decision route and an agent's model select do the same. At narrow widths every routing row now stacks its select
   under its label at full width, so the rows line up. (#930)
 
+- Opening the assistant showed an empty **New chat** for a moment and then switched to the most recent chat, even
+  if you had already clicked **New chat** or started typing: a message could land in an old, unrelated chat. Your
+  choice now stands, and the page shows a chat loading until it knows which one to open. **New chat** no longer
+  creates an empty "Untitled chat" in the list; the chat appears with its first message. (#931)
+
 ### Operations
 
 - One migration rewrites the existing Jev usage rows in place: cost becomes input tokens × 10.5 ₽ per 1M, currency

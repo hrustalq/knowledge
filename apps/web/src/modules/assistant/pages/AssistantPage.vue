@@ -35,10 +35,13 @@ const dialogs = ref<InstanceType<typeof ThreadDialogs> | null>(null)
 
 // `?thread=` is an opening instruction (a chat bot's "open the full answer"
 // link, issue #71), not two-way state: the rail drives selection afterwards.
+const linked = typeof route.query.thread === 'string' ? route.query.thread : null
+// Set during setup, so the server render and the first paint already show a
+// chat loading instead of an empty "New chat" that is about to be replaced (#931).
+if (!assistant.activeThread) assistant.resuming = true
 onMounted(() => {
-  const thread = typeof route.query.thread === 'string' ? route.query.thread : null
-  if (thread) void assistant.openThread(thread)
-  else if (!assistant.activeThread) void assistant.openOrCreateThread()
+  if (linked) void assistant.openThread(linked)
+  else if (!assistant.activeThread) void assistant.openLatest()
 })
 </script>
 

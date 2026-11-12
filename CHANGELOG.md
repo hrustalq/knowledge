@@ -48,6 +48,9 @@ in the pull request that introduces them — see
 - An agent run or a workflow step whose worker died could not be picked up again, and **Retry** on a failed
   workflow step did nothing: the retry was refused when it was queued, and the run stayed "queued" with nothing
   working on it. Both are queued again. (#997)
+- A release, even a hotfix, made the cluster download most of each image again (about 330 MB for the api image),
+  so a fix took 45 minutes to roll out. Image builds now reuse the previous release's layers, and ffmpeg and git
+  are installed below the application code, so a code-only release ships only its own changes. (#995)
 
 ### Operations
 
@@ -69,6 +72,11 @@ in the pull request that introduces them — see
   on `memory_banks`, `memory_units` and `ai_settings`. Additive: the previous release runs against it.
 - Retained text is masked before it is stored, but extraction and reflect send it to the model routed for the
   workspace, as the assistant does with pages. Neither runs with no model routed.
+- Image builds keep their layer cache in GHCR as `knowledge-api:buildcache` and `knowledge-web:buildcache`. Those
+  tags are cache manifests, not runnable images: never point a deployment at them. The first release built this
+  way is still a full download (the cache starts empty); the release after it is the first small one.
+- `knowledge-api` now carries git as well (about 31 MB compressed), so it and `knowledge-api-git` share every layer
+  and a node that has pulled one pulls only metadata for the other. Rolling back to an older tag works as before.
 
 ## [0.52.1] — 2026-11-12
 

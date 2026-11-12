@@ -23,8 +23,8 @@ The worker uses `createApplicationContext(WorkerModule)`: no HTTP server is
 created at all; so does the learner. The git process is HTTP, but of its own: it
 serves packs, which the API never does ("the API never streams file bodies"), so
 it is a separate process behind `/git/*` in the `Caddyfile`, built from the
-`git-runtime` stage of `Dockerfile.api` (the runtime image plus the `git`
-binary). It loads `*CoreModule`s and `AuthTokensModule` only, plus its own
+`git-runtime` stage of `Dockerfile.api` (the runtime image, which carries the
+`git` binary since #995, with its own port, health check and command). It loads `*CoreModule`s and `AuthTokensModule` only, plus its own
 controller, and authenticates in `GitAccessService` rather than through
 `AuthModule`'s global guards; dependency-cruiser holds it to that
 (`git-loads-no-other-controller`, `git-stays-out-of-the-other-processes`). A

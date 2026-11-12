@@ -90,9 +90,26 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
 COPY apps/api/prisma/ apps/api/prisma/
 RUN pnpm --filter @knowledge/api exec prisma generate
 
+# --------------------------------------------------------------- runtime-os
+# Every runtime OS package, BELOW the app layers (#995). An apt layer is not
+# byte-reproducible, so a RUN apt-get after a COPY of dist re-shipped 170 MB of
+# ffmpeg on every release. Here it changes only with the base image.
+# ffmpeg/ffprobe: the memo worker normalises and chunks recordings (#551,
+# docs/features/68). git: the git remote's upload-pack (#636). git is in the
+# api/worker image too (~31 MB compressed), so knowledge-api and
+# knowledge-api-git share every layer and a node pulls only one of them.
+# The -version calls fail the build, not the first memo or fetch.
+FROM base AS runtime-os
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ffmpeg git \
+ && rm -rf /var/lib/apt/lists/* \
+ && ffmpeg -version >/dev/null && ffprobe -version >/dev/null && git --version \
+ && mkdir -p /app/logs /var/cache/knowledge-git \
+ && chown node:node /app/logs /var/cache/knowledge-git
+
 # ------------------------------------------------------------------ runtime
-FROM base AS runtime
-# openssl + ca-certificates are already present from `base`.
+FROM runtime-os AS runtime
+# openssl + ca-certificates come from `base`, ffmpeg + git from `runtime-os`.
 ENV NODE_ENV=production \
     PORT=3000 \
     LOG_DIR=/app/logs
@@ -117,16 +134,6 @@ COPY --chown=node:node apps/api/package.json ./apps/api/
 COPY --chown=node:node apps/api/prisma/ ./apps/api/prisma/
 
 COPY --from=builder --chown=node:node /app/apps/api/dist ./apps/api/dist
-
-# ffmpeg/ffprobe: the memo worker normalises and chunks recordings (#551,
-# docs/features/68). Runtime only; the -version calls fail the build, not the
-# first memo, if the binaries ever go missing.
-RUN apt-get update \
- && apt-get install -y --no-install-recommends ffmpeg \
- && rm -rf /var/lib/apt/lists/* \
- && ffmpeg -version >/dev/null && ffprobe -version >/dev/null
-
-RUN mkdir -p /app/logs && chown node:node /app/logs
 
 USER node
 WORKDIR /app/apps/api
@@ -179,19 +186,12 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 CMD \
 # The worker service overrides this with: node dist/worker.main
 CMD ["node", "dist/main"]
 
-# The git remote (#636, docs/features/71 finding 5): this image plus the `git`
-# binary whose upload-pack serves fetches. apt's git adds ~96 MB (perl,
-# git-man), so it is a stage of its own and the api and worker images stay as
-# they are. LAST on purpose, which is why every other build of this file names
-# `--target runtime`: an untargeted build takes the last stage.
+# The git remote (#636, docs/features/71 finding 5): the same layers as
+# `runtime` (git is installed in `runtime-os`), only its own port, health check
+# and command, so it adds metadata and no layer. LAST on purpose, which is why
+# every other build of this file names `--target runtime`: an untargeted build
+# takes the last stage.
 FROM runtime AS git-runtime
-USER root
-RUN apt-get update \
- && apt-get install -y --no-install-recommends git \
- && rm -rf /var/lib/apt/lists/* \
- && git --version \
- && mkdir -p /var/cache/knowledge-git && chown node:node /var/cache/knowledge-git
-USER node
 ENV GIT_CACHE_DIR=/var/cache/knowledge-git
 EXPOSE 3002
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD \

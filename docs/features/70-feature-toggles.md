@@ -13,8 +13,13 @@ routes answer 404, and its MCP tools refuse and are no longer offered
 ## Decisions
 
 - **Per workspace, admin-owned.** The toggle is a workspace setting, not an env
-  var, because sections are a team's choice. There is no env ceiling: nothing
-  here widens access, so there is nothing to clamp.
+  var, because sections are a team's choice. One section has an env ceiling
+  over it: `sources` is off on a server without `WEB_SOURCES_ENABLED`
+  (`FeaturesService.unavailable()`), reported beside the stored choice and
+  never written into it.
+- **A purpose may suggest the list.** What a workspace is used for proposes
+  which sections are on ([77 — Workspace purpose](77-workspace-purpose.md)).
+  It is advice: this list stays the only switch.
 - **Absent, not forbidden.** A switched-off route is a 404 with
   `details.feature`, the same as a route that does not exist. A 403 would
   invite an access request for something no role can open.
@@ -40,6 +45,8 @@ that the form, the guard and the MCP gate all read:
 | `memos`            | `/memos*`                                                 | `MemosController`                                                                  | `list_memos`, `get_memo`                      |
 | `conflicts`        | `/conflicts`, the page Contradictions widget              | `ConflictsController`                                                              | `list_conflicts`, `resolve_conflict`          |
 | `assistant`        | `/assistant`, the editor's chat panel (⌘J)                | `v1/assistant/threads*`                                                            | —                                             |
+| `git`              | The Clone dialog on a project                             | the clone-key route in `ProjectsController`; the git remote itself (`GitAccessService`) | —                                             |
+| `sources`          | "Link a source" in the new-page menu, the page Source panel | `WebSourcesController`; also under the `WEB_SOURCES_ENABLED` ceiling             | —                                             |
 
 Review, lint, suggest, ask and related (`POST /v1/assistant/{review,lint,…}`)
 are not part of `assistant`. They are helpers inside other surfaces, and the
@@ -61,9 +68,9 @@ catch up within the TTL.
 
 | Surface                                | What it does                                                                                    |
 | -------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `GET /v1/workspaces/:id/features`      | `@Access('viewer','workspace',{guests:true})`: `{ workspaceId, disabled }`. The app reads it for every member |
+| `GET /v1/workspaces/:id/features`      | `@Access('viewer','workspace',{guests:true})`: `{ workspaceId, disabled, unavailable, uses, purposeAsked }`. The app reads it for every member |
 | `PUT /v1/workspaces/:id/features`      | `@Access('admin','workspace')`: replaces the whole list; an unknown value is a 400              |
-| Settings → **Features**                | Admin-only row: one checkbox per section, then Save (`FeaturesSettingsPage.vue`)                |
+| Settings → **Features**                | Admin-only: the purpose block ([77](77-workspace-purpose.md)), then one checkbox per section and Save (`FeaturesSettingsPage.vue`) |
 
 ## Enforcement
 

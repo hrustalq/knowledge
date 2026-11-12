@@ -221,7 +221,7 @@ describe('#807 tree writes read the tree under the lock', () => {
   it('two concurrent saves get distinct revision numbers', async () => {
     const r = rig([{ id: 'D' }]);
     const draft = (r.svc as unknown as { createDraftRevision: (id: string, o: object) => Promise<unknown> }).createDraftRevision.bind(r.svc);
-    await Promise.all([draft('D', {}), draft('D', {})]);
+    await Promise.all([draft('D', { by: { person: undefined } }), draft('D', { by: { person: undefined } })]);
     expect(r.revisions.sort()).toEqual([1, 2]);
   });
 });

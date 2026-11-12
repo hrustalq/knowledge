@@ -1,3 +1,4 @@
+import { internalWrite } from './write-authority.js';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { DEFAULT_API_BREAKING_CHANGE_POLICY, isApiSpecKind } from '@knowledge/contracts';
 import type {
@@ -1366,7 +1367,7 @@ export class MergeRequestsService {
     second: { id: string; order: number } | null,
     authorId: string | undefined,
   ): Promise<string> {
-    const { revisionId } = await this.documents.createRevision(documentId, { branch, message, contentType: body.contentType }, undefined, authorId);
+    const { revisionId } = await this.documents.createRevision(documentId, { branch, message, contentType: body.contentType }, internalWrite('merge'), undefined, authorId);
     drafts.push(revisionId);
     if (second) await this.prisma.revisionParent.create({ data: { revisionId, parentRevisionId: second.id, parentOrder: second.order } });
     const row = await this.prisma.documentRevision.findUniqueOrThrow({ where: { id: revisionId }, select: { s3Key: true } });

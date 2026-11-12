@@ -1,3 +1,4 @@
+import { internalWrite } from '../documents/write-authority.js';
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma, type ConnectorRun, type ConnectorRunItem } from '@prisma/client';
 import {
@@ -275,6 +276,8 @@ export class ConnectorItemsService {
         const revision = await this.documents.writeRevision(
           documentId,
           { text: markdown, message: t('connector.revertRevisionMessage'), contentType: 'text/markdown' },
+          // Undoing a sync is the connector's page going back to what it held (#958).
+          internalWrite('connector-sync'),
           undefined,
           source ? { connectorId: source } : undefined,
         );

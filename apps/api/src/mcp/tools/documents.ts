@@ -1,3 +1,4 @@
+import type { Principal } from '../../auth/principal.js';
 import { z } from 'zod';
 import { DOCUMENT_CATEGORIES, DOCUMENT_VISIBILITIES, API_DOCUMENT_KINDS, API_SPEC_SYNTAXES, isStructuredKind, type ApiSpecSyntax } from '@knowledge/contracts';
 import { keepFrontmatter } from '../../common/frontmatter.js';
@@ -131,7 +132,8 @@ export function registerDocumentsTools(ctx: McpToolContext): void {
         'Create a new markdown revision on a branch (immutable; parented on the branch head), upload the content and finalize it for indexing. Pass baseRevisionId for optimistic concurrency: the call is rejected if the branch head has moved past it. ' +
         'Content without a frontmatter block keeps the branch head\'s frontmatter (tags, relations); include a block to replace it. ' +
         'For an API spec document (kind openapi or asyncapi), content is the whole spec in YAML or JSON (say which with syntax); it is validated, and refused with the validator\'s messages when it does not. Its relations (what owns it: a service: or component:) go in a top-level x-knowledge-relations list shaped like frontmatter relations. ' +
-        'A test fixture (kind test-fixture) is the same: its whole YAML or JSON body, checked against the specs you can open.',
+        'A test fixture (kind test-fixture) is the same: its whole YAML or JSON body, checked against the specs you can open. ' +
+        'With no `branch` the write goes to the default branch of the page: in a workspace whose publishMode is `review` (knowledge_whoami) that is refused with reason `review-required` for anyone but a workspace admin once the page is published — write to a branch and open a merge request.',
       inputSchema: {
         documentId: z.string().uuid(),
         branch: z.string().optional(),
@@ -149,7 +151,7 @@ export function registerDocumentsTools(ctx: McpToolContext): void {
         'editor',
       );
       return json(
-        await createRevision(svc, documentId, { branch, baseRevisionId, content, message, syntax }, principal.userId),
+        await createRevision(svc, documentId, { branch, baseRevisionId, content, message, syntax }, principal),
       );
     },
   );
@@ -163,7 +165,8 @@ export function registerDocumentsTools(ctx: McpToolContext): void {
         'Change some lines of a page instead of rewriting it: a new revision on a branch, like knowledge_create_revision. ' +
         'Line numbers are 1-based and count the `markdown` that knowledge_get_document_content returned for baseRevisionId (the body without its frontmatter, which is kept; a spec or fixture is numbered whole). ' +
         'Each edit replaces startLine..endLine (inclusive) with content; endLine = startLine - 1 inserts before startLine, startLine = line count + 1 appends, empty content deletes. ' +
-        'Number every edit off that one read, not off each other; edits may not overlap. Refused when the branch head has moved past baseRevisionId: read again and renumber.',
+        'Number every edit off that one read, not off each other; edits may not overlap. Refused when the branch head has moved past baseRevisionId: read again and renumber. ' +
+        'The default branch is held to the workspace publish mode, as for knowledge_create_revision.',
       inputSchema: {
         documentId: z.string().uuid(),
         baseRevisionId: z.string().uuid().describe('The revision your line numbers come from; must be the branch head'),
@@ -189,7 +192,7 @@ export function registerDocumentsTools(ctx: McpToolContext): void {
       if (content.trim() === '') throw new Error('The edits leave the page empty; archive it instead.');
       // Read only for a spec or fixture: a page's content type is markdown.
       const syntax = base.contentType.includes('json') ? 'json' : 'yaml';
-      return json(await createRevision(svc, documentId, { branch, baseRevisionId, content, message, syntax }, principal.userId));
+      return json(await createRevision(svc, documentId, { branch, baseRevisionId, content, message, syntax }, principal));
     },
   );
 
@@ -340,7 +343,8 @@ export function registerDocumentsTools(ctx: McpToolContext): void {
         'Write a new revision of a page from a local file instead of pasting it: returns a presigned PUT URL (valid 15 minutes) and a curl command. ' +
         'Upload the file with it, then call knowledge_finalize_upload with the revisionId. The file is the whole page, as with knowledge_create_revision: ' +
         'a markdown file without a frontmatter block keeps the current tags and relations. Pass baseRevisionId to be refused when the branch head has moved. ' +
-        'For a new page, use knowledge_create_document with upload: true.',
+        'For a new page, use knowledge_create_document with upload: true. ' +
+        'The default branch is held to the workspace publish mode, as for knowledge_create_revision.',
       inputSchema: {
         documentId: z.string().uuid(),
         branch: z.string().optional().describe('The default branch when omitted'),
@@ -356,7 +360,7 @@ export function registerDocumentsTools(ctx: McpToolContext): void {
         { ...(branch ? { branchNames: [branch] } : {}), ...(baseRevisionId ? { revisionIds: [baseRevisionId] } : {}) },
         'editor',
       );
-      return json(await startUpload(svc, documentId, { branch, baseRevisionId, message, syntax }, principal.userId));
+      return json(await startUpload(svc, documentId, { branch, baseRevisionId, message, syntax }, principal));
     },
   );
 
@@ -384,7 +388,7 @@ export async function createRevision(
   svc: McpServices,
   documentId: string,
   opts: { branch?: string; baseRevisionId?: string; content: string; message?: string; syntax?: ApiSpecSyntax },
-  authorId: string,
+  principal: Principal,
 ) {
   const document = await svc.prisma.document.findUnique({ where: { id: documentId } });
   if (!document) throw new Error(`Document ${documentId} not found`);
@@ -417,7 +421,8 @@ export async function createRevision(
       contentType: spec ? `application/${opts.syntax ?? 'yaml'}` : 'text/markdown',
       expectedHeadRevisionId: opts.baseRevisionId,
     },
-    authorId,
+    { person: principal },
+    principal.userId,
   );
 }
 
@@ -426,7 +431,7 @@ async function startUpload(
   svc: McpServices,
   documentId: string,
   opts: { branch?: string; baseRevisionId?: string; message?: string; syntax?: ApiSpecSyntax },
-  authorId: string,
+  principal: Principal,
 ) {
   const document = await svc.prisma.document.findUniqueOrThrow({ where: { id: documentId }, select: { kind: true } });
   const draft = await svc.documents.createRevision(
@@ -437,8 +442,9 @@ async function startUpload(
       // A page is markdown; a spec or fixture says its syntax (createRevision's own choice is yaml).
       ...(isStructuredKind(document.kind) && opts.syntax ? { contentType: `application/${opts.syntax}` } : {}),
     },
+    { person: principal },
     opts.baseRevisionId,
-    authorId,
+    principal.userId,
   );
   return uploadTicket(svc, documentId, draft.revisionId);
 }

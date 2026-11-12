@@ -2138,7 +2138,7 @@ exports[`the offered tool set (#822) > a write key 1`] = `
         "readOnlyHint": false,
       },
       "name": "knowledge_create_revision",
-      "schema": "4553bc2905ab3999",
+      "schema": "c527bec74f5eeffb",
     },
     {
       "annotations": {
@@ -2530,7 +2530,7 @@ exports[`the offered tool set (#822) > a write key 1`] = `
         "readOnlyHint": false,
       },
       "name": "knowledge_patch_document",
-      "schema": "9797aeca3b3ce06a",
+      "schema": "eeccbb58c4c4ad97",
     },
     {
       "annotations": {
@@ -2656,7 +2656,7 @@ exports[`the offered tool set (#822) > a write key 1`] = `
         "readOnlyHint": false,
       },
       "name": "knowledge_start_upload",
-      "schema": "5eb6a965b4edb719",
+      "schema": "28e00c2c95d08c66",
     },
     {
       "annotations": {
@@ -2819,7 +2819,7 @@ exports[`the offered tool set (#822) > the stdio principal 1`] = `
         "readOnlyHint": false,
       },
       "name": "knowledge_create_revision",
-      "schema": "4553bc2905ab3999",
+      "schema": "c527bec74f5eeffb",
     },
     {
       "annotations": {
@@ -3211,7 +3211,7 @@ exports[`the offered tool set (#822) > the stdio principal 1`] = `
         "readOnlyHint": false,
       },
       "name": "knowledge_patch_document",
-      "schema": "9797aeca3b3ce06a",
+      "schema": "eeccbb58c4c4ad97",
     },
     {
       "annotations": {
@@ -3337,7 +3337,7 @@ exports[`the offered tool set (#822) > the stdio principal 1`] = `
         "readOnlyHint": false,
       },
       "name": "knowledge_start_upload",
-      "schema": "5eb6a965b4edb719",
+      "schema": "28e00c2c95d08c66",
     },
     {
       "annotations": {

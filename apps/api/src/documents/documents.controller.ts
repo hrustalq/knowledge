@@ -580,7 +580,7 @@ export class DocumentsController {
     @Body() dto: CreateUploadDto,
     @CurrentPrincipal() principal: Principal,
   ): Promise<CreateUploadResponse> {
-    return this.documents.createUpload(id, dto, principal?.userId);
+    return this.documents.createUpload(id, dto, { person: principal }, principal?.userId);
   }
 
   @Post(':id/revisions')
@@ -599,7 +599,7 @@ export class DocumentsController {
     @Headers('if-match') ifMatch?: string,
   ): Promise<RevisionInfo> {
     const expectedHead = ifMatch?.trim().replace(/^"+|"+$/g, '') || undefined;
-    return this.documents.createRevision(id, dto, expectedHead, principal?.userId);
+    return this.documents.createRevision(id, dto, { person: principal }, expectedHead, principal?.userId);
   }
 
   @Post(':id/revisions/:revisionId/finalize')

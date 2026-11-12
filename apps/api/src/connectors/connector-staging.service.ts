@@ -1,3 +1,4 @@
+import { internalWrite } from '../documents/write-authority.js';
 import { FigmaFilesService } from '../embeds/figma-files.service.js';
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma, type Connector, type ConnectorLink, type ConnectorRun, type ConnectorRunItem } from '@prisma/client';
@@ -554,7 +555,7 @@ export class ConnectorStagingService {
     const contentType = spec ? apiSpecContentType(spec.kind, spec.syntax) : 'text/markdown';
     // A `web` connector names itself as the writer: its source-backed page refuses every other (#674).
     return (
-      await this.documents.writeRevision(documentId, { text: markdown, branch, message: t('connector.syncRevisionMessage'), contentType }, undefined, writer)
+      await this.documents.writeRevision(documentId, { text: markdown, branch, message: t('connector.syncRevisionMessage'), contentType }, internalWrite('connector-sync'), undefined, writer)
     ).revisionId;
   }
 

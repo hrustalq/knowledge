@@ -210,7 +210,7 @@ describe('ConnectorStagingService.apply, delivered by merge request', () => {
     const h = harness({ ...WIKI_ON, wikiDelivery: 'merge-request' });
     await h.staging.apply(h.row, run, item('module:a'));
     expect(h.documents.createBranch).toHaveBeenCalledWith('d1', { name: expect.stringMatching(/^wiki\/abcdef12-/) });
-    expect(h.documents.createRevision).toHaveBeenCalledWith('d1', expect.objectContaining({ branch: expect.stringMatching(/^wiki\//) }));
+    expect(h.documents.createRevision).toHaveBeenCalledWith('d1', expect.objectContaining({ branch: expect.stringMatching(/^wiki\//) }), { internal: 'connector-sync' });
     expect(h.conflicts).toEqual([expect.objectContaining({ reason: 'regenerated', documentId: 'd1' })]);
   });
 
@@ -218,7 +218,7 @@ describe('ConnectorStagingService.apply, delivered by merge request', () => {
     const direct = harness({ ...WIKI_ON, wikiDelivery: 'direct' });
     await direct.staging.apply(direct.row, run, item('module:a'));
     expect(direct.documents.createBranch).not.toHaveBeenCalled();
-    expect(direct.documents.createRevision).toHaveBeenCalledWith('d1', expect.objectContaining({ branch: undefined }));
+    expect(direct.documents.createRevision).toHaveBeenCalledWith('d1', expect.objectContaining({ branch: undefined }), { internal: 'connector-sync' });
 
     const released = harness({ ...WIKI_ON, wikiDelivery: 'merge-request' });
     await released.staging.apply(released.row, run, item('changelog:v1.0.0'));

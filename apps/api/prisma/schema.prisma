@@ -759,6 +759,12 @@ model Project {
   emptyMaxChars      Int?   @map("empty_max_chars")
   /// off | warn | block — the breaking-API merge gate (#922); null is the workspace's.
   apiBreakingChangePolicy String? @map("api_breaking_change_policy")
+  /// Tracker handoff rules (#923), the vocabulary of workspace_settings'
+  /// work_item_* columns. Null inherits the workspace's; an explicit `off`
+  /// opts the project out while the workspace is on.
+  workItemIssues       String? @map("work_item_issues")
+  workItemConflicts    String? @map("work_item_conflicts")
+  workItemVerification String? @map("work_item_verification")
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   documents     Document[]

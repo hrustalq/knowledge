@@ -248,4 +248,21 @@ describe('tracker handoff (e2e)', () => {
     const handed = await prisma.connectorWorkItem.count({ where: { sourceKind: 'conflict', sourceId: { in: ruleConflicts } } });
     expect(handed).toBe(2);
   });
+
+  it("applies the project's own rule over the workspace's (#923)", async () => {
+    const rules = app.get(WorkItemRulesService);
+    Object.defineProperty(rules, 'maxPerTick', { value: 50 });
+    const left = () => prisma.connectorWorkItem.count({ where: { sourceKind: 'conflict', sourceId: { in: ruleConflicts } } });
+    // The workspace rule is still on and conflicts are waiting; the project opts out.
+    expect((await rules.setProject(page.projectId, { conflicts: 'off' })).conflicts).toMatchObject({ workspace: 'on', project: 'off', effective: 'off' });
+    expect(await rules.autoCreate()).toBe(0);
+    expect(await left()).toBe(2);
+    // The workspace turns it off; the project turns it on for itself alone.
+    await rules.set(WORKSPACE, { issues: null, conflicts: null, verification: null }, DEV_PRINCIPAL.userId);
+    await rules.setProject(page.projectId, { conflicts: 'on' });
+    expect(await rules.autoCreate()).toBe(ruleConflicts.length - 2);
+    expect(await left()).toBe(ruleConflicts.length);
+    // Null inherits again: workspace off, nothing runs.
+    expect((await rules.setProject(page.projectId, { conflicts: null })).conflicts).toMatchObject({ project: null, effective: 'off', source: 'default' });
+  });
 });

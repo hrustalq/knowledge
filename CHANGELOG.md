@@ -35,6 +35,11 @@ in the pull request that introduces them — see
   choice now stands, and the page shows a chat loading until it knows which one to open. **New chat** no longer
   creates an empty "Untitled chat" in the list; the chat appears with its first message. (#931)
 
+- The connect dialog's **Sign in** step offered "Sign in with …" and the token field about a second before it
+  listed **Your accounts**, so it was easy to start a second sign-in for an account you could have reused. The list
+  is now loaded when the dialog opens, and until it arrives the step shows a placeholder and holds the sign-in and
+  connect buttons. (#933)
+
 ### Operations
 
 - One migration rewrites the existing Jev usage rows in place: cost becomes input tokens × 10.5 ₽ per 1M, currency

@@ -16,6 +16,7 @@ import { useFeaturesStore } from '@/stores/features'
 import FeatureSections from '../components/FeatureSections.vue'
 import PurposeUses from '../components/PurposeUses.vue'
 import { usePurposeDraft } from '../model/purpose-draft'
+import { PURPOSE_SETUP_PATH } from '../routes'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -75,7 +76,12 @@ async function save() {
       <section class="space-y-3" aria-labelledby="purpose-heading">
         <div>
           <h2 id="purpose-heading" class="text-base font-semibold">{{ t('features.purpose.title') }}</h2>
-          <p class="kn-measure mt-0.5 text-sm text-muted-foreground">{{ t('features.purpose.subtitle') }}</p>
+          <p class="kn-measure mt-0.5 text-sm text-muted-foreground">
+            {{ t('features.purpose.subtitle') }}
+            <RouterLink :to="{ path: PURPOSE_SETUP_PATH, query: { next: '/settings/features' } }" class="font-medium text-foreground underline underline-offset-2">
+              {{ t('features.purpose.askMe') }}
+            </RouterLink>
+          </p>
         </div>
         <PurposeUses v-model="draft.uses.value" />
         <div class="space-y-1.5">

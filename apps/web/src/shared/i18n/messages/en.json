@@ -2444,6 +2444,7 @@
       "title": "Recipes",
       "hint": "Ready-made schedules and triggers for agents you already have. Everything a recipe adds starts off: turn it on in the agent's settings, and its runs execute as you. Applying one again keeps whatever is already set up.",
       "agent": "Agent: {name}",
+      "askMe": "Ask me a few questions instead.",
       "apply": "Apply",
       "applying": "Applying…",
       "applied": "Added to {name}, switched off — turn it on to start.",
@@ -7711,6 +7712,30 @@
       }
     }
   },
+  "purposeSetup": {
+    "title": "What is this workspace for?",
+    "body": "A few questions, then you see which sections that switches on and off. Nothing changes until you confirm, and you can change any of it later in Settings → Features.",
+    "describeLabel": "In a sentence or two (optional)",
+    "describeHint": "Say what your team writes and who reads it. Only workspace admins see this.",
+    "start": "Continue",
+    "chooseMyself": "Choose from a list instead",
+    "thinking": "Reading your answer…",
+    "picking": "Picking from what you said…",
+    "pickNow": "Pick now",
+    "reviewTitle": "Here is what that sets up",
+    "reviewBody": "Check what the workspace is used for, then the sections below. Untick a use that is wrong, or switch any section yourself.",
+    "sectionsBody": "A section no ticked use needs is switched off. Everyone in the workspace sees the result.",
+    "sectionsNoUse": "With no use ticked, every section stays as it is.",
+    "nothingPicked": "Nothing in your answers matched a use for certain. Tick what fits.",
+    "fallback": {
+      "unavailable": "No assistant model is set up here, so there are no questions. Tick what the workspace is used for.",
+      "failed": "The questions could not be loaded. Tick what the workspace is used for instead."
+    },
+    "confirm": "Confirm",
+    "startOver": "Start over",
+    "skip": "Skip for now",
+    "skipNote": "Skipping leaves every section on. This question will not come back; it stays in Settings → Features."
+  },
   "features": {
     "title": "Features",
     "subtitle": "Switch off the sections this workspace does not use. An off section disappears from the navigation and its pages for everyone here, and its API routes and MCP tools answer as if it did not exist.",
@@ -7740,10 +7765,11 @@
         "subtitle": "Tick what this workspace is used for. The sections below follow: one no chosen use needs is suggested off, and a section you set yourself stays as you left it. Nothing changes until you apply.",
         "descriptionLabel": "In your own words (optional)",
         "descriptionPlaceholder": "We document our public REST API and hold a weekly design review.",
+        "askMe": "Ask me a few questions instead.",
         "descriptionHint": "Only workspace admins see this.",
         "apply": "Apply",
-        "switchesOn": "Switches on when you apply.",
-        "switchesOff": "Switches off when you apply.",
+        "switchesOn": "Will switch on.",
+        "switchesOff": "Will switch off.",
         "suggestsOn": "Your purpose suggests this on.",
         "suggestsOff": "Your purpose suggests this off.",
         "uses": {

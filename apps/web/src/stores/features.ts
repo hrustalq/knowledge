@@ -3,7 +3,7 @@ import type { Directive } from 'vue'
 import type { WorkspaceFeature, WorkspaceFeaturesResponse, WorkspacePurposeResponse, WorkspaceUse } from '@knowledge/contracts'
 import { apiQueryOptions, bindStoreQuery } from '@/shared/api/queries'
 import { api } from '@/shared/api/client'
-import { getWorkspaceId } from '@/shared/api/api'
+import { DEMO_WORKSPACE_ID, getWorkspaceId } from '@/shared/api/api'
 
 const optionsFor = (id: string) => apiQueryOptions('/v1/workspaces/{id}/features', { path: { id } })
 
@@ -53,7 +53,9 @@ export const useFeaturesStore = defineStore('features', {
       this.disabled = res.disabled
       this.unavailable = res.unavailable ?? []
       this.uses = res.uses ?? []
-      this.purposeAsked = res.purposeAsked ?? true
+      // The demo workspace is AUTH_MODE=none's fixture: it has no `workspaces` row for the
+      // migration to stamp, and nobody created it, so there is nobody to ask.
+      this.purposeAsked = (res.purposeAsked ?? true) || res.workspaceId === DEMO_WORKSPACE_ID
     },
     /** Workspace admin: the stored purpose with its description, which the members' read never carries. */
     loadPurpose(): Promise<WorkspacePurposeResponse> {

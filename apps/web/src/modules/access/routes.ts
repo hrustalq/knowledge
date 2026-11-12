@@ -1,6 +1,11 @@
 import type { RouteRecordRaw } from 'vue-router'
 
+/** Where an admin says what the workspace is for (#934); the router guard sends a never-asked workspace's admin here once. */
+export const PURPOSE_SETUP_PATH = '/setup/purpose'
+
 export const routes: RouteRecordRaw[] = [
+  // No `meta.feature`: this is how the sections get chosen, so none of them gates it.
+  { path: PURPOSE_SETUP_PATH, component: () => import('./pages/PurposeSetupPage.vue') },
   // A person, inside this workspace. `/u` with no id is your own — the
   // avatar menu's target, and a link that stays right after a rename.
   { path: '/u', component: () => import('./pages/ProfilePage.vue') },

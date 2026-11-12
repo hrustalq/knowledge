@@ -101,11 +101,9 @@ export class DecisionClient {
       if (typeof p !== 'number' || !(p >= 0 && p <= 1)) throw new Error('decision model returned no probability');
       promptTokens = res?.usage?.input_tokens ?? 0;
       served = res?.model ?? served;
-      // USD, unlike gen-api's other `cost` fields: it carries TypeSafe's own price (docs/features/67).
-      cost =
-        typeof res?.usage?.cost === 'number'
-          ? { micros: Math.round(res.usage.cost * 1_000_000), currency: 'USD' }
-          : this.aiConfig.estimateCost(config, promptTokens, 0);
+      // Tokens × the model's price, never `usage.cost`: that field carries TypeSafe's own
+      // USD figure, about 250× below the rubles gen-api charges (#932).
+      cost = this.aiConfig.estimateCost(config, promptTokens, 0);
       this.bill(call, served, promptTokens, cost, startedAt, true);
       return p;
     } catch (err) {
@@ -158,7 +156,7 @@ export class DecisionClient {
 interface JevResponse {
   model?: string;
   answers?: { answer?: { noul?: number } };
-  usage?: { input_tokens?: number; cost?: number };
+  usage?: { input_tokens?: number };
 }
 
 class DecisionHttpError extends Error {

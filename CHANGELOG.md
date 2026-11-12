@@ -21,6 +21,16 @@ in the pull request that introduces them — see
   shown in another one; it now uses the page's language. It also no longer asks a question again after you skip it:
   a skipped question counts as answered, and a repeat ends the interview with the uses picked so far. (#972)
 
+- Usage showed Jev decision calls (citation checks, the contradiction pre-filter, harvest screening) in US dollars
+  at about 1/250 of what GenAPI charged. They are now recorded in rubles at the model's configured price, like every
+  other GenAPI call, so they count toward the ruble total. (#932)
+
+### Operations
+
+- One migration rewrites the existing Jev usage rows in place: cost becomes input tokens × 10.5 ₽ per 1M, currency
+  `RUB`. It is not reversed by a rollback and does not need to be: the previous release reads the corrected rows as
+  they are.
+
 ## [0.51.0] — 2026-11-12
 
 ### Breaking

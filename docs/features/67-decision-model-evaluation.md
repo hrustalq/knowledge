@@ -242,10 +242,11 @@ These are gen-api list prices, which is the only path we can pay for (see
 | `jev` | 0.0105 ₽ per 1k tokens | free |
 | `gpt-6-luna` | 0.025 ₽ per 1k tokens | 0.125 ₽ per 1k tokens |
 
-TypeSafe's own price is $0.042 per 1M input tokens, and gen-api's usage
-response carried that figure, so a Jev row is stored as USD. gen-api's own `cost`
-fields are in rubles (#793), and its list price for Jev, 10.5 ₽ per 1M input tokens,
-only prices a call that reports nothing. Per 1k calls, on our inputs:
+gen-api charges Jev in rubles at that list price: its request history shows
+0.0337 ₽ for a 3,211-token call (#932). The `usage.cost` in its response is
+TypeSafe's own figure, $0.042 per 1M input tokens, which is about 250× less and
+is not what is charged. So a Jev row is stored in rubles as input tokens × the
+model's price, and `usage.cost` is ignored. Per 1k calls, on our inputs:
 
 | Call site | gpt-6-luna | Jev |
 | --- | --- | --- |
@@ -417,8 +418,8 @@ The design follows the sketch this section used to hold.
 **Usage.**
 - Each question is one `ai_usage` row under the call site's operation:
   `contradiction`, `harvest`, or the new `citation_check`.
-- The row carries the model the response names (`jev-1.13-…`) and gen-api's
-  own cost.
+- The row carries the model the response names (`jev-1.13-…`) and a cost in
+  rubles: input tokens × the routed model's price (#932).
 - The harvest rate limit skips these rows.
 
 **Content and access.**

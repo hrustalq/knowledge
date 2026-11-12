@@ -17901,6 +17901,29 @@
       "pages"
     ]
   },
+  "MyLiveDraftResponse": {
+    "type": "object",
+    "properties": {
+      "branch": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/BranchInfo"
+          }
+        ],
+        "nullable": true
+      },
+      "pages": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "branch",
+      "pages"
+    ]
+  },
   "NoteCapturePayload": {
     "type": "object",
     "properties": {

@@ -250,6 +250,13 @@ export interface MyDraftBranchResponse extends CreateBranchResponse {
   pages: string[];
 }
 
+// GET /v1/documents/:id/branches/mine
+export interface MyLiveDraftResponse {
+  /** The caller's working branch for this page when it holds unpublished work (#958); null otherwise. Never created by this read. */
+  branch: BranchInfo | null;
+  pages: string[];
+}
+
 // GET /v1/documents/:id/branches
 export interface ListBranchesResponse {
   branches: BranchInfo[];

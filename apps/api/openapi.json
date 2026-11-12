@@ -8574,6 +8574,68 @@
         "tags": [
           "documents"
         ]
+      },
+      "get": {
+        "operationId": "DocumentsController_myLiveDraft",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyLiveDraftResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The caller's working branch for this page if it holds unpublished work, else null; creates nothing (#958)",
+        "tags": [
+          "documents"
+        ]
       }
     },
     "/v1/documents/{id}/compare": {
@@ -69768,6 +69830,29 @@
         "properties": {
           "branch": {
             "$ref": "#/components/schemas/BranchInfo"
+          },
+          "pages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "branch",
+          "pages"
+        ]
+      },
+      "MyLiveDraftResponse": {
+        "type": "object",
+        "properties": {
+          "branch": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BranchInfo"
+              }
+            ],
+            "nullable": true
           },
           "pages": {
             "type": "array",

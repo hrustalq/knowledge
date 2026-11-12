@@ -7,6 +7,7 @@ import type {
   FactExtractor,
   CreateBranchResponse,
   MyDraftBranchResponse,
+  MyLiveDraftResponse,
   CreateDocumentResponse,
   CreateUploadResponse,
   DocumentCategory,
@@ -1068,16 +1069,7 @@ export class DocumentsService {
     const spent = { mrAsSource: { some: spentMr } };
     // This page's own live draft first, so work saved before the fold stays
     // where it is even when a newer draft exists.
-    const mine = await this.prisma.documentBranch.findFirst({
-      where: {
-        documentId,
-        ownerId: userId,
-        name: { startsWith: prefix },
-        mrAsSource: { none: spentMr },
-        OR: [{ projectBranchId: null }, { projectBranch: { branches: { none: spent } } }],
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const mine = await this.liveDraftBranch(documentId, userId);
     if (!mine) {
       // Only a draft every page branch of which is the caller's: anyone may
       // name a branch `draft/<someone>`, and folding into theirs would publish
@@ -1138,6 +1130,37 @@ export class DocumentsService {
       }
     }
     return { branch: this.toBranchInfo(mine), pages: await this.draftPages(mine) };
+  }
+
+  /** The caller's working branch on this page that no merged or closed MR has spent. */
+  private liveDraftBranch(documentId: string, userId: string): Promise<DocumentBranch | null> {
+    const spentMr = { status: { in: ['merged', 'closed'] } };
+    return this.prisma.documentBranch.findFirst({
+      where: {
+        documentId,
+        ownerId: userId,
+        name: { startsWith: `${DRAFT_BRANCH_PREFIX}${userId}` },
+        mrAsSource: { none: spentMr },
+        OR: [{ projectBranchId: null }, { projectBranch: { branches: { none: { mrAsSource: { some: spentMr } } } } }],
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /**
+   * The read half of `myDraftBranch` (#958): the caller's working branch only
+   * when work was saved or typed on it, and never created. What a `direct`
+   * workspace's editor asks, so switching the mode strands nobody's draft.
+   */
+  async myLiveDraft(documentId: string, userId: string): Promise<MyLiveDraftResponse> {
+    await this.getDocumentOrThrow(documentId);
+    const mine = await this.liveDraftBranch(documentId, userId);
+    if (!mine) return { branch: null, pages: [] };
+    const [own, drafts] = await Promise.all([
+      this.prisma.documentRevision.count({ where: { branchId: mine.id } }),
+      this.prisma.collabDraft.count({ where: { branchId: mine.id } }),
+    ]);
+    return own + drafts > 0 ? { branch: this.toBranchInfo(mine), pages: await this.draftPages(mine) } : { branch: null, pages: [] };
   }
 
   /** The pages a working branch has revisions on (#636), by id: what its Publish would carry. */

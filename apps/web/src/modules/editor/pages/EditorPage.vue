@@ -136,6 +136,7 @@ import { ApiOperationRef } from '@/entities/api-operation'
 import { SaveAsTemplateDialog, type SaveAsTemplatePage } from '@/entities/template'
 import { useWorkingCopy } from '@/modules/editor/model/use-working-copy'
 import { nextInCollection, type CollectionRule } from '@/modules/editor/model/collection'
+import { workingBranchAsk } from '@/modules/editor/model/working-branch'
 import CollectionRuleFields from '@/modules/editor/components/CollectionRuleFields.vue'
 import { docToMarkdown } from '@/entities/rich-editor'
 import type { CollabHandle } from '@/entities/rich-editor'
@@ -979,8 +980,15 @@ async function loadPage() {
     if (requestedBranch && !byName(requestedBranch)) toast.error(t('editor.branchNotFound', { name: requestedBranch }))
     // A published page is edited on the caller's own working branch (#474),
     // unless a link named another. A private draft page is private already.
+    // In a `direct` workspace (#958) the page's default branch is edited, unless
+    // the caller already has unpublished work on a working branch.
+    const ask = workingBranchAsk({ requestedBranch, isDraftPage: !!detail.document.draftOwnerId, mode: features.publishMode })
     const working =
-      !requestedBranch && !detail.document.draftOwnerId ? await api.post('/v1/documents/{id}/branches/mine', { path }) : null
+      ask === 'mine'
+        ? await api.post('/v1/documents/{id}/branches/mine', { path })
+        : ask === 'existing'
+          ? await api.get('/v1/documents/{id}/branches/mine', { path })
+          : null
     const mine = working?.branch ?? null
     draftPages.value = working?.pages ?? []
     branch.value = mine ?? byName(requestedBranch) ?? byName(detail.document.defaultBranch) ?? null

@@ -11,6 +11,8 @@ import { toast } from 'vue-sonner'
 import { errorMessage } from '@/shared/api/errors'
 import { Button } from '@knowledge/ui/button'
 import { Input } from '@knowledge/ui/input'
+import { RadioGroup, RadioGroupItem } from '@knowledge/ui/radio-group'
+import { PUBLISH_MODES, type PublishMode } from '@knowledge/contracts'
 import { useAuthStore } from '@/stores/auth'
 import { useFeaturesStore } from '@/stores/features'
 
@@ -22,7 +24,9 @@ const policy = computed(() => features.editing)
 
 // Empty = inherit the server's number.
 const approvals = ref('')
+const mode = ref<PublishMode>('review')
 function reset() {
+  mode.value = policy.value?.publishMode.effective ?? 'review'
   approvals.value = policy.value?.requiredApprovals.workspace?.toString() ?? ''
 }
 watch(policy, reset, { immediate: true })
@@ -32,14 +36,22 @@ const approvalsValid = computed(() => {
   const n = approvalsValue.value
   return n === null || (Number.isInteger(n) && n >= 0 && n <= 20)
 })
-const dirty = computed(() => approvalsValue.value !== (policy.value?.requiredApprovals.workspace ?? null))
+const dirty = computed(
+  () =>
+    approvalsValue.value !== (policy.value?.requiredApprovals.workspace ?? null) ||
+    mode.value !== policy.value?.publishMode.effective,
+)
 
 const saving = ref(false)
 async function save() {
   if (saving.value || !dirty.value || !approvalsValid.value) return
   saving.value = true
   try {
-    await features.saveEditing({ requiredApprovals: approvalsValue.value })
+    await features.saveEditing({
+      requiredApprovals: approvalsValue.value,
+      // The default is stored as "inherit".
+      publishMode: mode.value === 'review' ? null : mode.value,
+    })
     toast.success(t('editing.saved'))
   } catch (e) {
     toast.error(errorMessage(e, t))
@@ -59,6 +71,27 @@ async function save() {
     <p v-else-if="!policy" class="text-sm text-muted-foreground" role="status">{{ t('editing.unavailable') }}</p>
 
     <form v-else class="space-y-8" @submit.prevent="save">
+      <section class="space-y-3" aria-labelledby="mode-heading">
+        <div>
+          <h2 id="mode-heading" class="text-base font-semibold">{{ t('editing.mode.title') }}</h2>
+          <p class="kn-measure mt-0.5 text-sm text-muted-foreground">{{ t('editing.mode.subtitle') }}</p>
+        </div>
+        <RadioGroup v-model="mode" class="kn-measure gap-2" aria-labelledby="mode-heading">
+          <label
+            v-for="m in PUBLISH_MODES"
+            :key="m"
+            class="flex cursor-pointer items-start gap-2.5 rounded-md border p-3 text-sm"
+            :class="mode === m ? 'border-primary' : ''"
+          >
+            <RadioGroupItem :value="m" class="mt-0.5" />
+            <span class="space-y-0.5">
+              <span class="block font-medium">{{ t(`editing.mode.${m}.label`) }}</span>
+              <span class="block text-xs text-muted-foreground">{{ t(`editing.mode.${m}.hint`) }}</span>
+            </span>
+          </label>
+        </RadioGroup>
+      </section>
+
       <section class="space-y-3" aria-labelledby="approvals-heading">
         <div>
           <h2 id="approvals-heading" class="text-base font-semibold">{{ t('editing.approvals.title') }}</h2>

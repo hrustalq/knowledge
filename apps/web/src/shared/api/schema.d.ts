@@ -1571,7 +1571,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** The caller's working branch for this page if it holds unpublished work, else null; creates nothing (#958) */
+        get: operations["DocumentsController_myLiveDraft"];
         put?: never;
         /**
          * The caller's private working branch for this page (#474), created on first ask
@@ -15422,6 +15423,10 @@ export interface components {
             branch: components["schemas"]["BranchInfo"];
             pages: string[];
         };
+        MyLiveDraftResponse: {
+            branch: components["schemas"]["BranchInfo"] | null;
+            pages: string[];
+        };
         NoteCapturePayload: {
             body: string;
             appliesTo?: string[];
@@ -22785,6 +22790,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CreateBranchResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    DocumentsController_myLiveDraft: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyLiveDraftResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

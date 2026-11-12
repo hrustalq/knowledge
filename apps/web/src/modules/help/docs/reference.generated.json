@@ -3011,6 +3011,16 @@
       "platformAdmin": false
     },
     {
+      "method": "GET",
+      "path": "/v1/documents/{id}/branches/mine",
+      "tag": "documents",
+      "summary": "The caller's working branch for this page if it holds unpublished work, else null; creates nothing (#958)",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "POST",
       "path": "/v1/documents/{id}/branches/mine",
       "tag": "documents",

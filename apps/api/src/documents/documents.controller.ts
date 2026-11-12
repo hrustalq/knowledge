@@ -21,6 +21,7 @@ import type {
   CompareResponse,
   CreateBranchResponse,
   MyDraftBranchResponse,
+  MyLiveDraftResponse,
   CreateDocumentResponse,
   CreateDocumentThreadResponse,
   CreateUploadResponse,
@@ -467,6 +468,14 @@ export class DocumentsController {
   })
   myDraftBranch(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<MyDraftBranchResponse> {
     return this.documents.myDraftBranch(id, principal.userId);
+  }
+
+  @Get(':id/branches/mine')
+  @Returns('MyLiveDraftResponse')
+  @Access('editor', 'document')
+  @ApiOperation({ summary: "The caller's working branch for this page if it holds unpublished work, else null; creates nothing (#958)" })
+  myLiveDraft(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<MyLiveDraftResponse> {
+    return this.documents.myLiveDraft(id, principal.userId);
   }
 
   @Get(':id/branches')

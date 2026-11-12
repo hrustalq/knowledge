@@ -8385,6 +8385,18 @@
       "invalid": "Enter a whole number from 0 to 20, or leave it empty.",
       "inherits": "Empty: uses the server default, {n} approval. | Empty: uses the server default, {n} approvals.",
       "hint": "Leave empty to go back to the server default ({n})."
+    },
+    "mode": {
+      "title": "Publish mode",
+      "subtitle": "The path a person's edit takes to a published page. Proposals from agents, captures and connectors are merge requests in both modes, and a new page stays a private draft until its author publishes it.",
+      "review": {
+        "label": "Review",
+        "hint": "A change to a published page goes through a merge request. Only a workspace admin can write to a page directly."
+      },
+      "direct": {
+        "label": "Direct",
+        "hint": "An editor's save is live at once, in the editor and over MCP, with no working branch and no merge request."
+      }
     }
   }
 }

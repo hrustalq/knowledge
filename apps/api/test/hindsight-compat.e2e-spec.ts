@@ -878,6 +878,38 @@ describe('Hindsight compatibility (e2e, #986)', () => {
       }
     });
 
+    it('refuses recall and reflect over their per-key rate, on both surfaces, calling no model', async () => {
+      const { MemoryRateService } = await import('../src/memory/memory-rate.service.js');
+      const { AssistantClient } = await import('../src/assistant/assistant.client.js');
+      // The limiter the memory doors hold: two modules provide one, so it is taken from its user.
+      const limiter = (app.get(MemoryRateService) as unknown as { limiter: { hit(key: string, limit: number, windowMs: number, failOpen: boolean): Promise<boolean> } }).limiter;
+      const real = limiter.hit.bind(limiter);
+      const readOnly = await mintKey(people.alice.id, { workspaceId: WS_A, scope: 'read' });
+      const { tool } = await mcp(readOnly, `/mcp/${mem}/`);
+      const model = vi.spyOn(app.get(AssistantClient), 'chatWithUsage');
+      // Over the rate for memory's recall and reflect only; every other counter answers as it would.
+      const hit = vi.spyOn(limiter, 'hit').mockImplementation((key, limit, windowMs, failOpen) => (/^memory:(recall|reflect):/.test(key) ? Promise.resolve(false) : real(key, limit, windowMs, failOpen)));
+      try {
+        for (const [path, body] of [[`/memories/recall`, { query: 'deploy pipeline' }], [`/reflect`, { query: 'Who maintains the deploy pipeline?' }]] as const) {
+          const res = await call(readOnly, 'POST', `/v1/default/banks/${mem}${path}`, body);
+          expect([path, res.status, res.headers.get('retry-after')]).toEqual([path, 429, '60']);
+          expect((await res.json()).detail).toMatch(/Too many/);
+        }
+        for (const [name, args] of [['recall', { query: 'deploy pipeline' }], ['reflect', { query: 'Who maintains the deploy pipeline?' }]] as const) {
+          const refused = await tool(name, args);
+          expect([name, refused.isError]).toEqual([name, true]);
+          expect(refused.text).not.toContain('Gwen');
+        }
+        expect(model).not.toHaveBeenCalled();
+        // The bank is resolved first: over the rate or not, another workspace's caller learns nothing but 404.
+        expect((await call(people.carol.key, 'POST', `/v1/default/banks/${mem}/memories/recall`, { query: 'x' })).status).toBe(404);
+      } finally {
+        hit.mockRestore();
+        model.mockRestore();
+      }
+      expect((await tool('recall', { query: 'deploy pipeline' })).isError).toBe(false);
+    });
+
     it('leaves the platform’s own MCP endpoint without a memory tool', async () => {
       const res = await rpc(people.alice.key, '/v1/mcp');
       expect(res.status).toBe(200);

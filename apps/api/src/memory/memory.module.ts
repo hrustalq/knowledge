@@ -3,6 +3,7 @@ import { MemoryBanksController, MemoryProbeController } from './memory-banks.con
 import { MemoryCoreModule } from './memory-core.module.js';
 import { MemoryIntakeService } from './memory-intake.service.js';
 import { MemoryMcpController } from './memory-mcp.controller.js';
+import { MemoryRateService } from './memory-rate.service.js';
 import { MemoryOperationsSweeper } from './memory-operations.sweeper.js';
 import { MemoryUnitsController } from './memory-units.controller.js';
 
@@ -11,7 +12,7 @@ import { MemoryUnitsController } from './memory-units.controller.js';
   imports: [MemoryCoreModule],
   controllers: [MemoryBanksController, MemoryUnitsController, MemoryMcpController, MemoryProbeController],
   // API-only: it re-enqueues, and a sweeper that also ran in the worker would do it twice.
-  providers: [MemoryIntakeService, MemoryOperationsSweeper],
+  providers: [MemoryIntakeService, MemoryRateService, MemoryOperationsSweeper],
   exports: [MemoryCoreModule],
 })
 export class MemoryModule {}

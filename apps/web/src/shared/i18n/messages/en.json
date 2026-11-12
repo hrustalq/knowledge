@@ -7733,7 +7733,46 @@
       "git": "Git remote",
       "sources": "Source-backed pages"
     },
-    "serverOff": "Off on this server (WEB_SOURCES_ENABLED), whatever is chosen here."
+    "serverOff": "Off on this server (WEB_SOURCES_ENABLED), whatever is chosen here.",
+      "sectionsTitle": "Sections",
+      "purpose": {
+        "title": "Purpose",
+        "subtitle": "Tick what this workspace is used for. The sections below follow: one no chosen use needs is suggested off, and a section you set yourself stays as you left it. Nothing changes until you apply.",
+        "descriptionLabel": "In your own words (optional)",
+        "descriptionPlaceholder": "We document our public REST API and hold a weekly design review.",
+        "descriptionHint": "Only workspace admins see this.",
+        "apply": "Apply",
+        "switchesOn": "Switches on when you apply.",
+        "switchesOff": "Switches off when you apply.",
+        "suggestsOn": "Your purpose suggests this on.",
+        "suggestsOff": "Your purpose suggests this off.",
+        "uses": {
+          "team-wiki": {
+            "name": "Team wiki",
+            "description": "How the team works: processes, onboarding, decisions and how-tos."
+          },
+          "engineering-docs": {
+            "name": "Engineering docs",
+            "description": "Architecture, services and runbooks, kept next to the code they describe."
+          },
+          "api-docs": {
+            "name": "API product docs",
+            "description": "Reference for an API or SDK: specs, test suites and try-it."
+          },
+          "meeting-notes": {
+            "name": "Meeting notes",
+            "description": "Recordings and notes from meetings, turned into pages."
+          },
+          "support-kb": {
+            "name": "Support knowledge base",
+            "description": "The answers a support team and its bots give customers."
+          },
+          "public-docs": {
+            "name": "Public docs",
+            "description": "Documentation published for readers outside the team."
+          }
+        }
+      }
   },
   "git": {
     "clone": {

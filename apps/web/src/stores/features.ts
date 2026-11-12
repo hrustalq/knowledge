@@ -1,6 +1,6 @@
 import { defineStore, type Pinia } from 'pinia'
 import type { Directive } from 'vue'
-import type { WorkspaceFeature, WorkspaceFeaturesResponse } from '@knowledge/contracts'
+import type { WorkspaceFeature, WorkspaceFeaturesResponse, WorkspacePurposeResponse, WorkspaceUse } from '@knowledge/contracts'
 import { apiQueryOptions, bindStoreQuery } from '@/shared/api/queries'
 import { api } from '@/shared/api/client'
 import { getWorkspaceId } from '@/shared/api/api'
@@ -20,6 +20,10 @@ export const useFeaturesStore = defineStore('features', {
     disabled: [] as WorkspaceFeature[],
     /** Off on the server (an env ceiling), whatever `disabled` says. */
     unavailable: [] as WorkspaceFeature[],
+    /** What the workspace is used for (#934): advice the sections were suggested from, never a switch. */
+    uses: [] as WorkspaceUse[],
+    /** False only for a new workspace whose admin has not yet met the purpose question. A failed read leaves it true: no redirect on a blip. */
+    purposeAsked: true,
     loaded: false,
   }),
   getters: {
@@ -31,10 +35,7 @@ export const useFeaturesStore = defineStore('features', {
       const id = getWorkspaceId()
       try {
         if (id) {
-          await bindStoreQuery<WorkspaceFeaturesResponse>(this, 'features', this.queryClient, optionsFor(id), (res) => {
-            this.disabled = res.disabled
-            this.unavailable = res.unavailable ?? []
-          })
+          await bindStoreQuery<WorkspaceFeaturesResponse>(this, 'features', this.queryClient, optionsFor(id), (res) => this.apply(res))
         }
       } catch {
         // every section stays on; see above
@@ -46,8 +47,25 @@ export const useFeaturesStore = defineStore('features', {
       const id = getWorkspaceId()
       const res = await api.put('/v1/workspaces/{id}/features', { path: { id }, body: { disabled } })
       this.queryClient.setQueryData(optionsFor(id).queryKey, res)
+      this.apply(res)
+    },
+    apply(res: WorkspaceFeaturesResponse) {
       this.disabled = res.disabled
       this.unavailable = res.unavailable ?? []
+      this.uses = res.uses ?? []
+      this.purposeAsked = res.purposeAsked ?? true
+    },
+    /** Workspace admin: the stored purpose with its description, which the members' read never carries. */
+    loadPurpose(): Promise<WorkspacePurposeResponse> {
+      return api.get('/v1/workspaces/{id}/purpose', { path: { id: getWorkspaceId() } })
+    },
+    /** Workspace admin: the purpose and the confirmed section list in one write; no uses with the list untouched is Skip. */
+    async savePurpose(body: { uses: WorkspaceUse[]; description?: string | null; disabled: WorkspaceFeature[] }): Promise<void> {
+      const id = getWorkspaceId()
+      const res = await api.put('/v1/workspaces/{id}/purpose', { path: { id }, body })
+      const next: WorkspaceFeaturesResponse = { workspaceId: id, disabled: res.disabled, unavailable: this.unavailable, uses: res.uses, purposeAsked: true }
+      this.queryClient.setQueryData(optionsFor(id).queryKey, next)
+      this.apply(next)
     },
   },
 })

@@ -685,6 +685,7 @@
     "projectRestricted": "This project is restricted. Ask one of its managers for access",
     "editRequired": "Editing this page is restricted to the people it names",
     "manageRequired": "Only this page's managers and workspace admins can change who has access",
+    "historyRestricted": "Page history in this workspace is kept to editors",
     "selfLockout": "This change would leave you without access to manage this page. Keep yourself (or a group you are in) as a manager",
     "draftPublishFirst": "This page is a private draft. Publish it to open it to the workspace",
     "unknownSubjects": "Not a member or group of this workspace: {subjects}",

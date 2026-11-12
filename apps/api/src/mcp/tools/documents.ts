@@ -23,6 +23,7 @@ export function registerDocumentsTools(ctx: McpToolContext): void {
     async ({ documentId, revisionId }) => {
       const workspaceId = await guard.doc(documentId, 'viewer');
       if (revisionId) await guard.branches(documentId, { revisionIds: [revisionId] }, 'viewer');
+      if (revisionId) await guard.history(workspaceId, documentId, [revisionId]);
       const doc = await svc.documents.getDocument(documentId, revisionId);
       void svc.analytics.view(caller, documentId, revisionId);
       const { backlinks } = await svc.documents.getBacklinks(documentId, await guard.scope(workspaceId));
@@ -48,8 +49,9 @@ export function registerDocumentsTools(ctx: McpToolContext): void {
       },
     },
     async ({ documentId, revisionId, lines }) => {
-      await guard.doc(documentId, 'viewer');
+      const workspaceId = await guard.doc(documentId, 'viewer');
       if (revisionId) await guard.branches(documentId, { revisionIds: [revisionId] }, 'viewer');
+      if (revisionId) await guard.history(workspaceId, documentId, [revisionId]);
       const content = await svc.documents.getContent(documentId, revisionId);
       void svc.analytics.view(caller, documentId, content.revisionId);
       return json(lines ? contentLines(content, lines, svc.webUrl()) : content);
@@ -68,6 +70,7 @@ export function registerDocumentsTools(ctx: McpToolContext): void {
     async ({ documentId, branch }) => {
       const workspaceId = await guard.doc(documentId, 'viewer');
       if (branch) await guard.branches(documentId, { branchNames: [branch] }, 'viewer');
+      await guard.history(workspaceId, documentId);
       return json(await svc.documents.listRevisions(documentId, await guard.scope(workspaceId), branch));
     },
   );
@@ -86,8 +89,9 @@ export function registerDocumentsTools(ctx: McpToolContext): void {
       },
     },
     async ({ documentId, fromRevisionId, toRevisionId, mode, includeSemanticDiff }) => {
-      await guard.doc(documentId, 'viewer');
+      const workspaceId = await guard.doc(documentId, 'viewer');
       await guard.branches(documentId, { revisionIds: [fromRevisionId, toRevisionId] }, 'viewer');
+      await guard.history(workspaceId, documentId);
       return json(
           await svc.compare.compare(documentId, fromRevisionId, toRevisionId, mode ?? 'direct', {
             structural: true,

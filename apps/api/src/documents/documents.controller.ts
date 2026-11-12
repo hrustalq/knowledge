@@ -52,7 +52,7 @@ import type {
 import { ConnectorLinksService } from '../connectors/connector-links.service.js';
 import { ConnectorProducer } from '../connectors/connector.producer.js';
 import { ConnectorsService, toRunInfo } from '../connectors/connectors.service.js';
-import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
+import { Access, CurrentPrincipal, History } from '../auth/access.decorator.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import type { Principal } from '../auth/principal.js';
 import { DocumentsService } from './documents.service.js';
@@ -431,6 +431,7 @@ export class DocumentsController {
   }
 
   @Get(':id/revisions')
+  @History()
   @Returns('ListRevisionsResponse')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'List revisions with DAG parentage (optionally filtered by branch)' })
@@ -479,6 +480,7 @@ export class DocumentsController {
   }
 
   @Get(':id/branches')
+  @History()
   @Returns('ListBranchesResponse')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'List branches with head revisions' })
@@ -621,6 +623,7 @@ export class DocumentsController {
   }
 
   @Get(':id/facts/timeline')
+  @History()
   @Returns('FactTimelineResponse')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'Fact lifecycle along a branch: introduced/removed revisions (removed-facts audit)' })

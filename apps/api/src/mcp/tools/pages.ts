@@ -231,8 +231,9 @@ export function registerPagesTools(ctx: McpToolContext): void {
       },
     },
     async ({ documentId, group, revisionId }) => {
-      await guard.doc(documentId, 'viewer');
+      const workspaceId = await guard.doc(documentId, 'viewer');
       if (revisionId) await guard.branches(documentId, { revisionIds: [revisionId] }, 'viewer');
+      if (revisionId) await guard.history(workspaceId, documentId, [revisionId]);
       const revision = revisionId ?? (await svc.documents.getContent(documentId)).revisionId;
       const items = await svc.embeds.group(revision, group ?? 0);
       if (!items) return json({ documentId, revisionId: revision, group: group ?? 0, items: [], note: 'No embed group at that index.' });

@@ -8403,6 +8403,18 @@
         "label": "Direct",
         "hint": "An editor's save is live at once, in the editor and over MCP, with no working branch and no merge request."
       }
+    },
+    "history": {
+      "title": "Page history",
+      "subtitle": "Who can read what a page said before: its revision list, comparisons, older revisions and as-of reads. The current page is never hidden, and a merge request's diff stays readable to whoever can read the merge request.",
+      "everyone": {
+        "label": "Everyone who can open the page",
+        "hint": "Viewers and guests read a page's history as they read the page."
+      },
+      "editors": {
+        "label": "Editors only",
+        "hint": "Viewers and guests read the current page. The API and MCP refuse them its history."
+      }
     }
   }
 }

@@ -22,6 +22,7 @@ export function registerGraphTools(ctx: McpToolContext): void {
     },
     async ({ workspaceId, projectId, asOf, knownAt }) => {
       await guard.ws(workspaceId, 'viewer');
+      if (asOf || knownAt) await guard.history(workspaceId);
       const at = await svc.temporal.resolve(workspaceId, asOf, knownAt);
       return json(withAsOf(await svc.documents.getWorkspaceGraph(await guard.scope(workspaceId), projectId, at), at));
     },
@@ -43,6 +44,7 @@ export function registerGraphTools(ctx: McpToolContext): void {
     },
     async ({ workspaceId, entity, relationship, depth, asOf, knownAt }) => {
       await guard.ws(workspaceId, 'viewer');
+      if (asOf || knownAt) await guard.history(workspaceId);
       const at = await svc.temporal.resolve(workspaceId, asOf, knownAt);
       const scope = await guard.scope(workspaceId);
       return json(withAsOf(await svc.entities.neighbors(scope, entity, depth ?? 1, relationship ? [relationship] : undefined, at), at));
@@ -65,6 +67,7 @@ export function registerGraphTools(ctx: McpToolContext): void {
     },
     async ({ workspaceId, entityId, direction, maxDepth, asOf, knownAt }) => {
       await guard.ws(workspaceId, 'viewer');
+      if (asOf || knownAt) await guard.history(workspaceId);
       const at = await svc.temporal.resolve(workspaceId, asOf, knownAt);
       const scope = await guard.scope(workspaceId);
       return json(withAsOf(await svc.entities.impactAnalysis(scope, entityId, direction ?? 'dependents', maxDepth ?? 3, at), at));
@@ -86,6 +89,7 @@ export function registerGraphTools(ctx: McpToolContext): void {
     },
     async ({ workspaceId, fromEntityId, toEntityId, maxDepth, asOf, knownAt }) => {
       await guard.ws(workspaceId, 'viewer');
+      if (asOf || knownAt) await guard.history(workspaceId);
       const at = await svc.temporal.resolve(workspaceId, asOf, knownAt);
       return json(withAsOf(await svc.entities.trace(await guard.scope(workspaceId), fromEntityId, toEntityId, maxDepth ?? 4, at), at));
     },
@@ -248,6 +252,7 @@ export function registerGraphTools(ctx: McpToolContext): void {
       await guard.ws(workspaceId, 'viewer');
       if (!atRevisionId) {
         // #81: the entity's neighbourhood across every page, as of a point.
+        await guard.history(workspaceId);
         const at = await svc.temporal.resolve(workspaceId, asOf, knownAt);
         if (!at) throw new Error('Give atRevisionId or asOf');
         const scope = await guard.scope(workspaceId);
@@ -266,6 +271,7 @@ export function registerGraphTools(ctx: McpToolContext): void {
       }
       await guard.doc(revision.documentId, 'viewer');
       await guard.branches(revision.documentId, { revisionIds: [atRevisionId] }, 'viewer');
+      await guard.history(workspaceId, revision.documentId);
       const at = await svc.history.factsAt(revision.documentId, atRevisionId);
       const currentNeighborhood = await svc.entities
         .neighbors(await guard.scope(workspaceId), entityId, 1)

@@ -239,10 +239,14 @@ onMounted(() => {
 const features = useFeaturesStore()
 const WIDGET_FEATURE: Partial<Record<RailWidget, WorkspaceFeature>> = { conflicts: 'conflicts', insights: 'analytics', workflows: 'workflows', source: 'sources' }
 
+const canReadHistory = computed(() => features.historyAudience === 'everyone' || auth.canEdit)
+
 const visibleWidgets = computed(() =>
   RAIL_WIDGETS.filter(
     (w) =>
       (!WIDGET_FEATURE[w.id] || features.isOn(WIDGET_FEATURE[w.id]!)) &&
+      // History kept to editors (#958): the API refuses it, so the widget is not drawn.
+      (w.id !== 'revisions' || canReadHistory.value) &&
       (w.id !== 'frontmatter' || !!content.value?.frontmatter) &&
       (w.id !== 'used-by' || !!declaration.value) &&
       (w.id !== 'source' || sourceBacked.value) &&
@@ -670,7 +674,7 @@ const resolveDocumentId = async () => documentId.value
  */
 
 const revisionsPreview = useQuery(
-  computed(() => ({ ...apiQueryOptions('/v1/documents/{id}/revisions', { path: { id: documentId.value } }), enabled: railReady.value })),
+  computed(() => ({ ...apiQueryOptions('/v1/documents/{id}/revisions', { path: { id: documentId.value } }), enabled: railReady.value && canReadHistory.value })),
 )
 const mergeRequestsPreview = useQuery(
   computed(() => ({

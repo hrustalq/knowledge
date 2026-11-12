@@ -12,7 +12,7 @@ import { errorMessage } from '@/shared/api/errors'
 import { Button } from '@knowledge/ui/button'
 import { Input } from '@knowledge/ui/input'
 import { RadioGroup, RadioGroupItem } from '@knowledge/ui/radio-group'
-import { PUBLISH_MODES, type PublishMode } from '@knowledge/contracts'
+import { HISTORY_AUDIENCES, PUBLISH_MODES, type HistoryAudience, type PublishMode } from '@knowledge/contracts'
 import { useAuthStore } from '@/stores/auth'
 import { useFeaturesStore } from '@/stores/features'
 
@@ -25,8 +25,10 @@ const policy = computed(() => features.editing)
 // Empty = inherit the server's number.
 const approvals = ref('')
 const mode = ref<PublishMode>('review')
+const audience = ref<HistoryAudience>('everyone')
 function reset() {
   mode.value = policy.value?.publishMode.effective ?? 'review'
+  audience.value = policy.value?.historyAudience.effective ?? 'everyone'
   approvals.value = policy.value?.requiredApprovals.workspace?.toString() ?? ''
 }
 watch(policy, reset, { immediate: true })
@@ -39,7 +41,8 @@ const approvalsValid = computed(() => {
 const dirty = computed(
   () =>
     approvalsValue.value !== (policy.value?.requiredApprovals.workspace ?? null) ||
-    mode.value !== policy.value?.publishMode.effective,
+    mode.value !== policy.value?.publishMode.effective ||
+    audience.value !== policy.value?.historyAudience.effective,
 )
 
 const saving = ref(false)
@@ -51,6 +54,7 @@ async function save() {
       requiredApprovals: approvalsValue.value,
       // The default is stored as "inherit".
       publishMode: mode.value === 'review' ? null : mode.value,
+      historyAudience: audience.value === 'everyone' ? null : audience.value,
     })
     toast.success(t('editing.saved'))
   } catch (e) {
@@ -122,6 +126,27 @@ async function save() {
             }}
           </p>
         </div>
+      </section>
+
+      <section class="space-y-3" aria-labelledby="history-heading">
+        <div>
+          <h2 id="history-heading" class="text-base font-semibold">{{ t('editing.history.title') }}</h2>
+          <p class="kn-measure mt-0.5 text-sm text-muted-foreground">{{ t('editing.history.subtitle') }}</p>
+        </div>
+        <RadioGroup v-model="audience" class="kn-measure gap-2" aria-labelledby="history-heading">
+          <label
+            v-for="a in HISTORY_AUDIENCES"
+            :key="a"
+            class="flex cursor-pointer items-start gap-2.5 rounded-md border p-3 text-sm"
+            :class="audience === a ? 'border-primary' : ''"
+          >
+            <RadioGroupItem :value="a" class="mt-0.5" />
+            <span class="space-y-0.5">
+              <span class="block font-medium">{{ t(`editing.history.${a}.label`) }}</span>
+              <span class="block text-xs text-muted-foreground">{{ t(`editing.history.${a}.hint`) }}</span>
+            </span>
+          </label>
+        </RadioGroup>
       </section>
 
       <div class="flex justify-end">

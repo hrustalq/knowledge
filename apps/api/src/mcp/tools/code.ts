@@ -133,6 +133,7 @@ export function registerCodeTools(ctx: McpToolContext): void {
       await guard.ws(workspaceId, 'viewer');
       await guard.doc(documentId, 'viewer');
       await guard.branches(documentId, { revisionIds: [fromRevisionId, toRevisionId].filter((r): r is string => !!r) }, 'viewer');
+      await guard.history(workspaceId, documentId);
       return json(await svc.apiDiffs.require(documentId, fromRevisionId, toRevisionId));
     },
   );

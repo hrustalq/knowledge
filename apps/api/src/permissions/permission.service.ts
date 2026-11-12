@@ -15,6 +15,7 @@ import type { DocumentAclFilter } from '../common/document-acl.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AccessService } from '../auth/access.service.js';
 import { AuditService } from '../auth/audit.service.js';
+import { EditingPolicyService } from '../auth/editing-policy.service.js';
 import { ROLE_ORDER, type Principal } from '../auth/principal.js';
 import { t } from '../i18n/t.js';
 import {
@@ -61,6 +62,7 @@ export class PermissionService {
     private readonly access: AccessService,
     private readonly audit: AuditService,
     private readonly config: ConfigService<Env, true>,
+    private readonly editing: EditingPolicyService,
   ) {}
 
   /**
@@ -336,6 +338,52 @@ export class PermissionService {
     const level = await this.levelFor(scope, resource);
     if (accessRank(level) < accessRank(needed)) throw this.refusal(scope, resource, level, needed);
     return level;
+  }
+
+  /**
+   * "May this caller read page history" (#958), the one place the rule is
+   * spelled. History is the revision list, a comparison, a revision that is
+   * not the current page, an as-of read, the facts timeline and the branch
+   * list. With `history_audience: editors` it takes edit on the page — or, for
+   * a read that spans the workspace (an as-of search or graph), the editor
+   * role. A read-only key reads as a viewer, as everywhere.
+   *
+   * `revisionIds`: the revisions a request names when naming them is its only
+   * claim on history. Not history: the page's current head, and the head of a
+   * branch a merge request was opened from — a proposal's diff is not page
+   * history, and whoever may read the merge request reads it.
+   *
+   * The refusal carries a reason and never a title.
+   */
+  async requireHistory(scope: AccessScope, documentId?: string, revisionIds?: readonly string[]): Promise<void> {
+    if (scope.bypass) return;
+    if ((await this.editing.policy(scope.workspaceId)).historyAudience.effective === 'everyone') return;
+    const allowed = documentId
+      ? accessRank(await this.levelFor(scope, { type: 'document', id: documentId })) >= accessRank('edit')
+      : !scope.readOnly && !scope.guest && (scope.role === 'editor' || scope.role === 'admin');
+    if (allowed) return;
+    if (documentId && revisionIds?.length) {
+      const inReview = { mrAsSource: { some: {} } };
+      const page = await this.prisma.document.findUnique({ where: { id: documentId }, select: { defaultBranch: true } });
+      const current = await this.prisma.documentBranch.findMany({
+        where: {
+          documentId,
+          headRevisionId: { in: [...revisionIds] },
+          OR: [{ name: page?.defaultBranch ?? '' }, inReview, { projectBranch: { branches: { some: inReview } } }],
+        },
+        select: { headRevisionId: true },
+      });
+      const heads = new Set(current.map((b) => b.headRevisionId));
+      if (revisionIds.every((id) => heads.has(id))) return;
+    }
+    throw new ForbiddenException({ statusCode: 403, message: t('error.access.historyRestricted'), reason: 'history-restricted' });
+  }
+
+  /** `requireHistory` for a principal: the scope is built only when the workspace restricts history. */
+  async requireHistoryAs(principal: Principal, workspaceId: string, documentId?: string, revisionIds?: readonly string[]): Promise<void> {
+    if (principal.mode === 'dev') return;
+    if ((await this.editing.policy(workspaceId)).historyAudience.effective === 'everyone') return;
+    await this.requireHistory(await this.scopeFor(principal, workspaceId), documentId, revisionIds);
   }
 
   /**

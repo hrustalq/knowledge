@@ -1,3 +1,4 @@
+import { useFeaturesStore } from '@/stores/features'
 import { computed, type ComputedRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
@@ -78,6 +79,7 @@ export function useCrumbs(): ComputedRef<Crumb[]> {
   const store = useDocumentsStore()
   const projects = useProjectsStore()
   const workflows = useWorkflowsStore()
+  const features = useFeaturesStore()
 
   /**
    * A merge request's crumb is its title (#651). The query is the detail page's
@@ -154,7 +156,7 @@ export function useCrumbs(): ComputedRef<Crumb[]> {
     if (path.startsWith('/merge-requests/')) {
       const mr = (mrQuery.data.value as { mergeRequest: MergeRequestInfo } | undefined)?.mergeRequest
       return [
-        { label: t('nav.mergeRequests'), to: '/merge-requests' },
+        { label: t(features.proposalsOnly ? 'nav.proposals' : 'nav.mergeRequests'), to: '/merge-requests' },
         { label: mr?.title ?? (route.params.id as string).slice(0, 8) },
       ]
     }
@@ -246,7 +248,7 @@ export function useCrumbs(): ComputedRef<Crumb[]> {
     }
     if (path === '/create') return [...pageRoot(), { label: t('nav.newPage') }]
     if (path === '/upload' || path === '/import') return [...pageRoot(), { label: t('nav.import') }]
-    const key = STATIC[path]
+    const key = path === '/merge-requests' && features.proposalsOnly ? 'nav.proposals' : STATIC[path]
     return key ? [{ label: t(key) }] : []
   })
 }

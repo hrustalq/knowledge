@@ -1,6 +1,6 @@
 import { MCP_TOOLSET_KEYS } from '@knowledge/contracts';
-import type { ApiKeyScope, McpToolset, McpToolSummary, WorkspaceRole } from '@knowledge/contracts';
-import { CAPTURE_TOOLS } from './mcp-tools.js';
+import type { ApiKeyScope, McpToolset, McpToolSummary, PublishMode, WorkspaceRole } from '@knowledge/contracts';
+import { CAPTURE_TOOLS, authoringOf } from './mcp-tools.js';
 import { TOOLSET_SKILLS, cell, joinSections, skillSections, type SkillSection } from './skill-sections.js';
 
 /** knowledge_whoami's answer — also the "your access" table in the skill. */
@@ -16,6 +16,8 @@ export interface McpWhoami {
     name: string;
     /** Effective for this connection — a read-only key reports viewer. */
     role: WorkspaceRole;
+    /** How a person's edit reaches a published page here (#958). Absent reads as `review`. */
+    publishMode?: PublishMode;
     projects: { projectId: string; name: string }[];
   }[];
 }
@@ -116,6 +118,7 @@ function sectionsOf(input: SkillInput): SkillSection[] {
     canCapture: input.tools.some((tool) => CAPTURE_TOOLS.has(tool.name)),
     git: input.git === true,
     workspaces: input.whoami.workspaces,
+    authoring: authoringOf(input.whoami.workspaces),
   });
 }
 
@@ -166,7 +169,7 @@ function compose(
   return `---
 name: ${part.name}
 description: Use when the user asks about, or wants to change, anything kept in the Knowledge platform at ${host} — internal documentation, architecture and service pages, how systems depend on each other, what a change would impact, or merge requests on pages. Searches with citations, reads whole pages, walks the relation graph${
-    canWrite ? ', and proposes edits as merge requests' : ''
+    canWrite ? (authoringOf(input.whoami.workspaces) === 'direct' ? ', and edits pages' : ', and proposes edits as merge requests') : ''
   } through the \`${serverName}\` MCP server.
 ---
 

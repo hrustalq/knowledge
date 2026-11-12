@@ -1,3 +1,5 @@
+import type { Principal } from '../auth/principal.js';
+import { internalWrite, type WriteAuthority } from '../documents/write-authority.js';
 import { randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -241,24 +243,25 @@ export class GitPushService {
     const shas = view.trial(planned.map((p) => this.modelCommit(p, branch)), blobs, created.map((ch) => ch.documentId));
     if (planned.some((p, i) => shas[i] !== p.sha)) throw new PushRefused('tree cannot be represented', t('error.git.push.cannotRepresent', { branch }));
 
-    const write = () => this.write(workspaceId, projectId, branch, head, planned, principal.userId, isDefault);
+    // #958: a push is its person's edit, held to the publish mode on a default branch; landing a merge request is the merge.
+    const write = (by: WriteAuthority = { person: principal }) => this.write(workspaceId, projectId, branch, head, planned, principal.userId, isDefault, by);
     if (isDefault) {
       const mr = await this.mergedBy(projectId, branch, planned.at(-1)!);
       const changes = planned.flatMap((p) => p.changes);
       if (mr) {
         // What the push carries beside the merge request passes the checks a direct push would (#769).
         const spanned = await this.mergeRequests.spannedPages(mr.id);
-        await this.assertMayGoDirect(changes.filter((ch) => !spanned.has(ch.documentId)), branch);
+        await this.assertMayGoDirect(changes.filter((ch) => !spanned.has(ch.documentId)), branch, principal);
         const merged = await this.mergeRequests
           .mergeByPush(mr.id, principal, async () => {
-            const ids = await write();
+            const ids = await write(internalWrite('merge'));
             return ids.revisionFor(mr.documentId);
           })
           .catch((e: unknown) => this.gateRefusal(e));
         return [t('error.git.push.mrMerged', { title: merged.title, url: this.mrUrl(merged.mergeRequestId) })];
       }
-      await this.assertMayGoDirect(changes, branch);
-      await this.prisma.withTransaction(write, { timeout: 60_000, maxWait: 10_000 });
+      await this.assertMayGoDirect(changes, branch, principal);
+      await this.prisma.withTransaction(() => write(), { timeout: 60_000, maxWait: 10_000 });
       return [];
     }
     return this.prisma.withTransaction(
@@ -469,13 +472,24 @@ export class GitPushService {
     return withIdLine(documentId, s.body, ext).equals(bytes) ? null : s.idLine;
   }
 
-  /** No new pages on the default branch, and no write to a protected one, without a merge request. */
-  private async assertMayGoDirect(changes: Planned[], branch: string): Promise<void> {
+  /**
+   * No new pages on the default branch, no write to a protected one, and in a
+   * `review` workspace no write at all from anyone but an admin (#958), without
+   * a merge request. The last is `DocumentsService`'s own predicate, asked
+   * before anything is written.
+   */
+  private async assertMayGoDirect(changes: Planned[], branch: string, principal: Principal): Promise<void> {
     const fresh = changes.find((ch) => ch.isNew);
     if (fresh) throw new PushRefused('new page', t('error.git.push.newOnDefault', { path: fresh.path, branch }));
     const pages = [...new Set(changes.map((ch) => ch.documentId))];
     const guarded = await this.prisma.documentBranch.count({ where: { documentId: { in: pages }, name: branch, protected: true } });
     if (guarded) throw new PushRefused('protected', t('error.git.push.protected', { branch }));
+    for (const id of pages) {
+      await this.documents.assertMayWriteDirect(id, branch, { person: principal }).catch((e: unknown) => {
+        if (e instanceof HttpException) throw new PushRefused('review required', t('error.git.push.reviewRequired', { branch }));
+        throw e;
+      });
+    }
   }
 
   /** The pusher may edit every page the push changes, and the parent of every page it creates. */
@@ -526,6 +540,7 @@ export class GitPushService {
     planned: PlannedCommit[],
     userId: string,
     isDefault: boolean,
+    by: WriteAuthority,
   ): Promise<{ created: string[]; revisionFor: (documentId: string) => string | null }> {
     return this.prisma.withTransaction(async () => {
       await this.commits.lock(projectId);
@@ -560,7 +575,7 @@ export class GitPushService {
             await this.documents.createBranch(documentId, { name: branch, fromRevisionId: ch.baseRevisionId && !ch.isNew ? rev(ch.baseRevisionId) : undefined }, userId);
           }
           let revisionId = rev(ch.revisionId);
-          if (ch.content) revisionId = await this.writeRevision(documentId, branch, ch, p.subject, userId, rev);
+          if (ch.content) revisionId = await this.writeRevision(documentId, branch, ch, p.subject, userId, rev, by);
           revisions.set(ch.revisionId, revisionId);
           changes.push({ documentId, revisionId, parentDocumentId: doc(ch.parentDocumentId), slug: ch.slug, removed: ch.removed });
         }
@@ -591,10 +606,10 @@ export class GitPushService {
     });
   }
 
-  private async writeRevision(documentId: string, branch: string, ch: Planned, subject: string, userId: string, rev: (id: string) => string): Promise<string> {
+  private async writeRevision(documentId: string, branch: string, ch: Planned, subject: string, userId: string, rev: (id: string) => string, by: WriteAuthority): Promise<string> {
     const source = 'copyOf' in ch.content! ? await this.prisma.documentRevision.findUniqueOrThrow({ where: { id: rev(ch.content!.copyOf) } }) : null;
     const contentType = source?.contentType ?? (ch.ext === 'md' ? 'text/markdown' : `application/${ch.ext}`);
-    const draft = await this.documents.createRevision(documentId, { branch, message: subject || undefined, contentType }, undefined, userId);
+    const draft = await this.documents.createRevision(documentId, { branch, message: subject || undefined, contentType }, by, undefined, userId);
     if (ch.secondParent) {
       const hasFirst = await this.prisma.revisionParent.count({ where: { revisionId: draft.revisionId } });
       await this.prisma.revisionParent.create({ data: { revisionId: draft.revisionId, parentRevisionId: rev(ch.secondParent), parentOrder: hasFirst ? 2 : 1 } });

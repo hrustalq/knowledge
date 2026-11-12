@@ -107,6 +107,13 @@ its query would 404. Queries a page owns for a section's widget are
 
 ## Not built
 
+- **Merge requests are not a section.** Switching them off would leave agent
+  findings, captures and connector proposals with nowhere to land: those are
+  merge requests in every workspace. What a workspace can choose is whether a
+  person's own edit goes through one, which is the publish mode
+  ([79](79-publish-mode.md)), a policy read at the point of the write, not a
+  toggle that hides routes.
+
 - No per-project toggles. A project overrides policy ([76](76-project-settings.md)), not navigation; the workspace is the
   boundary.
 - No live push of a change to other open tabs: they pick it up on their next

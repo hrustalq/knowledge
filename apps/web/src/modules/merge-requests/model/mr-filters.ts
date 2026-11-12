@@ -1,5 +1,6 @@
 import { computed, type ComputedRef } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useFeaturesStore } from '@/stores/features'
 import { Bot, GitBranch, GitMerge, UserRound, UserRoundCheck, UserRoundPlus } from 'lucide-vue-next'
 import type { ActiveFilter, FilterField, FilterOperator } from '@knowledge/ui/filter-bar'
 import { MR_PROVENANCES, type MergeRequestStatus, type SavedFilterQuery } from '@knowledge/contracts'
@@ -60,6 +61,7 @@ export function useMrFilterFields(): {
 } {
   const { t } = useI18n()
   const { members } = useMembers()
+  const features = useFeaturesStore()
 
   /** Role is the one thing that tells two same-named colleagues apart. */
   const memberOptions = computed(() =>
@@ -93,7 +95,8 @@ export function useMrFilterFields(): {
       key: 'provenance',
       label: t('filters.provenance'),
       icon: Bot,
-      options: MR_PROVENANCES.map((p) => ({ value: p, label: t(`mr.provenance.${p}`) })),
+      // The Proposals page of a direct workspace (#958) lists nothing a person opened.
+      options: MR_PROVENANCES.filter((p) => !(features.proposalsOnly && p === 'manual')).map((p) => ({ value: p, label: t(`mr.provenance.${p}`) })),
       multiple: false,
       operators: ['is'] as FilterOperator[],
     },

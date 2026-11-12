@@ -25,7 +25,9 @@ import {
 import { getProjectId, getWorkspaceId } from '@/shared/api/api'
 import { api, fetchApi, isApiRequestError } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
-import { presignedPut } from '@/shared/api/presigned-put'
+import { saveStructuredRevision } from '@/modules/api-reference/model/save-structured'
+import { useAuthStore } from '@/stores/auth'
+import { useFeaturesStore } from '@/stores/features'
 import { Button } from '@knowledge/ui/button'
 import { Input } from '@knowledge/ui/input'
 import { Label } from '@knowledge/ui/label'
@@ -34,6 +36,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PageLayout, PageState } from '@knowledge/ui/layout'
 
 const { t } = useI18n()
+const auth = useAuthStore()
+const features = useFeaturesStore()
 const route = useRoute()
 const router = useRouter()
 const queryClient = useQueryClient()
@@ -161,37 +165,23 @@ async function create(): Promise<string> {
   return res.documentId
 }
 
-/** Upload straight to storage, then finalize: the same path the page editor uses. */
+/** Upload straight to storage, then finalize; through the working branch where the workspace reviews changes (#958). */
 async function saveRevision(documentId: string): Promise<string> {
-  const contentType = apiSpecContentType(kind.value, syntax.value)
-  let revisionId = pendingRevision.value
-  if (!revisionId) {
-    // No branch: the server picks the default one.
-    const rev = await api.post('/v1/documents/{id}/revisions', {
-      path: { id: documentId },
-      body: { contentType },
-    })
-    revisionId = rev.revisionId
-  }
-  const up = await api.post('/v1/documents/{id}/uploads', {
-    path: { id: documentId },
-    body: { revisionId, contentType, filename: `source.${syntax.value}` },
-    config: { timeout: 0 },
+  const { deduplicated, heldBy } = await saveStructuredRevision({
+    documentId,
+    contentType: apiSpecContentType(kind.value, syntax.value),
+    filename: `source.${syntax.value}`,
+    text: text.value,
+    pending: pendingRevision,
+    viaReview: features.publishMode === 'review' && !auth.canAdminWorkspace,
+    title: title.value.trim(),
   })
-  await presignedPut({ url: up.upload.url, headers: { 'Content-Type': contentType } }, new Blob([text.value], { type: contentType }))
-  try {
-    const fin = await api.post('/v1/documents/{id}/revisions/{revisionId}/finalize', {
-      path: { id: documentId, revisionId },
-      config: { timeout: 0 },
-    })
-    pendingRevision.value = null
-    toast.success(fin.deduplicated ? t('apiSpecEditor.unchanged') : t('apiSpecEditor.saved'))
-  } catch (e) {
-    // A 409 means the page moved on since this draft was opened (#806): a
-    // retry on the same draft would only refuse again, so the next save starts over.
-    pendingRevision.value = isApiRequestError(e) && e.status === 409 ? null : revisionId
-    throw e
+  if (heldBy) {
+    toast.info(t('editor.draftBranch.held.title'))
+    await router.push(`/merge-requests/${heldBy}`)
+    return ''
   }
+  toast.success(deduplicated ? t('apiSpecEditor.unchanged') : t('apiSpecEditor.saved'))
   return documentId
 }
 </script>

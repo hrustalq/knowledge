@@ -70,7 +70,7 @@ describe('breaking API changes gate a spec merge (e2e)', () => {
 
   async function push(branch: string, text: string): Promise<string> {
     const docs = app.get(DocumentsService);
-    const draft = await docs.createRevision(documentId, { branch, contentType: 'application/vnd.oai.openapi+yaml' });
+    const draft = await docs.createRevision(documentId, { branch, contentType: 'application/vnd.oai.openapi+yaml' }, { person: undefined });
     const row = await prisma.documentRevision.findUniqueOrThrow({ where: { id: draft.revisionId } });
     await app.get(StorageService).putObjectText(row.s3Key, text, row.contentType);
     await docs.finalizeRevision(documentId, draft.revisionId);
@@ -184,7 +184,7 @@ describe('breaking API changes gate a spec merge (e2e)', () => {
   it('a page merge request is not applicable', async () => {
     await http().post(`/v1/documents/${pageId}/branches`).send({ name: 'edit' }).expect(201);
     const docs = app.get(DocumentsService);
-    const draft = await docs.createRevision(pageId, { branch: 'edit', contentType: 'text/markdown' });
+    const draft = await docs.createRevision(pageId, { branch: 'edit', contentType: 'text/markdown' }, { person: undefined });
     const row = await prisma.documentRevision.findUniqueOrThrow({ where: { id: draft.revisionId } });
     await app.get(StorageService).putObjectText(row.s3Key, '# A page, edited\n', 'text/markdown');
     await docs.finalizeRevision(pageId, draft.revisionId);

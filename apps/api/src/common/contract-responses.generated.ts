@@ -128,6 +128,7 @@ import type {
   DocumentWorkflowRunsResponse,
   DraftComponentResponse,
   DraftWorkflowResponse,
+  EditingPolicyResponse,
   EffectiveAccessResponse,
   EmbedUsagesResponse,
   EntityNeighborsResponse,
@@ -256,6 +257,7 @@ import type {
   MergeRequestDiffResponse,
   MergeRequestThreadResponse,
   MyDraftBranchResponse,
+  MyLiveDraftResponse,
   NotificationPreferences,
   NotificationUnreadCountResponse,
   PageInsightsResponse,
@@ -500,6 +502,7 @@ export interface ContractResponses {
   DocumentWorkflowRunsResponse: DocumentWorkflowRunsResponse;
   DraftComponentResponse: DraftComponentResponse;
   DraftWorkflowResponse: DraftWorkflowResponse;
+  EditingPolicyResponse: EditingPolicyResponse;
   EffectiveAccessResponse: EffectiveAccessResponse;
   EmbedUsagesResponse: EmbedUsagesResponse;
   EntityNeighborsResponse: EntityNeighborsResponse;
@@ -628,6 +631,7 @@ export interface ContractResponses {
   MergeRequestDiffResponse: MergeRequestDiffResponse;
   MergeRequestThreadResponse: MergeRequestThreadResponse;
   MyDraftBranchResponse: MyDraftBranchResponse;
+  MyLiveDraftResponse: MyLiveDraftResponse;
   NotificationPreferences: NotificationPreferences;
   NotificationUnreadCountResponse: NotificationUnreadCountResponse;
   PageInsightsResponse: PageInsightsResponse;

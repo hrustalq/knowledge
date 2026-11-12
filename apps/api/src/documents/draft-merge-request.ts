@@ -1,3 +1,4 @@
+import { internalWrite } from './write-authority.js';
 import type { MergeRequestProvenance } from '@knowledge/contracts';
 import type { PrismaService } from '../prisma/prisma.service.js';
 import type { DocumentsService } from './documents.service.js';
@@ -60,6 +61,7 @@ export async function openDraftMergeRequest(deps: DraftMergeRequestDeps, input: 
       await deps.documents.writeRevision(
         input.documentId,
         { text: input.markdown, branch: input.branch, message: input.title, contentType: 'text/markdown' },
+        internalWrite('proposal'),
         input.userId,
       );
 

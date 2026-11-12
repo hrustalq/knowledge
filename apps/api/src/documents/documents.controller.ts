@@ -21,6 +21,7 @@ import type {
   CompareResponse,
   CreateBranchResponse,
   MyDraftBranchResponse,
+  MyLiveDraftResponse,
   CreateDocumentResponse,
   CreateDocumentThreadResponse,
   CreateUploadResponse,
@@ -51,7 +52,7 @@ import type {
 import { ConnectorLinksService } from '../connectors/connector-links.service.js';
 import { ConnectorProducer } from '../connectors/connector.producer.js';
 import { ConnectorsService, toRunInfo } from '../connectors/connectors.service.js';
-import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
+import { Access, CurrentPrincipal, History } from '../auth/access.decorator.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import type { Principal } from '../auth/principal.js';
 import { DocumentsService } from './documents.service.js';
@@ -430,6 +431,7 @@ export class DocumentsController {
   }
 
   @Get(':id/revisions')
+  @History()
   @Returns('ListRevisionsResponse')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'List revisions with DAG parentage (optionally filtered by branch)' })
@@ -469,7 +471,16 @@ export class DocumentsController {
     return this.documents.myDraftBranch(id, principal.userId);
   }
 
+  @Get(':id/branches/mine')
+  @Returns('MyLiveDraftResponse')
+  @Access('editor', 'document')
+  @ApiOperation({ summary: "The caller's working branch for this page if it holds unpublished work, else null; creates nothing (#958)" })
+  myLiveDraft(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<MyLiveDraftResponse> {
+    return this.documents.myLiveDraft(id, principal.userId);
+  }
+
   @Get(':id/branches')
+  @History()
   @Returns('ListBranchesResponse')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'List branches with head revisions' })
@@ -569,7 +580,7 @@ export class DocumentsController {
     @Body() dto: CreateUploadDto,
     @CurrentPrincipal() principal: Principal,
   ): Promise<CreateUploadResponse> {
-    return this.documents.createUpload(id, dto, principal?.userId);
+    return this.documents.createUpload(id, dto, { person: principal }, principal?.userId);
   }
 
   @Post(':id/revisions')
@@ -588,7 +599,7 @@ export class DocumentsController {
     @Headers('if-match') ifMatch?: string,
   ): Promise<RevisionInfo> {
     const expectedHead = ifMatch?.trim().replace(/^"+|"+$/g, '') || undefined;
-    return this.documents.createRevision(id, dto, expectedHead, principal?.userId);
+    return this.documents.createRevision(id, dto, { person: principal }, expectedHead, principal?.userId);
   }
 
   @Post(':id/revisions/:revisionId/finalize')
@@ -612,6 +623,7 @@ export class DocumentsController {
   }
 
   @Get(':id/facts/timeline')
+  @History()
   @Returns('FactTimelineResponse')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'Fact lifecycle along a branch: introduced/removed revisions (removed-facts audit)' })

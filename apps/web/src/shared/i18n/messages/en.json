@@ -164,7 +164,9 @@
     "features": "Features",
     "pageActions": "Page actions",
     "linkSource": "Link a source",
-    "blueprints": "Blueprints"
+    "blueprints": "Blueprints",
+    "editing": "Editing",
+    "proposals": "Proposals"
   },
   "role": {
     "guest": "Guest",
@@ -337,7 +339,8 @@
     "securityHint": "Sign-in and the audit trail",
     "releasesHint": "Named points in time",
     "featuresHint": "Sections this workspace shows",
-    "blueprintsHint": "Page trees a new project starts from"
+    "blueprintsHint": "Page trees a new project starts from",
+    "editingHint": "How an edit reaches a page"
   },
   "connectors": {
     "pageSubtitle": "Keep pages in step with Confluence, Jira, Notion and markdown in git — in both directions.",
@@ -1848,6 +1851,13 @@
       "hiddenBlock": "Conflicting pages you cannot open must be resolved by someone who can.",
       "stale": "The target branch moved while you were resolving. The view has been reloaded.",
       "pageLabel": "Resolution of {title}"
+    },
+    "approvalsOf": "{have} of {required} required",
+    "approvalsNoneRequired": "none required",
+    "proposals": {
+      "subtitle": "Changes that agents, captures and connectors proposed. Accepting one merges it onto the page.",
+      "empty": "No proposals",
+      "emptyHint": "When an agent, a capture or a connector proposes a change to a page, it waits here for a person to accept it."
     }
   },
   "assistant": {
@@ -6912,7 +6922,8 @@
         "chat_auto_harvest_disabled": "Automatic thread harvest turned off",
         "member_capabilities_changed": "Member capabilities changed",
         "workspace_deleted": "Workspace deleted",
-        "workspace_renamed": "Workspace renamed"
+        "workspace_renamed": "Workspace renamed",
+        "workspace_editing_policy_updated": "Editing policy changed"
       }
     },
     "tabs": {
@@ -8366,5 +8377,44 @@
       "site": "Published site"
     },
     "overriddenIn": "Overridden in: "
+  },
+  "editing": {
+    "title": "Editing",
+    "subtitle": "How a change reaches a page in this workspace. Page history is always kept.",
+    "adminOnly": "Only a workspace admin can change how pages are edited.",
+    "unavailable": "The editing settings could not be loaded. Reload the page to try again.",
+    "saved": "Editing settings saved",
+    "approvals": {
+      "title": "Approvals",
+      "subtitle": "How many people other than the author must approve a merge request before it can be merged. 0 lets an author merge their own.",
+      "label": "Required approvals",
+      "invalid": "Enter a whole number from 0 to 20, or leave it empty.",
+      "inherits": "Empty: uses the server default, {n} approval. | Empty: uses the server default, {n} approvals.",
+      "hint": "Leave empty to go back to the server default ({n})."
+    },
+    "mode": {
+      "title": "Publish mode",
+      "subtitle": "The path a person's edit takes to a published page. Proposals from agents, captures and connectors are merge requests in both modes, and a new page stays a private draft until its author publishes it.",
+      "review": {
+        "label": "Review",
+        "hint": "A change to a published page goes through a merge request. Only a workspace admin can write to a page directly."
+      },
+      "direct": {
+        "label": "Direct",
+        "hint": "An editor's save is live at once, in the editor and over MCP, with no working branch and no merge request."
+      }
+    },
+    "history": {
+      "title": "Page history",
+      "subtitle": "Who can read what a page said before: its revision list, comparisons, older revisions and as-of reads. The current page is never hidden, and a merge request's diff stays readable to whoever can read the merge request.",
+      "everyone": {
+        "label": "Everyone who can open the page",
+        "hint": "Viewers and guests read a page's history as they read the page."
+      },
+      "editors": {
+        "label": "Editors only",
+        "hint": "Viewers and guests read the current page. The API and MCP refuse them its history."
+      }
+    }
   }
 }

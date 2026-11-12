@@ -1,3 +1,4 @@
+import { internalWrite } from '../documents/write-authority.js';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { load as parseYaml } from 'js-yaml';
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
@@ -594,6 +595,8 @@ export class WebSourcesService {
         await this.documents.writeRevision(
           documentId,
           { text: markdown, message: t('connector.sourceRestoredMessage', { number: revision.revisionNumber }), contentType: revision.contentType },
+          // A source-backed page is its connector's: restoring one is not a person's edit of a page (#958).
+          internalWrite('connector-sync'),
           actorId,
           { connectorId: row.id },
         );

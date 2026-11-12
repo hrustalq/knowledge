@@ -14,6 +14,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type {
   CreateWorkspaceResponse,
   DeleteWorkspaceResponse,
+  EditingPolicyResponse,
   ListWorkspaceCandidatesResponse,
   ListWorkspaceMembersResponse,
   ListWorkspacesResponse,
@@ -25,11 +26,13 @@ import type {
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { FeaturesService } from '../auth/features.service.js';
+import { EditingPolicyService } from '../auth/editing-policy.service.js';
 import {
   AddMemberDto,
   CreateWorkspaceDto,
   DeleteWorkspaceQueryDto,
   ListCandidatesQueryDto,
+  UpdateEditingPolicyDto,
   UpdateMemberDto,
   UpdateWorkspaceDto,
   UpdateWorkspaceFeaturesDto,
@@ -49,6 +52,7 @@ export class WorkspacesController {
   constructor(
     private readonly workspaces: WorkspacesService,
     private readonly features: FeaturesService,
+    private readonly editing: EditingPolicyService,
   ) {}
 
   @Get()
@@ -116,6 +120,28 @@ export class WorkspacesController {
     @Body() dto: UpdateWorkspacePurposeDto,
   ): Promise<WorkspacePurposeResponse> {
     return this.features.setPurpose(id, dto, principal.userId);
+  }
+
+  // Editing policy (#958). Every member and guest reads it: the app needs the
+  // mode before the first render. Only a workspace admin changes it.
+  @Get(':id/editing-policy')
+  @Returns('EditingPolicyResponse')
+  @Access('viewer', 'workspace', { guests: true })
+  @ApiOperation({ summary: 'How edits reach a page here: publish mode, history audience, required approvals — asked and applied' })
+  getEditingPolicy(@Param('id', ParseUUIDPipe) id: string): Promise<EditingPolicyResponse> {
+    return this.editing.policy(id);
+  }
+
+  @Put(':id/editing-policy')
+  @Returns('EditingPolicyResponse')
+  @Access('admin', 'workspace')
+  @ApiOperation({ summary: 'Set the editing policy (workspace admin); a field left out is unchanged, null inherits' })
+  setEditingPolicy(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateEditingPolicyDto,
+  ): Promise<EditingPolicyResponse> {
+    return this.editing.set(id, dto, principal.userId);
   }
 
   @Patch(':id')

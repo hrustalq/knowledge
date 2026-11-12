@@ -96,6 +96,8 @@ export class SearchService {
     // ranking and "off" promises the old one.
     // #81: `asOf` searches the text each page held then, under the same
     // filters; the trust re-rank and the PG join still read the page as it is.
+    // #958: an as-of search reads history, whichever surface asked.
+    if (dto.asOf || dto.knownAt) await this.permissions.requireHistory(scope);
     const [settings, acl, at] = await Promise.all([
       this.policy.effective(dto.workspaceId),
       this.permissions.documentFilterFor(scope),

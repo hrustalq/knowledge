@@ -84,7 +84,7 @@ function fixture(over: { mergeBaseOfB?: string; denyB?: boolean; bSource?: strin
     compare as never,
     {} as never, // activity
     {} as never, // access
-    { get: () => 0 } as never,
+    { policy: async () => ({ requiredApprovals: { effective: 0 } }) } as never, // editing policy
     {} as never, // notifications
     {} as never, // events
     permissions as never,
@@ -148,14 +148,18 @@ describe('multi-page merge requests', () => {
     const f = fixture({ staging: true, mergeBaseOfB: 'b-old' });
     await expect(f.service.merge(MR, 'squash', USER)).rejects.toThrow('staged');
     expect(f.documents.createRevision).toHaveBeenCalledTimes(2);
-    for (const call of f.documents.createRevision.mock.calls as unknown[][]) expect(call[3]).toBe('dddddddd-dddd-4ddd-8ddd-dddddddddddd');
+    for (const call of f.documents.createRevision.mock.calls as unknown[][]) {
+      // A merge is the review path itself (#958): never held to the publish mode.
+      expect(call[2]).toEqual({ internal: 'merge' });
+      expect(call[4]).toBe('dddddddd-dddd-4ddd-8ddd-dddddddddddd');
+    }
   });
 
   it('stages a branch update as the person updating it (#738)', async () => {
     const f = fixture({ mergeBaseOfB: 'b-old' });
     await expect(f.service.updateBranch(MR, {}, USER)).rejects.toThrow('staged');
     const [call] = f.documents.createRevision.mock.calls as unknown[][];
-    expect(call[3]).toBe('dddddddd-dddd-4ddd-8ddd-dddddddddddd');
+    expect(call[4]).toBe('dddddddd-dddd-4ddd-8ddd-dddddddddddd');
   });
 
   it('needs edit on every page it spans', async () => {

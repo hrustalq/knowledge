@@ -4,7 +4,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { BookMarked, ChevronRight, Library } from 'lucide-vue-next'
+import { BookMarked, ChevronRight, Inbox, Library } from 'lucide-vue-next'
 import { SwitcherCreateDialog } from '@/modules/projects'
 import { Collapse } from '@knowledge/ui/collapse'
 import { useAuthStore } from '@/stores/auth'
@@ -49,7 +49,10 @@ function openCreate(kind: 'workspace' | 'project', query = '') {
 const shown = (list: NavItem[]) =>
   list.filter((l) => (!l.feature || features.isOn(l.feature)) && (!l.workspaceAdmin || auth.canAdminWorkspace))
 
-const links = computed(() => shown(PRIMARY_NAV))
+// A direct workspace's merge requests are proposals from agents and captures (#958): same route, its own name.
+const links = computed(() =>
+  shown(PRIMARY_NAV).map((l) => (l.to === '/merge-requests' && features.proposalsOnly ? { ...l, labelKey: 'nav.proposals', icon: Inbox } : l)),
+)
 const knowledgeLinks = computed(() => shown(KNOWLEDGE_NAV))
 
 // Closed until you open it or land on one of its pages, then kept for the

@@ -36,6 +36,8 @@ export const settingsRoutes: RouteRecordRaw[] = [
   // Which sections the workspace shows (#604): workspace administration, so
   // the page gates on auth.canAdminWorkspace and the API enforces admin.
   { path: 'features', component: () => import('./pages/FeaturesSettingsPage.vue') },
+  // How an edit reaches a page (#958): admin-gated the same way.
+  { path: 'editing', component: () => import('./pages/EditingSettingsPage.vue') },
   // Accounts moved into /settings/access as a tab. Kept as a redirect
   // rather than deleted: it was a nav row and a bookmark for as long as
   // the settings shell has existed. No `platformAdmin` meta — the

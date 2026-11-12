@@ -1,5 +1,6 @@
 import type { McpToolset } from '@knowledge/contracts';
 import { renderCapturePlaybook } from './capture-kit.js';
+import type { Authoring } from './mcp-tools.js';
 
 /** What a section may read: the offered tools and the caller's connection, nothing else. */
 export interface SkillSectionContext {
@@ -14,6 +15,8 @@ export interface SkillSectionContext {
   canCapture: boolean;
   git: boolean;
   workspaces: { workspaceId: string; name: string }[];
+  /** How the reachable workspaces publish a person's edit (#958). */
+  authoring: Authoring;
 }
 
 /**
@@ -293,12 +296,44 @@ with its page tree and conventions. ${c.ref('knowledge_scaffold_project')} with 
 workspace admin. Unwritten pages stay out of search until someone edits them, so fill in the ones the user cares about.
 With \`parentId\` the tree goes under an existing page instead, and no conventions are written.`,
     });
-  if (c.has('knowledge_create_branch'))
+  // #958: every reachable workspace publishes directly, so the playbook is one revision on the default branch.
+  if (c.authoring === 'direct' && c.has('knowledge_create_revision'))
+    out.push({
+      toolset: 'authoring',
+      text: `### Change an existing page — directly
+
+These workspaces publish directly: your revision on the page's default branch is live at once. Open no branch and no
+merge request for your own edit.
+
+1. ${c.ref('knowledge_get_document_content')} — the whole current markdown. Note \`revisionId\`: it is your base.
+2. ${c.ref('knowledge_create_revision')} with no \`branch\`, the **complete** new markdown, a one-line \`message\`, and
+   \`baseRevisionId\` set to the base from step 1. A revision replaces the page; it is never a patch.
+   Step 1's \`markdown\` has the frontmatter split off into \`frontmatter\`. Send the body alone and the page keeps its
+   current \`tags\` and \`relations\`; send a \`---\` block only to change them, and then send all of it.
+   An API spec (kind \`openapi\` / \`asyncapi\`) has no frontmatter: name what owns it in a top-level
+   \`x-knowledge-relations\` list of the same shape (\`- { type: DESCRIBES, target: service:billing }\`).
+   To change only a few lines of a long page, call ${c.ref('knowledge_patch_document')} instead, with the same
+   \`baseRevisionId\` and line ranges numbered off step 1's \`markdown\` (1-based, all from that one read).
+   When the new page is a file on disk, do not paste it: ${c.ref('knowledge_start_upload')} returns a curl command that
+   uploads it, then ${c.ref('knowledge_finalize_upload')}. A new page from a file is ${c.ref('knowledge_create_document')}
+   with \`upload: true\`.
+
+If a write is rejected with a conflict, the page moved under you: re-read the content, redo the edit on the new head,
+and retry. Never retry blindly with a stale \`baseRevisionId\`.`,
+    });
+  else if (c.has('knowledge_create_branch'))
     out.push({
       toolset: 'authoring',
       text: `### Change an existing page — always through a merge request
 
-1. ${c.ref('knowledge_get_document_content')} — the whole current markdown. Note \`revisionId\`: it is your base.
+${
+    c.authoring === 'mixed'
+      ? `This is the path for a workspace whose \`publishMode\` is \`review\` (${c.ref('knowledge_whoami')} reports each one's). In a
+\`direct\` workspace skip steps 2, 4 and 5: ${c.ref('knowledge_create_revision')} with no \`branch\` is live at once.
+
+`
+      : ''
+  }1. ${c.ref('knowledge_get_document_content')} — the whole current markdown. Note \`revisionId\`: it is your base.
 2. ${c.ref('knowledge_create_branch')} with a descriptive name (\`agent/fix-billing-retry-docs\`).
 3. ${c.ref('knowledge_create_revision')} on that branch with the **complete** new markdown, a one-line \`message\`, and
    \`baseRevisionId\` set to the base from step 1. A revision replaces the page; it is never a patch.

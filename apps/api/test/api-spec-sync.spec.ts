@@ -402,6 +402,7 @@ describe('ConnectorStagingService, spec items', () => {
       expect(h.documents.createRevision).toHaveBeenCalledWith(
         'd1',
         expect.objectContaining({ branch: expect.stringMatching(/^spec\//), contentType: 'application/vnd.oai.openapi+yaml' }),
+        { internal: 'connector-sync' },
       );
       expect(h.conflicts).toEqual([expect.objectContaining({ reason: 'spec-changed', documentId: 'd1' })]);
     }

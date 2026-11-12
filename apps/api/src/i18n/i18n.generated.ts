@@ -785,6 +785,7 @@ export type I18nTranslations = {
             "ownerNotMember": string;
             "foreignIds": string;
             "sourceBacked": string;
+            "reviewRequired": string;
             "sourceVerify": string;
             "linesInvalid": string;
             "linesOutOfRange": string;
@@ -1381,6 +1382,7 @@ export type I18nTranslations = {
             "projectRestricted": string;
             "editRequired": string;
             "manageRequired": string;
+            "historyRestricted": string;
             "selfLockout": string;
             "draftPublishFirst": string;
             "unknownSubjects": string;
@@ -1644,6 +1646,7 @@ export type I18nTranslations = {
                 "kindChanged": string;
                 "notSpec": string;
                 "protected": string;
+                "reviewRequired": string;
                 "newOnDefault": string;
                 "cannotEdit": string;
                 "cannotRepresent": string;

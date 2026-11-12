@@ -1,7 +1,7 @@
 import { HttpException } from '@nestjs/common';
 import type { McpServer, RegisteredTool } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { MCP_TOOLSETS, MCP_TOOLSET_KEYS, featureOfToolset, toolsetOf } from '@knowledge/contracts';
-import type { McpConnectionInfo, McpToolSummary, WorkspaceFeature } from '@knowledge/contracts';
+import type { McpConnectionInfo, McpToolSummary, PublishMode, WorkspaceFeature } from '@knowledge/contracts';
 import type { Principal } from '../auth/principal.js';
 import type { RecordedToolCall } from '../analytics/analytics.recorder.js';
 
@@ -17,8 +17,10 @@ export const MCP_SERVER_NAME = 'knowledge';
  * Composed from the offered tools (#945): a line renders only when the tools
  * it names are offered, so a read-only key is not told to rate, edit or capture.
  */
-export function mcpInstructions(has: (tool: string) => boolean): string {
+export function mcpInstructions(has: (tool: string) => boolean, authoring: Authoring = 'review'): string {
   const all = (...tools: string[]) => tools.every(has);
+  const viaMr = 'knowledge_create_branch → knowledge_create_revision → knowledge_create_merge_request';
+  const direct = 'knowledge_create_revision (or knowledge_patch_document) with no `branch`: it is live at once';
   return [
     'Knowledge platform: a versioned documentation store with semantic search and a relation graph.',
     'Workspace > Project > Document. Every content tool takes a workspaceId — call knowledge_whoami first to get yours.',
@@ -34,8 +36,13 @@ export function mcpInstructions(has: (tool: string) => boolean): string {
       (has('knowledge_flag_document')
         ? " knowledge_flag_document marks a page requested (please check) or outdated (known wrong) — verifying is a person's act and has no tool."
         : ''),
-    all('knowledge_create_branch', 'knowledge_create_revision', 'knowledge_create_merge_request') &&
-      'To change an existing page: knowledge_create_branch → knowledge_create_revision → knowledge_create_merge_request. Do not merge your own merge request unless asked to.',
+    // #958: the path follows the publish mode of the workspaces this connection reaches.
+    authoring === 'direct'
+      ? has('knowledge_create_revision') && `To change an existing page: ${direct}. These workspaces publish directly, so open no branch or merge request for your own edit.`
+      : all('knowledge_create_branch', 'knowledge_create_revision', 'knowledge_create_merge_request') &&
+        (authoring === 'mixed'
+          ? `How to change an existing page depends on its workspace: knowledge_whoami reports each one's publishMode. "review": ${viaMr}, and do not merge your own merge request unless asked to. "direct": ${direct}.`
+          : `To change an existing page: ${viaMr}. Do not merge your own merge request unless asked to.`),
     all('knowledge_capture_decision', 'knowledge_capture_note') &&
       'When the session settles something durable — a decision and why, a non-obvious gotcha, a team convention — record it with knowledge_capture_decision / knowledge_capture_note (check knowledge_find_similar first). Captures become merge requests a person reviews.',
     (has('knowledge_capture_decision') || has('knowledge_flag_document')) &&
@@ -46,6 +53,16 @@ export function mcpInstructions(has: (tool: string) => boolean): string {
   ]
     .filter(Boolean)
     .join('\n');
+}
+
+/**
+ * How the workspaces a connection reaches publish a person's edit (#958):
+ * `direct` when every one is direct, `review` when none is, else `mixed`.
+ */
+export type Authoring = 'review' | 'direct' | 'mixed';
+export function authoringOf(workspaces: readonly { publishMode?: PublishMode }[]): Authoring {
+  const direct = workspaces.filter((w) => w.publishMode === 'direct').length;
+  return direct === 0 ? 'review' : direct === workspaces.length ? 'direct' : 'mixed';
 }
 
 /** What a caller offered every tool is sent. */
@@ -278,8 +295,8 @@ export function toolsetsNotOffered(principal: Principal, offSections: readonly W
 }
 
 /** The server instructions for `principal` (the draft tools, HTTP only, are named in none of them). */
-export function instructionsFor(principal: Principal, offSections?: readonly WorkspaceFeature[]): string {
-  return mcpInstructions((name) => isOffered(name, principal, offSections));
+export function instructionsFor(principal: Principal, offSections?: readonly WorkspaceFeature[], authoring?: Authoring): string {
+  return mcpInstructions((name) => isOffered(name, principal, offSections), authoring);
 }
 
 /**

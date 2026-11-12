@@ -34,6 +34,7 @@ import {
 } from '@knowledge/ui/layout'
 import type { ActiveFilter } from '@knowledge/ui/filter-bar'
 import { MergeRequestList } from '@/entities/merge-request'
+import { useFeaturesStore } from '@/stores/features'
 import MergeRequestSearchBar from '@/modules/merge-requests/components/MergeRequestSearchBar.vue'
 import SavedFilterRail from '@/modules/merge-requests/components/SavedFilterRail.vue'
 import {
@@ -47,6 +48,7 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const queryClient = useQueryClient()
+const features = useFeaturesStore()
 
 const state = ref<MrState>('open')
 const filters = ref<ActiveFilter[]>([])
@@ -62,6 +64,8 @@ const older = ref<MergeRequestInfo[]>([])
 const queryParams = computed(() => ({
   workspaceId: getWorkspaceId(),
   ...(state.value !== 'all' ? { status: state.value } : {}),
+  // A direct workspace (#958): proposals only, as the page's base scope; a picked provenance narrows within it.
+  ...(features.proposalsOnly ? { provenance: 'not-manual' as const } : {}),
   ...mergeRequestFilterParams(filters.value),
   ...(search.value ? { search: search.value } : {}),
   ...(cursor.value ? { cursor: cursor.value } : {}),
@@ -196,7 +200,11 @@ watch(railOpen, (open) => setFilterRailOpen(open))
 </script>
 
 <template>
-  <PageLayout variant="list" :title="t('nav.mergeRequests')" :subtitle="t('mr.listSubtitle')">
+  <PageLayout
+    variant="list"
+    :title="t(features.proposalsOnly ? 'nav.proposals' : 'nav.mergeRequests')"
+    :subtitle="t(features.proposalsOnly ? 'mr.proposals.subtitle' : 'mr.listSubtitle')"
+  >
     <template #sub-rail>
       <PageSubRail :label="t('filters.applied')" :open="railOpen">
         <SavedFilterRail
@@ -274,6 +282,7 @@ watch(railOpen, (open) => setFilterRailOpen(open))
         :rows="rows"
         :loading="listQuery.isPending.value && rows.length === 0"
         :narrowed="narrowed"
+        :proposals="features.proposalsOnly"
         @clear="clearNarrowing"
       />
 

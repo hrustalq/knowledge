@@ -1029,6 +1029,7 @@
       "rotateEverywhere": "Paste a new token for the same account. Every workspace that uses this account switches to it, here and elsewhere.",
       "yourAccounts": "Your accounts",
       "yourAccountsHint": "Connected in your other workspaces. Use one here without signing in or pasting anything again.",
+      "checkingAccounts": "Checking for accounts you can reuse",
       "usedIn": "Used in {workspaces}",
       "siteFirst": "Enter this workspace's site above first: an Atlassian token works on every site its account can reach."
     },

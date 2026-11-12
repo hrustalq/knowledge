@@ -14,6 +14,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
+import { Skeleton } from '@knowledge/ui/skeleton'
 import { ArrowLeft, CircleAlert, CircleCheck, Figma, Github, Link2, Loader2, Plus } from 'lucide-vue-next'
 import { connectionKindsFor, connectorKindInfo, type ConnectionLinkResult, type ConnectionMethod, type ConnectionProvider, type ConnectionSummary, type CredentialSummary, type CredentialsResponse, type GithubInstallationsResponse, type ListConnectionsResponse } from '@knowledge/contracts'
 import { api } from '@/shared/api/client'
@@ -171,8 +172,14 @@ async function saveToken() {
 
 const credentialsQuery = useQuery({
   ...apiQueryOptions('/v1/me/credentials'),
-  enabled: computed(() => props.open && step.value === 'signin'),
+  // From the moment the dialog opens, so the list is usually there before the sign-in step is (#933).
+  enabled: computed(() => props.open),
 })
+/**
+ * Still asking: the step holds a new sign-in back until it can say whether an
+ * account is there to reuse. A failed read ends it, and the step is as it was.
+ */
+const checkingYours = computed(() => credentialsQuery.isPending.value)
 /** Yours, for this service, that a connection can dial with and this workspace does not use yet. */
 const yours = computed(() =>
   ((credentialsQuery.data.value as CredentialsResponse | undefined)?.credentials ?? []).filter(
@@ -367,6 +374,11 @@ function close() {
             {{ yours.some(needsSite) && !site.trim() ? t('connectors.connections.siteFirst') : t('connectors.connections.yourAccountsHint') }}
           </p>
         </section>
+        <div v-else-if="checkingYours" class="space-y-2" role="status">
+          <span class="sr-only">{{ t('connectors.connections.checkingAccounts') }}</span>
+          <Skeleton class="h-4 w-32" />
+          <Skeleton class="h-14 w-full rounded-lg" />
+        </div>
 
         <!-- Shown only when there is a choice: with every App/OAuth key empty, a token is the whole flow. -->
         <div v-if="offered.length > 1" role="group" :aria-label="t('connectors.connections.methodLabel')" class="bg-muted inline-flex rounded-lg p-0.5">
@@ -422,7 +434,7 @@ function close() {
           <p v-if="!canStoreSecrets" class="text-panel-warning-ink text-xs" role="status">{{ t('connectors.connections.noKey') }}</p>
           <p v-if="tokenError" class="text-destructive text-xs" role="alert">{{ tokenError }}</p>
           <div class="flex justify-end">
-            <Button type="submit" :disabled="!canSave || saving">
+            <Button type="submit" :disabled="!canSave || saving || checkingYours">
               <Loader2 v-if="saving" class="size-4 animate-spin" aria-hidden="true" />
               {{ saving ? t('connectors.connections.checking', { provider: providerName }) : t('connectors.connections.connect') }}
             </Button>
@@ -435,7 +447,7 @@ function close() {
             <Loader2 class="size-4 animate-spin" aria-hidden="true" /> {{ t('connectors.github.loading') }}
           </div>
           <template v-else-if="!githubState?.connected">
-            <Button class="w-full" variant="outline" :disabled="opening" @click="signInGithub">
+            <Button class="w-full" variant="outline" :disabled="opening || checkingYours" @click="signInGithub">
               <Github class="size-4" aria-hidden="true" /> {{ t('connectors.github.connect') }}
             </Button>
             <p class="text-muted-foreground text-xs">{{ t('connectors.github.connectHint') }}</p>
@@ -457,7 +469,7 @@ function close() {
               </ul>
               <p class="text-muted-foreground text-xs">{{ t('connectors.connections.onYourGithubHint') }}</p>
             </section>
-            <Button class="w-full" variant="outline" :disabled="opening" @click="installGithub">
+            <Button class="w-full" variant="outline" :disabled="opening || checkingYours" @click="installGithub">
               <Plus class="size-4" aria-hidden="true" />
               {{ githubState.available?.length ? t('connectors.connections.installElsewhere') : t('connectors.github.install') }}
             </Button>
@@ -467,7 +479,7 @@ function close() {
 
         <!-- Figma OAuth -->
         <div v-else-if="method === 'oauth'" class="space-y-3">
-          <Button class="w-full" variant="outline" :disabled="opening" @click="connectFigma">
+          <Button class="w-full" variant="outline" :disabled="opening || checkingYours" @click="connectFigma">
             <Figma class="size-4" aria-hidden="true" /> {{ t('connectors.figmaAccess.connect') }}
           </Button>
           <p class="text-muted-foreground text-xs">{{ t('connectors.connections.oauthHint') }}</p>

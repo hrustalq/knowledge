@@ -348,4 +348,28 @@ export class SaveApiTestEnvironmentDto {
   @IsString({ each: true })
   @MaxLength(2000, { each: true, message: vmsg('maxLength') })
   secretOrigins?: string[];
+
+  @ApiPropertyOptional({
+    type: String,
+    format: 'uuid',
+    nullable: true,
+    description:
+      "Bind the environment to one project's suites; null shares it with every project. Sharing a bound one, or moving it to another project, keeps only the secrets this request sets",
+  })
+  @IsOptional()
+  @IsUUID()
+  projectId?: string | null;
+}
+
+/** GET /v1/workspaces/:id/test-environments */
+export class ListTestEnvironmentsQueryDto {
+  @ApiPropertyOptional({ format: 'uuid', description: "Only the environments a suite of this project may use: the shared ones and the project's own" })
+  @IsOptional()
+  @IsUUID()
+  projectId?: string;
+
+  @ApiPropertyOptional({ format: 'uuid', description: "The same, by a spec document: the environments its suites may run with" })
+  @IsOptional()
+  @IsUUID()
+  documentId?: string;
 }

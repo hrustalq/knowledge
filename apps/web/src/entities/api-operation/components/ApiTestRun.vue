@@ -138,7 +138,11 @@ const allCalls = (p: TestRunPlan): TestRunCall[] =>
 
 const envQuery = useQuery(
   computed(() => ({
-    ...apiQueryOptions('/v1/workspaces/{id}/test-environments', { path: { id: props.workspaceId } }),
+    // Only the ones this spec's suites may run with: the shared ones and its project's own (#925).
+    ...apiQueryOptions('/v1/workspaces/{id}/test-environments', {
+      path: { id: props.workspaceId },
+      query: { documentId: props.operation.documentId },
+    }),
     enabled: runnerOn.value,
   })),
 )

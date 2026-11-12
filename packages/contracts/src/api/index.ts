@@ -460,6 +460,8 @@ export interface ApiTestEnvironment {
   secrets: string[];
   /** Origins besides the server's that a run may send a secret to (a login service). */
   secretOrigins: string[];
+  /** The one project whose suites may use it (#925); null is shared by every project. */
+  projectId: string | null;
   updatedAt: string;
 }
 
@@ -470,7 +472,9 @@ export interface ListApiTestEnvironmentsResponse {
 /**
  * POST creates (name required); PATCH merges. A secret set to null is removed.
  * A PATCH that adds somewhere secrets may go (a new server origin, a new entry
- * in `secretOrigins`) keeps only the secrets it sets itself.
+ * in `secretOrigins`) or someone new who may use them (sharing a project's
+ * environment, or moving it to another project) keeps only the secrets it
+ * sets itself.
  */
 export interface SaveApiTestEnvironmentRequest {
   name?: string;
@@ -479,6 +483,8 @@ export interface SaveApiTestEnvironmentRequest {
   secrets?: Record<string, string | null>;
   /** Replaces the list. */
   secretOrigins?: string[];
+  /** Bind to one project's suites; null shares it with every project. */
+  projectId?: string | null;
 }
 
 export const API_TEST_RUN_STATUSES = ['queued', 'running', 'passed', 'failed', 'error'] as const;

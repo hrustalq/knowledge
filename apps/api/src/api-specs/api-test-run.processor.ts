@@ -60,7 +60,8 @@ export class ApiTestRunProcessor extends WorkerHost {
       for (const id of new Set([plan.documentId, ...targets.map((x) => x.documentId)])) {
         await this.permissions.requireLevel(scope, { type: 'document', id }, 'view');
       }
-      const env = run.environmentId ? await this.environments.values(run.workspaceId, run.environmentId) : null;
+      // Asked again here, not trusted from the start: the environment may have been bound to another project since.
+      const env = run.environmentId ? await this.environments.values(run.workspaceId, run.environmentId, run.documentId) : null;
       if (!env) throw new Error(t('error.apiTestRun.environmentGone'));
 
       const servers = new Map<string, string[]>();

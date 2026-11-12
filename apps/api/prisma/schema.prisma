@@ -4072,6 +4072,10 @@ model ApiTestEnvironment {
   secretNames   String[] @default([]) @map("secret_names")
   /// Origins besides the server's that a run may send a secret to.
   secretOrigins String[] @default([]) @map("secret_origins")
+  /// The one project whose suites may use it (#925); null is shared with
+  /// every project of the workspace. No FK, house policy: a deleted project's
+  /// environments simply stop matching any suite.
+  projectId     String?  @map("project_id") @db.Uuid
   /// No FK, house policy.
   createdBy     String   @map("created_by") @db.Uuid
   updatedBy     String   @map("updated_by") @db.Uuid

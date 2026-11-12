@@ -49,6 +49,7 @@ import {
   ApiTryRequestDto,
   GenerateApiTestSuiteDto,
   ListApiSpecsQueryDto,
+  ListTestEnvironmentsQueryDto,
   ListTestFixturesQueryDto,
   QaOverviewQueryDto,
   RunApiTestSuiteDto,
@@ -379,17 +380,23 @@ export class ApiSettingsController {
   constructor(
     private readonly settings: ApiSettingsService,
     private readonly environments: ApiTestEnvironmentsService,
+    private readonly permissions: PermissionService,
   ) {}
 
   // Test environments for the QA server runner (#483, phase 5). Editors manage
   // them; a viewer sees names, servers and inputs. Secrets are write-only.
+  // One bound to a project (#925) is listed only to those who may open it.
   @Get(':id/test-environments')
   @Feature('qa')
   @Returns('ListApiTestEnvironmentsResponse')
   @Access('viewer', 'workspace')
   @ApiOperation({ summary: "The workspace's QA test environments: server, inputs, and the names of the secrets set (never a value)" })
-  async listEnvironments(@Param('id', ParseUUIDPipe) id: string): Promise<ListApiTestEnvironmentsResponse> {
-    return { environments: await this.environments.list(id) };
+  async listEnvironments(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: ListTestEnvironmentsQueryDto,
+  ): Promise<ListApiTestEnvironmentsResponse> {
+    return { environments: await this.environments.list(await this.permissions.scopeFor(principal, id), query) };
   }
 
   @Post(':id/test-environments')
@@ -397,12 +404,12 @@ export class ApiSettingsController {
   @Returns('ApiTestEnvironment')
   @Access('editor', 'workspace')
   @ApiOperation({ summary: 'Create a QA test environment. Secrets are encrypted at rest and never returned' })
-  createEnvironment(
+  async createEnvironment(
     @CurrentPrincipal() principal: Principal,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: SaveApiTestEnvironmentDto,
   ): Promise<ApiTestEnvironment> {
-    return this.environments.create(id, dto, principal.userId);
+    return this.environments.create(await this.permissions.scopeFor(principal, id), dto, principal.userId);
   }
 
   @Patch(':id/test-environments/:environmentId')
@@ -410,13 +417,13 @@ export class ApiSettingsController {
   @Returns('ApiTestEnvironment')
   @Access('editor', 'workspace')
   @ApiOperation({ summary: 'Change a QA test environment. inputs replaces the set; a secret set to null is removed, one left out is kept' })
-  updateEnvironment(
+  async updateEnvironment(
     @CurrentPrincipal() principal: Principal,
     @Param('id', ParseUUIDPipe) id: string,
     @Param('environmentId', ParseUUIDPipe) environmentId: string,
     @Body() dto: SaveApiTestEnvironmentDto,
   ): Promise<ApiTestEnvironment> {
-    return this.environments.update(id, environmentId, dto, principal.userId);
+    return this.environments.update(await this.permissions.scopeFor(principal, id), environmentId, dto, principal.userId);
   }
 
   @Delete(':id/test-environments/:environmentId')
@@ -424,8 +431,12 @@ export class ApiSettingsController {
   @HttpCode(204)
   @Access('editor', 'workspace')
   @ApiOperation({ summary: 'Delete a QA test environment; its past runs keep their results' })
-  async deleteEnvironment(@Param('id', ParseUUIDPipe) id: string, @Param('environmentId', ParseUUIDPipe) environmentId: string): Promise<void> {
-    await this.environments.remove(id, environmentId);
+  async deleteEnvironment(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('environmentId', ParseUUIDPipe) environmentId: string,
+  ): Promise<void> {
+    await this.environments.remove(await this.permissions.scopeFor(principal, id), environmentId);
   }
 
   // A viewer reads it: the console has to know whether the proxy is there.

@@ -4658,6 +4658,10 @@
           "type": "string"
         }
       },
+      "projectId": {
+        "type": "string",
+        "nullable": true
+      },
       "updatedAt": {
         "type": "string"
       }
@@ -4669,6 +4673,7 @@
       "inputs",
       "secrets",
       "secretOrigins",
+      "projectId",
       "updatedAt"
     ]
   },

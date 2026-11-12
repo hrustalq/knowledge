@@ -24676,6 +24676,142 @@
         ]
       }
     },
+    "/v1/projects/{id}/settings/work-items": {
+      "get": {
+        "operationId": "ProjectWorkItemRulesController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectWorkItemRules"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A project's handoff rules: the workspace's, the project's own, and what applies",
+        "tags": [
+          "projects"
+        ]
+      },
+      "patch": {
+        "operationId": "ProjectWorkItemRulesController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProjectWorkItemRulesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectWorkItemRules"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Set a project's handoff rules (workspace admin or the project's maintainer); null inherits, off opts out",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
     "/v1/projects/{id}/tracker-route": {
       "get": {
         "operationId": "TrackerRoutesController_get",
@@ -31802,6 +31938,26 @@
             }
           },
           {
+            "name": "projectId",
+            "required": false,
+            "in": "query",
+            "description": "Only the environments a suite of this project may use: the shared ones and the project's own",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "documentId",
+            "required": false,
+            "in": "query",
+            "description": "The same, by a spec document: the environments its suites may run with",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
             "name": "Accept-Language",
             "in": "header",
             "required": false,
@@ -32203,6 +32359,142 @@
         "summary": "Override the API reference settings; null on a key inherits the deployment value",
         "tags": [
           "api-specs"
+        ]
+      }
+    },
+    "/v1/projects/{id}/settings/breaking-changes": {
+      "get": {
+        "operationId": "ProjectApiSettingsController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectBreakingChangeSettings"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A project's breaking-change gate: the workspace's policy, the project's own, and what applies",
+        "tags": [
+          "projects"
+        ]
+      },
+      "patch": {
+        "operationId": "ProjectApiSettingsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProjectBreakingChangesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectBreakingChangeSettings"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Set the project's breaking-change gate (workspace admin); null inherits the workspace's",
+        "tags": [
+          "projects"
         ]
       }
     },
@@ -41291,6 +41583,142 @@
         ]
       }
     },
+    "/v1/projects/{id}/settings/capture-parent": {
+      "get": {
+        "operationId": "ProjectCaptureSettingsController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectCaptureParentSettings"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Where this project's new captured pages nest: the workspace's page, the project's own, and what applies",
+        "tags": [
+          "projects"
+        ]
+      },
+      "patch": {
+        "operationId": "ProjectCaptureSettingsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProjectCaptureParentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectCaptureParentSettings"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Set the project's capture parent page (workspace admin or the project's maintainer); null inherits the workspace's",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
     "/v1/mcp": {
       "post": {
         "operationId": "McpController_handle",
@@ -47680,9 +48108,6 @@
       "PutWorkItemRulesDto": {
         "type": "object",
         "properties": {
-          "workspaceId": {
-            "type": "string"
-          },
           "issues": {
             "type": "string",
             "enum": [
@@ -47711,6 +48136,9 @@
             ],
             "nullable": true,
             "description": "outdated pages only, or every flagged page"
+          },
+          "workspaceId": {
+            "type": "string"
           }
         },
         "required": [
@@ -47751,6 +48179,40 @@
           "sourceKind",
           "sourceId"
         ]
+      },
+      "UpdateProjectWorkItemRulesDto": {
+        "type": "object",
+        "properties": {
+          "issues": {
+            "type": "string",
+            "enum": [
+              "off",
+              "high",
+              "medium",
+              "all"
+            ],
+            "nullable": true,
+            "description": "Reported issues to hand off: by rank, or all"
+          },
+          "conflicts": {
+            "type": "string",
+            "enum": [
+              "off",
+              "on"
+            ],
+            "nullable": true
+          },
+          "verification": {
+            "type": "string",
+            "enum": [
+              "off",
+              "outdated",
+              "all"
+            ],
+            "nullable": true,
+            "description": "outdated pages only, or every flagged page"
+          }
+        }
       },
       "PutTrackerRouteDto": {
         "type": "object",
@@ -49105,6 +49567,12 @@
             "items": {
               "type": "string"
             }
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Bind the environment to one project's suites; null shares it with every project. Sharing a bound one, or moving it to another project, keeps only the secrets this request sets"
           }
         }
       },
@@ -49141,6 +49609,24 @@
             "description": "The QA server runner (#483); on applies only when API_TEST_RUNNER_MODE is on. null is off"
           }
         }
+      },
+      "UpdateProjectBreakingChangesDto": {
+        "type": "object",
+        "properties": {
+          "policy": {
+            "type": "string",
+            "enum": [
+              "off",
+              "warn",
+              "block"
+            ],
+            "nullable": true,
+            "description": "The project's merge gate for breaking spec changes; null inherits the workspace's"
+          }
+        },
+        "required": [
+          "policy"
+        ]
       },
       "SetMessageFeedbackDto": {
         "type": "object",
@@ -50574,6 +51060,20 @@
             "description": "Defaults to the question"
           }
         }
+      },
+      "UpdateProjectCaptureParentDto": {
+        "type": "object",
+        "properties": {
+          "parentDocumentId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "A live page of this project; null inherits the workspace's capture parent"
+          }
+        },
+        "required": [
+          "parentDocumentId"
+        ]
       },
       "UpdateAnalyticsSettingsDto": {
         "type": "object",
@@ -55373,6 +55873,10 @@
               "type": "string"
             }
           },
+          "projectId": {
+            "type": "string",
+            "nullable": true
+          },
           "updatedAt": {
             "type": "string"
           }
@@ -55384,6 +55888,7 @@
           "inputs",
           "secrets",
           "secretOrigins",
+          "projectId",
           "updatedAt"
         ]
       },
@@ -69380,6 +69885,44 @@
           "openMergeRequest"
         ]
       },
+      "ProjectBreakingChangeSettings": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/ScopedSetting%3CApiBreakingChangePolicy%3E"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "projectId",
+          "policy"
+        ]
+      },
+      "ProjectCaptureParentSettings": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "parentDocumentId": {
+            "$ref": "#/components/schemas/ScopedSetting%3C(string%7Cnull)%3E"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "projectId",
+          "parentDocumentId"
+        ]
+      },
       "ProjectCascadeCounts": {
         "type": "object",
         "properties": {
@@ -69734,6 +70277,53 @@
           "remindBeforeDays",
           "inactiveAfterDays",
           "emptyMaxChars"
+        ]
+      },
+      "ProjectWorkItemRules": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "issues": {
+            "$ref": "#/components/schemas/ScopedSetting%3CWorkItemIssueRule%3E"
+          },
+          "conflicts": {
+            "$ref": "#/components/schemas/ScopedSetting%3CWorkItemConflictRule%3E"
+          },
+          "verification": {
+            "$ref": "#/components/schemas/ScopedSetting%3CWorkItemVerificationRule%3E"
+          },
+          "routed": {
+            "type": "boolean"
+          },
+          "ceiling": {
+            "type": "object",
+            "properties": {
+              "maxPerTick": {
+                "type": "number"
+              },
+              "syncEnabled": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "maxPerTick",
+              "syncEnabled"
+            ]
+          }
+        },
+        "required": [
+          "workspaceId",
+          "projectId",
+          "issues",
+          "conflicts",
+          "verification",
+          "routed",
+          "ceiling"
         ]
       },
       "ProposeAgentFindingResponse": {
@@ -72317,6 +72907,189 @@
           "prefix",
           "createdAt",
           "lastUsedAt"
+        ]
+      },
+      "ScopedSetting<(string|null)>": {
+        "type": "object",
+        "properties": {
+          "workspace": {
+            "type": "string",
+            "nullable": true
+          },
+          "project": {
+            "type": "string",
+            "nullable": true
+          },
+          "effective": {
+            "type": "string",
+            "nullable": true
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "project",
+              "workspace",
+              "default"
+            ]
+          }
+        },
+        "required": [
+          "workspace",
+          "project",
+          "effective",
+          "source"
+        ]
+      },
+      "ScopedSetting<ApiBreakingChangePolicy>": {
+        "type": "object",
+        "properties": {
+          "workspace": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApiBreakingChangePolicy"
+              }
+            ],
+            "nullable": true
+          },
+          "project": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApiBreakingChangePolicy"
+              }
+            ],
+            "nullable": true
+          },
+          "effective": {
+            "$ref": "#/components/schemas/ApiBreakingChangePolicy"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "project",
+              "workspace",
+              "default"
+            ]
+          }
+        },
+        "required": [
+          "workspace",
+          "project",
+          "effective",
+          "source"
+        ]
+      },
+      "ScopedSetting<WorkItemConflictRule>": {
+        "type": "object",
+        "properties": {
+          "workspace": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkItemConflictRule"
+              }
+            ],
+            "nullable": true
+          },
+          "project": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkItemConflictRule"
+              }
+            ],
+            "nullable": true
+          },
+          "effective": {
+            "$ref": "#/components/schemas/WorkItemConflictRule"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "project",
+              "workspace",
+              "default"
+            ]
+          }
+        },
+        "required": [
+          "workspace",
+          "project",
+          "effective",
+          "source"
+        ]
+      },
+      "ScopedSetting<WorkItemIssueRule>": {
+        "type": "object",
+        "properties": {
+          "workspace": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkItemIssueRule"
+              }
+            ],
+            "nullable": true
+          },
+          "project": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkItemIssueRule"
+              }
+            ],
+            "nullable": true
+          },
+          "effective": {
+            "$ref": "#/components/schemas/WorkItemIssueRule"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "project",
+              "workspace",
+              "default"
+            ]
+          }
+        },
+        "required": [
+          "workspace",
+          "project",
+          "effective",
+          "source"
+        ]
+      },
+      "ScopedSetting<WorkItemVerificationRule>": {
+        "type": "object",
+        "properties": {
+          "workspace": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkItemVerificationRule"
+              }
+            ],
+            "nullable": true
+          },
+          "project": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkItemVerificationRule"
+              }
+            ],
+            "nullable": true
+          },
+          "effective": {
+            "$ref": "#/components/schemas/WorkItemVerificationRule"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "project",
+              "workspace",
+              "default"
+            ]
+          }
+        },
+        "required": [
+          "workspace",
+          "project",
+          "effective",
+          "source"
         ]
       },
       "ScopedSetting<number>": {

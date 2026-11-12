@@ -4811,6 +4811,86 @@
       "platformAdmin": false
     },
     {
+      "method": "GET",
+      "path": "/v1/projects/{id}/settings/breaking-changes",
+      "tag": "projects",
+      "summary": "A project's breaking-change gate: the workspace's policy, the project's own, and what applies",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/projects/{id}/settings/breaking-changes",
+      "tag": "projects",
+      "summary": "Set the project's breaking-change gate (workspace admin); null inherits the workspace's",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{id}/settings/capture-parent",
+      "tag": "projects",
+      "summary": "Where this project's new captured pages nest: the workspace's page, the project's own, and what applies",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/projects/{id}/settings/capture-parent",
+      "tag": "projects",
+      "summary": "Set the project's capture parent page (workspace admin or the project's maintainer); null inherits the workspace's",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{id}/settings/verification",
+      "tag": "projects",
+      "summary": "A project's freshness thresholds: what the workspace set, what the project set, and what applies",
+      "role": "viewer",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/projects/{id}/settings/verification",
+      "tag": "projects",
+      "summary": "Override thresholds for this project (workspace admin or the project's maintainer); null inherits the workspace's",
+      "role": "editor",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{id}/settings/work-items",
+      "tag": "projects",
+      "summary": "A project's handoff rules: the workspace's, the project's own, and what applies",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/projects/{id}/settings/work-items",
+      "tag": "projects",
+      "summary": "Set a project's handoff rules (workspace admin or the project's maintainer); null inherits, off opts out",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "POST",
       "path": "/v1/projects/scaffold",
       "tag": "projects",

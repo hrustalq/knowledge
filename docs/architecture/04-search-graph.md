@@ -400,6 +400,92 @@ one place the effective freshness policy is read. Every hit carries
 event records `trustApplied` so two runs can be compared. New post-ranking
 filters: `verificationStates[]`, `includeArchived`.
 
+## Cross-encoder reranking: measured, not adopted (#1003)
+
+Nothing in the ranking reads a candidate against the question: the vector leg
+compares two vectors made separately, BM25 counts shared terms, and `fuseHits`
+merges the two orders. The standard answer is a cross-encoder over the fused
+candidates. It was measured on 2026-11-13 and **not built**, because it made the
+ranking worse on every split. There is no `RERANK_PROVIDER`, and
+`rerankScorer` still involves no model.
+
+**What was measured.** `BAAI/bge-reranker-v2-m3` (FP16 GGUF under llama.cpp's
+`/v1/rerank`), over pools captured from production (v0.52.1, the RTech OMS
+workspace, 406 listed pages, bge-m3 + OpenSearch, `minCosine` 0.4,
+`minCosineShare` 0.9, trust on). One unfiltered search per query recorded both
+legs 300 deep through the `observe` hook `make tune` uses; everything after was
+an offline replay of `floorVectorHits` → `fuseHits` → `rerankScorer`. The replay
+reproduced production's own top 10 for 476 of 476 queries before any reranker
+score was applied. With the reranker, a candidate's fused score was replaced by
+the sigmoid of the model's score, then the trust weight and the definition
+boost applied as today.
+
+Three query sets: every page's own title (the `--generate` case), 60 questions
+written against real passages (one answering page each, paraphrased, half on
+Russian-prose pages and half on pages dominated by tables, identifiers and
+contracts), and the 10 cases the feedback export held.
+
+| queries | n | order | recall@1 | recall@10 | MRR@10 |
+| --- | --- | --- | --- | --- | --- |
+| questions, Russian pages | 30 | fused (today) | 90.0% | 100.0% | 0.939 |
+| | | reranked, top 20 | 90.0% | 100.0% | 0.926 |
+| | | reranked, top 150 | 83.3% | 100.0% | 0.893 |
+| questions, Latin-heavy pages | 30 | fused (today) | 60.0% | 86.7% | 0.695 |
+| | | reranked, top 20 | 53.3% | 90.0% | 0.653 |
+| | | reranked, top 150 | 50.0% | 93.3% | 0.636 |
+| feedback votes | 10 | fused (today) | 80.0% | 80.0% | 0.800 |
+| | | reranked, top 20 | 60.0% | 80.0% | 0.675 |
+| titles, Russian | 171 | fused (today) | 93.0% | 99.4% | 0.954 |
+| | | reranked, top 20 | 69.0% | 93.0% | 0.758 |
+| titles, Latin | 235 | fused (today) | 99.1% | 100.0% | 0.996 |
+| | | reranked, top 20 | 60.0% | 98.7% | 0.763 |
+
+The reranked rows send the page title and heading breadcrumb before the chunk
+text. Sending the chunk text alone was worse on every row (questions: MRR 0.876
+Russian, 0.574 Latin-heavy). Two gentler uses of the same scores were no better
+than today's order either: fusing the reranker's order with the fused order by
+reciprocal rank, and letting it reorder only the first five.
+
+**Why it loses here.**
+
+- *On questions it is a wash.* At 20 candidates it moved the answering page up
+  for 9 of the 60 questions and down for 9. The pages it demoted were not one
+  kind: table chunks and prose chunks both moved in both directions, so no
+  change to what text is sent would obviously tip it.
+- *Titles.* A page's own title is a navigational query, and the legs already
+  win it because chunks are embedded and indexed with their title
+  ([#528](#titles-and-headings-528)). A cross-encoder scores "does this passage
+  answer the query", which a title does not ask.
+- *There is little left to reorder.* The relevance floors leave a median of 15
+  fused candidates per query, and the answering page was among them for 90–100%
+  of the questions. The misses are retrieval misses a reranker never sees, and
+  on Russian questions the first place is already right nine times in ten.
+
+**Latency** on the measuring laptop (M3 Pro, Metal, one server slot, about
+1,000 characters per candidate): p50 1.0 s and p95 2.4 s for up to 20
+candidates, p95 5.3 s for 50 and 12.7 s for 150, against a production search
+p50 of 90 ms. These are not production numbers: Ollama serves no rerank route,
+so production would need a second model server behind LiteLLM's `/rerank`, on a
+cluster whose one GPU slot Ollama holds. That was not stood up, because the
+quality result made it moot.
+
+**How far to trust this.** One model, one corpus, 60 written questions and 10
+votes: the question splits cannot resolve a difference of one or two answers,
+so read "no gain", not "a measured loss", on those rows. The title rows are
+large and unambiguous. The llama.cpp scores were checked against the reference
+`transformers` weights on the 868 question and feedback pairs (Pearson 0.986),
+and the reference scores give the same verdict (MRR 0.943 against 0.939 fused on
+Russian questions, 0.698 against 0.695 on Latin-heavy ones, 0.667 against 0.800
+on the votes). The questions were written by Claude in the authoring session,
+not by the people who use the workspace. The capture and replay scripts were
+scratch and are not in the repo; the method above is enough to rebuild them.
+
+**What would reopen it:** a corpus of long prose where the answering page is
+retrieved but ranked low (recall@10 well above recall@1 on real questions), or
+enough feedback votes to measure on. Until then the cheaper lever for the
+Latin-heavy misses is retrieval, not reordering:
+[#1004](https://github.com/hrustalq/knowledge/issues/1004).
+
 ## The graph is bipartite
 
 **Edges always run Document → Entity**, with a `doc:<id>` node convention, and

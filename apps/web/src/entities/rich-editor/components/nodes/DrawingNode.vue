@@ -4,6 +4,7 @@
 // document is not a wall of toolbars.
 import { computed, ref } from 'vue'
 import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
+import DOMPurify from 'dompurify'
 import { Check, PenLine, Trash2 } from 'lucide-vue-next'
 import { parseScene, renderSceneToSvg, serializeScene, emptyScene } from '@/core/markdown/drawing'
 import Whiteboard from '../Whiteboard.vue'
@@ -21,7 +22,12 @@ const { wrap, layoutAttrs, resize, place } = useDiagramLayout(props, editing)
 const sceneJson = computed<string>(
   () => (props.node.attrs.scene as string) || serializeScene(emptyScene()),
 )
-const preview = computed(() => renderSceneToSvg(parseScene(sceneJson.value)))
+// The scene is page text: parseScene checks it, and the preview is sanitized as
+// MarkdownView sanitizes the same SVG (GHSA-qmpf-jh26-7cfm). Node views mount
+// only in the browser, where DOMPurify has a DOM.
+const preview = computed(() =>
+  DOMPurify.sanitize(renderSceneToSvg(parseScene(sceneJson.value)), { USE_PROFILES: { svg: true, svgFilters: true } }),
+)
 const isEmpty = computed(() => parseScene(sceneJson.value).els.length === 0)
 
 /** Read mode opens the page's lightbox (#476), as MermaidNode does. */
@@ -37,7 +43,7 @@ function update(next: string) {
 <template>
   <NodeViewWrapper class="kn-block kn-drawing" v-bind="layoutAttrs" :data-selected="selected" :data-editing="editing">
     <div v-if="!editing" class="kn-drawing-view" @dblclick="editor.isEditable && (editing = true)">
-      <!-- eslint-disable-next-line vue/no-v-html -- SVG built from our own scene model -->
+      <!-- eslint-disable-next-line vue/no-v-html -- checked by parseScene and sanitized above -->
       <div v-if="!isEmpty" class="kn-drawing-canvas" v-bind="zoomAttrs()" v-html="preview" />
       <div v-else class="kn-drawing-placeholder">
         <PenLine class="size-5 opacity-50" />

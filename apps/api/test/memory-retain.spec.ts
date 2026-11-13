@@ -216,6 +216,15 @@ describe('MemoryIntakeService.retainItems, the door for prebuilt items (#1007)',
     expect(retainer.retain).toHaveBeenCalledWith({ workspaceId: WS, bank, userId: 'u1', locale: 'en', items: [item()], verbatim: true, consolidated: true });
   });
 
+  it('splits into admit and store for a wire that writes rows between them (#1008): an empty admit may pass, an empty store calls nothing', async () => {
+    const { svc, caller, calls, retainer, bank } = intake();
+    expect(await svc.admit(caller as never, 'agent', [], { allowEmpty: true })).toBe(bank);
+    expect(calls).toEqual(['rate', 'ensure']);
+    expect(await svc.store(caller as never, bank as never, [])).toBe(0);
+    expect(retainer.retain).not.toHaveBeenCalled();
+    await expect(svc.admit(caller as never, 'agent', [])).rejects.toBeInstanceOf(BadRequestException);
+  });
+
   it('refuses an empty, oversized or too-long request before the bank is created', async () => {
     for (const items of [[], [item(), item(), item(), item()], [item({ content: 'x'.repeat(101) })]]) {
       const { svc, caller, calls } = intake();

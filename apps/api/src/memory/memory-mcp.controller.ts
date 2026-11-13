@@ -8,6 +8,7 @@ import { CachePolicy } from '../common/http-cache.js';
 import { t } from '../i18n/t.js';
 import { MemoryAccessService } from './memory-access.service.js';
 import { MemoryBanksService } from './memory-banks.service.js';
+import { MemoryGraphService } from './memory-graph.service.js';
 import { MemoryIntakeService } from './memory-intake.service.js';
 import { buildMemoryMcpServer, isMemoryMcpProfile, type MemoryMcpServices } from './memory-mcp.js';
 import { MemoryRateService } from './memory-rate.service.js';
@@ -40,8 +41,16 @@ export class MemoryMcpController {
   private readonly logger = new Logger(MemoryMcpController.name);
   private readonly services: MemoryMcpServices;
 
-  constructor(access: MemoryAccessService, banks: MemoryBanksService, intake: MemoryIntakeService, recall: MemoryRecallService, reflect: MemoryReflectService, rate: MemoryRateService) {
-    this.services = { access, banks, intake, recall, reflect, rate };
+  constructor(
+    access: MemoryAccessService,
+    banks: MemoryBanksService,
+    intake: MemoryIntakeService,
+    recall: MemoryRecallService,
+    reflect: MemoryReflectService,
+    rate: MemoryRateService,
+    graph: MemoryGraphService,
+  ) {
+    this.services = { access, banks, intake, recall, reflect, rate, graph };
   }
 
   @Post()
@@ -84,7 +93,7 @@ export class MemoryMcpController {
     // The caller first: with memory off an unknown profile is the same 404 as any other memory path.
     await this.services.access.caller(request.principal, request.workspaceHeader, 'viewer');
     if (!isMemoryMcpProfile(profile)) throw new NotFoundException(t('error.memory.profileNotFound', { profile }));
-    const server = buildMemoryMcpServer(this.services, request);
+    const server = buildMemoryMcpServer(this.services, request, profile);
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     res.on('close', () => {
       void transport.close();

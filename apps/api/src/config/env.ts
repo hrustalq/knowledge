@@ -798,6 +798,12 @@ export const envSchema = z.object({
    */
   MEMORY_CONSOLIDATION_DAILY_CALLS: z.coerce.number().int().min(0).default(20),
   /**
+   * The graph wire (#1008): entities one `read_graph` or `search_nodes` call
+   * returns at most. The MCP reference memory server has no ceiling; here the
+   * result says when this one cut it.
+   */
+  MEMORY_GRAPH_READ_MAX_ENTITIES: z.coerce.number().int().min(1).default(500),
+  /**
    * Let a `web` source fetch a private or loopback address. Separate from
    * CONNECTOR_ALLOW_PRIVATE_URLS because any editor can link a source, where
    * only an admin sets up a connector.

@@ -27,6 +27,12 @@ in the pull request that introduces them — see
   with the tools `retain`, `sync_retain`, `recall` and `reflect`. A read-only key is offered only the last two.
   The platform's own endpoint `/api/v1/mcp` and its tools are unchanged. The same tools also answer at
   `/api/mcp/{bank_id}/hindsight`; any other name there is a 404. (#992, #1007)
+- `https://<host>/api/mcp/{bank_id}/graph` serves the nine tools of the MCP reference memory server
+  (`@modelcontextprotocol/server-memory` 2.1.1) over a bank, with the same names, schemas and answers, so a client
+  set up for that server can point at a bank instead of a local file. Entities and relations are rows of the bank;
+  each observation is stored as a memory, masked like any retain, so `recall` finds it. A read-only key gets only
+  `read_graph`, `search_nodes` and `open_nodes`. `read_graph` and `search_nodes` return at most
+  `MEMORY_GRAPH_READ_MAX_ENTITIES` (500) entities and say when they cut. (#1008)
 - A `memory` section under **Settings → Features**, and two built-in agents: `memorist`, which splits what an
   agent retains into facts when a model is routed at extraction (otherwise the text is stored as written), and
   `reflector`, which answers a reflect. (#987, #988, #991)

@@ -4,6 +4,8 @@ import type { Principal } from '../auth/principal.js';
 import { PRODUCT_VERSION } from '../config/version.js';
 import type { MemoryAccessService } from './memory-access.service.js';
 import type { MemoryBanksService } from './memory-banks.service.js';
+import { GRAPH_INSTRUCTIONS, registerGraphTools } from './memory-graph-mcp.js';
+import type { MemoryGraphService } from './memory-graph.service.js';
 import { FACT_TYPES, TAGS_MATCH } from './memory-facts.js';
 import type { MemoryIntakeService } from './memory-intake.service.js';
 import type { MemoryRateService } from './memory-rate.service.js';
@@ -14,9 +16,10 @@ import type { MemoryReflectService } from './memory-reflect.service.js';
 export const MEMORY_MCP_SERVER_NAME = 'knowledge-memory';
 /**
  * The tool sets a bank's endpoint serves, by the last path segment (#1007):
- * `POST mcp/{bank}/{profile}`. `hindsight` is also the bare `mcp/{bank}`.
+ * `POST mcp/{bank}/{profile}`. `hindsight` is also the bare `mcp/{bank}`;
+ * `graph` is the MCP reference memory server's nine tools (#1008).
  */
-export const MEMORY_MCP_PROFILES = ['hindsight'] as const;
+export const MEMORY_MCP_PROFILES = ['hindsight', 'graph'] as const;
 export type MemoryMcpProfile = (typeof MEMORY_MCP_PROFILES)[number];
 export const isMemoryMcpProfile = (value: string): value is MemoryMcpProfile => (MEMORY_MCP_PROFILES as readonly string[]).includes(value);
 
@@ -30,6 +33,7 @@ export interface MemoryMcpServices {
   recall: MemoryRecallService;
   reflect: MemoryReflectService;
   rate: MemoryRateService;
+  graph: MemoryGraphService;
 }
 
 export interface MemoryMcpRequest {
@@ -70,9 +74,10 @@ const RETAIN_INPUT = {
  * is not offered the two retain tools, and the resolver refuses it if it
  * calls one anyway.
  */
-export function buildMemoryMcpServer(services: MemoryMcpServices, request: MemoryMcpRequest): McpServer {
+export function buildMemoryMcpServer(services: MemoryMcpServices, request: MemoryMcpRequest, profile: MemoryMcpProfile = 'hindsight'): McpServer {
   const { access, banks, intake, recall, reflect, rate } = services;
   const { principal, workspaceHeader, pathBank } = request;
+  if (profile === 'graph') return buildGraphServer(services, request);
   const headerForm = pathBank === null;
   const server = new McpServer(
     { name: MEMORY_MCP_SERVER_NAME, version: PRODUCT_VERSION },
@@ -187,5 +192,24 @@ export function buildMemoryMcpServer(services: MemoryMcpServices, request: Memor
       async ({ query, limit, offset }) => text(await banks.list(await caller('viewer'), { q: query, limit, offset })),
     );
   }
+  return server;
+}
+
+/**
+ * The `graph` profile (#1008): the reference memory server's tools over the
+ * URL's bank. Only the path form reaches it — the controller routes a profile
+ * by path segment, and the header form stays Hindsight's.
+ */
+function buildGraphServer(services: MemoryMcpServices, request: MemoryMcpRequest): McpServer {
+  const { access, graph } = services;
+  const { principal, workspaceHeader, pathBank } = request;
+  if (pathBank === null) throw new Error('The graph profile needs a bank in the path');
+  const server = new McpServer({ name: MEMORY_MCP_SERVER_NAME, version: PRODUCT_VERSION }, { instructions: GRAPH_INSTRUCTIONS });
+  registerGraphTools(server, {
+    graph,
+    bankId: pathBank,
+    caller: (role, opts) => access.caller(principal, workspaceHeader, role, opts),
+    writes: principal.apiKey?.scope !== 'read',
+  });
   return server;
 }

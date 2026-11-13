@@ -10,6 +10,8 @@ import { MemoryRateService } from '../src/memory/memory-rate.service.js';
 import { RateLimitedException } from '../src/public/public-rate-limit.js';
 import { MCP_TOOLSETS } from '@knowledge/contracts';
 
+const GRAPH_READS = ['read_graph', 'search_nodes', 'open_nodes'];
+const GRAPH_TOOLS = ['create_entities', 'create_relations', 'add_observations', 'delete_entities', 'delete_observations', 'delete_relations', ...GRAPH_READS];
 const keyed = (scope: 'read' | 'capture' | 'write'): Principal => ({ ...DEV_PRINCIPAL, mode: 'api-key', isAdmin: false, userId: 'u1', apiKey: { id: 'k1', scope, workspaceId: 'ws-1' } });
 const bankRow = { id: 'bank-row', bankId: 'agent', workspaceId: 'ws-1' };
 
@@ -141,7 +143,7 @@ describe('per-bank memory MCP server (#986)', () => {
 
   it('is a server of its own: no tool shares a name with the platform’s, and a toolset key is not admitted', () => {
     const platform = new Set(Object.values(MCP_TOOLSETS).flatMap((t) => (t as { tools: readonly string[] }).tools));
-    for (const name of ['retain', 'sync_retain', 'recall', 'reflect', 'list_banks']) expect(platform.has(name)).toBe(false);
+    for (const name of ['retain', 'sync_retain', 'recall', 'reflect', 'list_banks', ...GRAPH_TOOLS]) expect(platform.has(name)).toBe(false);
     // AuthGuard admits a key limited to toolsets only where @McpKeyOk says so; this controller must not.
     expect(Reflect.getMetadata(MCP_KEY_OK_META, MemoryMcpController)).toBeUndefined();
     expect(Reflect.getMetadata(READ_KEY_OK_META, MemoryMcpController)).toBe(true);
@@ -150,7 +152,7 @@ describe('per-bank memory MCP server (#986)', () => {
   it('routes a profile by name: unknown is a 404 after the resolver, before any server is built (#1007)', async () => {
     let off = false;
     const access = { caller: vi.fn(async () => { if (off) throw new NotFoundException('The memory feature is switched off in this workspace.'); return {}; }) };
-    const controller = new MemoryMcpController(access as never, {} as never, {} as never, {} as never, {} as never, {} as never);
+    const controller = new MemoryMcpController(access as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never);
     const res = { on: vi.fn(), status: vi.fn(), headersSent: false };
     await expect(controller.profile(keyed('write'), undefined, 'agent', 'nope', {} as never, res as never)).rejects.toBeInstanceOf(NotFoundException);
     expect(res.on).not.toHaveBeenCalled();
@@ -158,5 +160,92 @@ describe('per-bank memory MCP server (#986)', () => {
     await expect(controller.profile(keyed('write'), undefined, 'agent', 'nope', {} as never, res as never)).rejects.toThrow(/switched off/);
     expect(isMemoryMcpProfile('hindsight')).toBe(true);
     expect(isMemoryMcpProfile('constructor')).toBe(false);
+  });
+});
+
+describe('the graph profile: the MCP reference memory server’s tools (#1008)', () => {
+  async function connectGraph(principal: Principal, opts: { capped?: boolean } = {}) {
+    const access = {
+      caller: vi.fn(async (p: Principal, _ws: unknown, role: string, o?: { capture?: boolean }) => {
+        if (role === 'editor' && p.apiKey?.scope === 'read') throw new ForbiddenException('This API key is read-only');
+        if (role === 'editor' && p.apiKey?.scope === 'capture' && !o?.capture) throw new ForbiddenException('A capture key cannot do this');
+        return { principal: p, workspaceId: 'ws-1', role, capture: o?.capture === true };
+      }),
+    };
+    const entity = { name: 'Alice', entityType: 'person', observations: ['works at Acme'] };
+    const read = { graph: { entities: [entity], relations: [] }, capped: opts.capped === true };
+    const graph = {
+      createEntities: vi.fn(async () => ({ created: [entity], skipped: ['Bob'] })),
+      createRelations: vi.fn(async () => [{ from: 'Alice', to: 'Acme', relationType: 'works_at' }]),
+      addObservations: vi.fn(async () => [{ entityName: 'Alice', addedObservations: ['likes tea'] }]),
+      deleteEntities: vi.fn(async () => 'Entities deleted successfully'),
+      deleteObservations: vi.fn(async () => 'Observations deleted successfully'),
+      deleteRelations: vi.fn(async () => 'Relations deleted successfully'),
+      read: vi.fn(async () => read),
+      search: vi.fn(async () => read),
+      open: vi.fn(async () => read.graph),
+    };
+    const server = buildMemoryMcpServer({ access, graph } as never, { principal, workspaceHeader: undefined, pathBank: 'agent', headerBank: undefined }, 'graph');
+    const [a, b] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'spec', version: '0' });
+    await Promise.all([server.connect(a), client.connect(b)]);
+    const call = async (name: string, args: Record<string, unknown>) =>
+      (await client.callTool({ name, arguments: args }).catch((e: Error) => ({ isError: true, content: [{ text: e.message }] }))) as {
+        isError?: boolean;
+        content: Array<{ text: string }>;
+        structuredContent?: unknown;
+      };
+    return { client, call, access, graph };
+  }
+
+  it('offers a write or capture key all nine tools, and a read key only the three reads', async () => {
+    for (const scope of ['write', 'capture'] as const) expect((await (await connectGraph(keyed(scope))).client.listTools()).tools.map((t) => t.name)).toEqual(GRAPH_TOOLS);
+    const { client, call, graph } = await connectGraph(keyed('read'));
+    expect((await client.listTools()).tools.map((t) => t.name)).toEqual(GRAPH_READS);
+    expect((await call('create_entities', { entities: [] })).isError).toBe(true);
+    expect(graph.createEntities).not.toHaveBeenCalled();
+  });
+
+  it('resolves each tool’s role on execution: a capture key creates and adds, only an editor deletes', async () => {
+    const { call, access, graph } = await connectGraph(keyed('capture'));
+    await call('create_entities', { entities: [] });
+    expect(access.caller).toHaveBeenLastCalledWith(expect.anything(), undefined, 'editor', { capture: true });
+    expect(graph.createEntities).toHaveBeenCalledWith(expect.objectContaining({ capture: true }), 'agent', []);
+    await call('add_observations', { observations: [] });
+    await call('create_relations', { relations: [] });
+    expect(graph.addObservations).toHaveBeenCalled();
+    expect(graph.createRelations).toHaveBeenCalled();
+    for (const [name, args] of [['delete_entities', { entityNames: ['A'] }], ['delete_observations', { deletions: [] }], ['delete_relations', { relations: [] }]] as const) {
+      expect([name, (await call(name, args)).isError]).toEqual([name, true]);
+    }
+    expect(graph.deleteEntities).not.toHaveBeenCalled();
+    await call('open_nodes', { names: ['Alice'] });
+    expect(access.caller).toHaveBeenLastCalledWith(expect.anything(), undefined, 'viewer', undefined);
+  });
+
+  it('answers in the reference’s shapes: indented JSON, a skipped notice beside it, a message for a delete', async () => {
+    const { call } = await connectGraph(keyed('write'));
+    const created = await call('create_entities', { entities: [] });
+    expect(created.content.map((c) => c.text)).toEqual([
+      JSON.stringify([{ name: 'Alice', entityType: 'person', observations: ['works at Acme'] }], null, 2),
+      'Skipped 1 entity that already exists: Bob. Its observations were not added; use add_observations for existing entities.',
+    ]);
+    expect(created.structuredContent).toEqual({ entities: [{ name: 'Alice', entityType: 'person', observations: ['works at Acme'] }], skipped: ['Bob'] });
+    expect((await call('add_observations', { observations: [] })).structuredContent).toEqual({ results: [{ entityName: 'Alice', addedObservations: ['likes tea'] }] });
+    const deleted = await call('delete_relations', { relations: [] });
+    expect(deleted.content).toEqual([{ type: 'text', text: 'Relations deleted successfully' }]);
+    expect(deleted.structuredContent).toEqual({ success: true, message: 'Relations deleted successfully' });
+  });
+
+  it('says beside a read when this server’s ceiling cut it, and changes nothing else', async () => {
+    const plain = await (await connectGraph(keyed('read'))).call('read_graph', {});
+    expect(plain.content).toHaveLength(1);
+    const { call } = await connectGraph(keyed('read'), { capped: true });
+    for (const [name, args] of [['read_graph', {}], ['search_nodes', { query: 'a' }]] as const) {
+      const res = await call(name, args);
+      expect(res.content[0]!.text).toBe(plain.content[0]!.text);
+      expect(res.content[1]!.text).toMatch(/^Showing only the first 1 entities: this server returns at most 1 per call\./);
+      expect(res.structuredContent).toEqual(plain.structuredContent);
+    }
   });
 });

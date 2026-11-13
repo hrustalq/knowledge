@@ -13,6 +13,13 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Fixed
+
+- AI usage no longer lists system work, such as memory consolidation, under "dev (AUTH_MODE=none)" on a server
+  where people sign in. Those calls now show as "system". (#1023)
+
 ## [0.53.0] — 2026-11-13
 
 ### Added

@@ -70,7 +70,7 @@ function usage(opts: { threadPage?: string | null; threadFails?: boolean; rows?:
     document: db.document,
     project: { findMany: vi.fn(async () => [{ id: A, name: 'Billing' }]) },
   };
-  const svc = new AiUsageService(prisma as never, { estimateCost: () => null } as never);
+  const svc = new AiUsageService(prisma as never, { estimateCost: () => null } as never, { get: () => 'none' } as never);
   const call = (extra: Record<string, unknown> = {}) =>
     svc.record({
       config: { workspaceId: WS, provider: 'openai', model: 'm', providerId: null } as never,

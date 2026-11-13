@@ -246,7 +246,8 @@
     "confirmBankId": "Чтобы удалить банк, введите его id: {bankId}",
     "entityNotFound": "Сущность {id} не найдена",
     "relationNotFound": "Связь {id} не найдена",
-    "fileNotFound": "Файл памяти {id} не найден"
+    "fileNotFound": "Файл памяти {id} не найден",
+    "fileChunk": "Эта запись — часть файла {path}: удалите файл"
   },
   "memo": {
     "notFound": "Запись не найдена",

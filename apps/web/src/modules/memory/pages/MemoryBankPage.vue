@@ -19,7 +19,7 @@ import { RouterLink, useRoute } from 'vue-router'
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { refDebounced } from '@vueuse/core'
 import { toast } from 'vue-sonner'
-import { ArrowLeft, Brain, FileUp, Search, Trash2 } from 'lucide-vue-next'
+import { ArrowLeft, Brain, FileText, FileUp, Search, Trash2 } from 'lucide-vue-next'
 import type { MemoryUnitListResponse, MemoryUnitSummary, MemoryUnitType } from '@knowledge/contracts'
 import { api } from '@/shared/api/client'
 import { apiQueryOptions } from '@/shared/api/queries'
@@ -119,6 +119,16 @@ async function remove(memory: MemoryUnitSummary) {
   }
 }
 const promoting = ref<MemoryUnitSummary | null>(null)
+
+/** A file chunk is not deleted on its own (#1018): its row opens the file on the Files tab, where the file deletes. */
+const openFile = ref<MemoryUnitSummary['file']>(null)
+function showFile(file: NonNullable<MemoryUnitSummary['file']>) {
+  openFile.value = file
+  section.value = 'files'
+}
+watch(section, (now) => {
+  if (now !== 'files') openFile.value = null
+})
 </script>
 
 <template>
@@ -199,6 +209,18 @@ const promoting = ref<MemoryUnitSummary | null>(null)
                   <FileUp class="size-4" />
                 </Button>
                 <Button
+                  v-if="m.file"
+                  size="icon"
+                  variant="ghost"
+                  class="size-8 text-muted-foreground"
+                  :aria-label="t('memory.bank.openFile', { path: m.file.path })"
+                  :title="t('memory.bank.openFile', { path: m.file.path })"
+                  @click="showFile(m.file)"
+                >
+                  <FileText class="size-4" />
+                </Button>
+                <Button
+                  v-else
                   size="icon"
                   variant="ghost"
                   class="size-8 text-muted-foreground hover:text-destructive"
@@ -220,7 +242,7 @@ const promoting = ref<MemoryUnitSummary | null>(null)
       </div>
       <div v-else :id="panelId(section, SECTION_SCOPE)" role="tabpanel" :aria-labelledby="tabId(section, SECTION_SCOPE)" class="min-w-0">
         <BankEntitiesPanel v-if="section === 'entities'" :bank-id="bank.id" />
-        <BankFilesPanel v-else :bank-id="bank.id" />
+        <BankFilesPanel v-else :bank-id="bank.id" :open="openFile" />
       </div>
 
       <PromoteMemoryDialog v-if="promoting" :open="!!promoting" :bank-id="bank.id" :memory="promoting" :project-id="bank.projectId" @update:open="(v) => { if (!v) promoting = null }" />

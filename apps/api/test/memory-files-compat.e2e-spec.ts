@@ -449,6 +449,30 @@ describe('Anthropic memory tool compatibility (e2e, #1009)', () => {
       }
     });
 
+    it('names a chunk’s file in the memories list and refuses to delete the chunk on its own (#1018)', async () => {
+      const deploy = (await list(people.alice.key)).files.find((f) => f.path === '/memories/notes/deploy.md')!;
+      const res = await web(people.alice.key, 'GET', `/banks/${bankRowId}/memories?limit=200`);
+      expect(res.status).toBe(200);
+      const items = ((await res.json()) as { items: Array<{ id: string; file: { id: string; path: string } | null }> }).items;
+      const chunk = items.find((m) => m.file?.path === '/memories/notes/deploy.md')!;
+      expect(chunk.file).toEqual({ id: deploy.id, path: '/memories/notes/deploy.md' });
+      const refused = await web(people.alice.key, 'DELETE', `/banks/${bankRowId}/memories/${chunk.id}`);
+      expect(refused.status).toBe(409);
+      expect(await refused.json()).toMatchObject({ details: { fileId: deploy.id, path: '/memories/notes/deploy.md' } });
+      expect(await prisma.memoryUnit.count({ where: { id: chunk.id } })).toBe(1);
+
+      // A memory retained the Hindsight way names no file and deletes as before.
+      await hindsight(people.alice.key).retain(bank, 'The canary runs for ten minutes.');
+      const plain = (await prisma.memoryUnit.findFirstOrThrow({ where: { bankId: bankRowId, text: 'The canary runs for ten minutes.' } })).id;
+      const after = ((await (await web(people.alice.key, 'GET', `/banks/${bankRowId}/memories?limit=200`)).json()) as { items: Array<{ id: string; file: unknown }> }).items;
+      expect(after.find((m) => m.id === plain)!.file).toBeNull();
+      expect((await web(people.alice.key, 'DELETE', `/banks/${bankRowId}/memories/${plain}`)).status).toBe(204);
+
+      // An orphan chunk, its file gone, names no file and deletes: that is cleanup.
+      const orphan = await prisma.memoryUnit.create({ data: { workspaceId: WS_A, bankId: bankRowId, text: 'left behind', sourceText: 'left behind', factType: 'world', documentId: 'file:/memories/gone.md', createdBy: people.alice.id, consolidatedAt: new Date() } });
+      expect((await web(people.alice.key, 'DELETE', `/banks/${bankRowId}/memories/${orphan.id}`)).status).toBe(204);
+    }, 30_000);
+
     it('lets an editor delete a file with its recall chunks, as the tool’s own delete does', async () => {
       const deploy = (await list(people.alice.key)).files.find((f) => f.path === '/memories/notes/deploy.md')!;
       const chunks = await prisma.memoryUnit.findMany({ where: { bankId: bankRowId, documentId: 'file:/memories/notes/deploy.md' }, select: { id: true } });

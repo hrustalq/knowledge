@@ -49,6 +49,12 @@ export interface MemoryUnitSummary {
   proofCount: number;
   occurredAt: string | null;
   createdAt: string;
+  /**
+   * The memory tool's file this memory is a chunk of (#1018), or null. A chunk
+   * is an index of the file, so it is not deleted on its own: the delete
+   * route refuses it (409) and the file is deleted instead.
+   */
+  file: { id: string; path: string } | null;
 }
 
 export interface MemoryUnitListResponse {

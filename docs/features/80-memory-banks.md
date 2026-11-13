@@ -382,9 +382,9 @@ listing, six-wide line numbers and the 16,000-character view cut). The route sit
 8. Own messages where the SDK would leak a raw errno: moving a directory into itself, a size over the
    cap, a field of the wrong type.
 
-Known gap: a file chunk deleted on its own (the Memories tab, `DELETE …/memories/{id}`) comes back
-only at that file's next write, because the file is still marked indexed. A file's recall lags its
-text by up to a sweep (about 90 s) after a failed index or a rename.
+A chunk is never deleted on its own (#1018): the web route refuses it, the Memories tab offers "open
+the file" instead of delete, and the Hindsight wire has no single-memory delete. Known gap: a file's
+recall lags its text by up to a sweep (about 90 s) after a failed index or a rename.
 
 ## The web section
 
@@ -396,7 +396,7 @@ text by up to a sweep (about 90 s) after a failed index or a rename.
 | `GET /v1/memory/banks/:id/memories` | viewer | a bank's memories, newest first; `type`, `q`, `limit` (≤ 200), `offset` |
 | `PATCH /v1/memory/banks/:id` | editor | bind to a project or the whole workspace; needs `requireProjectManage` on the project it leaves and the one it joins |
 | `DELETE /v1/memory/banks/:id?confirm=<bank id>` | editor | the bank and everything in it; the typed id is checked again here |
-| `DELETE /v1/memory/banks/:id/memories/:memoryId` | editor | one memory, and any observation it leaves bare |
+| `DELETE /v1/memory/banks/:id/memories/:memoryId` | editor | one memory, and any observation it leaves bare. A chunk of a memory tool file is refused, 409 with `fileId` and `path` (#1018): the file deletes instead. A chunk whose file is gone deletes |
 | `POST /v1/memory/banks/:id/memories/:memoryId/promote` | editor | see below |
 | `GET /v1/memory/banks/:id/entities` | viewer | the graph's entities in creation order, each with its observations (id + text), and every relation touching one; `q` (name, type or observation text), `limit` (≤ 200), `offset` |
 | `DELETE /v1/memory/banks/:id/entities/:entityId` | editor | one entity, its observations and every relation touching it (`MemoryGraphService.removeEntities`) |
@@ -420,6 +420,8 @@ memory tool endpoint with a handler to paste (TypeScript and Python, `model/conn
 page has three tabs (`?tab=entities|files` opens one; an opening instruction, not two-way state):
 
 - **Memories** — facts and observations, with delete, promote and the project binding for editors.
+  A chunk of a memory tool file names its file (`file` on each item) and opens it on the Files tab
+  instead of offering delete.
 - **Entities** — each entity with its type, its observations and its relations; delete of an entity
   (confirmed), an observation or a relation for editors.
 - **Files** — by path, with size and last write; a file opens in place to its text. Delete (confirmed)

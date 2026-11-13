@@ -949,6 +949,7 @@ export type I18nTranslations = {
             "entityNotFound": string;
             "relationNotFound": string;
             "fileNotFound": string;
+            "fileChunk": string;
         };
         "memo": {
             "notFound": string;

@@ -24,7 +24,8 @@ import { confirm } from '@knowledge/ui/confirm'
 import { Input } from '@knowledge/ui/input'
 import { PageState } from '@knowledge/ui/layout'
 
-const props = defineProps<{ bankId: string }>()
+/** A file to open on arrival, filtered to its path so it is on the first page (the Memories tab's "open the file"). */
+const props = defineProps<{ bankId: string; open?: { id: string; path: string } | null }>()
 
 const PAGE = 50
 const MAX = 200
@@ -33,7 +34,7 @@ const { t } = useI18n()
 const auth = useAuthStore()
 const queryClient = useQueryClient()
 
-const search = ref('')
+const search = ref(props.open?.path ?? '')
 const q = refDebounced(search, 300)
 const limit = ref(PAGE)
 watch(q, () => (limit.value = PAGE))
@@ -49,7 +50,7 @@ const data = computed(() => listQuery.data.value as MemoryFileListResponse | und
 
 /* -------------------------------------------------------------- open file */
 
-const openId = ref<string | null>(null)
+const openId = ref<string | null>(props.open?.id ?? null)
 const fileQuery = useQuery(
   computed(() => ({
     ...apiQueryOptions('/v1/memory/banks/{id}/files/{fileId}', { path: { id: props.bankId, fileId: openId.value ?? '' } }),

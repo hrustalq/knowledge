@@ -17535,6 +17535,26 @@
       },
       "createdAt": {
         "type": "string"
+      },
+      "file": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "path"
+            ]
+          }
+        ],
+        "nullable": true
       }
     },
     "required": [
@@ -17546,7 +17566,8 @@
       "entities",
       "proofCount",
       "occurredAt",
-      "createdAt"
+      "createdAt",
+      "file"
     ]
   },
   "MemoryUnitType": {

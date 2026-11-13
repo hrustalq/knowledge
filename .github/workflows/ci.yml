@@ -137,8 +137,17 @@ jobs:
             '  handle {' '    reverse_proxy localhost:5174' '  }' '}' > "$RUNNER_TEMP/Caddyfile"
           docker run -d --name e2e-proxy --network host \
             -v "$RUNNER_TEMP/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine
-          (cd apps/api && nohup node dist/worker.main.js > "$RUNNER_TEMP/worker.log" 2>&1 &)
+          # exec keeps $! the worker's own pid, so a worker that dies at start
+          # (#983: a provider missing from WorkerModule) fails within one poll,
+          # in both waits: the schema can already exist (the Hindsight step
+          # creates it), so the first wait may end before the worker has died.
+          (cd apps/api && exec nohup node dist/worker.main.js > "$RUNNER_TEMP/worker.log" 2>&1) & WORKER=$!
+          worker_alive() {
+            kill -0 "$WORKER" 2>/dev/null && return
+            echo "::error::the worker exited at start"; tail -50 "$RUNNER_TEMP/worker.log"; exit 1
+          }
           for i in $(seq 1 60); do
+            worker_alive
             curl -sf -u root:playwithdata localhost:2480/api/v1/query/knowledge \
               -d '{"language":"sql","command":"select name from schema:types where name = \"Document\""}' \
               | grep -q '"Document"' && break
@@ -147,13 +156,42 @@ jobs:
           (cd apps/api && nohup node dist/main.js > "$RUNNER_TEMP/api.log" 2>&1 &)
           (cd apps/web && NODE_ENV=production PORT=5174 nohup node server > "$RUNNER_TEMP/web.log" 2>&1 &)
           for i in $(seq 1 90); do
+            worker_alive
             curl -sf localhost:5173/api/v1/collab/capabilities | grep -q '"enabled":true' \
-              && curl -sf -o /dev/null localhost:5173/ && exit 0
+              && curl -sf -o /dev/null localhost:5173/ && worker_alive && exit 0
             sleep 2
           done
           echo "stack did not come up"
           docker logs e2e-proxy 2>&1 | tail -20
           tail -50 "$RUNNER_TEMP/worker.log" "$RUNNER_TEMP/api.log" "$RUNNER_TEMP/web.log"; exit 1
+
+      # #999: the entrypoints nothing else starts. Nest resolves providers only
+      # when the context is created, so a module missing one boots in tests and
+      # dies here. Each must log its ready line (the MCP server: answer
+      # `initialize` on stdin) and still be alive 3 s later. Only the API is
+      # covered by the steps above; the worker by the step before this one.
+      - name: Boot the learner, the git remote and the MCP server
+        run: |
+          boot() { # name, ready pattern, stdin line
+            local log="$RUNNER_TEMP/$1.log"
+            # stdin stays open (the MCP server reads it); the feeder writes to the log, not the step.
+            (exec > "$log" 2>&1; cd apps/api && exec node "dist/$1.main.js" < <(printf '%s\n' "$3"; sleep 60)) & local pid=$!
+            for i in $(seq 1 30); do
+              kill -0 "$pid" 2>/dev/null && ! grep -q "$2" "$log" || break
+              sleep 1
+            done
+            sleep 3
+            if kill -0 "$pid" 2>/dev/null && grep -q "$2" "$log" \
+              && ! grep -qE "UnknownDependenciesException|Nest can't resolve" "$log"; then
+              kill "$pid"; echo "$1: up"
+            else
+              echo "::error::$1 did not start"; tail -50 "$log"; kill "$pid" 2>/dev/null; return 1
+            fi
+          }
+          boot learner 'Learner started'
+          boot git 'Git remote listening'
+          boot mcp '"serverInfo"' \
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}'
 
       - name: Playwright
         run: pnpm --filter @knowledge/web run test:e2e
@@ -171,6 +209,9 @@ jobs:
           name: coedit-e2e
           path: |
             ${{ runner.temp }}/worker.log
+            ${{ runner.temp }}/learner.log
+            ${{ runner.temp }}/git.log
+            ${{ runner.temp }}/mcp.log
             ${{ runner.temp }}/api.log
             ${{ runner.temp }}/web.log
             ${{ runner.temp }}/proxy.log

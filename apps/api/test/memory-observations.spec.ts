@@ -1,5 +1,7 @@
 import { consolidationDay, consolidationPrompt, readConsolidation, refinement } from '../src/memory/memory-observations.js';
 import { preferObservations } from '../src/memory/memory-recall.service.js';
+import { MemoryConsolidationService } from '../src/memory/memory-consolidation.service.js';
+import { withLocaleDirective } from '../src/assistant/assistant.client.js';
 
 /**
  * #993: the consolidator's answer is a claim, and the reader keeps only what
@@ -103,5 +105,31 @@ describe('preferObservations', () => {
   it('changes nothing when no observation is kept', () => {
     const rows = [r('f1', 'world'), r('f2', 'world'), r('o1', 'observation', ['f1'])];
     expect(preferObservations(rows, 20).map((x) => x.row.id)).toEqual(['f1', 'f2']);
+  });
+});
+
+describe('memory content keeps its own language (#1022)', () => {
+  it('a consolidation pass sends no reply-language directive', async () => {
+    const chatWithUsage = vi.fn(async () => ({ content: '{"observations": []}', tokens: { promptTokens: 1, completionTokens: 1, totalTokens: 2, estimated: false } }));
+    const self = {
+      candidates: async () => [],
+      usage: { assertWithinBudget: async () => undefined },
+      takeCall: async () => true,
+      client: { chatWithUsage },
+      write: vi.fn(async () => ({ created: 0, refined: 0 })),
+    };
+    const batch = (MemoryConsolidationService.prototype as unknown as { batch: (...a: unknown[]) => Promise<unknown> }).batch;
+    await batch.call(self, { id: 'b', workspaceId: 'ws', mission: '' }, [{ text: 'Алиса руководит биллингом.', tags: [] }], { config: {}, instructions: 'tidy' }, null, Date.now());
+    const [[ctx]] = chatWithUsage.mock.calls as unknown as [[{ locale: string; operation: string }]];
+    expect(ctx).toMatchObject({ operation: 'memory-consolidate', locale: 'source' });
+  });
+
+  it("'source' leaves the messages as written; a locale still appends the directive", () => {
+    const messages = [{ role: 'system' as const, content: 'tidy' }, { role: 'user' as const, content: 'F1' }];
+    expect(withLocaleDirective(messages, 'source')).toBe(messages);
+    const ru = withLocaleDirective(messages, 'ru');
+    expect(ru[0]!.content).toContain('tidy');
+    expect(ru[0]!.content).not.toBe('tidy');
+    expect(messages[0]!.content).toBe('tidy');
   });
 });

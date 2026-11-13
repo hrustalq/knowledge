@@ -184,7 +184,7 @@ export class MemoryConsolidationService {
     if (!(await this.takeCall(bank.id, now))) return 'cap';
     const { content } = await this.client.chatWithUsage(
       // Billed to no person: nobody asked for this pass, as the learner's coach.
-      { config: agent.config, userId: AUTHOR_ID_STUB, operation: 'memory-consolidate', locale: 'en' },
+      { config: agent.config, userId: AUTHOR_ID_STUB, operation: 'memory-consolidate', locale: 'source' },
       [
         { role: 'system', content: agent.instructions },
         { role: 'user', content: consolidationPrompt(facts, candidates, bank.mission) },

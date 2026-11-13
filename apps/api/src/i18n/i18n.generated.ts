@@ -1005,6 +1005,10 @@ export type I18nTranslations = {
             "pluginUrlNotHttps": string;
             "pluginHostUnresolved": string;
             "pluginUrlPrivate": string;
+            "baseUrlInvalid": string;
+            "baseUrlNotHttps": string;
+            "baseUrlUnresolved": string;
+            "baseUrlPrivate": string;
             "providerNone": string;
             "decisionNeedsGenApi": string;
             "agentNotFound": string;
@@ -1570,6 +1574,8 @@ export type I18nTranslations = {
             "secretKeyMissing": string;
             "kindNotSupported": string;
             "platformWideAdminOnly": string;
+            "platformWideDomainsAdminOnly": string;
+            "providerDomainNotVerified": string;
             "issuerRequired": string;
             "clientIdRequired": string;
             "idpEntityIdRequired": string;

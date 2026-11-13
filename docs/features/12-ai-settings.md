@@ -156,7 +156,20 @@ process, because the key lives on the same host. Keys are write-only over the
 API — reads return `hasApiKey` and a last-4 hint. A missing key disables secret
 _writes_ only, with a message pointing at `ASSISTANT_API_KEY`; everything else
 keeps working. A row that will not decrypt (rotated key, corrupt envelope)
-falls back to the env credential rather than taking the assistant down.
+falls back to the env credential (on the env endpoint only) rather than taking
+the assistant down.
+
+**A key goes only to the endpoint it was given for** (GHSA-7hf4-5chc-29gr).
+`ASSISTANT_API_KEY` is sent only to the env endpoint (`ASSISTANT_BASE_URL`, else
+the env provider's default). A workspace row or named provider that dials
+anywhere else must carry its own key, or it dials with none. A key-less named
+provider borrows the default config's key only on the same endpoint. Saving a
+new `baseUrl` or `provider` drops the stored key unless the same request sends
+one. A workspace base URL is checked with `assertSafeExternalUrl` at save and
+dialled through `safeFetch` (`providerFetch` in `ai/provider-endpoint.ts`, used
+by the assistant client, OCR and extraction). A private or http address needs
+`AI_PROVIDERS_ALLOW_PRIVATE_URLS=true`. The operator's own endpoint is always
+allowed (`ResolvedAiConfig.privateOk`).
 
 **Skills are trusted; plugin output is not.** A skill is written by a workspace
 admin and sits next to the system prompt, so the prompt says plainly that

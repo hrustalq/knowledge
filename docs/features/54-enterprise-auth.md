@@ -55,8 +55,17 @@ any of it.
 
 ## The rules
 
-**A provider may assert only the domains it is given.** `allowedDomains` is the
-guard for every kind. A sign-in links to an existing account, or creates one,
+**A provider may assert only the domains it is given, and only once they are
+proven.** `allowedDomains` is the guard for every kind. A domain on it counts
+only when the provider's workspace holds a verified `sso_domains` row for it
+(DNS proof, or a platform admin's manual verification), or when the provider is
+platform-wide, whose list only a platform admin may change
+(GHSA-xj6f-x636-xrx8). `auth/sso/domain-proof.ts` is the one predicate: sign-in
+(`SsoLoginService.refuseAddress`), the save path (an added domain must be
+proven) and the view's `unverifiedDomains` all read it. A stored domain that is
+not proven stays on the list but signs nobody in. SSO never links an existing
+platform-admin account by address (`admin-link-refused`); a platform admin
+signs in with their password. A sign-in links to an existing account, or creates one,
 only when the address is verified by the provider and on one of those domains.
 An empty list means the provider can sign in people it has already linked, and
 nobody else. "Verified" means:

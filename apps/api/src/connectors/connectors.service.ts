@@ -83,6 +83,13 @@ export type UpdateConnectorInput = Partial<Omit<CreateConnectorInput, 'workspace
  * same reason AiProvidersService parses its own encryption key rather than
  * depending on AiConfigService's load order.
  */
+/**
+ * Whether the person acting reaches a GitHub App installation. Passed in by
+ * the API callers: the check needs their GitHub sign-in, which lives in an
+ * API-only module this worker-loadable service cannot import.
+ */
+export type InstallationReach = (installationId: string) => Promise<boolean>;
+
 @Injectable()
 export class ConnectorsService {
   private readonly logger = new Logger(ConnectorsService.name);
@@ -182,7 +189,8 @@ export class ConnectorsService {
 
   // --- writes ---
 
-  async create(input: CreateConnectorInput, userId?: string): Promise<ConnectorSummary> {
+  /** `reach` answers whether the caller's GitHub account reaches an installation; needed to bind an `app` connection. */
+  async create(input: CreateConnectorInput, userId?: string, reach?: InstallationReach): Promise<ConnectorSummary> {
     const info = connectorKindInfo(input.kind);
     if (!info) throw new BadRequestException(t('error.connector.unknownKind', { kind: input.kind }));
     this.assertKindEnabled(info.kind);
@@ -191,7 +199,7 @@ export class ConnectorsService {
 
     const config = withServerKeys(input.config ?? {}, {});
     await this.validateConfig(info.kind, config);
-    const via = input.connectionId ? await this.viaConnection(input.workspaceId, info.kind, input.connectionId, config) : null;
+    const via = input.connectionId ? await this.viaConnection(input.workspaceId, info.kind, input.connectionId, config, reach) : null;
     const token = via ? null : this.token(input.credential ?? null);
 
     const taken = await this.prisma.connector.findUnique({
@@ -225,7 +233,7 @@ export class ConnectorsService {
     return this.toSummary(row);
   }
 
-  async update(connectorId: string, input: UpdateConnectorInput): Promise<ConnectorSummary> {
+  async update(connectorId: string, input: UpdateConnectorInput, reach?: InstallationReach): Promise<ConnectorSummary> {
     const row = await this.require(connectorId);
     const kind = row.kind as ConnectorKind;
 
@@ -235,7 +243,14 @@ export class ConnectorsService {
     if (input.config !== undefined) await this.validateConfig(kind, input.config);
     const config = input.config === undefined ? null : withServerKeys(input.config, row.config);
     const via = input.connectionId
-      ? await this.viaConnection(row.workspaceId, kind, input.connectionId, config ?? { ...(row.config as Record<string, string>) })
+      ? await this.viaConnection(
+          row.workspaceId,
+          kind,
+          input.connectionId,
+          config ?? { ...(row.config as Record<string, string>) },
+          // Keeping the connection it already dials through reaches nothing new.
+          input.connectionId === row.connectionId ? async () => true : reach,
+        )
       : null;
     // undefined keeps the token it dials with now, null clears it.
     const rebind = !via && (input.credential !== undefined || input.config !== undefined);
@@ -654,6 +669,7 @@ export class ConnectorsService {
     kind: ConnectorKind,
     connectionId: string,
     config: Record<string, string>,
+    reach?: InstallationReach,
   ): Promise<{ connectionId: string; config: Prisma.InputJsonValue }> {
     const connection = await this.prisma.connection.findUnique({ where: { id: connectionId } });
     if (!connection || connection.workspaceId !== workspaceId) {
@@ -663,6 +679,12 @@ export class ConnectorsService {
     const target = connectionProviderFor(kind, config);
     if (target.provider !== connection.provider || target.site !== connection.site) {
       throw new BadRequestException(t('error.connector.connectionMismatch', { provider: connection.provider }));
+    }
+    // An installation token syncs every repository the installation was
+    // granted, so binding to one needs a person whose own GitHub account
+    // reaches it, the check the picker makes (GHSA-52pw-fwcw-7mmf).
+    if (connection.method === 'app' && !(connection.externalRef && reach && (await reach(connection.externalRef)))) {
+      throw new ForbiddenException(t('error.connection.githubNotVisible'));
     }
     delete config[GITHUB_INSTALLATION_CONFIG_KEY];
     delete config[FIGMA_GRANT_CONFIG_KEY];

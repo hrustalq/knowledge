@@ -343,6 +343,7 @@ export class ConnectionsService {
         const connector = await this.connectors.create(
           { workspaceId: row.workspaceId, kind: pair.kind, name, projectId: pair.projectId, config: { ...pair.config }, connectionId: row.id },
           userId ?? undefined,
+          userId ? (installationId) => this.browse.reaches(userId, installationId) : undefined,
         );
         names.add(name);
         linked.set(key, connector.id);

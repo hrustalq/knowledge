@@ -13596,6 +13596,12 @@
           "type": "string"
         }
       },
+      "unverifiedDomains": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
       "groupsClaim": {
         "type": "string",
         "nullable": true
@@ -13637,6 +13643,7 @@
       "jitEnabled",
       "defaultRole",
       "allowedDomains",
+      "unverifiedDomains",
       "groupsClaim",
       "groupSyncMode",
       "sessionTtlHours",

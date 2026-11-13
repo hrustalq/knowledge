@@ -31,6 +31,7 @@ import { generateSpKeyPair, parseCertificates } from './saml-cert.js';
 import { samlConfigOf } from './saml-profile.js';
 import { SamlService } from './saml.service.js';
 import { AuthPolicyService } from '../auth-policy.service.js';
+import { unprovenDomains } from './domain-proof.js';
 
 const ISSUER_KEYS = {
   invalid: 'error.sso.issuerInvalid',
@@ -96,19 +97,20 @@ export class IdentityProvidersService {
       where: { workspaceId },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
-    return { providers: rows.map((r) => this.view(r)), secretsWritable: this.key !== null, kinds: liveIdpKinds(this.config) };
+    const providers = await Promise.all(rows.map((r) => this.viewOf(r)));
+    return { providers, secretsWritable: this.key !== null, kinds: liveIdpKinds(this.config) };
   }
 
   async create(workspaceId: string, dto: CreateIdentityProviderDto, principal: Principal): Promise<IdentityProviderView> {
     if (!liveIdpKinds(this.config).includes(dto.kind)) throw new BadRequestException(t('error.sso.kindNotSupported', { kind: dto.kind }));
-    const fields = await this.fields(dto.kind, dto, principal, null);
+    const fields = await this.fields(workspaceId, dto.kind, dto, principal, null);
     const row = await this.prisma.identityProvider.create({
       data: { workspaceId, kind: dto.kind, name: dto.name.trim(), ...fields, ...(dto.kind === 'saml' ? this.spKeyPair(fields) : {}) },
     });
     void this.audit.record({ ...this.entry(principal, row, changedFields(dto)), action: 'sso.provider_created' });
     // Which providers satisfy enforced SSO may have changed — here and, for a platform-wide one, everywhere.
     this.policy.invalidate();
-    return this.view(row);
+    return this.viewOf(row);
   }
 
   async update(
@@ -118,7 +120,7 @@ export class IdentityProvidersService {
     principal: Principal,
   ): Promise<IdentityProviderView> {
     const existing = await this.owned(workspaceId, providerId);
-    const fields = await this.fields(existing.kind as IdpKind, dto, principal, existing);
+    const fields = await this.fields(workspaceId, existing.kind as IdpKind, dto, principal, existing);
     const row = await this.prisma.identityProvider.update({
       where: { id: existing.id },
       data: { ...(dto.name !== undefined ? { name: dto.name.trim() } : {}), ...fields },
@@ -126,7 +128,7 @@ export class IdentityProvidersService {
     this.oidc.forget(row.id);
     void this.audit.record({ ...this.entry(principal, row, changedFields(dto)), action: 'sso.provider_updated' });
     this.policy.invalidate();
-    return this.view(row);
+    return this.viewOf(row);
   }
 
   /** Deleting a provider also ends the sessions it vouched for: nothing stands behind them any more. */
@@ -161,6 +163,7 @@ export class IdentityProvidersService {
 
   /** Validate and translate a create/update body into columns. `existing` is null on create. */
   private async fields(
+    workspaceId: string,
     kind: IdpKind,
     dto: UpdateIdentityProviderDto,
     principal: Principal,
@@ -179,6 +182,18 @@ export class IdentityProvidersService {
         if (!domain) throw new BadRequestException(t('error.sso.invalidDomain', { domain: raw.slice(0, 100) }));
         if (!allowedDomains.includes(domain)) allowedDomains.push(domain);
       }
+      // GHSA-xj6f-x636-xrx8: a domain is the workspace's to list only once it
+      // proved it in DNS, the same predicate sign-in reads. A platform-wide
+      // provider's list is trusted as a platform admin's, so only one changes
+      // it. Domains already stored stay (they just do not match), so an
+      // unrelated edit of an older provider still saves.
+      const kept = existing?.allowedDomains ?? [];
+      const added = allowedDomains.filter((d) => !kept.includes(d));
+      const changed = added.length > 0 || kept.some((d) => !allowedDomains!.includes(d));
+      const platformWide = dto.platformWide ?? existing?.platformWide ?? false;
+      if (platformWide && changed && !principal.isAdmin) throw new ForbiddenException(t('error.sso.platformWideDomainsAdminOnly'));
+      const unproven = await unprovenDomains(this.prisma, { workspaceId, platformWide, allowedDomains }, added);
+      if (unproven.length > 0) throw new BadRequestException(t('error.sso.providerDomainNotVerified', { domain: unproven[0] }));
     }
 
     return {
@@ -335,7 +350,12 @@ export class IdentityProvidersService {
     };
   }
 
-  view(r: IdentityProvider): IdentityProviderView {
+  /** The view, with the domains that still need DNS proof. */
+  async viewOf(r: IdentityProvider): Promise<IdentityProviderView> {
+    return this.view(r, await unprovenDomains(this.prisma, r));
+  }
+
+  view(r: IdentityProvider, unverifiedDomains: string[]): IdentityProviderView {
     return {
       id: r.id,
       workspaceId: r.workspaceId,
@@ -352,6 +372,7 @@ export class IdentityProvidersService {
       jitEnabled: r.jitEnabled,
       defaultRole: (WORKSPACE_ROLES as readonly string[]).includes(r.defaultRole ?? '') ? (r.defaultRole as WorkspaceRole) : null,
       allowedDomains: r.allowedDomains,
+      unverifiedDomains,
       groupsClaim: r.groupsClaim,
       groupSyncMode: (GROUP_SYNC_MODES as readonly string[]).includes(r.groupSyncMode) ? (r.groupSyncMode as GroupSyncMode) : 'additive',
       sessionTtlHours: r.sessionTtlHours,

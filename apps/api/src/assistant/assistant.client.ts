@@ -12,6 +12,7 @@ import { FREE_TOOLS, PARALLEL_SAFE_TOOLS } from './assistant-tool-types.js';
 import type { Locale } from '@knowledge/contracts';
 import { t } from '../i18n/t.js';
 import { currentTrace, emitBacktest } from '@knowledge/observability';
+import { providerFetch } from '../ai/provider-endpoint.js';
 
 /**
  * Everything one upstream call needs to know beyond its messages: which
@@ -252,7 +253,7 @@ export class AssistantClient {
     if (!config.enabled) {
       throw new ServiceUnavailableException(t('error.assistant.providerDisabled'));
     }
-    const key = `${config.baseUrl}|${config.apiKey}|${config.timeoutMs}`;
+    const key = `${config.baseUrl}|${config.apiKey}|${config.timeoutMs}|${config.privateOk}`;
     const hit = this.clients.get(key);
     if (hit) return hit;
     const client = new OpenAI({
@@ -261,6 +262,8 @@ export class AssistantClient {
       apiKey: config.apiKey || 'unused',
       timeout: config.timeoutMs,
       maxRetries: 1,
+      // A workspace base URL is dialled through the SSRF filter (GHSA-7hf4-5chc-29gr).
+      fetch: providerFetch(config.privateOk),
     });
     if (this.clients.size >= CLIENT_CACHE_MAX) {
       const oldest = this.clients.keys().next().value;
@@ -453,11 +456,17 @@ export class AssistantClient {
       // Allowance is decided up front, in request order, rather than by a
       // counter incremented as each call runs. The two give identical answers;
       // only the first survives execution that is no longer one-at-a-time.
+      //
+      // A name this round did not offer never runs (GHSA-q976-7233-2h43). Mode,
+      // the agent's allowlist and the pane-only tools are all decided when the
+      // list is built, and a provider may return any name it likes, so this is
+      // the one place every caller is held to its own list.
+      const offeredNames = new Set(offered.map((t) => t.function.name));
       let spent = 0;
-      const planned = round.toolCalls.map((call) => ({
-        call,
-        allowed: FREE_TOOLS.has(call.name) || spent++ < budgetLeft,
-      }));
+      const planned = round.toolCalls.map((call) => {
+        const isOffered = offeredNames.has(call.name);
+        return { call, isOffered, allowed: isOffered && (FREE_TOOLS.has(call.name) || spent++ < budgetLeft) };
+      });
       const results = new Array<ToolExecutionResult | undefined>(planned.length);
 
       const runOne = async (call: { id: string; name: string; arguments: string }, at: number): Promise<void> => {
@@ -505,7 +514,17 @@ export class AssistantClient {
       // Replayed in the order the model asked, whatever order they finished in:
       // this transcript is what the next round reads, and it should not depend
       // on which fetch happened to return first.
-      for (const [at, { call, allowed }] of planned.entries()) {
+      for (const [at, { call, allowed, isOffered }] of planned.entries()) {
+        if (!isOffered) {
+          this.logger.warn(`Refused tool ${call.name}: not offered this round`);
+          trace.push({ tool: call.name, arguments: call.arguments.slice(0, 500), ok: false });
+          convo.push({
+            role: 'tool',
+            tool_call_id: call.id,
+            content: JSON.stringify({ error: `Tool ${call.name} is not available here; use only the tools you were given.` }),
+          });
+          continue;
+        }
         const result = allowed ? results[at] : undefined;
         if (!result) {
           convo.push({

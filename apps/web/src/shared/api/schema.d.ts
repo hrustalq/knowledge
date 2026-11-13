@@ -14653,6 +14653,7 @@ export interface components {
             jitEnabled: boolean;
             defaultRole: components["schemas"]["WorkspaceRole"] | null;
             allowedDomains: string[];
+            unverifiedDomains: string[];
             groupsClaim: string | null;
             groupSyncMode: components["schemas"]["GroupSyncMode"];
             sessionTtlHours: number | null;

@@ -331,6 +331,9 @@ const busy = computed(() => create.isPending.value || update.isPending.value)
           <span class="min-w-0 truncate">{{ p.saml?.idpEntityId ?? p.ldap?.url ?? p.config.issuer }}</span>
           <span v-if="p.allowedDomains.length">{{ t('security.providers.domainsList', { domains: p.allowedDomains.join(', ') }) }}</span>
         </div>
+        <p v-if="p.unverifiedDomains.length" class="text-xs text-destructive">
+          {{ t('security.providers.domainsUnverified', { domains: p.unverifiedDomains.join(', ') }) }}
+        </p>
         <div v-for="e in endpoints(p)" :key="e.value" class="flex min-w-0 items-center gap-2 text-xs">
           <span class="shrink-0 text-muted-foreground">{{ e.label }}</span>
           <code class="min-w-0 truncate rounded bg-muted px-1.5 py-0.5" :title="e.value">{{ e.value }}</code>

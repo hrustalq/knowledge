@@ -9,6 +9,7 @@ import type {
   RelationExtractor,
 } from './relation-extractor.provider.js';
 import { AiUsageService, estimateTokens, type AiUsageTokens } from '../ai/ai-usage.service.js';
+import { providerFetch } from '../ai/provider-endpoint.js';
 
 /**
  * Relation extraction via any OpenAI-compatible /chat/completions endpoint
@@ -61,6 +62,12 @@ export class OpenAICompatibleExtractor implements RelationExtractor {
     private readonly model: string,
     private readonly apiKey: string,
     private readonly usage: AiUsageService,
+    /**
+     * May the endpoint be a private address? True for the operator's EXTRACTOR_*
+     * endpoint; a workspace-routed one passes `ResolvedAiConfig.privateOk`
+     * (GHSA-7hf4-5chc-29gr).
+     */
+    private readonly privateOk = true,
   ) {}
 
   async extract(
@@ -111,7 +118,7 @@ export class OpenAICompatibleExtractor implements RelationExtractor {
     const startedAt = Date.now();
     let res: Response;
     try {
-      res = await fetch(`${this.baseUrl.replace(/\/$/, '')}/chat/completions`, {
+      res = await providerFetch(this.privateOk)(`${this.baseUrl.replace(/\/$/, '')}/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

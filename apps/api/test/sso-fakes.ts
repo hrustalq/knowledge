@@ -49,6 +49,8 @@ export function fakePrisma() {
     users: [] as Row[],
     members: [] as Row[],
     sessions: [] as Row[],
+    /** Verified domain claims (GHSA-xj6f-x636-xrx8). `corp.example`, every test provider's domain, is proven for WS. */
+    ssoDomains: [{ domain: 'corp.example', workspaceId: WS, verifiedAt: new Date() }] as Row[],
   };
   const match = (row: Row, where: Row) =>
     Object.entries(where).every(([k, v]) => {
@@ -61,6 +63,11 @@ export function fakePrisma() {
     withTransaction: async (fn: () => Promise<unknown>) => fn(),
     onCommit: (fn: () => Promise<unknown>) => void fn(),
     idpGroupMapping: { findMany: vi.fn(async () => []) },
+    ssoDomain: {
+      findMany: vi.fn(async ({ where }: Row) =>
+        db.ssoDomains.filter((d) => d.workspaceId === where.workspaceId && where.domain.in.includes(d.domain) && d.verifiedAt),
+      ),
+    },
     identityProvider: {
       findFirst: vi.fn(async ({ where }: Row) => db.providers.find((p) => match(p, where)) ?? null),
       findMany: vi.fn(async ({ where }: Row) => db.providers.filter((p) => match(p, where))),
@@ -177,9 +184,13 @@ export function ssoHarness(config = fakeConfig(), defaults: Row = {}) {
 /** `IdentityProvidersService` (the admin CRUD) over an in-memory provider table; `rows` is what the DB holds. */
 export function identityProvidersHarness(config = fakeConfig()) {
   const rows: Row[] = [];
+  const domains: Row[] = [{ domain: 'corp.example', workspaceId: WS, verifiedAt: new Date() }];
   const prisma = {
     withTransaction: async (fn: () => Promise<unknown>) => fn(),
     onCommit: (fn: () => Promise<unknown>) => void fn(),
+    ssoDomain: {
+      findMany: vi.fn(async ({ where }: Row) => domains.filter((d) => d.workspaceId === where.workspaceId && where.domain.in.includes(d.domain) && d.verifiedAt)),
+    },
     identityProvider: {
       create: vi.fn(async ({ data }: Row) => {
         const row = { id: randomUUID(), createdAt: new Date(), updatedAt: new Date(), enabled: false, showOnLogin: true, platformWide: false, jitEnabled: false, defaultRole: null, allowedDomains: [], groupsClaim: null, groupSyncMode: 'additive', sessionTtlHours: null, secretCipher: null, ...data };
@@ -202,6 +213,6 @@ export function identityProvidersHarness(config = fakeConfig()) {
     saml,
     new LdapService(config as never),
   );
-  return { svc, saml, rows, audit };
+  return { svc, saml, rows, audit, domains };
 }
 

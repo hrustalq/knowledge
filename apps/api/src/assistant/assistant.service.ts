@@ -1074,6 +1074,7 @@ export class AssistantService {
       principal: ctx.principal,
       workspaceId: thread.workspaceId,
       cite: (source) => turn.labels.label(source),
+      mode: turn.mode,
       ...(ctx.projectId ? { projectId: ctx.projectId } : {}),
       ...(ctx.audience ? { audience: ctx.audience } : {}),
       ...(ctx.channel ? { channel: ctx.channel } : {}),

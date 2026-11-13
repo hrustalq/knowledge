@@ -119,7 +119,7 @@ function tools() {
 }
 
 const decision = { title: 'Use RRF', context: 'Two rankers', decision: 'Fuse with RRF', projectId: PROJECT };
-const ctx = { principal: DEV_PRINCIPAL, workspaceId: WS };
+const ctx = { principal: DEV_PRINCIPAL, workspaceId: WS, mode: 'agent' as const };
 const formOf = (res: { prompt?: unknown }) => res.prompt as AssistantFormPrompt;
 
 describe('capture_decision', () => {

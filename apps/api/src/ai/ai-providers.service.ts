@@ -5,6 +5,7 @@ import type { AiProviderSummary, AiProviderKind } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AiModelsService } from './ai-models.service.js';
+import { assertSafeBaseUrl, movesEndpoint } from './provider-endpoint.js';
 import { decryptSecret, encryptSecret, maskSecret, MissingEncryptionKeyError, parseKey } from './secret-box.js';
 import { t } from '../i18n/t.js';
 
@@ -34,6 +35,7 @@ export interface UpsertProviderInput {
 @Injectable()
 export class AiProvidersService {
   private readonly key: Buffer | null;
+  private readonly allowPrivate: boolean;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -41,6 +43,7 @@ export class AiProvidersService {
     config: ConfigService<Env, true>,
   ) {
     this.key = parseKey(config.get('SETTINGS_ENCRYPTION_KEY', { infer: true }));
+    this.allowPrivate = config.get('AI_PROVIDERS_ALLOW_PRIVATE_URLS', { infer: true });
   }
 
   async list(workspaceId: string): Promise<AiProviderSummary[]> {
@@ -67,6 +70,7 @@ export class AiProvidersService {
       where: { workspaceId_name: { workspaceId, name: input.name } },
     });
     if (clash) throw new ConflictException(t('error.ai.providerNameTaken', { name: input.name }));
+    await assertSafeBaseUrl(input.baseUrl, this.allowPrivate);
 
     const row = await this.prisma.aiProvider.create({
       data: {
@@ -93,6 +97,12 @@ export class AiProvidersService {
       });
       if (clash) throw new ConflictException(t('error.ai.providerNameTaken', { name: input.name }));
     }
+    if (input.baseUrl !== undefined) await assertSafeBaseUrl(input.baseUrl, this.allowPrivate);
+    // A key stored for one endpoint is not sent to the next one an admin
+    // types (GHSA-7hf4-5chc-29gr): moving it drops the key unless a new one
+    // comes in the same request.
+    const apiKeyCipher =
+      input.apiKey !== undefined ? this.encrypt(input.apiKey) : movesEndpoint(current, input) ? null : undefined;
     const row = await this.prisma.aiProvider.update({
       where: { id },
       data: {
@@ -101,7 +111,7 @@ export class AiProvidersService {
         ...(input.baseUrl === undefined ? {} : { baseUrl: input.baseUrl }),
         // undefined keeps the stored credential, null clears it — the same
         // write-only convention the inline provider key uses.
-        ...(input.apiKey === undefined ? {} : { apiKeyCipher: this.encrypt(input.apiKey) }),
+        ...(apiKeyCipher === undefined ? {} : { apiKeyCipher }),
         ...(input.temperature === undefined ? {} : { temperature: input.temperature }),
         ...(input.maxToolCalls === undefined ? {} : { maxToolCalls: input.maxToolCalls }),
         ...(input.timeoutMs === undefined ? {} : { timeoutMs: input.timeoutMs }),

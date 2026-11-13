@@ -422,6 +422,11 @@ export interface IdentityProviderView {
   defaultRole: WorkspaceRole | null;
   /** Email domains this provider may assert. Linking and JIT both need the address to be in one. */
   allowedDomains: string[];
+  /**
+   * Domains on that list that do not match yet: this workspace has not proven
+   * them in DNS (Security → Domains). Empty for a platform-wide provider.
+   */
+  unverifiedDomains: string[];
   groupsClaim: string | null;
   groupSyncMode: GroupSyncMode;
   sessionTtlHours: number | null;
@@ -505,6 +510,8 @@ export const SSO_LOGIN_ERRORS = [
   'domain-not-allowed',
   'jit-disabled',
   'account-disabled',
+  /** The address belongs to a platform admin, whom SSO never links by address (GHSA-xj6f-x636-xrx8). */
+  'admin-link-refused',
   /** The fragment code was unknown, expired or already spent (POST /v1/auth/sso/exchange). */
   'exchange-invalid',
   'failed',

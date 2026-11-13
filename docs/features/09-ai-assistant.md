@@ -67,6 +67,13 @@ context engineering / prompt injection:
   off mid-conversation; the assistant can never read more than the user could.
 - Model-supplied document ids are re-verified to belong to the pinned
   workspace before content is fetched.
+- The harness runs only a tool it offered in that round
+  (GHSA-q976-7233-2h43). A provider may return any tool name, so
+  `AssistantClient.toolLoop` answers an unoffered call with an error result and
+  never executes it. That is where mode, an agent's allowlist and the pane-only
+  tools are enforced for every caller. `AssistantToolsService.execute` also
+  refuses a write tool unless the context's `mode` is `agent` (absent means
+  Ask).
 - Retrieved content is framed as untrusted data in the system prompt (the
   model is told to flag embedded instructions, not follow them), tool errors
   return `{"error"}` payloads instead of stack traces, and when the budget is

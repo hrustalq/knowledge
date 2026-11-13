@@ -12,6 +12,7 @@ import {
   type ParseResult,
 } from './parser.types.js';
 import { t } from '../../i18n/t.js';
+import { providerFetch } from '../../ai/provider-endpoint.js';
 
 // The prompt now lives on the `transcriber` agent (docs/features/20), so an
 // admin can adapt it to their documents. It is still deliberately NOT localized
@@ -68,6 +69,7 @@ export class OcrParser implements DocumentParser {
       apiKey: resolved.apiKey || 'unset',
       baseURL: resolved.baseUrl || undefined,
       timeout: Math.max(resolved.timeoutMs, 60_000),
+      fetch: providerFetch(resolved.privateOk),
     });
 
     const dataUri = `data:${ctx.contentType};base64,${Buffer.from(bytes).toString('base64')}`;

@@ -1,5 +1,5 @@
 import { ASSISTANT_CODE_TOOL_NAMES, ASSISTANT_TASK_READ_TOOL_NAMES, ASSISTANT_TASK_TOOL_NAMES } from '@knowledge/contracts';
-import type { AnalyticsChannel, AssistantPrompt, AssistantSource, AssistantUiBlock, FlowAnswers, FlowKey } from '@knowledge/contracts';
+import type { AnalyticsChannel, AssistantChatMode, AssistantPrompt, AssistantSource, AssistantUiBlock, FlowAnswers, FlowKey } from '@knowledge/contracts';
 import type { Principal } from '../auth/principal.js';
 import type { Audience } from '../permissions/access-scope.js';
 
@@ -64,6 +64,12 @@ export interface AssistantToolContext {
    * from here and nowhere else — the model never relays them.
    */
   flow?: { flow: FlowKey; answers: FlowAnswers };
+  /**
+   * The turn's mode. A write tool runs only in `agent` (GHSA-q976-7233-2h43):
+   * Ask mode leaves them off the offered list, and this is the same rule
+   * checked on execution. Absent is Ask.
+   */
+  mode?: AssistantChatMode;
 }
 
 export interface AssistantToolResult {

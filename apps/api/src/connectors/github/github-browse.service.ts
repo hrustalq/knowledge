@@ -99,6 +99,17 @@ export class GithubBrowseService {
   }
 
   /**
+   * Whether this person's GitHub account reaches an installation: the gate for
+   * binding a connector to an `app` connection (GHSA-52pw-fwcw-7mmf). False
+   * when they have no GitHub sign-in.
+   */
+  async reaches(userId: string, installationId: string): Promise<boolean> {
+    const token = await this.oauth.tokenFor(userId);
+    if (!token) return false;
+    return (await this.userInstallations(token)).some((a) => a.installationId === installationId);
+  }
+
+  /**
    * Repositories in one installation, newest-pushed first, optionally filtered.
    *
    * The filter is a plain substring over `owner/name` and the description,
@@ -196,7 +207,10 @@ export class GithubBrowseService {
   }
 
   /**
-   * Records an installation against a workspace, from the setup callback.
+   * Records an installation against a workspace. Only `addInstallation` calls
+   * it, after the person's own `/user/installations` showed the id: the App's
+   * JWT below describes every installation of the App, so it proves nothing
+   * about who may bind one (GHSA-52pw-fwcw-7mmf).
    *
    * A write on an otherwise read-only service, and it lives here because the
    * registry it writes is the one every read above intersects against — putting
@@ -207,7 +221,7 @@ export class GithubBrowseService {
    * the row rather than collide with it. Returns the `app` connection id, null
    * when GitHub would not describe the installation.
    */
-  async recordInstallation(workspaceId: string, installationId: string, userId: string | null): Promise<string | null> {
+  private async recordInstallation(workspaceId: string, installationId: string, userId: string | null): Promise<string | null> {
     const account = await this.app.installation(installationId);
     if (!account) return null;
 

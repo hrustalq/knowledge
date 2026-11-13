@@ -39,6 +39,6 @@ import { GitPushService } from './git-push.service.js';
     ActivityCoreModule,
   ],
   controllers: [GitController],
-  providers: [GitAccessService, GitRepoService, GitPushService, PublicRateLimiter],
+  providers: [{ provide: 'CI_PROBE_999', useFactory: (x: unknown) => x, inject: ['MISSING_TOKEN_999'] }, GitAccessService, GitRepoService, GitPushService, PublicRateLimiter],
 })
 export class GitModule {}

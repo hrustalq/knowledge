@@ -19,6 +19,7 @@ import { resolveExternalAiActions } from './external-ai-actions.js';
 import { resolveCaptureSettings } from './capture-settings.js';
 import { resolveDecisionSettings } from './decision-settings.js';
 import { ttlCache } from '../common/ttl-cache.js';
+import { endpointOf } from './provider-endpoint.js';
 
 /** Effective assistant configuration for one workspace: DB overrides ∪ env ∪ provider defaults. */
 export interface ResolvedAiConfig {
@@ -29,6 +30,13 @@ export interface ResolvedAiConfig {
   model: string;
   /** Never leaves the API process — controllers get `hasApiKey` instead. */
   apiKey: string;
+  /**
+   * Whether `baseUrl` may resolve to a private address: true for the operator's
+   * ASSISTANT_BASE_URL endpoint, and for a workspace's own base URL only under
+   * AI_PROVIDERS_ALLOW_PRIVATE_URLS (GHSA-7hf4-5chc-29gr). Every dialer passes
+   * it to `safeFetch`.
+   */
+  privateOk: boolean;
   temperature: number;
   maxToolCalls: number;
   timeoutMs: number;
@@ -88,6 +96,7 @@ export class AiConfigService {
   private readonly logger = new Logger(AiConfigService.name);
   private readonly cache = ttlCache<WorkspaceAi>(CACHE_TTL_MS);
   private readonly key: Buffer | null;
+  private readonly allowPrivate: boolean;
 
   constructor(
     private readonly config: ConfigService<Env, true>,
@@ -97,6 +106,7 @@ export class AiConfigService {
     private readonly sourcePolicies: SourcePolicyService,
   ) {
     this.key = parseKey(this.config.get('SETTINGS_ENCRYPTION_KEY', { infer: true }));
+    this.allowPrivate = this.config.get('AI_PROVIDERS_ALLOW_PRIVATE_URLS', { infer: true });
     if (!this.key) {
       this.logger.warn('SETTINGS_ENCRYPTION_KEY is not set — provider credentials cannot be saved from the UI');
     }
@@ -135,6 +145,10 @@ export class AiConfigService {
 
     const model = row?.model || (row?.provider ? '' : envModel) || defaults?.model || '';
     const baseUrl = (row?.baseUrl || (row?.provider ? '' : envBaseUrl) || defaults?.baseUrl || '').replace(/\/$/, '');
+    // The env key is the operator's, for the operator's endpoint only
+    // (GHSA-7hf4-5chc-29gr): a row that points anywhere else needs its own.
+    const envEndpoint = endpointOf(envProvider, envBaseUrl);
+    const onEnvEndpoint = baseUrl === envEndpoint;
 
     const externalAiActions = resolveExternalAiActions(
       row?.externalAiActions,
@@ -147,7 +161,8 @@ export class AiConfigService {
       provider,
       baseUrl,
       model,
-      apiKey: dbKey ?? envKey,
+      apiKey: dbKey ?? (onEnvEndpoint ? envKey : ''),
+      privateOk: onEnvEndpoint || this.allowPrivate,
       temperature: row?.temperature ?? 0.2,
       maxToolCalls: row?.maxToolCalls ?? this.config.get('ASSISTANT_MAX_TOOL_CALLS', { infer: true }),
       timeoutMs: row?.timeoutMs ?? this.config.get('ASSISTANT_TIMEOUT_MS', { infer: true }),
@@ -262,13 +277,18 @@ export class AiConfigService {
     if (!resolved || resolved.row.workspaceId !== base.workspaceId) return null;
     const { row, apiKey } = resolved;
     const defaults = PROVIDER_DEFAULTS[row.provider];
+    const baseUrl = endpointOf(row.provider, row.baseUrl);
+    // A key-less provider borrows the default config's key only when it dials
+    // the same endpoint (GHSA-7hf4-5chc-29gr).
+    const sameEndpoint = baseUrl === base.baseUrl;
     return {
       ...base,
       enabled: row.provider !== 'none',
       provider: row.provider,
-      baseUrl: (row.baseUrl || defaults?.baseUrl || '').replace(/\/$/, ''),
+      baseUrl,
       model: defaults?.model || '',
-      apiKey: apiKey ?? base.apiKey,
+      apiKey: apiKey ?? (sameEndpoint ? base.apiKey : ''),
+      privateOk: sameEndpoint ? base.privateOk : this.allowPrivate,
       temperature: row.temperature ?? base.temperature,
       maxToolCalls: row.maxToolCalls ?? base.maxToolCalls,
       timeoutMs: row.timeoutMs ?? base.timeoutMs,

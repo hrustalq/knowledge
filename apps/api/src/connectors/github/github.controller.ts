@@ -219,10 +219,18 @@ export class GithubController {
 
     // The install leg. Both can arrive together when someone installs and
     // authorizes in one pass, which is why this is not an `else`.
+    //
+    // `installation_id` is a query parameter anyone can write, and the state
+    // only proves who started the flow (GHSA-52pw-fwcw-7mmf). So the id goes
+    // through the same gate as `POST installations`: the person's own GitHub
+    // account must reach it. With no GitHub sign-in yet, nothing is recorded
+    // and the browser goes on to the OAuth leg; once it returns, the picker
+    // lists the installation under "available" for one click.
     if (installationId && isNumericId(installationId)) {
-      const recorded = await this.browse.recordInstallation(state.workspaceId, installationId, state.userId);
-      if (!recorded) {
-        res.redirect(`${web}${oauthLandingPath('github', 'install-failed', state.returnTo)}`);
+      const added = await this.browse.addInstallation(state.workspaceId, state.userId, installationId);
+      if ('error' in added) {
+        const authorize = added.error === 'notConnected' && rawState ? this.oauth.authorizeUrl(rawState, this.redirectUri()) : null;
+        res.redirect(authorize ?? `${web}${oauthLandingPath('github', 'install-failed', state.returnTo)}`);
         return;
       }
     }

@@ -32,8 +32,9 @@ import { ConnectorWorkItemsService } from './connector-work-items.service.js';
 import { ConnectorItemAiService } from './connector-item-ai.service.js';
 import { ConnectorItemsService } from './connector-items.service.js';
 import { ConnectorProducer } from './connector.producer.js';
-import { ConnectorsService, toRunInfo } from './connectors.service.js';
+import { ConnectorsService, toRunInfo, type InstallationReach } from './connectors.service.js';
 import { GithubAccessService } from './github/github-access.service.js';
+import { GithubBrowseService } from './github/github-browse.service.js';
 import { WorkItemHandoffService } from './handoff/work-item-handoff.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { RepoGuidanceService } from './guidance/repo-guidance.service.js';
@@ -81,7 +82,13 @@ export class ConnectorsController {
     private readonly guidance: RepoGuidanceService,
     private readonly handoffs: WorkItemHandoffService,
     private readonly permissions: PermissionService,
+    private readonly githubBrowse: GithubBrowseService,
   ) {}
+
+  /** Binding an `app` connection needs the caller's own GitHub account to reach it (GHSA-52pw-fwcw-7mmf). */
+  private reach(principal?: Principal): InstallationReach | undefined {
+    return principal ? (installationId) => this.githubBrowse.reaches(principal.userId, installationId) : undefined;
+  }
 
   @Get()
   @Returns('ListConnectorsResponse')
@@ -103,7 +110,7 @@ export class ConnectorsController {
     @Body() dto: CreateConnectorDto,
     @CurrentPrincipal() principal?: Principal,
   ): Promise<ConnectorResponse> {
-    const connector = await this.connectors.create(dto, principal?.userId);
+    const connector = await this.connectors.create(dto, principal?.userId, this.reach(principal));
     void this.activity.record({
       workspaceId: dto.workspaceId,
       actor: principal?.userId,
@@ -254,7 +261,7 @@ export class ConnectorsController {
     @Body() dto: UpdateConnectorDto,
     @CurrentPrincipal() principal?: Principal,
   ): Promise<ConnectorResponse> {
-    const connector = await this.connectors.update(id, dto);
+    const connector = await this.connectors.update(id, dto, this.reach(principal));
     void this.activity.record({
       workspaceId: connector.workspaceId,
       actor: principal?.userId,

@@ -13,6 +13,43 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.53.2] — 2026-11-13
+
+### Changed
+
+- A workspace AI provider (or the workspace's own AI settings) that sets a base URL now needs its own API key. Without
+  one it dials with no key instead of borrowing the server's `ASSISTANT_API_KEY`, which is now sent only to the
+  server's own endpoint. Changing a provider's base URL or provider type clears its stored key unless a new key is
+  saved with it. A base URL on a private network, or over http, is refused unless the server allows it (see
+  Operations). (GHSA-7hf4-5chc-29gr)
+- Single sign-on links or creates an account only for an address on a domain the provider's workspace has verified
+  under Security → Domains. A domain already on a provider's list that is not verified stays there but signs nobody
+  in, and the provider list marks it as needing DNS proof. Only a platform admin can change the domains of a
+  platform-wide provider. SSO no longer links a platform administrator's account by address; they sign in with
+  their password. (GHSA-xj6f-x636-xrx8)
+- Connecting a GitHub App installation, or pointing a connector at one, needs your own GitHub account to reach that
+  installation. Coming back from GitHub's install page without a connected GitHub account now goes on to connect
+  it first; the installation then appears under "available" in the repository picker. (GHSA-52pw-fwcw-7mmf)
+
+### Fixed
+
+- The Add domain field in AI web access stays full-width and readable on narrow screens instead of collapsing to a sliver. (#1081)
+
+### Security
+
+- Four advisories are fixed: a workspace admin could have the server's model API key sent to an address of their
+  choosing (GHSA-7hf4-5chc-29gr), could sign in as an existing account through an SSO provider they configured
+  (GHSA-xj6f-x636-xrx8, when SSO is on), and could bind another organisation's GitHub App installation
+  (GHSA-52pw-fwcw-7mmf); and the assistant could run a tool it had not offered, including write tools in Ask mode
+  (GHSA-q976-7233-2h43). Upgrade, then check the AI providers and SSO providers your workspaces use (see Changed).
+
+### Operations
+
+- `AI_PROVIDERS_ALLOW_PRIVATE_URLS` (default `false`) lets a workspace's AI provider base URL point at a private or
+  loopback address, or use http: a self-hosted Ollama or LiteLLM configured in AI settings. `ASSISTANT_BASE_URL` is
+  always allowed and needs no flag. Set it to `true` only if a workspace provider dials such an address. No
+  migration.
+
 ## [0.53.1] — 2026-11-13
 
 ### Fixed
@@ -7056,7 +7093,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.53.1...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.53.2...HEAD
+[0.53.2]: https://github.com/hrustalq/knowledge/compare/v0.53.1...v0.53.2
 [0.53.1]: https://github.com/hrustalq/knowledge/compare/v0.53.0...v0.53.1
 [0.53.0]: https://github.com/hrustalq/knowledge/compare/v0.52.1...v0.53.0
 [0.52.1]: https://github.com/hrustalq/knowledge/compare/v0.52.0...v0.52.1

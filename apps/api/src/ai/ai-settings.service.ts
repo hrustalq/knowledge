@@ -19,6 +19,7 @@ import { DECISION_THRESHOLD_COLUMN } from './decision-settings.js';
 import { AiConfigService } from './ai-config.service.js';
 import { AiModelsService } from './ai-models.service.js';
 import { SourcePolicyService } from './source-policy.service.js';
+import { assertSafeBaseUrl, movesEndpoint } from './provider-endpoint.js';
 import { encryptSecret, maskSecret, MissingEncryptionKeyError } from './secret-box.js';
 import { currentLocale, t } from '../i18n/t.js';
 
@@ -168,6 +169,16 @@ export class AiSettingsService {
       [input.chatModelId, input.reviewModelId, input.extractionModelId, input.decisionModelId].filter((id) => id != null),
     );
     const tunedModel = await this.decisionTunedModel(workspaceId, input);
+    // GHSA-7hf4-5chc-29gr: a base URL a workspace types is checked like any
+    // other admin-typed URL, and the key stored for the old endpoint is not
+    // carried to a new one unless the same request sends a key.
+    if (input.baseUrl !== undefined) {
+      await assertSafeBaseUrl(input.baseUrl, this.config.get('AI_PROVIDERS_ALLOW_PRIVATE_URLS', { infer: true }));
+    }
+    const moves =
+      input.apiKey === undefined &&
+      (input.baseUrl !== undefined || input.provider !== undefined) &&
+      movesEndpoint(await this.prisma.aiSettings.findUnique({ where: { workspaceId }, select: { provider: true, baseUrl: true } }), input);
     const data = {
       ...pick(input, 'provider'),
       ...pick(input, 'baseUrl'),
@@ -203,7 +214,7 @@ export class AiSettingsService {
       ...pick(input, 'captureAmendThreshold'),
       ...pick(input, 'captureParentDocumentId'),
       ...(input.enforceBudget === undefined ? {} : { enforceBudget: input.enforceBudget }),
-      ...(input.apiKey === undefined ? {} : { apiKeyCipher: this.encryptKey(input.apiKey) }),
+      ...(input.apiKey === undefined ? (moves ? { apiKeyCipher: null } : {}) : { apiKeyCipher: this.encryptKey(input.apiKey) }),
       updatedBy: actorId ?? null,
     };
 

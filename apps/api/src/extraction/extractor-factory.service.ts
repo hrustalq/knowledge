@@ -76,7 +76,7 @@ export class ExtractorFactory {
       return { extractor: this.envExtractor, tuning, config: resolved };
     }
 
-    const key = `${resolved.baseUrl}|${resolved.model}|${resolved.apiKey}`;
+    const key = `${resolved.baseUrl}|${resolved.model}|${resolved.apiKey}|${resolved.privateOk}`;
     const hit = this.cache.get(key);
     if (hit) return { extractor: hit, tuning, config: resolved };
 
@@ -85,6 +85,7 @@ export class ExtractorFactory {
       resolved.model,
       resolved.apiKey,
       this.usage,
+      resolved.privateOk,
     );
     // Bounded: a workspace churning provider settings must not grow this map.
     if (this.cache.size >= 32) {

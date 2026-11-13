@@ -24,7 +24,7 @@ import type { AccessScope } from '../src/permissions/access-scope.js';
 
 const WS = '11111111-1111-4111-8111-111111111111';
 const PAGE = '22222222-2222-4222-8222-222222222222';
-const ctx = { principal: DEV_PRINCIPAL, workspaceId: WS };
+const ctx = { principal: DEV_PRINCIPAL, workspaceId: WS, mode: 'agent' as const };
 const owner = { workspaceId: WS, bypass: false } as unknown as AccessScope;
 const clamped = { workspaceId: WS, bypass: false, clamped: true } as unknown as AccessScope;
 

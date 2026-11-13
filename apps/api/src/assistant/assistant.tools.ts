@@ -529,6 +529,10 @@ export class AssistantToolsService {
   }
 
   async execute(name: string, args: Record<string, unknown>, ctx: AssistantToolContext): Promise<AssistantToolResult> {
+    // Ask mode is read-only on execution too, not only on offer
+    // (GHSA-q976-7233-2h43): a provider can return a tool name it was never
+    // given, and the model reads untrusted text that may ask it to.
+    if (WRITE_TOOLS.has(name) && ctx.mode !== 'agent') return this.fail(`${name} needs Agent mode; this turn is read-only.`);
     try {
       // Session-scoped ACL re-check on EVERY call — not just once per request;
       // write tools additionally require 'editor' (never widened by the model).

@@ -44626,7 +44626,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.52.1",
+    "version": "0.53.1",
     "contact": {}
   },
   "tags": [],
@@ -66488,6 +66488,12 @@
               "type": "string"
             }
           },
+          "unverifiedDomains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "groupsClaim": {
             "type": "string",
             "nullable": true
@@ -66529,6 +66535,7 @@
           "jitEnabled",
           "defaultRole",
           "allowedDomains",
+          "unverifiedDomains",
           "groupsClaim",
           "groupSyncMode",
           "sessionTtlHours",

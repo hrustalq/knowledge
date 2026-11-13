@@ -536,6 +536,13 @@ export const envSchema = z.object({
   SETTINGS_ENCRYPTION_KEY: z.string().optional().default(''),
   /** Feature 12 plugins: allow MCP server URLs on private/loopback ranges (self-hosted). */
   AI_PLUGINS_ALLOW_PRIVATE_URLS: boolish(false),
+  /**
+   * Allow a workspace's model provider base URL (ai_settings and ai_providers)
+   * on private/loopback ranges and over http: a self-hosted Ollama or LiteLLM.
+   * The ASSISTANT_BASE_URL endpoint is the operator's and is always allowed
+   * (GHSA-7hf4-5chc-29gr). Mirrors AI_PLUGINS_ALLOW_PRIVATE_URLS.
+   */
+  AI_PROVIDERS_ALLOW_PRIVATE_URLS: boolish(false),
 
   /**
    * Web research (docs/features/25): the CEILING on how much of the open web

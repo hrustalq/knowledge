@@ -68,7 +68,7 @@ describe('the GitHub callback lands on /oauth/github (#564)', () => {
   it('sends a forged state to the error outcome, and an install to `installed` with the signed return path', async () => {
     const oauth = new GithubOauthService(config, {} as PrismaService);
     const recorded: string[] = [];
-    const browse = { recordInstallation: async (_ws: string, id: string) => (recorded.push(id), true) } as unknown as GithubBrowseService;
+    const browse = { addInstallation: async (_ws: string, _user: string, id: string) => (recorded.push(id), { connectionId: 'c' }) } as unknown as GithubBrowseService;
     const controller = new GithubController(new GithubAppService(config), oauth, browse, config);
     const redirect = (url: string) => urls.push(url);
     const urls: string[] = [];

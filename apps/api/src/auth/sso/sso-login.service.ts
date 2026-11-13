@@ -5,6 +5,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { currentLocale } from '../../i18n/t.js';
 import { AuditService } from '../audit.service.js';
 import type { ExternalIdentity } from './oidc-claims.js';
+import { speaksFor } from './domain-proof.js';
 import { presetOf } from './oidc-presets.js';
 import { RoleSyncService } from './role-sync.service.js';
 
@@ -73,12 +74,19 @@ export class SsoLoginService {
 
     if (!identity.email) return { ok: false, error: 'email-missing', reason: 'no email claim' };
     const email = identity.email;
-    const refusal = this.refuseAddress(provider, identity, email);
+    const refusal = await this.refuseAddress(provider, identity, email);
     const existing = await this.prisma.user.findUnique({ where: { email } });
 
     try {
       if (existing) {
         if (refusal) return { ...refusal, userId: existing.id };
+        // A platform admin passes enforced SSO as break-glass, so a provider
+        // that could claim their address would hold every workspace. Never
+        // linked by address; they sign in with their password
+        // (GHSA-xj6f-x636-xrx8).
+        if (existing.isAdmin) {
+          return { ok: false, error: 'admin-link-refused', reason: 'platform admin accounts are not linked by address', userId: existing.id };
+        }
         await this.prisma.userIdentity.create({
           data: { userId: existing.id, providerId: provider.id, subject: identity.subject, emailAtLink: email },
         });
@@ -125,19 +133,23 @@ export class SsoLoginService {
     }
   }
 
-  /** Why this provider may not speak for `email`, or null when it may. */
-  private refuseAddress(
+  /**
+   * Why this provider may not speak for `email`, or null when it may. A domain
+   * on the list counts only once its workspace proved it (`speaksFor`), so a
+   * stored list of unproven domains stops matching at once.
+   */
+  private async refuseAddress(
     provider: IdentityProvider,
     identity: ExternalIdentity,
     email: string,
-  ): { ok: false; error: SsoLoginError; reason: string } | null {
+  ): Promise<{ ok: false; error: SsoLoginError; reason: string } | null> {
     if (!identity.emailVerified) return { ok: false, error: 'email-not-verified', reason: 'email not verified by the IdP' };
     const domain = domainOf(email);
-    if (!provider.allowedDomains.includes(domain)) {
-      return { ok: false, error: 'domain-not-allowed', reason: `domain ${domain} not allowed` };
+    if (!(await speaksFor(this.prisma, provider, domain))) {
+      return { ok: false, error: 'domain-not-allowed', reason: `domain ${domain} not allowed or not verified` };
     }
     // Google: the account must belong to the Workspace org, not merely carry its address.
-    if (presetOf(provider.preset) === 'google' && !(identity.hostedDomain && provider.allowedDomains.includes(identity.hostedDomain))) {
+    if (presetOf(provider.preset) === 'google' && !(identity.hostedDomain && (await speaksFor(this.prisma, provider, identity.hostedDomain)))) {
       return { ok: false, error: 'domain-not-allowed', reason: `hd ${identity.hostedDomain ?? 'missing'} not allowed` };
     }
     return null;

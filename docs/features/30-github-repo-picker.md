@@ -93,6 +93,17 @@ a workspace of their choosing — so the HMAC covers the workspace, the user and
 an expiry, and every path verifies it *before* touching the database.
 `test/github-jwt.spec.ts` is mostly tampering cases for that reason.
 
+**The state proves who started the flow, not which installation GitHub sent.**
+`installation_id` is a query parameter anyone can write, and the App's own JWT
+describes every installation of the App. So the install leg goes through
+`GithubBrowseService.addInstallation`, the same gate as `POST installations`:
+the person's own `/user/installations` must list the id
+(GHSA-52pw-fwcw-7mmf). With no GitHub sign-in yet, nothing is recorded and the
+browser goes on to the OAuth leg; once it returns, the picker lists the
+installation under "available". Binding a connector to an `app` connection
+asks the same question (`InstallationReach`, passed in by the API callers),
+unless the connector already dials through that connection.
+
 **One route serves both redirect URLs.** The handler reads `code` and
 `installation_id` independently rather than as an either/or, because GitHub's
 first install with "request user authorization" on sends both in one request.

@@ -25,6 +25,8 @@ import { parseMarkdown } from '../common/frontmatter.js';
 import { FILENAME_FORBIDDEN, RESERVED_STEM } from './slug.js';
 
 const ZERO = '0'.repeat(40);
+/** A sha1 object id as receive-pack sends it (GHSA-4xqc-5p3w-3v95): anything else would reach git's argv. */
+const OID = /^[0-9a-f]{40}$/;
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 /** No `atomic`: each ref is its own transaction, so a push of two branches can land one. */
 const CAPS = 'report-status side-band-64k push-options ofs-delta object-format=sha1 agent=knowledge';
@@ -177,6 +179,10 @@ export class GitPushService {
       await mkdir(join(quarantine, 'pack'));
       let unpacked = false;
       for (const c of commands) {
+        if (!OID.test(c.oldSha ?? '') || !OID.test(c.newSha ?? '')) {
+          results.set(c.ref, `ng ${c.ref} malformed object id`);
+          continue;
+        }
         try {
           await this.repos.withRepo(workspaceId, projectId, caller.scope, true, async (repo) => {
             const env = { GIT_OBJECT_DIRECTORY: quarantine, GIT_ALTERNATE_OBJECT_DIRECTORIES: join(repo.dir, 'objects') };
@@ -226,7 +232,7 @@ export class GitPushService {
     const { view, project } = repo;
     const shown = view.branchRefs().get(branch) ?? ZERO;
     if (c.oldSha !== shown) throw new PushRefused('fetch first', t('error.git.push.stale', { branch }));
-    if (c.oldSha !== ZERO && !(await git(['merge-base', '--is-ancestor', c.oldSha, c.newSha]).then(() => true, () => false))) {
+    if (c.oldSha !== ZERO && !(await git(['merge-base', '--is-ancestor', '--end-of-options', c.oldSha, c.newSha]).then(() => true, () => false))) {
       throw new PushRefused('non-fast-forward', t('error.git.push.nonFastForward', { branch }));
     }
     // The branch's real head: commits after the one this view shows touched
@@ -290,7 +296,7 @@ export class GitPushService {
     git: (args: string[], input?: Buffer | string) => Promise<Buffer>,
   ): Promise<PlannedCommit[]> {
     const known = [...view.branchRefs().values()];
-    const list = (await git(['rev-list', '--topo-order', '--reverse', c.newSha, ...(known.length ? ['--not', ...known] : [])]))
+    const list = (await git(['rev-list', '--topo-order', '--reverse', '--end-of-options', c.newSha, ...known.map((sha) => `^${sha}`)]))
       .toString()
       .split('\n')
       .filter(Boolean);

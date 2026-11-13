@@ -92,6 +92,7 @@
     "zod": "^4.1.0"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "1.8.0",
     "@hocuspocus/provider": "4.7.1",
     "@modelcontextprotocol/server-memory": "2.1.1",
     "@nestjs/cli": "^12.0.0",

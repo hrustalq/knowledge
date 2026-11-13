@@ -119,6 +119,7 @@ export const WORKSPACE_TEARDOWN = {
   MemoryUnit: 'workspace',
   MemoryRelation: 'workspace',
   MemoryEntity: 'workspace',
+  MemoryFile: 'workspace',
   MemoryBank: 'workspace',
   MemoType: 'workspace',
   // Imports cascade from their link; listed first for the ones a link outlived.

@@ -4824,6 +4824,7 @@ model MemoryBank {
   operations MemoryOperation[]
   entities   MemoryEntity[]
   relations  MemoryRelation[]
+  files      MemoryFile[]
 
   @@unique([workspaceId, bankId])
   @@map("memory_banks")
@@ -4833,6 +4834,28 @@ model MemoryBank {
 /// keeps one: an exact name, unique in the bank, and a type. Its observations
 /// are `memory_units` facts whose `document_id` is `graph:{id}:{seq}`. A row
 /// only: never a vertex of the workspace relation graph.
+/// A file the Anthropic memory tool wrote (#1009), under `/memories`.
+/// Directories are implied by the paths: there is no row for one. The text is
+/// masked on write. Recall reads it through `memory_units` chunks with
+/// `document_id = file:<path>`, written verbatim and already consolidated.
+model MemoryFile {
+  id          String     @id @default(uuid()) @db.Uuid
+  workspaceId String     @map("workspace_id") @db.Uuid
+  bankId      String     @map("bank_id") @db.Uuid
+  bank        MemoryBank @relation(fields: [bankId], references: [id], onDelete: Cascade)
+  /// Canonical: `/memories/a/b.md`, no empty, `.` or `..` segment, no trailing slash.
+  path        String
+  content     String
+  createdBy   String     @map("created_by") @db.Uuid
+  updatedBy   String     @map("updated_by") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@unique([bankId, path])
+  @@map("memory_files")
+}
+
 model MemoryEntity {
   id          String     @id @default(uuid()) @db.Uuid
   workspaceId String     @map("workspace_id") @db.Uuid

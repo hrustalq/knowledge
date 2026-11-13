@@ -8,6 +8,7 @@ import { CachePolicy } from '../common/http-cache.js';
 import { t } from '../i18n/t.js';
 import { MemoryAccessService } from './memory-access.service.js';
 import { MemoryBanksService } from './memory-banks.service.js';
+import { MemoryFilesService } from './memory-files.service.js';
 import { MemoryGraphService } from './memory-graph.service.js';
 import { MemoryIntakeService } from './memory-intake.service.js';
 import { buildMemoryMcpServer, isMemoryMcpProfile, type MemoryMcpServices } from './memory-mcp.js';
@@ -49,8 +50,9 @@ export class MemoryMcpController {
     reflect: MemoryReflectService,
     rate: MemoryRateService,
     graph: MemoryGraphService,
+    files: MemoryFilesService,
   ) {
-    this.services = { access, banks, intake, recall, reflect, rate, graph };
+    this.services = { access, banks, intake, recall, reflect, rate, graph, files };
   }
 
   @Post()

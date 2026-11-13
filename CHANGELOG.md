@@ -33,6 +33,12 @@ in the pull request that introduces them — see
   each observation is stored as a memory, masked like any retain, so `recall` finds it. A read-only key gets only
   `read_graph`, `search_nodes` and `open_nodes`. `read_graph` and `search_nodes` return at most
   `MEMORY_GRAPH_READ_MAX_ENTITIES` (500) entities and say when they cut. (#1008)
+- Storage for Anthropic's memory tool (`memory_20250818`): `POST https://<host>/api/v1/default/banks/{bank_id}/memory-tool`
+  takes the raw `tool_use.input` and returns `{content, is_error}`, so an SDK memory handler is one HTTP call. The
+  same six commands (`view`, `create`, `str_replace`, `insert`, `delete`, `rename`) answer as one MCP tool named
+  `memory` at `/api/mcp/{bank_id}/files`. The answers are the SDK's own strings. Files live in the bank, masked on
+  write and held to `MEMORY_RETAIN_MAX_CHARS`. `recall` finds what they say, and their text is never consolidated.
+  Every path must stay under `/memories`. A read-only key can `view` and nothing else. (#1009)
 - A `memory` section under **Settings → Features**, and two built-in agents: `memorist`, which splits what an
   agent retains into facts when a model is routed at extraction (otherwise the text is stored as written), and
   `reflector`, which answers a reflect. (#987, #988, #991)

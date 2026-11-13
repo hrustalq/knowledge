@@ -249,3 +249,81 @@ describe('the graph profile: the MCP reference memory server’s tools (#1008)',
     }
   });
 });
+
+describe('the files profile: the Anthropic memory tool as one MCP tool (#1009)', () => {
+  async function connectFiles(principal: Principal) {
+    const access = {
+      caller: vi.fn(async (p: Principal, _ws: unknown, role: string, o?: { capture?: boolean }) => {
+        if (role === 'editor' && p.apiKey?.scope === 'read') throw new ForbiddenException('This API key is read-only');
+        if (role === 'editor' && p.apiKey?.scope === 'capture' && !o?.capture) throw new ForbiddenException('A capture key cannot do this');
+        return { principal: p, workspaceId: 'ws-1', role };
+      }),
+      find: vi.fn(async () => null),
+    };
+    const rate = { check: vi.fn(async () => undefined) };
+    const banks = { ensure: vi.fn(async () => { throw new Error('nothing may be written in this spec'); }) };
+    const { MemoryFilesService } = await import('../src/memory/memory-files.service.js');
+    const config = { get: (k: string) => (k === 'MEMORY_RETAIN_MAX_CHARS' ? 50_000 : 100) };
+    const files = new MemoryFilesService({} as never, access as never, banks as never, {} as never, {} as never, rate as never, config as never);
+    const server = buildMemoryMcpServer({ access, files } as never, { principal, workspaceHeader: undefined, pathBank: 'agent', headerBank: undefined }, 'files');
+    const [a, b] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'spec', version: '0' });
+    await Promise.all([server.connect(a), client.connect(b)]);
+    const call = async (args: Record<string, unknown>) => {
+      const res = (await client.callTool({ name: 'memory', arguments: args })) as { isError?: boolean; content: Array<{ text: string }> };
+      return { isError: res.isError === true, text: res.content[0]?.text ?? '' };
+    };
+    return { client, call, access, rate, banks };
+  }
+
+  it('offers one tool named memory to every key, a read-only one included', async () => {
+    for (const scope of ['read', 'capture', 'write'] as const) {
+      const tools = (await (await connectFiles(keyed(scope))).client.listTools()).tools;
+      expect(tools.map((t) => t.name)).toEqual(['memory']);
+      expect(Object.keys(tools[0]!.inputSchema.properties ?? {})).toEqual(['command', 'path', 'view_range', 'file_text', 'old_str', 'new_str', 'insert_line', 'insert_text', 'old_path', 'new_path']);
+    }
+  });
+
+  it('resolves each command’s role on execution and spends the recall rate on a view, the retain rate on a write', async () => {
+    const { call, access, rate } = await connectFiles(keyed('write'));
+    // An empty bank: the root listing, never an error.
+    expect(await call({ command: 'view', path: '/memories' })).toEqual({
+      isError: false,
+      text: "Here're the files and directories up to 2 levels deep in /memories, excluding hidden items and node_modules:\n4.0K\t/memories",
+    });
+    expect(access.caller).toHaveBeenLastCalledWith(expect.anything(), undefined, 'viewer', { capture: undefined });
+    expect(rate.check).toHaveBeenLastCalledWith('recall', expect.anything());
+    expect(await call({ command: 'delete', path: '/memories/x' })).toEqual({ isError: true, text: 'Error: The path /memories/x does not exist' });
+    expect(access.caller).toHaveBeenLastCalledWith(expect.anything(), undefined, 'editor', { capture: undefined });
+    expect(rate.check).toHaveBeenLastCalledWith('retain', expect.anything());
+  });
+
+  it('refuses a traversal on every command before a bank is read', async () => {
+    const { call, access, banks } = await connectFiles(keyed('write'));
+    const bad = '/memories/../etc/passwd';
+    const inputs = [
+      { command: 'view', path: bad },
+      { command: 'create', path: bad, file_text: 'x' },
+      { command: 'str_replace', path: bad, old_str: 'a', new_str: 'b' },
+      { command: 'insert', path: bad, insert_line: 0, insert_text: 'x' },
+      { command: 'delete', path: bad },
+      { command: 'rename', old_path: bad, new_path: '/memories/ok' },
+      { command: 'rename', old_path: '/memories/ok', new_path: bad },
+    ];
+    for (const input of inputs) expect([input.command, await call(input)]).toEqual([input.command, { isError: true, text: `Error: Path ${bad} would escape /memories directory` }]);
+    expect(access.find).not.toHaveBeenCalled();
+    expect(banks.ensure).not.toHaveBeenCalled();
+  });
+
+  it('lets a read-only key view and refuses it every write; a capture key may create but not delete', async () => {
+    const readOnly = await connectFiles(keyed('read'));
+    expect((await readOnly.call({ command: 'view', path: '/memories' })).isError).toBe(false);
+    for (const command of ['create', 'str_replace', 'insert', 'delete', 'rename']) {
+      const res = await readOnly.call({ command, path: '/memories/a', file_text: 'x', old_str: 'x', insert_line: 0, insert_text: 'x', old_path: '/memories/a', new_path: '/memories/b' });
+      expect([command, res.isError, res.text]).toEqual([command, true, 'This API key is read-only']);
+    }
+    const capture = await connectFiles(keyed('capture'));
+    expect((await capture.call({ command: 'delete', path: '/memories/a' })).text).toBe('A capture key cannot do this');
+    expect(capture.access.caller).toHaveBeenLastCalledWith(expect.anything(), undefined, 'editor', { capture: undefined });
+  });
+});

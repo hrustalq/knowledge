@@ -4,6 +4,7 @@ import { CurrentPrincipal, ReadKeyOk } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { CachePolicy } from '../common/http-cache.js';
 import { MemoryAccessService } from './memory-access.service.js';
+import { MemoryFilesService, type MemoryToolResult } from './memory-files.service.js';
 import { MemoryIntakeService } from './memory-intake.service.js';
 import { MemoryOperationsService } from './memory-operations.service.js';
 import { MemoryRateService } from './memory-rate.service.js';
@@ -32,6 +33,7 @@ export class MemoryUnitsController {
     private readonly operations: MemoryOperationsService,
     private readonly reflector: MemoryReflectService,
     private readonly rate: MemoryRateService,
+    private readonly files: MemoryFilesService,
   ) {}
 
   /**
@@ -44,6 +46,20 @@ export class MemoryUnitsController {
   @HttpCode(200)
   async retain(@CurrentPrincipal() principal: Principal, @Headers('x-workspace-id') ws: string | undefined, @Param('bankId') bankId: string, @Body() dto: RetainDto): Promise<RetainResponse> {
     return this.intake.retain(await this.access.caller(principal, ws, 'editor', { capture: true }), bankId, dto);
+  }
+
+  /**
+   * The Anthropic memory tool's storage (#1009): the raw `tool_use.input` of
+   * `memory_20250818` in, the `tool_result` out, so an SDK handler is one
+   * HTTP call. A refused path or a missing file is `is_error: true` with a 200;
+   * memory off, a missing role or a spent rate is an HTTP error. The role is
+   * the command's: `view` a viewer, `create` an editor or a capture key, the
+   * rest an editor.
+   */
+  @Post('memory-tool')
+  @HttpCode(200)
+  memoryTool(@CurrentPrincipal() principal: Principal, @Headers('x-workspace-id') ws: string | undefined, @Param('bankId') bankId: string, @Body() input: Record<string, unknown>): Promise<MemoryToolResult> {
+    return this.files.execute((role, opts) => this.access.caller(principal, ws, role, opts), bankId, input);
   }
 
   /** Recall. A viewer's call; the bank is resolved — and a missing or hidden one refused — before anything is embedded. */

@@ -231,13 +231,7 @@ export class MemoryGraphService {
     const bank = await this.writable(caller, bankId);
     const rows = [...(await this.entitiesNamed(bank, names)).values()];
     const present = new Set(rows.map((r) => r.name));
-    if (bank && rows.length) {
-      const ids = rows.map((r) => r.id);
-      // Relations cascade with the entity rows; the observations are facts, deleted the way every fact is.
-      await this.units.deleteWhere(bank, { ...FACTS, OR: ids.map((id) => ({ documentId: { startsWith: observationPrefix(id) } })) }, () =>
-        this.prisma.memoryEntity.deleteMany({ where: { id: { in: ids } } }),
-      );
-    }
+    if (bank && rows.length) await this.removeEntities(bank, rows.map((r) => r.id));
     return deleteEntitiesMessage(names.length, names.filter((n) => present.has(n)).length, names.filter((n) => !present.has(n)));
   }
 
@@ -267,6 +261,21 @@ export class MemoryGraphService {
                  SELECT * FROM unnest(${relations.map((r) => r.from)}::text[], ${relations.map((r) => r.to)}::text[], ${relations.map((r) => r.relationType)}::text[]))`
         : 0;
     return deleteRelationsMessage(relations.length, deleted);
+  }
+
+  /**
+   * Entity rows with their observations; relations cascade with the rows.
+   * The one entity delete, for the wire and the bank page alike. Answers how
+   * many entity rows went.
+   */
+  async removeEntities(bank: MemoryBank, ids: string[]): Promise<number> {
+    if (!ids.length) return 0;
+    let removed = 0;
+    // The observations are facts, deleted the way every fact is.
+    await this.units.deleteWhere(bank, { ...FACTS, OR: ids.map((id) => ({ documentId: { startsWith: observationPrefix(id) } })) }, async () => {
+      removed = (await this.prisma.memoryEntity.deleteMany({ where: { id: { in: ids }, bankId: bank.id } })).count;
+    });
+    return removed;
   }
 
   // --- helpers -----------------------------------------------------------

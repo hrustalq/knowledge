@@ -12,13 +12,9 @@ export class MemoryBanksQueryDto {
   workspaceId!: string;
 }
 
-export class MemoryUnitsQueryDto {
-  @ApiPropertyOptional({ enum: MEMORY_UNIT_TYPES })
-  @IsOptional()
-  @IsIn(MEMORY_UNIT_TYPES)
-  type?: MemoryUnitType;
-
-  @ApiPropertyOptional({ description: 'Words the memory text contains' })
+/** A page of a bank's memories, entities or files. */
+export class MemoryPageQueryDto {
+  @ApiPropertyOptional({ description: 'Words the text contains: a memory\'s, an entity\'s name, type or observations, a file\'s path' })
   @IsOptional()
   @IsString()
   @MaxLength(200, { message: vmsg('maxLength') })
@@ -38,6 +34,13 @@ export class MemoryUnitsQueryDto {
   @IsInt()
   @Min(0)
   offset?: number;
+}
+
+export class MemoryUnitsQueryDto extends MemoryPageQueryDto {
+  @ApiPropertyOptional({ enum: MEMORY_UNIT_TYPES })
+  @IsOptional()
+  @IsIn(MEMORY_UNIT_TYPES)
+  type?: MemoryUnitType;
 }
 
 export class DeleteMemoryBankQueryDto {

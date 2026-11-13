@@ -946,6 +946,9 @@ export type I18nTranslations = {
             };
             "bankRowNotFound": string;
             "confirmBankId": string;
+            "entityNotFound": string;
+            "relationNotFound": string;
+            "fileNotFound": string;
         };
         "memo": {
             "notFound": string;

@@ -1,12 +1,20 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { CaptureResult, MemoryBankListResponse, MemoryBankSummary, MemoryUnitListResponse } from '@knowledge/contracts';
+import type {
+  CaptureResult,
+  MemoryBankListResponse,
+  MemoryBankSummary,
+  MemoryEntityListResponse,
+  MemoryFileContent,
+  MemoryFileListResponse,
+  MemoryUnitListResponse,
+} from '@knowledge/contracts';
 import { Access, CurrentPrincipal, Feature } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { Returns } from '../common/returns.decorator.js';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { MemoryWebService } from './memory-web.service.js';
-import { BindMemoryBankDto, DeleteMemoryBankQueryDto, MemoryBanksQueryDto, MemoryUnitsQueryDto, PromoteMemoryDto } from './memory-web.dto.js';
+import { BindMemoryBankDto, DeleteMemoryBankQueryDto, MemoryBanksQueryDto, MemoryPageQueryDto, MemoryUnitsQueryDto, PromoteMemoryDto } from './memory-web.dto.js';
 
 /**
  * Memory banks for this platform's web app (#994, docs/features/80): the
@@ -14,6 +22,9 @@ import { BindMemoryBankDto, DeleteMemoryBankQueryDto, MemoryBanksQueryDto, Memor
  * its workspace in PG first (source `memory-bank`); the bank's project rule is
  * `MemoryWebService`'s, a 404. Off with the `memory` section, and with
  * `MEMORY_ENABLED`. The Hindsight-shaped routes are untouched by this.
+ *
+ * The entities and files routes (#1010) show what the graph and memory-tool
+ * wires wrote: read for a viewer, delete for an editor, no other write.
  */
 @ApiTags('memory')
 @Feature('memory')
@@ -35,6 +46,54 @@ export class MemoryWebController {
   @ApiOperation({ summary: 'A memory bank\'s facts and observations, newest first' })
   units(@Param('id', ParseUUIDPipe) id: string, @Query() query: MemoryUnitsQueryDto, @CurrentPrincipal() principal: Principal): Promise<MemoryUnitListResponse> {
     return this.web.memories(principal, id, query);
+  }
+
+  @Get('banks/:id/entities')
+  @Returns('MemoryEntityListResponse')
+  @Access('viewer', 'memory-bank')
+  @ApiOperation({ summary: 'A memory bank\'s graph entities (the `/mcp/<bank>/graph` wire), in creation order, with their observations and relations' })
+  entities(@Param('id', ParseUUIDPipe) id: string, @Query() query: MemoryPageQueryDto, @CurrentPrincipal() principal: Principal): Promise<MemoryEntityListResponse> {
+    return this.web.entities(principal, id, query);
+  }
+
+  @Delete('banks/:id/entities/:entityId')
+  @HttpCode(204)
+  @Access('editor', 'memory-bank')
+  @ApiOperation({ summary: 'Delete one graph entity, with its observations and every relation touching it' })
+  async deleteEntity(@Param('id', ParseUUIDPipe) id: string, @Param('entityId', ParseUUIDPipe) entityId: string, @CurrentPrincipal() principal: Principal): Promise<void> {
+    await this.web.deleteEntity(principal, id, entityId);
+  }
+
+  @Delete('banks/:id/relations/:relationId')
+  @HttpCode(204)
+  @Access('editor', 'memory-bank')
+  @ApiOperation({ summary: 'Delete one graph relation; both entities stay' })
+  async deleteRelation(@Param('id', ParseUUIDPipe) id: string, @Param('relationId', ParseUUIDPipe) relationId: string, @CurrentPrincipal() principal: Principal): Promise<void> {
+    await this.web.deleteRelation(principal, id, relationId);
+  }
+
+  @Get('banks/:id/files')
+  @Returns('MemoryFileListResponse')
+  @Access('viewer', 'memory-bank')
+  @ApiOperation({ summary: 'A memory bank\'s memory-tool files, by path, without their text' })
+  files(@Param('id', ParseUUIDPipe) id: string, @Query() query: MemoryPageQueryDto, @CurrentPrincipal() principal: Principal): Promise<MemoryFileListResponse> {
+    return this.web.fileList(principal, id, query);
+  }
+
+  @Get('banks/:id/files/:fileId')
+  @Returns('MemoryFileContent')
+  @Access('viewer', 'memory-bank')
+  @ApiOperation({ summary: 'One memory-tool file\'s text, as stored (masked on write)' })
+  file(@Param('id', ParseUUIDPipe) id: string, @Param('fileId', ParseUUIDPipe) fileId: string, @CurrentPrincipal() principal: Principal): Promise<MemoryFileContent> {
+    return this.web.file(principal, id, fileId);
+  }
+
+  @Delete('banks/:id/files/:fileId')
+  @HttpCode(204)
+  @Access('editor', 'memory-bank')
+  @ApiOperation({ summary: 'Delete one memory-tool file and its recall chunks' })
+  async deleteFile(@Param('id', ParseUUIDPipe) id: string, @Param('fileId', ParseUUIDPipe) fileId: string, @CurrentPrincipal() principal: Principal): Promise<void> {
+    await this.web.deleteFile(principal, id, fileId);
   }
 
   @Patch('banks/:id')

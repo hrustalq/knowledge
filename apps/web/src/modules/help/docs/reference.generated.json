@@ -4072,6 +4072,56 @@
     },
     {
       "method": "GET",
+      "path": "/v1/memory/banks/{id}/entities",
+      "tag": "memory",
+      "summary": "A memory bank's graph entities (the `/mcp/<bank>/graph` wire), in creation order, with their observations and relations",
+      "role": "viewer",
+      "source": "memory-bank",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/memory/banks/{id}/entities/{entityId}",
+      "tag": "memory",
+      "summary": "Delete one graph entity, with its observations and every relation touching it",
+      "role": "editor",
+      "source": "memory-bank",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/memory/banks/{id}/files",
+      "tag": "memory",
+      "summary": "A memory bank's memory-tool files, by path, without their text",
+      "role": "viewer",
+      "source": "memory-bank",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/memory/banks/{id}/files/{fileId}",
+      "tag": "memory",
+      "summary": "Delete one memory-tool file and its recall chunks",
+      "role": "editor",
+      "source": "memory-bank",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/memory/banks/{id}/files/{fileId}",
+      "tag": "memory",
+      "summary": "One memory-tool file's text, as stored (masked on write)",
+      "role": "viewer",
+      "source": "memory-bank",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/memory/banks/{id}/memories",
       "tag": "memory",
       "summary": "A memory bank's facts and observations, newest first",
@@ -4095,6 +4145,16 @@
       "path": "/v1/memory/banks/{id}/memories/{memoryId}/promote",
       "tag": "memory",
       "summary": "Propose a memory as a page: a capture, and so a merge request someone reviews. The memory stays in the bank",
+      "role": "editor",
+      "source": "memory-bank",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/memory/banks/{id}/relations/{relationId}",
+      "tag": "memory",
+      "summary": "Delete one graph relation; both entities stay",
       "role": "editor",
       "source": "memory-bank",
       "public": false,

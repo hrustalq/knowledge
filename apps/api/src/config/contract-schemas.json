@@ -17272,6 +17272,12 @@
       "observations": {
         "type": "number"
       },
+      "entities": {
+        "type": "number"
+      },
+      "files": {
+        "type": "number"
+      },
       "lastWriteAt": {
         "type": "string",
         "nullable": true
@@ -17287,8 +17293,187 @@
       "projectId",
       "facts",
       "observations",
+      "entities",
+      "files",
       "lastWriteAt",
       "createdAt"
+    ]
+  },
+  "MemoryEntityListResponse": {
+    "type": "object",
+    "properties": {
+      "bank": {
+        "$ref": "#/components/schemas/MemoryBankSummary"
+      },
+      "entities": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/MemoryEntitySummary"
+        }
+      },
+      "relations": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/MemoryRelationSummary"
+        }
+      },
+      "total": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "bank",
+      "entities",
+      "relations",
+      "total"
+    ]
+  },
+  "MemoryEntitySummary": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "entityType": {
+        "type": "string"
+      },
+      "observations": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/MemoryGraphObservation"
+        }
+      },
+      "createdAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "name",
+      "entityType",
+      "observations",
+      "createdAt"
+    ]
+  },
+  "MemoryFileContent": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "path": {
+        "type": "string"
+      },
+      "size": {
+        "type": "number"
+      },
+      "updatedAt": {
+        "type": "string"
+      },
+      "content": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "content",
+      "id",
+      "path",
+      "size",
+      "updatedAt"
+    ]
+  },
+  "MemoryFileListResponse": {
+    "type": "object",
+    "properties": {
+      "bank": {
+        "$ref": "#/components/schemas/MemoryBankSummary"
+      },
+      "files": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/MemoryFileSummary"
+        }
+      },
+      "total": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "bank",
+      "files",
+      "total"
+    ]
+  },
+  "MemoryFileSummary": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "path": {
+        "type": "string"
+      },
+      "size": {
+        "type": "number"
+      },
+      "updatedAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "path",
+      "size",
+      "updatedAt"
+    ]
+  },
+  "MemoryGraphObservation": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "text": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "text"
+    ]
+  },
+  "MemoryRelationSummary": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "fromId": {
+        "type": "string"
+      },
+      "from": {
+        "type": "string"
+      },
+      "toId": {
+        "type": "string"
+      },
+      "to": {
+        "type": "string"
+      },
+      "relationType": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "fromId",
+      "from",
+      "toId",
+      "to",
+      "relationType"
     ]
   },
   "MemoryUnitListResponse": {

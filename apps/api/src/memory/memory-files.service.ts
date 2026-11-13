@@ -202,12 +202,30 @@ export class MemoryFilesService {
     await withSubjectLock(this.prisma, filesLock(bank), async () => {
       const doomed = await this.fileOrTree(bank, p);
       if (!doomed.length) throw new MemoryToolError(`The path ${shown} does not exist`);
-      // The one delete path for a bank's memories: under the bank lock, bare observations swept, vectors after.
-      await this.units.deleteWhere(bank, { documentId: { in: doomed.map((f) => fileDocumentId(f.path)) } }, () =>
-        this.prisma.memoryFile.deleteMany({ where: { id: { in: doomed.map((f) => f.id) } } }),
-      );
+      await this.removeRows(bank, doomed);
     });
     return `Successfully deleted ${shown}`;
+  }
+
+  /**
+   * One file by its row id, with its recall chunks: the bank page's delete
+   * (#1010). Under the same lock as the tool's writes. False when the bank
+   * holds no such file.
+   */
+  async removeFile(bank: MemoryBank, fileId: string): Promise<boolean> {
+    return withSubjectLock(this.prisma, filesLock(bank), async () => {
+      const file = await this.prisma.memoryFile.findFirst({ where: { id: fileId, bankId: bank.id }, select: { id: true, path: true } });
+      if (!file) return false;
+      await this.removeRows(bank, [file]);
+      return true;
+    });
+  }
+
+  /** The one delete path for a bank's memories: under the bank lock, bare observations swept, vectors after. */
+  private async removeRows(bank: MemoryBank, rows: Array<{ id: string; path: string }>): Promise<void> {
+    await this.units.deleteWhere(bank, { documentId: { in: rows.map((f) => fileDocumentId(f.path)) } }, () =>
+      this.prisma.memoryFile.deleteMany({ where: { id: { in: rows.map((f) => f.id) } } }),
+    );
   }
 
   private async rename(caller: MemoryCaller, bankId: string, oldShown: string, newShown: string): Promise<string> {

@@ -253,6 +253,9 @@ import type {
   MemoTypesResponse,
   MemoryBankListResponse,
   MemoryBankSummary,
+  MemoryEntityListResponse,
+  MemoryFileContent,
+  MemoryFileListResponse,
   MemoryUnitListResponse,
   MergeMergeRequestResponse,
   MergeRequestApiChangesResponse,
@@ -630,6 +633,9 @@ export interface ContractResponses {
   MemoTypesResponse: MemoTypesResponse;
   MemoryBankListResponse: MemoryBankListResponse;
   MemoryBankSummary: MemoryBankSummary;
+  MemoryEntityListResponse: MemoryEntityListResponse;
+  MemoryFileContent: MemoryFileContent;
+  MemoryFileListResponse: MemoryFileListResponse;
   MemoryUnitListResponse: MemoryUnitListResponse;
   MergeMergeRequestResponse: MergeMergeRequestResponse;
   MergeRequestApiChangesResponse: MergeRequestApiChangesResponse;

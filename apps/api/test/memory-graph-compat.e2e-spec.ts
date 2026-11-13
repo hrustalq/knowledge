@@ -112,7 +112,7 @@ describe('MCP reference memory server compatibility (e2e, #1008)', () => {
     return key;
   }
 
-  async function person(name: string, workspaceId: string, role: 'editor' | 'viewer'): Promise<Person> {
+  async function person(name: string, workspaceId: string, role: 'admin' | 'editor' | 'viewer'): Promise<Person> {
     const email = `graph-e2e-${name}@example.test`;
     const user = await prisma.user.upsert({
       where: { email },
@@ -282,6 +282,120 @@ describe('MCP reference memory server compatibility (e2e, #1008)', () => {
       expect(await prisma.memoryRelation.count({ where: { workspaceId: doomed } })).toBe(0);
       expect(await graph.memoryUnitIds(doomed)).toEqual([]);
       await prisma.user.delete({ where: { id: dana.id } });
+    }, 30_000);
+  });
+
+  describe('the bank page’s routes (#1010)', () => {
+    const bank = `page-${nonce}`;
+    let vera: Person;
+    let admin: Person;
+    let bankRowId: string;
+    const web = (key: string, method: string, path: string, body?: unknown) =>
+      fetch(`${baseUrl}/v1/memory${path}`, {
+        method,
+        headers: { Authorization: `Bearer ${key}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      });
+    type Listing = {
+      bank: { bankId: string; entities: number };
+      entities: Array<{ id: string; name: string; entityType: string; observations: Array<{ id: string; text: string }> }>;
+      relations: Array<{ id: string; from: string; to: string; relationType: string }>;
+      total: number;
+    };
+    const list = async (key: string, query = ''): Promise<Listing> => {
+      const res = await web(key, 'GET', `/banks/${bankRowId}/entities${query}`);
+      expect(res.status).toBe(200);
+      return (await res.json()) as Listing;
+    };
+
+    beforeAll(async () => {
+      vera = await person('vera', WS_A, 'viewer');
+      admin = await person('admin', WS_A, 'admin');
+      const mcp = await ours(people.alice.key, bank);
+      await call(mcp, 'create_entities', {
+        entities: [
+          { name: 'Ann', entityType: 'person', observations: ['writes the runbook', 'on call in March'] },
+          { name: 'Ben', entityType: 'person', observations: [] },
+          { name: 'Ops', entityType: 'team', observations: [] },
+        ],
+      });
+      await call(mcp, 'create_relations', { relations: [{ from: 'Ann', to: 'Ben', relationType: 'mentors' }, { from: 'Ben', to: 'Ops', relationType: 'member_of' }] });
+      bankRowId = (await prisma.memoryBank.findUniqueOrThrow({ where: { workspaceId_bankId: { workspaceId: WS_A, bankId: bank } } })).id;
+    }, 30_000);
+
+    it('shows a viewer the entities in stored order, with observations and relations, and searches them as search_nodes does', async () => {
+      const all = await list(vera.key);
+      expect(all.bank).toMatchObject({ bankId: bank, entities: 3 });
+      expect(all.total).toBe(3);
+      expect(all.entities.map((e) => [e.name, e.entityType, e.observations.map((o) => o.text)])).toEqual([
+        ['Ann', 'person', ['writes the runbook', 'on call in March']],
+        ['Ben', 'person', []],
+        ['Ops', 'team', []],
+      ]);
+      expect(all.relations.map((r) => [r.from, r.relationType, r.to])).toEqual([
+        ['Ann', 'mentors', 'Ben'],
+        ['Ben', 'member_of', 'Ops'],
+      ]);
+      // An observation's id is a memory id: the memories list knows it.
+      const units = await prisma.memoryUnit.findMany({ where: { bankId: bankRowId }, select: { id: true } });
+      expect(units.map((u) => u.id)).toEqual(expect.arrayContaining(all.entities[0]!.observations.map((o) => o.id)));
+
+      const found = await list(vera.key, '?q=RUNBOOK');
+      expect([found.total, found.entities.map((e) => e.name)]).toEqual([1, ['Ann']]);
+      expect(found.relations.map((r) => r.to)).toEqual(['Ben']);
+      expect((await list(vera.key, '?q=team')).entities.map((e) => e.name)).toEqual(['Ops']);
+      expect((await list(vera.key, '?limit=1&offset=1')).entities.map((e) => e.name)).toEqual(['Ben']);
+      expect((await web(people.carol.key, 'GET', `/banks/${bankRowId}/entities`)).status).toBe(403);
+    });
+
+    it('refuses a viewer every delete', async () => {
+      const { entities, relations } = await list(vera.key);
+      expect((await web(vera.key, 'DELETE', `/banks/${bankRowId}/entities/${entities[0]!.id}`)).status).toBe(403);
+      expect((await web(vera.key, 'DELETE', `/banks/${bankRowId}/relations/${relations[0]!.id}`)).status).toBe(403);
+      expect((await web(vera.key, 'DELETE', `/banks/${bankRowId}/memories/${entities[0]!.observations[0]!.id}`)).status).toBe(403);
+      const after = await list(vera.key);
+      expect([after.entities.length, after.relations.length, after.entities[0]!.observations.length]).toEqual([3, 2, 2]);
+    });
+
+    it('hides a bank bound to a project the member cannot see', async () => {
+      const project = await prisma.project.create({ data: { workspaceId: WS_A, name: `Graph page ${nonce}` } });
+      const set = await fetch(`${baseUrl}/v1/projects/${project.id}/access`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${admin.key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ restricted: true, grants: [{ subjectType: 'user', subjectId: people.alice.id, level: 'view' }] }),
+      });
+      expect(set.status).toBe(200);
+      await prisma.memoryBank.update({ where: { id: bankRowId }, data: { projectId: project.id } });
+      try {
+        expect((await web(vera.key, 'GET', `/banks/${bankRowId}/entities`)).status).toBe(404);
+        expect((await list(people.alice.key)).total).toBe(3);
+      } finally {
+        await prisma.memoryBank.update({ where: { id: bankRowId }, data: { projectId: null } });
+      }
+    });
+
+    it('lets an editor delete a relation, an observation and an entity; the entity takes its observations and relations', async () => {
+      const before = await list(people.alice.key);
+      const mentors = before.relations.find((r) => r.relationType === 'mentors')!;
+      expect((await web(people.alice.key, 'DELETE', `/banks/${bankRowId}/relations/${mentors.id}`)).status).toBe(204);
+      expect((await web(people.alice.key, 'DELETE', `/banks/${bankRowId}/relations/${mentors.id}`)).status).toBe(404);
+      const ann = before.entities.find((e) => e.name === 'Ann')!;
+      expect((await web(people.alice.key, 'DELETE', `/banks/${bankRowId}/memories/${ann.observations[1]!.id}`)).status).toBe(204);
+      const mcp = await ours(people.alice.key, bank);
+      const opened = JSON.parse(text(await call(mcp, 'open_nodes', { names: ['Ann'] }))) as { entities: Array<{ observations: string[] }>; relations: unknown[] };
+      expect([opened.entities[0]!.observations, opened.relations]).toEqual([['writes the runbook'], []]);
+
+      const ben = before.entities.find((e) => e.name === 'Ben')!;
+      expect((await web(people.alice.key, 'DELETE', `/banks/${bankRowId}/entities/${ann.id}`)).status).toBe(204);
+      expect((await web(people.alice.key, 'DELETE', `/banks/${bankRowId}/entities/${ben.id}`)).status).toBe(204);
+      expect((await web(people.alice.key, 'DELETE', `/banks/${bankRowId}/entities/${ben.id}`)).status).toBe(404);
+      const after = await list(people.alice.key);
+      expect([after.entities.map((e) => e.name), after.relations]).toEqual([['Ops'], []]);
+      expect(await prisma.memoryUnit.count({ where: { id: ann.observations[0]!.id } })).toBe(0);
+      expect((await graph.memoryUnitIds(WS_A)).map((v) => v.unitId)).not.toContain(ann.observations[0]!.id);
+      // Another bank's entity id is not this bank's.
+      const other = await prisma.memoryEntity.findFirst({ where: { workspaceId: WS_A, NOT: { bankId: bankRowId } }, select: { id: true } });
+      if (other) expect((await web(people.alice.key, 'DELETE', `/banks/${bankRowId}/entities/${other.id}`)).status).toBe(404);
     }, 30_000);
   });
 

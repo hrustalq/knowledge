@@ -243,7 +243,10 @@
       "failed": "Вызов модели сведения не удался"
     },
     "bankRowNotFound": "Банк памяти {id} не найден",
-    "confirmBankId": "Чтобы удалить банк, введите его id: {bankId}"
+    "confirmBankId": "Чтобы удалить банк, введите его id: {bankId}",
+    "entityNotFound": "Сущность {id} не найдена",
+    "relationNotFound": "Связь {id} не найдена",
+    "fileNotFound": "Файл памяти {id} не найден"
   },
   "memo": {
     "notFound": "Запись не найдена",

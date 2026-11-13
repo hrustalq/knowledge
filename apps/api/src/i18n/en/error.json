@@ -243,7 +243,10 @@
       "failed": "The consolidation model call failed"
     },
     "bankRowNotFound": "Memory bank {id} not found",
-    "confirmBankId": "Type the bank id, {bankId}, to delete it"
+    "confirmBankId": "Type the bank id, {bankId}, to delete it",
+    "entityNotFound": "Entity {id} not found",
+    "relationNotFound": "Relation {id} not found",
+    "fileNotFound": "Memory file {id} not found"
   },
   "memo": {
     "notFound": "Memo not found",

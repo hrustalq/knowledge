@@ -130,7 +130,7 @@ describe('Anthropic memory tool compatibility (e2e, #1009)', () => {
     return key;
   }
 
-  async function person(name: string, workspaceId: string, role: 'editor' | 'viewer'): Promise<Person> {
+  async function person(name: string, workspaceId: string, role: 'admin' | 'editor' | 'viewer'): Promise<Person> {
     const email = `files-e2e-${name}@example.test`;
     const user = await prisma.user.upsert({
       where: { email },
@@ -385,6 +385,81 @@ describe('Anthropic memory tool compatibility (e2e, #1009)', () => {
       expect(await prisma.memoryFile.count({ where: { workspaceId: doomed } })).toBe(0);
       expect(await graph.memoryUnitIds(doomed)).toEqual([]);
       await prisma.user.delete({ where: { id: dana.id } });
+    }, 30_000);
+  });
+
+  describe('the bank page’s routes (#1010)', () => {
+    const bank = `page-${nonce}`;
+    let vera: Person;
+    let admin: Person;
+    let bankRowId: string;
+    const web = (key: string, method: string, path: string) => fetch(`${baseUrl}/v1/memory${path}`, { method, headers: { Authorization: `Bearer ${key}` } });
+    type Listing = { bank: { bankId: string; files: number }; files: Array<{ id: string; path: string; size: number }>; total: number };
+    const list = async (key: string, query = ''): Promise<Listing> => {
+      const res = await web(key, 'GET', `/banks/${bankRowId}/files${query}`);
+      expect(res.status).toBe(200);
+      return (await res.json()) as Listing;
+    };
+
+    beforeAll(async () => {
+      vera = await person('vera', WS_A, 'viewer');
+      admin = await person('admin', WS_A, 'admin');
+      await rest(people.alice.key, bank, { command: 'create', path: '/memories/notes/deploy.md', file_text: '# Deploy\nrun the canary first — straße' });
+      await rest(people.alice.key, bank, { command: 'create', path: '/memories/a.md', file_text: 'token for ci: alice@example.com' });
+      bankRowId = (await bankRow(WS_A, bank))!.id;
+    }, 30_000);
+
+    it('lists a viewer the files by path with their size in bytes, and serves one file’s text as stored', async () => {
+      const all = await list(vera.key);
+      expect(all.bank).toMatchObject({ bankId: bank, files: 2 });
+      expect(all.files.map((f) => f.path)).toEqual(['/memories/a.md', '/memories/notes/deploy.md']);
+      expect(all.files[1]!.size).toBe(Buffer.byteLength('# Deploy\nrun the canary first — straße'));
+      expect((await list(vera.key, '?q=NOTES')).files.map((f) => f.path)).toEqual(['/memories/notes/deploy.md']);
+      const one = await web(vera.key, 'GET', `/banks/${bankRowId}/files/${all.files[0]!.id}`);
+      expect(one.status).toBe(200);
+      const file = (await one.json()) as { path: string; content: string; size: number };
+      // Masked on write: the stored text is what is served.
+      expect(file).toMatchObject({ path: '/memories/a.md', content: 'token for ci: [SECRET_1]', size: all.files[0]!.size });
+      expect(file.content).not.toContain('alice@example.com');
+      expect(Buffer.byteLength(file.content)).toBe(file.size);
+      expect((await web(people.carol.key, 'GET', `/banks/${bankRowId}/files`)).status).toBe(403);
+      expect((await web(vera.key, 'GET', `/banks/${bankRowId}/files/${randomUUID()}`)).status).toBe(404);
+    });
+
+    it('refuses a viewer’s delete', async () => {
+      const [file] = (await list(vera.key)).files;
+      expect((await web(vera.key, 'DELETE', `/banks/${bankRowId}/files/${file!.id}`)).status).toBe(403);
+      expect((await list(vera.key)).total).toBe(2);
+    });
+
+    it('hides a bank bound to a project the member cannot see', async () => {
+      const project = await prisma.project.create({ data: { workspaceId: WS_A, name: `Files page ${nonce}` } });
+      const set = await fetch(`${baseUrl}/v1/projects/${project.id}/access`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${admin.key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ restricted: true, grants: [{ subjectType: 'user', subjectId: people.alice.id, level: 'view' }] }),
+      });
+      expect(set.status).toBe(200);
+      await prisma.memoryBank.update({ where: { id: bankRowId }, data: { projectId: project.id } });
+      try {
+        expect((await web(vera.key, 'GET', `/banks/${bankRowId}/files`)).status).toBe(404);
+        expect((await list(people.alice.key)).total).toBe(2);
+      } finally {
+        await prisma.memoryBank.update({ where: { id: bankRowId }, data: { projectId: null } });
+      }
+    });
+
+    it('lets an editor delete a file with its recall chunks, as the tool’s own delete does', async () => {
+      const deploy = (await list(people.alice.key)).files.find((f) => f.path === '/memories/notes/deploy.md')!;
+      const chunks = await prisma.memoryUnit.findMany({ where: { bankId: bankRowId, documentId: 'file:/memories/notes/deploy.md' }, select: { id: true } });
+      expect(chunks.length).toBeGreaterThan(0);
+      expect((await web(people.alice.key, 'DELETE', `/banks/${bankRowId}/files/${deploy.id}`)).status).toBe(204);
+      expect((await web(people.alice.key, 'DELETE', `/banks/${bankRowId}/files/${deploy.id}`)).status).toBe(404);
+      expect(await prisma.memoryUnit.count({ where: { id: { in: chunks.map((c) => c.id) } } })).toBe(0);
+      const vectors = (await graph.memoryUnitIds(WS_A)).map((v) => v.unitId);
+      for (const c of chunks) expect(vectors).not.toContain(c.id);
+      expect(await rest(people.alice.key, bank, { command: 'view', path: '/memories/notes' })).toEqual({ content: 'Error: The path /memories/notes does not exist. Please provide a valid path.', is_error: true });
+      expect((await list(people.alice.key)).files.map((f) => f.path)).toEqual(['/memories/a.md']);
     }, 30_000);
   });
 

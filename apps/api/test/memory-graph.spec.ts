@@ -127,7 +127,7 @@ describe('MemoryGraphService (#1008)', () => {
     prisma.memoryEntity.findMany.mockResolvedValueOnce([{ id: 'e0', name: 'E0', entityType: 't' }]);
     expect(await svc.deleteEntities(caller as never, 'agent', ['E0', 'Ghost'])).toBe('Deleted 1 of 2 entities. Not found: Ghost');
     expect(units.deleteWhere).toHaveBeenCalledWith(bank, { factType: { not: 'observation' }, OR: [{ documentId: { startsWith: 'graph:e0:' } }] }, expect.any(Function));
-    expect(prisma.memoryEntity.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['e0'] } } });
+    expect(prisma.memoryEntity.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['e0'] }, bankId: bank.id } });
     expect(rate.check).toHaveBeenCalledWith('retain', caller.principal);
   });
 });

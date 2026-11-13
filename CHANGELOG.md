@@ -55,6 +55,12 @@ in the pull request that introduces them — see
   (which then decides who can read it, and needs the right to manage that project), and **promote** a memory to a
   page: it becomes a capture, so a merge request someone reviews, whose origin names the bank. The memory stays in
   the bank. The section is not shown while the server has memory off. (#994)
+- A memory bank's page has two more tabs: **Entities**, the knowledge graph an MCP client wrote through
+  `/mcp/{bank_id}/graph`, with each entity's observations and relations; and **Files**, what Claude's memory tool
+  wrote, by path, each opening to its text. Both are read-only, with delete for editors, and show everything as
+  plain text. **Settings → Memory banks** now lists every way into a bank: the Hindsight base URL, the three MCP
+  endpoints, the memory tool endpoint with a handler to paste in TypeScript or Python, and the `mcp-remote` config
+  for clients that start only local servers. (#1010)
 
 ### Fixed
 

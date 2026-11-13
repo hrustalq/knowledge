@@ -33,6 +33,10 @@ export interface RetainInput {
    * replace whatever an earlier, interrupted run of it wrote.
    */
   operationId?: string;
+  /** Store each item exactly as given, one unit per item: no extraction call (#1007). For a wire whose text must stay exact. */
+  verbatim?: boolean;
+  /** Write the units already consolidated, so the consolidation pass never claims them (#1007). */
+  consolidated?: boolean;
 }
 
 /** One masker for a whole request, over each item's content and context: the same value gets the same placeholder throughout. */
@@ -92,7 +96,7 @@ export class MemoryRetainService {
       throw new ServiceUnavailableException(t('error.memory.storeNotReady'));
     }
     const items = input.operationId ? input.items : maskItems(input.items);
-    const { facts, usage } = await this.extract(input, items);
+    const { facts, usage } = input.verbatim ? { facts: new Map<number, Fact[]>(), usage: null } : await this.extract(input, items);
 
     const units: Unit[] = items.flatMap((item, i) =>
       (facts.get(i) ?? [null]).map((fact) => ({
@@ -150,6 +154,7 @@ export class MemoryRetainService {
       mentionedAt: at,
       createdBy: input.userId,
       operationId: input.operationId ?? null,
+      consolidatedAt: input.consolidated ? new Date() : null,
     };
   }
 

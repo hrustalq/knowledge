@@ -4822,9 +4822,87 @@ model MemoryBank {
 
   units      MemoryUnit[]
   operations MemoryOperation[]
+  entities   MemoryEntity[]
+  relations  MemoryRelation[]
+  files      MemoryFile[]
 
   @@unique([workspaceId, bankId])
   @@map("memory_banks")
+}
+
+/// An entity of a bank's graph (#1008), as the MCP reference memory server
+/// keeps one: an exact name, unique in the bank, and a type. Its observations
+/// are `memory_units` facts whose `document_id` is `graph:{id}:{seq}`. A row
+/// only: never a vertex of the workspace relation graph.
+/// A file the Anthropic memory tool wrote (#1009), under `/memories`.
+/// Directories are implied by the paths: there is no row for one. The text is
+/// masked on write. Recall reads it through `memory_units` chunks with
+/// `document_id = file:<path>`, written verbatim and already consolidated.
+model MemoryFile {
+  id          String     @id @default(uuid()) @db.Uuid
+  workspaceId String     @map("workspace_id") @db.Uuid
+  bankId      String     @map("bank_id") @db.Uuid
+  bank        MemoryBank @relation(fields: [bankId], references: [id], onDelete: Cascade)
+  /// Canonical: `/memories/a/b.md`, no empty, `.` or `..` segment, no trailing slash.
+  path        String
+  content     String
+  createdBy   String     @map("created_by") @db.Uuid
+  updatedBy   String     @map("updated_by") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@unique([bankId, path])
+  @@map("memory_files")
+}
+
+model MemoryEntity {
+  id          String     @id @default(uuid()) @db.Uuid
+  workspaceId String     @map("workspace_id") @db.Uuid
+  bankId      String     @map("bank_id") @db.Uuid
+  bank        MemoryBank @relation(fields: [bankId], references: [id], onDelete: Cascade)
+  name        String
+  entityType  String     @map("entity_type")
+  /// `normalizeEntityKey(name)`: what links its observations to recall's entity leg.
+  entityKey   String     @map("entity_key")
+  /// Creation order, which every read returns entities in, as the reference does.
+  position    Int        @default(autoincrement())
+  /// The last observation number handed out, so observations read back in the order they were added.
+  observationSeq Int     @default(0) @map("observation_seq")
+  createdBy   String     @map("created_by") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  outgoing MemoryRelation[] @relation("RelationFrom")
+  incoming MemoryRelation[] @relation("RelationTo")
+
+  @@unique([bankId, name])
+  @@index([bankId, position])
+  @@map("memory_entities")
+}
+
+/// A relation between two entities of a bank's graph (#1008), unique per
+/// (from, to, type). Deleting either entity deletes it.
+model MemoryRelation {
+  id           String       @id @default(uuid()) @db.Uuid
+  workspaceId  String       @map("workspace_id") @db.Uuid
+  bankId       String       @map("bank_id") @db.Uuid
+  bank         MemoryBank   @relation(fields: [bankId], references: [id], onDelete: Cascade)
+  fromId       String       @map("from_id") @db.Uuid
+  from         MemoryEntity @relation("RelationFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  toId         String       @map("to_id") @db.Uuid
+  to           MemoryEntity @relation("RelationTo", fields: [toId], references: [id], onDelete: Cascade)
+  relationType String       @map("relation_type")
+  /// Creation order, as for entities.
+  position     Int          @default(autoincrement())
+  createdBy    String       @map("created_by") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([fromId, toId, relationType])
+  @@index([bankId, position])
+  @@index([toId])
+  @@map("memory_relations")
 }
 
 /// One fact an agent retained (#986): live the moment it is written, read only

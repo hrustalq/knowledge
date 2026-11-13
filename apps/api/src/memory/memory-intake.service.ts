@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { MemoryBank } from '@prisma/client';
 import type { Env } from '../config/env.js';
 import type { MemoryCaller } from './memory-access.service.js';
 import { MemoryBanksService } from './memory-banks.service.js';
-import { readRetainItems } from './memory-facts.js';
+import { assertRetainCeilings, readRetainItems, type RetainItem } from './memory-facts.js';
 import { MemoryOperationsService } from './memory-operations.service.js';
 import { MemoryRateService } from './memory-rate.service.js';
-import { MemoryRetainService } from './memory-retain.service.js';
+import { MemoryRetainService, type RetainInput } from './memory-retain.service.js';
 import type { RetainResponse } from './memory-wire.js';
 
 export interface RetainRequest {
@@ -51,5 +52,35 @@ export class MemoryIntakeService {
     }
     const { usage } = await this.retainer.retain({ workspaceId: caller.workspaceId, bank, userId: principal.userId, locale: principal.locale, items });
     return { ...done, async: false, ...(usage ? { usage } : {}) };
+  }
+
+  /**
+   * The door for a wire that builds its own items (#1007): the graph and file
+   * wires. Same rate, ceilings and bank creation as `retain`; always sync, as
+   * those wires answer from what they just wrote. Same role contract as `retain`.
+   */
+  async retainItems(caller: MemoryCaller, bankId: string, items: RetainItem[], options: Pick<RetainInput, 'verbatim' | 'consolidated'> = {}): Promise<{ bank: MemoryBank; units: number }> {
+    const bank = await this.admit(caller, bankId, items);
+    return { bank, units: await this.store(caller, bank, items, options) };
+  }
+
+  /**
+   * `retainItems` in two steps, for a wire that writes rows of its own between
+   * them (#1008: the graph's entities): the rate, the ceilings and the bank
+   * first, so a refusal comes before anything is written; then `store`.
+   * `allowEmpty` is for a write that may hold no text at all — creating
+   * entities with no observations still spends the retain rate.
+   */
+  async admit(caller: MemoryCaller, bankId: string, items: ReadonlyArray<{ content: string }>, opts: { allowEmpty?: boolean } = {}): Promise<MemoryBank> {
+    await this.rate.check('retain', caller.principal);
+    if (items.length || !opts.allowEmpty) assertRetainCeilings(items, this.limits);
+    return this.banks.ensure(caller, bankId);
+  }
+
+  /** The second step: the items `admit` let through, stored sync. Nothing to store is a no-op. */
+  async store(caller: MemoryCaller, bank: MemoryBank, items: RetainItem[], options: Pick<RetainInput, 'verbatim' | 'consolidated'> = {}): Promise<number> {
+    if (!items.length) return 0;
+    const { principal } = caller;
+    return (await this.retainer.retain({ workspaceId: caller.workspaceId, bank, userId: principal.userId, locale: principal.locale, items, ...options })).units;
   }
 }

@@ -918,6 +918,7 @@ export type I18nTranslations = {
             "workspaceRequired": string;
             "workspaceHeaderRequired": string;
             "bankNotFound": string;
+            "profileNotFound": string;
             "bankIdInvalid": string;
             "contentNotText": string;
             "itemsRequired": string;
@@ -945,6 +946,9 @@ export type I18nTranslations = {
             };
             "bankRowNotFound": string;
             "confirmBankId": string;
+            "entityNotFound": string;
+            "relationNotFound": string;
+            "fileNotFound": string;
         };
         "memo": {
             "notFound": string;

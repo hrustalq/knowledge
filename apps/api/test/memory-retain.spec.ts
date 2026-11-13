@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { BadRequestException, ServiceUnavailableException } from '@nestjs/common';
 import { extractionBatches, extractionPrompt, readFacts, readRetainItems, tagsWhere, type RetainItem } from '../src/memory/memory-facts.js';
+import { MemoryIntakeService } from '../src/memory/memory-intake.service.js';
 import { MemoryRetainService } from '../src/memory/memory-retain.service.js';
 
 const WS = '11111111-1111-4111-8111-111111111111';
@@ -107,7 +108,7 @@ describe('MemoryRetainService (#986)', () => {
     };
     const units = { deleteBareObservations: vi.fn(async () => [] as string[]) };
     const svc = new MemoryRetainService(prisma as never, graph as never, aliases as never, embeddings as never, agents as never, usage as never, client as never, units as never);
-    const retain = (items: RetainItem[]) => svc.retain({ workspaceId: WS, bank: { id: 'bank-1', mission: '' }, userId: 'u1', locale: 'en', items });
+    const retain = (items: RetainItem[], extra: { verbatim?: boolean; consolidated?: boolean } = {}) => svc.retain({ workspaceId: WS, bank: { id: 'bank-1', mission: '' }, userId: 'u1', locale: 'en', items, ...extra });
     return { svc, retain, created, prisma, graph, client, embeddings };
   }
 
@@ -155,6 +156,25 @@ describe('MemoryRetainService (#986)', () => {
     expect(spent.client.chatWithUsage).not.toHaveBeenCalled();
   });
 
+  it('a verbatim retain calls no routed model and stores each item as one masked unit (#1007)', async () => {
+    const answer = JSON.stringify({ items: [{ item: 'I1', facts: [{ text: 'Split.' }, { text: 'Twice.' }] }] });
+    const { retain, created, client } = service({ routed: true, answer });
+    const out = await retain([item({ content: 'Mail bob@example.com about billing.' }), item({ content: 'Second.', documentId: 'd2' })], { verbatim: true });
+    expect(out).toEqual({ units: 2, usage: null });
+    expect(client.chatWithUsage).not.toHaveBeenCalled();
+    expect(created.units.map((u) => u.documentId)).toEqual(['d1', 'd2']);
+    expect(created.units[0]!.text).toBe('Mail [EMAIL_1] about billing.');
+    expect(created.units[0]!.text).toBe(created.units[0]!.sourceText);
+    // Not asked to be consolidated: left for the consolidation pass, as today.
+    expect(created.units.every((u) => u.consolidatedAt === null)).toBe(true);
+  });
+
+  it('writes units already consolidated when asked, so the pass (consolidated_at IS NULL) never claims them (#1007)', async () => {
+    const { retain, created } = service();
+    await retain([item()], { verbatim: true, consolidated: true });
+    expect(created.units[0]!.consolidatedAt).toBeInstanceOf(Date);
+  });
+
   it('says the index is missing instead of storing rows no recall could rank', async () => {
     const { retain, created } = service({ ready: false });
     await expect(retain([item()])).rejects.toBeInstanceOf(ServiceUnavailableException);
@@ -173,5 +193,43 @@ describe('MemoryRetainService (#986)', () => {
     // Masked when its row was written: a second pass would renumber the placeholders.
     expect(created.units[0]).toMatchObject({ text: 'пароль [SECRET_2] и [SECRET_1]', operationId: 'op-1' });
     expect(prisma.memoryUnit.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { bankId: 'bank-1', factType: { not: 'observation' }, OR: [{ documentId: { in: [] } }, { operationId: 'op-1' }] } }));
+  });
+});
+
+describe('MemoryIntakeService.retainItems, the door for prebuilt items (#1007)', () => {
+  function intake() {
+    const calls: string[] = [];
+    const bank = { id: 'bank-1', bankId: 'agent', mission: '' };
+    const banks = { ensure: vi.fn(async () => (calls.push('ensure'), bank)) };
+    const retainer = { retain: vi.fn(async () => (calls.push('retain'), { units: 1, usage: null })) };
+    const rate = { check: vi.fn(async () => void calls.push('rate')) };
+    const config = { get: (k: string) => ({ MEMORY_RETAIN_MAX_ITEMS: LIMITS.maxItems, MEMORY_RETAIN_MAX_CHARS: LIMITS.maxChars })[k] };
+    const svc = new MemoryIntakeService(banks as never, retainer as never, {} as never, rate as never, config as never);
+    const caller = { principal: { userId: 'u1', locale: 'en' }, workspaceId: WS };
+    return { svc, caller, calls, retainer, bank };
+  }
+
+  it('applies the rate, then the ceilings, then creates the bank, and retains sync with the wire’s options', async () => {
+    const { svc, caller, calls, retainer, bank } = intake();
+    expect(await svc.retainItems(caller as never, 'agent', [item()], { verbatim: true, consolidated: true })).toEqual({ bank, units: 1 });
+    expect(calls).toEqual(['rate', 'ensure', 'retain']);
+    expect(retainer.retain).toHaveBeenCalledWith({ workspaceId: WS, bank, userId: 'u1', locale: 'en', items: [item()], verbatim: true, consolidated: true });
+  });
+
+  it('splits into admit and store for a wire that writes rows between them (#1008): an empty admit may pass, an empty store calls nothing', async () => {
+    const { svc, caller, calls, retainer, bank } = intake();
+    expect(await svc.admit(caller as never, 'agent', [], { allowEmpty: true })).toBe(bank);
+    expect(calls).toEqual(['rate', 'ensure']);
+    expect(await svc.store(caller as never, bank as never, [])).toBe(0);
+    expect(retainer.retain).not.toHaveBeenCalled();
+    await expect(svc.admit(caller as never, 'agent', [])).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('refuses an empty, oversized or too-long request before the bank is created', async () => {
+    for (const items of [[], [item(), item(), item(), item()], [item({ content: 'x'.repeat(101) })]]) {
+      const { svc, caller, calls } = intake();
+      await expect(svc.retainItems(caller as never, 'agent', items)).rejects.toBeInstanceOf(BadRequestException);
+      expect(calls).toEqual(['rate']);
+    }
   });
 });

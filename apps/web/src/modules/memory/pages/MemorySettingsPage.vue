@@ -9,6 +9,11 @@
  * gets the switch back here — which is why this route carries no
  * `meta.feature`, unlike a bank's page — and everyone else one line. Both on:
  * the switch, how to connect a client, and the banks.
+ *
+ * Connecting (#1010) lists every wire into a bank: the Hindsight base URL,
+ * the three MCP endpoints, the memory tool's REST endpoint with a handler to
+ * paste, and the `mcp-remote` bridge for clients that start only stdio
+ * servers. They all read and write the same bank.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -16,6 +21,7 @@ import { RouterLink } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 import { Brain, Check, Copy, Trash2 } from 'lucide-vue-next'
+import { CopyBlock } from '@/entities/access'
 import type { MemoryBankListResponse, MemoryBankSummary } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
@@ -27,8 +33,9 @@ import { useFeaturesStore } from '@/stores/features'
 import { useProjectsStore } from '@/stores/projects'
 import { Button } from '@knowledge/ui/button'
 import { Checkbox } from '@knowledge/ui/checkbox'
-import { PageHeader, PageState } from '@knowledge/ui/layout'
+import { PageHeader, PageState, PageTabs, panelId, tabId, type PageTab } from '@knowledge/ui/layout'
 import DeleteBankDialog from '../components/DeleteBankDialog.vue'
+import { BRIDGE_COMMAND, HANDLER_LANGS, MEMORY_TOOL_TYPE, memoryEndpoints, memoryToolHandler, stdioBridgeConfig, type HandlerLang } from '../model/connection'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -65,8 +72,27 @@ async function toggle(next: boolean) {
 
 /* -------------------------------------------------------------- connection */
 
-const mcpUrl = computed(() => (list.value ? `${list.value.apiUrl}/mcp/<bank-id>/` : ''))
-const copies = { base: useCopy(), mcp: useCopy() }
+const endpoints = computed(() => (list.value ? memoryEndpoints(list.value.apiUrl) : null))
+const rows = computed(() =>
+  endpoints.value
+    ? (
+        [
+          ['base', t('memory.connect.baseUrl')],
+          ['mcp', t('memory.connect.mcpUrl')],
+          ['graph', t('memory.connect.graphUrl')],
+          ['files', t('memory.connect.filesUrl')],
+          ['tool', t('memory.connect.toolUrl')],
+        ] as const
+      ).map(([key, label]) => ({ key, label, value: endpoints.value![key] }))
+    : [],
+)
+const copies = { base: useCopy(), mcp: useCopy(), graph: useCopy(), files: useCopy(), tool: useCopy() }
+
+const HANDLER_SCOPE = 'memory-handler'
+const lang = ref<HandlerLang>('typescript')
+const langs: PageTab<HandlerLang>[] = HANDLER_LANGS.map((key) => ({ key, label: key === 'typescript' ? 'TypeScript' : 'Python' }))
+const handler = computed(() => (endpoints.value ? memoryToolHandler(lang.value, endpoints.value.tool) : ''))
+const bridge = computed(() => (endpoints.value ? stdioBridgeConfig(endpoints.value.graph) : ''))
 
 /* ------------------------------------------------------------------ delete */
 
@@ -113,10 +139,7 @@ async function deleted(bank: MemoryBankSummary) {
             </i18n-t>
           </div>
           <dl v-if="list" class="divide-y rounded-md border">
-            <div v-for="row in [
-              { key: 'base' as const, label: t('memory.connect.baseUrl'), value: list.apiUrl },
-              { key: 'mcp' as const, label: t('memory.connect.mcpUrl'), value: mcpUrl },
-            ]" :key="row.key" class="grid gap-1 px-3 py-2 sm:grid-cols-[12rem_minmax(0,1fr)_auto] sm:items-center sm:gap-3">
+            <div v-for="row in rows" :key="row.key" class="grid gap-1 px-3 py-2 sm:grid-cols-[12rem_minmax(0,1fr)_auto] sm:items-center sm:gap-3">
               <dt class="text-xs text-muted-foreground">{{ row.label }}</dt>
               <dd class="min-w-0 truncate font-mono text-ui" :title="row.value">{{ row.value }}</dd>
               <dd class="-my-1 -ml-2 justify-self-start sm:ml-0 sm:justify-self-end">
@@ -128,6 +151,27 @@ async function deleted(bank: MemoryBankSummary) {
               </dd>
             </div>
           </dl>
+
+          <template v-if="list">
+            <div class="space-y-2 pt-2">
+              <h3 class="text-sm font-medium">{{ t('memory.connect.handlerTitle') }}</h3>
+              <i18n-t keypath="memory.connect.handlerHint" tag="p" class="kn-measure text-sm text-muted-foreground" scope="global">
+                <template #tool><code class="font-mono text-ui">{{ MEMORY_TOOL_TYPE }}</code></template>
+              </i18n-t>
+              <PageTabs v-model="lang" :tabs="langs" :label="t('memory.connect.lang')" :scope="HANDLER_SCOPE" />
+              <div :id="panelId(lang, HANDLER_SCOPE)" role="tabpanel" :aria-labelledby="tabId(lang, HANDLER_SCOPE)">
+                <CopyBlock :code="handler" :label="lang === 'typescript' ? 'memory.ts' : 'memory.py'" />
+              </div>
+            </div>
+
+            <div class="space-y-2 pt-2">
+              <h3 class="text-sm font-medium">{{ t('memory.connect.stdioTitle') }}</h3>
+              <i18n-t keypath="memory.connect.stdioHint" tag="p" class="kn-measure text-sm text-muted-foreground" scope="global">
+                <template #bridge><code class="font-mono text-ui break-all">{{ BRIDGE_COMMAND }}</code></template>
+              </i18n-t>
+              <CopyBlock :code="bridge" :label="t('memory.connect.stdioLabel')" />
+            </div>
+          </template>
         </section>
 
         <section aria-labelledby="memory-banks" class="space-y-3">

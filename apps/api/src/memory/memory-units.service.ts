@@ -99,24 +99,31 @@ export class MemoryUnitsService {
    * they supported with less evidence, and deletes those left with none.
    */
   async clear(bank: MemoryBank, type?: string): Promise<DeleteResponse> {
-    const where = { bankId: bank.id, ...(type ? { factType: type } : {}) };
-    const ids = await withSubjectLock(this.prisma, `memory-bank:${bank.id}`, async () => {
-      const ids = (await this.prisma.memoryUnit.findMany({ where, select: { id: true } })).map((r) => r.id);
-      await this.prisma.memoryUnit.deleteMany({ where: { id: { in: ids } } });
-      return [...ids, ...(await this.deleteBareObservations(bank.id))];
-    });
-    await this.dropVectors(bank.workspaceId, ids);
+    const { ids } = await this.deleteWhere(bank, type ? { factType: type } : {});
     return { success: true, message: null, deleted_count: ids.length };
   }
 
   /** One memory of the bank, deleted (#994): a fact also leaves the observations it supported, which go too once they have no evidence. False when the bank holds no such memory. */
   async deleteOne(bank: MemoryBank, memoryId: string): Promise<boolean> {
-    const ids = await withSubjectLock(this.prisma, `memory-bank:${bank.id}`, async () => {
-      const gone = await this.prisma.memoryUnit.deleteMany({ where: { id: memoryId, bankId: bank.id } });
-      return gone.count ? [memoryId, ...(await this.deleteBareObservations(bank.id))] : [];
+    return (await this.deleteWhere(bank, { id: memoryId })).matched > 0;
+  }
+
+  /**
+   * The bank's memories `where` picks, deleted under the bank's lock, with
+   * whatever `alongside` deletes in the same transaction (#1008: the graph's
+   * entity rows). The observations left with no evidence follow; every
+   * vector is dropped once it commits. `matched` counts what `where` picked,
+   * `ids` everything deleted.
+   */
+  async deleteWhere(bank: MemoryBank, where: Prisma.MemoryUnitWhereInput, alongside?: () => Promise<unknown>): Promise<{ matched: number; ids: string[] }> {
+    const done = await withSubjectLock(this.prisma, `memory-bank:${bank.id}`, async () => {
+      const ids = (await this.prisma.memoryUnit.findMany({ where: { AND: [where, { bankId: bank.id }] }, select: { id: true } })).map((r) => r.id);
+      if (ids.length) await this.prisma.memoryUnit.deleteMany({ where: { id: { in: ids } } });
+      await alongside?.();
+      return { matched: ids.length, ids: ids.length ? [...ids, ...(await this.deleteBareObservations(bank.id))] : [] };
     });
-    await this.dropVectors(bank.workspaceId, ids);
-    return ids.length > 0;
+    await this.dropVectors(bank.workspaceId, done.ids);
+    return done;
   }
 
   /**

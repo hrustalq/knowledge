@@ -58,6 +58,12 @@ const dateOf = (value: unknown): Date | null => {
   return Number.isNaN(d.getTime()) ? null : d;
 };
 
+/** A retain request's ceilings, whichever wire built its items: how many items, and how long each one's text. */
+export function assertRetainCeilings(items: ReadonlyArray<{ content?: unknown }>, limits: { maxItems: number; maxChars: number }): void {
+  if (items.length < 1 || items.length > limits.maxItems) throw new BadRequestException(t('error.memory.itemsRequired', { max: limits.maxItems }));
+  if (items.some((i) => typeof i.content === 'string' && i.content.length > limits.maxChars)) throw new BadRequestException(t('error.memory.itemTooLong', { max: limits.maxChars }));
+}
+
 /**
  * A retain body's items, as this server stores them. The global pipe checked
  * the envelope; what it cannot say is checked here: only text is retained, a
@@ -72,12 +78,11 @@ export function readRetainItems(
   limits: { maxItems: number; maxChars: number },
   now = new Date(),
 ): RetainItem[] {
-  if (items.length < 1 || items.length > limits.maxItems) throw new BadRequestException(t('error.memory.itemsRequired', { max: limits.maxItems }));
+  assertRetainCeilings(items, limits);
   const shared = items.some((i) => typeof i.document_id === 'string' && i.document_id) ? null : randomUUID();
   const extraTags = cleanTags(documentTags);
   return items.map((item) => {
     if (typeof item.content !== 'string' || !item.content.trim()) throw new BadRequestException(t('error.memory.contentNotText'));
-    if (item.content.length > limits.maxChars) throw new BadRequestException(t('error.memory.itemTooLong', { max: limits.maxChars }));
     let timestamp: string | null = now.toISOString();
     if (item.timestamp === 'unset') timestamp = null;
     else if (item.timestamp != null) {

@@ -216,6 +216,7 @@
     "workspaceRequired": "Memory routes need an API key pinned to one workspace: the key decides which workspace \"default\" means",
     "workspaceHeaderRequired": "With AUTH_MODE=none, name the workspace in an X-Workspace-Id header",
     "bankNotFound": "Memory bank {bankId} not found",
+    "profileNotFound": "No MCP tool set named {profile} on a memory bank",
     "bankIdInvalid": "A bank id is 1 to 200 characters with no control characters",
     "contentNotText": "Only text can be retained: `content` must be a string",
     "itemsRequired": "A retain request carries 1 to {max} items",
@@ -242,7 +243,10 @@
       "failed": "The consolidation model call failed"
     },
     "bankRowNotFound": "Memory bank {id} not found",
-    "confirmBankId": "Type the bank id, {bankId}, to delete it"
+    "confirmBankId": "Type the bank id, {bankId}, to delete it",
+    "entityNotFound": "Entity {id} not found",
+    "relationNotFound": "Relation {id} not found",
+    "fileNotFound": "Memory file {id} not found"
   },
   "memo": {
     "notFound": "Memo not found",

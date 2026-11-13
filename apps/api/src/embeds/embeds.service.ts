@@ -216,10 +216,11 @@ export class EmbedsService {
    * One group of a revision, for an agent: canonical URLs, captions, the
    * frame names and text layers (untrusted, from the cache) and, while the
    * allowlist passes, the snapshot bytes. The caller has already been
-   * checked for the document.
+   * checked for the document; the rows are filtered on it too, so a revision
+   * of another page reads nothing (GHSA-4m3x-rcfg-892m).
    */
-  async group(revisionId: string, groupIndex: number) {
-    const refs = await this.prisma.revisionEmbed.findMany({ where: { revisionId, groupIndex }, orderBy: { position: 'asc' } });
+  async group(documentId: string, revisionId: string, groupIndex: number) {
+    const refs = await this.prisma.revisionEmbed.findMany({ where: { documentId, revisionId, groupIndex }, orderBy: { position: 'asc' } });
     if (!refs.length) return null;
     const workspaceId = refs[0]!.workspaceId;
     const pinned = refs.filter((r): r is typeof r & Key => !!r.fileKey && !!r.version && !r.warning);

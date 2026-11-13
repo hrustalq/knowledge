@@ -234,8 +234,9 @@ export function registerPagesTools(ctx: McpToolContext): void {
       const workspaceId = await guard.doc(documentId, 'viewer');
       if (revisionId) await guard.branches(documentId, { revisionIds: [revisionId] }, 'viewer');
       if (revisionId) await guard.history(workspaceId, documentId, [revisionId]);
-      const revision = revisionId ?? (await svc.documents.getContent(documentId)).revisionId;
-      const items = await svc.embeds.group(revision, group ?? 0);
+      // Through the page, as GET /:id/content does: a revision of another page is not found (GHSA-4m3x-rcfg-892m).
+      const revision = (await svc.documents.contentRevision(documentId, revisionId)).revision.id;
+      const items = await svc.embeds.group(documentId, revision, group ?? 0);
       if (!items) return json({ documentId, revisionId: revision, group: group ?? 0, items: [], note: 'No embed group at that index.' });
       const content: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [
         {

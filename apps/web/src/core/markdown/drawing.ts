@@ -138,15 +138,50 @@ export function wrapText(text: string, width: number, fontSize: number): string[
   return out;
 }
 
+const SHAPE_KINDS: readonly string[] = ['rect', 'ellipse', 'diamond', 'arrow', 'line', 'draw', 'text'] satisfies ShapeKind[];
+
+const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+const positive = (v: unknown, fallback: number): number => (finite(v) && v > 0 ? v : fallback);
+
+/** A style off the palette falls back field by field: these values are interpolated into SVG attributes. */
+function readStyle(raw: unknown): DrawStyle {
+  const s = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  return {
+    stroke: (DRAW_COLORS as readonly unknown[]).includes(s.stroke) ? (s.stroke as DrawColor) : DEFAULT_STYLE.stroke,
+    fill: (DRAW_FILLS as readonly unknown[]).includes(s.fill) ? (s.fill as DrawFill) : DEFAULT_STYLE.fill,
+    sw: positive(s.sw, DEFAULT_STYLE.sw),
+    dash: s.dash === 1 || s.dash === 2 ? s.dash : 0,
+    fs: positive(s.fs, DEFAULT_STYLE.fs!),
+  };
+}
+
+function readElement(raw: unknown): DrawElement | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const e = raw as Record<string, unknown>;
+  if (typeof e.id !== 'string' || !SHAPE_KINDS.includes(e.t as string)) return null;
+  if (![e.x, e.y, e.w, e.h].every(finite)) return null;
+  if (e.text !== undefined && typeof e.text !== 'string') return null;
+  if (e.pts !== undefined && !(Array.isArray(e.pts) && e.pts.every((p) => Array.isArray(p) && p.length === 2 && p.every(finite)))) return null;
+  const el: DrawElement = { id: e.id, t: e.t as ShapeKind, x: e.x as number, y: e.y as number, w: e.w as number, h: e.h as number, s: readStyle(e.s) };
+  if (e.pts !== undefined) el.pts = e.pts as [number, number][];
+  if (e.text !== undefined) el.text = e.text as string;
+  return el;
+}
+
+/**
+ * The one reader of a scene, which is page text (GHSA-qmpf-jh26-7cfm): every
+ * value that reaches the SVG string is checked here — a known kind, finite
+ * numbers, palette keys — and an element that fails is dropped.
+ */
 export function parseScene(raw: string): DrawScene {
   try {
-    const parsed = JSON.parse(raw) as Partial<DrawScene>;
+    const parsed = JSON.parse(raw) as Partial<Record<keyof DrawScene, unknown>>;
     if (!parsed || !Array.isArray(parsed.els)) return emptyScene();
     return {
       v: 1,
-      w: Number(parsed.w) || 720,
-      h: Number(parsed.h) || 420,
-      els: parsed.els.filter((e): e is DrawElement => !!e && typeof e.id === 'string'),
+      w: positive(parsed.w, 720),
+      h: positive(parsed.h, 420),
+      els: parsed.els.map(readElement).filter((e): e is DrawElement => e !== null),
     };
   } catch {
     return emptyScene();

@@ -512,7 +512,9 @@ function decodeEntities(text: string): string {
  * silently degrade every panel, layout and embed into a bare <div>.
  */
 export const SANITIZE_CONFIG: { ADD_TAGS: string[]; ADD_ATTR: string[] } = {
-  ADD_TAGS: ['details', 'summary', 'time', 'mark', 'u', 'object'],
+  // No `object`: a file card builds its own after sanitizing, and one written
+  // into the markdown would frame any URL (GHSA-gvrv-7g78-f9p6).
+  ADD_TAGS: ['details', 'summary', 'time', 'mark', 'u'],
   ADD_ATTR: [
     'data-kn-mermaid',
     'data-kn-drawing',

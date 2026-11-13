@@ -138,10 +138,16 @@ jobs:
           docker run -d --name e2e-proxy --network host \
             -v "$RUNNER_TEMP/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine
           # exec keeps $! the worker's own pid, so a worker that dies at start
-          # (#983: a provider missing from WorkerModule) fails here, not 2 min later.
+          # (#983: a provider missing from WorkerModule) fails within one poll,
+          # in both waits: the schema can already exist (the Hindsight step
+          # creates it), so the first wait may end before the worker has died.
           (cd apps/api && exec nohup node dist/worker.main.js > "$RUNNER_TEMP/worker.log" 2>&1) & WORKER=$!
+          worker_alive() {
+            kill -0 "$WORKER" 2>/dev/null && return
+            echo "::error::the worker exited at start"; tail -50 "$RUNNER_TEMP/worker.log"; exit 1
+          }
           for i in $(seq 1 60); do
-            kill -0 "$WORKER" 2>/dev/null || { echo "::error::the worker exited at start"; tail -50 "$RUNNER_TEMP/worker.log"; exit 1; }
+            worker_alive
             curl -sf -u root:playwithdata localhost:2480/api/v1/query/knowledge \
               -d '{"language":"sql","command":"select name from schema:types where name = \"Document\""}' \
               | grep -q '"Document"' && break
@@ -150,12 +156,12 @@ jobs:
           (cd apps/api && nohup node dist/main.js > "$RUNNER_TEMP/api.log" 2>&1 &)
           (cd apps/web && NODE_ENV=production PORT=5174 nohup node server > "$RUNNER_TEMP/web.log" 2>&1 &)
           for i in $(seq 1 90); do
+            worker_alive
             curl -sf localhost:5173/api/v1/collab/capabilities | grep -q '"enabled":true' \
-              && curl -sf -o /dev/null localhost:5173/ && kill -0 "$WORKER" 2>/dev/null && exit 0
+              && curl -sf -o /dev/null localhost:5173/ && worker_alive && exit 0
             sleep 2
           done
           echo "stack did not come up"
-          kill -0 "$WORKER" 2>/dev/null || echo "::error::the worker is not running"
           docker logs e2e-proxy 2>&1 | tail -20
           tail -50 "$RUNNER_TEMP/worker.log" "$RUNNER_TEMP/api.log" "$RUNNER_TEMP/web.log"; exit 1
 

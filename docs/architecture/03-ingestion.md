@@ -173,6 +173,80 @@ mirror (non-fatal). Because the interval is a pure function of PG order, jobs
 finishing out of order converge. Once a page's new head is live, its open
 conflicts quoting an older revision are superseded.
 
+## Model-written chunk context: measured, not adopted (#1004)
+
+A chunk is embedded with the context its position gives it for free: the page
+title and the heading breadcrumb (recipe `r2`, above). Contextual retrieval adds
+context a model writes: before indexing, a model reads the page and writes one
+or two sentences situating each chunk, and that text is prepended for the
+embedding and indexed for BM25. It would have been recipe `r3`. It was measured
+on 2026-11-13 and **not built**: over 60 written questions it put one more
+answer in first place and two more in the top 10, which the question set cannot
+tell from noise. There is no context step in the pipeline, no `context` field on
+a chunk, and `EMBED_RECIPE` is still `r2`.
+
+**What was measured.** The corpus captured from production for the reranker
+measurement ([04](04-search-graph.md#cross-encoder-reranking-measured-not-adopted-1003):
+v0.52.1, the RTech OMS workspace, 406 listed pages, 4,915 chunks) and its three
+query sets: every page's own title, 60 questions written against real passages
+(half on Russian-prose pages, half on pages dominated by tables, identifiers and
+contracts), and the 10 feedback cases. Both legs were rebuilt offline: every
+chunk re-embedded with bge-m3 as `chunkEmbedText` assembles it, the BM25 leg in
+a scratch OpenSearch index with the production mapping and `bm25Clause`, then
+`floorVectorHits` → `fuseHits` → `rerankScorer` with production's knobs and
+trust weights. Rebuilt under `r2`, the vector leg returned production's own
+first hit for every query and the BM25 leg for 85% of them (its term statistics
+are those of a one-workspace index), and the ranking metrics matched
+production's on three of the five splits. The `r2` rows below are that local
+rebuild, so each comparison is like for like.
+
+For `r3`, `deepseek-flash` (thinking off, 160 output tokens at most) wrote a
+context for each of 3,487 chunks, one call per chunk with the page as a shared
+prefix and the page and passage marked untrusted. The OpenAPI spec page (1,428
+chunks) was left as it is, since spec projections were out of scope. The context
+sat between the heading breadcrumb and the body in the embedded text, and in its
+own `ru`/`en`-analysed field joined to the `cross_fields` match at boost 1.
+
+| queries | n | recipe | recall@1 | recall@10 | MRR@10 | moved up / down |
+| --- | --- | --- | --- | --- | --- | --- |
+| questions, Latin-heavy pages | 30 | `r2` (today) | 60.0% | 86.7% | 0.695 | |
+| | | `r3`, embeddings only | 63.3% | 93.3% | 0.712 | 6 / 4 |
+| | | `r3`, embeddings and BM25 | 70.0% | 93.3% | 0.775 | 7 / 2 |
+| questions, Russian pages | 30 | `r2` (today) | 93.3% | 100.0% | 0.954 | |
+| | | `r3`, embeddings only | 90.0% | 100.0% | 0.944 | 1 / 1 |
+| | | `r3`, embeddings and BM25 | 86.7% | 100.0% | 0.925 | 1 / 2 |
+| feedback votes | 10 | `r2` (today) | 80.0% | 80.0% | 0.800 | |
+| | | `r3`, either | 80.0% | 80.0% | 0.800 | 0 / 0 |
+| titles, Russian | 171 | `r2` (today) | 91.8% | 99.4% | 0.948 | |
+| | | `r3`, embeddings and BM25 | 94.7% | 99.4% | 0.966 | 7 / 3 |
+| titles, Latin | 235 | `r2` (today) | 99.1% | 100.0% | 0.996 | |
+| | | `r3`, embeddings and BM25 | 98.7% | 100.0% | 0.994 | 1 / 2 |
+
+**How to read it.** The gain is on the split that had room for one: on the
+Latin-heavy pages the answering page was missing from the top 10 for four
+questions and is missing for two, and three more answers reach first place. The
+Russian questions lose two first places, and the feedback cases do not move.
+Summed over the 60 questions, first place goes from 46 to 47. Thirty questions a
+split cannot resolve a difference of two or three answers, so this is "no
+measurable gain", not "a small gain".
+
+**Cost.** The batch used 13.7M cached and 2.6M uncached input tokens and 0.17M
+output tokens: about $1.07 at DeepSeek's peak list price on the day, which is
+also what turning it on would cost once for this corpus. The price was not the
+obstacle. The build is: a context writer with a cache, a retry stamp, a chunk
+field in both stores, a third BM25 field, and a re-embed of every head.
+
+**How far to trust this.** One context model, one prompt, one corpus. The
+`heading^2` boost was not retuned with a third field in the blend. The page a
+call saw was rebuilt from its chunks, not read from the source. The questions
+were written by Claude for the reranker measurement, not by the people who use
+the workspace. The generator and replay scripts were scratch and are not in the
+repo; the method above is enough to rebuild them.
+
+**What would reopen it:** a question set on table- and identifier-heavy pages
+large enough to tell three answers from noise, or feedback votes that show
+answering pages missing from the results.
+
 ## Why embeddings are a DI token
 
 `EMBEDDING_PROVIDER` is a real `Symbol` token declared in

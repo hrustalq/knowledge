@@ -482,9 +482,9 @@ scratch and are not in the repo; the method above is enough to rebuild them.
 
 **What would reopen it:** a corpus of long prose where the answering page is
 retrieved but ranked low (recall@10 well above recall@1 on real questions), or
-enough feedback votes to measure on. Until then the cheaper lever for the
-Latin-heavy misses is retrieval, not reordering:
-[#1004](https://github.com/hrustalq/knowledge/issues/1004).
+enough feedback votes to measure on. The retrieval-side lever for the
+Latin-heavy misses, model-written chunk context, was measured the same day and
+not adopted either: [03](03-ingestion.md#model-written-chunk-context-measured-not-adopted-1004).
 
 ## The graph is bipartite
 

@@ -44,6 +44,7 @@ const FIELD = {
   arbiter: 'decisionArbiterThreshold',
   citation: 'decisionCitationThreshold',
   harvest: 'decisionHarvestThreshold',
+  memory: 'decisionMemoryThreshold',
 } as const satisfies Record<DecisionSite, string>
 
 // Jev is reached only through gen-api; the API refuses a model of any other provider.
@@ -58,7 +59,7 @@ async function route(value: string) {
   }
 }
 
-const form = reactive<Record<DecisionSite, string>>({ arbiter: '', citation: '', harvest: '' })
+const form = reactive<Record<DecisionSite, string>>({ arbiter: '', citation: '', harvest: '', memory: '' })
 watch(
   () => props.decision,
   (d) => {
@@ -130,7 +131,7 @@ async function saveThresholds() {
       <legend class="text-muted-foreground mb-2 text-xs font-medium">
         {{ t('ai.decision.thresholds', { model: decision.tunedOn }) }}
       </legend>
-      <div class="grid gap-3 sm:grid-cols-3">
+      <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <label v-for="site in DECISION_SITES" :key="site" class="block space-y-1.5">
           <span class="text-xs">{{ t(`ai.decision.site.${site}`) }}</span>
           <Input

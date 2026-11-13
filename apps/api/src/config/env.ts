@@ -772,6 +772,38 @@ export const envSchema = z.object({
    */
   WEB_SOURCES_ENABLED: boolish(false),
   /**
+   * Memory banks (#986): the Hindsight-compatible routes under `/v1/default`.
+   * A ceiling over the workspace `memory` toggle: off, every memory route
+   * answers 404 and no memory table is written.
+   */
+  MEMORY_ENABLED: boolish(false),
+  /** Items one retain request may carry. */
+  MEMORY_RETAIN_MAX_ITEMS: z.coerce.number().int().min(1).max(1000).default(100),
+  /** Characters one retained item may hold. */
+  MEMORY_RETAIN_MAX_CHARS: z.coerce.number().int().min(1).default(50_000),
+  /** Retain requests one API key (or person) may send a minute. */
+  MEMORY_RETAIN_RATE_PER_MIN: z.coerce.number().int().min(1).default(120),
+  /** Recall requests one API key (or person) may send a minute. */
+  MEMORY_RECALL_RATE_PER_MIN: z.coerce.number().int().min(1).default(300),
+  /** Reflect requests one API key (or person) may send a minute. Each is a model call. */
+  MEMORY_REFLECT_RATE_PER_MIN: z.coerce.number().int().min(1).default(30),
+  /** How long an async retain may stay claimed before the sweeper takes it for a dead worker's. */
+  MEMORY_OPERATION_TIMEOUT_MS: z.coerce.number().int().min(1000).default(600_000),
+  /** Days a finished operation's row is kept before it is purged. */
+  MEMORY_OPERATION_RETENTION_DAYS: z.coerce.number().int().min(1).default(7),
+  /**
+   * Consolidation (#993): model calls one bank may make a UTC day to fold its
+   * facts into observations. Low on purpose: each is a paid call, and the
+   * backlog waits for the next day rather than the budget.
+   */
+  MEMORY_CONSOLIDATION_DAILY_CALLS: z.coerce.number().int().min(0).default(20),
+  /**
+   * The graph wire (#1008): entities one `read_graph` or `search_nodes` call
+   * returns at most. The MCP reference memory server has no ceiling; here the
+   * result says when this one cut it.
+   */
+  MEMORY_GRAPH_READ_MAX_ENTITIES: z.coerce.number().int().min(1).default(500),
+  /**
    * Let a `web` source fetch a private or loopback address. Separate from
    * CONNECTOR_ALLOW_PRIVATE_URLS because any editor can link a source, where
    * only an admin sets up a connector.

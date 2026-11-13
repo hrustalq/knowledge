@@ -8193,6 +8193,178 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/memory/banks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The memory banks of a workspace the caller may read, with their size and how to connect a client */
+        get: operations["MemoryWebController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/memory/banks/{id}/memories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A memory bank's facts and observations, newest first */
+        get: operations["MemoryWebController_units"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/memory/banks/{id}/entities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A memory bank's graph entities (the `/mcp/<bank>/graph` wire), in creation order, with their observations and relations */
+        get: operations["MemoryWebController_entities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/memory/banks/{id}/entities/{entityId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete one graph entity, with its observations and every relation touching it */
+        delete: operations["MemoryWebController_deleteEntity"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/memory/banks/{id}/relations/{relationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete one graph relation; both entities stay */
+        delete: operations["MemoryWebController_deleteRelation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/memory/banks/{id}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A memory bank's memory-tool files, by path, without their text */
+        get: operations["MemoryWebController_files"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/memory/banks/{id}/files/{fileId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One memory-tool file's text, as stored (masked on write) */
+        get: operations["MemoryWebController_file"];
+        put?: never;
+        post?: never;
+        /** Delete one memory-tool file and its recall chunks */
+        delete: operations["MemoryWebController_deleteFile"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/memory/banks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a memory bank and everything it holds; `confirm` must be its bank id */
+        delete: operations["MemoryWebController_deleteBank"];
+        options?: never;
+        head?: never;
+        /** Bind a memory bank to a project (it then follows that project's restriction), or to the whole workspace. Needs manage on both projects */
+        patch: operations["MemoryWebController_bind"];
+        trace?: never;
+    };
+    "/v1/memory/banks/{id}/memories/{memoryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete one memory. A fact leaves the observations it supported; one left with no evidence goes too */
+        delete: operations["MemoryWebController_deleteUnit"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/memory/banks/{id}/memories/{memoryId}/promote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Propose a memory as a page: a capture, and so a merge request someone reviews. The memory stays in the bank */
+        post: operations["MemoryWebController_promote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -8477,7 +8649,7 @@ export interface components {
         };
         UpdateWorkspaceFeaturesDto: {
             /** @description The sections to switch off; every one not listed is on. An empty list turns everything back on. */
-            disabled: ("workflows" | "knowledge-health" | "qa" | "analytics" | "captures" | "memos" | "conflicts" | "assistant" | "git" | "sources")[];
+            disabled: ("workflows" | "knowledge-health" | "qa" | "analytics" | "captures" | "memos" | "conflicts" | "assistant" | "git" | "sources" | "memory")[];
         };
         UpdateWorkspacePurposeDto: {
             /** @description What the workspace is used for. Empty with an untouched `disabled` is the Skip. */
@@ -8485,7 +8657,7 @@ export interface components {
             /** @description The admin's own words. Only admins read it back. */
             description?: string | null;
             /** @description The sections to leave switched off, as the admin confirmed them; replaces the stored list in the same write. */
-            disabled: ("workflows" | "knowledge-health" | "qa" | "analytics" | "captures" | "memos" | "conflicts" | "assistant" | "git" | "sources")[];
+            disabled: ("workflows" | "knowledge-health" | "qa" | "analytics" | "captures" | "memos" | "conflicts" | "assistant" | "git" | "sources" | "memory")[];
         };
         UpdateEditingPolicyDto: {
             /**
@@ -9388,6 +9560,8 @@ export interface components {
             decisionCitationThreshold?: number | null;
             /** @description Decision probability at or above which the harvest lets an item through (#530). Null inherits the code default (0.5). */
             decisionHarvestThreshold?: number | null;
+            /** @description Decision probability at or above which memory consolidation sends a fact–observation pair to its model (#993). Null inherits the code default (0.2). */
+            decisionMemoryThreshold?: number | null;
         };
         TestAiConnectionDto: {
             /** Format: uuid */
@@ -11301,6 +11475,27 @@ export interface components {
             /** @description As on the view: must match it, or the heartbeat changes nothing */
             noTrack?: boolean;
         };
+        BindMemoryBankDto: {
+            /**
+             * Format: uuid
+             * @description The project whose restriction the bank follows, or null for the whole workspace
+             */
+            projectId: string | null;
+        };
+        PromoteMemoryDto: {
+            /**
+             * Format: uuid
+             * @description The project the page is proposed in
+             */
+            projectId: string;
+            /** @description The page title */
+            title: string;
+            /**
+             * @description Which kind of note the page is written as
+             * @enum {string}
+             */
+            kind: "gotcha" | "convention" | "howto";
+        };
         ApiErrorResponse: {
             /**
              * @description HTTP status (0 is reserved for client-synthesized errors)
@@ -11966,7 +12161,7 @@ export interface components {
             createdAt: string;
         };
         /** @enum {string} */
-        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "memo-triage" | "source-recipe" | "source-judge" | "blueprint-derive" | "blueprint-generate" | "blueprint-interview" | "purpose-interview";
+        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "memory-extract" | "memory-recall" | "memory-reflect" | "memory-consolidate" | "memory-consolidate-screen" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "memo-triage" | "source-recipe" | "source-judge" | "blueprint-derive" | "blueprint-generate" | "blueprint-interview" | "purpose-interview";
         AiUsageResponse: {
             from: string;
             to: string;
@@ -13655,6 +13850,10 @@ export interface components {
                     requested: number | null;
                     effective: number;
                 };
+                memory: {
+                    requested: number | null;
+                    effective: number;
+                };
             };
             tunedOn: string;
         };
@@ -15267,6 +15466,88 @@ export interface components {
         MemoTypesResponse: {
             types: components["schemas"]["MemoType"][];
         };
+        MemoryBankListResponse: {
+            banks: components["schemas"]["MemoryBankSummary"][];
+            apiUrl: string;
+            consolidation: boolean;
+        };
+        MemoryBankSummary: {
+            id: string;
+            bankId: string;
+            name: string;
+            projectId: string | null;
+            facts: number;
+            observations: number;
+            entities: number;
+            files: number;
+            lastWriteAt: string | null;
+            createdAt: string;
+        };
+        MemoryEntityListResponse: {
+            bank: components["schemas"]["MemoryBankSummary"];
+            entities: components["schemas"]["MemoryEntitySummary"][];
+            relations: components["schemas"]["MemoryRelationSummary"][];
+            total: number;
+        };
+        MemoryEntitySummary: {
+            id: string;
+            name: string;
+            entityType: string;
+            observations: components["schemas"]["MemoryGraphObservation"][];
+            createdAt: string;
+        };
+        MemoryFileContent: {
+            id: string;
+            path: string;
+            size: number;
+            updatedAt: string;
+            content: string;
+        };
+        MemoryFileListResponse: {
+            bank: components["schemas"]["MemoryBankSummary"];
+            files: components["schemas"]["MemoryFileSummary"][];
+            total: number;
+        };
+        MemoryFileSummary: {
+            id: string;
+            path: string;
+            size: number;
+            updatedAt: string;
+        };
+        MemoryGraphObservation: {
+            id: string;
+            text: string;
+        };
+        MemoryRelationSummary: {
+            id: string;
+            fromId: string;
+            from: string;
+            toId: string;
+            to: string;
+            relationType: string;
+        };
+        MemoryUnitListResponse: {
+            bank: components["schemas"]["MemoryBankSummary"];
+            items: components["schemas"]["MemoryUnitSummary"][];
+            total: number;
+        };
+        MemoryUnitSummary: {
+            id: string;
+            type: components["schemas"]["MemoryUnitType"];
+            text: string;
+            context: string | null;
+            tags: string[];
+            entities: string[];
+            proofCount: number;
+            occurredAt: string | null;
+            createdAt: string;
+            file: {
+                id: string;
+                path: string;
+            } | null;
+        };
+        /** @enum {string} */
+        MemoryUnitType: "world" | "experience" | "observation";
         MergeConflictHunk: {
             base: components["schemas"]["LineRange"];
             target: components["schemas"]["LineRange"];
@@ -17364,7 +17645,7 @@ export interface components {
             counts: components["schemas"]["WorkspaceDeletionCounts"];
         };
         /** @enum {string} */
-        WorkspaceFeature: "workflows" | "knowledge-health" | "qa" | "analytics" | "captures" | "memos" | "conflicts" | "assistant" | "git" | "sources";
+        WorkspaceFeature: "workflows" | "knowledge-health" | "qa" | "analytics" | "captures" | "memos" | "conflicts" | "assistant" | "git" | "sources" | "memory";
         WorkspaceFeaturesResponse: {
             workspaceId: string;
             disabled: components["schemas"]["WorkspaceFeature"][];
@@ -44856,6 +45137,536 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MemoryWebController_list: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryBankListResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MemoryWebController_units: {
+        parameters: {
+            query?: {
+                /** @description Words the text contains: a memory's, an entity's name, type or observations, a file's path */
+                q?: string;
+                /** @description At most 200; 50 when left out */
+                limit?: number;
+                offset?: number;
+                type?: "world" | "experience" | "observation";
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryUnitListResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MemoryWebController_entities: {
+        parameters: {
+            query?: {
+                /** @description Words the text contains: a memory's, an entity's name, type or observations, a file's path */
+                q?: string;
+                /** @description At most 200; 50 when left out */
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryEntityListResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MemoryWebController_deleteEntity: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                entityId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MemoryWebController_deleteRelation: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                relationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MemoryWebController_files: {
+        parameters: {
+            query?: {
+                /** @description Words the text contains: a memory's, an entity's name, type or observations, a file's path */
+                q?: string;
+                /** @description At most 200; 50 when left out */
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryFileListResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MemoryWebController_file: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                fileId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryFileContent"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MemoryWebController_deleteFile: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                fileId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MemoryWebController_deleteBank: {
+        parameters: {
+            query: {
+                /** @description The bank id, typed: a delete without it is refused */
+                confirm: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MemoryWebController_bind: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BindMemoryBankDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryBankSummary"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MemoryWebController_deleteUnit: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                memoryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MemoryWebController_promote: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                memoryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PromoteMemoryDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaptureResult"];
+                };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {

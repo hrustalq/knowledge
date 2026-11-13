@@ -43723,12 +43723,910 @@
           "analytics"
         ]
       }
+    },
+    "/v1/memory/banks": {
+      "get": {
+        "operationId": "MemoryWebController_list",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryBankListResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The memory banks of a workspace the caller may read, with their size and how to connect a client",
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/v1/memory/banks/{id}/memories": {
+      "get": {
+        "operationId": "MemoryWebController_units",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Words the text contains: a memory's, an entity's name, type or observations, a file's path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "At most 200; 50 when left out",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "world",
+                "experience",
+                "observation"
+              ]
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryUnitListResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A memory bank's facts and observations, newest first",
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/v1/memory/banks/{id}/entities": {
+      "get": {
+        "operationId": "MemoryWebController_entities",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Words the text contains: a memory's, an entity's name, type or observations, a file's path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "At most 200; 50 when left out",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryEntityListResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A memory bank's graph entities (the `/mcp/<bank>/graph` wire), in creation order, with their observations and relations",
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/v1/memory/banks/{id}/entities/{entityId}": {
+      "delete": {
+        "operationId": "MemoryWebController_deleteEntity",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete one graph entity, with its observations and every relation touching it",
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/v1/memory/banks/{id}/relations/{relationId}": {
+      "delete": {
+        "operationId": "MemoryWebController_deleteRelation",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "relationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete one graph relation; both entities stay",
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/v1/memory/banks/{id}/files": {
+      "get": {
+        "operationId": "MemoryWebController_files",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Words the text contains: a memory's, an entity's name, type or observations, a file's path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "At most 200; 50 when left out",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryFileListResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A memory bank's memory-tool files, by path, without their text",
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/v1/memory/banks/{id}/files/{fileId}": {
+      "get": {
+        "operationId": "MemoryWebController_file",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fileId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryFileContent"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One memory-tool file's text, as stored (masked on write)",
+        "tags": [
+          "memory"
+        ]
+      },
+      "delete": {
+        "operationId": "MemoryWebController_deleteFile",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fileId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete one memory-tool file and its recall chunks",
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/v1/memory/banks/{id}": {
+      "patch": {
+        "operationId": "MemoryWebController_bind",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BindMemoryBankDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryBankSummary"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Bind a memory bank to a project (it then follows that project's restriction), or to the whole workspace. Needs manage on both projects",
+        "tags": [
+          "memory"
+        ]
+      },
+      "delete": {
+        "operationId": "MemoryWebController_deleteBank",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "confirm",
+            "required": true,
+            "in": "query",
+            "description": "The bank id, typed: a delete without it is refused",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete a memory bank and everything it holds; `confirm` must be its bank id",
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/v1/memory/banks/{id}/memories/{memoryId}": {
+      "delete": {
+        "operationId": "MemoryWebController_deleteUnit",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "memoryId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete one memory. A fact leaves the observations it supported; one left with no evidence goes too",
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/v1/memory/banks/{id}/memories/{memoryId}/promote": {
+      "post": {
+        "operationId": "MemoryWebController_promote",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "memoryId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromoteMemoryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaptureResult"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Propose a memory as a page: a capture, and so a merge request someone reviews. The memory stays in the bank",
+        "tags": [
+          "memory"
+        ]
+      }
     }
   },
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.51.0",
+    "version": "0.52.1",
     "contact": {}
   },
   "tags": [],
@@ -44464,7 +45362,8 @@
                 "conflicts",
                 "assistant",
                 "git",
-                "sources"
+                "sources",
+                "memory"
               ]
             }
           }
@@ -44512,7 +45411,8 @@
                 "conflicts",
                 "assistant",
                 "git",
-                "sources"
+                "sources",
+                "memory"
               ]
             }
           }
@@ -47036,6 +47936,13 @@
             "minimum": 0,
             "maximum": 1,
             "description": "Decision probability at or above which the harvest lets an item through (#530). Null inherits the code default (0.5)."
+          },
+          "decisionMemoryThreshold": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Decision probability at or above which memory consolidation sends a fact–observation pair to its model (#993). Null inherits the code default (0.2)."
           }
         },
         "required": [
@@ -51879,6 +52786,48 @@
           "activeMs"
         ]
       },
+      "BindMemoryBankDto": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "The project whose restriction the bank follows, or null for the whole workspace"
+          }
+        },
+        "required": [
+          "projectId"
+        ]
+      },
+      "PromoteMemoryDto": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The project the page is proposed in"
+          },
+          "title": {
+            "type": "string",
+            "description": "The page title"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "gotcha",
+              "convention",
+              "howto"
+            ],
+            "description": "Which kind of note the page is written as"
+          }
+        },
+        "required": [
+          "projectId",
+          "title",
+          "kind"
+        ]
+      },
       "ApiErrorResponse": {
         "type": "object",
         "properties": {
@@ -54694,6 +55643,11 @@
           "harvest",
           "citation_check",
           "coach",
+          "memory-extract",
+          "memory-recall",
+          "memory-reflect",
+          "memory-consolidate",
+          "memory-consolidate-screen",
           "extraction",
           "public_ask",
           "test-suite",
@@ -61999,12 +62953,29 @@
                   "requested",
                   "effective"
                 ]
+              },
+              "memory": {
+                "type": "object",
+                "properties": {
+                  "requested": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "effective": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "requested",
+                  "effective"
+                ]
               }
             },
             "required": [
               "arbiter",
               "citation",
-              "harvest"
+              "harvest",
+              "memory"
             ]
           },
           "tunedOn": {
@@ -69147,6 +70118,356 @@
         },
         "required": [
           "types"
+        ]
+      },
+      "MemoryBankListResponse": {
+        "type": "object",
+        "properties": {
+          "banks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MemoryBankSummary"
+            }
+          },
+          "apiUrl": {
+            "type": "string"
+          },
+          "consolidation": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "banks",
+          "apiUrl",
+          "consolidation"
+        ]
+      },
+      "MemoryBankSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "bankId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string",
+            "nullable": true
+          },
+          "facts": {
+            "type": "number"
+          },
+          "observations": {
+            "type": "number"
+          },
+          "entities": {
+            "type": "number"
+          },
+          "files": {
+            "type": "number"
+          },
+          "lastWriteAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "bankId",
+          "name",
+          "projectId",
+          "facts",
+          "observations",
+          "entities",
+          "files",
+          "lastWriteAt",
+          "createdAt"
+        ]
+      },
+      "MemoryEntityListResponse": {
+        "type": "object",
+        "properties": {
+          "bank": {
+            "$ref": "#/components/schemas/MemoryBankSummary"
+          },
+          "entities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MemoryEntitySummary"
+            }
+          },
+          "relations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MemoryRelationSummary"
+            }
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "bank",
+          "entities",
+          "relations",
+          "total"
+        ]
+      },
+      "MemoryEntitySummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "entityType": {
+            "type": "string"
+          },
+          "observations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MemoryGraphObservation"
+            }
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "entityType",
+          "observations",
+          "createdAt"
+        ]
+      },
+      "MemoryFileContent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "size": {
+            "type": "number"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "content",
+          "id",
+          "path",
+          "size",
+          "updatedAt"
+        ]
+      },
+      "MemoryFileListResponse": {
+        "type": "object",
+        "properties": {
+          "bank": {
+            "$ref": "#/components/schemas/MemoryBankSummary"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MemoryFileSummary"
+            }
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "bank",
+          "files",
+          "total"
+        ]
+      },
+      "MemoryFileSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "size": {
+            "type": "number"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "path",
+          "size",
+          "updatedAt"
+        ]
+      },
+      "MemoryGraphObservation": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text"
+        ]
+      },
+      "MemoryRelationSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "fromId": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "toId": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "relationType": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "fromId",
+          "from",
+          "toId",
+          "to",
+          "relationType"
+        ]
+      },
+      "MemoryUnitListResponse": {
+        "type": "object",
+        "properties": {
+          "bank": {
+            "$ref": "#/components/schemas/MemoryBankSummary"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MemoryUnitSummary"
+            }
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "bank",
+          "items",
+          "total"
+        ]
+      },
+      "MemoryUnitSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/MemoryUnitType"
+          },
+          "text": {
+            "type": "string"
+          },
+          "context": {
+            "type": "string",
+            "nullable": true
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "entities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "proofCount": {
+            "type": "number"
+          },
+          "occurredAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "file": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "path"
+                ]
+              }
+            ],
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "text",
+          "context",
+          "tags",
+          "entities",
+          "proofCount",
+          "occurredAt",
+          "createdAt",
+          "file"
+        ]
+      },
+      "MemoryUnitType": {
+        "type": "string",
+        "enum": [
+          "world",
+          "experience",
+          "observation"
         ]
       },
       "MergeConflictHunk": {
@@ -78148,7 +79469,8 @@
           "conflicts",
           "assistant",
           "git",
-          "sources"
+          "sources",
+          "memory"
         ]
       },
       "WorkspaceFeaturesResponse": {

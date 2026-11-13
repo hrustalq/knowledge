@@ -53,6 +53,7 @@ import { PublishingModule } from './publishing/publishing.module.js';
 import { PublicModule } from './public/public.module.js';
 import { ExportModule } from './export/export.module.js';
 import { ChatModule } from './chat/chat.module.js';
+import { MemoryModule } from './memory/memory.module.js';
 
 @Module({
   imports: [
@@ -141,6 +142,9 @@ import { ChatModule } from './chat/chat.module.js';
     // Usage analytics (#79): the page-view beacon. API-only; recording is
     // AnalyticsCoreModule's, which search, MCP and the worker load.
     AnalyticsModule,
+    // Memory banks (#986): the Hindsight-compatible routes under /v1/default.
+    // API-only; every route 404s unless MEMORY_ENABLED.
+    MemoryModule,
   ],
   controllers: [AppController],
   providers: [AppService],

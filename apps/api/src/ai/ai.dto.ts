@@ -386,6 +386,20 @@ export class UpdateAiSettingsDto {
   @Min(0, { message: vmsg('min') })
   @Max(1, { message: vmsg('max') })
   decisionHarvestThreshold?: number | null;
+
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    minimum: 0,
+    maximum: 1,
+    description: 'Decision probability at or above which memory consolidation sends a fact–observation pair to its model (#993). Null inherits the code default (0.2).',
+  })
+  @IsOptional()
+  @NULLABLE<UpdateAiSettingsDto>('decisionMemoryThreshold')
+  @IsNumber()
+  @Min(0, { message: vmsg('min') })
+  @Max(1, { message: vmsg('max') })
+  decisionMemoryThreshold?: number | null;
 }
 
 export class TestAiConnectionDto {

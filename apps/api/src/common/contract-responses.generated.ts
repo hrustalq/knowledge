@@ -251,6 +251,12 @@ import type {
   MemoResponse,
   MemoSpeakersResponse,
   MemoTypesResponse,
+  MemoryBankListResponse,
+  MemoryBankSummary,
+  MemoryEntityListResponse,
+  MemoryFileContent,
+  MemoryFileListResponse,
+  MemoryUnitListResponse,
   MergeMergeRequestResponse,
   MergeRequestApiChangesResponse,
   MergeRequestConflictsResponse,
@@ -625,6 +631,12 @@ export interface ContractResponses {
   MemoResponse: MemoResponse;
   MemoSpeakersResponse: MemoSpeakersResponse;
   MemoTypesResponse: MemoTypesResponse;
+  MemoryBankListResponse: MemoryBankListResponse;
+  MemoryBankSummary: MemoryBankSummary;
+  MemoryEntityListResponse: MemoryEntityListResponse;
+  MemoryFileContent: MemoryFileContent;
+  MemoryFileListResponse: MemoryFileListResponse;
+  MemoryUnitListResponse: MemoryUnitListResponse;
   MergeMergeRequestResponse: MergeMergeRequestResponse;
   MergeRequestApiChangesResponse: MergeRequestApiChangesResponse;
   MergeRequestConflictsResponse: MergeRequestConflictsResponse;

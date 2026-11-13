@@ -13,6 +13,96 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.53.0] — 2026-11-13
+
+### Added
+
+- **Memory banks.** An agent can keep what it learns between sessions in a memory bank and read it back at once,
+  without a merge request: a memory is a row the agent wrote for itself, readable only through its bank, never a
+  page and never in page search. The API speaks [Hindsight](https://github.com/vectorize-io/hindsight)'s wire
+  (OpenAPI v1.2.1) for banks, `retain` (sync and async, with operations), `recall` and `reflect`, so the official
+  Hindsight clients connect with `https://<host>/api` as their base URL and an API key pinned to one workspace.
+  Every other Hindsight route answers 404. Off by default; see Operations. (#986)
+- An MCP endpoint per memory bank, `https://<host>/api/mcp/{bank_id}/` (or `/api/mcp` with an `X-Bank-Id` header),
+  with the tools `retain`, `sync_retain`, `recall` and `reflect`. A read-only key is offered only the last two.
+  The platform's own endpoint `/api/v1/mcp` and its tools are unchanged. The same tools also answer at
+  `/api/mcp/{bank_id}/hindsight`; any other name there is a 404. (#992, #1007)
+- `https://<host>/api/mcp/{bank_id}/graph` serves the nine tools of the MCP reference memory server
+  (`@modelcontextprotocol/server-memory` 2.1.1) over a bank, with the same names, schemas and answers, so a client
+  set up for that server can point at a bank instead of a local file. Entities and relations are rows of the bank;
+  each observation is stored as a memory, masked like any retain, so `recall` finds it. A read-only key gets only
+  `read_graph`, `search_nodes` and `open_nodes`. `read_graph` and `search_nodes` return at most
+  `MEMORY_GRAPH_READ_MAX_ENTITIES` (500) entities and say when they cut. (#1008)
+- Storage for Anthropic's memory tool (`memory_20250818`): `POST https://<host>/api/v1/default/banks/{bank_id}/memory-tool`
+  takes the raw `tool_use.input` and returns `{content, is_error}`, so an SDK memory handler is one HTTP call. The
+  same six commands (`view`, `create`, `str_replace`, `insert`, `delete`, `rename`) answer as one MCP tool named
+  `memory` at `/api/mcp/{bank_id}/files`. The answers are the SDK's own strings. Files live in the bank, masked on
+  write and held to `MEMORY_RETAIN_MAX_CHARS`. `recall` finds what they say, and their text is never consolidated.
+  Every path must stay under `/memories`. A read-only key can `view` and nothing else. (#1009) If the search index
+  for a file cannot be written (for example, no embedding provider yet), a background sweep writes it later. A
+  renamed file is re-indexed the same way, and a Hindsight clear leaves the files searchable. On a bank's page, a
+  memory that is part of a file opens that file instead of offering delete. (#1018)
+- A `memory` section under **Settings → Features**, and two built-in agents: `memorist`, which splits what an
+  agent retains into facts when a model is routed at extraction (otherwise the text is stored as written), and
+  `reflector`, which answers a reflect. (#987, #988, #991)
+- **Memory observations.** A bank folds the facts it holds into observations in the background: one statement, the
+  facts that support it, a quote from each and a proof count. A later fact refines an observation and the earlier
+  wording is kept; deleting a fact removes it from the evidence, and an observation left with none is deleted.
+  `recall` returns observations with `source_fact_ids`, honours `prefer_observations` and `include.source_facts`,
+  and `GET`/`PATCH …/banks/{bank_id}/config` (`enable_observations`, `reflect_mission`, the disposition traits) and
+  `POST …/consolidate` answer as Hindsight's do. Runs only while a model is routed to the new `consolidator` agent
+  (purpose extraction), within a daily cap per bank; see Operations. (#993)
+- **Settings → Memory banks.** Admins switch the `memory` section on or off there, everyone sees the banks they may
+  read with their size and last write, and how to point a Hindsight or MCP client at them. A bank's page lists its
+  facts and observations; an editor can delete one, delete the bank after typing its id, bind it to a project
+  (which then decides who can read it, and needs the right to manage that project), and **promote** a memory to a
+  page: it becomes a capture, so a merge request someone reviews, whose origin names the bank. The memory stays in
+  the bank. The section is not shown while the server has memory off. (#994)
+- A memory bank's page has two more tabs: **Entities**, the knowledge graph an MCP client wrote through
+  `/mcp/{bank_id}/graph`, with each entity's observations and relations; and **Files**, what Claude's memory tool
+  wrote, by path, each opening to its text. Both are read-only, with delete for editors, and show everything as
+  plain text. **Settings → Memory banks** now lists every way into a bank: the Hindsight base URL, the three MCP
+  endpoints, the memory tool endpoint with a handler to paste in TypeScript or Python, and the `mcp-remote` config
+  for clients that start only local servers. (#1010)
+
+### Fixed
+
+- An agent run or a workflow step whose worker died could not be picked up again, and **Retry** on a failed
+  workflow step did nothing: the retry was refused when it was queued, and the run stayed "queued" with nothing
+  working on it. Both are queued again. (#997)
+- A release, even a hotfix, made the cluster download most of each image again (about 330 MB for the api image),
+  so a fix took 45 minutes to roll out. Image builds now reuse the previous release's layers, and ffmpeg and git
+  are installed below the application code, so a code-only release ships only its own changes. (#995)
+
+### Operations
+
+- `MEMORY_ENABLED` (default `false`) switches memory banks on for the server. Off, every memory route answers 404
+  and no memory table is written; a workspace can also switch its `memory` section off. Seven more values tune it,
+  each with a default: `MEMORY_RETAIN_MAX_ITEMS`, `MEMORY_RETAIN_MAX_CHARS`, the per-key rates
+  `MEMORY_RETAIN_RATE_PER_MIN`, `MEMORY_RECALL_RATE_PER_MIN` and `MEMORY_REFLECT_RATE_PER_MIN` (a request over
+  the rate is a 429), `MEMORY_OPERATION_TIMEOUT_MS` and `MEMORY_OPERATION_RETENTION_DAYS`.
+- Three migrations add `memory_banks`, `memory_units`, `memory_unit_entities` and `memory_operations`. They only
+  create tables, so the previous release runs against the migrated database and a rollback needs no step.
+- The worker creates the `MemoryUnit` vector type and its index in ArcadeDB when it starts. Until a worker of
+  this release has started once, a retain answers 503 and says the index is missing.
+- `MEMORY_CONSOLIDATION_DAILY_CALLS` (default `20`) caps the model calls one memory bank may spend a UTC day on
+  observations; `0` turns them off for the server. Consolidation calls nothing until a model is routed to the
+  `consolidator` (the extraction route, or a pin on the agent), and is billed as `memory-consolidate` in AI usage
+  to no person. When a decision model is routed, it screens each fact–observation pair first
+  (`memory-consolidate-screen`, a new *Memory consolidation* threshold under AI settings → Decisions).
+- A fourth memory migration adds `memory_observation_evidence`, `memory_observation_history` and nullable columns
+  on `memory_banks`, `memory_units` and `ai_settings`. Additive: the previous release runs against it.
+- Three more memory migrations add `memory_entities`, `memory_relations` (the graph wire), `memory_files` (the
+  memory tool wire) and a nullable `memory_files.indexed_at`. They only create tables and a column, so the previous
+  release runs against the migrated database and a rollback needs no step.
+- Retained text is masked before it is stored, but extraction and reflect send it to the model routed for the
+  workspace, as the assistant does with pages. Neither runs with no model routed.
+- Image builds keep their layer cache in GHCR as `knowledge-api:buildcache` and `knowledge-web:buildcache`. Those
+  tags are cache manifests, not runnable images: never point a deployment at them. The first release built this
+  way is still a full download (the cache starts empty); the release after it is the first small one.
+- `knowledge-api` now carries git as well (about 31 MB compressed), so it and `knowledge-api-git` share every layer
+  and a node that has pulled one pulls only metadata for the other. Rolling back to an older tag works as before.
+
 ## [0.52.1] — 2026-11-12
 
 ### Fixed
@@ -6938,7 +7028,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.52.1...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.53.0...HEAD
+[0.53.0]: https://github.com/hrustalq/knowledge/compare/v0.52.1...v0.53.0
 [0.52.1]: https://github.com/hrustalq/knowledge/compare/v0.52.0...v0.52.1
 [0.52.0]: https://github.com/hrustalq/knowledge/compare/v0.51.0...v0.52.0
 [0.51.0]: https://github.com/hrustalq/knowledge/compare/v0.50.1...v0.51.0

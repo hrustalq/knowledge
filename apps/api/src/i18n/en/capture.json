@@ -28,9 +28,11 @@
     "amends": "Adds a section to the existing page \"{page}\", the closest match ({score}).",
     "newPage": "Starts a new page: no existing page was close enough to amend.",
     "similar": "Closest existing pages:",
-    "rationale": "Why:"
+    "rationale": "Why:",
+    "introMemory": "Promoted from an agent's memory ({source}). Nothing reaches the knowledge base until a person merges this."
   },
   "origin": {
-    "directMessage": "direct message"
+    "directMessage": "direct message",
+    "memoryBank": "memory bank"
   }
 }

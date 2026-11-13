@@ -225,8 +225,8 @@ services:
   # The git remote (#636, docs/features/71), opt-in twice like the learner:
   # started only when COMPOSE_PROFILES names `git`, and serving only with
   # GIT_REMOTE_ENABLED=true; without the flag it answers 404 to every /git/*.
-  # Its own image (knowledge-api-git, the `git-runtime` stage: the api image
-  # plus the git binary) and its own process (git.main.ts), so packs never pass
+  # Its own image (knowledge-api-git, the `git-runtime` stage: the api image's
+  # layers, git included, with its own command) and its own process (git.main.ts), so packs never pass
   # through the API. Caddy routes /git/* here. The volume holds one bare
   # repository per project and visible set: losing it costs a cold rebuild from
   # Postgres and MinIO, never data.

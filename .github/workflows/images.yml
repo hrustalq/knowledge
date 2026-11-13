@@ -35,8 +35,11 @@ jobs:
       fail-fast: true
       matrix:
         include:
-          - { image: knowledge-api, file: Dockerfile.api, target: runtime }
-          - { image: knowledge-api-git, file: Dockerfile.api, target: git-runtime }
+          # knowledge-api-git is built in the knowledge-api job (the step after
+          # this one), not as its own row: two parallel builds of one Dockerfile
+          # each run apt and get different digests, and the one that loses the
+          # cache write re-ships ~360 MB on the next release (#995).
+          - { image: knowledge-api, file: Dockerfile.api, target: runtime, git_image: knowledge-api-git }
           - { image: knowledge-web, file: Dockerfile.web, target: runtime }
     env:
       REF: ${{ inputs.ref }}
@@ -70,5 +73,28 @@ jobs:
             org.opencontainers.image.source=https://github.com/hrustalq/knowledge
             org.opencontainers.image.revision=${{ steps.meta.outputs.sha }}
             org.opencontainers.image.version=${{ env.REF }}
-          cache-from: type=gha,scope=${{ matrix.image }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+          # A registry cache, not type=gha (#995): the Actions cache is scoped to a
+          # ref, and no image build runs on main, so a tag never saw the previous
+          # tag's layers and every release re-shipped ~330 MB. The :buildcache tag
+          # is a cache manifest, not a runnable image: never point a deployment at it.
+          cache-from: type=registry,ref=ghcr.io/hrustalq/${{ matrix.image }}:buildcache
+          cache-to: type=registry,ref=ghcr.io/hrustalq/${{ matrix.image }}:buildcache,mode=max,image-manifest=true,oci-mediatypes=true
+
+      # git-runtime is runtime plus metadata. On the same builder, right after
+      # it, every layer is the one just pushed, so the two images share them all.
+      - if: matrix.git_image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.file }}
+          target: git-runtime
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/hrustalq/${{ matrix.git_image }}:${{ env.REF }}
+            ghcr.io/hrustalq/${{ matrix.git_image }}:${{ steps.meta.outputs.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/hrustalq/knowledge
+            org.opencontainers.image.revision=${{ steps.meta.outputs.sha }}
+            org.opencontainers.image.version=${{ env.REF }}
+          cache-from: type=registry,ref=ghcr.io/hrustalq/${{ matrix.image }}:buildcache

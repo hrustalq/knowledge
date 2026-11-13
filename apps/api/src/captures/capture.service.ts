@@ -11,6 +11,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import type { KnowledgeCapture, Prisma } from '@prisma/client';
 import {
+  MEMORY_ORIGIN_PLATFORM,
   CAPTURE_SESSION_MAX_FILES,
   captureStateFor,
   entityTypeOf,
@@ -902,7 +903,9 @@ export class CaptureService {
     what?: string,
   ): string {
     const lines = [
-      origin
+      origin?.platform === MEMORY_ORIGIN_PLATFORM
+        ? t('capture.mergeRequest.introMemory', { source: `${t('capture.origin.memoryBank', undefined, lang)} ${origin.chatTitle ?? ''}`.trim() }, lang)
+        : origin
         ? t('capture.mergeRequest.introChat', { source: describeOrigin(origin, t('capture.origin.directMessage', undefined, lang)) }, lang)
         : session.client === 'assistant'
           ? t('capture.mergeRequest.introAssistant', undefined, lang)

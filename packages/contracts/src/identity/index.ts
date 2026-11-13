@@ -148,6 +148,9 @@ export const AUDIT_ACTIONS = [
   'workspace.renamed',
   /** The editing policy changed (#958): `params` holds the columns written, null = back to inheriting. */
   'workspace.editing_policy_updated',
+  /** A memory bank was created or deleted (#986): `target` is its `bank_id`, `params` what a delete removed. */
+  'memory.bank_created',
+  'memory.bank_deleted',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -1615,6 +1618,8 @@ export const WORKSPACE_FEATURES = [
   'git',
   // Source-backed pages (#674); also under the WEB_SOURCES_ENABLED ceiling.
   'sources',
+  // Memory banks (#986): the Hindsight-compatible routes; also under the MEMORY_ENABLED ceiling.
+  'memory',
 ] as const;
 export type WorkspaceFeature = (typeof WORKSPACE_FEATURES)[number];
 
@@ -1632,7 +1637,7 @@ export function isWorkspaceFeature(value: unknown): value is WorkspaceFeature {
  */
 export const WORKSPACE_USES = {
   'team-wiki': ['workflows'],
-  'engineering-docs': ['git', 'conflicts', 'captures', 'sources'],
+  'engineering-docs': ['git', 'conflicts', 'captures', 'sources', 'memory'],
   'api-docs': ['qa', 'git', 'sources'],
   'meeting-notes': ['memos', 'captures'],
   'support-kb': ['analytics', 'conflicts', 'sources'],

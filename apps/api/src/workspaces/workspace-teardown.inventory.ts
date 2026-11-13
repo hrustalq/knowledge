@@ -111,6 +111,16 @@ export const WORKSPACE_TEARDOWN = {
   ExportJob: 'workspace',
   ImportJob: 'workspace',
   Memo: 'workspace',
+  // Memory banks (#986), leaves to root.
+  MemoryOperation: 'workspace',
+  MemoryObservationEvidence: 'workspace',
+  MemoryObservationHistory: 'workspace',
+  MemoryUnitEntity: 'workspace',
+  MemoryUnit: 'workspace',
+  MemoryRelation: 'workspace',
+  MemoryEntity: 'workspace',
+  MemoryFile: 'workspace',
+  MemoryBank: 'workspace',
   MemoType: 'workspace',
   // Imports cascade from their link; listed first for the ones a link outlived.
   PlaudImport: 'workspace',

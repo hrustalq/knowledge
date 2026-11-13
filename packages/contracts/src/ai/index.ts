@@ -1001,7 +1001,7 @@ export interface AiRouting {
 }
 
 /** The call sites a decision pre-filters (#530). */
-export const DECISION_SITES = ['arbiter', 'citation', 'harvest'] as const;
+export const DECISION_SITES = ['arbiter', 'citation', 'harvest', 'memory'] as const;
 export type DecisionSite = (typeof DECISION_SITES)[number];
 
 /**
@@ -1016,7 +1016,13 @@ export const DECISION_DEFAULT_MODEL = 'jev-1-13';
  * measured in docs/features/67 on {@link DECISION_DEFAULT_MODEL}. A workspace
  * override is sparse and records the model it was saved against.
  */
-export const DECISION_THRESHOLDS: Record<DecisionSite, number> = { arbiter: 0.2, citation: 0.5, harvest: 0.5 };
+export const DECISION_THRESHOLDS: Record<DecisionSite, number> = {
+  arbiter: 0.2,
+  citation: 0.5,
+  harvest: 0.5,
+  // ponytail: not measured (#993) — the arbiter's pair-screen value; tune on real banks before trusting the cut
+  memory: 0.2,
+};
 
 export interface DecisionSettings {
   /** False when the deployment's DECISION_PROVIDER is `none`: no route is honoured, whatever is saved. */
@@ -1373,6 +1379,16 @@ export type AiUsageOperation =
    * zeros stub, since no one asked for it.
    */
   | 'coach'
+  /** Splitting retained text into facts for a memory bank (#986). One row per extraction call. */
+  | 'memory-extract'
+  /** Asking the decision model whether a recalled memory helps the query (#986), when the request asks to prune. One row per candidate. */
+  | 'memory-recall'
+  /** Answering a question over a memory bank's recalled memories (#986): one row per reflect. */
+  | 'memory-reflect'
+  /** The `consolidator` folding a bank's new facts into observations (#993). One row per batch, billed to no person (the zeros stub). */
+  | 'memory-consolidate'
+  /** Asking the decision model whether a new fact bears on an existing observation (#993), before consolidation. One row per pair. */
+  | 'memory-consolidate-screen'
   /**
    * Inferring graph relations from a chunk during ingestion. One row per chunk
    * call, so a reindex of a large corpus is visible as the spend it is.
@@ -1585,6 +1601,12 @@ export const BUILT_IN_AGENT_KEYS = [
   'interpreter',
   /** Drafts a project blueprint's styleguide and page guidance from a derived tree (#716). Never from the Run button. */
   'scaffolder',
+  /** Splits what an agent retains into facts for its memory bank (#986). Called only by retain, never from the Run button. */
+  'memorist',
+  /** Answers a question from a memory bank's recalled memories (#986). Called only by reflect, never from the Run button. */
+  'reflector',
+  /** Folds a memory bank's new facts into observations with their evidence (#993). Called only by consolidation, never from the Run button. */
+  'consolidator',
 ] as const;
 export type BuiltInAgentKey = (typeof BUILT_IN_AGENT_KEYS)[number];
 

@@ -22,6 +22,7 @@ import * as editor from '@/modules/editor/routes'
 import * as help from '@/modules/help/routes'
 import * as insights from '@/modules/insights/routes'
 import * as memos from '@/modules/memos/routes'
+import * as memory from '@/modules/memory/routes'
 import * as mergeRequests from '@/modules/merge-requests/routes'
 import * as notifications from '@/modules/notifications/routes'
 import * as projects from '@/modules/projects/routes'
@@ -72,6 +73,7 @@ export function createRouter() {
           // same nesting as projects ← publishing above.
           { ...assistant.aiSettingsRoute, children: [...assistant.aiSectionRoutes, access.connectAiRoute] },
           ...connectors.settingsRoutes,
+          ...memory.settingsRoutes,
           ...help.settingsRoutes,
         ],
       },

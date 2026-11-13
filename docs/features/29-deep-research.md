@@ -265,10 +265,12 @@ finding can now _carry_ its web sources, so the existing
 attributed to the caller — is the minimal version of promotion, and the graph
 half can land against a behaviour that exists rather than a guess.
 
-**Reranking and entailment checking.** A CPU cross-encoder in front of the
-context, and a small entailment model gating each claim, are both well-evidenced
-and both belong after there is a loop to measure. Adding them now would tune a
-pipeline whose shape is not yet fixed.
+**Reranking and entailment checking.** A small entailment model gating each
+claim is well-evidenced and belongs after there is a loop to measure. The
+cross-encoder in front of the context is no longer deferred: it was measured on
+the search backtest in #1003 and not adopted, because it ranked worse than the
+fused order on every split
+([04](../architecture/04-search-graph.md#cross-encoder-reranking-measured-not-adopted-1003)).
 
 **Parallel job execution.** Reads parallelize inside a turn; the queues stay at
 concurrency 1. One research run at a time per workspace is already the rule

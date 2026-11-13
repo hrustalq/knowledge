@@ -282,6 +282,16 @@ export class AssistantClient {
     return completion.choices[0]?.message?.content ?? '';
   }
 
+  /** `chat`, with the tokens the call was billed for — for a caller whose own response reports them (#986). */
+  async chatWithUsage(ctx: AiCallContext, messages: ChatCompletionMessageParam[], opts?: { json?: boolean }): Promise<{ content: string; tokens: AiUsageTokens }> {
+    const completion = await this.create(ctx, {
+      messages,
+      ...(opts?.json ? { response_format: { type: 'json_object' as const } } : {}),
+    });
+    const content = completion.choices[0]?.message?.content ?? '';
+    return { content, tokens: completion.usage ? fromUsage(completion.usage) : estimateFor(messages, content) };
+  }
+
   /**
    * The tool harness: a bounded agentic loop. The model may call the given
    * tools; every call is executed through `execute` (which enforces access

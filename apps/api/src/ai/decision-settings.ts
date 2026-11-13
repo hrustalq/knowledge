@@ -11,6 +11,7 @@ export interface DecisionSettingsRow {
   decisionArbiterThreshold: number | null;
   decisionCitationThreshold: number | null;
   decisionHarvestThreshold: number | null;
+  decisionMemoryThreshold: number | null;
   decisionTunedModel: string | null;
 }
 
@@ -18,6 +19,7 @@ export const DECISION_THRESHOLD_COLUMN = {
   arbiter: 'decisionArbiterThreshold',
   citation: 'decisionCitationThreshold',
   harvest: 'decisionHarvestThreshold',
+  memory: 'decisionMemoryThreshold',
 } as const satisfies Record<DecisionSite, keyof DecisionSettingsRow>;
 
 /**

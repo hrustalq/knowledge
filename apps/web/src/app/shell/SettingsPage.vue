@@ -7,6 +7,7 @@ import { RouterLink, RouterView, useRoute } from 'vue-router'
 import {
   Activity,
   Bell,
+  Brain,
   BookMarked,
   BookOpen,
   Braces,
@@ -68,6 +69,11 @@ const links = computed<SettingsLink[]>(() => [
     ? [{ to: '/settings/workflows', label: t('nav.workflows'), icon: Workflow, hint: t('settings.workflowsHint') }]
     : []),
   { to: '/settings/connectors', label: t('nav.connectors'), icon: Plug, hint: t('settings.connectorsHint') },
+  // Gone only with the server's ceiling (#994): an admin who switched the
+  // section off comes back through this row to switch it on.
+  ...(!features.unavailable.includes('memory')
+    ? [{ to: '/settings/memory', label: t('nav.memory'), icon: Brain, hint: t('settings.memoryHint') }]
+    : []),
   // Admin-only, so hidden from everyone else: unlike the rows above, the page
   // has nothing to show a member who cannot manage it.
   ...(auth.canAdminWorkspace

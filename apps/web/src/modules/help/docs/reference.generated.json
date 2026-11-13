@@ -4042,6 +4042,126 @@
     },
     {
       "method": "GET",
+      "path": "/v1/memory/banks",
+      "tag": "memory",
+      "summary": "The memory banks of a workspace the caller may read, with their size and how to connect a client",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/memory/banks/{id}",
+      "tag": "memory",
+      "summary": "Delete a memory bank and everything it holds; `confirm` must be its bank id",
+      "role": "editor",
+      "source": "memory-bank",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/memory/banks/{id}",
+      "tag": "memory",
+      "summary": "Bind a memory bank to a project (it then follows that project's restriction), or to the whole workspace. Needs manage on both projects",
+      "role": "editor",
+      "source": "memory-bank",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/memory/banks/{id}/entities",
+      "tag": "memory",
+      "summary": "A memory bank's graph entities (the `/mcp/<bank>/graph` wire), in creation order, with their observations and relations",
+      "role": "viewer",
+      "source": "memory-bank",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/memory/banks/{id}/entities/{entityId}",
+      "tag": "memory",
+      "summary": "Delete one graph entity, with its observations and every relation touching it",
+      "role": "editor",
+      "source": "memory-bank",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/memory/banks/{id}/files",
+      "tag": "memory",
+      "summary": "A memory bank's memory-tool files, by path, without their text",
+      "role": "viewer",
+      "source": "memory-bank",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/memory/banks/{id}/files/{fileId}",
+      "tag": "memory",
+      "summary": "Delete one memory-tool file and its recall chunks",
+      "role": "editor",
+      "source": "memory-bank",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/memory/banks/{id}/files/{fileId}",
+      "tag": "memory",
+      "summary": "One memory-tool file's text, as stored (masked on write)",
+      "role": "viewer",
+      "source": "memory-bank",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/memory/banks/{id}/memories",
+      "tag": "memory",
+      "summary": "A memory bank's facts and observations, newest first",
+      "role": "viewer",
+      "source": "memory-bank",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/memory/banks/{id}/memories/{memoryId}",
+      "tag": "memory",
+      "summary": "Delete one memory. A fact leaves the observations it supported; one left with no evidence goes too",
+      "role": "editor",
+      "source": "memory-bank",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/memory/banks/{id}/memories/{memoryId}/promote",
+      "tag": "memory",
+      "summary": "Propose a memory as a page: a capture, and so a merge request someone reviews. The memory stays in the bank",
+      "role": "editor",
+      "source": "memory-bank",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/memory/banks/{id}/relations/{relationId}",
+      "tag": "memory",
+      "summary": "Delete one graph relation; both entities stay",
+      "role": "editor",
+      "source": "memory-bank",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/memos",
       "tag": "memos",
       "summary": "My memos, newest first, and whether this server can transcribe",

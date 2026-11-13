@@ -299,6 +299,12 @@ export type I18nTranslations = {
         "interpreterDesc": string;
         "scaffolder": string;
         "scaffolderDesc": string;
+        "memorist": string;
+        "memoristDesc": string;
+        "reflector": string;
+        "reflectorDesc": string;
+        "consolidator": string;
+        "consolidatorDesc": string;
         "testerRun": {
             "noOperation": string;
             "summary": string;
@@ -376,9 +382,11 @@ export type I18nTranslations = {
             "newPage": string;
             "similar": string;
             "rationale": string;
+            "introMemory": string;
         };
         "origin": {
             "directMessage": string;
+            "memoryBank": string;
         };
     };
     "chat": {
@@ -904,6 +912,44 @@ export type I18nTranslations = {
             "noParser": string;
             "failed": string;
             "timedOut": string;
+        };
+        "memory": {
+            "disabled": string;
+            "workspaceRequired": string;
+            "workspaceHeaderRequired": string;
+            "bankNotFound": string;
+            "profileNotFound": string;
+            "bankIdInvalid": string;
+            "contentNotText": string;
+            "itemsRequired": string;
+            "itemTooLong": string;
+            "timestampInvalid": string;
+            "storeNotReady": string;
+            "memoryNotFound": string;
+            "noReranker": string;
+            "windowInvalid": string;
+            "operationIdTaken": string;
+            "operationNotPending": string;
+            "noReflectModel": string;
+            "reflectFailed": string;
+            "rateLimited": string;
+            "observationsOff": string;
+            "noConsolidationModel": string;
+            "configKeyUnknown": string;
+            "configValueInvalid": string;
+            "consolidationStopped": {
+                "disabled": string;
+                "noModel": string;
+                "cap": string;
+                "budget": string;
+                "failed": string;
+            };
+            "bankRowNotFound": string;
+            "confirmBankId": string;
+            "entityNotFound": string;
+            "relationNotFound": string;
+            "fileNotFound": string;
+            "fileChunk": string;
         };
         "memo": {
             "notFound": string;
@@ -2010,6 +2056,7 @@ export type I18nTranslations = {
         "capture": string;
         "releaseTag": string;
         "conflict": string;
+        "memoryBank": string;
     };
     "validation": {
         "isDefined": string;

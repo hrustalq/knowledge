@@ -15541,6 +15541,10 @@ export interface components {
             proofCount: number;
             occurredAt: string | null;
             createdAt: string;
+            file: {
+                id: string;
+                path: string;
+            } | null;
         };
         /** @enum {string} */
         MemoryUnitType: "world" | "experience" | "observation";

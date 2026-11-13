@@ -8500,6 +8500,7 @@
       "noMatch": "No memory of this type contains those words.",
       "proof": "no facts | {n} fact | {n} facts",
       "deleteMemory": "Delete this memory",
+      "openFile": "Part of {path}: open the file",
       "memoryDeleted": "Memory deleted",
       "more": "Show more",
       "shown": "{shown} of {total}",

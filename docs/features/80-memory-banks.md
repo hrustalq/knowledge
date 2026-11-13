@@ -149,7 +149,7 @@ an `X-Workspace-Id` header.
 | `POST …/memories/recall` | viewer | recall |
 | `POST …/reflect` | viewer | one answer over a recall |
 | `GET …/memories/list`, `GET …/memories/{id}`, `GET …/stats` | viewer | |
-| `DELETE …/memories` | editor | every memory, or one fact type |
+| `DELETE …/memories` | editor | every memory, or one fact type; the memory tool's file chunks stay (#1018) |
 | `GET`, `PATCH …/config` | viewer, editor | `enable_observations`, `reflect_mission`, the three disposition traits; any other key is a 400 that names the ones kept |
 | `POST …/consolidate` | editor | one consolidation pass as an operation; 409 with the reason while consolidation cannot run |
 | `GET …/operations`, `GET …/operations/{id}` | viewer | an id the bank does not hold reads `not_found` |
@@ -210,7 +210,9 @@ an async one.
 `RetainInput.verbatim`, which skips the `memorist` and stores one unit per item, still masked and
 embedded; `consolidated` writes the units with `consolidated_at` already set, so consolidation never
 claims them. Both wires below write through `MemoryIntakeService` (`admit` → rows of their own →
-`store`), so the retain rate, the ceilings and the bank's creation are the same as a retain's.
+`store`), so the retain rate, the ceilings and the bank's creation are the same as a retain's. The
+files wire's chunks are the one exception: they are an index of text already admitted, written by
+`MemoryFilesService.reindex` straight through `MemoryRetainService` with a `guard` (see below).
 
 ## Recall and reflect
 
@@ -335,9 +337,20 @@ listing, six-wide line numbers and the 16,000-character view cut). The route sit
   than `MEMORY_RETAIN_MAX_ITEMS` — as units with `document_id = file:<path>`, the path as context,
   verbatim and **born consolidated**, so consolidation never reads them. A file emptied of text keeps
   no chunk. A delete takes the chunks with the rows (`deleteWhere`); a rename moves rows and chunks in
-  one transaction.
+  one transaction. A Hindsight clear keeps them (#1018), because they mirror files it does not touch.
+- **The index stays level with the text** (#1018). `memory_files.indexed_at` is the `updated_at` of
+  the content the chunks hold, and a file is stale when the two differ. `MemoryFilesService.reindex`
+  runs after each write: it reads the file and embeds it. Then, under the bank lock and in the
+  transaction that writes the chunks, it writes only if the row still holds that text at that path
+  (`RetainInput.guard`), marking it indexed in the same step. Otherwise it reads again (three
+  attempts). A write, rename or delete that commits meanwhile is therefore never overwritten with
+  older text, and a deleted path gets no chunk back. `MemoryFilesIndexSweeper` (API-only, 60 s tick)
+  rewrites what is left stale after a 30 s grace: an index that failed (no embedding provider, store
+  not ready), a writer that ran out of attempts, a rename (whose moved vectors still carry the old
+  path), a row never indexed. Three failures end a tick.
 - **Locks.** `memory-files:{bank}` serialises writes and is taken before `memory-bank:{bank}`
-  wherever both are held. Prefix matches use `starts_with()`, never `LIKE`: paths hold `_`.
+  wherever both are held. A path that takes the bank lock takes it before it touches a file row,
+  because an index holds the bank lock while it marks one. Prefix matches use `starts_with()`, never `LIKE`: paths hold `_`.
 - **Roles on execution**, before anything is read: `view` needs a viewer, `create` an editor or a
   `capture` key, every other command an editor. Memory off, a missing role and a spent rate are HTTP
   errors (404/403/429); a refused path or content is an `is_error: true` result. A `view` spends the
@@ -369,11 +382,9 @@ listing, six-wide line numbers and the 16,000-character view cut). The route sit
 8. Own messages where the SDK would leak a raw errno: moving a directory into itself, a size over the
    cap, a field of the wrong type.
 
-Known gaps: the recall index is written after the file row commits, so an index failure (no
-embeddings, store not ready) is logged and the command still succeeds, and recall lags until that
-file's next write — two concurrent writes of one file can leave it one write behind. `DELETE
-…/memories` removes file chunks but keeps the files; the next write re-indexes each. A rename keeps
-each chunk's vector, embedded with the old path as context.
+A chunk is never deleted on its own (#1018): the web route refuses it, the Memories tab offers "open
+the file" instead of delete, and the Hindsight wire has no single-memory delete. Known gap: a file's
+recall lags its text by up to a sweep (about 90 s) after a failed index or a rename.
 
 ## The web section
 
@@ -385,7 +396,7 @@ each chunk's vector, embedded with the old path as context.
 | `GET /v1/memory/banks/:id/memories` | viewer | a bank's memories, newest first; `type`, `q`, `limit` (≤ 200), `offset` |
 | `PATCH /v1/memory/banks/:id` | editor | bind to a project or the whole workspace; needs `requireProjectManage` on the project it leaves and the one it joins |
 | `DELETE /v1/memory/banks/:id?confirm=<bank id>` | editor | the bank and everything in it; the typed id is checked again here |
-| `DELETE /v1/memory/banks/:id/memories/:memoryId` | editor | one memory, and any observation it leaves bare |
+| `DELETE /v1/memory/banks/:id/memories/:memoryId` | editor | one memory, and any observation it leaves bare. A chunk of a memory tool file is refused, 409 with `fileId` and `path` (#1018): the file deletes instead. A chunk whose file is gone deletes |
 | `POST /v1/memory/banks/:id/memories/:memoryId/promote` | editor | see below |
 | `GET /v1/memory/banks/:id/entities` | viewer | the graph's entities in creation order, each with its observations (id + text), and every relation touching one; `q` (name, type or observation text), `limit` (≤ 200), `offset` |
 | `DELETE /v1/memory/banks/:id/entities/:entityId` | editor | one entity, its observations and every relation touching it (`MemoryGraphService.removeEntities`) |
@@ -409,6 +420,8 @@ memory tool endpoint with a handler to paste (TypeScript and Python, `model/conn
 page has three tabs (`?tab=entities|files` opens one; an opening instruction, not two-way state):
 
 - **Memories** — facts and observations, with delete, promote and the project binding for editors.
+  A chunk of a memory tool file names its file (`file` on each item) and opens it on the Files tab
+  instead of offering delete.
 - **Entities** — each entity with its type, its observations and its relations; delete of an entity
   (confirmed), an observation or a relation for editors.
 - **Files** — by path, with size and last write; a file opens in place to its text. Delete (confirmed)

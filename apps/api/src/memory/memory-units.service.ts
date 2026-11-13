@@ -6,6 +6,7 @@ import { GraphService } from '../graph/graph.service.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { MEMORY_TIME_FIELDS, tagsWhere, type MemoryTimeField, type TagsMatch } from './memory-facts.js';
+import { FILE_DOCUMENT_PREFIX } from './memory-files.js';
 import type { BankStatsResponse, DeleteResponse, ListMemoryUnitsResponse, MemoryUnitItem } from './memory-wire.js';
 
 
@@ -97,9 +98,12 @@ export class MemoryUnitsService {
    * `DELETE …/memories`: every memory of the bank, or those of one fact type.
    * Rows at once, vectors right after. Clearing facts leaves the observations
    * they supported with less evidence, and deletes those left with none.
+   * The memory tool's file chunks stay (#1009): they mirror files the clear
+   * does not touch, and recall must find what `view` shows. A file goes
+   * through the files wire or the bank page, chunks with it.
    */
   async clear(bank: MemoryBank, type?: string): Promise<DeleteResponse> {
-    const { ids } = await this.deleteWhere(bank, type ? { factType: type } : {});
+    const { ids } = await this.deleteWhere(bank, { ...(type ? { factType: type } : {}), NOT: { documentId: { startsWith: FILE_DOCUMENT_PREFIX } } });
     return { success: true, message: null, deleted_count: ids.length };
   }
 

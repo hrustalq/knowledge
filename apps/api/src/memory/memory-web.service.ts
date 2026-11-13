@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, type MemoryBank, type MemoryUnit } from '@prisma/client';
 import {
@@ -24,13 +24,16 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { MemoryAccessService, type MemoryCaller } from './memory-access.service.js';
 import { MemoryBanksService } from './memory-banks.service.js';
 import { MemoryConsolidationService } from './memory-consolidation.service.js';
+import { FILE_DOCUMENT_PREFIX } from './memory-files.js';
 import { MemoryFilesService } from './memory-files.service.js';
 import { MemoryGraphService } from './memory-graph.service.js';
 import { MemoryUnitsService } from './memory-units.service.js';
 
 type Unit = MemoryUnit & { entities: Array<{ name: string; entityKey: string }>; _count: { evidence: number } };
 
-function unitSummary(row: Unit): MemoryUnitSummary {
+function unitSummary(row: Unit, files: ReadonlyMap<string, string>): MemoryUnitSummary {
+  const path = filePathOf(row.documentId);
+  const fileId = path === null ? undefined : files.get(path);
   return {
     id: row.id,
     type: row.factType as MemoryUnitType,
@@ -41,8 +44,12 @@ function unitSummary(row: Unit): MemoryUnitSummary {
     proofCount: row.factType === 'observation' ? row._count.evidence : 1,
     occurredAt: (row.occurredStart ?? row.mentionedAt)?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
+    file: fileId && path !== null ? { id: fileId, path } : null,
   };
 }
+
+/** The file path a memory tool chunk's `document_id` names, or null for any other memory. */
+const filePathOf = (documentId: string): string | null => (documentId.startsWith(FILE_DOCUMENT_PREFIX) ? documentId.slice(FILE_DOCUMENT_PREFIX.length) : null);
 
 function fileSummary(row: { id: string; path: string; size: number; updatedAt: Date }): MemoryFileSummary {
   return { id: row.id, path: row.path, size: row.size, updatedAt: row.updatedAt.toISOString() };
@@ -105,12 +112,33 @@ export class MemoryWebService {
       this.prisma.memoryUnit.count({ where }),
       this.summaries([bank]),
     ]);
-    return { bank: summary!, items: rows.map(unitSummary), total };
+    const files = await this.filesByPath(bank, rows.map((r) => r.documentId));
+    return { bank: summary!, items: rows.map((r) => unitSummary(r, files)), total };
   }
 
+  /**
+   * One memory, deleted. A chunk of a memory tool file is refused (#1018): it
+   * is an index of the file, which would stay and stay marked indexed, so the
+   * chunk would be missing from recall until the file's next write. The file
+   * is deleted instead. A chunk whose file is already gone deletes as usual.
+   */
   async deleteUnit(principal: Principal, id: string, unitId: string): Promise<void> {
     const { bank } = await this.bankFor(principal, id);
+    const unit = await this.prisma.memoryUnit.findFirst({ where: { id: unitId, bankId: bank.id }, select: { documentId: true } });
+    const [file] = unit ? (await this.filesByPath(bank, [unit.documentId])).entries() : [];
+    if (file) {
+      const [path, fileId] = file;
+      throw new ConflictException({ statusCode: 409, message: t('error.memory.fileChunk', { path }), fileId, path });
+    }
     if (!(await this.unitStore.deleteOne(bank, unitId))) throw new NotFoundException(t('error.memory.memoryNotFound', { id: unitId }));
+  }
+
+  /** The bank's files these memories are chunks of, path → file id. Only those that still exist. */
+  private async filesByPath(bank: MemoryBank, documentIds: string[]): Promise<Map<string, string>> {
+    const paths = [...new Set(documentIds.map(filePathOf).filter((p): p is string => p !== null))];
+    if (!paths.length) return new Map();
+    const rows = await this.prisma.memoryFile.findMany({ where: { bankId: bank.id, path: { in: paths } }, select: { id: true, path: true } });
+    return new Map(rows.map((f) => [f.path, f.id]));
   }
 
   /** Deleting a bank asks for its name, typed: the server checks what the dialog asked for. */

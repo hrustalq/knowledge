@@ -246,7 +246,8 @@
     "confirmBankId": "Type the bank id, {bankId}, to delete it",
     "entityNotFound": "Entity {id} not found",
     "relationNotFound": "Relation {id} not found",
-    "fileNotFound": "Memory file {id} not found"
+    "fileNotFound": "Memory file {id} not found",
+    "fileChunk": "This memory is part of the file {path}: delete the file instead"
   },
   "memo": {
     "notFound": "Memo not found",

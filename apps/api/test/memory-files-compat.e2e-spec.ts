@@ -449,6 +449,30 @@ describe('Anthropic memory tool compatibility (e2e, #1009)', () => {
       }
     });
 
+    it('names a chunk’s file in the memories list and refuses to delete the chunk on its own (#1018)', async () => {
+      const deploy = (await list(people.alice.key)).files.find((f) => f.path === '/memories/notes/deploy.md')!;
+      const res = await web(people.alice.key, 'GET', `/banks/${bankRowId}/memories?limit=200`);
+      expect(res.status).toBe(200);
+      const items = ((await res.json()) as { items: Array<{ id: string; file: { id: string; path: string } | null }> }).items;
+      const chunk = items.find((m) => m.file?.path === '/memories/notes/deploy.md')!;
+      expect(chunk.file).toEqual({ id: deploy.id, path: '/memories/notes/deploy.md' });
+      const refused = await web(people.alice.key, 'DELETE', `/banks/${bankRowId}/memories/${chunk.id}`);
+      expect(refused.status).toBe(409);
+      expect(await refused.json()).toMatchObject({ details: { fileId: deploy.id, path: '/memories/notes/deploy.md' } });
+      expect(await prisma.memoryUnit.count({ where: { id: chunk.id } })).toBe(1);
+
+      // A memory retained the Hindsight way names no file and deletes as before.
+      await hindsight(people.alice.key).retain(bank, 'The canary runs for ten minutes.');
+      const plain = (await prisma.memoryUnit.findFirstOrThrow({ where: { bankId: bankRowId, text: 'The canary runs for ten minutes.' } })).id;
+      const after = ((await (await web(people.alice.key, 'GET', `/banks/${bankRowId}/memories?limit=200`)).json()) as { items: Array<{ id: string; file: unknown }> }).items;
+      expect(after.find((m) => m.id === plain)!.file).toBeNull();
+      expect((await web(people.alice.key, 'DELETE', `/banks/${bankRowId}/memories/${plain}`)).status).toBe(204);
+
+      // An orphan chunk, its file gone, names no file and deletes: that is cleanup.
+      const orphan = await prisma.memoryUnit.create({ data: { workspaceId: WS_A, bankId: bankRowId, text: 'left behind', sourceText: 'left behind', factType: 'world', documentId: 'file:/memories/gone.md', createdBy: people.alice.id, consolidatedAt: new Date() } });
+      expect((await web(people.alice.key, 'DELETE', `/banks/${bankRowId}/memories/${orphan.id}`)).status).toBe(204);
+    }, 30_000);
+
     it('lets an editor delete a file with its recall chunks, as the tool’s own delete does', async () => {
       const deploy = (await list(people.alice.key)).files.find((f) => f.path === '/memories/notes/deploy.md')!;
       const chunks = await prisma.memoryUnit.findMany({ where: { bankId: bankRowId, documentId: 'file:/memories/notes/deploy.md' }, select: { id: true } });
@@ -484,5 +508,80 @@ describe('Anthropic memory tool compatibility (e2e, #1009)', () => {
       unavailable.mockRestore();
     }
     expect(await prisma.memoryBank.count({ where: { bankId: `off-${nonce}` } })).toBe(0);
+  });
+
+  describe('the recall index stays level with the files (#1009 gaps)', () => {
+    const bank = `level-${nonce}`;
+    const call = (input: Input) => rest(people.alice.key, bank, input);
+    const fileRow = (path: string) => prisma.memoryFile.findFirstOrThrow({ where: { workspaceId: WS_A, bank: { bankId: bank }, path } });
+    const chunks = (path: string) => prisma.memoryUnit.findMany({ where: { workspaceId: WS_A, documentId: `file:${path}` }, orderBy: { text: 'asc' } });
+    const stale = async (path: string) => {
+      const f = await fileRow(path);
+      return f.indexedAt?.getTime() !== f.updatedAt.getTime();
+    };
+    /** Sweeps past the grace until `path` is level; other files a dev DB holds may come first. */
+    async function sweepUntilLevel(path: string): Promise<void> {
+      const { MemoryFilesIndexSweeper } = await import('../src/memory/memory-files-index.sweeper.js');
+      const sweeper = app.get(MemoryFilesIndexSweeper);
+      for (let i = 0; i < 50 && (await stale(path)); i++) await sweeper.sweep(Date.now() + 60_000);
+      expect(await stale(path)).toBe(false);
+    }
+
+    it('marks a written file indexed; a missed index is rewritten by the sweeper; a rename is re-embedded', async () => {
+      await call({ command: 'create', path: '/memories/runbook.md', file_text: 'Paging goes to the on-call SRE.' });
+      expect(await stale('/memories/runbook.md')).toBe(false);
+
+      // An index that failed after the write: no chunk, the row stale.
+      const before = await chunks('/memories/runbook.md');
+      await prisma.memoryUnit.deleteMany({ where: { id: { in: before.map((c) => c.id) } } });
+      await prisma.$executeRaw`UPDATE memory_files SET indexed_at = NULL WHERE workspace_id = ${WS_A}::uuid AND path = '/memories/runbook.md'`;
+      await sweepUntilLevel('/memories/runbook.md');
+      expect((await chunks('/memories/runbook.md')).map((c) => c.text)).toEqual(['Paging goes to the on-call SRE.']);
+
+      // A rename moves the chunks at once and leaves the file stale; the sweep re-embeds them under the new path.
+      const moved = (await chunks('/memories/runbook.md')).map((c) => c.id);
+      await call({ command: 'rename', old_path: '/memories/runbook.md', new_path: '/memories/ops/runbook.md' });
+      expect((await chunks('/memories/ops/runbook.md')).map((c) => c.id)).toEqual(moved);
+      expect(await stale('/memories/ops/runbook.md')).toBe(true);
+      await sweepUntilLevel('/memories/ops/runbook.md');
+      const fresh = await chunks('/memories/ops/runbook.md');
+      expect(fresh.map((c) => [c.text, c.context])).toEqual([['Paging goes to the on-call SRE.', '/memories/ops/runbook.md']]);
+      expect(fresh.map((c) => c.id)).not.toEqual(moved);
+      expect(await chunks('/memories/runbook.md')).toEqual([]);
+    }, 60_000);
+
+    it('an index that read the text before a later write writes nothing of it, and settles on the text as stored', async () => {
+      await call({ command: 'create', path: '/memories/owner.md', file_text: 'Billing is owned by Gwen.' });
+      await call({ command: 'str_replace', path: '/memories/owner.md', old_str: 'Gwen', new_str: 'Hugo' });
+      const row = await fileRow('/memories/owner.md');
+      await prisma.$executeRaw`UPDATE memory_files SET indexed_at = NULL WHERE id = ${row.id}::uuid`;
+      // The index's first read sees the text before the str_replace, as a slow writer racing the next one would.
+      const { MemoryFilesService } = await import('../src/memory/memory-files.service.js');
+      const files = app.get(MemoryFilesService);
+      const read = vi.spyOn(prisma.memoryFile, 'findFirst').mockResolvedValueOnce({ ...row, content: 'Billing is owned by Gwen.' } as never);
+      try {
+        expect(await files.reindex((await bankRow(WS_A, bank))!, row.id)).toBe(true);
+      } finally {
+        read.mockRestore();
+      }
+      expect((await chunks('/memories/owner.md')).map((c) => c.text)).toEqual(['Billing is owned by Hugo.']);
+      expect(await stale('/memories/owner.md')).toBe(false);
+
+      // A file deleted before its index runs gets no chunk back.
+      await call({ command: 'delete', path: '/memories/owner.md' });
+      expect(await files.reindex((await bankRow(WS_A, bank))!, row.id)).toBe(true);
+      expect(await chunks('/memories/owner.md')).toEqual([]);
+    }, 60_000);
+
+    it('a Hindsight clear keeps the files’ chunks: recall still finds what view shows', async () => {
+      await call({ command: 'create', path: '/memories/pager.md', file_text: 'The pager rotation changes on Mondays.' });
+      await hindsight(people.alice.key).retain(bank, 'Gwen prefers async standups.');
+      const cleared = await fetch(`${baseUrl}/v1/default/banks/${bank}/memories`, { method: 'DELETE', headers: { Authorization: `Bearer ${people.alice.key}` } });
+      expect(cleared.status).toBe(200);
+      const row = (await bankRow(WS_A, bank))!;
+      expect(await prisma.memoryUnit.count({ where: { bankId: row.id, NOT: { documentId: { startsWith: 'file:' } } } })).toBe(0);
+      expect((await chunks('/memories/pager.md')).map((c) => c.text)).toEqual(['The pager rotation changes on Mondays.']);
+      expect((await hindsight(people.alice.key).recall(bank, 'When does the pager rotation change?')).results.map((r) => r.text)).toContainEqual(expect.stringContaining('Mondays'));
+    }, 60_000);
   });
 });

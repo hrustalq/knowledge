@@ -37,6 +37,13 @@ export interface RetainInput {
   verbatim?: boolean;
   /** Write the units already consolidated, so the consolidation pass never claims them (#1007). */
   consolidated?: boolean;
+  /**
+   * Asked under the bank's lock, in the transaction that would write the
+   * units, before anything is replaced: false writes nothing and the retain
+   * answers `superseded`. A file's index (#1009) passes the check that its
+   * text is still what was embedded, and marks it indexed in the same step.
+   */
+  guard?: () => Promise<boolean>;
 }
 
 /** One masker for a whole request, over each item's content and context: the same value gets the same placeholder throughout. */
@@ -89,7 +96,7 @@ export class MemoryRetainService {
     private readonly units: MemoryUnitsService,
   ) {}
 
-  async retain(input: RetainInput): Promise<{ units: number; usage: TokenUsage | null }> {
+  async retain(input: RetainInput): Promise<{ units: number; usage: TokenUsage | null; superseded?: true }> {
     // Only the worker builds the index (on boot). Without it the rows would be
     // stored and never ranked, so say what is missing instead.
     if (!(await this.graph.memoryIndexReady(this.embeddings.dimension))) {
@@ -114,9 +121,10 @@ export class MemoryRetainService {
 
     await this.graph.upsertMemoryUnits(input.workspaceId, input.bank.id, units.map((u, i) => ({ unitId: u.id, embedding: vectors[i]! })), Date.now());
     const replaces = [...new Set(items.filter((i) => !i.append).map((i) => i.documentId))];
-    let replaced: string[];
+    let replaced: string[] | null;
     try {
       replaced = await withSubjectLock(this.prisma, `memory-bank:${input.bank.id}`, async () => {
+        if (input.guard && !(await input.guard())) return null;
         const old = await this.prisma.memoryUnit.findMany({
           // Facts only: an observation is consolidation's, and a client's document_id never names one.
           where: { bankId: input.bank.id, factType: { not: 'observation' }, OR: [{ documentId: { in: replaces } }, ...(input.operationId ? [{ operationId: input.operationId }] : [])] },
@@ -130,6 +138,10 @@ export class MemoryRetainService {
     } catch (e) {
       await this.graph.deleteMemoryUnits(input.workspaceId, units.map((u) => u.id)).catch(() => undefined);
       throw e;
+    }
+    if (!replaced) {
+      await this.graph.deleteMemoryUnits(input.workspaceId, units.map((u) => u.id)).catch(() => undefined);
+      return { units: 0, usage, superseded: true };
     }
     // The rows are gone already; a failure here leaves orphans for the reap.
     await this.graph.deleteMemoryUnits(input.workspaceId, replaced).catch((e: Error) => this.logger.warn(`Replaced memory vectors not deleted, the reap will: ${e.message}`));

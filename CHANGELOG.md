@@ -13,6 +13,12 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Fixed
+
+- The Add domain field in AI web access stays full-width and readable on narrow screens instead of collapsing to a sliver. (#1081)
+
 ## [0.53.1] — 2026-11-13
 
 ### Fixed

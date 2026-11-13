@@ -1971,6 +1971,7 @@ export type I18nTranslations = {
         "viewer": string;
         "editor": string;
         "admin": string;
+        "system": string;
     };
     "status": {
         "mr": {

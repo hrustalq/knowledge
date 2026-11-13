@@ -12,6 +12,7 @@ import {
   type TemplatePlaceholderKind,
   type TemplateRelationDefault,
 } from '@knowledge/contracts';
+import { MATTER_OPTIONS } from '../common/frontmatter.js';
 import { normalizeRelation, readFrontmatterTags } from '../common/relations.js';
 import { TEMPLATE_MAX_PLACEHOLDERS, TEMPLATE_MAX_SOURCE_CHARS } from './templates.constants.js';
 
@@ -153,7 +154,7 @@ export function parseTemplateSource(source: string): ParsedTemplateSource {
   }
   let parsed: matter.GrayMatterFile<string>;
   try {
-    parsed = matter(source, {});
+    parsed = matter(source, MATTER_OPTIONS);
   } catch (e) {
     throw new TemplateSourceError('invalidFrontmatter', (e as Error).message.split('\n')[0]);
   }

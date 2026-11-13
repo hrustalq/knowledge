@@ -4,6 +4,7 @@ import { AiConfigService, type ResolvedAiConfig } from '../src/ai/ai-config.serv
 import { AiUsageService, type AiUsageTokens } from '../src/ai/ai-usage.service.js';
 import { fromUsage } from '../src/assistant/assistant.client.js';
 import { MemosProcessor } from '../src/memos/memos.processor.js';
+import { AUTHOR_ID_STUB } from '../src/activity/actor.js';
 
 /**
  * What a call costs, and in what (#793). The usage blocks here are the shapes
@@ -43,7 +44,7 @@ const config = (over: Partial<ResolvedAiConfig> = {}) =>
 function service() {
   const create = vi.fn(async (_: { data: Record<string, unknown> }) => ({}));
   const aiConfig = { estimateCost: AiConfigService.prototype.estimateCost };
-  return { create, usage: new AiUsageService({ aiUsage: { create } } as never, aiConfig as never) };
+  return { create, usage: new AiUsageService({ aiUsage: { create } } as never, aiConfig as never, { get: () => 'none' } as never) };
 }
 
 async function stored(cfg: ResolvedAiConfig, tokens: AiUsageTokens) {
@@ -171,7 +172,7 @@ describe('usage totals', () => {
       row({}),
     ]);
     const prisma = { aiUsage: { findMany }, user: { findMany: vi.fn(async () => []) }, publishedSite: { findMany: vi.fn(async () => []) } };
-    const res = await new AiUsageService(prisma as never, {} as never).summarize('ws', { groupBy: 'model' });
+    const res = await new AiUsageService(prisma as never, {} as never, { get: () => 'none' } as never).summarize('ws', { groupBy: 'model' });
     const expected = [
       { micros: 500_000, currency: 'RUB' },
       { micros: 3_000_000, currency: 'USD' },
@@ -180,6 +181,24 @@ describe('usage totals', () => {
     expect(res.totals.unpricedCalls).toBe(1);
     expect(res.buckets[0]!.costs).toEqual(expected);
     expect(res.series[0]!.costs).toEqual(expected);
+  });
+});
+
+describe('usage labels for the all-zeros id (#1023)', () => {
+  const summarize = (authMode: string) => {
+    const findMany = vi.fn(async () => [
+      { userId: AUTHOR_ID_STUB, model: 'm', promptTokens: 1, completionTokens: 1, totalTokens: 2, costMicros: null, costCurrency: 'USD', ok: true, createdAt: new Date('2026-11-01T00:00:00Z') },
+    ]);
+    const prisma = { aiUsage: { findMany }, user: { findMany: vi.fn(async () => []) }, publishedSite: { findMany: vi.fn(async () => []) } };
+    return new AiUsageService(prisma as never, {} as never, { get: () => authMode } as never).summarize('ws', { groupBy: 'user' });
+  };
+
+  it('is the system actor when people sign in with keys: only system work bills it there', async () => {
+    expect((await summarize('api-key')).buckets[0]!.label).toBe('role.system');
+  });
+
+  it('is still the dev principal under AUTH_MODE=none', async () => {
+    expect((await summarize('none')).buckets[0]!.label).toBe('dev (AUTH_MODE=none)');
   });
 });
 

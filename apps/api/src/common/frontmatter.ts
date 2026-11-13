@@ -29,9 +29,36 @@ export interface ParsedMarkdown {
   body: string;
 }
 
+/** A frontmatter fence that names a language which runs code (`---js`). */
+export class FrontmatterLanguageError extends Error {}
+
+function refuseLanguage(): never {
+  throw new FrontmatterLanguageError('frontmatter in this language is not read');
+}
+
+/**
+ * The only options any `matter(` call in this app passes (GHSA-qw3q-w6h2-9f7v).
+ *
+ * gray-matter takes the engine from the text after the opening fence, whatever
+ * `language` says, and its defaults include `javascript`, which evaluates the
+ * block. Page text chooses that fence, so the engines that run code throw.
+ * Passing options at all also bypasses gray-matter's cache, which answers a
+ * repeat of a source that threw with its unparsed text (#775).
+ */
+export const MATTER_OPTIONS = {
+  language: 'yaml',
+  engines: { javascript: refuseLanguage, coffee: refuseLanguage },
+} satisfies matter.GrayMatterOption<string, never>;
+
 export function parseMarkdown(raw: string): ParsedMarkdown {
-  // Options bypass gray-matter's cache, which answers a repeat of a source that threw with its unparsed text (#775).
-  const parsed = matter(raw, {});
+  let parsed: matter.GrayMatterFile<string>;
+  try {
+    parsed = matter(raw, MATTER_OPTIONS);
+  } catch (e) {
+    // A `---js` block is text, not frontmatter: show it as written.
+    if (e instanceof FrontmatterLanguageError) return { data: {}, body: raw };
+    throw e;
+  }
   return {
     data: (parsed.data ?? {}) as Record<string, unknown>,
     body: parsed.content,

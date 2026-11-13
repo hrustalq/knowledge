@@ -87,7 +87,7 @@ describe('AiUsageService.record attribution', () => {
   const tokens = { promptTokens: 1, completionTokens: 1, totalTokens: 2, estimated: false };
   function service() {
     const create = vi.fn(async () => ({}));
-    const svc = new AiUsageService({ aiUsage: { create } } as never, { estimateCost: () => null } as never);
+    const svc = new AiUsageService({ aiUsage: { create } } as never, { estimateCost: () => null } as never, { get: () => 'none' } as never);
     return { svc, create };
   }
 

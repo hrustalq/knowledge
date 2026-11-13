@@ -1,4 +1,5 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AI_USAGE_UNATTRIBUTED, GEN_API_COST_CURRENCY } from '@knowledge/contracts';
 import type {
   AiBudgetInfo,
@@ -97,6 +98,7 @@ export class AiUsageService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly aiConfig: AiConfigService,
+    private readonly config: ConfigService,
   ) {}
 
   async record(input: AiUsageRecordInput): Promise<void> {
@@ -521,8 +523,9 @@ export class AiUsageService {
   }
 
   /**
-   * Resolves user ids to emails. The dev principal's all-zeros id has no users
-   * row (AUTH_MODE=none), so it is named explicitly rather than showing a UUID.
+   * Resolves user ids to emails. The all-zeros id has no users row: under
+   * AUTH_MODE=none it is the dev principal, otherwise only system work bills it
+   * (memory consolidation, the learner), so it is named rather than shown as a UUID.
    */
   private async userLabels(ids: string[]): Promise<Map<string, string>> {
     const unique = [...new Set(ids)];
@@ -539,7 +542,9 @@ export class AiUsageService {
       for (const site of sites) map.set(site.id, `site: ${site.slug}`);
     }
     for (const id of unique) {
-      if (!map.has(id) && id === AUTHOR_ID_STUB) map.set(id, 'dev (AUTH_MODE=none)');
+      if (!map.has(id) && id === AUTHOR_ID_STUB) {
+        map.set(id, this.config.get('AUTH_MODE') === 'api-key' ? t('role.system') : 'dev (AUTH_MODE=none)');
+      }
     }
     return map;
   }

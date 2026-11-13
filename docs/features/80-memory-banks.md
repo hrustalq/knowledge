@@ -200,6 +200,8 @@ an async one.
 - **Facts are extracted** by the `memorist` agent (purpose `extraction`) when a model is
   routed there and the budget allows. A missing route, a spent budget, a failed call or an
   unreadable answer stores the masked text verbatim: retain never fails for want of a model.
+  A fact keeps the language of the item it comes from (#1022): the call carries no reply-language
+  directive (`locale: 'source'` in `AiCallContext`), whatever the caller's locale.
 - **A `document_id` retained before is replaced** (`update_mode: append` keeps it).
 - **Async**: the items are stored, masked, in a `memory_operations` row whose id is the
   client's `operation_id` when it sent one; the job carries only the id. An API-side sweeper
@@ -246,6 +248,9 @@ Its proof count is its evidence rows, derived on read and never stored.
   learner's coach is), and the bank is under its daily cap. Each is checked before the call it would
   pay for; a pass that stops says which (`disabled`, `no-model`, `cap`, `budget`, `failed`). With no
   model routed nothing is claimed and nothing is called: recall behaves as it did before observations.
+- **Language.** An observation is written in the language of the facts it rests on (#1022): the
+  pass sends no reply-language directive, as extraction does not. Reflect is a reply to a person and
+  answers in the caller's locale.
 - **The daily cap** is `MEMORY_CONSOLIDATION_DAILY_CALLS` per bank per UTC day, taken by one guarded
   `UPDATE` of `memory_banks.consolidation_day` / `consolidation_calls` before each call, so two workers
   never pass it. The backlog waits for the next day. Decision-model screens do not count against it.

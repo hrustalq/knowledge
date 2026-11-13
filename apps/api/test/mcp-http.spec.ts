@@ -2298,6 +2298,40 @@ describe('tools that copy a REST twin keep its checks (#812)', () => {
     expect(res.isError).toBeFalsy();
     expect(createRun).toHaveBeenCalledWith(row, 'pull', 'manual', { externalIds: undefined, actorId: principal.userId });
   });
+
+  // GHSA-4m3x-rcfg-892m: the revision is resolved through the page, as GET
+  // /:id/content does, so another page's (or workspace's) revision id reads nothing.
+  it('knowledge_get_embed reads a revision of the named page only', async () => {
+    const { mcp } = service(accessWith('viewer'));
+    const DOC = '55555555-5555-4555-8555-555555555555';
+    const OWN_REV = '66666666-6666-4666-8666-666666666666';
+    const OTHER_REV = '77777777-7777-4777-8777-777777777777';
+    const owner: Record<string, string> = { [OWN_REV]: DOC, [OTHER_REV]: '88888888-8888-4888-8888-888888888888' };
+    const contentRevision = vi.fn(async (documentId: string, revisionId?: string) => {
+      const id = revisionId ?? OWN_REV;
+      if (owner[id] !== documentId) throw new NotFoundException(`Revision ${id} not found on document ${documentId}`);
+      return { workspaceId: WS_A, kind: 'markdown', revision: { id, documentId } };
+    });
+    const group = vi.fn(async () => [{ url: 'https://www.figma.com/design/KEY/', version: '1', caption: 'Theirs', warning: null, name: null, text: null, snapshotKey: null }]);
+    const m = mcp as unknown as { documents: object; permissions: object };
+    Object.assign(m.documents, { contentRevision });
+    Object.assign(m.permissions, { requireHistoryAs: vi.fn(async () => undefined) });
+    Object.assign(mcp as unknown as { embeds: object }, { embeds: { group } });
+    const client = await connect(mcp, keyPrincipal({ id: 'k', scope: 'read', workspaceId: null }));
+    const call = (args: object) => client.callTool({ name: 'knowledge_get_embed', arguments: { documentId: DOC, ...args } });
+
+    const other = await call({ revisionId: OTHER_REV });
+    expect(other.isError).toBe(true);
+    expect(JSON.stringify(other.content)).toMatch(/not found on document/);
+    expect(group).not.toHaveBeenCalled();
+
+    expect((await call({ revisionId: OWN_REV })).isError).toBeFalsy();
+    expect((await call({})).isError).toBeFalsy();
+    expect(group.mock.calls).toEqual([
+      [DOC, OWN_REV, 0],
+      [DOC, OWN_REV, 0],
+    ]);
+  });
 });
 
 /**

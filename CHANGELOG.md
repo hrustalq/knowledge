@@ -24,6 +24,23 @@ in the pull request that introduces them — see
   text they come from; reflect still answers in the caller's language. Facts already stored stay as they
   are. (#1022)
 
+### Changed
+
+- A page whose frontmatter fence names a language other than YAML (`---js`, `---coffee`) now shows that block as
+  part of its body instead of reading it as frontmatter. A template saved that way is refused.
+  (GHSA-qw3q-w6h2-9f7v)
+- An attachment block keeps its link only when it points at one of the page's attachments, and an embed item links
+  out only over http or https. A raw `<object>` written into a page is no longer rendered. A drawing element whose
+  colour, size or shape is not one the editor writes is drawn with the default style or left out.
+  (GHSA-gvrv-7g78-f9p6, GHSA-qmpf-jh26-7cfm)
+
+### Security
+
+- Five advisories are fixed: page frontmatter could run code in the API and worker (GHSA-qw3q-w6h2-9f7v), a drawing
+  block (GHSA-qmpf-jh26-7cfm) and attachment or embed links (GHSA-gvrv-7g78-f9p6) could run script for a reader, a
+  git push could pass options to git (GHSA-4xqc-5p3w-3v95), and `knowledge_get_embed` returned the embeds of a
+  revision of another page (GHSA-4m3x-rcfg-892m). Upgrade; nothing else to do.
+
 ## [0.53.0] — 2026-11-13
 
 ### Added

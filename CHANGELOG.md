@@ -19,6 +19,10 @@ in the pull request that introduces them — see
 
 - AI usage no longer lists system work, such as memory consolidation, under "dev (AUTH_MODE=none)" on a server
   where people sign in. Those calls now show as "system". (#1023)
+- A memory bank no longer translates what an agent retains. Facts were written in the language of the person
+  whose key retained them, and observations were always written in English. Both now keep the language of the
+  text they come from; reflect still answers in the caller's language. Facts already stored stay as they
+  are. (#1022)
 
 ## [0.53.0] — 2026-11-13
 

@@ -145,6 +145,14 @@ describe('MemoryRetainService (#986)', () => {
     expect(embeddings.embedBatch).toHaveBeenCalledWith(['Alice owns billing.', 'Billing runs on Tuesdays.', 'Unsplit.']);
   });
 
+  it('asks the model to keep the item’s language, not the caller’s: no reply-language directive (#1022)', async () => {
+    const answer = JSON.stringify({ items: [{ item: 'I1', facts: [{ text: 'Alice leads billing.', type: 'world' }] }] });
+    const { svc, client } = service({ routed: true, answer });
+    await svc.retain({ workspaceId: WS, bank: { id: 'bank-1', mission: '' }, userId: 'u1', locale: 'ru', items: [item({ content: 'Alice leads billing.' })] });
+    const [[ctx]] = client.chatWithUsage.mock.calls as unknown as [[{ locale: string }]];
+    expect(ctx.locale).toBe('source');
+  });
+
   it('never fails for want of a model: a spent budget, a failed call and an unreadable answer all store verbatim', async () => {
     for (const opts of [{ budget: new Error('budget') }, { answer: new Error('upstream 500') }, { answer: 'not json' }]) {
       const { retain, created } = service({ routed: true, ...opts });

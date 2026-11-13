@@ -200,7 +200,7 @@ export class MemoryRetainService {
       try {
         await this.usage.assertWithinBudget(input.workspaceId, input.userId);
         const { content, tokens } = await this.client.chatWithUsage(
-          { config: agent.config, userId: input.userId, operation: 'memory-extract', locale: input.locale },
+          { config: agent.config, userId: input.userId, operation: 'memory-extract', locale: 'source' },
           [
             { role: 'system', content: agent.instructions },
             { role: 'user', content: extractionPrompt(batch, input.bank.mission) },

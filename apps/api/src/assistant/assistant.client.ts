@@ -28,8 +28,11 @@ export interface AiCallContext {
   /**
    * Language the model must answer in (docs/features/18). Applied centrally in
    * `create`/`createStream`, so every caller gets it without editing prompts.
+   * `'source'` sends no directive: for a call whose output is stored as the
+   * same knowledge as its input (memory facts and observations, #1022), which
+   * keeps the language it was written in rather than the caller's.
    */
-  locale: Locale;
+  locale: Locale | 'source';
 }
 
 /**
@@ -39,10 +42,11 @@ export interface AiCallContext {
  * cannot forget it. Pure — the caller's message array is never mutated, which
  * matters because runWithTools reuses one conversation across rounds.
  */
-function withLocaleDirective(
+export function withLocaleDirective(
   messages: ChatCompletionMessageParam[],
-  locale: Locale,
+  locale: Locale | 'source',
 ): ChatCompletionMessageParam[] {
+  if (locale === 'source') return messages;
   const directive = t('prompt.localeDirective', undefined, locale);
   const at = messages.findIndex((m) => m.role === 'system');
   if (at === -1) return [{ role: 'system', content: directive }, ...messages];

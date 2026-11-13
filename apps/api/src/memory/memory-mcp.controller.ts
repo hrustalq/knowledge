@@ -1,14 +1,15 @@
-import { Controller, Delete, Get, Header, Headers, HttpCode, Logger, Param, Post, Req, Res } from '@nestjs/common';
+import { Controller, Delete, Get, Header, Headers, HttpCode, Logger, NotFoundException, Param, Post, Req, Res } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { Request, Response } from 'express';
 import { CurrentPrincipal, ReadKeyOk } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { CachePolicy } from '../common/http-cache.js';
+import { t } from '../i18n/t.js';
 import { MemoryAccessService } from './memory-access.service.js';
 import { MemoryBanksService } from './memory-banks.service.js';
 import { MemoryIntakeService } from './memory-intake.service.js';
-import { buildMemoryMcpServer, type MemoryMcpServices } from './memory-mcp.js';
+import { buildMemoryMcpServer, isMemoryMcpProfile, type MemoryMcpServices } from './memory-mcp.js';
 import { MemoryRateService } from './memory-rate.service.js';
 import { MemoryRecallService } from './memory-recall.service.js';
 import { MemoryReflectService } from './memory-reflect.service.js';
@@ -65,9 +66,24 @@ export class MemoryMcpController {
     return this.handle({ principal, workspaceHeader, pathBank, headerBank: undefined }, req, res);
   }
 
-  private async handle(request: Parameters<typeof buildMemoryMcpServer>[1], req: Request, res: Response): Promise<void> {
+  /** One of the bank's tool sets by name (#1007). The header form stays Hindsight-only: `mcp/graph` already means the bank named "graph". */
+  @Post(':bankId/:profile')
+  profile(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') workspaceHeader: string | undefined,
+    @Param('bankId') pathBank: string,
+    @Param('profile') profile: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    return this.handle({ principal, workspaceHeader, pathBank, headerBank: undefined }, req, res, profile);
+  }
+
+  private async handle(request: Parameters<typeof buildMemoryMcpServer>[1], req: Request, res: Response, profile = 'hindsight'): Promise<void> {
     // Thrown before `res` is touched, so the exception filter answers it in the memory error shape.
+    // The caller first: with memory off an unknown profile is the same 404 as any other memory path.
     await this.services.access.caller(request.principal, request.workspaceHeader, 'viewer');
+    if (!isMemoryMcpProfile(profile)) throw new NotFoundException(t('error.memory.profileNotFound', { profile }));
     const server = buildMemoryMcpServer(this.services, request);
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     res.on('close', () => {
@@ -86,7 +102,7 @@ export class MemoryMcpController {
   // GET (an SSE stream) and DELETE (a session) have nothing to act on in a
   // stateless server. With memory off they are 404 like the rest, so a server
   // without memory answers these paths exactly as it did before they existed.
-  @Get(['', ':bankId'])
+  @Get(['', ':bankId', ':bankId/:profile'])
   @HttpCode(405)
   @Header('Allow', 'POST')
   noStream() {
@@ -94,7 +110,7 @@ export class MemoryMcpController {
     return methodNotAllowed();
   }
 
-  @Delete(['', ':bankId'])
+  @Delete(['', ':bankId', ':bankId/:profile'])
   @HttpCode(405)
   @Header('Allow', 'POST')
   noSession() {

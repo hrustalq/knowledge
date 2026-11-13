@@ -12,6 +12,14 @@ import type { MemoryRecallService } from './memory-recall.service.js';
 import type { MemoryReflectService } from './memory-reflect.service.js';
 
 export const MEMORY_MCP_SERVER_NAME = 'knowledge-memory';
+/**
+ * The tool sets a bank's endpoint serves, by the last path segment (#1007):
+ * `POST mcp/{bank}/{profile}`. `hindsight` is also the bare `mcp/{bank}`.
+ */
+export const MEMORY_MCP_PROFILES = ['hindsight'] as const;
+export type MemoryMcpProfile = (typeof MEMORY_MCP_PROFILES)[number];
+export const isMemoryMcpProfile = (value: string): value is MemoryMcpProfile => (MEMORY_MCP_PROFILES as readonly string[]).includes(value);
+
 /** The bank a header-form request means when it names none, as Hindsight's does. */
 export const DEFAULT_BANK_ID = 'default';
 

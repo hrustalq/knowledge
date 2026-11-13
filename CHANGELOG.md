@@ -25,7 +25,8 @@ in the pull request that introduces them — see
   Every other Hindsight route answers 404. Off by default; see Operations. (#986)
 - An MCP endpoint per memory bank, `https://<host>/api/mcp/{bank_id}/` (or `/api/mcp` with an `X-Bank-Id` header),
   with the tools `retain`, `sync_retain`, `recall` and `reflect`. A read-only key is offered only the last two.
-  The platform's own endpoint `/api/v1/mcp` and its tools are unchanged. (#992)
+  The platform's own endpoint `/api/v1/mcp` and its tools are unchanged. The same tools also answer at
+  `/api/mcp/{bank_id}/hindsight`; any other name there is a 404. (#992, #1007)
 - A `memory` section under **Settings → Features**, and two built-in agents: `memorist`, which splits what an
   agent retains into facts when a model is routed at extraction (otherwise the text is stored as written), and
   `reflector`, which answers a reflect. (#987, #988, #991)

@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { MemoryBank } from '@prisma/client';
 import type { Env } from '../config/env.js';
 import type { MemoryCaller } from './memory-access.service.js';
 import { MemoryBanksService } from './memory-banks.service.js';
-import { readRetainItems } from './memory-facts.js';
+import { assertRetainCeilings, readRetainItems, type RetainItem } from './memory-facts.js';
 import { MemoryOperationsService } from './memory-operations.service.js';
 import { MemoryRateService } from './memory-rate.service.js';
-import { MemoryRetainService } from './memory-retain.service.js';
+import { MemoryRetainService, type RetainInput } from './memory-retain.service.js';
 import type { RetainResponse } from './memory-wire.js';
 
 export interface RetainRequest {
@@ -51,5 +52,19 @@ export class MemoryIntakeService {
     }
     const { usage } = await this.retainer.retain({ workspaceId: caller.workspaceId, bank, userId: principal.userId, locale: principal.locale, items });
     return { ...done, async: false, ...(usage ? { usage } : {}) };
+  }
+
+  /**
+   * The door for a wire that builds its own items (#1007): the graph and file
+   * wires. Same rate, ceilings and bank creation as `retain`; always sync, as
+   * those wires answer from what they just wrote. Same role contract as `retain`.
+   */
+  async retainItems(caller: MemoryCaller, bankId: string, items: RetainItem[], options: Pick<RetainInput, 'verbatim' | 'consolidated'> = {}): Promise<{ bank: MemoryBank; units: number }> {
+    const { principal } = caller;
+    await this.rate.check('retain', principal);
+    assertRetainCeilings(items, this.limits);
+    const bank = await this.banks.ensure(caller, bankId);
+    const { units } = await this.retainer.retain({ workspaceId: caller.workspaceId, bank, userId: principal.userId, locale: principal.locale, items, ...options });
+    return { bank, units };
   }
 }

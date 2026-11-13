@@ -918,6 +918,7 @@ export type I18nTranslations = {
             "workspaceRequired": string;
             "workspaceHeaderRequired": string;
             "bankNotFound": string;
+            "profileNotFound": string;
             "bankIdInvalid": string;
             "contentNotText": string;
             "itemsRequired": string;

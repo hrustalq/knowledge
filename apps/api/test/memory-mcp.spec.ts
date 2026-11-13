@@ -5,7 +5,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { MCP_KEY_OK_META, READ_KEY_OK_META } from '../src/auth/access.decorator.js';
 import { DEV_PRINCIPAL, type Principal } from '../src/auth/principal.js';
 import { MemoryMcpController } from '../src/memory/memory-mcp.controller.js';
-import { buildMemoryMcpServer } from '../src/memory/memory-mcp.js';
+import { buildMemoryMcpServer, isMemoryMcpProfile } from '../src/memory/memory-mcp.js';
 import { MemoryRateService } from '../src/memory/memory-rate.service.js';
 import { RateLimitedException } from '../src/public/public-rate-limit.js';
 import { MCP_TOOLSETS } from '@knowledge/contracts';
@@ -145,5 +145,18 @@ describe('per-bank memory MCP server (#986)', () => {
     // AuthGuard admits a key limited to toolsets only where @McpKeyOk says so; this controller must not.
     expect(Reflect.getMetadata(MCP_KEY_OK_META, MemoryMcpController)).toBeUndefined();
     expect(Reflect.getMetadata(READ_KEY_OK_META, MemoryMcpController)).toBe(true);
+  });
+
+  it('routes a profile by name: unknown is a 404 after the resolver, before any server is built (#1007)', async () => {
+    let off = false;
+    const access = { caller: vi.fn(async () => { if (off) throw new NotFoundException('The memory feature is switched off in this workspace.'); return {}; }) };
+    const controller = new MemoryMcpController(access as never, {} as never, {} as never, {} as never, {} as never, {} as never);
+    const res = { on: vi.fn(), status: vi.fn(), headersSent: false };
+    await expect(controller.profile(keyed('write'), undefined, 'agent', 'nope', {} as never, res as never)).rejects.toBeInstanceOf(NotFoundException);
+    expect(res.on).not.toHaveBeenCalled();
+    off = true;
+    await expect(controller.profile(keyed('write'), undefined, 'agent', 'nope', {} as never, res as never)).rejects.toThrow(/switched off/);
+    expect(isMemoryMcpProfile('hindsight')).toBe(true);
+    expect(isMemoryMcpProfile('constructor')).toBe(false);
   });
 });

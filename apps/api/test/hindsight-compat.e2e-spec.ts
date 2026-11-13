@@ -878,6 +878,21 @@ describe('Hindsight compatibility (e2e, #986)', () => {
       }
     });
 
+    it('serves the same tools at /mcp/<bank>/hindsight, 404s an unknown profile in the memory shape, and 405s GET and DELETE there (#1007)', async () => {
+      const bare = (await (await rpc(people.alice.key, `/mcp/${mem}/`)).json()) as unknown;
+      const named = await rpc(people.alice.key, `/mcp/${mem}/hindsight`);
+      expect(named.status).toBe(200);
+      expect(await named.json()).toEqual(bare);
+      const unknown = await rpc(people.alice.key, `/mcp/${mem}/nope`);
+      expect(unknown.status).toBe(404);
+      expect(await unknown.json()).toEqual({ detail: expect.stringContaining('nope') });
+      // With memory off it is the same 404 as every other memory path.
+      expect((await rpc(people.erin.key, `/mcp/${mem}/hindsight`)).status).toBe(404);
+      for (const method of ['GET', 'DELETE']) {
+        expect([method, (await fetch(`${baseUrl}/mcp/${mem}/hindsight`, { method, headers: { Authorization: `Bearer ${people.alice.key}` } })).status]).toEqual([method, 405]);
+      }
+    });
+
     it('refuses recall and reflect over their per-key rate, on both surfaces, calling no model', async () => {
       const { MemoryRateService } = await import('../src/memory/memory-rate.service.js');
       const { AssistantClient } = await import('../src/assistant/assistant.client.js');

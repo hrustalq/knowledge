@@ -108,7 +108,7 @@ describe('MemoryRetainService (#986)', () => {
     };
     const units = { deleteBareObservations: vi.fn(async () => [] as string[]) };
     const svc = new MemoryRetainService(prisma as never, graph as never, aliases as never, embeddings as never, agents as never, usage as never, client as never, units as never);
-    const retain = (items: RetainItem[], extra: { verbatim?: boolean; consolidated?: boolean } = {}) => svc.retain({ workspaceId: WS, bank: { id: 'bank-1', mission: '' }, userId: 'u1', locale: 'en', items, ...extra });
+    const retain = (items: RetainItem[], extra: { verbatim?: boolean; consolidated?: boolean; guard?: () => Promise<boolean> } = {}) => svc.retain({ workspaceId: WS, bank: { id: 'bank-1', mission: '' }, userId: 'u1', locale: 'en', items, ...extra });
     return { svc, retain, created, prisma, graph, client, embeddings };
   }
 
@@ -179,6 +179,21 @@ describe('MemoryRetainService (#986)', () => {
     const { retain, created } = service({ ready: false });
     await expect(retain([item()])).rejects.toBeInstanceOf(ServiceUnavailableException);
     expect(created.units).toEqual([]);
+  });
+
+  it('a guard that says no writes nothing, keeps the old units and drops the new vectors (#1009)', async () => {
+    const { retain, created, prisma, graph } = service();
+    const guard = vi.fn(async () => false);
+    expect(await retain([item()], { verbatim: true, guard })).toEqual({ units: 0, usage: null, superseded: true });
+    expect(guard).toHaveBeenCalledOnce();
+    expect(created.units).toEqual([]);
+    expect(prisma.memoryUnit.deleteMany).not.toHaveBeenCalled();
+    const [[, , written]] = graph.upsertMemoryUnits.mock.calls as unknown as [[string, string, Array<{ unitId: string }>]];
+    expect(graph.deleteMemoryUnits).toHaveBeenCalledWith(WS, written.map((w) => w.unitId));
+    // Asked before anything is replaced; a yes writes as usual.
+    const ok = service();
+    expect((await ok.retain([item()], { guard: async () => true })).units).toBe(1);
+    expect(ok.prisma.memoryUnit.deleteMany).toHaveBeenCalled();
   });
 
   it('keeps an appended document’s earlier units', async () => {

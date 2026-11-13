@@ -313,4 +313,5 @@ export function fileChunks(content: string, maxChunks: number): string[] {
 }
 
 /** The document id a file's recall chunks share: a retain of it replaces them all. Distinct from the graph's `graph:` prefix. */
-export const fileDocumentId = (path: string): string => `file:${path}`;
+export const FILE_DOCUMENT_PREFIX = 'file:';
+export const fileDocumentId = (path: string): string => `${FILE_DOCUMENT_PREFIX}${path}`;

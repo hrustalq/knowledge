@@ -38,7 +38,9 @@ in the pull request that introduces them — see
   same six commands (`view`, `create`, `str_replace`, `insert`, `delete`, `rename`) answer as one MCP tool named
   `memory` at `/api/mcp/{bank_id}/files`. The answers are the SDK's own strings. Files live in the bank, masked on
   write and held to `MEMORY_RETAIN_MAX_CHARS`. `recall` finds what they say, and their text is never consolidated.
-  Every path must stay under `/memories`. A read-only key can `view` and nothing else. (#1009)
+  Every path must stay under `/memories`. A read-only key can `view` and nothing else. (#1009) If the search index
+  for a file cannot be written (for example, no embedding provider yet), a background sweep writes it later. A
+  renamed file is re-indexed the same way, and a Hindsight clear leaves the files searchable. (#1018)
 - A `memory` section under **Settings → Features**, and two built-in agents: `memorist`, which splits what an
   agent retains into facts when a model is routed at extraction (otherwise the text is stored as written), and
   `reflector`, which answers a reflect. (#987, #988, #991)

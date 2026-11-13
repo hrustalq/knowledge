@@ -4851,6 +4851,8 @@ model MemoryFile {
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  /// The `updated_at` of the content the file's recall chunks hold, set in the transaction that writes them. Behind `updated_at` (or null) = the index is stale and `MemoryFilesIndexSweeper` rewrites it.
+  indexedAt DateTime? @map("indexed_at") @db.Timestamptz
 
   @@unique([bankId, path])
   @@map("memory_files")

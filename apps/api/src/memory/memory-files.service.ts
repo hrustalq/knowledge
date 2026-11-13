@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { MemoryBank } from '@prisma/client';
+import type { Locale } from '@knowledge/contracts';
 import { createMasker } from '../common/mask.js';
 import { lockSubject, withSubjectLock } from '../common/subject-lock.js';
 import type { Env } from '../config/env.js';
@@ -29,8 +30,8 @@ import {
   replaceOnce,
   type MemoryPath,
 } from './memory-files.js';
-import { MemoryIntakeService } from './memory-intake.service.js';
 import { MemoryRateService } from './memory-rate.service.js';
+import { MemoryRetainService } from './memory-retain.service.js';
 import { MemoryUnitsService } from './memory-units.service.js';
 
 /** What a memory tool call answers: the `tool_result` the application hands back to Claude. */
@@ -66,16 +67,18 @@ type FileRow = { id: string; path: string; content: string };
  * - **Masked on write.** The stored text is what every later command reads,
  *   so a `str_replace` quoting the original secret is "did not appear".
  * - **Recall.** Each write replaces the file's chunks (`document_id =
- *   file:<path>`) through the intake, verbatim and born consolidated, so
- *   consolidation never claims them. A delete takes them with the file, a
- *   rename moves them, in the transaction that moves the rows.
+ *   file:<path>`), verbatim and born consolidated, so consolidation never
+ *   claims them. A delete takes them with the file, a rename moves them, in
+ *   the transaction that moves the rows.
  * - **Reads spend the recall rate, writes the retain rate.**
  *
  * Writes are serialised per bank by the `memory-files:{bank}` lock, taken
- * before the bank's `memory-bank:{bank}` lock wherever both are held. The
- * chunks are written after the file commits: an index that fails (no
- * embedding provider, a store not ready) leaves the file written and is
- * logged, and the next write of that file replaces the chunks again.
+ * before the bank's `memory-bank:{bank}` lock wherever both are held; a path
+ * holding the bank lock takes it before any file row. The chunks are written after the file
+ * commits (`reindex`), only while the file still holds the text embedded,
+ * and mark it indexed in the same transaction; a file left stale (no
+ * embedding provider, a store not ready, a rename's new path) is rewritten
+ * by `MemoryFilesIndexSweeper`.
  *
  * API-only, as the intake it writes through.
  */
@@ -89,7 +92,7 @@ export class MemoryFilesService {
     private readonly prisma: PrismaService,
     private readonly access: MemoryAccessService,
     private readonly banks: MemoryBanksService,
-    private readonly intake: MemoryIntakeService,
+    private readonly retainer: MemoryRetainService,
     private readonly units: MemoryUnitsService,
     private readonly rate: MemoryRateService,
     config: ConfigService<Env, true>,
@@ -151,17 +154,18 @@ export class MemoryFilesService {
     this.assertSize(shown, text);
     const bank = await this.banks.ensure(caller, bankId);
     const content = createMasker()(text);
-    await withSubjectLock(this.prisma, filesLock(bank), async () => {
+    const file = await withSubjectLock(this.prisma, filesLock(bank), async () => {
       await this.assertNoFileAbove(bank, p, shown);
       if ((await this.filesUnder(bank, p)).length) throw new MemoryToolError(`File ${shown} already exists`);
       // Overwrites a file that exists: the documentation allows it, and Claude's tool description says "creates or overwrites".
-      await this.prisma.memoryFile.upsert({
+      return this.prisma.memoryFile.upsert({
         where: { bankId_path: { bankId: bank.id, path: p.path } },
         create: { workspaceId: caller.workspaceId, bankId: bank.id, path: p.path, content, createdBy: caller.principal.userId, updatedBy: caller.principal.userId },
         update: { content, updatedBy: caller.principal.userId },
+        select: { id: true },
       });
     });
-    await this.index(caller, bank, p.path, content);
+    await this.reindex(bank, file.id, caller.principal.locale);
     return `File created successfully at: ${shown}`;
   }
 
@@ -188,9 +192,9 @@ export class MemoryFilesService {
       const content = createMasker()(changed.content);
       this.assertSize(shown, content);
       await this.prisma.memoryFile.update({ where: { id: file.id }, data: { content, updatedBy: caller.principal.userId } });
-      return { content, line: changed.line };
+      return { id: file.id, content, line: changed.line };
     });
-    await this.index(caller, bank, p.path, done.content);
+    await this.reindex(bank, done.id, caller.principal.locale);
     return answer(done.content, done.line);
   }
 
@@ -246,12 +250,14 @@ export class MemoryFilesService {
       if (isFile && isImagePath(to.path)) throw imageRefused(newShown);
       await this.assertNoFileAbove(bank, to, newShown, from.path);
       const moves = moving.map((f) => ({ id: f.id, from: f.path, to: to.path + f.path.slice(from.path.length) }));
+      // The bank's lock before any file row: an index holds it while it marks a row, so the other order deadlocks.
+      await lockSubject(this.prisma, bankLock(bank));
       await this.prisma.$executeRaw`
         UPDATE memory_files f SET path = m.to_path, updated_by = ${caller.principal.userId}::uuid, updated_at = now()
           FROM unnest(${moves.map((m) => m.id)}::uuid[], ${moves.map((m) => m.to)}::text[]) AS m(id, to_path)
          WHERE f.id = m.id`;
       // The recall index moves with the rows, under the bank's lock so no retain of these ids interleaves.
-      await lockSubject(this.prisma, `memory-bank:${bank.id}`);
+      // Its vectors still hold the old path as context: the moved files are stale (updated_at moved), so the sweeper re-embeds them.
       await this.prisma.$executeRaw`
         UPDATE memory_units u SET document_id = 'file:' || m.to_path, context = m.to_path, updated_at = now()
           FROM unnest(${moves.map((m) => fileDocumentId(m.from))}::text[], ${moves.map((m) => m.to)}::text[]) AS m(doc, to_path)
@@ -290,26 +296,57 @@ export class MemoryFilesService {
   }
 
   /**
-   * The file's recall chunks, replaced: verbatim, born consolidated, the path
-   * as their context. A file emptied of text keeps no chunk. A failure is
-   * logged, never answered: the file is written and the next write re-indexes.
+   * The file's recall chunks brought level with its text, verbatim, born
+   * consolidated, the path as their context; a file emptied of text keeps no
+   * chunk. The chunks are written, and the file marked indexed, only while it
+   * still holds the text that was embedded at that path — checked under the
+   * bank's lock, in the transaction that writes them — so a write, rename or
+   * delete that commits meanwhile is never overwritten with older text; the
+   * file is read again instead. True once the index holds the file as stored
+   * (or the file is gone: its delete took the chunks). False leaves it stale
+   * for the sweeper; a failure is logged, never answered.
    */
-  private async index(caller: MemoryCaller, bank: MemoryBank, path: string, content: string): Promise<void> {
-    const documentId = fileDocumentId(path);
+  async reindex(bank: MemoryBank, fileId: string, locale: Locale = 'en'): Promise<boolean> {
     try {
-      const chunks = fileChunks(content, this.maxItems);
-      if (!chunks.length) {
-        await this.units.deleteWhere(bank, { documentId, factType: { not: 'observation' } });
-        return;
+      for (let attempt = 0; attempt < INDEX_ATTEMPTS; attempt++) {
+        const file = await this.prisma.memoryFile.findFirst({ where: { id: fileId, bankId: bank.id }, select: { path: true, content: true, updatedAt: true, updatedBy: true } });
+        if (!file) return true;
+        const documentId = fileDocumentId(file.path);
+        // By text and path, not updated_at: a timestamp read back loses PG's microseconds.
+        const settle = async () =>
+          (await this.prisma.$executeRaw`
+            UPDATE memory_files SET indexed_at = updated_at
+             WHERE id = ${fileId}::uuid AND path = ${file.path} AND content = ${file.content}`) > 0;
+        const chunks = fileChunks(file.content, this.maxItems);
+        if (chunks.length) {
+          const timestamp = file.updatedAt.toISOString();
+          const items: RetainItem[] = chunks.map((chunk) => ({ content: chunk, context: file.path, timestamp, metadata: { file: file.path }, documentId, entities: [], tags: [], append: false }));
+          const done = await this.retainer.retain({ workspaceId: bank.workspaceId, bank, userId: file.updatedBy, locale, items, verbatim: true, consolidated: true, guard: settle });
+          if (!done.superseded) return true;
+          continue;
+        }
+        const dropped = await withSubjectLock(this.prisma, bankLock(bank), async () => {
+          if (!(await settle())) return null;
+          // Born consolidated, so no observation rests on them: nothing is left bare.
+          const ids = (await this.prisma.memoryUnit.findMany({ where: { bankId: bank.id, documentId, factType: { not: 'observation' } }, select: { id: true } })).map((r) => r.id);
+          await this.prisma.memoryUnit.deleteMany({ where: { id: { in: ids } } });
+          return ids;
+        });
+        if (dropped) {
+          await this.units.dropVectors(bank.workspaceId, dropped);
+          return true;
+        }
       }
-      const timestamp = new Date().toISOString();
-      const items: RetainItem[] = chunks.map((chunk) => ({ content: chunk, context: path, timestamp, metadata: { file: path }, documentId, entities: [], tags: [], append: false }));
-      await this.intake.store(caller, bank, items, { verbatim: true, consolidated: true });
+      return false;
     } catch (e) {
-      this.logger.warn({ msg: 'memory file written, recall index not updated', bankId: bank.id, path, error: String(e) });
+      this.logger.warn({ msg: 'memory file written, recall index not updated; the sweeper retries', bankId: bank.id, fileId, error: String(e) });
+      return false;
     }
   }
 }
 
 const ok = (content: string): MemoryToolResult => ({ content, is_error: false });
 const filesLock = (bank: MemoryBank) => `memory-files:${bank.id}`;
+const bankLock = (bank: MemoryBank) => `memory-bank:${bank.id}`;
+/** Reads of a file one reindex makes while writers keep moving it; past them the sweeper takes over. */
+const INDEX_ATTEMPTS = 3;

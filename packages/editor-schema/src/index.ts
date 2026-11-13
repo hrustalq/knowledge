@@ -15,6 +15,7 @@
 import { Mark, Node, getSchema, mergeAttributes, type AnyExtension } from '@tiptap/core';
 import { DOMParser as PMDOMParser, type DOMOutputSpec, type Node as PMNode, type Schema } from '@tiptap/pm/model';
 import { asEmbedLayout, type EmbedItem, type EmbedLayout } from '@knowledge/contracts/embeds';
+import { parseAttachmentPath } from '@knowledge/contracts/publishing';
 import StarterKit from '@tiptap/starter-kit';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import Highlight from '@tiptap/extension-highlight';
@@ -377,6 +378,20 @@ export const Drawing = Node.create({
   },
 });
 
+/**
+ * A file block's href is an attachment route or nothing (GHSA-gvrv-7g78-f9p6).
+ * The Link mark filters schemes, but this node copies its href out of raw HTML,
+ * and its attrs can also arrive straight from a shared draft — so both its
+ * parse and its render check.
+ */
+function attachmentHref(href: string | null | undefined): string {
+  const value = (href ?? '').trim();
+  return parseAttachmentPath(value) ? value : '';
+}
+
+/** An embed item links out only over http(s), as the read view's tiles do (`embedTile`). */
+const HTTP_URL = /^https?:\/\//i;
+
 export const FileEmbed = Node.create({
   name: 'knFile',
   group: 'block',
@@ -408,7 +423,7 @@ export const FileEmbed = Node.create({
       },
       href: {
         default: '',
-        parseHTML: (element) => element.querySelector('a')?.getAttribute('href') ?? '',
+        parseHTML: (element) => attachmentHref(element.querySelector('a')?.getAttribute('href')),
         renderHTML: () => ({}),
       },
     };
@@ -422,7 +437,7 @@ export const FileEmbed = Node.create({
     return [
       'div',
       mergeAttributes(HTMLAttributes),
-      ['a', { href: node.attrs.href as string }, node.attrs.filename as string],
+      ['a', { href: attachmentHref(node.attrs.href as string) }, node.attrs.filename as string],
     ];
   },
 });
@@ -478,7 +493,7 @@ export const Embed = Node.create({
       { [KN.embed]: asEmbedLayout(node.attrs.layout) },
       ...items.map((item) => [
         'a',
-        { href: item.url, ...(item.version ? { [KN.version]: item.version } : {}) },
+        { ...(HTTP_URL.test(item.url) ? { href: item.url } : {}), ...(item.version ? { [KN.version]: item.version } : {}) },
         item.caption || item.url,
       ]),
       ...(caption ? [['figcaption', {}, caption]] : []),

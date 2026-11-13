@@ -196,7 +196,12 @@ function renderFiles() {
     const name = node.getAttribute('data-kn-name') ?? 'attachment'
     const mime = node.getAttribute('data-kn-mime') ?? ''
     const size = Number(node.getAttribute('data-kn-size')) || 0
-    const rawHref = node.querySelector('a')?.getAttribute('href') ?? ''
+    const rawHref = (node.querySelector('a')?.getAttribute('href') ?? '').trim()
+    // An attachment route or no card, as the public renderer does (GHSA-gvrv-7g78-f9p6).
+    if (!parseAttachmentPath(rawHref)) {
+      node.remove()
+      continue
+    }
     const href = resolveAssetUrl(rawHref)
     const download = `${href}${href.includes('?') ? '&' : '?'}download=1`
     const kind = attachmentKind(mime)

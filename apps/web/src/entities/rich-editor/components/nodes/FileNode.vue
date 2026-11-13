@@ -6,6 +6,7 @@ import { computed, ref } from 'vue'
 import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import { Download, ExternalLink, File, FileText, Maximize2, Minimize2, Trash2 } from 'lucide-vue-next'
 import { Collapse } from '@knowledge/ui/collapse'
+import { parseAttachmentPath } from '@knowledge/contracts/publishing'
 import { resolveAssetUrl } from '@/shared/api/api'
 import { attachmentKind } from '@/core/markdown/nodes'
 import { formatBytes } from '@/shared/utils/format'
@@ -18,7 +19,12 @@ const expanded = ref(true)
 
 const mime = computed(() => (props.node.attrs.mime as string) ?? '')
 const kind = computed(() => attachmentKind(mime.value))
-const href = computed(() => resolveAssetUrl((props.node.attrs.href as string) ?? ''))
+// An attachment route or nothing (GHSA-gvrv-7g78-f9p6): attrs can arrive from a
+// shared draft without passing the schema's parse rule.
+const href = computed(() => {
+  const raw = ((props.node.attrs.href as string) ?? '').trim()
+  return parseAttachmentPath(raw) ? resolveAssetUrl(raw) : ''
+})
 const downloadHref = computed(() => {
   const url = href.value
   return `${url}${url.includes('?') ? '&' : '?'}download=1`
@@ -33,17 +39,17 @@ const downloadHref = computed(() => {
       <span v-if="node.attrs.size" class="kn-file-size">{{ formatBytes(Number(node.attrs.size)) }}</span>
       <div class="ml-auto flex items-center gap-0.5">
         <button
-          v-if="kind === 'pdf'"
+          v-if="kind === 'pdf' && href"
           type="button"
           :aria-label="expanded ? t('editor.collapsePreview') : t('editor.expandPreview')"
           @click="expanded = !expanded"
         >
           <component :is="expanded ? Minimize2 : Maximize2" class="size-3.5" />
         </button>
-        <a :href="href" target="_blank" rel="noopener noreferrer" :aria-label="t('editor.openInNewTab')">
+        <a v-if="href" :href="href" target="_blank" rel="noopener noreferrer" :aria-label="t('editor.openInNewTab')">
           <ExternalLink class="size-3.5" />
         </a>
-        <a :href="downloadHref" :download="node.attrs.filename" :aria-label="t('editor.download')">
+        <a v-if="href" :href="downloadHref" :download="node.attrs.filename" :aria-label="t('editor.download')">
           <Download class="size-3.5" />
         </a>
         <button v-if="editor.isEditable" type="button" :aria-label="t('editor.removeAttachment')" @click="deleteNode()">
@@ -54,7 +60,7 @@ const downloadHref = computed(() => {
 
     <!-- Unmounted while closed: an <object> left in the tree keeps a PDF
          renderer alive behind a control that says the preview is collapsed. -->
-    <Collapse v-if="kind === 'pdf'" :open="expanded">
+    <Collapse v-if="kind === 'pdf' && href" :open="expanded">
       <object
         class="kn-file-pdf"
         :data="href"

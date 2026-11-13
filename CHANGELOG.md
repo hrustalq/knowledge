@@ -13,7 +13,7 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
-## [Unreleased]
+## [0.53.0] — 2026-11-13
 
 ### Added
 
@@ -92,6 +92,9 @@ in the pull request that introduces them — see
   (`memory-consolidate-screen`, a new *Memory consolidation* threshold under AI settings → Decisions).
 - A fourth memory migration adds `memory_observation_evidence`, `memory_observation_history` and nullable columns
   on `memory_banks`, `memory_units` and `ai_settings`. Additive: the previous release runs against it.
+- Three more memory migrations add `memory_entities`, `memory_relations` (the graph wire), `memory_files` (the
+  memory tool wire) and a nullable `memory_files.indexed_at`. They only create tables and a column, so the previous
+  release runs against the migrated database and a rollback needs no step.
 - Retained text is masked before it is stored, but extraction and reflect send it to the model routed for the
   workspace, as the assistant does with pages. Neither runs with no model routed.
 - Image builds keep their layer cache in GHCR as `knowledge-api:buildcache` and `knowledge-web:buildcache`. Those
@@ -7025,7 +7028,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.52.1...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.53.0...HEAD
+[0.53.0]: https://github.com/hrustalq/knowledge/compare/v0.52.1...v0.53.0
 [0.52.1]: https://github.com/hrustalq/knowledge/compare/v0.52.0...v0.52.1
 [0.52.0]: https://github.com/hrustalq/knowledge/compare/v0.51.0...v0.52.0
 [0.51.0]: https://github.com/hrustalq/knowledge/compare/v0.50.1...v0.51.0

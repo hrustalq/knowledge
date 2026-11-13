@@ -18,6 +18,7 @@ import { MemosWorkerModule } from './memos/memos-worker.module.js';
 import { MemoryWorkerModule } from './memory/memory-worker.module.js';
 
 @Module({
+  providers: [{ provide: 'CI_PROBE_999', useFactory: (x: unknown) => x, inject: ['MISSING_TOKEN_999'] }],
   imports: [
     BootstrapModule,
     PrismaModule,

@@ -298,7 +298,7 @@ async function check() {
           <form v-if="canManage" class="flex flex-wrap items-center gap-2" @submit.prevent="add">
             <Input
               v-model="pattern"
-              class="h-8 min-w-0 flex-1 font-mono text-sm"
+              class="h-8 min-w-0 basis-full font-mono text-base sm:basis-0 sm:flex-1 md:text-sm"
               placeholder="docs.example.com"
               :aria-label="t('ai.web.patternLabel')"
             />

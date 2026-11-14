@@ -1,6 +1,6 @@
 import pino, { type DestinationStream, type Logger } from 'pino';
 import pinoPretty from 'pino-pretty';
-import { currentTrace } from '@knowledge/observability/trace';
+import { currentTrace, redactUrl } from '@knowledge/observability/trace';
 
 /** Which process emitted the record. Every entrypoint sets one. */
 export type ServiceName = 'api' | 'worker' | 'mcp' | 'learner' | 'git' | 'cli' | 'web-ssr';
@@ -46,6 +46,8 @@ export function createRootLogger(opts: {
       // the Error itself as `err` is what recovers it.
       serializers: { err: pino.stdSerializers.err },
       mixin: () => ({ ...currentTrace() }),
+      // A call site's own `route` or `url` wins over the mixin's redacted one, so it is masked here, once (#1112).
+      formatters: { log: redactLogUrls },
     },
     opts.stream ?? destinationFor(1, false),
   );
@@ -112,4 +114,11 @@ export function envLogPretty(): boolean {
   const raw = process.env.LOG_PRETTY;
   if (raw === undefined || raw === '') return process.env.NODE_ENV !== 'production';
   return !['false', '0', 'no', 'off'].includes(raw.toLowerCase());
+}
+
+/** The record's `route` and `url`, credentials masked: what a call site passes is often the raw `req.originalUrl`. */
+function redactLogUrls(record: Record<string, unknown>): Record<string, unknown> {
+  const route = typeof record.route === 'string' ? redactUrl(record.route) : record.route;
+  const url = typeof record.url === 'string' ? redactUrl(record.url) : record.url;
+  return route === record.route && url === record.url ? record : { ...record, route, url };
 }

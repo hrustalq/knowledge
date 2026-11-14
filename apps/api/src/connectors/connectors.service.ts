@@ -201,6 +201,7 @@ export class ConnectorsService {
 
     const config = withServerKeys(input.config ?? {}, {});
     await this.validateConfig(info.kind, config);
+    if (!input.connectionId) await assertInstallationReach(config, {}, reach);
     const via = input.connectionId ? await this.viaConnection(input.workspaceId, info.kind, input.connectionId, config, reach) : null;
     const token = via ? null : this.token(input.credential ?? null);
 
@@ -246,6 +247,7 @@ export class ConnectorsService {
     }
     if (input.config !== undefined) await this.validateConfig(kind, input.config);
     const config = input.config === undefined ? null : withServerKeys(input.config, row.config);
+    if (config && !input.connectionId) await assertInstallationReach(config, row.config, reach);
     const via = input.connectionId
       ? await this.viaConnection(
           row.workspaceId,
@@ -903,6 +905,20 @@ export async function addToRun(
  * Whatever the request says, the stored values stand.
  */
 const SERVER_CONFIG_KEYS = [FIGMA_GRANT_CONFIG_KEY, FIGMA_HANDLE_CONFIG_KEY];
+
+/**
+ * An installation named in a request's config, the GitHub repo picker's path:
+ * the person's own GitHub account must reach it, the question the picker and
+ * `viaConnection` ask (GHSA-52pw-fwcw-7mmf). Otherwise an admin could name any
+ * installation id and read its repositories. The one the row already holds
+ * asks nothing again.
+ */
+export async function assertInstallationReach(config: Record<string, string>, stored: Prisma.JsonValue, reach?: InstallationReach): Promise<void> {
+  const named = config[GITHUB_INSTALLATION_CONFIG_KEY]?.trim();
+  if (!named) return;
+  if (named === String(((stored ?? {}) as Record<string, unknown>)[GITHUB_INSTALLATION_CONFIG_KEY] ?? '').trim()) return;
+  if (!(reach && (await reach(named)))) throw new ForbiddenException(t('error.connection.githubNotVisible'));
+}
 
 export function withServerKeys(incoming: Record<string, string>, stored: Prisma.JsonValue): Record<string, string> {
   const kept = (stored ?? {}) as Record<string, unknown>;

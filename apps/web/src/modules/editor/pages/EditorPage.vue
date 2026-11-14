@@ -1107,15 +1107,14 @@ async function publishRevision(
   revisionId: string,
   text: string,
 ): Promise<FinalizeRevisionResponse> {
+  // The upload URL is signed for this exact size.
+  const body = new Blob([text], { type: 'text/markdown' })
   const up = await api.post('/v1/documents/{id}/uploads', {
     path: { id: documentId },
-    body: { revisionId, contentType: 'text/markdown', filename: 'source.md' },
+    body: { revisionId, contentType: 'text/markdown', filename: 'source.md', sizeBytes: body.size },
     config: { timeout: 0 },
   })
-  await presignedPut(
-    { url: up.upload.url, headers: { 'Content-Type': 'text/markdown' } },
-    new Blob([text], { type: 'text/markdown' }),
-  )
+  await presignedPut({ url: up.upload.url, headers: { 'Content-Type': 'text/markdown' } }, body)
   return await api.post('/v1/documents/{id}/revisions/{revisionId}/finalize', {
     path: { id: documentId, revisionId },
     config: { timeout: 0 },

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { redactUrl } from '@knowledge/observability';
+import { Writable } from 'node:stream';
+import { createRootLogger, redactUrl } from '@knowledge/observability';
 import { traceMiddleware } from '@knowledge/observability/express';
 import { clientIp } from '../src/common/client-ip.js';
 import { readCookie } from '../src/common/cookies.js';
@@ -21,6 +22,21 @@ describe('redactUrl masks a share token in the path', () => {
     expect(redactUrl('/s/kp_short')).toBe('/s/kp_[REDACTED]');
     expect(redactUrl('/v1/documents/kp_note')).toBe('/v1/documents/kp_note');
     expect(redactUrl('/settings/sharing')).toBe('/settings/sharing');
+  });
+});
+
+describe('a log line never carries a credential in the URL its caller passed (#1112 residual)', () => {
+  it("masks a call site's own `route`, which overrides the mixin's", () => {
+    const lines: string[] = [];
+    const stream = new Writable({ write: (chunk, _enc, done) => (lines.push(String(chunk)), done()) });
+    const logger = createRootLogger({ service: 'web-ssr', level: 'info', stream: stream as never });
+    logger.error({ msg: 'SSR render failed', route: '/s/kp_secretToken123/page?x=1' });
+    logger.warn({ msg: 'upstream failed', url: '/pub/site/session?jwt_token=eyJsecret' });
+    expect(lines.join('')).not.toMatch(/secretToken123|eyJsecret/);
+  });
+
+  it('masks a site session jwt_token in a query', () => {
+    expect(redactUrl('/v1/public/sites/x/session?jwt_token=eyJabc&return=/')).toBe('/v1/public/sites/x/session?jwt_token=[REDACTED]&return=/');
   });
 });
 

@@ -61,9 +61,9 @@
 			wrap console
 			fields {
 				# One filter per field, so the query rule and the share-path rule are one
-				# regexp: the value after ?token= / &X-Amz-Signature= or after
+				# regexp: the value after a credential query key (the app's list) or after
 				# /shares/kp_ and /s/kp_ goes, up to the next delimiter.
-				request>uri regexp "((?:[?&](?:token|X-Amz-Signature)=)|/(?:shares|s)/kp_)[^/?#&]*" "${1}REDACTED"
+				request>uri regexp "((?:[?&](?:token|access_token|api_key|jwt_token|code|state|X-Amz-Signature)=)|/(?:shares|s)/kp_)[^/?#&]*" "${1}REDACTED"
 			}
 		}
 	}

@@ -342,6 +342,23 @@ export class MattermostAdapter implements ChatAdapter {
     return note ? { ephemeral_text: note } : {};
   }
 
+  /**
+   * The press's `user_id` is the body's word: Mattermost signs nothing in it.
+   * The button's own signature already ties it to its channel, so the presser
+   * must at least be a member there, as the bot sees it (#1104). Inside the
+   * channel a replayed context could still name another member; Mattermost
+   * keeps a button's `integration` out of what it sends clients, so that takes
+   * the server's admin or the request itself (documented limit, doc 47).
+   */
+  async confirmPresser(ctx: ChatAdapterContext, inbound: ChatInbound): Promise<boolean> {
+    try {
+      await this.call(ctx, 'GET', `/channels/${encodeURIComponent(inbound.chatId)}/members/${encodeURIComponent(inbound.externalUserId)}`);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async identify(ctx: ChatAdapterContext): Promise<{ username: string }> {
     const me = await this.call<{ username?: string }>(ctx, 'GET', '/users/me');
     if (!me.username) throw new ChatPlatformError('users/me returned no username');

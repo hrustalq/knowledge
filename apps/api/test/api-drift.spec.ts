@@ -222,6 +222,8 @@ describe('ApiDriftService.forPullRequest', () => {
   function service() {
     const row = { id: 'c1', workspaceId: 'w', kind: 'codebase', enabled: true, name: 'app', config: { apiSpecs: 'openapi.yaml' } };
     const prisma = {
+      // An open project: the change is judged against the workspace's pages (restricted ones: e8fd875e).
+      project: { findUnique: async () => ({ id: 'p', restricted: false }) },
       connectorLink: { findMany: async () => [{ externalId: 'spec:openapi.yaml', documentId: SPEC_DOC }, { externalId: 'overview', documentId: 'hub' }] },
       document: { findMany: async () => [{ id: SPEC_DOC, title: 'Users API', specSlug: 'users-api' }] },
     };
@@ -304,6 +306,8 @@ describe('the sentinel with a spec tied', () => {
 
   function sentinel(visible: string[]) {
     const prisma = {
+      // An open project: the change is judged against the workspace's pages (restricted ones: e8fd875e).
+      project: { findUnique: async () => ({ id: 'p', restricted: false }) },
       // A docs connector: the deleted controller is outside its subdir, so no page is tied by path.
       connector: { findFirst: async () => ({ id: 'c1', name: 'app', kind: 'markdown-git', config: { subdir: 'docs' }, projectId: 'p', parentId: null }) },
       connectorLink: { findMany: async () => [] },

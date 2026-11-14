@@ -7,6 +7,7 @@ import {
   Injectable,
   Logger,
   UnauthorizedException,
+  Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type {
@@ -28,6 +29,8 @@ import { AuthPolicyService, type EnforcedDomain } from './auth-policy.service.js
 import { AuditService } from './audit.service.js';
 import type { RequestMeta } from '../common/client-ip.js';
 import { hashToken, mintToken } from './auth-tokens.js';
+import { LoginBackoff } from './login-backoff.js';
+import { RateLimitedException } from '../public/public-rate-limit.js';
 import { toMeResponse } from './me-response.js';
 import { asLocale } from '../i18n/locale.js';
 import { currentLocale, t } from '../i18n/t.js';
@@ -62,6 +65,8 @@ export class AuthFlowService {
     private readonly mail: MailProducer,
     private readonly audit: AuditService,
     private readonly policy: AuthPolicyService,
+    // Optional so a spec that builds the service by hand needs none.
+    @Optional() private readonly backoff?: LoginBackoff,
   ) {}
 
   /**
@@ -122,6 +127,9 @@ export class AuthFlowService {
 
   async login(email: string, password: string, meta?: RequestMeta): Promise<Issued<AuthSessionResponse>> {
     const normalized = email.trim().toLowerCase();
+    // Before anything is looked up: a guess in the wait costs nothing and says nothing.
+    const wait = meta && this.backoff ? await this.backoff.retryAfter(normalized, meta.ip) : 0;
+    if (wait > 0) throw new RateLimitedException(t('error.auth.rateLimited'), wait, 'login-backoff');
     // The ceiling is instance-wide, so saying so reveals nothing about the account.
     if (!passwordAllowedFor(normalized, this.config)) {
       this.recordFailure(normalized, 'password-login-disabled', meta);
@@ -158,8 +166,10 @@ export class AuthFlowService {
     // The reason goes to the audit trail only, which a platform admin reads.
     if (reason || !user) {
       this.recordFailure(normalized, reason ?? 'unknown-email', meta, user?.id);
+      if (meta) await this.backoff?.failed(normalized, meta.ip);
       throw new UnauthorizedException(t('error.auth.invalidCredentials'));
     }
+    await this.backoff?.cleared(normalized, meta?.ip);
     return this.issueSession(user, meta, {
       authMethod: 'password',
       workspaceId: domain?.workspaceId ?? null,
@@ -274,6 +284,9 @@ export class AuthFlowService {
       // An invite sets a first password; there was no previous one to warn about.
       if (reset.purpose !== 'invite') this.prisma.onCommit(() => this.mail.enqueue({ template: 'password-changed', userId: reset.userId }));
     });
+    // The address is proven: guesses before the reset stop slowing its owner down.
+    const owner = await this.prisma.user.findUnique({ where: { id: reset.userId }, select: { email: true } });
+    if (owner) await this.backoff?.cleared(owner.email);
   }
 
   async changePassword(principal: Principal, currentPassword: string, newPassword: string): Promise<void> {

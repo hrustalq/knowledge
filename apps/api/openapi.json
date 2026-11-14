@@ -46291,11 +46291,17 @@
           "filename": {
             "type": "string",
             "example": "source.md"
+          },
+          "sizeBytes": {
+            "type": "number",
+            "example": 2048,
+            "minimum": 0
           }
         },
         "required": [
           "contentType",
-          "filename"
+          "filename",
+          "sizeBytes"
         ]
       },
       "CreateRevisionDto": {
@@ -46779,7 +46785,8 @@
         },
         "required": [
           "filename",
-          "contentType"
+          "contentType",
+          "sizeBytes"
         ]
       },
       "EmbedItemStatusDto": {

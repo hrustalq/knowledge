@@ -36,7 +36,8 @@ import { Label } from '@knowledge/ui/label'
 import { useAuthStore } from '@/stores/auth'
 import { useProjectsStore } from '@/stores/projects'
 import MemoActions from '@/modules/memos/components/MemoActions.vue'
-import { newMemoTypeKey, useMemoTypes } from '@/modules/memos/model/memo-types'
+import { useMemoTypes } from '@/modules/memos/model/memo-types'
+import MemoTypesDialog from '@/modules/memos/components/MemoTypesDialog.vue'
 import { apiUrl, getWorkspaceId } from '@/shared/api/api'
 import { MEMO_STATUS_CLASS, MEMO_STATUS_ICON, isMemoInFlight, segmentAt } from '@/modules/memos/model/memo-ui'
 
@@ -197,23 +198,20 @@ watch(
   { immediate: true },
 )
 /**
- * An admin can take the type triage proposed in one press: it becomes a type
- * of the workspace's own and this memo's choice. Its guidance is the model's
- * words, shown first and theirs to rewrite afterwards under Memo types.
+ * The type triage proposed opens in the Memo types editor as a new type: its
+ * guidance is the model's words, and guidance is trusted text the secretary
+ * follows (doc 75), so it is saved only by the admin's own press there. A
+ * saved type becomes this memo's choice.
  */
 const auth = useAuthStore()
-const adoptType = () =>
-  act(async () => {
-    const proposed = data.value?.triage?.newType
-    if (!proposed || !review.value) return
-    const key = newMemoTypeKey(proposed.name, types.value.map((type) => type.key))
-    await request('put', '/v1/memos/types/{key}', {
-      path: { key },
-      body: { workspaceId: getWorkspaceId(), name: proposed.name, guidance: proposed.guidance },
-    })
-    await queryClient.invalidateQueries({ queryKey: ['/v1/memos/types'] })
-    review.value.type = key
-  })
+const typesOpen = ref(false)
+const typesDraft = computed(() => data.value?.triage?.newType ?? null)
+const adoptType = () => {
+  if (typesDraft.value) typesOpen.value = true
+}
+const adopted = (key: string) => {
+  if (review.value) review.value.type = key
+}
 
 const confirmReview = () =>
   act(() =>
@@ -354,6 +352,7 @@ const retry = () => act(() => request('post', '/v1/memos/{id}/retry', { path: { 
             <template v-if="auth.canAdminWorkspace">
               <p class="italic">{{ data.triage.newType.guidance }}</p>
               <Button size="xs" variant="outline" :disabled="acting" @click="adoptType">{{ t('memos.review.adoptType') }}</Button>
+              <MemoTypesDialog v-model:open="typesOpen" :workspace-id="getWorkspaceId()" :draft="typesDraft" @saved="adopted" />
             </template>
           </div>
           <Button size="sm" :disabled="acting" @click="confirmReview">{{ t('memos.review.confirm') }}</Button>

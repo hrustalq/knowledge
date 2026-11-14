@@ -30,6 +30,7 @@ import type {
 } from './glossary.dto.js';
 import { t } from '../i18n/t.js';
 import { parseModelJson } from '../common/model-json.js';
+import { wrapUntrusted } from '../common/untrusted.js';
 import { withSubjectLock } from '../common/subject-lock.js';
 
 /** How much of a page the extractor sees — the same ceiling `review` uses. */
@@ -317,7 +318,7 @@ export class GlossaryService {
         },
         {
           role: 'user',
-          content: `Title: ${dto.title || '(untitled)'}\n\nPage:\n\n${source.slice(0, MAX_SOURCE_CHARS)}`,
+          content: wrapUntrusted(`Title: ${dto.title || '(untitled)'}\n\n${source.slice(0, MAX_SOURCE_CHARS)}`, 'glossary_source', 'document'),
         },
       ],
       { json: true },

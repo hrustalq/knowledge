@@ -511,6 +511,17 @@ describe('runTestPlan', () => {
       expect(JSON.stringify([...results.values()])).not.toContain('S3CRET');
       expect(results.get('setup/clean')!.captures).toEqual({ invoiceId: 'inv_1' });
     });
+
+    it('is left out of the result row when a later capture of the same request fails', async () => {
+      const failing: TestRunPlan = { ...tainted, setup: [call('echo', OWN, '/echo?k={{secret.apiKey}}', { x: '$.echo', y: '$.missing' })] };
+      const results = await runTestPlan(failing, {}, async (_k, _t, r) => ({
+        status: 200,
+        headers: [],
+        body: JSON.stringify({ echo: `derived-${new URL(r.url).searchParams.get('k')}` }),
+      }), undefined, undefined, guarded);
+      expect(results.get('setup/echo')).toMatchObject({ outcome: 'fail', reason: 'capture:y' });
+      expect(results.get('setup/echo')!.captures).toEqual({});
+    });
   });
 });
 

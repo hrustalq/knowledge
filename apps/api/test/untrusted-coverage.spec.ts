@@ -9,9 +9,23 @@ import { describe, expect, it } from 'vitest';
  */
 
 const SRC = join(import.meta.dirname, '..', 'src');
-const ROOTS = ['assistant', 'agents', 'documents/mention-replies.service.ts', 'memos/triage.ts', 'ai/ai-plugins.service.ts'];
+const ROOTS = [
+  'assistant',
+  'agents',
+  'documents/mention-replies.service.ts',
+  'memos/triage.ts',
+  'ai/ai-plugins.service.ts',
+  // The 2026-11-14 re-check's siblings.
+  'ai/agent-findings.service.ts',
+  'connectors/connector-item-ai.service.ts',
+  'workflows/workflow.executors.ts',
+  'glossary/glossary.service.ts',
+  'extraction/openai-compatible.provider.ts',
+];
 /** An opening content tag written into a string, or opening a template literal's line: `<page title=…>`, `<document>`, … */
-const HAND_WRITTEN = /(^\s*|[`'"][^`'"\n]*)<(document|page|pages|attachment|draft|discussion|merge_request|passage_under_discussion|plugin-result)[\s>=]/u;
+const HAND_WRITTEN = /(^\s*|[`'"][^`'"\n]*)<(document|page|pages|attachment|draft|discussion|merge_request|passage_under_discussion|plugin-result|file)[\s>=]/u;
+/** A hand-written section header in front of raw page text: `--- SOURCE: <title> ---`. */
+const HAND_HEADER = /--- SOURCE: /u;
 
 function files(path: string): string[] {
   const full = join(SRC, path);
@@ -26,7 +40,7 @@ describe('untrusted text reaches models through the one wrapper', () => {
     const offenders = ROOTS.flatMap(files).flatMap((file) =>
       readFileSync(file, 'utf8')
         .split('\n')
-        .flatMap((line, i) => (HAND_WRITTEN.test(line) ? [`${file.slice(SRC.length + 1)}:${i + 1}: ${line.trim()}`] : [])),
+        .flatMap((line, i) => (HAND_WRITTEN.test(line) || HAND_HEADER.test(line) ? [`${file.slice(SRC.length + 1)}:${i + 1}: ${line.trim()}`] : [])),
     );
     expect(offenders).toEqual([]);
   });

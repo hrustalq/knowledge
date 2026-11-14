@@ -97,7 +97,8 @@ export function registerAgentsTools(ctx: McpToolContext): void {
     async ({ workspaceId, definitionId, rootDocumentId, note }) => {
       await guard.ws(workspaceId, 'editor');
       await guard.doc(rootDocumentId, 'editor');
-      return json(
+      return pageJson(
+          'knowledge_start_workflow',
           await svc.workflows.startRun(
             { workspaceId, definitionId, rootDocumentId, ...(note ? { note } : {}) },
             principal.userId,

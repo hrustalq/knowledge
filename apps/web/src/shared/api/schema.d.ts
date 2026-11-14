@@ -8996,6 +8996,8 @@ export interface components {
             contentType: string;
             /** @example source.md */
             filename: string;
+            /** @example 2048 */
+            sizeBytes: number;
         };
         CreateRevisionDto: {
             /** @description Default: main. */
@@ -9176,7 +9178,7 @@ export interface components {
              */
             contentType: "image/png" | "image/jpeg" | "image/gif" | "image/webp" | "image/avif" | "application/pdf" | "text/plain" | "text/csv" | "text/markdown" | "application/json" | "application/zip" | "application/msword" | "application/vnd.openxmlformats-officedocument.wordprocessingml.document" | "application/vnd.ms-excel" | "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" | "application/vnd.ms-powerpoint" | "application/vnd.openxmlformats-officedocument.presentationml.presentation";
             /** @example 148231 */
-            sizeBytes?: number;
+            sizeBytes: number;
         };
         EmbedItemStatusDto: {
             fileKey: string;

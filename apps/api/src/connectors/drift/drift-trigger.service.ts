@@ -5,6 +5,7 @@ import { AgentRegistryService } from '../../agents/agent-registry.service.js';
 import { AgentProducer } from '../../agents/agent.producer.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { REPO_CONNECTOR_KINDS } from '../code-research/repo-snapshot.service.js';
+import { RESTRICTED_RUN_PREFIX } from '../../ai/run-privacy.js';
 import type { MergedPullRequestDelivery, PullRequestDelivery } from './pull-request-delivery.js';
 
 /** The agent a drift check runs as. */
@@ -107,11 +108,14 @@ export class DriftTriggerService {
       where: { workspaceId_key: { workspaceId: row.workspaceId, key: DRIFT_AGENT_KEY } },
       select: { id: true },
     });
+    // A repository only its project may read (#553) makes a private run.
+    const project = row.projectId ? await this.prisma.project.findUnique({ where: { id: row.projectId }, select: { restricted: true } }) : null;
     const run = await this.prisma.agentRun.create({
       data: {
         workspaceId: row.workspaceId,
         agentKey: DRIFT_AGENT_KEY,
         agentId: override?.id ?? null,
+        ...(project?.restricted ? { subjectKey: `${RESTRICTED_RUN_PREFIX}${row.projectId}` } : {}),
         trigger: 'webhook',
         createdBy: row.createdBy,
         locale: row.locale,

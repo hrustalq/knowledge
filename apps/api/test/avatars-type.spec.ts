@@ -22,7 +22,7 @@ describe('avatar content types', () => {
   it('binds the declared type into the upload URL', async () => {
     const { svc, storage } = service(null);
     await svc.reserve('users', 'u1', { filename: 'me.png', contentType: 'image/png', sizeBytes: 10 } as never);
-    expect(storage.presignPut).toHaveBeenCalledWith('k', 'image/png', 900, { bindContentType: true });
+    expect(storage.presignPut).toHaveBeenCalledWith('k', 'image/png', 900, { bindContentType: true, contentLength: expect.any(Number) });
   });
 
   it.each(['text/html', 'image/svg+xml', 'application/xhtml+xml', null])('refuses and deletes an upload that arrived as %s', async (type) => {

@@ -343,6 +343,17 @@ describe.each(PLATFORMS)('$kind', ({ kind, server }) => {
       expect(String(err)).toContain(`${kind} GET /users/me`);
     });
 
+    it('confirms a presser only when the server says they are in the channel (#1104 residual)', async () => {
+      const press = { externalUserId: 'u-1', chatId: 'ch-1' } as never;
+      safeFetch.mockResolvedValueOnce(json(200, { channel_id: 'ch-1', user_id: 'u-1' }));
+      expect(await adapter.confirmPresser!(ctx, press)).toBe(true);
+      expect(safeFetch.mock.calls[0][0]).toBe(`${server}/api/v4/channels/ch-1/members/u-1`);
+      safeFetch.mockResolvedValueOnce(json(404, { message: 'not a member' }));
+      expect(await adapter.confirmPresser!(ctx, press)).toBe(false);
+      safeFetch.mockRejectedValueOnce(new Error('down'));
+      expect(await adapter.confirmPresser!(ctx, press)).toBe(false);
+    });
+
     it('has no webhook to register and no deep link', async () => {
       await expect(adapter.registerWebhook()).resolves.toBeUndefined();
       expect(adapter.directLink()).toBeNull();

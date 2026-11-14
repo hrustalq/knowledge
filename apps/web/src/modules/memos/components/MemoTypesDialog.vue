@@ -22,7 +22,9 @@ import { Textarea } from '@knowledge/ui/textarea'
 import { useProjectsStore } from '@/stores/projects'
 import { newMemoTypeKey, useMemoTypes } from '../model/memo-types'
 
-const props = defineProps<{ workspaceId: string }>()
+/** `draft`: a type triage proposed, opened as a new one for an admin to read, edit and save (#1103-era hardening). */
+const props = defineProps<{ workspaceId: string; draft?: { name: string; guidance: string } | null }>()
+const emit = defineEmits<{ saved: [key: string] }>()
 const open = defineModel<boolean>('open', { required: true })
 
 const { t } = useI18n()
@@ -45,15 +47,17 @@ const current = computed<MemoType | undefined>(() => types.value.find((type) => 
 
 function load() {
   const type = current.value
-  name.value = type ? (type.builtIn && !type.overridden ? '' : type.name) : ''
-  guidance.value = type?.guidance ?? ''
+  // A new type starts from the proposal when there is one: model words, saved only by the admin's own press.
+  const seed = type ? null : props.draft
+  name.value = type ? (type.builtIn && !type.overridden ? '' : type.name) : (seed?.name ?? '')
+  guidance.value = type?.guidance ?? seed?.guidance ?? ''
   hidden.value = type?.hidden ?? false
   project.value = type?.projectId ?? HERE
   auto.value = type?.auto ?? false
 }
 watch(open, (now) => {
   if (!now) return
-  selected.value = types.value[0]?.key ?? NEW
+  selected.value = props.draft ? NEW : (types.value[0]?.key ?? NEW)
   load()
 })
 watch(selected, load)
@@ -84,6 +88,7 @@ function save() {
     () => {
       selected.value = key
       toast.success(t('memos.types.saved'))
+      emit('saved', key)
     },
   )
 }

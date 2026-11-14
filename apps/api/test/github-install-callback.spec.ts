@@ -94,3 +94,21 @@ describe('binding a connector to an app connection', () => {
     await expect(via(async (id) => id === '999')).resolves.toMatchObject({ connectionId: 'conn-1' });
   });
 });
+
+describe('naming an installation in connector config (GHSA-52pw-fwcw-7mmf, the config path)', () => {
+  const ask = async (config: Record<string, string>, stored: Record<string, unknown>, reach?: (id: string) => Promise<boolean>) => {
+    const { assertInstallationReach } = await import('../src/connectors/connectors.service.js');
+    return assertInstallationReach(config, stored, reach);
+  };
+
+  it('refuses an installation the caller cannot reach, or with nobody to ask', async () => {
+    await expect(ask({ githubInstallationId: '999' }, {}, async () => false)).rejects.toThrow(/githubNotVisible/);
+    await expect(ask({ githubInstallationId: '999' }, {})).rejects.toThrow(/githubNotVisible/);
+  });
+
+  it('lets through one the caller reaches, the one the row already holds, and config naming none', async () => {
+    await expect(ask({ githubInstallationId: '111' }, {}, async (id) => id === '111')).resolves.toBeUndefined();
+    await expect(ask({ githubInstallationId: '999' }, { githubInstallationId: '999' })).resolves.toBeUndefined();
+    await expect(ask({ repoUrl: 'https://github.com/a/b' }, {})).resolves.toBeUndefined();
+  });
+});

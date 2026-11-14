@@ -669,6 +669,38 @@ describe('git remote (e2e, #636)', () => {
     }
   });
 
+  it('a push moving a page under another needs edit on the new parent, as REST does (#1087)', async () => {
+    const vault = await page(`Vault ${nonce}`, `# Vault ${nonce}\n`);
+    const loose = await page(`Loose notes ${nonce}`, `# Loose notes ${nonce}\n`);
+    // Bob reads the vault and may not edit under it; the page he moves is his to edit.
+    await http()
+      .put(`/v1/documents/${vault.id}/access`)
+      .set(as(people.admin.key))
+      .send({
+        restricted: true,
+        grants: [
+          { subjectType: 'user', subjectId: people.bob.id, level: 'view' },
+          // An edit grant is what makes the restriction gate editing at all.
+          { subjectType: 'user', subjectId: people.alice.id, level: 'edit' },
+        ],
+      })
+      .expect(ok(200));
+    const bob = await clone(people.bob.key, 'bob-move');
+    mkdirSync(join(bob, vault.slug), { recursive: true });
+    await git(['mv', `${loose.slug}.md`, `${vault.slug}/${loose.slug}.md`], bob);
+    await git(['commit', '-qm', 'Into the vault'], bob);
+    expect(await gitFails(['push', 'origin', 'HEAD:main'], bob)).toMatch(new RegExp(`${loose.slug}\\.md`));
+    expect((await prisma.document.findUniqueOrThrow({ where: { id: loose.id } })).parentId).toBeNull();
+
+    await http()
+      .put(`/v1/documents/${vault.id}/access`)
+      .set(as(people.admin.key))
+      .send({ restricted: true, grants: [{ subjectType: 'user', subjectId: people.bob.id, level: 'edit' }] })
+      .expect(ok(200));
+    await gitAll(['push', 'origin', 'HEAD:main'], bob);
+    expect((await prisma.document.findUniqueOrThrow({ where: { id: loose.id } })).parentId).toBe(vault.id);
+  });
+
   it('refuses a file over the revision ceiling before reading it (#1107)', async () => {
     const dir = join(work, 'alice-w');
     await git(['checkout', '-q', 'main'], dir);

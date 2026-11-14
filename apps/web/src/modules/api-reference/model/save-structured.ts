@@ -30,8 +30,10 @@ export async function saveStructuredRevision(opts: {
     const rev = await api.post('/v1/documents/{id}/revisions', { path, body: { contentType, ...(working ? { branch: working.name } : {}) } })
     revisionId = rev.revisionId
   }
-  const up = await api.post('/v1/documents/{id}/uploads', { path, body: { revisionId, contentType, filename: opts.filename }, config: { timeout: 0 } })
-  await presignedPut({ url: up.upload.url, headers: { 'Content-Type': contentType } }, new Blob([opts.text], { type: contentType }))
+  // The upload URL is signed for this exact size.
+  const file = new Blob([opts.text], { type: contentType })
+  const up = await api.post('/v1/documents/{id}/uploads', { path, body: { revisionId, contentType, filename: opts.filename, sizeBytes: file.size }, config: { timeout: 0 } })
+  await presignedPut({ url: up.upload.url, headers: { 'Content-Type': contentType } }, file)
   let deduplicated: boolean
   try {
     const fin = await api.post('/v1/documents/{id}/revisions/{revisionId}/finalize', { path: { ...path, revisionId }, config: { timeout: 0 } })

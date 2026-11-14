@@ -2157,7 +2157,7 @@ describe('question flows over MCP (#425)', () => {
     session: { client: 'claude-code' },
   };
   const body = (res: Awaited<ReturnType<Client['callTool']>>) =>
-    JSON.parse((res.content as Array<{ text: string }>)[0].text) as Record<string, any>;
+    readPageText((res.content as Array<{ text: string }>)[0].text) as Record<string, any>;
 
   /** A client with a form: `answer` plays the person, one elicitation at a time. */
   async function eliciting(mcp: McpService, answer: (params: ElicitRequest['params']) => ElicitResult) {

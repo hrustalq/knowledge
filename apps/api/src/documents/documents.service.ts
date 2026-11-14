@@ -400,6 +400,10 @@ export class DocumentsService {
     by: WriteAuthority,
     authorId: string = AUTHOR_ID_STUB,
   ): Promise<CreateUploadResponse> {
+    // Refused before a ticket is signed: finalize would refuse the body anyway (#1109).
+    if (dto.sizeBytes > this.storage.revisionMaxBytes) {
+      throw new PayloadTooLargeException(t('error.document.revisionTooLarge', { max: this.storage.revisionMaxBytes }));
+    }
     const document = await this.getDocumentOrThrow(documentId);
 
     let revision: DocumentRevision;
@@ -418,7 +422,7 @@ export class DocumentsService {
     }
 
     const objectKey = revision.s3Key;
-    const url = await this.storage.presignPut(objectKey, dto.contentType);
+    const url = await this.storage.presignPut(objectKey, dto.contentType, 900, { contentLength: dto.sizeBytes });
     return {
       documentId: document.id,
       revisionId: revision.id,

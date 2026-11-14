@@ -9,6 +9,14 @@ import type { Principal } from '../auth/principal.js';
 export const MEMO_RUN_PREFIX = 'memo:';
 
 /**
+ * A run over a repository whose project the workspace cannot see (#553): a
+ * drift check reads that project's diff, so its findings are its owner's
+ * (`DriftTriggerService` sets `restricted:<projectId>`). Read like a memo's.
+ */
+export const RESTRICTED_RUN_PREFIX = 'restricted:';
+const PRIVATE_PREFIXES = [MEMO_RUN_PREFIX, RESTRICTED_RUN_PREFIX];
+
+/**
  * A memo is its uploader's (doc 68, `MemosService.require`), and so is the
  * `secretary` run that analyses it (#1089): its summary and drafts are the
  * recording in other words. Anyone else reads such a run as missing, whatever
@@ -21,12 +29,17 @@ export const MEMO_RUN_PREFIX = 'memo:';
 export function privateRunWhere(principal: Principal): Prisma.AgentRunWhereInput {
   if (seesEveryRun(principal)) return {};
   return {
-    OR: [{ subjectKey: null }, { NOT: { subjectKey: { startsWith: MEMO_RUN_PREFIX } } }, { createdBy: principal.userId }],
+    OR: [
+      { subjectKey: null },
+      { AND: PRIVATE_PREFIXES.map((prefix) => ({ NOT: { subjectKey: { startsWith: prefix } } })) },
+      { createdBy: principal.userId },
+    ],
   };
 }
 
 export function mayReadRun(run: { subjectKey: string | null; createdBy: string }, principal: Principal): boolean {
-  return seesEveryRun(principal) || !isMemoRun(run) || run.createdBy === principal.userId;
+  const isPrivate = PRIVATE_PREFIXES.some((prefix) => run.subjectKey?.startsWith(prefix) === true);
+  return seesEveryRun(principal) || !isPrivate || run.createdBy === principal.userId;
 }
 
 export function isMemoRun(run: { subjectKey: string | null }): boolean {

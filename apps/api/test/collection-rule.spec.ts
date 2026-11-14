@@ -26,14 +26,14 @@ function service(resolve: (ws: string, ref: string) => Promise<{ ref: string }>)
 describe('collection rule (#716)', () => {
   it('stores the canonical template ref and the pattern as typed', async () => {
     const { svc, update, templates } = service(async () => ({ ref: 'builtin:adr' }));
-    await svc.updateDocument('d1', { childTemplateRef: ' builtin:adr ', childTitlePattern: 'ADR {{n:4}}: ' }, 'u1');
+    await svc.updateDocument('d1', { childTemplateRef: ' builtin:adr ', childTitlePattern: 'ADR {{n:4}}: ' }, {} as never, 'u1');
     expect(templates.resolve).toHaveBeenCalledWith(WS, ' builtin:adr ');
     expect(update.mock.calls[0]![0].data).toMatchObject({ childTemplateRef: 'builtin:adr', childTitlePattern: 'ADR {{n:4}}: ' });
   });
 
   it('clears the rule with null or a blank pattern, without resolving anything', async () => {
     const { svc, update, templates } = service(async () => ({ ref: 'x' }));
-    await svc.updateDocument('d1', { childTemplateRef: null, childTitlePattern: '   ' }, 'u1');
+    await svc.updateDocument('d1', { childTemplateRef: null, childTitlePattern: '   ' }, {} as never, 'u1');
     expect(templates.resolve).not.toHaveBeenCalled();
     expect(update.mock.calls[0]![0].data).toMatchObject({ childTemplateRef: null, childTitlePattern: null });
   });

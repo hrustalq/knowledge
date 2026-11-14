@@ -29,7 +29,11 @@ and connector mirroring in [19 §Access mirroring](19-connectors.md#access-mirro
   node on the chain project → root page → … → page. Restricting a page hides its
   whole subtree. A child can narrow its parent's restriction but never reopen
   it. A page moved under a restricted parent is restricted in the same
-  transaction, and moving it out lifts that at once.
+  transaction, and moving it out lifts that at once. Placing a page counts as
+  creating it there (#1087): a move or reparent (`PATCH` `parentId` /
+  `projectId`, `POST :id/move`) asks `requireCreateUnder` of the destination,
+  so it answers exactly as create does and cannot hide a page from its own
+  mover or probe a hidden parent.
 - **The workspace role is the ceiling.** A `viewer` with an `edit` grant still
   only reads. Edit is decided by the nearest restricted node that carries any
   edit or manage grant; with none, an `editor` edits as before.

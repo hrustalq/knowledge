@@ -249,12 +249,12 @@ export class DocumentsController {
   @Returns('DocumentSummary')
   @Access('editor', 'document')
   @ApiOperation({ summary: 'Update title / category / parent (features 07 + 08); parentId: null re-roots' })
-  update(
+  async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateDocumentDto,
     @CurrentPrincipal() principal: Principal,
   ): Promise<DocumentSummary> {
-    return this.documents.updateDocument(id, dto, principal?.userId);
+    return this.documents.updateDocument(id, dto, await this.permissions.scopeForDocument(principal, id), principal?.userId);
   }
 
   @Post(':id/move')
@@ -266,12 +266,12 @@ export class DocumentsController {
       'parentId: null re-roots; beforeId names the sibling it lands above, omitted appends last',
   })
   @ApiResponse({ status: 409, description: 'beforeId no longer names a child of parentId — the tree moved' })
-  move(
+  async move(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: MoveDocumentDto,
     @CurrentPrincipal() principal: Principal,
   ): Promise<DocumentSummary> {
-    return this.documents.moveDocument(id, dto, principal?.userId);
+    return this.documents.moveDocument(id, dto, await this.permissions.scopeForDocument(principal, id), principal?.userId);
   }
 
   @Post(':id/publish')

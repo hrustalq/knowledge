@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import { zipSync } from 'fflate';
 import mammoth from 'mammoth';
+import { DEFAULT_ARCHIVE_MAX_INFLATED_BYTES, unzipBounded } from '../../common/unzip-bounded.js';
 import type { ImportParserId } from '@knowledge/contracts';
 import { htmlToMarkdown } from './html-to-markdown.js';
 import {
@@ -35,8 +37,11 @@ export class DocxParser implements DocumentParser {
     await ctx.onStage(t('import.stage.reading-document'), 0.2);
 
     const images: ParsedImage[] = [];
+    // mammoth inflates whatever it is given, trusting each entry's own stream. So the archive is
+    // inflated here first, within the ceiling, and handed over stored: it can hold no more (#1109).
+    const bounded = zipSync(unzipBounded(bytes, ctx.maxInflatedBytes ?? DEFAULT_ARCHIVE_MAX_INFLATED_BYTES), { level: 0 });
     const result = await mammoth.convertToHtml(
-      { buffer: Buffer.from(bytes) },
+      { buffer: Buffer.from(bounded) },
       {
         // Word's own heading styles carry the outline; without this map a
         // "Title" paragraph would arrive as ordinary prose.

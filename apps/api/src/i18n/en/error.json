@@ -90,6 +90,7 @@
     "nothingToUpdate": "Nothing to update",
     "contentIsDraft": "Revision {id} is a draft — finalize it before reading content",
     "uploadMissing": "No object uploaded at {key} — upload before finalizing",
+    "revisionTooLarge": "The uploaded body is larger than a revision may be ({max} bytes)",
     "revisionNotDraft": "Revision {id} is {status}, expected draft",
     "archived": "Document {id} is archived — unarchive it before changing it",
     "ownerNotMember": "The owner must be a member of this workspace",

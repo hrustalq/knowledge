@@ -728,8 +728,9 @@ export const envSchema = z.object({
    * body, from the bucket's own HEAD at finalize and from `git cat-file -s`
    * before a pushed blob is read; what an archive (PPTX, DOCX, a repository)
    * may inflate to in total, counted from each entry's declared size before it
-   * is inflated; and a body fetched from a host someone else chose (a web
-   * source, an embed snapshot), cut off while it streams.
+   * is inflated, and what a downloaded repository archive may weigh; and an
+   * embed snapshot fetched from Figma's render host, cut off while it streams
+   * (a web source keeps its own 5 MB ceiling, counted the same way).
    */
   REVISION_MAX_BYTES: z.coerce.number().int().positive().default(52_428_800),
   ARCHIVE_MAX_INFLATED_BYTES: z.coerce.number().int().positive().default(536_870_912),

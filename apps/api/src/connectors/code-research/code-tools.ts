@@ -1,4 +1,5 @@
 import { posix } from 'node:path';
+import { createContext, Script } from 'node:vm';
 import type { ChatCompletionFunctionTool } from 'openai/resources/chat/completions';
 import type { AssistantWebSource } from '@knowledge/contracts';
 import { globToRegExp } from '../../common/glob.js';
@@ -271,11 +272,10 @@ export class SnapshotCodeTools {
       if (pathFilter && !pathFilter.test(path)) continue;
       const text = Buffer.from(snapshot.files.get(path)!).toString('utf8');
       let matches: Array<{ line: number; text: string }> | null = null;
-      let lineNo = 0;
-      for (const line of text.split('\n')) {
-        lineNo += 1;
-        if (line.length > MAX_SEARCHED_LINE_CHARS) continue;
-        if (!matcher(line)) continue;
+      const lines = text.split('\n');
+      for (const index of matcher.lines(lines, MAX_SEARCHED_LINE_CHARS)) {
+        const line = lines[index]!;
+        const lineNo = index + 1;
         if (count >= limit) {
           truncated = true;
           break outer;
@@ -478,12 +478,28 @@ export function windowLines(
  */
 const HOSTILE_PATTERN = /\((?:[^()\\]|\\.)*[+*}](?:[^()\\]|\\.)*\)[+*{]/;
 
-/** A line predicate for a substring or a regular expression, case-folded unless asked otherwise. */
-export function compileSearch(query: string, opts: { regex: boolean; caseSensitive: boolean }): (line: string) => boolean {
+/** How long one search's regular expression may run in all (#1109). */
+const SEARCH_BUDGET_MS = 2_000;
+/** Runs `re` over `lines` inside a context whose run can be stopped: V8 checks for termination while a regex backtracks. */
+const MATCH_SCRIPT = new Script('hits = []; for (let i = 0; i < lines.length; i++) if (lines[i].length <= maxLen && re.test(lines[i])) hits.push(i);');
+
+/** A line predicate, and its batch form for a whole file: the indexes of the lines that match, skipping any longer than `maxLen`. */
+export type SearchMatcher = ((line: string) => boolean) & { lines(lines: string[], maxLen: number): number[] };
+
+/**
+ * A line predicate for a substring or a regular expression, case-folded unless asked otherwise.
+ *
+ * The shape check refuses the usual catastrophic pattern up front, but it is a
+ * heuristic (`(a|a)*b` slips past it). So a regular expression also runs in a
+ * `vm` context under one deadline for the whole search (#1109): past
+ * `SEARCH_BUDGET_MS` the run is terminated mid-backtrack and the search fails
+ * with words, rather than holding the event loop.
+ */
+export function compileSearch(query: string, opts: { regex: boolean; caseSensitive: boolean }): SearchMatcher {
   if (!opts.regex) {
-    if (opts.caseSensitive) return (line) => line.includes(query);
-    const needle = query.toLowerCase();
-    return (line) => line.toLowerCase().includes(needle);
+    const needle = opts.caseSensitive ? query : query.toLowerCase();
+    const test = (line: string) => (opts.caseSensitive ? line : line.toLowerCase()).includes(needle);
+    return Object.assign(test, { lines: (lines: string[], maxLen: number) => lines.flatMap((l, i) => (l.length <= maxLen && test(l) ? [i] : [])) });
   }
   if (HOSTILE_PATTERN.test(query)) {
     throw new Error('That regular expression could backtrack without bound; simplify the nested quantifier');
@@ -494,8 +510,24 @@ export function compileSearch(query: string, opts: { regex: boolean; caseSensiti
   } catch (error) {
     throw new Error(`Invalid regular expression: ${(error as Error).message}`);
   }
-  return (line) => re.test(line);
+  const deadline = Date.now() + SEARCH_BUDGET_MS;
+  const context = createContext({ re, lines: [] as string[], maxLen: 0, hits: [] as number[] });
+  const run = (lines: string[], maxLen: number): number[] => {
+    const left = deadline - Date.now();
+    if (left <= 0) throw tooSlow();
+    Object.assign(context, { lines, maxLen });
+    try {
+      MATCH_SCRIPT.runInContext(context, { timeout: Math.max(1, left) });
+    } catch (e) {
+      if ((e as { code?: string }).code === 'ERR_SCRIPT_EXECUTION_TIMEOUT') throw tooSlow();
+      throw e;
+    }
+    return [...(context.hits as number[])];
+  };
+  return Object.assign((line: string) => run([line], Infinity).length > 0, { lines: run });
 }
+
+const tooSlow = () => new Error('That regular expression took too long to run; simplify it or add a glob');
 
 function clampInt(value: unknown, min: number, max: number, fallback: number): number {
   const n = typeof value === 'number' ? Math.trunc(value) : Number.parseInt(String(value ?? ''), 10);

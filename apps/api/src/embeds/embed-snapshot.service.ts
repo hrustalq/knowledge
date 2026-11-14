@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { readCapped } from '../common/read-capped.js';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.js';
@@ -131,10 +132,13 @@ export class EmbedSnapshotService {
     };
   }
 
-  /** Figma's render URLs are presigned on its own storage: no token goes with them. */
+  /** Figma's render URLs are presigned on its own storage: no token goes with them. Read to `FETCH_MAX_BYTES` and no further (#1109). */
   private async download(ctx: ConnectorContext, url: string): Promise<Uint8Array> {
     const res = await connectorFetch(url, { signal: ctx.signal }, ctx);
-    return new Uint8Array(await res.arrayBuffer());
+    const max = this.config.get('FETCH_MAX_BYTES', { infer: true });
+    const { bytes, whole } = await readCapped(res, max);
+    if (!whole) throw new Error(`render too large: over ${max} bytes`);
+    return bytes;
   }
 
   /**

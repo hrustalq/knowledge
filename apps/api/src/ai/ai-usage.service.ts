@@ -1,4 +1,5 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { clampInt } from '../common/clamp.js';
 import { ConfigService } from '@nestjs/config';
 import { AI_USAGE_UNATTRIBUTED, GEN_API_COST_CURRENCY } from '@knowledge/contracts';
 import type {
@@ -476,7 +477,7 @@ export class AiUsageService {
     workspaceId: string,
     opts: { cursor?: string; limit?: number; userId?: string; operation?: string; ok?: boolean },
   ): Promise<ListAiUsageLogsResponse> {
-    const limit = Math.min(opts.limit ?? LOG_PAGE_SIZE, 200);
+    const limit = clampInt(opts.limit, 1, 200, LOG_PAGE_SIZE);
     const rows = await this.prisma.aiUsage.findMany({
       where: {
         workspaceId,

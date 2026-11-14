@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { readCapped } from '../../common/read-capped.js';
 import { Injectable } from '@nestjs/common';
 import { importFormatFor, type ConnectorCapabilities, type ConnectorKind } from '@knowledge/contracts';
 import { t } from '../../i18n/t.js';
@@ -331,8 +332,9 @@ export class GoogleDriveAdapter implements ConnectorAdapter {
         ? `${DRIVE}/files/${id}/export?mimeType=${encodeURIComponent(plan.exportType)}`
         : `${DRIVE}/files/${id}?${this.flags({ alt: 'media' })}`;
     const res = await connectorFetch(url, { headers: await this.headers(ctx, DRIVE_SCOPE), signal: ctx.signal }, ctx);
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    if (bytes.byteLength > MAX_FILE_BYTES) {
+    // Counted while it streams (#1109), not after the whole body is held.
+    const { bytes, whole } = await readCapped(res, MAX_FILE_BYTES);
+    if (!whole) {
       throw new Error(t('error.connector.googleDrive.tooLarge', { name: file.name }));
     }
 
@@ -344,6 +346,7 @@ export class GoogleDriveAdapter implements ConnectorAdapter {
       userId: ctx.userId ?? '',
       filename: plan.filename,
       contentType: plan.contentType,
+      maxInflatedBytes: ctx.archiveMaxBytes,
       // The run's own stage line ("Fetching …") is the one worth reading.
       onStage: async () => undefined,
     });

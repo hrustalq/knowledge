@@ -3,7 +3,7 @@ import { RELATION_EDGE_TYPES, CONFLICT_STATUSES, RELEASE_TAG_NAME_PATTERN } from
 import { MCP_AS_OF, MCP_KNOWN_AT } from '../mcp-tools.js';
 import { withAsOf } from '../../graph/temporal.js';
 import { MAX_COMMUNITY_LEVELS } from '../../agents/communities.js';
-import { json, type McpToolContext } from './context.js';
+import { json, pageJson, type McpToolContext } from './context.js';
 
 /** The relation graph, its history, release tags, conflicts and communities (Phase 4–5, #81). */
 export function registerGraphTools(ctx: McpToolContext): void {
@@ -24,7 +24,7 @@ export function registerGraphTools(ctx: McpToolContext): void {
       await guard.ws(workspaceId, 'viewer');
       if (asOf || knownAt) await guard.history(workspaceId);
       const at = await svc.temporal.resolve(workspaceId, asOf, knownAt);
-      return json(withAsOf(await svc.documents.getWorkspaceGraph(await guard.scope(workspaceId), projectId, at), at));
+      return pageJson('knowledge_get_workspace_graph', withAsOf(await svc.documents.getWorkspaceGraph(await guard.scope(workspaceId), projectId, at), at));
     },
   );
 
@@ -47,7 +47,7 @@ export function registerGraphTools(ctx: McpToolContext): void {
       if (asOf || knownAt) await guard.history(workspaceId);
       const at = await svc.temporal.resolve(workspaceId, asOf, knownAt);
       const scope = await guard.scope(workspaceId);
-      return json(withAsOf(await svc.entities.neighbors(scope, entity, depth ?? 1, relationship ? [relationship] : undefined, at), at));
+      return pageJson('knowledge_find_relations', withAsOf(await svc.entities.neighbors(scope, entity, depth ?? 1, relationship ? [relationship] : undefined, at), at));
     },
   );
 
@@ -70,7 +70,7 @@ export function registerGraphTools(ctx: McpToolContext): void {
       if (asOf || knownAt) await guard.history(workspaceId);
       const at = await svc.temporal.resolve(workspaceId, asOf, knownAt);
       const scope = await guard.scope(workspaceId);
-      return json(withAsOf(await svc.entities.impactAnalysis(scope, entityId, direction ?? 'dependents', maxDepth ?? 3, at), at));
+      return pageJson('knowledge_impact_analysis', withAsOf(await svc.entities.impactAnalysis(scope, entityId, direction ?? 'dependents', maxDepth ?? 3, at), at));
     },
   );
 
@@ -91,7 +91,7 @@ export function registerGraphTools(ctx: McpToolContext): void {
       await guard.ws(workspaceId, 'viewer');
       if (asOf || knownAt) await guard.history(workspaceId);
       const at = await svc.temporal.resolve(workspaceId, asOf, knownAt);
-      return json(withAsOf(await svc.entities.trace(await guard.scope(workspaceId), fromEntityId, toEntityId, maxDepth ?? 4, at), at));
+      return pageJson('knowledge_trace_relation', withAsOf(await svc.entities.trace(await guard.scope(workspaceId), fromEntityId, toEntityId, maxDepth ?? 4, at), at));
     },
   );
 
@@ -122,7 +122,7 @@ export function registerGraphTools(ctx: McpToolContext): void {
     },
     async ({ workspaceId, query, limit }) => {
       await guard.ws(workspaceId, 'admin', true);
-      return json(await svc.graphQuery.run(workspaceId, query, limit, principal.mode === 'dev' ? 'mcp-operator' : principal.userId));
+      return pageJson('knowledge_query_graph', await svc.graphQuery.run(workspaceId, query, limit, principal.mode === 'dev' ? 'mcp-operator' : principal.userId));
     },
   );
 
@@ -139,7 +139,7 @@ export function registerGraphTools(ctx: McpToolContext): void {
     },
     async ({ workspaceId, projectId }) => {
       await guard.ws(workspaceId, 'viewer');
-      return json({ tags: await svc.releaseTags.list(await guard.scope(workspaceId), projectId) });
+      return pageJson('knowledge_list_release_tags', { tags: await svc.releaseTags.list(await guard.scope(workspaceId), projectId) });
     },
   );
 
@@ -178,7 +178,7 @@ export function registerGraphTools(ctx: McpToolContext): void {
     },
     async ({ workspaceId, status, documentId }) => {
       await guard.ws(workspaceId, 'viewer');
-      return json({ conflicts: await svc.conflicts.list(await guard.scope(workspaceId), { status, documentId }) });
+      return pageJson('knowledge_list_conflicts', { conflicts: await svc.conflicts.list(await guard.scope(workspaceId), { status, documentId }) });
     },
   );
 
@@ -206,7 +206,7 @@ export function registerGraphTools(ctx: McpToolContext): void {
     },
     async ({ workspaceId, question, limit, level }) => {
       await guard.ws(workspaceId, 'viewer');
-      return json({ communities: await svc.communities.overview(await guard.scope(workspaceId), question, limit ?? 5, level ?? 0) });
+      return pageJson('knowledge_global_overview', { communities: await svc.communities.overview(await guard.scope(workspaceId), question, limit ?? 5, level ?? 0) });
     },
   );
 
@@ -229,7 +229,7 @@ export function registerGraphTools(ctx: McpToolContext): void {
         throw new Error(`Conflict ${conflictId} not found in workspace ${workspaceId}`);
       }
       const status = action === 'resolve' ? 'resolved' : 'dismissed';
-      return json(await svc.conflicts.close(await guard.scope(workspaceId), conflictId, status, principal.userId, note));
+      return pageJson('knowledge_resolve_conflict', await svc.conflicts.close(await guard.scope(workspaceId), conflictId, status, principal.userId, note));
     },
   );
 
@@ -260,7 +260,7 @@ export function registerGraphTools(ctx: McpToolContext): void {
           svc.entities.neighbors(scope, entityId, 1, undefined, at).catch(() => null),
           svc.entities.neighbors(scope, entityId, 1).catch(() => null),
         ]);
-        return json({ entityId, resolvedAsOf: at.resolved, neighborhoodAsOf: then, currentNeighborhood: now });
+        return pageJson('knowledge_get_historical_context', { entityId, resolvedAsOf: at.resolved, neighborhoodAsOf: then, currentNeighborhood: now });
       }
       const revision = await svc.prisma.documentRevision.findUnique({
         where: { id: atRevisionId },
@@ -276,7 +276,7 @@ export function registerGraphTools(ctx: McpToolContext): void {
       const currentNeighborhood = await svc.entities
         .neighbors(await guard.scope(workspaceId), entityId, 1)
         .catch(() => null);
-      return json({
+      return pageJson('knowledge_get_historical_context', {
         entityId,
         atRevisionId,
         document: { documentId: revision.documentId, title: revision.document.title },

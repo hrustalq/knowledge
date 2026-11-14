@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import type { AssistantWebSource, WebAccessDenial, WebAccessMode } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { SourcePolicyService } from '../ai/source-policy.service.js';
+import { readCapped } from '../common/read-capped.js';
 import { safeFetch } from '../common/safe-fetch.js';
 import { wrapUntrusted as wrapUntrustedPayload } from '../common/untrusted.js';
 import { extractArticle, type ExtractedArticle } from '../import/parsers/html-to-markdown.js';
@@ -229,7 +230,8 @@ export class WebResearchService {
         return fail(t('error.web.fetchType', { type: type.split(';')[0] || 'unknown' }));
       }
       contentType = type;
-      bytes = await readCappedBytes(response, maxBytes);
+      // Counted off the stream, in bytes; a cut mid-sequence leaves one replacement char the extractor never minds.
+      bytes = (await readCapped(response, maxBytes)).bytes;
     } catch (err) {
       return fail(t('error.web.fetchFailed', { error: err instanceof Error ? err.message : String(err) }));
     }
@@ -381,39 +383,6 @@ export class WebResearchService {
 }
 
 const USER_AGENT = 'knowledge-platform/1.0 (+web research; docs/features/25)';
-
-/**
- * Read at most `maxBytes` off the body, then drop the connection.
- *
- * `response.text()` buffers the whole body and only then slices, so the cap
- * bounded nothing that mattered: a server streaming without end was limited
- * only by the request timeout, which is fifteen seconds of whatever it cares
- * to send. Counting bytes off the stream is what the setting's name already
- * claims — and it counts *bytes*, where slicing the decoded string counted
- * UTF-16 units and so let a Cyrillic page through at roughly twice the cap.
- *
- * A cut mid-sequence leaves one replacement char at the end; TextDecoder is
- * non-fatal by default and the extraction step never sees the difference.
- */
-async function readCappedBytes(response: Response, maxBytes: number): Promise<Uint8Array> {
-  if (!response.body) return new Uint8Array();
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  try {
-    while (total < maxBytes) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
-      total += value.byteLength;
-    }
-  } finally {
-    await reader.cancel().catch(() => {});
-  }
-  // Bytes, not text: a PDF has to reach its parser unmangled, and decoding is
-  // now the caller's business because only it knows which format arrived.
-  return Buffer.concat(chunks, Math.min(total, maxBytes));
-}
 
 /** The host as a reader recognises it — `docs.example.com`, never `www.`. */
 export function displayHost(url: URL): string {

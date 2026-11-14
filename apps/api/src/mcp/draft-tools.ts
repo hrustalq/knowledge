@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { DRAFT_EDIT_OPS, type WorkspaceRole } from '@knowledge/contracts';
 import type { Principal } from '../auth/principal.js';
+import { pageJson } from './tools/context.js';
 
 /**
  * A page's shared draft (#316), as McpService knows it. Implemented by
@@ -64,7 +65,7 @@ export function registerDraftTools(server: McpServer, deps: DraftToolDeps): void
     async ({ documentId, branch: name }) => {
       await guard.doc(documentId, 'viewer');
       if (name) await guard.branches(documentId, { branchNames: [name] }, 'viewer');
-      return json({ draft: await drafts.read(documentId, name) });
+      return pageJson('knowledge_get_draft', { draft: await drafts.read(documentId, name) });
     },
   );
 

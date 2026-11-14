@@ -202,7 +202,9 @@ an async one.
   unreadable answer stores the masked text verbatim: retain never fails for want of a model.
   A fact keeps the language of the item it comes from (#1022): the call carries no reply-language
   directive (`locale: 'source'` in `AiCallContext`), whatever the caller's locale.
-- **A `document_id` retained before is replaced** (`update_mode: append` keeps it).
+- **A `document_id` retained before is replaced** (`update_mode: append` keeps it). A client id
+  starting with `graph:` or `file:` is a 400 (`error.memory.documentIdReserved`, #1108): those ids
+  belong to the graph and files wires, and a retain under one would replace their rows.
 - **Async**: the items are stored, masked, in a `memory_operations` row whose id is the
   client's `operation_id` when it sent one; the job carries only the id. An API-side sweeper
   re-enqueues a job the queue lost, re-queues or fails a row a dead worker left claimed, and
@@ -357,7 +359,8 @@ listing, six-wide line numbers and the 16,000-character view cut). The route sit
   wherever both are held. A path that takes the bank lock takes it before it touches a file row,
   because an index holds the bank lock while it marks one. Prefix matches use `starts_with()`, never `LIKE`: paths hold `_`.
 - **Roles on execution**, before anything is read: `view` needs a viewer, `create` an editor or a
-  `capture` key, every other command an editor. Memory off, a missing role and a spent rate are HTTP
+  `capture` key, every other command an editor. A `create` over a file that exists replaces it, so
+  it asks for an editor again without the lift (#1108): a `capture` key adds files, never rewrites one. Memory off, a missing role and a spent rate are HTTP
   errors (404/403/429); a refused path or content is an `is_error: true` result. A `view` spends the
   recall rate, a write the retain rate.
 - **Masked on write**, held to `MEMORY_RETAIN_MAX_CHARS` (checked again after an edit). A bank is

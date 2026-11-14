@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { wrapUntrusted } from '../common/untrusted.js';
 import { t } from '../i18n/t.js';
+import { FILE_DOCUMENT_PREFIX } from './memory-files.js';
 
 /**
  * The pure half of retain (#986): reading a request into items, building the
@@ -64,6 +65,9 @@ export function assertRetainCeilings(items: ReadonlyArray<{ content?: unknown }>
   if (items.some((i) => typeof i.content === 'string' && i.content.length > limits.maxChars)) throw new BadRequestException(t('error.memory.itemTooLong', { max: limits.maxChars }));
 }
 
+/** Document ids only a wire writes: graph observations (`memory-graph.ts`) and a file's recall chunks (`FILE_DOCUMENT_PREFIX`). */
+const RESERVED_DOCUMENT_PREFIXES = ['graph:', FILE_DOCUMENT_PREFIX] as const;
+
 /**
  * A retain body's items, as this server stores them. The global pipe checked
  * the envelope; what it cannot say is checked here: only text is retained, a
@@ -83,6 +87,10 @@ export function readRetainItems(
   const extraTags = cleanTags(documentTags);
   return items.map((item) => {
     if (typeof item.content !== 'string' || !item.content.trim()) throw new BadRequestException(t('error.memory.contentNotText'));
+    // The graph and files wires own these ids: a retain under one would replace their rows (#1108).
+    if (typeof item.document_id === 'string' && RESERVED_DOCUMENT_PREFIXES.some((p) => (item.document_id as string).startsWith(p))) {
+      throw new BadRequestException(t('error.memory.documentIdReserved'));
+    }
     let timestamp: string | null = now.toISOString();
     if (item.timestamp === 'unset') timestamp = null;
     else if (item.timestamp != null) {

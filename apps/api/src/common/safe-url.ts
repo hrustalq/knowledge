@@ -64,7 +64,8 @@ export async function assertSafeExternalUrl(
  * Everything that is not the public internet. `BlockList` compares parsed
  * addresses, so no spelling of one can slip past, and it checks an IPv4-mapped
  * IPv6 address against the IPv4 rules. Forms that embed an IPv4 address some
- * other way (NAT64, the deprecated `::a.b.c.d`) are refused whole.
+ * other way (NAT64, the deprecated `::a.b.c.d`, 6to4, Teredo) are refused whole:
+ * the relay that unwraps them could reach anything (#1110).
  */
 const PRIVATE_ADDRESSES = new BlockList();
 for (const [network, prefix] of [
@@ -74,16 +75,23 @@ for (const [network, prefix] of [
   ['127.0.0.0', 8],
   ['169.254.0.0', 16], // link-local, incl. cloud metadata
   ['172.16.0.0', 12],
+  ['192.0.0.0', 24], // IETF protocol assignments
   ['192.168.0.0', 16],
+  ['198.18.0.0', 15], // benchmarking
+  ['224.0.0.0', 4], // multicast
+  ['240.0.0.0', 4], // reserved, incl. broadcast
 ] as const) {
   PRIVATE_ADDRESSES.addSubnet(network, prefix, 'ipv4');
 }
 for (const [network, prefix] of [
   ['::', 96], // unspecified, loopback and IPv4-compatible
   ['64:ff9b::', 96], // NAT64
+  ['2001::', 32], // Teredo
+  ['2002::', 16], // 6to4
   ['fc00::', 7], // unique local
   ['fe80::', 10], // link-local
   ['fec0::', 10], // site-local
+  ['ff00::', 8], // multicast
 ] as const) {
   PRIVATE_ADDRESSES.addSubnet(network, prefix, 'ipv6');
 }

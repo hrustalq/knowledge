@@ -14,6 +14,8 @@ export interface ParseContext {
   filename: string;
   contentType: string;
   onStage(stage: string, progress?: number | null): Promise<void>;
+  /** What an archive format (PPTX, DOCX) may inflate to: `ARCHIVE_MAX_INFLATED_BYTES`, else its default (#1109). */
+  maxInflatedBytes?: number;
 }
 
 /**

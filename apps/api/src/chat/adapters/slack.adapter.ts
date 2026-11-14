@@ -16,6 +16,7 @@ import {
   type ChatView,
   type RawInbound,
 } from './chat-adapter.types.js';
+import { safeFetch } from '../../common/safe-fetch.js';
 import { MD_LINK_RE, citeNumber, parseJson, plainCommand, renderMarkdownAnswer, resolveUrl } from './chat-markdown.js';
 
 const SLACK_API = 'https://slack.com/api';
@@ -325,11 +326,13 @@ export class SlackAdapter implements ChatAdapter {
     this.responseUrls.delete(actionId);
     if (!url || !note) return;
     try {
-      await fetch(url, {
+      // Host-checked on the way in; guarded and never redirected on the way out (#1110).
+      await safeFetch(url, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ response_type: 'ephemeral', replace_original: false, text: note }),
         signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+        redirect: 'error',
       });
     } catch {
       // The note is a courtesy; the press itself was handled.

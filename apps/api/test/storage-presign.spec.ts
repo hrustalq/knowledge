@@ -1,7 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import 'reflect-metadata';
 import type { ConfigService } from '@nestjs/config';
+import * as storageModule from '../src/storage/storage.service.js';
 import { StorageService } from '../src/storage/storage.service.js';
+
+// Looked up at call time, so the red run fails on behaviour rather than on a missing export.
+const ObjectTooLargeError = (storageModule as Record<string, unknown>).ObjectTooLargeError as new (...a: never[]) => Error;
 import type { Env } from '../src/config/env.js';
 
 /**
@@ -19,6 +23,7 @@ function storage(publicEndpoint: string): StorageService {
     S3_SECRET_KEY: 'test-secret',
     S3_BUCKET: 'knowledge',
     S3_FORCE_PATH_STYLE: true,
+    REVISION_MAX_BYTES: 52_428_800,
   };
   const config = { get: (key: keyof Env) => env[key] } as unknown as ConfigService<Env, true>;
   return new StorageService(config);
@@ -43,5 +48,26 @@ describe('StorageService presigning', () => {
   it('falls back to S3_ENDPOINT when the public endpoint is unset', async () => {
     const url = new URL(await storage('').presignPut(KEY, 'image/png'));
     expect(url.origin).toBe('http://minio:9000');
+  });
+});
+
+describe('StorageService.getObjectVersion ceiling (#1109)', () => {
+  function withObject(contentLength: number) {
+    const s = storage('');
+    const body = { transformToString: vi.fn(async () => 'x'.repeat(contentLength)), destroy: vi.fn() };
+    (s as unknown as { s3: { send: unknown } }).s3 = { send: vi.fn(async () => ({ ContentLength: contentLength, VersionId: 'v1', Body: body })) };
+    return { s, body };
+  }
+
+  it('refuses an object over the revision ceiling from its length, before reading the body', async () => {
+    const { s, body } = withObject(60 * 1024 * 1024);
+    await expect(s.getObjectVersion('k')).rejects.toBeInstanceOf(ObjectTooLargeError);
+    expect(body.transformToString).not.toHaveBeenCalled();
+    expect(body.destroy).toHaveBeenCalled();
+  });
+
+  it('reads one under it', async () => {
+    const { s } = withObject(10);
+    expect(await s.getObjectVersion('k')).toEqual({ text: 'x'.repeat(10), versionId: 'v1' });
   });
 });

@@ -1,4 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { pageText } from '../../common/page-text.js';
+import type { UntrustedOrigin } from '../../common/untrusted.js';
 import type { AnalyticsCaller } from '../../analytics/analytics.recorder.js';
 import type { Principal } from '../../auth/principal.js';
 import type { McpWhoami, StackSkill } from '../skill.js';
@@ -32,3 +34,28 @@ export type McpGuard = ReturnType<McpServices['guardFor']>;
 export function json(value: unknown) {
   return { content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }] };
 }
+
+/**
+ * A result that may carry text someone other than the caller wrote (#1136):
+ * one line of plain JSON facts, then the text in one untrusted block. Every
+ * registered tool either answers through this (or `wrapUntrusted`) or is
+ * listed as plain, with why, in `test/mcp-page-text.spec.ts`.
+ */
+export function pageJson(tool: string, value: unknown) {
+  return { content: [{ type: 'text' as const, text: pageText(value, tool, ORIGIN[tool] ?? 'document') }] };
+}
+
+/** Tools whose text is not a page's: the wrapper names where it came from instead. */
+const ORIGIN: Record<string, UntrustedOrigin> = {
+  knowledge_code_usages: 'repo',
+  knowledge_list_api_operations: 'spec',
+  knowledge_get_api_operation: 'spec',
+  knowledge_diff_api_spec: 'spec',
+  knowledge_list_work_items: 'task',
+  knowledge_handoff_work_item: 'task',
+  knowledge_get_page_insights: 'search',
+  knowledge_list_memos: 'memo',
+  knowledge_list_templates: 'template',
+  knowledge_get_template: 'template',
+  knowledge_get_draft: 'draft',
+};

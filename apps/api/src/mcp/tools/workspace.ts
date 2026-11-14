@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { ScaffoldProjectDto } from '../../projects/projects.dto.js';
 import { SUPPORTED_LOCALES } from '@knowledge/contracts';
 import { wrapUntrusted } from '../../common/untrusted.js';
-import { json, type McpToolContext } from './context.js';
+import { json, pageJson, type McpToolContext } from './context.js';
 
 /** Orientation and the workspace around pages: whoami, projects, blueprints, templates and memos. */
 export function registerWorkspaceTools(ctx: McpToolContext): void {
@@ -20,7 +20,7 @@ export function registerWorkspaceTools(ctx: McpToolContext): void {
     async ({ workspaceId, projectId }) => {
       await guard.ws(workspaceId, 'viewer');
       const { memos } = await svc.memos.list(principal, workspaceId, projectId);
-      return json({ memos });
+      return pageJson('knowledge_list_memos', { memos });
     },
   );
 
@@ -133,7 +133,7 @@ export function registerWorkspaceTools(ctx: McpToolContext): void {
     },
     async ({ workspaceId, projectId }) => {
       await guard.ws(workspaceId, 'viewer');
-      return json(await svc.templates.list({ workspaceId, ...(projectId ? { projectId } : {}) }));
+      return pageJson('knowledge_list_templates', await svc.templates.list({ workspaceId, ...(projectId ? { projectId } : {}) }));
     },
   );
 
@@ -150,7 +150,7 @@ export function registerWorkspaceTools(ctx: McpToolContext): void {
     },
     async ({ workspaceId, templateRef, version }) => {
       await guard.ws(workspaceId, 'viewer');
-      return json(await svc.templates.getByRef(workspaceId, templateRef, version));
+      return pageJson('knowledge_get_template', await svc.templates.getByRef(workspaceId, templateRef, version));
     },
   );
 }

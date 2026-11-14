@@ -26,6 +26,7 @@
  */
 import { assign, createActor, fromPromise, sendParent, sendTo, setup, type Snapshot } from 'xstate'
 import { connectorKindInfo, FIGMA_ALLOWLIST_CONFIG_KEY, FIGMA_GRANT_CONFIG_KEY, FIGMA_TOKEN_EXPIRES_CONFIG_KEY } from '@knowledge/contracts'
+import { CONNECTOR_SETUP_KEY } from '@/shared/utils/signed-in-storage'
 import type {
   ConnectorConflictPolicy,
   ConnectorDirection,
@@ -512,7 +513,34 @@ export const connectorSetupMachine = setup({
 
 export type PersistedSetup = Snapshot<unknown>
 
-const STORAGE_KEY = 'kn_connector_setup'
+// Kept in shared so sign-out can forget it (#1101).
+const STORAGE_KEY = CONNECTOR_SETUP_KEY
+
+type StoredShape = {
+  value?: unknown
+  context?: SetupContext
+  children?: Record<string, { snapshot?: { value?: unknown } } | undefined>
+}
+
+/**
+ * The snapshot as it may be written (#1101): without the pasted credential and
+ * the webhook secret, which live only in the API's secret box. A wizard that
+ * had a credential typed resumes on the question asking for it — past the
+ * test, the token it proved is gone, so the flow cannot pretend otherwise.
+ */
+function withoutSecrets(snapshot: PersistedSetup): PersistedSetup {
+  const snap = snapshot as StoredShape
+  const context = snap.context
+  if (!context) return snapshot
+  const out: StoredShape = { ...snap, context: { ...context, credential: '', webhookSecret: '' } }
+  const step = context.credential ? KIND_STEPS[context.kind]?.find((s) => s.meta.credential)?.name : undefined
+  const child = snap.children?.kind
+  if (step && child?.snapshot) {
+    out.value = 'configuring'
+    out.children = { ...snap.children, kind: { ...child, snapshot: { ...child.snapshot, value: step } } }
+  }
+  return out as PersistedSetup
+}
 
 /**
  * Build the actor for one kind, restoring a stored snapshot when it belongs to
@@ -565,7 +593,7 @@ export function loadSetup(kind: ConnectorKind): PersistedSetup | undefined {
 
 export function saveSetup(snapshot: PersistedSetup): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot))
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(withoutSecrets(snapshot)))
   } catch {
     // Storage being unavailable must never block finishing the setup.
   }

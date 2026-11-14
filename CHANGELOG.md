@@ -17,6 +17,9 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- Setting up a connector no longer keeps the pasted token or webhook secret in the browser's storage. A setup you
+  resume asks for the token again. Signing out now also removes an unfinished connector setup and every page edit
+  not yet published from this browser. (#1101)
 - A page title containing `` $` ``, `$'` or `$&` no longer breaks the app for everyone who can see it in the sidebar.
   The server used to expand those patterns when it built the page, which duplicated the document and stopped the app
   from loading its state. (#1100)

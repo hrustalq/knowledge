@@ -14,6 +14,7 @@
  * access is guarded because private modes and full quotas throw.
  */
 import { isTemplateProvenance, type PageFields } from '@/entities/document'
+import { WORKING_COPY_PREFIX } from '@/shared/utils/signed-in-storage'
 
 export interface WorkingCopy extends PageFields {
   v: 1
@@ -26,7 +27,8 @@ export interface WorkingCopy extends PageFields {
   savedAt: number
 }
 
-const PREFIX = 'kn:unstaged:v1:'
+// Kept in shared so sign-out can forget every working copy (#1101).
+const PREFIX = WORKING_COPY_PREFIX
 
 /** `branch` is null for the page's default branch, which keeps the original slot. */
 export function workingCopyKey(workspaceId: string, documentId: string | null, branch: string | null = null): string {

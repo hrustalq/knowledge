@@ -21,8 +21,33 @@ in the pull request that introduces them — see
   `proof`; the account is linked when that number is sent to the bot from the private chat the link came from.
   `HTTP` **Migration:** show `proof` to the person and tell them to send it to the bot themselves; read the link
   from `GET /v1/me/chat-identities` afterwards. (#1104)
+- MCP tools that return page text (`knowledge_search`, `knowledge_get_document_content`, `knowledge_get_document`,
+  `knowledge_get_draft`, merge-request reads and diffs, graph and relation reads, template reads and more; the full
+  list is in `test/mcp-page-text.spec.ts`) now answer with one line of plain JSON — ids, cite labels, trust status,
+  counts, dates — followed by the titles, snippets, markdown and diffs inside one `<documents>` block that marks
+  them as data. `MCP` **Migration:** parse the first line as JSON for ids; read page text from the block, or merge the
+  two as `readPageText` in `apps/api/src/common/page-text.ts` does. A result with no page text is the JSON line
+  alone. (#1136)
 
 ### Fixed
+
+- A page can no longer give instructions to the coding agent reading it over MCP: page text in MCP tool results now
+  arrives marked as data, as it already did for the assistant. Results are about the same size as before. (#1136)
+- Over git, a clone or fetch now follows the workspace's history setting: when history is kept to editors, a viewer
+  (or a read-only key) can no longer clone. Pushing a new top-level page now needs edit on the project, as creating
+  it in the app does. A pushed file larger than a page may be is refused before it is read. Merging a merge request
+  by pushing a merge commit now lands only what merging it in the app would; a merge commit that changes the
+  reviewed text, or leaves it out, is refused, and a conflict resolved locally is pushed to the merge request's
+  branch first. (#1107)
+- A key that may only capture memories can no longer overwrite or delete them: a retain under a `graph:` or `file:`
+  document id is refused, and writing a file over an existing one needs an editor. (#1108)
+- One editor, connected repository or remote host can no longer exhaust the server's memory with a single large
+  file: uploaded page bodies, slide decks, Word documents, repository archives, Drive files, web-source pages, design
+  renders and search bodies now stop at a size limit instead of being read whole first. A bad page size or tree depth
+  on the documents list is no longer an error, a code search with a runaway pattern stops after two seconds, and an
+  avatar upload id must be the one the upload step returned. (#1109)
+- The outbound address filter now also refuses multicast, reserved, benchmarking and protocol-assignment ranges and
+  IPv6 forms that carry an IPv4 address (6to4, Teredo). Slack and Teams replies no longer follow a redirect. (#1110)
 
 - Linking a Telegram, Mattermost or Time account can no longer be done for you by someone who sends you their link.
   Confirming on the web now shows a six-digit number that you send to the bot from your own private chat with it;
@@ -106,6 +131,10 @@ in the pull request that introduces them — see
 - Migration `20270124100000_chat_link_proof` adds four columns to `chat_link_codes` (nullable, or with a default);
   rolling back leaves them unused. No new env vars. Link codes confirmed before the upgrade but not yet used need
   confirming again. (#1104)
+- New env vars, all with defaults and none required in production: `REVISION_MAX_BYTES` (52428800: the largest page
+  body finalize or a git push accepts), `ARCHIVE_MAX_INFLATED_BYTES` (536870912: what a slide deck, Word document or
+  repository archive may inflate to, and what a repository download may weigh) and `FETCH_MAX_BYTES` (10485760: the
+  largest embed render read from Figma). No migration. (#1107, #1109)
 
 ## [0.53.2] — 2026-11-13
 

@@ -4,7 +4,7 @@ import { DOCUMENT_CATEGORIES, DOCUMENT_VISIBILITIES, API_DOCUMENT_KINDS, API_SPE
 import { keepFrontmatter } from '../../common/frontmatter.js';
 import { applyLineEdits } from '../line-patch.js';
 import { contentLines } from '../../documents/content-lines.js';
-import { json, type McpToolContext } from './context.js';
+import { json, pageJson, type McpToolContext } from './context.js';
 import type { McpServices } from '../mcp-services.js';
 
 /** Pages, their revisions and branches: read, create, revise, upload and reindex. */
@@ -28,7 +28,7 @@ export function registerDocumentsTools(ctx: McpToolContext): void {
       const doc = await svc.documents.getDocument(documentId, revisionId);
       void svc.analytics.view(caller, documentId, revisionId);
       const { backlinks } = await svc.documents.getBacklinks(documentId, await guard.scope(workspaceId));
-      return json({ ...doc, backlinks });
+      return pageJson('knowledge_get_document', { ...doc, backlinks });
     },
   );
 
@@ -55,7 +55,7 @@ export function registerDocumentsTools(ctx: McpToolContext): void {
       if (revisionId) await guard.history(workspaceId, documentId, [revisionId]);
       const content = await svc.documents.getContent(documentId, revisionId);
       void svc.analytics.view(caller, documentId, content.revisionId);
-      return json(lines ? contentLines(content, lines, svc.webUrl()) : content);
+      return pageJson('knowledge_get_document_content', lines ? contentLines(content, lines, svc.webUrl()) : content);
     },
   );
 
@@ -72,7 +72,7 @@ export function registerDocumentsTools(ctx: McpToolContext): void {
       const workspaceId = await guard.doc(documentId, 'viewer');
       if (branch) await guard.branches(documentId, { branchNames: [branch] }, 'viewer');
       await guard.history(workspaceId, documentId);
-      return json(await svc.documents.listRevisions(documentId, await guard.scope(workspaceId), branch));
+      return pageJson('knowledge_list_revisions', await svc.documents.listRevisions(documentId, await guard.scope(workspaceId), branch));
     },
   );
 
@@ -93,7 +93,7 @@ export function registerDocumentsTools(ctx: McpToolContext): void {
       const workspaceId = await guard.doc(documentId, 'viewer');
       await guard.branches(documentId, { revisionIds: [fromRevisionId, toRevisionId] }, 'viewer');
       await guard.history(workspaceId, documentId);
-      return json(
+      return pageJson('knowledge_compare_revisions', 
           await svc.compare.compare(documentId, fromRevisionId, toRevisionId, mode ?? 'direct', {
             structural: true,
             semantic: includeSemanticDiff ?? false,
@@ -217,7 +217,7 @@ export function registerDocumentsTools(ctx: McpToolContext): void {
       const { branches } = await svc.mergeRequests.projectBranches(projectId, scope, { name, openOnly });
       const from = Number(cursor ?? 0);
       const end = from + limit;
-      return json({ projectId, branches: branches.slice(from, end), nextCursor: end < branches.length ? String(end) : null });
+      return pageJson('knowledge_list_branches', { projectId, branches: branches.slice(from, end), nextCursor: end < branches.length ? String(end) : null });
     },
   );
 
@@ -253,7 +253,7 @@ export function registerDocumentsTools(ctx: McpToolContext): void {
       },
     },
     async ({ workspaceId, projectId, parentId, depth, includeArchived }) => {
-      return json(
+      return pageJson('knowledge_list_documents', 
         await svc.documents.getTree(await guard.pages(workspaceId), projectId, {
           parentId: parentId ?? null,
           ...(depth ? { depth } : {}),

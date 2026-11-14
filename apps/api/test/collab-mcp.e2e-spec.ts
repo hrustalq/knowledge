@@ -8,6 +8,7 @@ import { collabDocName, collabToken } from '@knowledge/contracts';
 import { SUGGESTIONS_FIELD } from '@knowledge/editor-schema/suggestions';
 import { BODY_FIELD } from '../src/collab/collab-drafts.service.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
+import { readPageText } from '../src/common/page-text.js';
 
 /**
  * #316 end to end against live infra (two API instances, one Redis): the MCP
@@ -60,7 +61,7 @@ describe('MCP agents in a shared draft (e2e, #316)', () => {
     const body = result.content[0]!.text;
     let value: unknown = null;
     try {
-      value = JSON.parse(body);
+      value = readPageText(body);
     } catch {
       // A refusal is prose.
     }

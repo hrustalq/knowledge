@@ -10,6 +10,7 @@ import { promisify } from 'node:util';
 import request from 'supertest';
 import { vi } from 'vitest';
 import type { PrismaService } from '../src/prisma/prisma.service.js';
+import { readPageText } from '../src/common/page-text.js';
 
 /**
  * #636 phases 3, 4 and 5a acceptance: a project is a git remote. Real `git`
@@ -623,7 +624,7 @@ describe('git remote (e2e, #636)', () => {
         .expect(ok(200))
         .then((res) => {
           expect(res.body.result.isError).toBeFalsy();
-          return JSON.parse(res.body.result.content[0].text);
+          return readPageText(res.body.result.content[0].text);
         });
     await mcp('knowledge_create_branch', { documentId: guide.id, name: 'mcp-terms' });
     await write(people.bob, guide.id, 'mcp-terms', `# Style guide ${nonce}\n\nOne, from MCP.\n`);

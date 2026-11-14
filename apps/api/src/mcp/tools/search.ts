@@ -5,7 +5,7 @@ import { currentTrace, newTraceId } from '@knowledge/observability';
 import { MCP_AS_OF, MCP_KNOWN_AT } from '../mcp-tools.js';
 import { SEARCH_QUERY_RULE } from '../../assistant/assistant-tool-types.js';
 import { wrapUntrusted } from '../../common/untrusted.js';
-import { json, type McpToolContext } from './context.js';
+import { json, pageJson, type McpToolContext } from './context.js';
 
 /** Search, answer feedback, issue reports, chat search and search usage (docs/features/38, #79, #339). */
 export function registerSearchTools(ctx: McpToolContext): void {
@@ -67,7 +67,7 @@ export function registerSearchTools(ctx: McpToolContext): void {
       // One batched read for the whole hit list (docs/features/38), and the
       // trace id of this call so an agent can quote it back to
       // knowledge_feedback.
-      return json({
+      return pageJson('knowledge_search', {
         ...res,
         // One entry per page (#416): an agent pays for every repeated chunk.
         results: await svc.provenance.decorateResults(workspaceId, firstPerPage(res.results)),
@@ -184,7 +184,7 @@ export function registerSearchTools(ctx: McpToolContext): void {
     },
     async ({ documentId }) => {
       await guard.doc(documentId, 'viewer');
-      return json(await svc.analyticsQuery.pageInsights(documentId));
+      return pageJson('knowledge_get_page_insights', await svc.analyticsQuery.pageInsights(documentId));
     },
   );
 

@@ -7,7 +7,8 @@
 //   ssh macmini 'cat ~/Homelab/infra/knowledge/.env' |
 //     node scripts/env-to-github.mjs .env.production.example - [--apply]
 //
-// Credential-shaped names become secrets, the rest variables. Prints names, never values.
+// Credential-shaped names, and any value carrying a login in a URL (scheme://user:pass@),
+// become secrets, the rest variables (#1113). Prints names, never values.
 // GitHub refuses names starting GITHUB_, so those are stored as GH_* — deploy.yml renames
 // them back (#138).
 import { readFileSync } from 'node:fs';
@@ -15,7 +16,8 @@ import { spawnSync } from 'node:child_process';
 
 const REPO = 'hrustalq/knowledge';
 const ENVIRONMENT = 'production';
-const SECRET = /PASSWORD|_PASS$|SECRET|TOKEN|_KEY$|DATABASE_URL|SMTP_URL/;
+const SECRET = /PASSWORD|_PASS$|SECRET|TOKEN|_KEY$|DATABASE(_OWNER)?_URL|SMTP_URL/;
+const URL_LOGIN = /^[a-z][a-z0-9+.-]*:\/\/[^/?#\s]*:[^/?#\s]*@/i;
 const TEMPLATE = new URL('../.env.production.example', import.meta.url);
 
 const args = process.argv.slice(2);
@@ -54,7 +56,7 @@ for (const [key, { value, from }] of [...merged].sort(([a], [b]) => a.localeComp
     failed = true;
     continue;
   }
-  const kind = SECRET.test(key) ? 'secret' : 'variable';
+  const kind = SECRET.test(key) || URL_LOGIN.test(value) ? 'secret' : 'variable';
   const name = key.replace(/^GITHUB_/, 'GH_');
   const shown = name === key ? key : `${key} -> ${name}`;
   console.log(`${kind.padEnd(8)}  ${shown.padEnd(32)}  ${from}`);

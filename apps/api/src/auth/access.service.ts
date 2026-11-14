@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { hasCapability, type Locale, type MemberCapability, type WorkspaceRole } from '@knowledge/contracts';
+import { hasCapability, type AccessResourceType, type Locale, type MemberCapability, type WorkspaceRole } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { userAvatarUrl } from '../common/avatar-url.js';
 import { DEV_PRINCIPAL, ROLE_ORDER, type Principal } from './principal.js';
@@ -159,6 +159,25 @@ export class AccessService {
     });
     if (!mr) throw new NotFoundException(t('error.mergeRequest.notFound', { id: mergeRequestId }));
     return { workspaceId: mr.document.workspaceId, documentId: mr.documentId };
+  }
+
+  /**
+   * A workflow run is its root page's (#1085): its nodes hold drafts written
+   * from that page, so whoever may not open the page may not open the run.
+   * Runs keep no FK to the page, so one whose page is gone falls back to the
+   * run's project.
+   */
+  async rootOfWorkflowRun(runId: string): Promise<{ workspaceId: string; resource: { type: AccessResourceType; id: string } }> {
+    const run = await this.prisma.workflowRun.findUnique({
+      where: { id: runId },
+      select: { workspaceId: true, projectId: true, rootDocumentId: true },
+    });
+    if (!run) throw new NotFoundException(t('error.workflow.runNotFound', { id: runId }));
+    const page = await this.prisma.document.findUnique({ where: { id: run.rootDocumentId }, select: { id: true } });
+    return {
+      workspaceId: run.workspaceId,
+      resource: page ? { type: 'document', id: page.id } : { type: 'project', id: run.projectId },
+    };
   }
 
   /**

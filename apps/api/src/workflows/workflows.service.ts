@@ -37,6 +37,7 @@ import { ProjectsService } from '../projects/projects.service.js';
 import { WorkflowProducer } from './workflow.producer.js';
 import { workflowRunLockKey } from './workflow.constants.js';
 import { withSubjectLock } from '../common/subject-lock.js';
+import { hidesAnything, visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
 import { WorkflowRunnerService } from './workflow-runner.service.js';
 import { templateIssues } from './workflow-templates.js';
 import { TemplatesService } from '../templates/templates.service.js';
@@ -311,13 +312,29 @@ export class WorkflowsService {
     return this.toRunInfo(run, definition.name, document.title, await this.statsFor([run.id]));
   }
 
-  async listRuns(query: ListWorkflowRunsQueryDto): Promise<ListWorkflowRunsResponse> {
+  /**
+   * `scope` drops runs rooted at a page the caller may not open (#1085), and
+   * runs in a project hidden from them whose page is gone — the rule AclGuard
+   * applies to one run, so the list and the counts agree with the detail.
+   */
+  async listRuns(query: ListWorkflowRunsQueryDto, scope: AccessScope): Promise<ListWorkflowRunsResponse> {
     const limit = query.limit ?? 25;
+    const hidden = hidesAnything(scope)
+      ? (
+          await this.prisma.document.findMany({
+            where: { workspaceId: query.workspaceId, NOT: visibilityWhere(scope) },
+            select: { id: true },
+          })
+        ).map((d) => d.id)
+      : [];
     const baseWhere: Prisma.WorkflowRunWhereInput = {
       workspaceId: query.workspaceId,
       ...(query.projectId ? { projectId: query.projectId } : {}),
       ...(query.definitionId ? { definitionId: query.definitionId } : {}),
       ...(query.documentId ? { rootDocumentId: query.documentId } : {}),
+      ...(hidesAnything(scope)
+        ? { AND: [{ rootDocumentId: { notIn: hidden } }, { projectId: { notIn: [...scope.denied] } }] }
+        : {}),
     };
 
     const rows = await this.prisma.workflowRun.findMany({

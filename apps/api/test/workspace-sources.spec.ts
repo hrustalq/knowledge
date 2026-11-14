@@ -23,7 +23,8 @@ describe('WORKSPACE_SOURCES', () => {
     await expect(missing).rejects.toThrow(WORKSPACE_SOURCES[source].missing);
   });
 
-  it.each(SOURCES.filter((s) => s !== 'merge-request'))('the guard reads %s from its param and refuses a malformed id', async (source) => {
+  // These two resolve to a page (`documentOfMergeRequest`, `rootOfWorkflowRun`), not through `workspaceOf`.
+  it.each(SOURCES.filter((s) => s !== 'merge-request' && s !== 'workflow-run'))('the guard reads %s from its param and refuses a malformed id', async (source) => {
     const row = WORKSPACE_SOURCES[source];
     const seen: unknown[] = [];
     const access = { workspaceOf: async (_: string, id: unknown) => (seen.push(id), WS), requireRole: async () => undefined, requireOwnThread: async () => undefined };
@@ -43,5 +44,46 @@ describe('WORKSPACE_SOURCES', () => {
     await run(row.int ? '7' : ID);
     expect(seen).toEqual([row.int ? 7 : ID]);
     await expect(run('nope')).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  describe('workflow-run (#1085)', () => {
+    const RUN = { workspaceId: WS, projectId: '33333333-3333-4333-8333-333333333333', rootDocumentId: ID };
+    const access = (run: unknown, page: unknown) =>
+      new AccessService(
+        { workflowRun: { findUnique: async () => run }, document: { findUnique: async () => page } } as never,
+        noAuthPolicy,
+      );
+
+    it('resolves a run to its root page', async () => {
+      expect(await access(RUN, { id: ID }).rootOfWorkflowRun(ID)).toEqual({ workspaceId: WS, resource: { type: 'document', id: ID } });
+    });
+
+    it("falls back to the run's project once the page is gone", async () => {
+      expect(await access(RUN, null).rootOfWorkflowRun(ID)).toEqual({
+        workspaceId: WS,
+        resource: { type: 'project', id: RUN.projectId },
+      });
+    });
+
+    it('404s an unknown run', async () => {
+      await expect(access(null, null).rootOfWorkflowRun(ID)).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('the guard holds the route to the page level', async () => {
+      const asked: unknown[] = [];
+      await new AclGuard(
+        { getAllAndOverride: () => undefined, get: () => ({ role: 'editor', source: 'workflow-run', operator: false }) } as never,
+        { rootOfWorkflowRun: async () => ({ workspaceId: WS, resource: { type: 'document', id: ID } }) } as never,
+        { requireResource: async (...args: unknown[]) => void asked.push(args.slice(1, 4)) } as never,
+        {} as never,
+      ).canActivate({
+        getHandler: () => undefined,
+        getClass: () => undefined,
+        switchToHttp: () => ({
+          getRequest: () => ({ principal: { userId: 'u', mode: 'session' }, method: 'POST', params: { id: ID }, query: {}, body: {} }),
+        }),
+      } as never);
+      expect(asked).toEqual([[WS, { type: 'document', id: ID }, 'editor']]);
+    });
   });
 });

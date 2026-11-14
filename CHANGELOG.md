@@ -15,8 +15,32 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Breaking
+
+- `POST /v1/chat/link` no longer links the messenger account. It returns the account, the bot and a six-digit
+  `proof`; the account is linked when that number is sent to the bot from the private chat the link came from.
+  `HTTP` **Migration:** show `proof` to the person and tell them to send it to the bot themselves; read the link
+  from `GET /v1/me/chat-identities` afterwards. (#1104)
+
 ### Fixed
 
+- Linking a Telegram, Mattermost or Time account can no longer be done for you by someone who sends you their link.
+  Confirming on the web now shows a six-digit number that you send to the bot from your own private chat with it;
+  five wrong numbers spend the link. You get a notification whenever an account is linked to you. Buttons on
+  Mattermost and Time messages now work only in the channel they were posted in and for 30 days; buttons posted
+  before this release stop working. (#1104)
+- Page text, titles, comments, attached files and plugin results can no longer pass themselves off as instructions
+  to the assistant or the agents by closing the block that marks them as data. The current page, applied pages and
+  attachments now reach the model beside your question rather than among its instructions. (#1102)
+- A QA server run no longer stores, shows or sends to another host a value captured from a request a stored secret
+  was filled into, whatever the capture is called. (#1103)
+- With open web access, the assistant fetches a web address with its query only when you typed it or a web search
+  returned it; any other address loses its query and must be short. An agent with a tool list no longer gets MCP
+  plugin tools it does not name, and chat bots are never offered them. (#1105)
+- A signed agent webhook resent with a new delivery id no longer starts a second run. Stored credentials are now
+  bound to the row they were saved in, so one copied elsewhere does not decrypt there; existing credentials keep
+  working and are re-sealed the next time they are saved. An AI key that no longer decrypts is shown as such on the
+  provider and calls go without it, instead of quietly switching to the server's key. (#1106)
 - Text a model wrote no longer loads anything from another site by itself. In assistant answers, agent replies in
   threads, workflow drafts, merge requests an agent opened and a published site's Ask answers, an external image
   now shows as a link you can choose to open, other media is dropped, and a diagram cannot fetch remote styles.
@@ -76,6 +100,12 @@ in the pull request that introduces them — see
   discard it (a workspace admin still can), and the "parsed" and "failed" notices go only to the uploader. Importing
   into a project or under a page you could not create a page in is now refused, as creating the page directly is.
   A file named `parsed.md` no longer has its upload overwritten by its own parse. (#1086)
+
+### Operations
+
+- Migration `20270124100000_chat_link_proof` adds four columns to `chat_link_codes` (nullable, or with a default);
+  rolling back leaves them unused. No new env vars. Link codes confirmed before the upgrade but not yet used need
+  confirming again. (#1104)
 
 ## [0.53.2] — 2026-11-13
 

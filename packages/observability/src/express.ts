@@ -1,5 +1,5 @@
 import type { HttpRequestEvent } from '@knowledge/contracts/observability';
-import { redactUrl, startTrace, withTrace } from '@knowledge/observability/trace';
+import { acceptTraceId, redactUrl, startTrace, withTrace } from '@knowledge/observability/trace';
 import { emitBacktest } from '@knowledge/observability/backtest';
 
 /**
@@ -46,7 +46,7 @@ export function traceMiddleware(req: TracedRequest, res: TracedResponse, next: (
   const header = req.headers['x-request-id'];
   const inbound = Array.isArray(header) ? header[0] : header;
   const ctx = startTrace('http', {
-    traceId: inbound,
+    traceId: acceptTraceId(inbound),
     method: req.method,
     // Redacted at the source: every record in this scope inherits `route`.
     route: redactUrl(req.originalUrl ?? req.url),

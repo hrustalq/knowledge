@@ -203,7 +203,12 @@ function readCookie(header, name) {
   for (const part of header.split(';')) {
     const eq = part.indexOf('=')
     if (eq > 0 && part.slice(0, eq).trim() === name) {
-      return decodeURIComponent(part.slice(eq + 1).trim())
+      // A value that does not decode is absent, not a failed render (#1112).
+      try {
+        return decodeURIComponent(part.slice(eq + 1).trim())
+      } catch {
+        return null
+      }
     }
   }
   return null

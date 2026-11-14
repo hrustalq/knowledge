@@ -16,6 +16,7 @@ import type {
 import { api, fetchApi, isApiRequestError } from '@/shared/api/queries'
 import { getWorkspaceId, setActiveWorkspace } from '@/shared/api/api'
 import { clearPwaCaches } from '@/shared/utils/pwa'
+import { forgetSignedInStorage } from '@/shared/utils/signed-in-storage'
 
 /**
  * #650 migration: a tab signed in before the session became an HttpOnly cookie
@@ -166,6 +167,8 @@ export const useAuthStore = defineStore('auth', {
       this.me = null
       // Nothing the signed-out session read may answer for the next one.
       this.queryClient.clear()
+      // Nor what it left in this browser: a half-done connector setup, unpublished edits (#1101).
+      forgetSignedInStorage()
       await clearPwaCaches().catch(() => undefined)
     },
     setWorkspace(workspaceId: string) {

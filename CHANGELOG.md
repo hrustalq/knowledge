@@ -17,6 +17,21 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- Text a model wrote no longer loads anything from another site by itself. In assistant answers, agent replies in
+  threads, workflow drafts, merge requests an agent opened and a published site's Ask answers, an external image
+  now shows as a link you can choose to open, other media is dropped, and a diagram cannot fetch remote styles.
+  Images attached to pages still show. The member app now sends a first Content-Security-Policy: forms may only
+  post to the app, the page base cannot be changed, embedded objects load only from the app (and its file storage),
+  and the app cannot be framed. (#1099)
+- Setting up a connector no longer keeps the pasted token or webhook secret in the browser's storage. A setup you
+  resume asks for the token again. Signing out now also removes an unfinished connector setup and every page edit
+  not yet published from this browser. (#1101)
+- A page title containing `` $` ``, `$'` or `$&` no longer breaks the app for everyone who can see it in the sidebar.
+  The server used to expand those patterns when it built the page, which duplicated the document and stopped the app
+  from loading its state. (#1100)
+- Comments, merge-request descriptions, assistant answers and shared pages can no longer carry a stylesheet, a form,
+  form controls or inline styles. These used to survive the sanitizer, so one comment could restyle or hide parts of
+  the app, or place an invisible button that posted to another site. A diagram keeps the width set for it. (#1098)
 - Live updates stop when access does. An open live connection is checked again every 30 seconds, so signing out,
   revoking a key, a disabled account or removal from the workspace ends it within one check. The live socket no
   longer accepts an API key or session token in its address; it takes the single-use ticket the web already uses, or

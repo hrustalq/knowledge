@@ -15,6 +15,7 @@ import { nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import DOMPurify from 'dompurify'
 import { markdownToHtml, SANITIZE_CONFIG, slugifyHeading } from '@/core/markdown/render'
+import { sanitizeUntrusted, sanitizeUntrustedSvg } from '@/shared/utils/untrusted-markdown'
 import { parseScene, renderSceneToSvg } from '@/core/markdown/drawing'
 import { KN, attachmentKind, carryDiagramLayout, embedItemsOf, escapeHtml } from '@/core/markdown/nodes'
 import { embedTile } from '@/entities/document/model/embeds'
@@ -43,8 +44,15 @@ const props = withDefaults(
      * that has not closed yet just flashes an error at the reader.
      */
     streaming?: boolean
+    /**
+     * A model wrote this (#1099): an assistant answer, an agent's reply, a
+     * workflow draft. Nothing in it may load from another host by itself, so
+     * an external image becomes a link and a diagram's stylesheet loses its
+     * remote url()s (shared/utils/untrusted-markdown).
+     */
+    untrusted?: boolean
   }>(),
-  { streaming: false },
+  { streaming: false, untrusted: false },
 )
 const emit = defineEmits<{
   headings: [MarkdownHeading[]]
@@ -81,7 +89,9 @@ const reveal = createRevealTracker()
 async function render() {
   const markdown = props.markdown ?? ''
   const resolvePage = await pageRefResolver(markdown)
-  html.value = DOMPurify.sanitize(markdownToHtml(markdown, { resolvePage }), { ...SANITIZE_CONFIG })
+  const raw = markdownToHtml(markdown, { resolvePage })
+  // Stripped before it reaches the DOM: an image starts loading the moment it is inserted.
+  html.value = props.untrusted ? sanitizeUntrusted(raw) : DOMPurify.sanitize(raw, { ...SANITIZE_CONFIG })
   await nextTick()
   if (props.streaming) {
     const root = host.value
@@ -286,13 +296,17 @@ async function renderMermaid() {
       const { svg } = await mermaidSvg(mermaid, source)
       const wrap = document.createElement('div')
       wrap.className = 'kn-mermaid-figure'
-      wrap.innerHTML = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })
+      wrap.innerHTML = props.untrusted
+        ? sanitizeUntrustedSvg(svg)
+        : DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })
       carryDiagramLayout(block, wrap)
       block.replaceWith(wrap)
     } catch {
       // Leave the source visible and flagged rather than swallowing the block:
       // a diagram that fails to parse is still content the author wrote.
       block.classList.add('kn-mermaid-broken')
+      // The sanitizer strips inline style (#1098); its width comes back from data-kn-width.
+      carryDiagramLayout(block, block)
     }
   }
 }

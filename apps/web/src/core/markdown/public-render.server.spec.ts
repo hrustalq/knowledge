@@ -52,6 +52,16 @@ describe('renderPublicMarkdown', () => {
     expect(html).toMatch(/<div data-kn-mermaid="1" data-kn-wrap="right">/)
   })
 
+  it('serves a sized mermaid block with its width, though the sanitizer strips inline style (#1098)', () => {
+    const { html } = renderPublicMarkdown('```mermaid width=480\ngraph TD; A-->B\n```', options)
+    expect(html).toMatch(/<div data-kn-mermaid="1" data-kn-width="480" style="--kn-diagram-width: 480px">/)
+  })
+
+  it('drops style and form markup a page carries (#1098)', () => {
+    const { html } = renderPublicMarkdown('x\n\n<style>body{display:none}</style>\n\n<form action="https://evil.example/"><button>Go</button></form>\n\n<div style="position:fixed">y</div>', options)
+    expect(html).not.toMatch(/<style|<form|<button|position:fixed/)
+  })
+
   it('sanitizes with the app config: scripts and handlers go, rich-block attributes stay', () => {
     const { html } = renderPublicMarkdown(
       '<img src=x onerror="alert(1)"><script>alert(2)</script>\n\n> [!WARNING]\n> careful',

@@ -8,6 +8,7 @@ import { createRenderCache, renderCacheKey } from './server/render-cache.js'
 import { createSiteHostResolver, siteFilesMiddleware } from './server/site-files.js'
 import { siteWidgetRoute } from './server/site-widget.js'
 import { exportRenderRoute } from './server/export-render.js'
+import { spliceTemplate } from './server/splice-template.js'
 
 // Vue's compile-time flags. The SSR bundles leave `vue-i18n` external, so
 // Node loads its esm build unreplaced, and its plugin install() reads
@@ -131,7 +132,13 @@ app.use(async (req, res, next) => {
 
 // The app host's security headers and robots.txt (issue #277). A site's host
 // and the public paths keep whatever their own handlers set.
-app.use(appHostMiddleware(PUBLIC_PATH))
+// CSP_ASSET_ORIGINS: where presigned attachment URLs live when not on this
+// origin (#1099). Production proxies the bucket under its own host, so none;
+// local dev presigns against MinIO on :9000.
+const CSP_ASSET_ORIGINS = (process.env.CSP_ASSET_ORIGINS ?? (isProduction ? '' : 'http://localhost:9000'))
+  .split(/\s+/)
+  .filter(Boolean)
+app.use(appHostMiddleware(PUBLIC_PATH, { assetOrigins: CSP_ASSET_ORIGINS }))
 
 // A site's embeddable Ask widget script (issue #77 phase 3): `/widget.js` on
 // its host or `/pub/<slug>/widget.js`, before the reader takes it for a page.
@@ -281,11 +288,7 @@ async function renderPublic(req, res, url, siteHost) {
     res.set(rendered.headers ?? {}).redirect(302, rendered.redirect)
     return
   }
-  const html = template
-    .replace(`<!--app-lang-->`, locale)
-    .replace(`<!--app-css-->`, devStyles)
-    .replace(`<!--app-head-->`, rendered.head ?? '')
-    .replace(`<!--app-html-->`, rendered.html ?? '')
+  const html = spliceTemplate(template, { lang: locale, css: devStyles, head: rendered.head, html: rendered.html })
   res
     .status(rendered.status ?? 200)
     .set({ 'Content-Type': 'text/html', ...rendered.headers })
@@ -346,13 +349,14 @@ app.use('*all', async (req, res) => {
       traceId: typeof headerTraceId === 'string' ? headerTraceId : null,
     })
 
-    const html = template
-      .replace(`<!--app-lang-->`, locale)
-      .replace(`<!--app-css-->`, devStyles)
+    const html = spliceTemplate(template, {
+      lang: locale,
+      css: devStyles,
       // The route's own name (#644), already escaped; signed out it stays "Knowledge".
-      .replace(`<title>Knowledge</title>`, () => `<title>${rendered.title ?? 'Knowledge'}</title>`)
-      .replace(`<!--app-head-->`, rendered.head ?? '')
-      .replace(`<!--app-html-->`, rendered.html ?? '')
+      title: rendered.title ?? null,
+      head: rendered.head,
+      html: rendered.html,
+    })
 
     // One member's render, behind their cookie: never a shared cache's, and
     // never reused without asking.

@@ -510,8 +510,18 @@ function decodeEntities(text: string): string {
  * Attributes DOMPurify must not strip. The read view sanitizes this HTML, and
  * every rich block is identified by a data-* attribute — losing them would
  * silently degrade every panel, layout and embed into a bare <div>.
+ *
+ * What it forbids (#1098): this config guards every surface that renders
+ * someone else's markdown on the app's origin — a viewer's comment, a merge
+ * request, model output, a share link — and DOMPurify's defaults keep a global
+ * `<style>`, a form posting elsewhere, its controls and `position:fixed`
+ * overlays. The pipeline's one inline style, a diagram's width, travels in
+ * `data-kn-width` too, and each read view puts it back on the figure it draws
+ * (`carryDiagramLayout`). Heading anchors are assigned after sanitizing.
  */
-export const SANITIZE_CONFIG: { ADD_TAGS: string[]; ADD_ATTR: string[] } = {
+export const SANITIZE_CONFIG: { ADD_TAGS: string[]; ADD_ATTR: string[]; FORBID_TAGS: string[]; FORBID_ATTR: string[] } = {
+  FORBID_TAGS: ['style', 'form', 'input', 'button', 'textarea', 'select', 'option', 'object'],
+  FORBID_ATTR: ['style', 'id', 'name'],
   // No `object`: a file card builds its own after sanitizing, and one written
   // into the markdown would frame any URL (GHSA-gvrv-7g78-f9p6).
   ADD_TAGS: ['details', 'summary', 'time', 'mark', 'u'],

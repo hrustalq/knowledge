@@ -481,7 +481,7 @@ const replyTarget = computed(() =>
                 <Loader2 class="size-3.5 animate-spin" aria-hidden="true" />
                 {{ t('mention.thinking', { agent: agentName(comment.agentKey ?? '') }) }}
               </p>
-              <MarkdownView v-else :markdown="comment.body" />
+              <MarkdownView v-else :markdown="comment.body" :untrusted="isAgent(comment, i)" />
             </div>
           </li>
         </ol>

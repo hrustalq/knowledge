@@ -472,7 +472,8 @@ function refresh() {
             v-if="mr.description"
             class="rounded-lg border bg-card px-4 py-3 [&_.markdown-body>:first-child]:mt-0 [&_.markdown-body>:last-child]:mb-0"
           >
-            <MarkdownView :markdown="mr.description" />
+            <!-- An agent's or a capture's description is model output (#1099). -->
+            <MarkdownView :markdown="mr.description" :untrusted="mr.provenance !== 'manual'" />
           </div>
 
           <MrActivityFeed

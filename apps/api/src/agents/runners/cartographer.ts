@@ -9,6 +9,7 @@ import type { Principal } from '../../auth/principal.js';
 import { parseModelJson } from '../../common/model-json.js';
 import { type AgentServices, type AgentRunner, type AgentReporter, type AgentRunResult, MAX_FINDINGS, reasonOf, runBrief } from '../agent-services.js';
 import { MAX_DESCRIBED, MAX_PAGES, readFinding } from './curator.js';
+import { wrapUntrusted } from '../../common/untrusted.js';
 
 const RELATION_OUTPUT_CONTRACT =
   'Respond ONLY with a json object of the shape ' +
@@ -160,7 +161,12 @@ async function mapRelations(
           role: 'user',
           content:
             runBrief(run.input) +
-            `Pages in this workspace (id | category | title | relations it already declares):\n${listing}`,
+            // Titles are written by any editor: listed as data (#1141).
+            wrapUntrusted(
+              `Pages in this workspace (id | category | title | relations it already declares):\n${listing}`,
+              'cartographer',
+              'document',
+            ),
         },
       ];
 

@@ -230,6 +230,14 @@ sites, so SSE and WS cannot disagree:
 - It denies by default. A scope that cannot be computed delivers nothing about
   pages, and a page that cannot be read (deleted) reaches only those who see
   everything. Workspace-level frames and addressed frames pass unchanged.
+- A frame with no page but a `projectId` (a connector's run or revert, a
+  capture approved into a project, any page-less activity row whose project
+  `ActivityService.record` resolved) or a `project.*` frame is judged by that
+  project with `canSeeProject` (#1088, #1140). A frame about a project that is
+  gone passes, since it carries nothing but ids.
+- A private run (`run-privacy.ts`: a memo's, a restricted project's) publishes
+  its `agent.run.*` frames addressed to its creator (`runFrameAddress`), so
+  the bus never tells the workspace such a run exists.
 
 ## The client: LiveClient and the live cache
 

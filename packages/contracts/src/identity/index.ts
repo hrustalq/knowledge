@@ -581,6 +581,11 @@ export interface MeResponse {
    * /me, logout and resend-verification answers 403 `emailUnverified`.
    */
   emailVerificationRequired: boolean;
+  /**
+   * POST /v1/workspaces would be taken (#1142): signup is open, or the caller is
+   * a platform admin or the dev principal, and no key pins them to one workspace.
+   */
+  canCreateWorkspace: boolean;
   /** Empty in dev mode (the dev principal is admin+operator everywhere). */
   memberships: WorkspaceMembership[];
 }

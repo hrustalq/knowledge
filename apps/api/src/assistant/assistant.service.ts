@@ -410,7 +410,9 @@ export class AssistantService {
         { role: 'system', content: agent.instructions },
         {
           role: 'user',
-          content: `Title: ${dto.title || '(untitled)'}\n\nDraft:\n\n${dto.markdown.slice(0, 60_000)}`,
+          // Wrapped (#1141): a draft is often pasted from elsewhere, and it is
+          // the text under review, never instructions to the reviewer.
+          content: wrapUntrusted(`Title: ${dto.title || '(untitled)'}\n\n${dto.markdown.slice(0, 60_000)}`, 'review', 'draft'),
         },
       ],
       { json: true },
@@ -442,7 +444,9 @@ export class AssistantService {
       { role: 'system', content: agent.instructions },
       {
         role: 'user',
-        content: `Instruction: ${dto.instruction}\n\nTitle: ${dto.title || '(untitled)'}\n\nCurrent draft:\n\n${dto.markdown.slice(0, 60_000)}`,
+        // The draft is wrapped (#1141); the person's instruction follows it,
+        // outside the block, so the draft cannot restate what was asked.
+        content: `${wrapUntrusted(`Title: ${dto.title || '(untitled)'}\n\n${dto.markdown.slice(0, 60_000)}`, 'suggest', 'draft')}\n\nInstruction: ${dto.instruction}`,
       },
     ]);
     return { enabled: true, suggestion: suggestion.trim() };

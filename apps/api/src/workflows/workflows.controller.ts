@@ -172,7 +172,7 @@ export class WorkflowsController {
     @CurrentPrincipal() principal: Principal,
   ): Promise<WorkflowNodeEventResponse> {
     return this.workflows.sendNodeEvent(id, nodeId, dto.type, dto.draft, principal?.userId, (node, run, step) =>
-      this.materializer.materialize(node, run, step, principal?.userId),
+      this.materializer.materialize(node, run, step, principal.userId),
     );
   }
 

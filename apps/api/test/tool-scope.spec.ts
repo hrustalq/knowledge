@@ -8,8 +8,8 @@ const offered = [tool('search_knowledge'), tool('web_fetch'), tool('mcp__crm__ex
 const names = (list: typeof offered) => list.map((t) => t.function.name);
 
 describe('scopeToAgent', () => {
-  it('offers everything to an agent with no allowlist', () => {
-    expect(names(scopeToAgent(offered, []))).toEqual(names(offered));
+  it('offers every built-in tool to an agent with no allowlist, and no plugin tool (#1141)', () => {
+    expect(names(scopeToAgent(offered, []))).toEqual(['search_knowledge', 'web_fetch']);
   });
 
   it('drops a plugin tool the allowlist does not name, built-in or plugin alike', () => {

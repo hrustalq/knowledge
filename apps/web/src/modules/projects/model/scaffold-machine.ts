@@ -16,6 +16,7 @@
 import { assign, setup, type Snapshot } from 'xstate'
 import type { Blueprint, BlueprintGlossaryTerm, Locale } from '@knowledge/contracts'
 import { storedJson } from '@/shared/utils/stored-json'
+import { PROJECT_WIZARD_KEY } from '@/shared/utils/signed-in-storage'
 import type { NodePath } from './blueprint-tree'
 import type { DescribeInterview } from './interview'
 
@@ -122,7 +123,7 @@ export const scaffoldMachine = setup({
   },
 })
 
-const stored = storedJson<Snapshot<unknown>>('kn_project_wizard')
+const stored = storedJson<Snapshot<unknown>>(PROJECT_WIZARD_KEY)
 export const loadSnapshot = stored.load
 export const saveSnapshot = stored.save
 export const clearSnapshot = stored.clear

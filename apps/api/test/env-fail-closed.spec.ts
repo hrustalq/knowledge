@@ -30,6 +30,14 @@ describe('env (#1093): production refuses what fails open', () => {
     );
   });
 
+  it('requires a verified address under production unless the env says otherwise (#1143)', () => {
+    const prod = { ...base, NODE_ENV: 'production', AUTH_MODE: 'api-key' };
+    expect(validateEnv(prod).AUTH_REQUIRE_VERIFIED_EMAIL).toBe(true);
+    expect(validateEnv({ ...prod, AUTH_REQUIRE_VERIFIED_EMAIL: 'false' }).AUTH_REQUIRE_VERIFIED_EMAIL).toBe(false);
+    expect(validateEnv({ ...base }).AUTH_REQUIRE_VERIFIED_EMAIL).toBe(false);
+    expect(validateEnv({ ...base, NODE_ENV: 'test' }).AUTH_REQUIRE_VERIFIED_EMAIL).toBe(false);
+  });
+
   it('boots production with real auth, and anything outside production as before', () => {
     expect(validateEnv({ ...base, NODE_ENV: 'production', AUTH_MODE: 'api-key' }).AUTH_ECHO_TOKENS).toBe(false);
     expect(validateEnv({ ...base }).AUTH_MODE).toBe('none');

@@ -289,6 +289,8 @@ export class ConnectorsController {
       workspaceId: connector.workspaceId,
       actor: principal?.userId,
       action: 'connector.deleted',
+      // The row is gone by now, so `record` cannot look its project up.
+      projectId: connector.projectId,
       subjectId: id,
       metadata: { title: connector.name },
     });

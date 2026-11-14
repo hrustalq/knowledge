@@ -16728,6 +16728,9 @@
       "emailVerificationRequired": {
         "type": "boolean"
       },
+      "canCreateWorkspace": {
+        "type": "boolean"
+      },
       "memberships": {
         "type": "array",
         "items": {
@@ -16746,6 +16749,7 @@
       "authMethod",
       "emailVerified",
       "emailVerificationRequired",
+      "canCreateWorkspace",
       "memberships"
     ]
   },

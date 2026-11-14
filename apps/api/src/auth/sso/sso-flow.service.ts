@@ -45,6 +45,7 @@ import { identityFromLdapEntry, ldapConfigOf } from './ldap-profile.js';
 import { LOGOUT_TOKEN_MAX_AGE_SEC } from './oidc.service.js';
 import { UUID_RE } from '@knowledge/contracts';
 import { hashToken } from '../auth-tokens.js';
+import { speaksFor } from './domain-proof.js';
 
 /** The fragment code's lifetime: long enough for one page load, short enough to be useless later. */
 const EXCHANGE_TTL_MS = 60_000;
@@ -140,10 +141,17 @@ export class SsoFlowService {
       },
       orderBy: [{ name: 'asc' }, { id: 'asc' }],
     });
+    // #1143: a button for a domain the provider's workspace never proved is a
+    // phishing aid (sign-in would refuse it anyway). The enforced domain is
+    // proven by definition, so its providers stay.
+    const viaEnforced = (r: (typeof rows)[number]) =>
+      !!enforced && (enforced.providerId ? r.id === enforced.providerId : r.workspaceId === enforced.workspaceId || r.platformWide);
+    const offered = [];
+    for (const r of rows) if (viaEnforced(r) || (await speaksFor(this.prisma, r, domain))) offered.push(r);
     const passwordPast = !enforced || this.policy.isBreakGlass(normalized) || enforced.allowPasswordForAdmins;
     return {
-      method: rows.length ? 'sso' : 'password',
-      providers: rows.map(toLoginProvider),
+      method: offered.length ? 'sso' : 'password',
+      providers: offered.map(toLoginProvider),
       passwordAllowed: passwordAllowedFor(normalized, this.config) && passwordPast,
       enforced: enforced !== null,
     };

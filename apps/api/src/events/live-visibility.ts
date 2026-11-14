@@ -59,7 +59,7 @@ export class LiveVisibility {
       return listeners.map(() => true);
     }
     if (!event.documentId) {
-      const projectId = event.type.startsWith('project.') ? event.subjectId : undefined;
+      const projectId = event.projectId ?? (event.type.startsWith('project.') ? event.subjectId : undefined);
       // Workspace-level frames pass as before.
       return projectId ? this.allowsProject(event.workspaceId, projectId, listeners) : listeners.map(() => true);
     }

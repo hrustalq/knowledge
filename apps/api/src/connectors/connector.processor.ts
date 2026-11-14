@@ -159,6 +159,7 @@ export class ConnectorProcessor extends WorkerHost {
         workspaceId: first.workspaceId,
         type: 'connector.run.started',
         subjectId: connector.id,
+        projectId: connector.projectId,
         title: connector.name,
       });
     }
@@ -207,6 +208,7 @@ export class ConnectorProcessor extends WorkerHost {
           workspaceId: first.workspaceId,
           type: 'connector.run.failed',
           subjectId: connector.id,
+          projectId: connector.projectId,
           title: connector.name,
         });
       }

@@ -36,17 +36,40 @@ export const APP_ROBOTS_TXT = 'User-agent: *\nAllow: /pub/\nDisallow: /\n'
  * @returns {string}
  */
 export function appContentSecurityPolicy(assetOrigins = []) {
+  // X-Frame-Options, stated the way current browsers read it.
+  return [...baseDirectives(assetOrigins), "frame-ancestors 'none'"].join('; ')
+}
+
+/** @param {string[]} assetOrigins */
+function baseDirectives(assetOrigins) {
   for (const origin of assetOrigins) {
     if (!/^https?:\/\/[a-z0-9.-]+(?::\d+)?$/i.test(origin)) throw new Error(`Not a CSP origin: ${origin}`)
   }
   return [
     "base-uri 'none'",
     "form-action 'self'",
-    // The PDF preview is the one <object> the app draws, from a presigned URL.
+    // The PDF preview is the one <object> the app (and the public renderer) draws, from a presigned URL.
     ["object-src 'self'", ...assetOrigins].join(' '),
-    // X-Frame-Options, stated the way current browsers read it.
-    "frame-ancestors 'none'",
-  ].join('; ')
+  ]
+}
+
+/**
+ * A share link's or published site's response headers (#1142): the render's
+ * own, plus `nosniff` and the app's three directives. The frame policy is the
+ * render's when it states one — the Ask widget lists who may frame it — and
+ * `'none'` otherwise. `img-src` waits on the image proxy, as on the app (#1133).
+ *
+ * @param {string[]} assetOrigins
+ * @param {Record<string, string> | undefined} renderHeaders
+ * @returns {Record<string, string>}
+ */
+export function publicResponseHeaders(assetOrigins, renderHeaders) {
+  const frame = renderHeaders?.['Content-Security-Policy']?.match(/frame-ancestors[^;]*/)?.[0].trim() ?? "frame-ancestors 'none'"
+  return {
+    ...renderHeaders,
+    'X-Content-Type-Options': 'nosniff',
+    'Content-Security-Policy': [...baseDirectives(assetOrigins), frame].join('; '),
+  }
 }
 
 /**

@@ -6,6 +6,7 @@ import { visibilityWhere } from '../../permissions/access-scope.js';
 import type { ResolvedAgent } from '../agent-registry.service.js';
 import type { Principal } from '../../auth/principal.js';
 import { parseModelJson } from '../../common/model-json.js';
+import { wrapUntrusted } from '../../common/untrusted.js';
 import { type AgentServices, type AgentRunner, type AgentReporter, type AgentRunResult, MAX_FINDINGS, reasonOf, pageScope, runBrief } from '../agent-services.js';
 
 /** How many pages the curator will look at in one pass. */
@@ -136,7 +137,8 @@ async function curate(
           role: 'user',
           content:
             runBrief(run.input) +
-            `Pages in this workspace (id | category | title | last updated):\n${listing}`,
+            // Titles are written by any editor: listed as data (#1141).
+            wrapUntrusted(`Pages in this workspace (id | category | title | last updated):\n${listing}`, 'curator', 'document'),
         },
       ];
 

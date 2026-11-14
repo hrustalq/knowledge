@@ -8,6 +8,7 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { McpController } from '../src/mcp/mcp.controller.js';
 import { readPageText } from '../src/common/page-text.js';
+import { wrapUntrusted } from '../src/common/untrusted.js';
 import { AccessService } from '../src/auth/access.service.js';
 import { AclGuard } from '../src/auth/acl.guard.js';
 import { MCP_KEY_OK_META, READ_KEY_OK_META, type AccessSpec } from '../src/auth/access.decorator.js';
@@ -1086,7 +1087,8 @@ describe('McpService over a principal', () => {
     expect(res.isError).toBeFalsy();
     expect(editor.learnings.create).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceId: WS_A, agentKey: 'reviewer', status: 'proposed', sourceKind: 'manual' }),
-      p.userId,
+      // The principal, not its id (#1140): a finding source asks whether it may read the run.
+      expect.objectContaining({ userId: p.userId }),
     );
   });
 
@@ -1334,7 +1336,7 @@ describe('MCP AI-readable resources', () => {
     expect(resourceTemplates.find((t) => t.uriTemplate.endsWith('.md'))?.mimeType).toBe('text/markdown');
   });
 
-  it('reads a page byte-identical to GET /v1/documents/:id/markdown', async () => {
+  it('reads a page as GET /v1/documents/:id/markdown says it, wrapped untrusted (#1141)', async () => {
     const world = readableWorld();
     const client = await connect(service(world.access, world.aiReadable).mcp, pinnedToA());
     const read = await client.readResource({ uri: `knowledge://documents/${DOC_A}.md` });
@@ -1349,7 +1351,7 @@ describe('MCP AI-readable resources', () => {
       res as never,
     );
     expect(rest).toBeTruthy();
-    expect(content.text).toBe(rest);
+    expect(content.text).toBe(wrapUntrusted(rest as string, 'document-markdown', 'document'));
     expect(content.text).toContain(`Body of ${DOC_A}.`);
   });
 
@@ -1359,12 +1361,12 @@ describe('MCP AI-readable resources', () => {
     const ws = await client.readResource({ uri: `knowledge://workspaces/${WS_A}/llms.txt` });
     const expected = await world.aiReadable.workspaceIndex(WS_A);
     expect(expected.status).toBe(200);
-    expect((ws.contents[0] as { text: string }).text).toBe(expected.status === 200 ? expected.body : '');
+    expect((ws.contents[0] as { text: string }).text).toBe(wrapUntrusted(expected.status === 200 ? expected.body : '', 'workspace-llms-txt', 'document'));
     expect((ws.contents[0] as { text: string }).text).toContain(`https://kb.example.com/documents/${DOC_A}.md`);
 
     const proj = await client.readResource({ uri: `knowledge://projects/${PROJ_A}/llms.txt` });
     const expectedProj = await world.aiReadable.projectIndex(PROJ_A);
-    expect((proj.contents[0] as { text: string }).text).toBe(expectedProj.status === 200 ? expectedProj.body : '');
+    expect((proj.contents[0] as { text: string }).text).toBe(wrapUntrusted(expectedProj.status === 200 ? expectedProj.body : '', 'project-llms-txt', 'document'));
   });
 
   it('refuses a key pinned to workspace A every workspace-B resource, before any content is read', async () => {

@@ -303,12 +303,14 @@ export class ConnectorItemsService {
       const run = await this.prisma.connectorRun.update({
         where: { id: item.runId },
         data: { reverted: { increment: 1 } },
+        include: { connector: { select: { projectId: true } } },
       });
       this.prisma.onCommit(() =>
         this.events.publish({
           workspaceId: run.workspaceId,
           type: 'connector.item.reverted',
           subjectId: run.id,
+          projectId: run.connector.projectId,
           documentId: item.documentId ?? undefined,
           title: item.title,
         }),

@@ -833,7 +833,7 @@
             }
           }
         },
-        "summary": "Mail a fresh confirmation link to the caller's address (at most one a minute)",
+        "summary": "Mail a fresh confirmation link to the caller's address (at most one a minute). 429 past 3/min per account or 10/min per IP",
         "tags": [
           "auth"
         ]
@@ -69627,6 +69627,9 @@
           "emailVerificationRequired": {
             "type": "boolean"
           },
+          "canCreateWorkspace": {
+            "type": "boolean"
+          },
           "memberships": {
             "type": "array",
             "items": {
@@ -69645,6 +69648,7 @@
           "authMethod",
           "emailVerified",
           "emailVerificationRequired",
+          "canCreateWorkspace",
           "memberships"
         ]
       },

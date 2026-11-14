@@ -31,6 +31,7 @@
 import { assign, setup, type Snapshot } from 'xstate'
 import type { WorkflowGraph, WorkflowTrigger } from '@knowledge/contracts'
 import { storedJson } from '@/shared/utils/stored-json'
+import { WORKFLOW_WIZARD_KEY } from '@/shared/utils/signed-in-storage'
 
 export type WizardLane = 'describe' | 'draw'
 
@@ -169,7 +170,7 @@ export const wizardMachine = setup({
  * The snapshot is plain JSON, which is what would let it move server-side
  * later; today it is per-viewer and needs no schema.
  */
-const stored = storedJson<Snapshot<unknown>>('kn_wf_wizard')
+const stored = storedJson<Snapshot<unknown>>(WORKFLOW_WIZARD_KEY)
 export const loadSnapshot = stored.load
 export const saveSnapshot = stored.save
 export const clearSnapshot = stored.clear

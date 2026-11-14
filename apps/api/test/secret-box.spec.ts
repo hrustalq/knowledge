@@ -55,3 +55,45 @@ describe('secret box', () => {
     expect(decryptSecret(envelope, null, here)).toBeNull();
   });
 });
+
+describe('tag length (#1141)', () => {
+  it('refuses an envelope whose tag was cut short', () => {
+    const [, kid, iv, tag, ct] = encryptSecret('sk-1', KEY, here).split('$');
+    const short = Buffer.from(tag!, 'base64').subarray(0, 4).toString('base64');
+    expect(decryptSecret(['gcm2', kid, iv, short, ct].join('$'), KEY, here)).toBeNull();
+  });
+});
+
+describe('legacy envelope re-seal (#1141)', () => {
+  it('rewrites every first-format envelope sealed to its own slot, and leaves the rest', async () => {
+    const { resealLegacySecrets } = await import('../src/ai/secret-reseal.service.js');
+    const rows: Record<string, Array<{ id: string; workspaceId: string | null; envelope: string }>> = {
+      'ai_providers.api_key_cipher': [{ id: 'row-1', workspaceId: WS_A, envelope: legacy('sk-old', KEY) }],
+      'credentials.secret': [
+        { id: 'cred-1', workspaceId: null, envelope: legacy('tok', KEY) },
+        { id: 'cred-2', workspaceId: null, envelope: legacy('rotated', OTHER_KEY) },
+      ],
+    };
+    const updates: Array<{ sql: string; args: unknown[] }> = [];
+    const prisma = {
+      $queryRawUnsafe: async (sql: string) => rows[`${/FROM (\w+)/.exec(sql)![1]}.${/WHERE (\w+) LIKE/.exec(sql)![1]}`] ?? [],
+      $executeRawUnsafe: async (sql: string, ...args: unknown[]) => {
+        updates.push({ sql, args });
+        return 1;
+      },
+    };
+    const result = await resealLegacySecrets(prisma as never, KEY);
+    expect(result).toEqual({ resealed: 2, unreadable: 1 });
+    const provider = updates.find((u) => u.sql.includes('ai_providers'))!;
+    expect(decryptSecret(provider.args[0] as string, KEY, here)).toBe('sk-old');
+    // Guarded: only the envelope that was read is replaced.
+    expect(provider.args).toEqual([expect.stringMatching(/^gcm2\$/), 'row-1', rows['ai_providers.api_key_cipher']![0]!.envelope]);
+    const cred = updates.find((u) => u.sql.includes('credentials'))!;
+    expect(decryptSecret(cred.args[0] as string, KEY, secretSlot('credentials', 'secret', null, 'cred-1'))).toBe('tok');
+  });
+
+  it('is a no-op without a key', async () => {
+    const { resealLegacySecrets } = await import('../src/ai/secret-reseal.service.js');
+    expect(await resealLegacySecrets({} as never, null)).toEqual({ resealed: 0, unreadable: 0 });
+  });
+});

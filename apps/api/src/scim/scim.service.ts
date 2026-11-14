@@ -127,6 +127,12 @@ export class ScimService {
         if (await this.prisma.scimUser.findUnique({ where: { workspaceId_userId: { workspaceId: ws, userId: user.id } } })) {
           throw conflict(t('error.scim.emailProvisioned', { email: f.email }));
         }
+        // #1143: an address nobody proved, on a domain this workspace did not
+        // prove, may be a squatter's — the directory's membership is not theirs
+        // to take. Nothing is written; the IdP sees the conflict it sees for a
+        // provisioned address, and the person proves the address (or the
+        // workspace its domain) before the directory can link it.
+        if (!authority && !user.emailVerifiedAt) throw conflict(t('error.scim.emailProvisioned', { email: f.email }));
         if (authority && user.displayName !== f.displayName) {
           user = await this.prisma.user.update({ where: { id: user.id }, data: { displayName: f.displayName } });
         }

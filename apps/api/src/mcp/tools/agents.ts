@@ -54,7 +54,7 @@ export function registerAgentsTools(ctx: McpToolContext): void {
       return json(
         await svc.learnings.create(
           { workspaceId, text, agentKey: agentKey ?? null, projectId: projectId ?? null, status: 'proposed', sourceKind: 'manual' },
-          principal.userId,
+          principal,
         ),
       );
     },

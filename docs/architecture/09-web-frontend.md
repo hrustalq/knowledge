@@ -99,13 +99,19 @@ live when not on the app's origin; dev MinIO by default outside production)
 `; frame-ancestors 'none'`. It is nonce-free on purpose, so it names no
 `script-src` (the inline state script needs nonces, #277) and no `img-src`
 (pages hotlink external images; that waits for an image proxy). Public paths
-and site hosts never get it. Model output is guarded in the renderer instead:
+and site hosts never get it: their HTML goes out with `publicResponseHeaders`
+instead (#1142), which adds `X-Content-Type-Options: nosniff` and the same
+three directives, and keeps the render's own `frame-ancestors` (the widget's
+list) or states `'none'`. On a site's own host `object-src` also names the
+app's origin (`WEB_BASE_URL`), where its PDF previews are presigned. Model output is guarded in the renderer instead:
 `MarkdownView`'s `untrusted` (and `SiteAsk`) goes through
 `shared/utils/untrusted-markdown.ts`, which drops everything that fetches on render
 and keeps an `<img>` only for an attachment path or a `data:` image, before
 the HTML reaches the DOM. Text from a model is rendered `untrusted`: assistant
 answers, agent replies in threads, workflow drafts and descriptions of merge
-requests that a person did not open.
+requests that a person did not open; so are glossary definitions (a model's or
+a capture's words) and the source-recipe preview of freshly fetched content
+(#1142).
 
 Whether a host is a site's is decided once per request, first thing
 (`server/site-files.js`, `res.locals.siteHost`). The host is `Host`, or

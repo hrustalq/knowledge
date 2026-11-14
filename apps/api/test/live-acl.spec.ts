@@ -121,6 +121,15 @@ describe('LiveVisibility', () => {
       expect(await live.allows(frame({ type: 'project.deleted', subjectId: SECRET }), [p(BOB)])).toEqual([true]);
     });
 
+    it('judges a page-less frame that names its project by that project (#1140)', async () => {
+      // connector.run.* and capture.approved carry no page and no project.* type.
+      const { live, prisma } = visibility({ [ALICE]: scope(ALICE, []), [BOB]: scope(BOB, [SECRET]) });
+      Object.assign(prisma, { project: projects({ [SECRET]: { restricted: true }, [OPEN]: { restricted: false } }) });
+      const run = (projectId: string) => frame({ type: 'connector.run.succeeded', subjectId: OPEN, projectId, title: 'secret repo' });
+      expect(await live.allows(run(SECRET), [p(ALICE), p(BOB)])).toEqual([true, false]);
+      expect(await live.allows(run(OPEN), [p(ALICE), p(BOB)])).toEqual([true, true]);
+    });
+
     it('never reads the project for listeners nothing is hidden from', async () => {
       const { live, prisma } = visibility({ [ALICE]: scope(ALICE, []) });
       const project = projects({});
@@ -134,6 +143,38 @@ describe('LiveVisibility', () => {
     const { live, permissions } = visibility({});
     permissions.scopeFor.mockRejectedValueOnce(new Error('not a member'));
     expect(await live.allows(frame({ documentId: OPEN }), [p(BOB)])).toEqual([false]);
+  });
+});
+
+describe('ActivityService.record project of a page-less row (#1140)', () => {
+  const recorder = (connectorProject: string | null) => {
+    const create = vi.fn(async () => ({}));
+    const publish = vi.fn(async () => undefined);
+    const prisma = {
+      activityLog: { create },
+      document: { findUnique: vi.fn(), updateMany: vi.fn() },
+      connector: { findUnique: vi.fn(async () => (connectorProject ? { projectId: connectorProject } : null)) },
+    };
+    return { service: new ActivityService(prisma as never, { publish } as never), create, publish };
+  };
+
+  it('files a connector row under the connector’s project and says so on the frame', async () => {
+    const { service, create, publish } = recorder(SECRET);
+    await service.record({ workspaceId: WS, actor: ALICE, action: 'connector.created', subjectId: OPEN, metadata: { title: 'repo' } });
+    expect(create.mock.calls[0]).toMatchObject([{ data: { projectId: SECRET } }]);
+    expect(publish.mock.calls[0]).toMatchObject([{ type: 'connector.created', projectId: SECRET }]);
+  });
+
+  it('puts a caller-given project on a page-less frame', async () => {
+    const { service, publish } = recorder(null);
+    await service.record({ workspaceId: WS, actor: ALICE, action: 'capture.approved', projectId: SECRET, subjectId: OPEN });
+    expect(publish.mock.calls[0]).toMatchObject([{ projectId: SECRET }]);
+  });
+
+  it('leaves the project off a frame about a page, which is judged by the page', async () => {
+    const { service, publish } = recorder(null);
+    await service.record({ workspaceId: WS, actor: ALICE, action: 'document.updated', documentId: OPEN, projectId: SECRET });
+    expect((publish.mock.calls[0] as unknown as [KnowledgeEvent])[0].projectId).toBeUndefined();
   });
 });
 

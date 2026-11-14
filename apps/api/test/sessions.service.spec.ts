@@ -129,7 +129,7 @@ describe('TokenAuthService session resolution', () => {
     expect(sessions.touch).toHaveBeenCalledWith('s1');
 
     // /me reports it for a session, and null for anything that is not one.
-    expect(toMeResponse(principal, [], false).authMethod).toBe('oidc');
+    expect(toMeResponse(principal, [], false, true).authMethod).toBe('oidc');
     expect(toMeResponse({ ...principal, mode: 'api-key' }, [], false).authMethod).toBeNull();
   });
 

@@ -381,8 +381,8 @@ describe('SCIM Users', () => {
     expect(res.body).not.toHaveProperty('password');
   });
 
-  it('links an existing account by address instead of creating a second one', async () => {
-    db.tables.user.push({ id: randomUUID(), email: 'ada@corp.example', displayName: 'Ada (manual)', createdAt: new Date(), disabledAt: null });
+  it('links an existing (verified) account by address instead of creating a second one', async () => {
+    db.tables.user.push({ id: randomUUID(), email: 'ada@corp.example', displayName: 'Ada (manual)', createdAt: new Date(), disabledAt: null, emailVerifiedAt: new Date() });
     const id = await createAda();
     expect(db.tables.user).toHaveLength(1);
     expect(db.tables.user[0]).toMatchObject({ id, displayName: 'Ada (manual)' });
@@ -494,7 +494,8 @@ describe('SCIM Users', () => {
   });
 
   it('takes over a membership a sign-in created, so deactivation reaches it', async () => {
-    const existing = { id: randomUUID(), email: 'ada@corp.example', displayName: 'Ada', createdAt: new Date(), disabledAt: null };
+    // A JIT sign-in proves the address (doc 54), so the account is verified.
+    const existing = { id: randomUUID(), email: 'ada@corp.example', displayName: 'Ada', createdAt: new Date(), disabledAt: null, emailVerifiedAt: new Date() };
     db.tables.user.push(existing);
     db.tables.workspaceMember.push({ workspaceId: WS_A, userId: existing.id, role: 'editor', trustedOperator: false, source: 'jit' });
     await createAda();
@@ -708,11 +709,19 @@ describe('SCIM and accounts it does not own (#1094, #1096)', () => {
     expect(db.tables.chatIdentity).toHaveLength(0);
   });
 
-  it('claims nothing without the domain, and nothing of an account already verified', async () => {
+  it('refuses to link an unverified account without the domain: the squatter gets no membership (#1143)', async () => {
     const user = squatter();
-    await createAda();
+    const res = await entra.post('/Users', ENTRA_CREATE);
+    expect(res.status).toBe(409);
+    expect(res.body.scimType).toBe('uniqueness');
+    expect(db.tables.scimUser.filter((r) => r.userId === user.id)).toHaveLength(0);
+    expect(db.tables.workspaceMember.filter((m) => m.userId === user.id)).toHaveLength(0);
     expect(user.passwordHash).toBe('scrypt$squatter');
     expect(db.tables.session[0].revokedAt).toBeNull();
+  });
+
+  it('claims nothing of an account already verified', async () => {
+    const user = squatter();
 
     db.tables.ssoDomain.push({ domain: 'corp.example', workspaceId: WS_B, verifiedAt: new Date() });
     db.tables.user.find((u) => u.id === user.id)!.emailVerifiedAt = new Date('2026-01-01');

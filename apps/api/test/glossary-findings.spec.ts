@@ -39,6 +39,8 @@ const suggestion = (term: string, over: Partial<GlossaryTermSuggestion> = {}): G
   ...over,
 });
 
+const SCOPE_OF_CALLER = { workspaceId: '11111111-1111-4111-8111-111111111111', userId: 'u2' };
+
 describe('the glossarist run', () => {
   function harness(over: { scanned?: string[]; failOn?: string; input?: Record<string, unknown> } = {}) {
     const prisma = {
@@ -169,6 +171,8 @@ describe('Add to glossary', () => {
       {} as never,
       {} as never,
       glossary as never,
+      {} as never,
+      { scopeFor: vi.fn(async () => SCOPE_OF_CALLER) } as never,
     );
     return { svc, glossary, findings };
   }
@@ -178,7 +182,8 @@ describe('Add to glossary', () => {
     const res = await svc.addTerm(WS, 'run-1', 0, { userId: 'u2' } as never, { definition: 'Edited.' });
     expect(glossary.create).toHaveBeenCalledWith(
       { workspaceId: WS, projectId: P2, term: 'Merge base', definition: 'Edited.', aliases: ['base'], source: 'ai' },
-      expect.objectContaining({ workspaceId: WS }),
+      // The caller's own scope, never the system's (#1140): the glossary asks edit on P2.
+      SCOPE_OF_CALLER,
       'u2',
     );
     expect(res).toEqual({ termId: 'term-new', term: 'Merge base', projectId: P2 });

@@ -47,7 +47,9 @@ model call and no claim row.
    the code was issued to** (`ChatIdentityService.redeemProof`, called for a
    six-digit DM before anything else is done with it). Membership of the
    confirming person is checked again then. `CHAT_LINK_PROOF_MAX_ATTEMPTS` (5)
-   wrong numbers spend the code. The page tells the member never to give the
+   wrong numbers spend the code. Every number first claims an attempt in one
+   guarded UPDATE (`proof_attempts < 5`), so concurrent messages cannot
+   outrun the cap and no number past the fifth is compared (#1141). The page tells the member never to give the
    number to anyone, and every link is a `chat.identity.linked` notification
    (category `access`) to the linked person.
 

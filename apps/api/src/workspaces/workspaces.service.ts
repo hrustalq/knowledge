@@ -15,6 +15,7 @@ import {
 } from '@knowledge/contracts';
 import { AuditService } from '../auth/audit.service.js';
 import type { Principal } from '../auth/principal.js';
+import { workspaceCreationRefusal } from '../auth/workspace-creation.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { userAvatarUrl } from '../common/avatar-url.js';
 import type { AddMemberDto, UpdateMemberDto } from './workspaces.dto.js';
@@ -64,15 +65,9 @@ export class WorkspacesService {
   }
 
   async create(principal: Principal, name: string): Promise<CreateWorkspaceResponse> {
-    // Making a workspace makes its creator an admin there (#1091). With signup
-    // closed, accounts are handed out by an operator, and so are tenants.
-    // A key pinned to one workspace stays there; a new tenant is outside its pin (#1092).
-    if (principal.apiKey?.workspaceId) {
-      throw new ForbiddenException(t('error.auth.apiKeyPinnedNoCreate'));
-    }
-    if (!principal.isAdmin && principal.mode !== 'dev' && !this.config.get<boolean>('AUTH_SIGNUP_ENABLED')) {
-      throw new ForbiddenException(t('error.workspace.creationClosed'));
-    }
+    const refusal = workspaceCreationRefusal(principal, this.config.get<boolean>('AUTH_SIGNUP_ENABLED') === true);
+    if (refusal === 'pinned') throw new ForbiddenException(t('error.auth.apiKeyPinnedNoCreate'));
+    if (refusal === 'closed') throw new ForbiddenException(t('error.workspace.creationClosed'));
     // One transaction: a workspace whose founding admin never committed is
     // invisible to its creator (list scopes to membership), un-joinable (adding a
     // member is admin-gated) and undeletable — an

@@ -163,7 +163,9 @@ export class AuthFlowController {
   @Post('resend-verification')
   @Returns('ResendVerificationResponse')
   @UnverifiedOk()
-  @ApiOperation({ summary: "Mail a fresh confirmation link to the caller's address (at most one a minute)" })
+  @UseGuards(AuthRateLimitGuard)
+  @AuthRateLimit('resend')
+  @ApiOperation({ summary: "Mail a fresh confirmation link to the caller's address (at most one a minute). 429 past 3/min per account or 10/min per IP" })
   resendVerification(@CurrentPrincipal() principal: Principal): Promise<ResendVerificationResponse> {
     return this.flow.resendVerification(principal);
   }

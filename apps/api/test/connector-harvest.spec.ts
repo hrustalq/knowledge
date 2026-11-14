@@ -302,6 +302,7 @@ describe('the connector webhook, for a harvest connector', () => {
       {} as never,
       { claim } as never,
       { get: () => 0 } as never,
+      { once: (_s: string, _b: string, _seen: unknown, handle: () => Promise<unknown>) => handle() } as never,
     );
     return { ctl, claim, enqueue, row, connectors };
   }

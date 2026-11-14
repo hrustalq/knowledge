@@ -84,7 +84,10 @@ or a crash lost them. Now:
   hidden. A browser that refuses the write (quota, blocked storage) is reported
   in the header rather than claimed safe. Signing out removes every
   `kn:unstaged:v1:` key from the browser (`shared/utils/signed-in-storage.ts`,
-  #1101): the copies are not keyed by person.
+  #1101): the copies are not keyed by person. The same list holds the other
+  per-person values: the connector, project and workflow wizards' drafts, and
+  try-it's per-spec values in `sessionStorage` (`kn_try:`, third-party tokens
+  and passwords included), which are dropped from memory too (#1142).
 - "Unstaged" is **measured, not flagged**: the current page against the
   published baseline, normalised the way publishing would (`samePage`). The
   baseline is captured after the editor has parsed the page (`@ready` →

@@ -1564,7 +1564,7 @@
       "method": "POST",
       "path": "/v1/auth/resend-verification",
       "tag": "auth",
-      "summary": "Mail a fresh confirmation link to the caller's address (at most one a minute)",
+      "summary": "Mail a fresh confirmation link to the caller's address (at most one a minute). 429 past 3/min per account or 10/min per IP",
       "role": null,
       "source": null,
       "public": false,

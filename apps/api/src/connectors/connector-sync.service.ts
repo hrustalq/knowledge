@@ -448,6 +448,7 @@ export class ConnectorSyncService {
       type: 'connector.run.awaiting-review',
       subjectId: runRow.id,
       title: row.name,
+      projectId: row.projectId,
     });
     return { done: true };
   }
@@ -549,6 +550,7 @@ export class ConnectorSyncService {
       type: failed > 0 ? 'connector.run.failed' : 'connector.run.succeeded',
       subjectId: row.id,
       title: row.name,
+      projectId: row.projectId,
     });
     // A web source's transient failures are retried by a later run, and a crawl counts its dropped pages (#674).
     if (row.kind === 'web') await this.webSources.afterRun(row, runRow);

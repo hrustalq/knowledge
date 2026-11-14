@@ -38,8 +38,20 @@ export function privateRunWhere(principal: Principal): Prisma.AgentRunWhereInput
 }
 
 export function mayReadRun(run: { subjectKey: string | null; createdBy: string }, principal: Principal): boolean {
-  const isPrivate = PRIVATE_PREFIXES.some((prefix) => run.subjectKey?.startsWith(prefix) === true);
-  return seesEveryRun(principal) || !isPrivate || run.createdBy === principal.userId;
+  return seesEveryRun(principal) || !isPrivateRun(run) || run.createdBy === principal.userId;
+}
+
+/** A memo's or a restricted project's run: only its creator (and platform admins) may read it. */
+export function isPrivateRun(run: { subjectKey: string | null }): boolean {
+  return PRIVATE_PREFIXES.some((prefix) => run.subjectKey?.startsWith(prefix) === true);
+}
+
+/**
+ * The address of a run's live frame (#1140): a private run's goes to its
+ * creator alone, so the bus never tells the workspace such a run exists.
+ */
+export function runFrameAddress(run: { subjectKey: string | null; createdBy: string }): { userId?: string } {
+  return isPrivateRun(run) ? { userId: run.createdBy } : {};
 }
 
 export function isMemoRun(run: { subjectKey: string | null }): boolean {

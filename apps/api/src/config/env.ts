@@ -26,6 +26,12 @@ const boolish = (fallback: boolean) =>
     .default(fallback);
 
 export const envSchema = z.object({
+  /**
+   * The default is `development`, so the production refusals in `validateEnv`
+   * (#1093) hang on this line. Dockerfile.api and Dockerfile.web pin
+   * `ENV NODE_ENV=production` in the image, so a deployment whose env lost the
+   * line still runs as production (#1143).
+   */
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(3000),
 
@@ -119,9 +125,11 @@ export const envSchema = z.object({
   AUTH_INVITE_TTL_HOURS: z.coerce.number().int().positive().default(72),
   /**
    * Refuse session principals whose address is unproven (403 `emailUnverified`)
-   * everywhere but the routes that let them prove it. Off by default: an
-   * unverified person can work and is nagged by a banner. API keys are minted
-   * by an admin and are never refused for this.
+   * everywhere but the routes that let them prove it. Off by default outside
+   * production: an unverified person can work and is nagged by a banner. Under
+   * NODE_ENV=production an unset value means on (#1143, `validateEnv`), so a
+   * deployment that lost the line fails closed; `false` still turns it off.
+   * API keys are minted by an admin and are never refused for this.
    */
   AUTH_REQUIRE_VERIFIED_EMAIL: boolish(false),
 
@@ -1178,6 +1186,10 @@ function smtpUrlHasUserinfo(url: string): boolean {
 
 /** Fail-fast env validation, plugged into @nestjs/config `validate`. */
 export function validateEnv(config: Record<string, unknown>): Env {
+  // #1143: production's default for an unset line is the closed one.
+  if (config.NODE_ENV === 'production' && config.AUTH_REQUIRE_VERIFIED_EMAIL === undefined) {
+    config = { ...config, AUTH_REQUIRE_VERIFIED_EMAIL: true };
+  }
   const parsed = envSchema.safeParse(config);
   if (!parsed.success) {
     throw new Error(`Invalid environment:\n${parsed.error.issues.map((i) => `  ${i.path.join('.')}: ${i.message}`).join('\n')}`);

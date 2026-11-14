@@ -68,9 +68,41 @@ const TAG: Record<UntrustedOrigin, string> = {
  */
 const CLOSING = new RegExp(`<(\\s*/\\s*)(${[...new Set(Object.values(TAG))].join('|')})(?![\\w-])`, 'giu');
 
-/** The payload with every wrapper closing tag defused (`&lt;/pages`): it reads the same and ends nothing. */
+/** Characters a reader skips: zero-width spaces and joiners, word joiners, the BOM, soft hyphens. */
+const INVISIBLE = /[­᠎​-‏⁠-⁤﻿]/u;
+
+/**
+ * The payload with every wrapper closing tag defused (`&lt;/pages`): it reads the same and ends nothing.
+ *
+ * A model reads `<` + U+200B + `/pages>` and fullwidth `＜／pages＞` as the closing tag too
+ * (#1141), so the match runs on the payload as a reader folds it: every code
+ * point NFKC-normalized, invisibles dropped. The `<` of each match is then
+ * replaced in the original text. Folding the whole payload instead would
+ * rewrite text that closes nothing.
+ */
 function defuse(payload: string): string {
-  return payload.replace(CLOSING, '&lt;$1$2');
+  // Printable ASCII and line breaks fold to themselves: the plain match is enough.
+  if (/^[\t\n\r -~]*$/u.test(payload)) return payload.replace(CLOSING, '&lt;$1$2');
+  // Only `<`, U+FE64 and U+FF1C fold to `<`: with none of them there is no tag to end.
+  if (!/[<﹤＜]/u.test(payload)) return payload;
+  let folded = '';
+  const origin: number[] = []; // origin[i] = index in `payload` of the code point folded[i] came from
+  let at = 0;
+  for (const ch of payload) {
+    const out = INVISIBLE.test(ch) ? '' : ch.normalize('NFKC');
+    for (let k = 0; k < out.length; k++) origin.push(at);
+    folded += out;
+    at += ch.length;
+  }
+  const opens = [...new Set([...folded.matchAll(CLOSING)].map((m) => origin[m.index]!))].sort((a, b) => a - b);
+  if (opens.length === 0) return payload;
+  let result = '';
+  let last = 0;
+  for (const open of opens) {
+    result += `${payload.slice(last, open)}&lt;`;
+    last = open + (payload.codePointAt(open)! > 0xffff ? 2 : 1);
+  }
+  return result + payload.slice(last);
 }
 
 export function wrapUntrusted(payload: string, tool: string, origin: UntrustedOrigin): string {

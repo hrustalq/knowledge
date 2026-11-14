@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { ForbiddenException } from '@nestjs/common';
 import type { AgentRun } from '@prisma/client';
 import type { AgentFinding, AgentRunInput } from '@knowledge/contracts';
 import { parseMarkdown, readComponentFrontmatter } from '../src/common/frontmatter.js';
@@ -320,8 +321,14 @@ describe('publishing the draft', () => {
     draft: { title: 'ResponsivePopover', markdown: '---\ncomponent:\n  paths: [x]\n---\n# body', template: { ref: 'builtin:component', version: 1 } },
   };
 
-  function findingsService(run: Record<string, unknown>) {
+  function findingsService(run: Record<string, unknown>, refuseCreate = false) {
     const sql: string[] = [];
+    const permissions = {
+      scopeFor: vi.fn(async () => ({ workspaceId: 'w' })),
+      requireCreateUnder: vi.fn(async () => {
+        if (refuseCreate) throw new ForbiddenException('no');
+      }),
+    };
     const prisma = {
       agentRun: { findUnique: vi.fn(async () => run) },
       $executeRaw: vi.fn(async (strings: TemplateStringsArray) => {
@@ -351,8 +358,11 @@ describe('publishing the draft', () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
+      {} as never,
+      permissions as never,
     );
-    return { service, prisma, documents, storage, mergeRequests, sql };
+    return { service, prisma, documents, storage, mergeRequests, sql, permissions };
   }
   const baseRun = {
     id: 'run-1',
@@ -364,6 +374,14 @@ describe('publishing the draft', () => {
     findings: [draftFinding],
   };
 
+  it('asks the owner may create at the place, and opens nothing when refused (#1140)', async () => {
+    const { service, documents, permissions } = findingsService({ ...baseRun }, true);
+    await expect(service.proposePage('w', 'run-1', 0, { userId: 'u' } as never, { projectId: 'p1', parentId: 'parent' })).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(permissions.requireCreateUnder).toHaveBeenCalledWith({ workspaceId: 'w' }, { projectId: 'p1', parentId: 'parent' });
+    expect(documents.createDocument).not.toHaveBeenCalled();
+  });
   it('opens the draft as a merge request on a hidden page, byte for byte, as the caller', async () => {
     const { service, prisma, documents, storage, mergeRequests } = findingsService(baseRun);
     const res = await service.proposePage('w', 'run-1', 0, { userId: 'u' } as never, { projectId: 'p1', parentId: 'parent' });

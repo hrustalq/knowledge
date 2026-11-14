@@ -603,7 +603,8 @@ const redraft = () =>
                     </div>
                   </div>
                   <DiffView v-else-if="view === 'changes' && compare" :compare="compare" />
-                  <MarkdownView v-else-if="preview.after.trim()" :markdown="preview.after" />
+                  <!-- untrusted: freshly fetched external content (#1142). -->
+                  <MarkdownView v-else-if="preview.after.trim()" :markdown="preview.after" untrusted />
                   <p v-else class="text-sm text-muted-foreground">{{ t('sources.recipe.emptyResult') }}</p>
                 </div>
               </div>

@@ -349,7 +349,8 @@ describe('#658 write pairs commit together', () => {
     const access = { principalFor: async () => ({ userId: 'u1' }), requireRole: async () => undefined };
     const svc = new ChatIdentityService(prisma, access as never, {} as never, {} as never, config({ CHAT_LINK_CODE_TTL_MINUTES: 10, WEB_BASE_URL: 'http://x' }), {} as never, {} as never);
     await expect(svc.redeemProof({ id: 'int1', workspaceId: WS, locale: 'en' } as never, { externalUserId: '42', chatId: '42' }, '123456')).rejects.toThrow('boom');
-    expect(committed).toEqual([]);
+    // Only the attempt claim (#1141) commits on its own; the spend rolls back with the identity.
+    expect(committed).toEqual(['chatLinkCode.updateMany']);
   });
 
   it('chat answer: no assistant thread without its conversation', async () => {

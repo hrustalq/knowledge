@@ -18,6 +18,8 @@ import type { Env } from '../config/env.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ttlCache } from '../common/ttl-cache.js';
+import type { Principal } from '../auth/principal.js';
+import { mayReadRun } from './run-privacy.js';
 
 /** Characters of learning text one prompt takes, whatever AGENT_LEARNINGS_MAX allows. */
 const MAX_PROMPT_CHARS = 4_000;
@@ -121,7 +123,8 @@ export class AgentLearningsService {
     workspaceId: string,
     filter: { agentKey?: string; status?: AgentLearningStatus },
     visible: (documentIds: string[]) => Promise<Set<string>>,
-    deniedProjects: ReadonlySet<string> = new Set(),
+    deniedProjects: ReadonlySet<string>,
+    viewer: Principal,
   ): Promise<AgentLearningSummary[]> {
     const learnings = await this.list(workspaceId, filter);
     const withEvidence = learnings.filter((l) => l.evidenceCount > 0).map((l) => l.id);
@@ -138,7 +141,7 @@ export class AgentLearningsService {
       [...new Set(refs.flatMap((r) => (k in r ? [(r as Record<K, string>)[k]] : [])))];
     const [runs, captures, votes] = await Promise.all([
       ids('runId').length
-        ? this.prisma.agentRun.findMany({ where: { workspaceId, id: { in: ids('runId') } }, select: { id: true, agentKey: true, findings: true } })
+        ? this.prisma.agentRun.findMany({ where: { workspaceId, id: { in: ids('runId') } }, select: { id: true, agentKey: true, findings: true, subjectKey: true, createdBy: true } })
         : [],
       ids('captureId').length
         ? this.prisma.knowledgeCapture.findMany({
@@ -167,7 +170,8 @@ export class AgentLearningsService {
       if ('runId' in ref) {
         const run = runById.get(ref.runId);
         const f = Array.isArray(run?.findings) ? (run.findings as unknown as AgentFinding[])[ref.findingIndex] : undefined;
-        if (!run || !f) return null;
+        // A private run (a memo's, a restricted project's) is counted, never named (#1140).
+        if (!run || !f || !mayReadRun(run, viewer)) return null;
         // A finding citing no page is never shown: it cannot be checked against anything.
         const pages = f.documentIds ?? [];
         return pages.length
@@ -224,13 +228,14 @@ export class AgentLearningsService {
    */
   async create(
     input: CreateLearningInput,
-    actorId: string,
+    actor: Principal,
     db: Prisma.TransactionClient = this.prisma,
   ): Promise<AgentLearningSummary> {
+    const actorId = actor.userId;
     const text = cleanText(input.text);
     if (input.agentKey) await this.assertAgent(input.workspaceId, input.agentKey, db);
     if (input.projectId) await this.assertProject(input.workspaceId, input.projectId, db);
-    const source = await this.resolveSource(input, db);
+    const source = await this.resolveSource(input, actor, db);
     const active = input.status === 'active';
     const row = await db.agentLearning.create({
       data: {
@@ -385,6 +390,7 @@ export class AgentLearningsService {
   /** The provenance columns for a source, each resolved to this workspace or refused. */
   private async resolveSource(
     input: CreateLearningInput,
+    actor: Principal,
     db: Prisma.TransactionClient,
   ): Promise<Pick<AgentLearning, 'sourceKind' | 'sourceId' | 'documentId' | 'mergeRequestId' | 'runId' | 'findingIndex'>> {
     const kind = input.sourceKind ?? 'manual';
@@ -423,8 +429,12 @@ export class AgentLearningsService {
       }
       case 'finding': {
         if (!input.runId || input.findingIndex == null) throw refuse();
-        const run = await db.agentRun.findUnique({ where: { id: input.runId }, select: { workspaceId: true, findings: true } });
-        if (run?.workspaceId !== input.workspaceId) throw refuse();
+        const run = await db.agentRun.findUnique({
+          where: { id: input.runId },
+          select: { workspaceId: true, findings: true, subjectKey: true, createdBy: true },
+        });
+        // A private run reads as missing to whoever may not read it (#1140), never as "not yours".
+        if (run?.workspaceId !== input.workspaceId || !mayReadRun(run, actor)) throw refuse();
         const findings = Array.isArray(run.findings) ? (run.findings as unknown as AgentFinding[]) : [];
         const finding = findings[input.findingIndex];
         if (!finding) throw refuse();

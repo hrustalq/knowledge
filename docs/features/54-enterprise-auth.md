@@ -62,7 +62,9 @@ only when the provider's workspace holds a verified `sso_domains` row for it
 platform-wide, whose list only a platform admin may change
 (GHSA-xj6f-x636-xrx8). `auth/sso/domain-proof.ts` is the one predicate: sign-in
 (`SsoLoginService.refuseAddress`), the save path (an added domain must be
-proven) and the view's `unverifiedDomains` all read it. A stored domain that is
+proven), the view's `unverifiedDomains` and email-first discovery (#1143: no
+button for a domain the provider may not assert, unless it is the domain's
+enforced provider) all read it. A stored domain that is
 not proven stays on the list but signs nobody in. SSO never links an existing
 platform-admin account by address (`admin-link-refused`); a platform admin
 signs in with their password. A sign-in links to an existing account, or creates one,
@@ -159,7 +161,11 @@ manages, along with the JIT and group memberships SCIM takes over, and revokes
 the person's sessions everywhere. Provisioning disables the global account
 (`users.disabled_at`) and rewrites its name and email only when the address's
 domain is one this workspace has verified. Otherwise one workspace's directory
-could lock someone out of another.
+could lock someone out of another. Without that domain, SCIM does not link an
+existing account whose address was never confirmed (#1143): it answers 409
+`uniqueness`, as for an address already provisioned, and writes nothing, so a
+squatter who registered the address first gets no membership. A confirmed
+account still links.
 
 **Deleting a provider signs out the sessions it opened.** So does an OIDC
 back-channel logout: a `logout_token` with a `sid` ends the sessions that IdP

@@ -107,6 +107,9 @@ function learnerWorld(opts: { findings: DismissedFinding[]; learnings?: Partial<
   return { learner, prisma, client, learnings, outcomes };
 }
 
+// A member who may read every run in these fixtures (#1140: private runs are counted, never named).
+const VIEWER = { userId: 'viewer', mode: 'session', isAdmin: false } as never;
+
 describe('learner thresholds', () => {
   it('three dismissals from one person do not qualify; from two people they do', () => {
     const fromOne = [dismissed(), dismissed(), dismissed()];
@@ -405,7 +408,7 @@ describe('learnings API surface', () => {
       [{ ...base, id: 'l1', status: 'proposed', sourceKind: 'derived', evidence: [{ runId: 'r1', findingIndex: 0 }, { runId: 'r1', findingIndex: 1 }, { runId: 'gone', findingIndex: 0 }] as never }],
       [{ id: 'r1', agentKey: 'reviewer', findings: [f('Open page is stale', ['open']), f('Secret page is stale', ['open', 'secret'])] }],
     );
-    const [learning] = await svc.listForViewer(WS, {}, async (ids) => new Set(ids.filter((id) => id !== 'secret')));
+    const [learning] = await svc.listForViewer(WS, {}, async (ids) => new Set(ids.filter((id) => id !== 'secret')), new Set(), VIEWER);
     expect(learning!.evidenceCount).toBe(3);
     expect(learning!.evidence!.findings.map((x) => x.title)).toEqual(['Open page is stale']);
     expect(learning!.evidence!.hidden).toBe(2);
@@ -433,7 +436,7 @@ describe('learnings API surface', () => {
       },
       mergeRequest: { findMany: vi.fn(async () => [{ id: 'mr1', documentId: 'open', closedAt: at }]) },
     });
-    const [learning] = await svc.listForViewer(WS, {}, async (ids) => new Set(ids.filter((id) => id !== 'secret')), new Set(['p-secret']));
+    const [learning] = await svc.listForViewer(WS, {}, async (ids) => new Set(ids.filter((id) => id !== 'secret')), new Set(['p-secret']), VIEWER);
     expect(learning!.evidence!.findings.map((x) => [x.title, x.agentKey])).toEqual([
       ['Open capture', 'mcp'],
       ['Open question', 'mcp'],

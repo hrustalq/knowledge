@@ -116,9 +116,22 @@ export class GlossaryService {
 
   /** Whether a term is the workspace's own — the routes ask before a write, which then needs an admin. */
   async isWorkspaceTerm(termId: string): Promise<boolean> {
+    return (await this.projectOfTerm(termId)) === null;
+  }
+
+  async projectOfTerm(termId: string): Promise<string | null> {
     const row = await this.prisma.glossaryTerm.findUnique({ where: { id: termId }, select: { projectId: true } });
     if (!row) throw new NotFoundException(t('error.glossary.notFound', { id: termId }));
-    return row.projectId === null;
+    return row.projectId;
+  }
+
+  /**
+   * A project's term is written by whoever may edit that project (#1140): the
+   * workspace role alone let a member denied a restricted project add to,
+   * change or remove its vocabulary. A workspace term is the caller's admin check.
+   */
+  async requireProjectWrite(scope: AccessScope, projectId: string | null): Promise<void> {
+    if (projectId) await this.permissions.requireLevel(scope, { type: 'project', id: projectId }, 'edit');
   }
 
   /**
@@ -134,6 +147,7 @@ export class GlossaryService {
     // Required and explicit: a caller that forgot the project must not have written a workspace term.
     const { projectId } = dto;
     if (projectId) await this.projects.requireProjectInWorkspace(projectId, dto.workspaceId);
+    await this.requireProjectWrite(scope, projectId);
     if (dto.documentId) await this.assertDefiningPage(dto.documentId, dto.workspaceId, scope);
 
     // Check and insert under one lock: for a workspace term there is no unique

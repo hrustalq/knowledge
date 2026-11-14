@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { APP_ROBOTS_TXT, APP_SECURITY_HEADERS, appContentSecurityPolicy, appHostMiddleware } from './app-host.js'
+import { APP_ROBOTS_TXT, APP_SECURITY_HEADERS, appContentSecurityPolicy, appHostMiddleware, publicResponseHeaders } from './app-host.js'
 
 /**
  * The app host (issue #277). What is pinned: the security headers go on the
@@ -71,5 +71,37 @@ describe('appHostMiddleware', () => {
     expect(res.send).toHaveBeenCalledWith(APP_ROBOTS_TXT)
     expect(APP_ROBOTS_TXT).toMatch(/^Allow: \/pub\/$/m)
     expect(APP_ROBOTS_TXT).toMatch(/^Disallow: \/$/m)
+  })
+})
+
+// #1142: share links and published sites had no CSP, no frame policy and no
+// nosniff. They get the app's three directives; the frame policy is the
+// render's own when it names one (the Ask widget lists who may frame it).
+describe('publicResponseHeaders', () => {
+  it('adds nosniff and a policy that refuses framing to a share or site page', () => {
+    const h = publicResponseHeaders([], { 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' })
+    expect(h['X-Content-Type-Options']).toBe('nosniff')
+    expect(h['Cache-Control']).toBe('no-store')
+    expect(h['Referrer-Policy']).toBe('no-referrer')
+    const d = directives(h['Content-Security-Policy'])
+    expect(d['base-uri']).toEqual(["'none'"])
+    expect(d['form-action']).toEqual(["'self'"])
+    expect(d['object-src']).toEqual(["'self'"])
+    expect(d['frame-ancestors']).toEqual(["'none'"])
+    expect(d['img-src']).toBeUndefined()
+  })
+
+  it("keeps the widget's frame-ancestors and adds the rest", () => {
+    const h = publicResponseHeaders(['http://localhost:9000'], {
+      'Content-Security-Policy': "frame-ancestors 'self' https://example.com",
+    })
+    const d = directives(h['Content-Security-Policy'])
+    expect(d['frame-ancestors']).toEqual(["'self'", 'https://example.com'])
+    expect(d['base-uri']).toEqual(["'none'"])
+    expect(d['object-src']).toEqual(["'self'", 'http://localhost:9000'])
+  })
+
+  it('works with no render headers at all', () => {
+    expect(directives(publicResponseHeaders([], undefined)['Content-Security-Policy'])['frame-ancestors']).toEqual(["'none'"])
   })
 })

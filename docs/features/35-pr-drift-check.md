@@ -193,6 +193,14 @@ compared in constant time (`markdown-git`'s sync check compares GitLab's token
 with `!==`, which is fine for a sync and not for a trigger that spends model
 calls).
 
+**A signed delivery is acted on once** (#1143). Neither host stamps a time into
+what it signs, so a captured `synchronize` delivery would verify forever and,
+replayed after the pull request moved on, queue a paid check of an old head.
+Both hooks run their handler through `WebhookReplay` (`connectors/webhook-replay.ts`),
+which claims the body's hash first and releases it when the handler throws (a
+bad signature included): the first signed copy of a body is handled, a second
+is answered 202 and does nothing, for 90 days ([06 §Limits](../architecture/06-auth-acl.md#limits)).
+
 **`'webhook'` joins `AGENT_RUN_TRIGGERS`.** The vocabulary's own comment asks for
 a value only together with the thing that emits it; `DriftTriggerService` is
 that thing, for this one agent, and never the event bus — so none of feature

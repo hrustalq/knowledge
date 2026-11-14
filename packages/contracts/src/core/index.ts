@@ -264,6 +264,12 @@ export interface KnowledgeEvent {
   revisionId?: string;
   /** Secondary subject (branch name, merge request id, entity key, ...). */
   subjectId?: string;
+  /**
+   * The project a frame with no page is about (#1140): a connector's run, a
+   * capture approved into a project. Delivered only to those who can see the
+   * project. A frame that names a page is judged by the page instead.
+   */
+  projectId?: string;
   title?: string;
   actor?: string;
   /** Live data patching: changed fields of the tracked entity, mergeable into cached copies (present on document.updated & co). */

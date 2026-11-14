@@ -12,8 +12,9 @@ function matches(where: ReturnType<typeof privateRunWhere>, row: { subjectKey: s
   return where.OR.some((clause) => {
     if ('subjectKey' in clause && clause.subjectKey === null) return row.subjectKey === null;
     if ('createdBy' in clause) return row.createdBy === clause.createdBy;
-    const prefix = (clause.NOT as { subjectKey: { startsWith: string } }).subjectKey.startsWith;
-    return row.subjectKey !== null && !row.subjectKey.startsWith(prefix);
+    const nots = 'AND' in clause ? (clause.AND as Array<{ NOT: unknown }>) : [clause as { NOT: unknown }];
+    const prefixes = nots.map((n) => (n.NOT as { subjectKey: { startsWith: string } }).subjectKey.startsWith);
+    return row.subjectKey !== null && prefixes.every((prefix) => !row.subjectKey!.startsWith(prefix));
   });
 }
 
@@ -21,14 +22,16 @@ const ROWS = [
   { subjectKey: 'memo:m1', createdBy: 'alice' },
   { subjectKey: 'path:docs/a.md', createdBy: 'alice' },
   { subjectKey: null, createdBy: 'alice' },
+  // A drift check over a repository of a restricted project: its owner's.
+  { subjectKey: 'restricted:p1', createdBy: 'alice' },
 ];
 
 describe('run privacy (#1089)', () => {
   it.each([
-    ['the uploader', person('alice'), [true, true, true]],
-    ['another member', person('bob'), [false, true, true]],
-    ['a platform admin', person('root', { isAdmin: true }), [true, true, true]],
-    ['the dev principal', person('dev', { mode: 'dev' }), [true, true, true]],
+    ['the uploader', person('alice'), [true, true, true, true]],
+    ['another member', person('bob'), [false, true, true, false]],
+    ['a platform admin', person('root', { isAdmin: true }), [true, true, true, true]],
+    ['the dev principal', person('dev', { mode: 'dev' }), [true, true, true, true]],
   ])('%s', (_who, principal, expected) => {
     expect(ROWS.map((row) => mayReadRun(row, principal))).toEqual(expected);
     expect(ROWS.map((row) => matches(privateRunWhere(principal), row))).toEqual(expected);

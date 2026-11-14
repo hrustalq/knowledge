@@ -598,3 +598,33 @@ describe('DriftPublishSweeper page flags', () => {
     expect(verification.markOutdated).not.toHaveBeenCalled();
   });
 });
+
+describe('DriftTriggerService.request on a repository of a restricted project', () => {
+  const service = (restricted: boolean) => {
+    const created: Array<Record<string, unknown>> = [];
+    const prisma = {
+      agentRun: {
+        findFirst: vi.fn(async () => null),
+        count: vi.fn(async () => 0),
+        create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => (created.push(data), { id: 'run-1', ...data })),
+      },
+      aiAgent: { findUnique: vi.fn(async () => null) },
+      project: { findUnique: vi.fn(async () => ({ restricted })) },
+    };
+    const registry = { resolve: vi.fn(async () => ({ enabled: true })) };
+    return { created, svc: new DriftTriggerService(prisma as never, registry as never, { enqueue: vi.fn() } as never) };
+  };
+  const row = { id: 'c1', workspaceId: 'w1', projectId: 'p1', kind: 'codebase', enabled: true, config: { driftCheck: 'report' }, createdBy: 'owner', locale: 'en' };
+
+  it('makes a run private to its owner, as a memo run is', async () => {
+    const { created, svc } = service(true);
+    await svc.request(row as never, { pullRequest: pr } as never);
+    expect(created[0]).toMatchObject({ subjectKey: 'restricted:p1' });
+  });
+
+  it('leaves a run on an open project to the workspace', async () => {
+    const { created, svc } = service(false);
+    await svc.request(row as never, { pullRequest: pr } as never);
+    expect(created[0]!.subjectKey).toBeUndefined();
+  });
+});

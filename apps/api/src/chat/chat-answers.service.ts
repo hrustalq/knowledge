@@ -532,6 +532,8 @@ export class ChatAnswersService {
 
     const action = decodeChatAction(press.data);
     if (!action) return ack();
+    // A presser the platform does not vouch for is confirmed first (#1104).
+    if (d.adapter.confirmPresser && !(await d.adapter.confirmPresser(d.ctx, inbound))) return ack();
     if (!userId) return ack(t('chat.feedback.linkFirst'));
     let principal: Principal;
     try {

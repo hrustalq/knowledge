@@ -108,6 +108,14 @@ half that the worker cannot load. So the chat answer uses the feature-21
    - On Time this route only ever receives **button presses**; messages arrive
      over the websocket held by `ChatSocketSupervisor`, which hands each one to
      the same `receive`.
+   - A Time press names its presser unsigned: Mattermost signs nothing in it.
+     The button's context is signed over the action, the channel and a 30-day
+     expiry (#1104), and before acting on a press the core asks the adapter's
+     `confirmPresser`, which checks the presser is a member of that channel as
+     the bot sees it. **Documented limit:** inside the channel, whoever holds a
+     signed context could still name another member. Mattermost keeps a
+     button's `integration` out of what it sends clients, so that takes the
+     Mattermost server's admin or the press request itself.
 2. `receive` resolves the binding, the identity and the reply language: the
    person's `users.locale`, then the binding's, then the bot's. Everything after
    that runs inside `withLocale`.

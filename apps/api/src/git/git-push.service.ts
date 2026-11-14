@@ -105,6 +105,8 @@ interface Planned extends Entry {
   content?: { body: Buffer; idLine: IdLine | null } | { copyOf: string };
   /** The first-parent revision this page's branch forks at, when the branch has none yet. */
   baseRevisionId: string | null;
+  /** An existing page this commit moves under another parent (or to the root). */
+  moved?: boolean;
   /** A merge node: the other side's revision, second parent of the new one. */
   secondParent?: string;
 }
@@ -453,6 +455,7 @@ export class GitPushService {
         isNew: fresh.has(l.path) ? { title: titleOf(text, nameOf(l.path)), kind: kindOf(l.ext, text, l.path) } : undefined,
         content: { body: l.s.body, idLine: fresh.has(l.path) ? l.s.idLine : this.idLineOf(e.documentId, l.bytes, l.s, l.ext) },
         baseRevisionId: old?.revisionId ?? null,
+        moved: !!old && old.parentDocumentId !== e.parentDocumentId,
       });
     }
     // A page only placed: one carried along by its parent's move changes
@@ -460,7 +463,7 @@ export class GitPushService {
     for (const [path, e] of index) {
       const old = byDoc.get(e.documentId);
       if (!old || changes.some((ch) => ch.documentId === e.documentId)) continue;
-      if (old.parentDocumentId !== e.parentDocumentId || old.slug !== e.slug) changes.push({ ...e, path, removed: false, baseRevisionId: old.revisionId });
+      if (old.parentDocumentId !== e.parentDocumentId || old.slug !== e.slug) changes.push({ ...e, path, removed: false, baseRevisionId: old.revisionId, moved: old.parentDocumentId !== e.parentDocumentId });
     }
     for (const p of gone) {
       const e = before.get(p)!;
@@ -523,6 +526,7 @@ export class GitPushService {
    * The pusher may edit every page the push changes, and create every page it
    * creates where it lands: edit on its parent, or on the project for a root
    * page — `requireCreateUnder`, the question REST and MCP ask (#1107). A page
+   * it moves asks the same where it lands, as a REST move does (#1087). A page
    * under a parent this same push creates is covered by that parent's check.
    */
   private async assertMayWrite(planned: PlannedCommit[], scope: GitCaller['scope'], projectId: string): Promise<void> {
@@ -539,6 +543,11 @@ export class GitPushService {
         : this.permissions.requireLevel(scope, { type: 'document', id: ch.documentId }, 'edit');
       await check.catch((e: unknown) => {
         if (e instanceof HttpException) throw new PushRefused('forbidden', t(ch.isNew ? 'error.git.push.cannotCreate' : 'error.git.push.cannotEdit', { path: ch.path }));
+        throw e;
+      });
+      if (!ch.moved || (ch.parentDocumentId && fresh.has(ch.parentDocumentId))) continue;
+      await this.permissions.requireCreateUnder(scope, { projectId, parentId: ch.parentDocumentId ?? undefined }).catch((e: unknown) => {
+        if (e instanceof HttpException) throw new PushRefused('forbidden', t('error.git.push.cannotCreate', { path: ch.path }));
         throw e;
       });
     }

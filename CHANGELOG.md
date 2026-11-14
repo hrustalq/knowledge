@@ -17,6 +17,9 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- Comments, merge-request descriptions, assistant answers and shared pages can no longer carry a stylesheet, a form,
+  form controls or inline styles. These used to survive the sanitizer, so one comment could restyle or hide parts of
+  the app, or place an invisible button that posted to another site. A diagram keeps the width set for it. (#1098)
 - Live updates stop when access does. An open live connection is checked again every 30 seconds, so signing out,
   revoking a key, a disabled account or removal from the workspace ends it within one check. The live socket no
   longer accepts an API key or session token in its address; it takes the single-use ticket the web already uses, or

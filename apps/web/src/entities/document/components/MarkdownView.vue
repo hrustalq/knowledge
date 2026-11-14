@@ -293,6 +293,8 @@ async function renderMermaid() {
       // Leave the source visible and flagged rather than swallowing the block:
       // a diagram that fails to parse is still content the author wrote.
       block.classList.add('kn-mermaid-broken')
+      // The sanitizer strips inline style (#1098); its width comes back from data-kn-width.
+      carryDiagramLayout(block, block)
     }
   }
 }

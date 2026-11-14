@@ -6,6 +6,7 @@ import { traceMiddleware } from '@knowledge/observability/express';
 import type { Env } from './config/env.js';
 import { GitModule } from './git/git.module.js';
 import { PinoNestLogger } from './observability/nest-logger.js';
+import { applySecurityHeaders } from './common/security-headers.js';
 
 /**
  * The sixth entrypoint (#636, docs/features/71): a project as a git remote.
@@ -19,6 +20,7 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(GitModule, { bodyParser: false, bufferLogs: true });
   app.useLogger(new PinoNestLogger(logger));
   app.use(traceMiddleware);
+  applySecurityHeaders(app);
   app.enableShutdownHooks();
   const config = app.get(ConfigService<Env, true>);
   const port = config.get('GIT_PORT', { infer: true });

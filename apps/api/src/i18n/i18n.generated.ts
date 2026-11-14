@@ -1168,6 +1168,7 @@ export type I18nTranslations = {
             "urlInvalid": string;
             "urlNotHttps": string;
             "urlPrivate": string;
+            "urlCredentials": string;
             "hostUnresolved": string;
             "disabled": string;
             "pullNotSupported": string;

@@ -8,7 +8,7 @@
 # the SSR bundle itself inlines the workspace deps, but server.js is plain
 # unbundled Node and imports @knowledge/observability at runtime. So packages/*
 # must still ship as .ts outside node_modules.
-ARG NODE_IMAGE=node:24.21.0-bookworm-slim
+ARG NODE_IMAGE=node:24.21.0-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20
 
 # --------------------------------------------------------------------- base
 FROM ${NODE_IMAGE} AS base

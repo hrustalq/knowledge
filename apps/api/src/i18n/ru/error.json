@@ -464,6 +464,7 @@
     "urlInvalid": "Это не похоже на URL",
     "urlNotHttps": "URL коннектора должен использовать https",
     "urlPrivate": "Адрес {address} находится в частной сети; разрешите его через CONNECTOR_ALLOW_PRIVATE_URLS",
+    "urlCredentials": "{field} не должен содержать имя пользователя или токен; укажите токен как учётные данные коннектора",
     "hostUnresolved": "Не удалось разрешить хост {host}",
     "disabled": "Коннектор отключён",
     "pullNotSupported": "Коннекторы {kind} не умеют загружать",

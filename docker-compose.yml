@@ -65,7 +65,7 @@ services:
     # `latest` is a nightly snapshot, so a query feature cannot float with it.
     # A volume written by 26.9.1-SNAPSHOT or 26.11.1-SNAPSHOT opens on it.
     # Keep docker-compose.prod.yml in step.
-    image: arcadedata/arcadedb:26.10.2@sha256:7a498ebbbb9a5f02f7d43487c13b6632f83eb7fff345968baf220ac9266fd791
+    image: arcadedata/arcadedb:26.11.1@sha256:22a049898f34f01c256b56a1ba95fb01d32e5e14755d3c4367415c8e55ae5035
     ports: ["127.0.0.1:2480:2480", "127.0.0.1:2424:2424"]
     environment:
       JAVA_OPTS: >-
@@ -85,7 +85,7 @@ services:
   # Phase 5 optional BM25 layer (plan.md §11). Not started by default:
   # make infra-up-opensearch  (+ FULLTEXT_PROVIDER=opensearch in apps/api/.env)
   opensearch:
-    image: opensearchproject/opensearch:2@sha256:3bfa1ec74d56928c2e018033d45c460ce2c0ea65a5cedd577de3102326c31b89
+    image: opensearchproject/opensearch:3@sha256:3b55f6b6249cfdb92b52ee59adc8a266203ba9ef9f5d82544fad6f1af2f3609e
     profiles: ["opensearch"]
     ports: ["127.0.0.1:9200:9200"]
     environment:
@@ -134,7 +134,7 @@ services:
   # message lands in the inbox at http://localhost:8025 instead. Loopback only:
   # it relays nothing, but its UI shows every reset link it has ever caught.
   mailpit:
-    image: axllent/mailpit:v1.31@sha256:23fe39e81bde596a918000b3135c0f85dc8bb4c9ea6be274b051143f3e300387
+    image: axllent/mailpit:v1.33@sha256:aef2aacc11f075ec0fb6874275ee4a421e688e11a96ebb296134d1735c7761ce
     profiles: ["mailpit"]
     ports: ["127.0.0.1:1025:1025", "127.0.0.1:8025:8025"]
 
@@ -159,7 +159,7 @@ services:
   # keycloak/realm-knowledge.json seeds test users ada/ada (verified) and
   # eve/eve (unverified address). Admin console: admin/admin. Loopback only.
   keycloak:
-    image: quay.io/keycloak/keycloak:26.4@sha256:9409c59bdfb65dbffa20b11e6f18b8abb9281d480c7ca402f51ed3d5977e6007
+    image: quay.io/keycloak/keycloak:26.8@sha256:c68e286cacd87b942ac1939a0a1481461109d6acd3a57dc496969a319a76bbf0
     profiles: ["keycloak"]
     command: ["start-dev", "--import-realm", "--http-port=8180"]
     ports: ["127.0.0.1:8180:8180"]

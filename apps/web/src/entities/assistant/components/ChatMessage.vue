@@ -322,6 +322,7 @@ function saveEdit() {
       <MarkdownView
         v-if="body"
         :markdown="body"
+        untrusted
         class="max-w-[72ch]"
         :streaming="streamingText !== undefined"
         @rendered="onRendered"

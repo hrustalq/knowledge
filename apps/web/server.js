@@ -132,7 +132,13 @@ app.use(async (req, res, next) => {
 
 // The app host's security headers and robots.txt (issue #277). A site's host
 // and the public paths keep whatever their own handlers set.
-app.use(appHostMiddleware(PUBLIC_PATH))
+// CSP_ASSET_ORIGINS: where presigned attachment URLs live when not on this
+// origin (#1099). Production proxies the bucket under its own host, so none;
+// local dev presigns against MinIO on :9000.
+const CSP_ASSET_ORIGINS = (process.env.CSP_ASSET_ORIGINS ?? (isProduction ? '' : 'http://localhost:9000'))
+  .split(/\s+/)
+  .filter(Boolean)
+app.use(appHostMiddleware(PUBLIC_PATH, { assetOrigins: CSP_ASSET_ORIGINS }))
 
 // A site's embeddable Ask widget script (issue #77 phase 3): `/widget.js` on
 // its host or `/pub/<slug>/widget.js`, before the reader takes it for a page.

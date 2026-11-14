@@ -17,6 +17,12 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- Text a model wrote no longer loads anything from another site by itself. In assistant answers, agent replies in
+  threads, workflow drafts, merge requests an agent opened and a published site's Ask answers, an external image
+  now shows as a link you can choose to open, other media is dropped, and a diagram cannot fetch remote styles.
+  Images attached to pages still show. The member app now sends a first Content-Security-Policy: forms may only
+  post to the app, the page base cannot be changed, embedded objects load only from the app (and its file storage),
+  and the app cannot be framed. (#1099)
 - Setting up a connector no longer keeps the pasted token or webhook secret in the browser's storage. A setup you
   resume asks for the token again. Signing out now also removes an unfinished connector setup and every page edit
   not yet published from this browser. (#1101)

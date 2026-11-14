@@ -13,6 +13,13 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Fixed
+
+- A workflow run follows its source page's permissions. Starting one needs edit on the page, and a run on a page you
+  cannot open no longer shows in the run list, opens, or takes review actions, in the app or over MCP. (#1085)
+
 ## [0.53.2] — 2026-11-13
 
 ### Changed

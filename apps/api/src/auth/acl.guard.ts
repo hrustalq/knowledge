@@ -185,6 +185,7 @@ export class AclGuard implements CanActivate {
       const { workspaceId, documentId } = await this.access.documentOfMergeRequest(this.uuid(req.params?.id, 'mergeRequest'));
       return { workspaceId, resource: { type: 'document', id: documentId } };
     }
+    if (spec.source === 'workflow-run') return this.access.rootOfWorkflowRun(this.uuid(req.params?.id, 'workflowRun'));
     const workspaceId = await this.resolveWorkspace(spec.source, req);
     if (spec.source === 'document' || spec.source === 'project') {
       return { workspaceId, resource: { type: spec.source, id: req.params?.id as string } };

@@ -926,6 +926,86 @@ describe('page permissions (e2e, #76)', () => {
     });
   });
 
+  describe('workflow runs (#1085)', () => {
+    let definitionId: string;
+    let runId: string;
+    let nodeId: string;
+    const runIdsFor = async (p: Person) =>
+      (
+        (await http().get('/v1/workflows/runs').query({ workspaceId: WORKSPACE, limit: 100 }).set(as(p)).expect(ok(200))).body as {
+          runs: Array<{ id: string }>;
+        }
+      ).runs.map((r) => r.id);
+
+    beforeAll(async () => {
+      // A pure human gate: no model call, and nothing in this app consumes the queue.
+      const definition = await http()
+        .post('/v1/workflows')
+        .set(as(people.admin))
+        .send({
+          workspaceId: WORKSPACE,
+          projectId: null,
+          name: `ACL review ${nonce}`,
+          graph: { steps: [{ id: 'check', kind: 'review', title: 'Check', next: [], fanOut: false, autoApprove: false }] },
+        })
+        .expect(ok(201));
+      definitionId = definition.body.id;
+      runId = (
+        await http()
+          .post('/v1/workflows/runs')
+          .set(as(people.admin))
+          .send({ workspaceId: WORKSPACE, definitionId, rootDocumentId: ids.P })
+          .expect(ok(201))
+      ).body.id;
+      nodeId = (await prisma.workflowRunNode.findFirstOrThrow({ where: { runId }, select: { id: true } })).id;
+    });
+
+    afterAll(async () => {
+      if (runId) await http().post(`/v1/workflows/runs/${runId}/events`).set(as(people.admin)).send({ type: 'CANCEL' });
+      if (definitionId) await http().delete(`/v1/workflows/${definitionId}`).set(as(people.admin));
+    });
+
+    it('refuses to start a run on a page the editor may not edit, with no title', async () => {
+      const res = await http()
+        .post('/v1/workflows/runs')
+        .set(as(people.bob))
+        .send({ workspaceId: WORKSPACE, definitionId, rootDocumentId: ids.C });
+      expect(res.status).toBe(403);
+      expect(res.body.details).toMatchObject({ canRequestAccess: true, resourceType: 'document' });
+      expect(JSON.stringify(res.body)).not.toContain(word);
+      expect(await prisma.workflowRun.count({ where: { rootDocumentId: ids.C } })).toBe(0);
+    });
+
+    it('leaves a run on a restricted page out of the list for whoever cannot open the page', async () => {
+      expect(await runIdsFor(people.alice)).toContain(runId);
+      expect(await runIdsFor(people.bob)).not.toContain(runId);
+      const bob = await http().get('/v1/workflows/runs').query({ workspaceId: WORKSPACE, limit: 100 }).set(as(people.bob));
+      expect(JSON.stringify(bob.body)).not.toContain(word);
+      expect(Object.values(bob.body.counts as Record<string, number>).reduce((a, b) => a + b, 0)).toBe(bob.body.runs.length);
+    });
+
+    it('refuses the run and its node routes as the page would', async () => {
+      expect(await status(people.alice, `/v1/workflows/runs/${runId}`)).toBe(200);
+      const detail = await http().get(`/v1/workflows/runs/${runId}`).set(as(people.bob));
+      expect(detail.status).toBe(403);
+      expect(JSON.stringify(detail.body)).not.toContain(word);
+      await http().post(`/v1/workflows/runs/${runId}/events`).set(as(people.bob)).send({ type: 'PAUSE' }).expect(ok(403));
+      await http()
+        .patch(`/v1/workflows/runs/${runId}/nodes/${nodeId}`)
+        .set(as(people.bob))
+        .send({ draft: { title: 'x', markdown: 'x' } })
+        .expect(ok(403));
+      await http().post(`/v1/workflows/runs/${runId}/nodes/${nodeId}/events`).set(as(people.bob)).send({ type: 'SKIP' }).expect(ok(403));
+    });
+
+    it('applies the same rule to knowledge_get_workflow_run', async () => {
+      const read = await mcp(people.bob, 'knowledge_get_workflow_run', { runId });
+      expect(read.isError).toBe(true);
+      expect(JSON.stringify(read)).not.toContain(word);
+      expect((await mcp(people.alice, 'knowledge_get_workflow_run', { runId })).isError).toBeFalsy();
+    });
+  });
+
   describe('access requests', () => {
     it('request → duplicate 409 → approve opens the subtree to the requester', async () => {
       const body = { workspaceId: WORKSPACE, resourceType: 'document', resourceId: ids.C, level: 'view' };

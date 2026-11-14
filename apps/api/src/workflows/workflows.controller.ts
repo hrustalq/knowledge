@@ -39,6 +39,7 @@ import {
   WorkflowRunEventDto,
 } from './workflows.dto.js';
 import { Returns } from '../common/returns.decorator.js';
+import { PermissionService } from '../permissions/permission.service.js';
 
 /**
  * Dynamic document workflows (docs/features/17).
@@ -60,6 +61,7 @@ export class WorkflowsController {
     private readonly workflows: WorkflowsService,
     private readonly materializer: WorkflowMaterializerService,
     private readonly architect: WorkflowDraftService,
+    private readonly permissions: PermissionService,
   ) {}
 
   // ----------------------------------------------------------------- design
@@ -99,8 +101,11 @@ export class WorkflowsController {
       'Workflow runs, newest first. `counts` covers every status under the same ' +
       'filters, so status badges do not move as you switch between them.',
   })
-  listRuns(@Query() query: ListWorkflowRunsQueryDto): Promise<ListWorkflowRunsResponse> {
-    return this.workflows.listRuns(query);
+  async listRuns(
+    @Query() query: ListWorkflowRunsQueryDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<ListWorkflowRunsResponse> {
+    return this.workflows.listRuns(query, await this.permissions.scopeFor(principal, query.workspaceId));
   }
 
   @Post('runs')
@@ -109,10 +114,14 @@ export class WorkflowsController {
   @ApiOperation({
     summary: 'Start a run against a page (409 when one is already in flight for that page)',
   })
-  startRun(
+  async startRun(
     @Body() dto: StartWorkflowRunDto,
     @CurrentPrincipal() principal: Principal,
   ): Promise<WorkflowRunInfo> {
+    // A run reads the page into its prompts and writes pages under it, so it
+    // takes edit on the page, as the MCP twin's `guard.doc` does (#1085).
+    const scope = await this.permissions.scopeFor(principal, dto.workspaceId);
+    await this.permissions.requireLevel(scope, { type: 'document', id: dto.rootDocumentId }, 'edit');
     return this.workflows.startRun(dto, principal.userId);
   }
 

@@ -217,7 +217,11 @@ export class McpServices {
         await check(() => this.access.workspaceOf('connector-run', id), role);
         await this.permissions.requireConnectorVisible(principal, { runId: id });
       },
-      workflowRun: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOf('workflow-run', id), role),
+      // A run is its root page's, as AclGuard resolves it (#1085).
+      workflowRun: async (id: string, role: WorkspaceRole) => {
+        const { workspaceId, resource } = await this.access.rootOfWorkflowRun(id);
+        await this.permissions.requireResource(principal, workspaceId, resource, role, false);
+      },
       exportJob: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOf('export', id), role),
       // The workspace only; whether the caller uploaded it is MemosService's 404 (#551).
       memo: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOf('memo', id), role),

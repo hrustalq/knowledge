@@ -3,7 +3,7 @@ import express from 'express'
 import { configureBacktest, createRootLogger, envLogLevel } from '@knowledge/observability'
 import { traceMiddleware } from '@knowledge/observability/express'
 import { aiReadableMiddleware } from './server/ai-readable.js'
-import { appHostMiddleware } from './server/app-host.js'
+import { appHostMiddleware, publicResponseHeaders } from './server/app-host.js'
 import { createRenderCache, renderCacheKey } from './server/render-cache.js'
 import { createSiteHostResolver, siteFilesMiddleware } from './server/site-files.js'
 import { siteWidgetRoute } from './server/site-widget.js'
@@ -138,6 +138,16 @@ app.use(async (req, res, next) => {
 const CSP_ASSET_ORIGINS = (process.env.CSP_ASSET_ORIGINS ?? (isProduction ? '' : 'http://localhost:9000'))
   .split(/\s+/)
   .filter(Boolean)
+// A site on its own host still presigns against the app's storage origin, so
+// its PDF previews need that origin too (#1142).
+const SITE_HOST_ASSET_ORIGINS = (() => {
+  try {
+    return process.env.WEB_BASE_URL ? [...CSP_ASSET_ORIGINS, new URL(process.env.WEB_BASE_URL).origin] : CSP_ASSET_ORIGINS
+  } catch {
+    return CSP_ASSET_ORIGINS
+  }
+})()
+publicResponseHeaders(SITE_HOST_ASSET_ORIGINS, undefined) // a bad origin fails at boot, as it does for the app's policy
 app.use(appHostMiddleware(PUBLIC_PATH, { assetOrigins: CSP_ASSET_ORIGINS }))
 
 // A site's embeddable Ask widget script (issue #77 phase 3): `/widget.js` on
@@ -296,7 +306,7 @@ async function renderPublic(req, res, url, siteHost) {
   const html = spliceTemplate(template, { lang: locale, css: devStyles, head: rendered.head, html: rendered.html })
   res
     .status(rendered.status ?? 200)
-    .set({ 'Content-Type': 'text/html', ...rendered.headers })
+    .set({ 'Content-Type': 'text/html', ...publicResponseHeaders(siteHost ? SITE_HOST_ASSET_ORIGINS : CSP_ASSET_ORIGINS, rendered.headers) })
     .send(html)
 }
 

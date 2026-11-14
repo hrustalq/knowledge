@@ -200,7 +200,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Mail a fresh confirmation link to the caller's address (at most one a minute) */
+        /** Mail a fresh confirmation link to the caller's address (at most one a minute). 429 past 3/min per account or 10/min per IP */
         post: operations["AuthFlowController_resendVerification"];
         delete?: never;
         options?: never;
@@ -15358,6 +15358,7 @@ export interface components {
             authMethod: components["schemas"]["AuthMethod"] | null;
             emailVerified: boolean;
             emailVerificationRequired: boolean;
+            canCreateWorkspace: boolean;
             memberships: components["schemas"]["WorkspaceMembership"][];
         };
         /** @enum {string} */

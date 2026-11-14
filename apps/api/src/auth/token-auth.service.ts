@@ -101,11 +101,14 @@ export class TokenAuthService {
     const live = (row: { revokedAt: Date | null; expiresAt: Date | null } | null) =>
       !!row && !row.revokedAt && !(row.expiresAt && row.expiresAt <= now);
     const [user, keyLive, sessionLive] = await Promise.all([
-      this.prisma.user.findUnique({ where: { id: principal.userId }, select: { disabledAt: true } }),
+      this.prisma.user.findUnique({ where: { id: principal.userId }, select: { disabledAt: true, isAdmin: true } }),
       principal.apiKey ? this.prisma.apiKey.findUnique({ where: { id: principal.apiKey.id }, select }).then(live) : true,
       principal.sessionId ? this.prisma.session.findUnique({ where: { id: principal.sessionId }, select }).then(live) : true,
     ]);
-    return !!user && !user.disabledAt && keyLive && sessionLive;
+    // #1143: a principal minted while the person was a platform admin carries
+    // that bypass for as long as it lives; once the flag is gone, it no longer stands.
+    if (!user || user.disabledAt || (principal.isAdmin && !user.isAdmin)) return false;
+    return keyLive && sessionLive;
   }
 
   private async resolveSession(token: string): Promise<Principal> {

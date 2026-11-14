@@ -515,7 +515,12 @@ mirroring embeddings: `none` (default) or `openai-compatible`
 (`EXTRACTOR_BASE_URL` must include `/v1`, chat completions, JSON output).
 Inferred edges carry a clamped confidence at or above `EXTRACTOR_MIN_CONFIDENCE`,
 plus `sourceChunkId` and a `snippet` — a claim you cannot trace to a passage is
-not a claim worth storing.
+not a claim worth storing. Each chunk (with the page title and heading path)
+reaches the model inside one `wrapUntrusted(…, 'extract_relations', 'document')`
+block (#1141), so a page cannot end its block and address the extractor. That
+costs about 80 tokens per chunk on every ingestion, accepted on purpose; an
+author could declare any relation in frontmatter anyway, so the wrapper guards
+the prompt, not the graph.
 
 Two rules matter more than the mechanism:
 

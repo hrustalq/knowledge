@@ -164,11 +164,20 @@ export class ChatIdentityService {
     });
     if (!row?.confirmedBy || !row.proofHash) return 'none';
 
+    // Every number, right or wrong, first claims one of the attempts in a
+    // single guarded statement (#1141): concurrent messages cannot read the
+    // same count, so no number past the cap is ever compared.
+    const claimed = await this.prisma.chatLinkCode.updateMany({
+      where: { id: row.id, usedAt: null, proofAttempts: { lt: CHAT_LINK_PROOF_MAX_ATTEMPTS } },
+      data: { proofAttempts: { increment: 1 } },
+    });
+    if (claimed.count === 0) return 'none';
+
     if (!sameHash(row.proofHash, hashProof(row.id, proof))) {
-      const spent = row.proofAttempts + 1 >= CHAT_LINK_PROOF_MAX_ATTEMPTS;
+      // The claim that reached the cap spends the code.
       await this.prisma.chatLinkCode.updateMany({
-        where: { id: row.id, usedAt: null },
-        data: spent ? { proofAttempts: { increment: 1 }, usedAt: new Date() } : { proofAttempts: { increment: 1 } },
+        where: { id: row.id, usedAt: null, proofAttempts: { gte: CHAT_LINK_PROOF_MAX_ATTEMPTS } },
+        data: { usedAt: new Date() },
       });
       return 'mismatch';
     }

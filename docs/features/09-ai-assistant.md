@@ -82,9 +82,18 @@ context engineering / prompt injection:
   read tools return the row's facts (ids, cite labels, trust status) as plain
   JSON and the page's text inside the wrapper. The wrapper defuses any
   wrapper's closing tag in the payload (`&lt;/pages`), so text cannot end its
-  own block; plugin output goes through it too (origin `plugin`).
+  own block, matched as a reader folds it (#1141: NFKC per code point,
+  zero-width and other invisible characters dropped), so `<\u200B/pages>` and
+  `＜／pages＞` are defused too while text that closes nothing is kept as it
+  was; plugin output goes through it too (origin `plugin`, error text
+  included). Review and suggest wrap the draft (origin `draft`), with the
+  person's instruction after the block; `global_overview` answers facts plain
+  and titles and summaries wrapped; the curator, cartographer and digest list
+  page titles inside one wrapper; the arbiter's decision pre-filter carries the
+  title inside each passage's wrapper.
   `untrusted-coverage.spec.ts` fails on a hand-written `<page>` / `<document>`
-  block in `assistant/`, `agents/`, mention replies or memo triage. Tool errors
+  block in `assistant/`, `agents/`, mention replies or memo triage, and on a
+  runner's page-title listing outside a wrapper. Tool errors
   return `{"error"}` payloads instead of stack traces, and when the budget is
   spent the final round runs without tools so the model must answer.
 - The response reports `toolCalls` (tool, arguments, ok) and `model` for

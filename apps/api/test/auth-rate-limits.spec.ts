@@ -70,6 +70,19 @@ describe('auth rate limits (#1092)', () => {
     expect(await attemptsUntil429('forgotPassword', { email: 'ada@example.com' })).toBeLessThanOrEqual(6);
   });
 
+  it('resend-verification is budgeted per account and per IP (#1143)', async () => {
+    const lim = limiter();
+    const guard = new AuthRateLimitGuard(lim as never, new Reflector());
+    let refused = 0;
+    for (let i = 0; i < 30; i++) {
+      const ctx = rateCtx('resendVerification', {}, { userId: USER, mode: 'session' });
+      (ctx as unknown as { switchToHttp(): { getRequest(): { socket: { remoteAddress: string } } } }).switchToHttp().getRequest().socket.remoteAddress = `198.51.100.${i}`;
+      await guard.canActivate(ctx).catch(() => (refused += 1));
+    }
+    expect(refused).toBeGreaterThan(0);
+    expect(await attemptsUntil429('resendVerification', {}, { userId: USER, mode: 'session' })).toBeLessThan(Infinity);
+  });
+
   it('change-password is budgeted per account, whatever IP the guesses come from', async () => {
     const lim = limiter();
     const guard = new AuthRateLimitGuard(lim as never, new Reflector());

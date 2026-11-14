@@ -277,8 +277,14 @@ describe('materializing a templated draft', () => {
     produces: { category: 'guide', relationToParent: 'IMPLEMENTS', templateRef: LIVE },
   };
 
-  function makeMaterializer() {
+  function makeMaterializer(refuse = false) {
     const createDocument = vi.fn(async () => ({ documentId: 'doc-1', revisionId: 'rev-1' }));
+    const permissions = {
+      scopeForUser: vi.fn(async () => ({ userId: 'u1' })),
+      requireCreateUnder: vi.fn(async () => {
+        if (refuse) throw new Error('forbidden');
+      }),
+    };
     const materializer = new WorkflowMaterializerService(
       {
         workflowRunNode: { findUnique: async () => null },
@@ -286,8 +292,9 @@ describe('materializing a templated draft', () => {
       } as never,
       { createDocument, finalizeRevision: vi.fn(async () => ({})) } as never,
       makeTemplates(),
+      permissions as never,
     );
-    return { materializer, createDocument };
+    return { materializer, createDocument, permissions };
   }
 
   const nodeWith = (draft: WorkflowNodeDraft) =>
@@ -299,11 +306,20 @@ describe('materializing a templated draft', () => {
       nodeWith({ title: 'Runbook: Refunds', markdown: '# Refunds', frontmatter: { tags: ['runbook'] }, templateRef: LIVE, templateVersion: 1 }),
       run,
       step,
+      'u1',
     );
     const [dto] = createDocument.mock.calls[0] as unknown as [Record<string, unknown>];
     expect(dto.template).toEqual({ ref: LIVE, version: 1 });
     expect(dto.content).toMatchObject({ mode: 'inline' });
     expect(parseMarkdown((dto.content as { text: string }).text).data).toEqual({ tags: ['runbook'] });
+  });
+
+  it('asks the approver may create where the page lands, and creates nothing when refused (#1140)', async () => {
+    const { materializer, createDocument, permissions } = makeMaterializer(true);
+    await expect(materializer.materialize(nodeWith({ title: 'Runbook', markdown: '# x' }), run, step, 'u1')).rejects.toThrow('forbidden');
+    expect(permissions.scopeForUser).toHaveBeenCalledWith('u1', run.workspaceId);
+    expect(permissions.requireCreateUnder).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ projectId: run.projectId, parentId: 'root' }));
+    expect(createDocument).not.toHaveBeenCalled();
   });
 
   it('materializes without provenance when that version no longer resolves', async () => {
@@ -312,6 +328,7 @@ describe('materializing a templated draft', () => {
       nodeWith({ title: 'Runbook', markdown: '# x', templateRef: LIVE, templateVersion: 9 }),
       run,
       step,
+      'u1',
     );
     const [dto] = createDocument.mock.calls[0] as unknown as [Record<string, unknown>];
     expect(dto.template).toBeUndefined();

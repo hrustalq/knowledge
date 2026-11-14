@@ -124,6 +124,16 @@ const PLAIN: Record<string, string> = {
   knowledge_suggest_draft_edit: 'the suggestion the caller made',
 };
 
+/**
+ * Wrapped tools that also answer through plain `json(…)` somewhere, how many
+ * times, and why that answer can carry nothing a page wrote. A new plain exit
+ * in a wrapped tool fails until it is wrapped or listed here.
+ */
+const FACTS_ONLY_EXITS: Record<string, [number, string]> = {
+  knowledge_flag_document: [1, 'the `requested` branch answers ids, the state the caller set and the owner id'],
+  knowledge_get_embed: [1, 'an empty group answers ids, the index and a fixed note'],
+};
+
 describe('every MCP tool wraps its page text or says why it has none', () => {
   const src = join(import.meta.dirname, '../src/mcp');
   const files = [...readdirSync(join(src, 'tools')).map((f) => join(src, 'tools', f)), join(src, 'draft-tools.ts'), join(src, 'capture-tools.ts')].filter(
@@ -142,6 +152,28 @@ describe('every MCP tool wraps its page text or says why it has none', () => {
 
   it('a tool not listed as plain answers through pageJson or wrapUntrusted', () => {
     const unwrapped = tools.filter((t) => !PLAIN[t.name] && !/pageJson\(|pageText\(|runPage\(|wrapUntrusted\(/.test(t.block)).map((t) => t.name);
+    expect(unwrapped).toEqual([]);
+  });
+
+  it('a wrapped tool has no return path that skips the wrapper (#1141)', () => {
+    // `json(…)` or a hand-built `text: JSON.stringify(…)` inside a wrapped tool is a second way out.
+    const PLAIN_EXIT = /\bjson\(|text: JSON\.stringify\(/g;
+    const found = Object.fromEntries(
+      tools.filter((t) => !PLAIN[t.name]).flatMap((t) => {
+        const n = t.block.match(PLAIN_EXIT)?.length ?? 0;
+        return n ? [[t.name, n]] : [];
+      }),
+    );
+    expect(found).toEqual(Object.fromEntries(Object.entries(FACTS_ONLY_EXITS).map(([name, [n]]) => [name, n])));
+  });
+
+  it('a resource read hands back page text wrapped, or is our own skill text', () => {
+    const block = readFileSync(join(src, 'tools', 'resources.ts'), 'utf8').split('server.registerResource(').slice(1);
+    const unwrapped = block
+      .map((b) => ({ name: /^\s*[`'](.+?)[`']/.exec(b)?.[1] ?? '?', b }))
+      .filter(({ name, b }) => !name.startsWith('skill') && !/wrapUntrusted\(|pageText\(/.test(b))
+      .map(({ name }) => name);
+    expect(block.length).toBeGreaterThanOrEqual(5);
     expect(unwrapped).toEqual([]);
   });
 

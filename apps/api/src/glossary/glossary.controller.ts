@@ -57,8 +57,11 @@ export class GlossaryController {
    */
   private async writeScope(principal: Principal, termId: string): Promise<AccessScope> {
     const workspaceId = await this.access.workspaceOf('glossary-term', termId);
-    if (await this.glossary.isWorkspaceTerm(termId)) await this.access.requireRole(principal, workspaceId, 'admin');
-    return this.permissions.scopeFor(principal, workspaceId);
+    const projectId = await this.glossary.projectOfTerm(termId);
+    if (projectId === null) await this.access.requireRole(principal, workspaceId, 'admin');
+    const scope = await this.permissions.scopeFor(principal, workspaceId);
+    await this.glossary.requireProjectWrite(scope, projectId);
+    return scope;
   }
 
   @Get()

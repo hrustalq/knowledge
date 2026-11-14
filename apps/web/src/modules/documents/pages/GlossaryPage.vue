@@ -540,7 +540,8 @@ watch(highlighted, (id) => {
             <Badge v-else-if="term.source === 'captured'" variant="outline" class="mt-1 font-normal">{{ t('captures.badge') }}</Badge>
           </TableCell>
           <TableCell class="align-top text-sm">
-            <MarkdownView :markdown="term.definition" />
+            <!-- untrusted: a definition may be a model's or a capture's words (#1142). -->
+            <MarkdownView :markdown="term.definition" untrusted />
           </TableCell>
           <TableCell class="align-top text-sm">
             {{ term.projectId === null ? t('glossary.levelWorkspace') : projectName(term.projectId) || t('glossary.levelProject') }}

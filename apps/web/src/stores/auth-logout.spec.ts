@@ -16,10 +16,13 @@ vi.mock('@/shared/utils/pwa', () => ({ clearPwaCaches: async () => undefined }))
 const { useAuthStore } = await import('./auth')
 
 let storage: MemoryStorage
+let session: MemoryStorage
 
 beforeEach(() => {
   storage = new MemoryStorage()
+  session = new MemoryStorage()
   vi.stubGlobal('localStorage', storage)
+  vi.stubGlobal('sessionStorage', session)
   const pinia = createPinia()
   pinia.use(() => ({ queryClient: markRaw(new QueryClient()) }))
   createApp({}).use(pinia)
@@ -43,6 +46,24 @@ describe('auth.logout', () => {
     for (let i = 0; i < storage.length; i++) expect(storage.key(i)).not.toMatch(/^kn:unstaged:/)
     expect(storage.getItem('kn_theme')).toBe('dark')
     expect(storage.getItem('kn_lang')).toBe('ru')
+  })
+
+  // #1142: try-it keeps a third-party API's token and password per spec page in
+  // sessionStorage, and the project / workflow wizards keep drafts.
+  it('forgets try-it credentials and the wizard drafts', async () => {
+    session.setItem('kn_try:doc1', '{"token":"secret","basicPassword":"pw"}')
+    session.setItem('kn_try:doc2', '{"apiKey":"k"}')
+    session.setItem('kn_other', 'kept')
+    storage.setItem('kn_project_wizard', '{"value":"draft"}')
+    storage.setItem('kn_wf_wizard', '{"value":"draft"}')
+
+    await useAuthStore().logout()
+
+    expect(session.getItem('kn_try:doc1')).toBeNull()
+    expect(session.getItem('kn_try:doc2')).toBeNull()
+    expect(session.getItem('kn_other')).toBe('kept')
+    expect(storage.getItem('kn_project_wizard')).toBeNull()
+    expect(storage.getItem('kn_wf_wizard')).toBeNull()
   })
 
   it('still forgets them when the session was already dead', async () => {

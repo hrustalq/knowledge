@@ -63,7 +63,11 @@ pretty-printed JSON, so a result costs about the same as before (measured in
 #1136's PR). No `structuredContent`: a client that also feeds it to its model
 would read every result twice. The tools that answer plain are listed with why
 in `test/mcp-page-text.spec.ts`; a new tool fails there until it is one or the
-other.
+other. The same spec fails a wrapped tool that gains a second, plain exit
+(`json(…)` or a hand-built `text: JSON.stringify(…)`) unless it is listed with
+why it carries only facts (#1141), and a resource read that hands back page text
+unwrapped: `knowledge://documents/{id}.md` and both `llms.txt` resources answer
+inside one `<documents>` block; only the skill resources (our own text) are plain.
 
 **Two transports, one tool set, one guard.** `McpService.buildServer(principal)`
 is the only place tools are registered: it builds the caller's guards and hands

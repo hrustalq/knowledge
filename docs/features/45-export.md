@@ -157,7 +157,10 @@ bundle when needed, and the **images only** as one flat folder to
 file beside it, so other attachments appear by name. Chromium never needs the
 network, and must not have it: a page can embed any URL, and whatever it
 fetched would be printed into a PDF the requester downloads. Both compose
-files start Gotenberg with `--chromium-allow-list=^file:///tmp/.*`. External
+files start Gotenberg with `--chromium-allow-list=^file:///tmp/.*`, and so
+does the homelab k3s Deployment: that flag, not the HTML, is the control.
+Probed on `gotenberg/gotenberg:8` (#1142): a remote `<img>` reached a listener
+from a Gotenberg without the flag and never from one with it. External
 images are therefore missing from a PDF, though they appear in the HTML
 bundle, where the reader's own browser fetches them.
 

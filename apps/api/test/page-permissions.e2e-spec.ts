@@ -863,6 +863,131 @@ describe('page permissions (e2e, #76)', () => {
     });
   });
 
+  describe('a restricted project behind connectors, private runs and finding creates (#1140)', () => {
+    // Not `word`: bob's feed holds rows about O, whose title carries it.
+    const crypt = `vexil${nonce}`;
+    let cryptProject: string;
+    const planted: { runs: string[]; definitionId?: string } = { runs: [] };
+    const feedOf = async (p: Person) =>
+      JSON.stringify((await http().get('/v1/activity').query({ workspaceId: WORKSPACE, limit: 200 }).set(as(p)).expect(ok(200))).body);
+    const run = async (data: Record<string, unknown>) => {
+      const row = await prisma.agentRun.create({
+        data: { workspaceId: WORKSPACE, trigger: 'manual', status: 'succeeded', finishedAt: new Date(), ...data } as never,
+      });
+      planted.runs.push(row.id);
+      return row.id;
+    };
+
+    beforeAll(async () => {
+      cryptProject = (
+        await http().post('/v1/projects').set(as(people.admin)).send({ workspaceId: WORKSPACE, name: `Crypt ${crypt}` }).expect(ok(201))
+      ).body.project.projectId;
+      await http().put(`/v1/projects/${cryptProject}/access`).set(as(people.admin)).send({ restricted: true, grants: [] }).expect(ok(200));
+    });
+
+    afterAll(async () => {
+      if (planted.runs.length) await prisma.agentRun.deleteMany({ where: { id: { in: planted.runs } } });
+      await prisma.workflowRun.deleteMany({ where: { rootDocumentId: ids.P, createdBy: people.bob.id } });
+      if (planted.definitionId) await prisma.workflowDefinition.deleteMany({ where: { id: planted.definitionId } });
+      await prisma.glossaryTerm.deleteMany({ where: { term: `Crypt term ${crypt}` } });
+    });
+
+    it("keeps a restricted project's connector out of the feed of a member without a grant", async () => {
+      const connector = await prisma.connector.create({
+        data: { workspaceId: WORKSPACE, kind: 'codebase', name: `Crypt repo ${crypt}`, projectId: cryptProject, createdBy: people.admin.id },
+      });
+      await http().delete(`/v1/connectors/${connector.id}`).set(as(people.admin)).expect(ok(200));
+      // Recording is fire-and-forget: wait for the admin's row before reading bob's.
+      for (let i = 0; i < 20 && !(await feedOf(people.admin)).includes(crypt); i++) await new Promise((r) => setTimeout(r, 250));
+      expect(await feedOf(people.admin)).toContain(crypt);
+      expect(await feedOf(people.bob)).not.toContain(crypt);
+    });
+
+    it("refuses a learning sourced from a finding of someone else's memo run", async () => {
+      const runId = await run({
+        agentKey: 'secretary',
+        subjectKey: `memo:${randomUUID()}`,
+        createdBy: people.alice.id,
+        findings: [{ kind: 'gap', severity: 'info', title: `Memo ${crypt}`, detail: 'x', documentIds: [ids.O], documentTitles: [titles.O] }],
+      });
+      const res = await http()
+        .post('/v1/ai/agents/learnings')
+        .set(as(people.bob))
+        .send({ workspaceId: WORKSPACE, text: 'x', sourceKind: 'finding', runId, findingIndex: 0 });
+      expect(res.status).toBe(400);
+      expect(JSON.stringify(res.body)).not.toContain(crypt);
+      expect(await prisma.agentLearning.count({ where: { runId } })).toBe(0);
+    });
+
+    it("refuses to add a finding's term to a project the member may not edit", async () => {
+      const runId = await run({
+        agentKey: 'curator',
+        createdBy: people.admin.id,
+        findings: [
+          {
+            kind: 'gap',
+            severity: 'info',
+            title: 'Term',
+            detail: 'x',
+            documentIds: [ids.O],
+            documentTitles: [titles.O],
+            term: { term: `Crypt term ${crypt}`, aliases: [], definition: 'x', projectId: cryptProject },
+          },
+        ],
+      });
+      const res = await http().post(`/v1/ai/agents/runs/${runId}/findings/0/add-term`).query({ workspaceId: WORKSPACE }).set(as(people.bob)).send({});
+      expect(res.status).toBe(403);
+      expect(await prisma.glossaryTerm.count({ where: { term: `Crypt term ${crypt}` } })).toBe(0);
+    });
+
+    it('materializes no workflow page where the run owner may no longer create', async () => {
+      const { WorkflowMaterializeSweeper } = await import('../src/workflows/workflow-materialize.sweeper.js');
+      const step = { id: 'write', kind: 'review', title: 'Write', next: [], fanOut: false, autoApprove: false, produces: { category: 'guide', relationToParent: 'IMPLEMENTS' } };
+      planted.definitionId = (
+        await prisma.workflowDefinition.create({
+          data: { workspaceId: WORKSPACE, name: `ACL sweep ${nonce}`, graph: { steps: [step] }, createdBy: people.admin.id } as never,
+        })
+      ).id;
+      // A run bob started while he could edit P, swept after P was closed to him.
+      const wf = await prisma.workflowRun.create({
+        data: {
+          workspaceId: WORKSPACE,
+          projectId,
+          definitionId: planted.definitionId,
+          definitionSnapshot: { steps: [step] },
+          rootDocumentId: ids.P,
+          status: 'running',
+          createdBy: people.bob.id,
+          nodes: { create: { stepId: 'write', status: 'materializing', draft: { title: `Swept ${crypt}`, markdown: '# x' } } },
+        },
+      });
+      const sweeper = app.get(WorkflowMaterializeSweeper);
+      for (let i = 0; i < 40; i++) {
+        await sweeper.sweep();
+        const node = await prisma.workflowRunNode.findFirstOrThrow({ where: { runId: wf.id } });
+        if (node.status !== 'materializing') break;
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      expect(await prisma.document.count({ where: { title: `Swept ${crypt}` } })).toBe(0);
+      expect((await prisma.workflowRunNode.findFirstOrThrow({ where: { runId: wf.id } })).status).toBe('failed');
+    });
+
+    it("opens no component draft in a project its owner may not create in", async () => {
+      const { ComponentDraftSweeper } = await import('../src/components/component-draft.sweeper.js');
+      const runId = await run({
+        agentKey: 'archaeologist',
+        subjectKey: `component:${randomUUID()}:src/crypt.ts`,
+        createdBy: people.bob.id,
+        input: { connectorId: randomUUID(), component: { name: 'Crypt', paths: ['src/crypt.ts'], projectId: cryptProject } },
+        findings: [{ kind: 'gap', severity: 'info', title: 'Crypt', detail: 'x', documentIds: [], documentTitles: [], draft: { title: `Drafted ${crypt}`, markdown: '# x' } }],
+      });
+      await app.get(ComponentDraftSweeper).sweep();
+      expect(await prisma.document.count({ where: { title: `Drafted ${crypt}` } })).toBe(0);
+      const findings = (await prisma.agentRun.findUniqueOrThrow({ where: { id: runId } })).findings as Array<{ mergeRequestId?: string }>;
+      expect(findings[0]!.mergeRequestId).toBeUndefined();
+    });
+  });
+
   describe('private drafts (#474)', () => {
     const draftTitle = `Draft memo ${word}`;
     const draftText = `# ${draftTitle}\n\nThe ${word} payroll ledger draft: what changes in the bonuses, and who signs it.\n`;

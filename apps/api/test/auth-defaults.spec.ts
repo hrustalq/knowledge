@@ -228,7 +228,7 @@ describe('rows from before the #75 migration', () => {
     const principal = await tokens.resolve('ks_legacy');
     expect(principal).toMatchObject({ mode: 'session', sessionId: 's-old', authMethod: 'password' });
     expect('providerId' in principal).toBe(false);
-    expect(toMeResponse(principal, [], false).authMethod).toBe('password');
+    expect(toMeResponse(principal, [], false, true).authMethod).toBe('password');
   });
 
   it('a member with no source reads, and edits, as manual', async () => {

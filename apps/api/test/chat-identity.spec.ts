@@ -57,11 +57,14 @@ function harness(code: Partial<{ usedAt: Date | null; expiresAt: Date }> = {}, m
         where.externalChatId === row.externalChatId &&
         row.usedAt === null &&
         (row as Record<string, unknown>).confirmedBy
-          ? row
+          ? { ...row } // a snapshot, as a database read is
           : null,
       ),
       updateMany: vi.fn(async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
         if (where.usedAt === null && row.usedAt !== null) return { count: 0 };
+        const cap = where.proofAttempts as { lt?: number; gte?: number } | undefined;
+        const tried = Number((row as Record<string, unknown>).proofAttempts ?? 0);
+        if ((cap?.lt !== undefined && tried >= cap.lt) || (cap?.gte !== undefined && tried < cap.gte)) return { count: 0 };
         const { proofAttempts, ...rest } = data;
         if (typeof proofAttempts === 'object') (row as Record<string, unknown>).proofAttempts = Number((row as Record<string, unknown>).proofAttempts ?? 0) + 1;
         else if (proofAttempts !== undefined) (row as Record<string, unknown>).proofAttempts = proofAttempts;
@@ -180,6 +183,17 @@ describe('redeemProof', () => {
     expect(h.row.usedAt).not.toBeNull();
     await expect(h.svc.redeemProof(integration as never, account, proof)).resolves.toBe('none');
     expect(h.prisma.chatIdentity.upsert).not.toHaveBeenCalled();
+  });
+
+  it('holds the cap under concurrent numbers: no guess past the fifth is even compared (#1141)', async () => {
+    const h = harness();
+    const { proof } = await h.svc.confirm('the-code', alice);
+    const wrong = proof === '000000' ? '000001' : '000000';
+    const outcomes = await Promise.all([...Array.from({ length: 8 }, () => h.svc.redeemProof(integration as never, account, wrong)), h.svc.redeemProof(integration as never, account, proof)]);
+    expect(outcomes.at(-1)).not.toBe('linked');
+    expect(h.prisma.chatIdentity.upsert).not.toHaveBeenCalled();
+    expect(Number((h.row as Record<string, unknown>).proofAttempts)).toBeLessThanOrEqual(5);
+    expect(h.row.usedAt).not.toBeNull();
   });
 
   it('refuses when the confirming person has left the workspace since', async () => {

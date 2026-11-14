@@ -72,6 +72,18 @@ describe('live socket re-check (#1097)', () => {
     expect(socket.close).toHaveBeenCalledWith(4401, 'authentication failed');
   });
 
+  it('closes a socket when its credential cannot be read, with a code the client retries (#1143)', async () => {
+    const g = gateway();
+    const socket = await g.connect('/v1/events/ws', { authorization: 'Bearer ks_x' });
+    socket.receive({ type: 'subscribe', workspaceId: WS });
+    await settle();
+    g.tokenAuth.isCurrent.mockRejectedValue(new Error('connection terminated'));
+    await g.gw.recheck();
+    expect(socket.close).toHaveBeenCalledTimes(1);
+    // Not 4401/4403: the web client stops reconnecting on those, and a PG blip is not a sign-out.
+    expect(socket.close).toHaveBeenCalledWith(1011, 'try again');
+  });
+
   it('drops a subscription to a workspace the person was removed from, and keeps the socket', async () => {
     const g = gateway();
     const socket = await g.connect('/v1/events/ws', { authorization: 'Bearer ks_x' });
@@ -120,6 +132,19 @@ describe('SSE stream re-check (#1097)', () => {
     expect(completed).toBe(true);
     upstream.next({ data: 'two' });
     expect(seen).toEqual([{ data: 'one' }]);
+  });
+
+  it('ends the stream when the credential cannot be read (#1143)', async () => {
+    vi.useFakeTimers();
+    const upstream = new Subject<{ data: unknown }>();
+    const tokenAuth = { isCurrent: vi.fn(async () => true) };
+    const access = { requireRole: vi.fn(async () => 'viewer') };
+    const controller = new EventsController({ stream: () => upstream.asObservable() } as never, {} as never, tokenAuth as never, access as never);
+    let completed = false;
+    controller.events(WS, principal).subscribe({ complete: () => (completed = true) });
+    tokenAuth.isCurrent.mockRejectedValue(new Error('connection terminated'));
+    await vi.advanceTimersByTimeAsync(LIVE_RECHECK_MS);
+    expect(completed).toBe(true);
   });
 
   it('ends the stream once the person left the workspace', async () => {

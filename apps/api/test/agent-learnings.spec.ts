@@ -119,7 +119,7 @@ function world(opts: { limit?: number } = {}) {
 }
 
 const create = (w: ReturnType<typeof world>, over: Record<string, unknown>) =>
-  w.service.create({ workspaceId: WS, text: 'x', ...over } as never, ADMIN);
+  w.service.create({ workspaceId: WS, text: 'x', ...over } as never, { userId: ADMIN, mode: 'session', isAdmin: false } as never);
 
 describe('AgentLearningsService — what reaches a prompt', () => {
   it('renders active learnings and never a proposed or archived one', async () => {
@@ -197,6 +197,42 @@ describe('AgentLearningsService — what reaches a prompt', () => {
     await expect(create(w, { text: '   ' })).rejects.toBeInstanceOf(BadRequestException);
     await expect(create(w, { text: 'x'.repeat(1001) })).rejects.toBeInstanceOf(BadRequestException);
     await expect(create(w, { agentKey: 'no-such-agent' })).rejects.toBeInstanceOf(BadRequestException);
+  });
+});
+
+describe('AgentLearningsService — private runs (#1140)', () => {
+  const memoRun = (w: ReturnType<typeof world>) =>
+    w.runs.set(RUN, {
+      id: RUN,
+      workspaceId: WS,
+      agentKey: 'secretary',
+      status: 'succeeded',
+      findings: [finding()] as never,
+      createdAt: new Date(),
+      subjectKey: 'memo:m1',
+      createdBy: EDITOR,
+    } as never);
+
+  it('refuses to attach a learning to a finding of a run the author may not read', async () => {
+    const w = world();
+    memoRun(w);
+    await expect(create(w, { sourceKind: 'finding', runId: RUN, findingIndex: 0 })).rejects.toThrow();
+    expect(w.learnings).toHaveLength(0);
+  });
+
+  it('counts, never names, evidence from a run the viewer may not read', async () => {
+    const w = world();
+    memoRun(w);
+    w.prisma.agentRun.findMany = vi.fn(async () => [...w.runs.values()]);
+    w.learnings.push({ id: 'l1', workspaceId: WS, status: 'proposed', evidence: [{ runId: RUN, findingIndex: 0 }], evidenceCount: 1 } as never);
+    w.service.list = vi.fn(async () => [{ id: 'l1', evidenceCount: 1 }]) as never;
+    w.prisma.agentLearning.findMany = vi.fn(async () => [{ id: 'l1', evidence: [{ runId: RUN, findingIndex: 0 }] }]);
+    const viewer = (userId: string) => ({ userId, mode: 'session', isAdmin: false }) as never;
+    const all = async (ids: string[]) => new Set(ids);
+    const [other] = await w.service.listForViewer(WS, {}, all, new Set(), viewer(ADMIN));
+    expect(other!.evidence).toEqual({ findings: [], hidden: 1 });
+    const [own] = await w.service.listForViewer(WS, {}, all, new Set(), viewer(EDITOR));
+    expect(own!.evidence!.findings).toHaveLength(1);
   });
 });
 

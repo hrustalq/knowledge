@@ -167,7 +167,8 @@ export const useAuthStore = defineStore('auth', {
       this.me = null
       // Nothing the signed-out session read may answer for the next one.
       this.queryClient.clear()
-      // Nor what it left in this browser: a half-done connector setup, unpublished edits (#1101).
+      // Nor what it left in this browser: a half-done connector setup, unpublished edits (#1101),
+      // wizard drafts and try-it credentials (#1142).
       forgetSignedInStorage()
       await clearPwaCaches().catch(() => undefined)
     },

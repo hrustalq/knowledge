@@ -158,7 +158,11 @@ _writes_ only, with a message pointing at `ASSISTANT_API_KEY`; everything else
 keeps working. Each envelope is sealed to its place (#1106): `gcm2$<key id>$…`
 with AAD `<table>.<column>:<workspace>:<row>` from `ai/secret-slots.ts`, so one
 copied into another row, column or workspace does not decrypt; the first `gcm$`
-format is still read and is rewritten when the row next saves its secret. A
+format is still read, and `SecretResealService` (API, once per boot, off the
+request path) rewrites every one still stored into `gcm2$` sealed to its row
+(#1141): an envelope with no AAD decrypts in any row. Each UPDATE is guarded on
+the envelope it read, so replicas racing write once; one this key cannot read is
+left and counted in the log. Decryption pins a 16-byte tag. A
 stored key that will not decrypt (another key, a moved envelope) is reported as
 `apiKeyUnreadable` on the settings and provider responses, shown on the
 provider row, and the connection dials with no key: it never falls back to the

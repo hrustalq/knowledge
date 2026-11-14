@@ -16,7 +16,8 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:
  * envelope written under another key is refused without trying it.
  *
  * The first format, `gcm$<iv>$<tag>$<ct>` (no AAD, no key id), is still read,
- * and is rewritten in the new format the next time its row saves the secret.
+ * and `SecretResealService` rewrites every one in the new format at API boot
+ * (#1141), since an envelope with no AAD decrypts in any row.
  *
  * Threat model, stated plainly: the key lives in SETTINGS_ENCRYPTION_KEY on the
  * same host as the API. This protects a database dump or a replica; it does not
@@ -106,7 +107,8 @@ export function decryptSecret(envelope: string | null | undefined, key: Buffer |
     aad = null;
   } else return null;
   try {
-    const decipher = createDecipheriv(ALGO, key, Buffer.from(iv, 'base64'));
+    // The tag length pinned (#1141): a truncated tag must not verify.
+    const decipher = createDecipheriv(ALGO, key, Buffer.from(iv, 'base64'), { authTagLength: 16 });
     if (aad) decipher.setAAD(aad);
     decipher.setAuthTag(Buffer.from(tag, 'base64'));
     return Buffer.concat([decipher.update(Buffer.from(ct, 'base64')), decipher.final()]).toString('utf8');

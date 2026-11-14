@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mayReadRun, privateRunWhere } from '../src/ai/run-privacy.js';
+import { mayReadRun, privateRunWhere, runFrameAddress } from '../src/ai/run-privacy.js';
 import type { Principal } from '../src/auth/principal.js';
 
 /** #1089: a memo's analysis is its uploader's. The filter and the row check say the same thing. */
@@ -35,5 +35,11 @@ describe('run privacy (#1089)', () => {
   ])('%s', (_who, principal, expected) => {
     expect(ROWS.map((row) => mayReadRun(row, principal))).toEqual(expected);
     expect(ROWS.map((row) => matches(privateRunWhere(principal), row))).toEqual(expected);
+  });
+});
+
+describe('run frames (#1140)', () => {
+  it('addresses a private run’s frame to its creator and broadcasts the rest', () => {
+    expect(ROWS.map(runFrameAddress)).toEqual([{ userId: 'alice' }, {}, {}, { userId: 'alice' }]);
   });
 });

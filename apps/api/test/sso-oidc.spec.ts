@@ -514,6 +514,17 @@ describe('discovery and login buttons', () => {
     expect(await h.sso.discover('x@other.example')).toMatchObject({ method: 'password', providers: [] });
   });
 
+  it('discover offers no provider for a domain its workspace never proved (#1143)', async () => {
+    const h = harness();
+    const proven = h.provider({ name: 'Proven' });
+    // Another workspace lists corp.example too, but proved nothing: a phishing button.
+    h.provider({ name: 'Squatted', workspaceId: randomUUID(), allowedDomains: ['corp.example'] });
+    const wide = h.provider({ name: 'Wide', workspaceId: randomUUID(), platformWide: true, allowedDomains: ['corp.example'] });
+    expect((await h.sso.discover('ada@corp.example')).providers.map((p) => p.id).sort()).toEqual([proven.id, wide.id].sort());
+    h.provider({ name: 'Unproven', allowedDomains: ['other.example'] });
+    expect(await h.sso.discover('ada@other.example')).toMatchObject({ method: 'password', providers: [] });
+  });
+
   it("login buttons are the workspace's own plus every platform-wide one", async () => {
     const h = harness();
     const own = h.provider({ name: 'A' });

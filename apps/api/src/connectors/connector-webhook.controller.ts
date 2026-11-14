@@ -21,6 +21,7 @@ import { readRepoPushDelivery, safeJson } from './webhook-payload.js';
 import { ConnectorWorkItemsService } from './connector-work-items.service.js';
 import { TrackerRegistry } from './tracker-registry.service.js';
 import { ConnectorHarvestSweeper } from './harvest/connector-harvest.sweeper.js';
+import { WebhookReplay } from './webhook-replay.js';
 
 /**
  * Inbound webhooks from external systems (docs/features/19).
@@ -47,6 +48,7 @@ export class ConnectorWebhookController {
     private readonly workItems: ConnectorWorkItemsService,
     private readonly harvests: ConnectorHarvestSweeper,
     config: ConfigService<Env, true>,
+    private readonly replay: WebhookReplay,
   ) {
     this.debounceMs = config.get('WIKI_PUSH_DEBOUNCE_MS', { infer: true });
   }
@@ -67,9 +69,20 @@ export class ConnectorWebhookController {
       throw new UnauthorizedException(t('error.connector.webhookNotConfigured'));
     }
 
+    const rawBody = req.rawBody?.toString('utf8') ?? '';
+    // A signed body is acted on once (#1143): GitHub and GitLab stamp no time
+    // into theirs. Claimed before the branch below verifies it and released
+    // when it throws, so a refused delivery is remembered by nobody.
+    return this.replay.once(`connector:${row.id}`, rawBody, { accepted: true, runId: null }, () => this.handle(row, headers, rawBody));
+  }
+
+  private async handle(
+    row: Awaited<ReturnType<ConnectorsService['require']>>,
+    headers: Record<string, string>,
+    rawBody: string,
+  ): Promise<{ accepted: boolean; runId: string | null }> {
     // The secret only: nothing is decrypted or minted for a delivery not yet verified (GHSA-pc42).
     const ctx = this.connectors.webhookContextFor(row);
-    const rawBody = req.rawBody?.toString('utf8') ?? '';
 
     // A harvest connector (#382, doc 59): a resolved item is claimed, and the
     // API-side sweeper reads and harvests it. Nothing else to do here — a

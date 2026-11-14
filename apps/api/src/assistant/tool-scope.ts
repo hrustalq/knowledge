@@ -1,3 +1,5 @@
+import { MCP_TOOL_PREFIX } from '../ai/mcp-client.service.js';
+
 /**
  * Narrow the offered tools to the agent's allowlist (docs/features/20).
  *
@@ -10,10 +12,13 @@
  * MCP plugin tools obey it too (#1105): they receive model-chosen arguments
  * and reach a system outside this one, so an agent with a list gets one only
  * when the list names it (`mcp__<slug>__<tool>`, accepted by the agent form).
- * The plugin's own enabled-tools list still narrows on top.
+ * The plugin's own enabled-tools list still narrows on top. An agent with no
+ * list keeps every built-in tool its mode offers and gets **no** plugin tool
+ * (#1141): a plugin is reached only by an agent whose list names it, as the
+ * built-in researcher and author already are (their lists name none).
  */
 export function scopeToAgent<T extends { function: { name: string } }>(offered: T[], agentTools: readonly string[]): T[] {
-  if (agentTools.length === 0) return offered;
+  if (agentTools.length === 0) return offered.filter((tool) => !tool.function.name.startsWith(MCP_TOOL_PREFIX));
   const allowed = new Set(agentTools);
   return offered.filter((tool) => allowed.has(tool.function.name));
 }

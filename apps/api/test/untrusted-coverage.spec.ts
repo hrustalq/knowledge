@@ -44,4 +44,16 @@ describe('untrusted text reaches models through the one wrapper', () => {
     );
     expect(offenders).toEqual([]);
   });
+
+  it('page-title listings reach a background agent wrapped (#1141)', () => {
+    // A listing line in a prompt: wrapped on that line or opened on the one before.
+    const LISTING = /Pages in this workspace \(|digestListing\(facts\)/u;
+    const offenders = files('agents/runners').flatMap((file) => {
+      const lines = readFileSync(file, 'utf8').split('\n');
+      return lines.flatMap((line, i) =>
+        LISTING.test(line) && !/wrapUntrusted\(/.test(line) && !/wrapUntrusted\(\s*$/.test(lines[i - 1] ?? '') ? [`${file.slice(SRC.length + 1)}:${i + 1}`] : [],
+      );
+    });
+    expect(offenders).toEqual([]);
+  });
 });

@@ -308,11 +308,18 @@ the whole message lands in the worker log instead. Reset and verify tokens are
 echoed as `debugToken` only when `AUTH_ECHO_TOKENS=true` (#1093; off by default, set in
 `.env.example`, refused under `NODE_ENV=production`). `validateEnv` also refuses
 `NODE_ENV=production` with `AUTH_MODE=none` unless `AUTH_ALLOW_NONE_IN_PRODUCTION=true`.
+Those refusals hang on `NODE_ENV`, whose schema default is `development`; the
+images pin it instead (`ENV NODE_ENV=production` in `Dockerfile.api` and
+`Dockerfile.web`), so a deployment whose environment lost the line still runs
+as production and still refuses (#1143).
 Signup auto-joins
 `AUTH_DEFAULT_WORKSPACE_ID` as `AUTH_DEFAULT_ROLE` and mails a confirmation
 link; any followed link sets `users.email_verified_at`. With
 `AUTH_REQUIRE_VERIFIED_EMAIL=true`, an unverified **session** reaches only the
-`@UnverifiedOk` routes (403 `emailUnverified` elsewhere, WS close 4403).
+`@UnverifiedOk` routes (403 `emailUnverified` elsewhere, WS close 4403). Unset,
+it is off, except under `NODE_ENV=production`, where `validateEnv` reads an
+unset line as `true` (#1143): the closed answer is the one an omission picks,
+and `false` written out still turns it off.
 
 ## Single sign-on (#75)
 
@@ -388,6 +395,13 @@ the same pass deletes expired login transactions and expired sessions. A
 verified, enforced domain is read by `AuthFlowService` before login, signup and
 forgot-password.
 
+**Discovery offers only what sign-in would accept** (#1143): `discover` lists a
+provider for an address only when `speaksFor` (`auth/sso/domain-proof.ts`, the
+predicate sign-in reads) holds for its domain, or when the provider is the
+domain's enforced one. A domain another workspace typed but never proved gets
+no button, so the email-first page cannot be used to send a person to a
+stranger's IdP.
+
 **SCIM is a separate credential, not a principal.** `/v1/scim/v2` is
 `@Public()` to the global guards and behind `ScimTokenGuard`, which turns
 `Bearer kscim_…` into the workspace it provisions. No `requireRole` ever sees
@@ -399,10 +413,13 @@ address's domain being verified by the provisioning workspace.
 **Rate limits** on the auth routes reuse `PublicRateLimiter` through
 `AuthRateLimitGuard` with a per-route bucket: per IP always, per address or
 username where the body names one, and per account where the route has one
-(`password`, on change-password). Login, LDAP, exchange, signup, forgot, reset,
-verify and change-password fail closed when Redis is down (#1092). Discovery
-fails open. Login runs one scrypt whatever the address (`burnPasswordCheck`),
-so timing does not tell a registered address from an unknown one.
+(`password`, on change-password; `resend`, on resend-verification, #1143, whose
+own one-a-minute cooldown reads before it writes). Login, LDAP, exchange,
+signup, forgot, reset, verify, resend and change-password fail closed when
+Redis is down (#1092). Discovery fails open. Login runs one scrypt whatever the
+address or account state (`burnPasswordCheck` for no password; the stored hash
+is checked before `disabledAt`, #1143), so timing does not tell a registered
+address from an unknown one, or a disabled account from a live one.
 
 **Login backoff** (`auth/login-backoff.ts`) sits on top of the window: from
 the 5th consecutive failure for an address *from one IP*, a wait of 2 s
@@ -425,8 +442,12 @@ whose address was never confirmed, `claimUnverifiedAccount` ends the old
 password, sessions, API keys, open links and chat identities and marks the
 address verified, in the link's transaction. SCIM without domain authority
 revokes only the sessions its own workspace's providers opened
-(`SessionsService.revokeIssuedBy`), and moves an address only to another
-verified domain.
+(`SessionsService.revokeIssuedBy`), moves an address only to another
+verified domain, and does not link an existing account whose address was never
+confirmed at all (#1143): it answers 409 `uniqueness`, as for an address it
+already provisioned, writes nothing, and so grants a possible squatter none of
+the directory's membership. An existing *verified* account still links
+without domain authority, as an admin could add it by address.
 
 **Browser binding** (#1095): the GitHub, Figma and Plaud callbacks complete only
 in a browser whose session cookie is the user the signed state names
@@ -441,7 +462,10 @@ platform admin, or someone sharing a workspace (`permissions/can-see-user.ts`);
 account flags (`isAdmin`, `hasPassword`, `hasApiKey`) only to the subject and a
 platform admin. A workspace admin's add-member picker matches one full address;
 only a platform admin searches by fragment. With `AUTH_SIGNUP_ENABLED=false`,
-only a platform admin creates workspaces.
+only a platform admin creates workspaces. One rule decides it
+(`auth/workspace-creation.ts`, which also refuses a pinned key), and `/me`
+answers it as `canCreateWorkspace`, so the web offers "New workspace" only
+where the API would take it (#1142).
 
 ## The trusted-operator escape hatch
 
@@ -517,6 +541,16 @@ for the gateway, and every `subscribe` runs `AccessService.requireRole('viewer')
 in PostgreSQL **before the subscription exists**. See
 [08 — Events & live updates](08-events-live.md).
 
+An open stream (WS or SSE) is re-judged every `LIVE_RECHECK_MS` (#1097,
+`events/live-recheck.ts`): `TokenAuthService.isCurrent` re-reads the account,
+key and session, and a principal minted while its person was a platform admin
+no longer stands once the flag is gone (#1143). A re-check that cannot read
+PostgreSQL fails closed (#1143): the socket closes with 1011, which the web
+client reconnects on (4401 and 4403 it takes as signed out), and the SSE stream
+ends. Either way the reconnect authenticates anew. The collab gateway's own
+re-check still keeps a connection through a failed read (a `ponytail:` note in
+`collab.gateway.ts`).
+
 Background work authenticates the same way: an agent run rehydrates a real
 principal from `users` and calls the same `AccessService.requireRole` an HTTP
 request would, which is what `AuthCoreModule` (AccessService without the guards)
@@ -573,7 +607,7 @@ controllers, and controllers must not load in the worker
 ```
 POST /v1/auth/signup | login | forgot-password | reset-password   @Public()
 POST /v1/auth/verify-email                                        @Public()
-POST /v1/auth/logout | resend-verification                        authenticated, @UnverifiedOk()
+POST /v1/auth/logout | resend-verification                        authenticated, @UnverifiedOk() (resend: rate-limited)
 POST /v1/auth/change-password                                     authenticated
 GET  /v1/me   PATCH /v1/me                                        self
 GET/POST/PATCH /v1/users                                          @PlatformAdmin()
@@ -687,6 +721,19 @@ at all: the web server answers it only for an internal peer with no
 - Members who cannot open a page get a 403 that confirms it exists (the
   Confluence trade-off, so they can ask for access). There is no "hidden" flag
   that would make it a 404 for them.
+- Adding a member by address (`POST /v1/workspaces/:id/members`) answers 404
+  `noUserWithEmail` for an address with no account, so a workspace admin learns
+  whether an address is registered. Accepted (#1143): the exact-address picker
+  a workspace admin already has (#1091) says the same, and an admin is trusted
+  with it. A fragment search stays platform-admin only.
+- GitHub and repository webhooks sign the body but stamp no time into it (a
+  platform limit), so a captured delivery verifies forever. `WebhookReplay`
+  (`connectors/webhook-replay.ts`, #1143) acts on each signed body once: a
+  Redis `SET NX` of the body's SHA-256 per receiver, claimed before the handler
+  and released when it throws (a bad signature included), remembered 90 days.
+  `X-GitHub-Delivery` is not signed, so it is not the key. A replay older than
+  90 days, or one that lands while Redis is down (deliveries pass then), is
+  acted on again.
 - Mail is outbound only: no bounce handling, so a dead address stays unverified
   rather than being flagged.
 - The sign-in policy is cached in-process for 30 s. After an admin turns

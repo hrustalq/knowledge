@@ -28,7 +28,7 @@ import { localeFromRequest } from '../i18n/locale.js';
 import { t, withLocale } from '../i18n/t.js';
 import { bindTrace, startTrace, withTrace } from '@knowledge/observability';
 import { Ticker } from '../common/ticker.js';
-import { LIVE_RECHECK_MS, credentialStands, workspaceStands } from './live-recheck.js';
+import { LIVE_RECHECK_MS, credentialStanding, workspaceStands } from './live-recheck.js';
 
 interface SocketState {
   principal: Principal;
@@ -121,7 +121,12 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     return this.ticker.exclusive(async () => {
       for (const [socket, st] of [...this.state]) {
         const locale = this.localeOf(socket);
-        if (!(await credentialStands(this.tokenAuth, st.principal))) {
+        const credential = await credentialStanding(this.tokenAuth, st.principal);
+        if (credential === 'unknown') {
+          this.retryLater(socket);
+          continue;
+        }
+        if (credential !== 'ok') {
           this.sendError(socket, 401, t('error.auth.invalidSession', undefined, locale));
           socket.close(4401, 'authentication failed');
           this.handleDisconnect(socket);
@@ -130,6 +135,10 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         for (const workspaceId of [...st.subscriptions.keys()]) {
           const standing = await withLocale(locale, () => workspaceStands(this.access, st.principal, workspaceId));
           if (standing === 'ok') continue;
+          if (standing === 'unknown') {
+            this.retryLater(socket);
+            break;
+          }
           if (standing === 'unauthorized') {
             this.sendError(socket, 401, t('error.auth.invalidSession', undefined, locale));
             socket.close(4401, 'authentication failed');
@@ -142,6 +151,16 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         }
       }
     });
+  }
+
+  /**
+   * The re-check could not read who is on the socket (#1143): close it with a
+   * code the client reconnects on (not 4401/4403, which it treats as signed
+   * out), so the reconnect authenticates anew instead of streaming on trust.
+   */
+  private retryLater(socket: WebSocket): void {
+    socket.close(1011, 'try again');
+    this.handleDisconnect(socket);
   }
 
   async handleConnection(socket: WebSocket, request: IncomingMessage): Promise<void> {

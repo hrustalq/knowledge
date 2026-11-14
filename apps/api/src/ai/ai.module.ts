@@ -22,6 +22,7 @@ import { AgentTriggerCoreModule } from '../agents/agent-trigger-core.module.js';
 import { AgentWebhookController } from './agent-webhook.controller.js';
 import { AgentTiebreakService } from './agent-tiebreak.service.js';
 import { McpClientService } from './mcp-client.service.js';
+import { SecretResealService } from './secret-reseal.service.js';
 import { AiController } from './ai.controller.js';
 import { AiUsageController } from './ai-usage.controller.js';
 import { AgentOutcomesController } from './agent-outcomes.controller.js';
@@ -64,7 +65,7 @@ import { AgentOutcomesController } from './agent-outcomes.controller.js';
     DecisionClientModule,
   ],
   controllers: [AiController, AiUsageController, AgentWebhookController, AgentOutcomesController],
-  providers: [AiAgentsService, AgentRunsService, AgentTriggersService, AgentRecipesService, AgentFindingsService, AgentTiebreakService, AiPluginsService, AiSettingsService, McpClientService],
+  providers: [AiAgentsService, AgentRunsService, AgentTriggersService, AgentRecipesService, AgentFindingsService, AgentTiebreakService, AiPluginsService, AiSettingsService, McpClientService, SecretResealService],
   // AgentFindingsService for the drift check's publisher (docs/features/35),
   // which proposes through the very path the Propose button takes.
   exports: [AiCoreModule, AgentCoreModule, AiPluginsService, AgentTiebreakService, AgentFindingsService],

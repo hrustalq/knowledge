@@ -29,7 +29,6 @@ import { VerificationService } from '../verification/verification.service.js';
 import { GlossaryService } from '../glossary/glossary.service.js';
 import { ConflictsService } from '../conflicts/conflicts.service.js';
 import type { Principal } from '../auth/principal.js';
-import { systemScope } from '../permissions/access-scope.js';
 import { wrapUntrusted } from '../common/untrusted.js';
 import { PermissionService } from '../permissions/permission.service.js';
 
@@ -121,7 +120,7 @@ export class AgentFindingsService {
             runId,
             findingIndex: index,
           },
-          principal.userId,
+          principal,
           tx,
         );
         await tx.$executeRaw`
@@ -303,8 +302,9 @@ export class AgentFindingsService {
           aliases: edits.aliases ?? proposed.aliases,
           source: 'ai',
         },
-        // No defining page on a finding's term, so no title to scope.
-        systemScope(workspaceId),
+        // The caller's scope (#1140): filing into the finding's project asks
+        // edit on it, like any glossary write.
+        await this.permissions.scopeFor(principal, workspaceId),
         principal.userId,
       );
       await this.prisma.$executeRaw`
@@ -430,6 +430,12 @@ export class AgentFindingsService {
     place: { projectId: string; parentId?: string | null },
   ): Promise<DraftPageProposalResponse> {
     const { run, finding } = await this.findingOf(workspaceId, runId, index, principal);
+    // `createPage`'s check (#1140): the place comes from a run's input or a
+    // connector's destination, chosen before this person's grants were known.
+    await this.permissions.requireCreateUnder(await this.permissions.scopeFor(principal, workspaceId), {
+      projectId: place.projectId,
+      ...(place.parentId ? { parentId: place.parentId } : {}),
+    });
     const draft = finding.draft;
     if (!draft?.title || !draft.markdown) throw new BadRequestException(t('error.ai.findingNoDraft'));
     if (finding.mergeRequestId) {

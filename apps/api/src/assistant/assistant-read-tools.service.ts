@@ -13,7 +13,7 @@ import { SearchService } from '../search/search.service.js';
 import { firstPerPage } from '../search/ranking.js';
 import { readFrontmatterRelations, readFrontmatterTags } from '../common/relations.js';
 import { wrapUntrusted } from '../common/untrusted.js';
-import { withPageText } from '../common/page-text.js';
+import { pageText, withPageText } from '../common/page-text.js';
 import { TemplatesService } from '../templates/templates.service.js';
 import { CommunitiesService } from '../communities/communities.service.js';
 import { MAX_COMMUNITY_LEVELS } from '../agents/communities.js';
@@ -498,7 +498,7 @@ export class AssistantReadToolsService {
     const results = communities.map((c) => ({
       title: c.title,
       level: c.level,
-      summary: wrapUntrusted(c.summary, 'global_overview', 'page'),
+      summary: c.summary,
       pages: c.documents.map((d) => {
         let source = seen.get(d.documentId);
         if (!source) {
@@ -509,7 +509,8 @@ export class AssistantReadToolsService {
         return { documentId: d.documentId, title: d.title, ...this.citeOf(ctx, source) };
       }),
     }));
-    return { content: JSON.stringify({ communities: results }), ok: true, sources };
+    // Titles and summaries are page text (#1141): ids, levels and cite labels stay facts.
+    return { content: pageText({ communities: results }, 'global_overview', 'page'), ok: true, sources };
   }
 
   /**

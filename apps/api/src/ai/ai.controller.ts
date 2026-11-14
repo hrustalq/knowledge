@@ -673,6 +673,7 @@ export class AiController {
         },
         (ids) => this.permissions.visibleDocumentIds(scope, ids),
         scope.denied,
+        principal,
       ),
       promptLimit: this.learnings.promptLimit,
     };
@@ -691,7 +692,7 @@ export class AiController {
     // Active text reaches a prompt at once, so making it so is the admin's act
     // here exactly as it is on PATCH.
     if (dto.status === 'active') await this.access.requireRole(principal, dto.workspaceId, 'admin');
-    const learning = await this.learnings.create(dto, principal.userId);
+    const learning = await this.learnings.create(dto, principal);
     await this.activity.record({
       workspaceId: learning.workspaceId,
       actor: principal?.userId,

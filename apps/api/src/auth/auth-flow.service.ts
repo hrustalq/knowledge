@@ -150,11 +150,13 @@ export class AuthFlowService {
       ? 'unknown-email'
       : !user.passwordHash
         ? 'no-password'
-        : user.disabledAt
-          ? 'disabled'
-          : (await verifyPassword(password, user.passwordHash))
-            ? null
-            : 'wrong-password';
+        : // #1143: checked before the account state, so a disabled account
+          // spends the same scrypt a wrong password does.
+          !(await verifyPassword(password, user.passwordHash))
+          ? 'wrong-password'
+          : user.disabledAt
+            ? 'disabled'
+            : null;
     // With the admin exception on, the refusal is the same 403 for a wrong
     // password, an unknown address and a non-admin — so the answer never says
     // which addresses belong to an admin. Only the right admin password passes.
@@ -412,6 +414,7 @@ export class AuthFlowService {
       },
       memberships,
       this.config.get<boolean>('AUTH_REQUIRE_VERIFIED_EMAIL') === true,
+      this.config.get<boolean>('AUTH_SIGNUP_ENABLED') === true,
     );
     return { token, expiresAt: session.expiresAt.toISOString(), me };
   }

@@ -294,7 +294,10 @@ The share reader's public entry (`entry-public.ts`, `reader.html`,
   URL), `og:*`, `twitter:card`. `noindex` (meta and `X-Robots-Tag`) when the
   site is not indexable, on every non-default version, and on a 404.
   `Cache-Control: no-cache`. Plus `<link rel="alternate">` to the page in the
-  other versions and as markdown (phase 2b).
+  other versions and as markdown (phase 2b). Every site page also carries
+  `nosniff` and the public Content-Security-Policy (#1142, see
+  [09](../architecture/09-web-frontend.md)): `frame-ancestors 'none'` except on
+  the Ask frame below, which keeps its own list.
 
 ## Search
 

@@ -29,6 +29,11 @@ const BUCKETS = {
   /** A token guess; the body names no address. */
   reset: { perIp: 10, perEmail: null, failOpen: false },
   verify: { perIp: 20, perEmail: null, failOpen: false },
+  /**
+   * #1143: one verification mail per hit. The service's one-a-minute cooldown
+   * reads the last token before inserting, so concurrent requests slip past it.
+   */
+  resend: { perIp: 10, perEmail: null, perUser: 3, failOpen: false },
   /** change-password: the current password guessed by whoever holds the session. */
   password: { perIp: 30, perEmail: null, perUser: 5, failOpen: false },
 } as const satisfies Record<string, Budget>;

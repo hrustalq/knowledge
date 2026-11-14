@@ -88,6 +88,9 @@ export class ActivityService {
         workspaceId: input.workspaceId,
         documentId: input.documentId,
         subjectId: input.subjectId,
+        // A page-less row's frame carries its project, so `LiveVisibility`
+        // keeps a restricted project's connector or capture from every member (#1140).
+        ...(!input.documentId && projectId ? { projectId } : {}),
         actor: input.actor ?? DEV_ACTOR,
         title: typeof input.metadata?.title === 'string' ? input.metadata.title : undefined,
         ...(input.patch ? { patch: input.patch } : {}),
@@ -123,6 +126,15 @@ export class ActivityService {
       return doc?.projectId ?? null;
     }
     if (input.subjectId && input.action.startsWith('project.')) return input.subjectId;
+    // A connector belongs to one project (#1140): its rows name the connector,
+    // which a member denied that project must not read in the feed.
+    if (input.subjectId && input.action.startsWith('connector.')) {
+      const connector = await this.prisma.connector.findUnique({
+        where: { id: input.subjectId },
+        select: { projectId: true },
+      });
+      return connector?.projectId ?? null;
+    }
     return null;
   }
 

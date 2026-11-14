@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { effectiveGlossary } from '@knowledge/contracts';
 import { GlossaryService } from '../src/glossary/glossary.service.js';
 import { GlossaryController } from '../src/glossary/glossary.controller.js';
@@ -74,13 +74,25 @@ function harness(seed: Array<Record<string, unknown>>) {
   };
   const projects = { requireProjectInWorkspace: vi.fn(async () => undefined) };
   const activity = { record: vi.fn(async () => undefined) };
-  const svc = new GlossaryService(prisma as never, activity as never, {} as never, projects as never, {} as never, {} as never, {} as never, {} as never);
+  const permissions = {
+    requireLevel: vi.fn(async (scope: { denied?: Set<string> }, resource: { id: string }) => {
+      if (scope.denied?.has(resource.id)) throw new ForbiddenException('denied');
+    }),
+  };
+  const svc = new GlossaryService(prisma as never, activity as never, {} as never, projects as never, {} as never, {} as never, {} as never, permissions as never);
   return { svc, rows, prisma };
 }
 
 describe('GlossaryService with workspace terms', () => {
   const create = (svc: GlossaryService, projectId: string | null, name: string) =>
     svc.create({ workspaceId: WS, projectId, term: name, definition: 'd' }, SCOPE, 'u');
+
+  it("refuses a project's term to a member denied that project (#1140)", async () => {
+    const { svc, rows } = harness([]);
+    const denied = { ...(SCOPE as object), denied: new Set([A]) } as never;
+    await expect(svc.create({ workspaceId: WS, projectId: A, term: 'Ledger', definition: 'd' }, denied, 'u')).rejects.toBeInstanceOf(ForbiddenException);
+    expect(rows).toHaveLength(0);
+  });
 
   it('never holds two workspace terms of one name, while a project may define the same word', async () => {
     const { svc } = harness([{ id: 'w', projectId: null, term: 'Tenant' }]);
@@ -119,6 +131,8 @@ describe('GlossaryController: who writes a workspace term', () => {
       update: vi.fn(async () => ({})),
       remove: vi.fn(async () => ({ deleted: true })),
       isWorkspaceTerm: vi.fn(async () => workspaceTerm),
+      projectOfTerm: vi.fn(async () => (workspaceTerm ? null : A)),
+      requireProjectWrite: vi.fn(async () => undefined),
     };
     const access = { requireRole: vi.fn(async () => undefined), workspaceOf: vi.fn(async () => WS) };
     const permissions = { scopeFor: vi.fn(async () => SCOPE) };
@@ -141,5 +155,12 @@ describe('GlossaryController: who writes a workspace term', () => {
     await ctrl.remove('t', editor);
     expect(access.requireRole).not.toHaveBeenCalled();
     expect(glossary.create.mock.calls[0]![0]).toMatchObject({ projectId: A });
+  });
+
+  it("asks edit on the term's project before a change or a removal (#1140)", async () => {
+    const { ctrl, glossary } = controller(false);
+    await ctrl.update('t', {} as never, editor);
+    await ctrl.remove('t', editor);
+    expect(glossary.requireProjectWrite.mock.calls).toEqual([[SCOPE, A], [SCOPE, A]]);
   });
 });

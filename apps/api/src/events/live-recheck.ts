@@ -10,15 +10,21 @@ import type { Principal } from '../auth/principal.js';
  */
 export const LIVE_RECHECK_MS = 30_000;
 
-type Standing = 'ok' | 'unauthorized' | 'forbidden';
+/** `unknown`: the check itself failed (a PG blip), so nobody can say the reader still stands. */
+type Standing = 'ok' | 'unauthorized' | 'forbidden' | 'unknown';
 
 /**
  * Does the credential that opened a stream still stand (account, key,
- * session)? A failed read (a PG blip) answers yes and the next tick asks
- * again, as the collab gateway's re-check does.
+ * session, platform-admin flag)? A failed read is `unknown`, and the caller
+ * ends the stream (#1143): the reconnect authenticates anew, so a credential
+ * revoked during an outage cannot outlive it.
  */
-export async function credentialStands(tokenAuth: Pick<TokenAuthService, 'isCurrent'>, principal: Principal): Promise<boolean> {
-  return tokenAuth.isCurrent(principal).catch(() => true);
+export async function credentialStanding(tokenAuth: Pick<TokenAuthService, 'isCurrent'>, principal: Principal): Promise<Standing> {
+  try {
+    return (await tokenAuth.isCurrent(principal)) ? 'ok' : 'unauthorized';
+  } catch {
+    return 'unknown';
+  }
 }
 
 /** May it still read this workspace — the `requireRole` the subscription passed, asked again. */
@@ -29,7 +35,7 @@ export async function workspaceStands(access: Pick<AccessService, 'requireRole'>
   } catch (e) {
     if (e instanceof UnauthorizedException) return 'unauthorized';
     const status = (e as { getStatus?: () => number }).getStatus?.();
-    return status === 403 || status === 404 ? 'forbidden' : 'ok';
+    return status === 403 || status === 404 ? 'forbidden' : 'unknown';
   }
 }
 
@@ -40,6 +46,6 @@ export async function liveStanding(
   principal: Principal,
   workspaceId: string,
 ): Promise<Standing> {
-  if (!(await credentialStands(tokenAuth, principal))) return 'unauthorized';
-  return workspaceStands(access, principal, workspaceId);
+  const credential = await credentialStanding(tokenAuth, principal);
+  return credential === 'ok' ? workspaceStands(access, principal, workspaceId) : credential;
 }

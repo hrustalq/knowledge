@@ -75,7 +75,10 @@ revision ids, comments or history.
 **Headers.** Every share response, errors included, carries
 `Referrer-Policy: no-referrer` (the token is in the URL),
 `X-Robots-Tag: noindex, nofollow` and `Cache-Control: no-store`. The web
-server sets the same three headers on the HTML.
+server sets the same three headers on the HTML, plus `nosniff` and a
+Content-Security-Policy (`base-uri 'none'; form-action 'self'; object-src
+'self'…; frame-ancestors 'none'`, #1142, see
+[09](../architecture/09-web-frontend.md)).
 
 **Password sessions.** An unlock writes a random session value to Redis for
 `SHARE_UNLOCK_TTL_MIN`, mapped to `shareId|fingerprint(password_hash)`. The

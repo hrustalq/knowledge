@@ -32,6 +32,9 @@ in the pull request that introduces them — see
   `error.connector.urlCredentials`: connector settings are shown to every member who can see the connector, so a
   token there was readable by all of them. `HTTP` **Migration:** remove the login from the URL and paste the token
   as the connector's credential. Connectors saved that way before keep running until they are next edited. (#1114)
+- The MCP resources `knowledge://documents/{id}.md` and the workspace and project `llms.txt` now return their text
+  inside one `<documents>` block that marks it as data, as the page-text tools already do. `MCP` **Migration:** read
+  the text from inside the block, or use `readPageText` in `apps/api/src/common/page-text.ts`. (#1141)
 
 ### Changed
 
@@ -39,6 +42,10 @@ in the pull request that introduces them — see
   private address, rather than the first one, so a client can no longer choose its own address for rate limits
   and audit rows by sending the header itself. An inbound `X-Request-Id` is kept only when it is 8–64 letters,
   digits, `-` or `_` (a UUID fits); anything else gets a fresh id. (#1112)
+- A custom agent with no tool list no longer gets MCP plugin tools; an empty list now means the built-in tools only.
+  To keep a plugin's tools, name them (`mcp__<slug>__<tool>`) in the agent's tool list. (#1141)
+- "New workspace" is offered only when the API would allow it (signup open, or a platform admin), and `GET /v1/me`
+  carries `canCreateWorkspace`. (#1140)
 
 ### Fixed
 
@@ -147,6 +154,33 @@ in the pull request that introduces them — see
 - Production dependencies updated to releases without known high or critical advisories on paths the app uses:
   the MCP SDK, undici, zod, Nest and its Express adapter (multer), the web server's express, compression and
   axios, DOMPurify and vue-i18n, plus their transitive packages. (#1111)
+- Members denied a restricted project no longer see its connectors' names in the activity feed or in live run
+  frames, nor `capture.approved` frames about it. A memo's or a restricted project's agent run is announced only to
+  the person who started it. (#1140)
+- A learning can no longer cite a finding of an agent run its author may not read, and a learning's evidence from
+  such a run is counted, never named. (#1140)
+- Adding, changing or removing a project's glossary term now takes edit on that project, from the glossary routes
+  and from a finding's "Add to glossary". Workflow pages, and the draft pages the component, ticket and memo
+  sweepers propose, are checked against where they land when they are written, not only when the run started. (#1140)
+- SCIM no longer links an existing account whose address was never confirmed unless the workspace has verified that
+  domain (409, no membership). The email-first sign-in page no longer offers a provider for a domain its workspace
+  never proved. (#1140)
+- `POST /v1/auth/resend-verification` answers 429 past 3 a minute per account or 10 per address. Signing in to a
+  disabled account now takes as long as a wrong password. Live update streams close when their credential cannot be
+  re-checked (database unreachable) or when the person lost platform-admin rights; the web client reconnects. (#1143)
+- A replayed GitHub or repository webhook delivery is ignored for 90 days, so it can no longer restart agent runs,
+  overwrite newer ticket state or queue a drift check of an old commit. (#1143)
+- Relation extraction, the assistant's review and suggest, `global_overview` and the curator, cartographer, digest
+  and arbiter agents now pass page text and titles to the model as untrusted data. A page can no longer close its
+  untrusted block with a zero-width or fullwidth spelling of the closing tag. (#1141)
+- The five-attempt cap on the chat account-linking number now holds when several wrong numbers arrive at once. (#1141)
+- Share links and published site pages send `X-Content-Type-Options: nosniff` and a Content-Security-Policy
+  (`base-uri 'none'`, `form-action 'self'`, a narrow `object-src`, `frame-ancestors 'none'` except the Ask widget's
+  own embed list). Glossary definitions and the source-recipe preview render as untrusted, so a remote image in them
+  shows as a link. Signing out also clears try-it values (third-party API tokens and passwords) and project and
+  workflow wizard drafts. (#1142)
+- `GET /v1/connectors` no longer returns a login embedded in a connector URL saved before such URLs were refused.
+  (#1142)
 
 ### Operations
 
@@ -167,6 +201,16 @@ in the pull request that introduces them — see
   machine through an SSH tunnel. `docker-compose.prod.yml` and the Dockerfiles pin their base images by digest.
   The Caddyfile's access-log filter changed (synced to the cluster with the release). No new env vars, no
   migration. (#1112, #1114)
+- `AUTH_REQUIRE_VERIFIED_EMAIL` now defaults to `true` when `NODE_ENV=production` and the line is missing (an
+  explicit `false` still wins). Production sets it explicitly, so nothing changes as deployed. (#1143)
+- On first boot the API re-seals every legacy `gcm$` secret envelope to its row (`gcm2$`) and logs
+  `Legacy secret envelopes: N re-sealed, M unreadable under this key`; a non-zero `unreadable` means rows sealed
+  under another key, already unusable. Redis now keeps one small `kn:wh:*` key per webhook delivery for 90 days, so
+  GitHub's "Redeliver" on a delivery that already succeeded does nothing. No new env vars, no migration. (#1141,
+  #1143)
+- A connector still holding `https://user:token@…` keeps syncing, but its edit form now shows the URL without the
+  login and saving drops it: move the token into the connector credential and rotate it, since every viewer of the
+  connector list could read it until this release. Dev compose pins `mailpit` and `keycloak` by digest. (#1142)
 
 ## [0.53.2] — 2026-11-13
 

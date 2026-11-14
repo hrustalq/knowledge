@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { hasUrlLogin, stripUrlLogins } from './url-login.js';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, type Connector, type ConnectorRun } from '@prisma/client';
 import {
@@ -748,7 +749,7 @@ export class ConnectorsService {
       if (present && /url$/i.test(field.key)) {
         // A token belongs in the credential store; config is returned to every
         // viewer of the connector list (#1114).
-        if (/^[a-z][a-z0-9+.-]*:\/\/[^/?#]*@/i.test(String(value).trim())) {
+        if (hasUrlLogin(String(value))) {
           throw new BadRequestException(t('error.connector.urlCredentials', { field: field.label }));
         }
         await assertSafeExternalUrl(String(value), this.allowPrivateFor(kind), {
@@ -794,7 +795,8 @@ export class ConnectorsService {
       kind: row.kind as ConnectorKind,
       name: row.name,
       enabled: row.enabled,
-      config: (row.config ?? {}) as Record<string, string>,
+      // A row saved before #1138 may still hold a URL login: never hand it out (#1142).
+      config: stripUrlLogins((row.config ?? {}) as Record<string, string>),
       hasCredential: row.connectionId !== null,
       credentialHint: connection?.credentialRow?.secretHint ?? null,
       connectionId: row.connectionId,

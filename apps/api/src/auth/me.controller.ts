@@ -162,6 +162,7 @@ export class MeController {
       principal,
       await this.access.memberships(principal),
       this.config.get('AUTH_REQUIRE_VERIFIED_EMAIL', { infer: true }),
+      this.config.get('AUTH_SIGNUP_ENABLED', { infer: true }),
     );
   }
 

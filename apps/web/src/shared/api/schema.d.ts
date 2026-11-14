@@ -7720,7 +7720,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Link the messenger account that asked for this code to the signed-in person */
+        /** Confirm a link code: returns the number to send to the bot from that private chat, which is what links the account */
         post: operations["ChatLinkController_link"];
         delete?: never;
         options?: never;
@@ -11791,6 +11791,7 @@ export interface components {
             documentId?: string;
             revisionId?: string;
             deliveryId?: string;
+            signed?: string;
             threadId?: string;
         };
         AgentRunInput: {
@@ -12040,6 +12041,7 @@ export interface components {
             baseUrl: string | null;
             hasApiKey: boolean;
             apiKeyHint: string | null;
+            apiKeyUnreadable: boolean;
             temperature: number | null;
             maxToolCalls: number | null;
             timeoutMs: number | null;
@@ -12065,6 +12067,7 @@ export interface components {
             model: string;
             hasApiKey: boolean;
             apiKeyHint: string | null;
+            apiKeyUnreadable: boolean;
             temperature: number;
             maxToolCalls: number;
             timeoutMs: number;
@@ -13201,6 +13204,14 @@ export interface components {
         ChatIntegrationsResponse: {
             integrations: components["schemas"]["ChatIntegrationSummary"][];
             enabled: boolean;
+        };
+        ChatLinkPending: {
+            kind: components["schemas"]["ChatPlatformKind"];
+            integrationName: string;
+            botUsername: string | null;
+            externalUserName: string | null;
+            proof: string;
+            expiresAt: string;
         };
         ChatLinkPreview: {
             kind: components["schemas"]["ChatPlatformKind"];
@@ -43715,7 +43726,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ChatIdentityEntry"];
+                    "application/json": components["schemas"]["ChatLinkPending"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

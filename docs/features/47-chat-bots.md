@@ -35,9 +35,21 @@ model call and no claim row.
    group the bot answers "message me privately" with a `t.me/<bot>` link and no
    code, because anyone in the group could open it and the account would then
    ask its questions as whoever clicked first.
-2. **The person.** The code is redeemed at `/chat/link?code=` by a signed-in
+2. **The person.** The code is confirmed at `/chat/link?code=` by a signed-in
    session that is a member of the bot's workspace. The page previews which
    account, which bot and which workspace before anything is linked.
+3. **The tie between them** (#1104). Those two alone are the device-code shape:
+   an outsider asks the bot for a code and sends the link to a member, whose
+   click would link the outsider's account as them. So confirming links
+   nothing. It returns a one-time six-digit number (`ChatLinkPending`; the row
+   keeps `proof_hash` = SHA-256 of `<row id>:<number>` and `confirmed_by`), and
+   the account is linked only when that number arrives **from the private chat
+   the code was issued to** (`ChatIdentityService.redeemProof`, called for a
+   six-digit DM before anything else is done with it). Membership of the
+   confirming person is checked again then. `CHAT_LINK_PROOF_MAX_ATTEMPTS` (5)
+   wrong numbers spend the code. The page tells the member never to give the
+   number to anyone, and every link is a `chat.identity.linked` notification
+   (category `access`) to the linked person.
 
 `chat_link_codes` keeps only the SHA-256 of a code, which is single-use (spent
 by a guarded `updateMany`) and expires after `CHAT_LINK_CODE_TTL_MINUTES`. A
@@ -490,8 +502,12 @@ if anything, is still unknown.
   buttons become a line of links under the text, because Time's buttons only
   call back. A press POSTs to the button's `integration.url` — our webhook —
   with the `context` it was given and nothing that proves who sent it, so the
-  context carries an HMAC over the data keyed by the bot token; a forged,
-  re-targeted or another bot's context is a 401. The press's note is the
+  context carries an HMAC keyed by the bot token over the data, the channel it
+  was posted in and an expiry 30 days out (`{ a, c, e, s }`, #1104); a forged,
+  re-targeted, other-channel, expired or another bot's context is a 401, and so
+  is a button posted before #1104 (signed over the data alone). The presser's
+  `user_id` is still the body's: within the channel the button was posted in,
+  a member who can read the post's props could press as another member. The press's note is the
   `ephemeral_text` of the HTTP response: `respondToAction` holds it until the
   core's `acknowledge` (at most 5 s). Re-rendering is the core's own edit.
 - **Mentions are defused.** `@channel`, `@all` or a colleague's handle quoted

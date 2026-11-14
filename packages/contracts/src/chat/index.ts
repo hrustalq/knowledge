@@ -361,3 +361,22 @@ export interface ChatLinkPreview {
   workspaceName: string;
   expiresAt: string;
 }
+
+/**
+ * POST /v1/chat/link (#1104): confirming links nothing yet. The person sends
+ * `proof` to the bot from their own private chat with it, and the account is
+ * linked when that message arrives — so a link someone else sent them cannot
+ * be completed by their click alone.
+ */
+export interface ChatLinkPending {
+  kind: ChatPlatformKind;
+  integrationName: string;
+  botUsername: string | null;
+  externalUserName: string | null;
+  /** Six digits, shown once, never stored in the clear. */
+  proof: string;
+  expiresAt: string;
+}
+
+/** Wrong numbers after which a link code is spent (#1104). */
+export const CHAT_LINK_PROOF_MAX_ATTEMPTS = 5;

@@ -54,10 +54,10 @@ import type {
   ChatBindingEntry,
   ChatBindingsResponse,
   ChatIdentitiesResponse,
-  ChatIdentityEntry,
   ChatIntegrationSummary,
   ChatIntegrationTestResponse,
   ChatIntegrationsResponse,
+  ChatLinkPending,
   ChatLinkPreview,
   ChatSearchAvailability,
   ChatSearchResponse,
@@ -434,10 +434,10 @@ export interface ContractResponses {
   ChatBindingEntry: ChatBindingEntry;
   ChatBindingsResponse: ChatBindingsResponse;
   ChatIdentitiesResponse: ChatIdentitiesResponse;
-  ChatIdentityEntry: ChatIdentityEntry;
   ChatIntegrationSummary: ChatIntegrationSummary;
   ChatIntegrationTestResponse: ChatIntegrationTestResponse;
   ChatIntegrationsResponse: ChatIntegrationsResponse;
+  ChatLinkPending: ChatLinkPending;
   ChatLinkPreview: ChatLinkPreview;
   ChatSearchAvailability: ChatSearchAvailability;
   ChatSearchResponse: ChatSearchResponse;

@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Post } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { ChatIdentitiesResponse, ChatIdentityEntry, ChatLinkPreview } from '@knowledge/contracts';
+import type { ChatIdentitiesResponse, ChatLinkPending, ChatLinkPreview } from '@knowledge/contracts';
 import { CurrentPrincipal, SessionOnly } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
@@ -33,10 +33,12 @@ export class ChatLinkController {
   }
 
   @Post('chat/link')
-  @Returns('ChatIdentityEntry')
+  @Returns('ChatLinkPending')
   @SessionOnly()
-  @ApiOperation({ summary: 'Link the messenger account that asked for this code to the signed-in person' })
-  link(@Body() dto: ChatLinkCodeDto, @CurrentPrincipal() principal: Principal): Promise<ChatIdentityEntry> {
+  @ApiOperation({
+    summary: 'Confirm a link code: returns the number to send to the bot from that private chat, which is what links the account',
+  })
+  link(@Body() dto: ChatLinkCodeDto, @CurrentPrincipal() principal: Principal): Promise<ChatLinkPending> {
     return this.identities.confirm(dto.code, principal);
   }
 

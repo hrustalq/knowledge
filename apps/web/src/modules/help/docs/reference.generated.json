@@ -2194,7 +2194,7 @@
       "method": "POST",
       "path": "/v1/chat/link",
       "tag": "chat",
-      "summary": "Link the messenger account that asked for this code to the signed-in person",
+      "summary": "Confirm a link code: returns the number to send to the bot from that private chat, which is what links the account",
       "role": null,
       "source": null,
       "public": false,

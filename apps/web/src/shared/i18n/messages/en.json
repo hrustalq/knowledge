@@ -4684,6 +4684,7 @@
       "memo.review": "your memo is sorted and waits for your confirm",
       "plaud.pending": "Plaud recordings are waiting for your confirmation",
       "plaud.reconnect": "your Plaud sign-in lapsed: link the account again",
+      "chat.identity.linked": "a messenger account was linked to you: unlink it in your profile if this was not you",
       "source.updated": "took a new version from its source",
       "source.alert": "needs attention: its source"
     },
@@ -6045,13 +6046,14 @@
       "title": "Link a chat account",
       "checking": "Checking the link…",
       "missing": "This page needs the link the bot sent you.",
-      "done": "Linked. Ask the bot your question in {platform}.",
+      "done": "Now send this number to {bot} from your own {platform} account, in your private chat with it. The account is linked when it arrives.",
       "question": "Link the {platform} account {account} to you in {workspace}?",
       "unnamed": "(no username)",
       "explain": "{bot} will answer this account as you, with exactly your access. Confirm only if you asked the bot for this link.",
-      "linking": "Linking…",
-      "confirm": "Link my account",
-      "manage": "Manage linked accounts"
+      "linking": "One moment…",
+      "confirm": "Show my number",
+      "manage": "Manage linked accounts",
+      "warning": "Never give this number to anyone. If somebody sent you this link and asks for it, they are trying to link their account as you."
     },
     "subscriptions": {
       "toggle": "Notifications ({n})",

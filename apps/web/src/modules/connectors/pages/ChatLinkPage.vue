@@ -4,14 +4,19 @@
  *
  * The bot proved which messenger account asked; this page proves which person
  * is answering — it requires sign-in (the router sends you through /login and
- * back), and nothing is linked until you press the button. The preview names
- * the account and the workspace first, because the person reading this should
- * be able to tell a link they asked for from one somebody forwarded them.
+ * back). The preview names the account and the workspace first, because the
+ * person reading this should be able to tell a link they asked for from one
+ * somebody forwarded them.
+ *
+ * Confirming still links nothing (#1104): it shows a one-time number, and the
+ * account is linked when that number reaches the bot from the private chat the
+ * link came from. A forwarded link therefore needs the number handed back to
+ * whoever forwarded it, which is what the warning under it says not to do.
  */
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute } from 'vue-router'
-import type { ChatLinkPreview } from '@knowledge/contracts'
+import type { ChatLinkPending, ChatLinkPreview } from '@knowledge/contracts'
 import { api } from '@/shared/api/client'
 import { errorMessage } from '@/shared/api/errors'
 import { Button } from '@knowledge/ui/button'
@@ -22,8 +27,9 @@ const route = useRoute()
 
 const code = computed(() => (typeof route.query.code === 'string' ? route.query.code : ''))
 const preview = ref<ChatLinkPreview | null>(null)
+const pending = ref<ChatLinkPending | null>(null)
 const error = ref<string | null>(null)
-const state = ref<'loading' | 'ready' | 'linking' | 'linked' | 'failed'>('loading')
+const state = ref<'loading' | 'ready' | 'linking' | 'pending' | 'failed'>('loading')
 
 // After hydration only: the code is a one-time secret, and the SSR pass has no
 // session to preview it with anyway.
@@ -45,8 +51,8 @@ onMounted(async () => {
 async function confirm() {
   state.value = 'linking'
   try {
-    await api.post('/v1/chat/link', { body: { code: code.value } })
-    state.value = 'linked'
+    pending.value = await api.post('/v1/chat/link', { body: { code: code.value } })
+    state.value = 'pending'
   } catch (e) {
     error.value = errorMessage(e, t)
     state.value = 'failed'
@@ -54,6 +60,7 @@ async function confirm() {
 }
 
 const platform = computed(() => (preview.value ? t(`chatBots.kind.${preview.value.kind}`) : ''))
+const bot = computed(() => (pending.value?.botUsername ? `@${pending.value.botUsername}` : (pending.value?.integrationName ?? '')))
 </script>
 
 <template>
@@ -63,8 +70,8 @@ const platform = computed(() => (preview.value ? t(`chatBots.kind.${preview.valu
         <h1 class="font-display text-xl font-bold tracking-tight">{{ t('chatBots.link.title') }}</h1>
         <CardDescription v-if="state === 'loading'">{{ t('chatBots.link.checking') }}</CardDescription>
         <CardDescription v-else-if="state === 'failed'" class="text-destructive">{{ error }}</CardDescription>
-        <CardDescription v-else-if="state === 'linked'">
-          {{ t('chatBots.link.done', { platform }) }}
+        <CardDescription v-else-if="state === 'pending'">
+          {{ t('chatBots.link.done', { platform, bot }) }}
         </CardDescription>
         <CardDescription v-else-if="preview">
           {{
@@ -86,7 +93,9 @@ const platform = computed(() => (preview.value ? t(`chatBots.kind.${preview.valu
             <Button as-child variant="ghost"><RouterLink to="/documents">{{ t('common.cancel') }}</RouterLink></Button>
           </div>
         </template>
-        <template v-else-if="state === 'linked'">
+        <template v-else-if="state === 'pending' && pending">
+          <p class="font-mono text-3xl font-semibold tracking-[0.3em] tabular-nums" data-testid="chat-link-proof">{{ pending.proof }}</p>
+          <p class="text-xs text-destructive">{{ t('chatBots.link.warning') }}</p>
           <Button as-child variant="outline" class="self-start">
             <RouterLink to="/settings/profile">{{ t('chatBots.link.manage') }}</RouterLink>
           </Button>

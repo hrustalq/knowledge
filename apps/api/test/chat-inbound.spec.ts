@@ -165,6 +165,7 @@ function harness(opts: {
     resolve: vi.fn(async () => (opts.linked === false ? null : { userId: 'u-alice' })),
     issueCode: vi.fn(async () => ({ url: 'https://kn.test/chat/link?code=abc', minutes: 15 })),
     unlinkExternal: vi.fn(async () => true),
+    redeemProof: vi.fn(async (): Promise<string> => 'none'),
   };
   const captures = { start: vi.fn(async () => undefined) };
   const harvester = { harvest: vi.fn(opts.harvest ?? (async () => ({ proposed: 2, duplicates: 1, dropped: 1 }))) };
@@ -213,6 +214,29 @@ describe('an unlinked account', () => {
     ]);
     expect(h.assistant.runChatTurn).not.toHaveBeenCalled();
     expect(h.prisma.chatAnswer.create).not.toHaveBeenCalled();
+  });
+
+  // #1104: the number a confirmation page showed is what links, from this private chat only.
+  it('redeems a six-digit message in a DM as a link proof, and asks no model', async () => {
+    const h = harness({ linked: false });
+    h.identities.redeemProof.mockResolvedValueOnce('linked');
+    await h.svc.receive(integration, inbound({ text: ' 482913 ' }));
+    expect(h.identities.redeemProof).toHaveBeenCalledWith(integration, expect.objectContaining({ isDm: true }), ' 482913 ');
+    expect(h.identities.issueCode).not.toHaveBeenCalled();
+    expect(h.assistant.runChatTurn).not.toHaveBeenCalled();
+  });
+
+  it('says a wrong number is wrong', async () => {
+    const h = harness({ linked: false });
+    h.identities.redeemProof.mockResolvedValueOnce('mismatch');
+    await h.svc.receive(integration, inbound({ text: '000000' }));
+    expect(h.posted).toEqual([{ kind: 'notice', text: 'chat.link.proofWrong' }]);
+  });
+
+  it('never redeems a number typed in a group', async () => {
+    const h = harness({ linked: false, binding: { answerMode: 'all' } });
+    await h.svc.receive(integration, inbound({ isDm: false, chatId: '-100', text: '482913' }));
+    expect(h.identities.redeemProof).not.toHaveBeenCalled();
   });
 
   it('is sent to a private chat from a group — a code is never posted where others can open it', async () => {

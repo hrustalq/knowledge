@@ -38,18 +38,22 @@ describe('revision version pin (e2e, #818)', () => {
   });
 
   it('a PUT to the upload URL after finalize does not change the content', async () => {
+    const reviewed = '# Reviewed\n\nThe finalized body.\n';
+    // The same length: the URL is signed for one size, and this case is about the version pin.
+    const tampered = '# Tampered\n\nWritten afterwards\n'.padEnd(reviewed.length, '.');
     const upload = await http()
       .post(`/v1/documents/${documentId}/uploads`)
-      .send({ contentType: 'text/markdown', filename: 'source.md' })
+      .send({ contentType: 'text/markdown', filename: 'source.md', sizeBytes: Buffer.byteLength(reviewed) })
       .expect(201);
     const { revisionId } = upload.body as { revisionId: string };
     const url = upload.body.upload.url as string;
-    const put = (body: string) =>
-      fetch(url, { method: 'PUT', body, headers: { 'content-type': 'text/markdown' } }).then((r) => expect(r.ok).toBe(true));
+    const put = (body: string) => fetch(url, { method: 'PUT', body, headers: { 'content-type': 'text/markdown' } });
 
-    await put('# Reviewed\n\nThe finalized body.\n');
+    // Another size than the one declared is refused by the store itself.
+    expect((await put(`${reviewed}and a much longer body than was declared`)).status).toBe(403);
+    expect((await put(reviewed)).ok).toBe(true);
     await http().post(`/v1/documents/${documentId}/revisions/${revisionId}/finalize`).send({}).expect(201);
-    await put('# Tampered\n\nWritten after finalize.\n');
+    expect((await put(tampered)).ok).toBe(true);
 
     const content = await http().get(`/v1/documents/${documentId}/content`).expect(200);
     expect(content.body.revisionId).toBe(revisionId);

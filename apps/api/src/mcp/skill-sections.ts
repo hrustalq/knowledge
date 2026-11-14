@@ -314,9 +314,10 @@ merge request for your own edit.
    \`x-knowledge-relations\` list of the same shape (\`- { type: DESCRIBES, target: service:billing }\`).
    To change only a few lines of a long page, call ${c.ref('knowledge_patch_document')} instead, with the same
    \`baseRevisionId\` and line ranges numbered off step 1's \`markdown\` (1-based, all from that one read).
-   When the new page is a file on disk, do not paste it: ${c.ref('knowledge_start_upload')} returns a curl command that
-   uploads it, then ${c.ref('knowledge_finalize_upload')}. A new page from a file is ${c.ref('knowledge_create_document')}
-   with \`upload: true\`.
+   When the new page is a file on disk, do not paste it: ${c.ref('knowledge_start_upload')} with the file's \`sizeBytes\`
+   (\`wc -c\`; the URL is signed for that size) returns a curl command that uploads it, then
+   ${c.ref('knowledge_finalize_upload')}. A new page from a file is ${c.ref('knowledge_create_document')} with
+   \`upload: true\` and \`sizeBytes\`.
 
 If a write is rejected with a conflict, the page moved under you: re-read the content, redo the edit on the new head,
 and retry. Never retry blindly with a stale \`baseRevisionId\`.`,
@@ -343,9 +344,10 @@ ${
    \`x-knowledge-relations\` list of the same shape (\`- { type: DESCRIBES, target: service:billing }\`).
    To change only a few lines of a long page, call ${c.ref('knowledge_patch_document')} instead, with the same branch and
    \`baseRevisionId\` and line ranges numbered off step 1's \`markdown\` (1-based, all from that one read).
-   When the new page is a file on disk, do not paste it: ${c.ref('knowledge_start_upload')} returns a curl command that
-   uploads it, then ${c.ref('knowledge_finalize_upload')}. A new page from a file is ${c.ref('knowledge_create_document')}
-   with \`upload: true\`.
+   When the new page is a file on disk, do not paste it: ${c.ref('knowledge_start_upload')} with the file's \`sizeBytes\`
+   (\`wc -c\`; the URL is signed for that size) returns a curl command that uploads it, then
+   ${c.ref('knowledge_finalize_upload')}. A new page from a file is ${c.ref('knowledge_create_document')} with
+   \`upload: true\` and \`sizeBytes\`.
 ${
     c.has('knowledge_create_merge_request')
       ? `4. ${c.ref('knowledge_create_merge_request')} from your branch to the default branch, with a description of what changed and why.

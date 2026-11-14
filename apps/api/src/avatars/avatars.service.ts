@@ -75,7 +75,7 @@ export class AvatarsService {
 
     const uploadId = randomUUID();
     const key = this.storage.avatarObjectKey(kind, ownerId, uploadId, dto.filename);
-    const url = await this.storage.presignPut(key, dto.contentType, 900, { bindContentType: true });
+    const url = await this.storage.presignPut(key, dto.contentType, 900, { bindContentType: true, contentLength: dto.sizeBytes });
     return {
       uploadId,
       upload: {

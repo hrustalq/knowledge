@@ -117,7 +117,7 @@ export class ImportService {
       },
     });
 
-    const url = await this.storage.presignPut(s3Key, dto.contentType);
+    const url = await this.storage.presignPut(s3Key, dto.contentType, 900, { contentLength: dto.sizeBytes });
 
     return {
       import: toInfo(row),

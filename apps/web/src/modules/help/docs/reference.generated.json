@@ -6495,6 +6495,10 @@
           "optional": true
         },
         {
+          "name": "sizeBytes",
+          "optional": true
+        },
+        {
           "name": "parentId",
           "optional": true
         },
@@ -8123,6 +8127,10 @@
         {
           "name": "syntax",
           "optional": true
+        },
+        {
+          "name": "sizeBytes",
+          "optional": false
         }
       ]
     },

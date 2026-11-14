@@ -45,6 +45,14 @@ describe('StorageService presigning', () => {
     }
   });
 
+  it('signs the declared length, so the store refuses another size, and the type with it when asked', async () => {
+    const s = storage('');
+    const sized = new URL(await s.presignPut(KEY, 'image/png', 900, { contentLength: 1234 }));
+    expect(sized.searchParams.get('X-Amz-SignedHeaders')).toBe('content-length;host');
+    const both = new URL(await s.presignPut(KEY, 'image/png', 900, { bindContentType: true, contentLength: 1234 } as never));
+    expect(both.searchParams.get('X-Amz-SignedHeaders')).toBe('content-length;content-type;host');
+  });
+
   it('falls back to S3_ENDPOINT when the public endpoint is unset', async () => {
     const url = new URL(await storage('').presignPut(KEY, 'image/png'));
     expect(url.origin).toBe('http://minio:9000');

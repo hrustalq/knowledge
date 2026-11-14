@@ -50,7 +50,8 @@ export class StorageService {
    */
   private readonly presigner: S3Client;
   private readonly bucket: string;
-  private readonly revisionMaxBytes: number;
+  /** REVISION_MAX_BYTES: the largest body a revision may hold. */
+  readonly revisionMaxBytes: number;
 
   constructor(config: ConfigService<Env, true>) {
     this.bucket = config.get('S3_BUCKET', { infer: true });
@@ -149,13 +150,19 @@ export class StorageService {
     return `workspaces/${workspaceId}/documents/${documentId}/revisions/${revisionId}/${filename}`;
   }
 
-  async presignPut(objectKey: string, contentType: string, expiresInSeconds = 900, opts: { bindContentType?: boolean } = {}): Promise<string> {
-    const cmd = new PutObjectCommand({ Bucket: this.bucket, Key: objectKey, ContentType: contentType });
-    return getSignedUrl(this.presigner, cmd, {
-      expiresIn: expiresInSeconds,
-      // The presigner leaves the type out of the signature unless told, and a PUT can then store any type it likes.
-      ...(opts.bindContentType ? { signableHeaders: new Set(['content-type']) } : {}),
-    });
+  async presignPut(
+    objectKey: string,
+    contentType: string,
+    expiresInSeconds = 900,
+    opts: { bindContentType?: boolean; contentLength?: number } = {},
+  ): Promise<string> {
+    const length = opts.contentLength;
+    const cmd = new PutObjectCommand({ Bucket: this.bucket, Key: objectKey, ContentType: contentType, ...(length !== undefined ? { ContentLength: length } : {}) });
+    // The presigner leaves the type and the length out of the signature unless
+    // told: a PUT could then store any type, and any size up to the store's own
+    // ceiling, under a ticket for one small file. A signed length is exact.
+    const signed = [...(opts.bindContentType ? ['content-type'] : []), ...(length !== undefined ? ['content-length'] : [])];
+    return getSignedUrl(this.presigner, cmd, { expiresIn: expiresInSeconds, ...(signed.length ? { signableHeaders: new Set(signed) } : {}) });
   }
 
   /**

@@ -4,6 +4,7 @@ import { Prisma, type Credential } from '@prisma/client';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { FIGMA_GRANT_CONFIG_KEY, FIGMA_HANDLE_CONFIG_KEY, FIGMA_TOKEN_EXPIRES_CONFIG_KEY } from '@knowledge/contracts';
 import { decryptSecret, encryptSecret, parseKey } from '../ai/secret-box.js';
+import { slots } from '../ai/secret-slots.js';
 import { safeFetch } from '../common/safe-fetch.js';
 import type { Env } from '../config/env.js';
 import { FIGMA_API } from '../connectors/adapters/figma.js';
@@ -78,13 +79,14 @@ export class FigmaOauthService {
   authorizeUrl(workspaceId: string, userId: string, connectorId: string | null, returnTo: string): string | null {
     if (!this.configured) return null;
     const verifier = randomBytes(32).toString('base64url');
+    const nonce = randomUUID();
     const state: FigmaOauthState = {
       workspaceId,
       userId,
       connectorId,
       returnTo,
-      pkce: encryptSecret(verifier, this.key),
-      nonce: randomUUID(),
+      pkce: encryptSecret(verifier, this.key, slots.oauthStatePkce('figma', { workspaceId, nonce })),
+      nonce,
       exp: Math.floor(Date.now() / 1000) + STATE_TTL_SECONDS,
     };
     const params = new URLSearchParams({
@@ -120,7 +122,7 @@ export class FigmaOauthService {
    */
   async completeAuthorization(state: FigmaOauthState, code: string): Promise<'connected' | 'auth-failed' | 'account-in-use'> {
     if (!this.configured) return 'auth-failed';
-    const verifier = decryptSecret(state.pkce, this.key);
+    const verifier = decryptSecret(state.pkce, this.key, slots.oauthStatePkce('figma', state));
     if (!verifier) return 'auth-failed';
     const token = await this.post('token', {
       redirect_uri: this.redirectUri(),
@@ -133,25 +135,23 @@ export class FigmaOauthService {
     if (handle === null) return 'auth-failed';
 
     const figmaUserId = token.user_id_string;
-    const secrets = {
-      accessToken: encryptSecret(token.access_token, this.key),
-      refreshToken: encryptSecret(token.refresh_token, this.key),
-      expiresAt: expiry(token.expires_in),
-    };
+    // Sealed for the credential row they land in (#1106), chosen inside the transaction.
+    const expiresAt = expiry(token.expires_in);
     return this.prisma.$transaction(async (tx) => {
       const held = await tx.credential.findFirst({ where: { ...FIGMA_SIGN_IN, accountId: figmaUserId }, orderBy: { createdAt: 'asc' } });
       if (held?.userId && held.userId !== state.userId) return 'account-in-use' as const;
+      const id = held?.id ?? randomUUID();
       const signIn = {
         userId: state.userId,
         accountLabel: handle,
-        secret: secrets.accessToken,
-        refreshSecret: secrets.refreshToken,
-        expiresAt: secrets.expiresAt,
+        secret: encryptSecret(token.access_token!, this.key, slots.credential({ id }, 'secret')),
+        refreshSecret: encryptSecret(token.refresh_token!, this.key, slots.credential({ id }, 'refresh_secret')),
+        expiresAt,
         refreshingUntil: null,
       };
       const credential = held
-        ? await tx.credential.update({ where: { id: held.id }, data: signIn })
-        : await tx.credential.create({ data: { ...FIGMA_SIGN_IN, site: null, accountId: figmaUserId, ...signIn } });
+        ? await tx.credential.update({ where: { id }, data: signIn })
+        : await tx.credential.create({ data: { id, ...FIGMA_SIGN_IN, site: null, accountId: figmaUserId, ...signIn } });
 
       const ref = { workspaceId: state.workspaceId, provider: 'figma', method: 'oauth', externalRef: figmaUserId };
       const account = { accountId: figmaUserId, accountLabel: handle, credentialId: credential.id };
@@ -190,7 +190,7 @@ export class FigmaOauthService {
     for (let waited = 0; waited <= LEASE_MS; waited += WAIT_STEP_MS) {
       const row = await this.prisma.credential.findFirst({ where: { ...FIGMA_SIGN_IN, accountId: figmaUserId }, orderBy: { createdAt: 'asc' } });
       if (!row) return null;
-      const token = decryptSecret(row.secret, this.key);
+      const token = decryptSecret(row.secret, this.key, slots.credential(row, 'secret'));
       if (token && token !== rejected && row.expiresAt && row.expiresAt.getTime() - RENEW_MARGIN_MS > Date.now()) return token;
 
       // The one guarded statement: whoever still sees this token, with no live
@@ -223,7 +223,7 @@ export class FigmaOauthService {
 
   /** Holds the lease; releases it on failure so the next caller can try. */
   private async refresh(row: Credential): Promise<string | null> {
-    const refreshToken = decryptSecret(row.refreshSecret, this.key);
+    const refreshToken = decryptSecret(row.refreshSecret, this.key, slots.credential(row, 'refresh_secret'));
     const body = refreshToken ? await this.post('refresh', { refresh_token: refreshToken }) : null;
     if (!body?.access_token) {
       await this.prisma.credential.updateMany({ where: { id: row.id }, data: { refreshingUntil: null } });
@@ -231,7 +231,7 @@ export class FigmaOauthService {
     }
     await this.prisma.credential.update({
       where: { id: row.id },
-      data: { secret: encryptSecret(body.access_token, this.key), expiresAt: expiry(body.expires_in), refreshingUntil: null },
+      data: { secret: encryptSecret(body.access_token, this.key, slots.credential(row, 'secret')), expiresAt: expiry(body.expires_in), refreshingUntil: null },
     });
     return body.access_token;
   }

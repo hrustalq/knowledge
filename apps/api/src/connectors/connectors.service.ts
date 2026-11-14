@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, type Connector, type ConnectorRun } from '@prisma/client';
@@ -27,6 +28,7 @@ import {
   type DocumentCategory,
 } from '@knowledge/contracts';
 import { decryptSecret, encryptSecret, MissingEncryptionKeyError, parseKey } from '../ai/secret-box.js';
+import { slots } from '../ai/secret-slots.js';
 import { assertSafeExternalUrl } from '../common/safe-url.js';
 import { withSubjectLock } from '../common/subject-lock.js';
 import type { Env } from '../config/env.js';
@@ -207,8 +209,10 @@ export class ConnectorsService {
     });
     if (taken) throw new ConflictException(t('error.connector.nameTaken', { name: input.name }));
 
+    const id = randomUUID();
     const row = await this.prisma.connector.create({
       data: {
+        id,
         workspaceId: input.workspaceId,
         kind: info.kind,
         name: input.name,
@@ -223,7 +227,7 @@ export class ConnectorsService {
         syncMode: input.syncMode ?? 'auto',
         preserveHierarchy: input.preserveHierarchy ?? false,
         syncIntervalMinutes: input.syncIntervalMinutes ?? null,
-        webhookSecret: this.encrypt(input.webhookSecret ?? null),
+        webhookSecret: this.encrypt(input.webhookSecret ?? null, { id, workspaceId: input.workspaceId }),
         enabled: input.enabled ?? true,
         locale: currentLocale(),
         createdBy: userId ?? null,
@@ -281,7 +285,7 @@ export class ConnectorsService {
         ...keep('enabled'),
         ...(config === null ? {} : { config: config as Prisma.InputJsonValue }),
         ...(input.direction === undefined ? {} : { direction: this.checkDirection(kind, input.direction) }),
-        ...(input.webhookSecret === undefined ? {} : { webhookSecret: this.encrypt(input.webhookSecret) }),
+        ...(input.webhookSecret === undefined ? {} : { webhookSecret: this.encrypt(input.webhookSecret, row) }),
         ...via,
       },
     });
@@ -419,7 +423,7 @@ export class ConnectorsService {
       connectorId: row.id,
       workspaceId: row.workspaceId,
       config: (row.config ?? {}) as Record<string, string>,
-      webhookSecret: decryptSecret(row.webhookSecret, this.key),
+      webhookSecret: decryptSecret(row.webhookSecret, this.key, slots.connectorWebhook(row)),
       onStage,
       debug,
       // Read once per context for the same reason `debug` is, and handed to
@@ -699,24 +703,26 @@ export class ConnectorsService {
 
   /** A pasted token, sealed; null or empty = none. */
   private token(plaintext: string | null): ConnectorToken | null {
-    const envelope = this.encrypt(plaintext);
-    return envelope ? { secret: plaintext!, envelope } : null;
+    if (plaintext === null || plaintext === '') return null;
+    // Sealed by the binder into the credential row it lands in; refused here when it could not be.
+    if (!this.key) throw new BadRequestException(t('error.connector.encryptionKeyMissing'));
+    return { secret: plaintext };
   }
 
   /** The token a connector dials with now, so an update that does not touch it keeps it. */
   private async currentToken(connectionId: string | null): Promise<ConnectorToken | null> {
     const connection = connectionId
-      ? await this.prisma.connection.findUnique({ where: { id: connectionId }, select: { method: true, credentialRow: { select: { secret: true } } } })
+      ? await this.prisma.connection.findUnique({ where: { id: connectionId }, select: { method: true, credentialRow: { select: { id: true, secret: true } } } })
       : null;
-    const envelope = connection?.method === 'token' ? connection.credentialRow?.secret : undefined;
-    const secret = decryptSecret(envelope, this.key);
-    return secret ? { secret, envelope: envelope! } : null;
+    const row = connection?.method === 'token' ? connection.credentialRow : null;
+    const secret = row ? decryptSecret(row.secret, this.key, slots.credential(row, 'secret')) : null;
+    return secret ? { secret } : null;
   }
 
-  private encrypt(plaintext: string | null): string | null {
+  private encrypt(plaintext: string | null, row: { id: string; workspaceId: string }): string | null {
     if (plaintext === null || plaintext === '') return null;
     try {
-      return encryptSecret(plaintext, this.key);
+      return encryptSecret(plaintext, this.key, slots.connectorWebhook(row));
     } catch (err) {
       if (err instanceof MissingEncryptionKeyError) {
         throw new BadRequestException(t('error.connector.encryptionKeyMissing'));

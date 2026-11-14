@@ -2,6 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { connectionProviderFor } from '@knowledge/contracts';
 import { encryptSecret } from '../src/ai/secret-box.js';
+import { slots } from '../src/ai/secret-slots.js';
 import { bindConnection, type BindableConnector } from '../src/connectors/connection-binding.js';
 import { ConnectorsService } from '../src/connectors/connectors.service.js';
 
@@ -65,7 +66,7 @@ function fakeDb(connectors: Row[]) {
     credential: {
       findMany: vi.fn(async () => []),
       create: vi.fn(async ({ data }: { data: { secret: string } }) => {
-        const row = { ...data, id: randomUUID(), accountId: null, accountLabel: null, accountAvatarUrl: null };
+        const row = { id: randomUUID(), ...data, accountId: null, accountLabel: null, accountAvatarUrl: null };
         db.credentials.push(row);
         return row;
       }),
@@ -92,7 +93,7 @@ function connector(over: Partial<Row> & { token?: string }): Row {
 /** Binds each connector as `ConnectorsService.create` does, with the token it was given. */
 const bindAll = async (db: ReturnType<typeof fakeDb>) => {
   for (const row of db.connectors) {
-    await bindConnection(db as never, row, key, row.token ? { secret: row.token, envelope: encryptSecret(row.token, key) } : null);
+    await bindConnection(db as never, row, key, row.token ? { secret: row.token } : null);
   }
 };
 
@@ -168,7 +169,7 @@ describe('bindConnection', () => {
     const db = fakeDb([row]);
     await bindAll(db);
     const first = row.connectionId;
-    await bindConnection(db as never, row, key, { secret: 'ghp_new', envelope: encryptSecret('ghp_new', key) });
+    await bindConnection(db as never, row, key, { secret: 'ghp_new' });
     expect(row.connectionId).not.toBe(first);
     await bindConnection(db as never, row, key, null);
     expect(row.connectionId).toBeNull();
@@ -179,7 +180,7 @@ describe('dialing through a connection', () => {
   function service(connection: Partial<Conn>, secret?: string) {
     const prisma = {
       connection: { findUnique: vi.fn(async () => ({ workspaceId: WS, method: 'token', credentialId: 'cred-1', ...connection })) },
-      credential: { findUnique: vi.fn(async () => (secret ? { secret: encryptSecret(secret, key) } : null)) },
+      credential: { findUnique: vi.fn(async () => (secret ? { secret: encryptSecret(secret, key, slots.credential({ id: 'cred-1' }, 'secret')) } : null)) },
     };
     const config = { get: (name: string) => (name === 'SETTINGS_ENCRYPTION_KEY' ? keyText : false) };
     const githubApp = { installationToken: vi.fn(async (id: string) => `ghs_for_${id}`) };

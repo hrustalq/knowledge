@@ -155,9 +155,14 @@ database dump or a replica; it does not protect against a compromised API
 process, because the key lives on the same host. Keys are write-only over the
 API — reads return `hasApiKey` and a last-4 hint. A missing key disables secret
 _writes_ only, with a message pointing at `ASSISTANT_API_KEY`; everything else
-keeps working. A row that will not decrypt (rotated key, corrupt envelope)
-falls back to the env credential (on the env endpoint only) rather than taking
-the assistant down.
+keeps working. Each envelope is sealed to its place (#1106): `gcm2$<key id>$…`
+with AAD `<table>.<column>:<workspace>:<row>` from `ai/secret-slots.ts`, so one
+copied into another row, column or workspace does not decrypt; the first `gcm$`
+format is still read and is rewritten when the row next saves its secret. A
+stored key that will not decrypt (another key, a moved envelope) is reported as
+`apiKeyUnreadable` on the settings and provider responses, shown on the
+provider row, and the connection dials with no key: it never falls back to the
+env credential.
 
 **A key goes only to the endpoint it was given for** (GHSA-7hf4-5chc-29gr).
 `ASSISTANT_API_KEY` is sent only to the env endpoint (`ASSISTANT_BASE_URL`, else

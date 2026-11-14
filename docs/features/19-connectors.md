@@ -122,8 +122,8 @@ denial-of-service surface with a public URL. A burst of edits **coalesces** into
 the run that is still queued rather than being refused — a running run's scope
 is frozen, so refusing would silently drop those items until the next full sync.
 
-**Credentials reuse `secret-box.ts` unchanged** (AES-256-GCM, `gcm$iv$tag$ct`,
-fail-soft decrypt, same `SETTINGS_ENCRYPTION_KEY`), write-only over the API with
+**Credentials reuse `secret-box.ts`** (AES-256-GCM, sealed to their row since
+#1106, fail-soft decrypt, same `SETTINGS_ENCRYPTION_KEY`), write-only over the API with
 a last-4 hint. The SSRF guard that was inside `mcp-client.service.ts` moved to
 `common/safe-url.ts` and is now called by both plugins and connectors — one
 implementation of an SSRF filter is the only safe number.

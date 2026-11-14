@@ -13,6 +13,7 @@ import { verifyHubSignature } from '../src/connectors/webhook-payload.js';
 import { AgentWebhookController } from '../src/ai/agent-webhook.controller.js';
 import { AgentTriggersService } from '../src/ai/agent-triggers.service.js';
 import { encryptSecret } from '../src/ai/secret-box.js';
+import { slots } from '../src/ai/secret-slots.js';
 import { runBrief } from '../src/agents/agent-services.js';
 import { MentionRepliesService, runReply } from '../src/documents/mention-replies.service.js';
 
@@ -41,7 +42,7 @@ const trigger = (over: Partial<AgentTrigger> = {}): AgentTrigger => ({
   ownerId: OWNER,
   cooldownMinutes: 0,
   note: null,
-  webhookSecret: encryptSecret(SECRET, Buffer.from(KEY_B64, 'base64')),
+  webhookSecret: encryptSecret(SECRET, Buffer.from(KEY_B64, 'base64'), slots.agentTriggerWebhook({ id: TRIGGER_ID, workspaceId: WS })),
   lastFiredAt: null,
   createdBy: OWNER,
   createdAt: new Date('2026-10-01T00:00:00Z'),

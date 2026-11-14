@@ -3164,7 +3164,7 @@ model Credential {
   accountLabel     String? @map("account_label")
   accountAvatarUrl String? @map("account_avatar_url")
 
-  /// secret-box envelopes ("gcm$iv$tag$ct"). Never leave the API.
+  /// secret-box envelopes (`gcm2$<key id>$iv$tag$ct`, sealed to this row and column; old `gcm$` still read). Never leave the API.
   secret        String
   /// Last-4 hint, as on connections.
   secretHint    String? @map("secret_hint")

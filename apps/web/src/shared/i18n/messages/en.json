@@ -3023,6 +3023,7 @@
       "keyEnvironment": "key from environment",
       "keyDefault": "default's key",
       "keyMissing": "no key",
+      "keyUnreadable": "stored key no longer decrypts — save it again",
       "price": "{prompt} in · {completion} out per 1M tokens",
       "priceList": "list price",
       "priceCached": "{price} cached",

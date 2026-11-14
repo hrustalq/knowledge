@@ -124,6 +124,14 @@ describe('buildProviderRows', () => {
     expect(buildProviderRows(settings(), [profile()], [])[1]!.key).toEqual({ source: 'default' })
   })
 
+  // #1106: a stored key that no longer decrypts is said, not shown as the env key or as none.
+  it('says a stored key no longer decrypts', () => {
+    const broken = settings({ hasApiKey: false, apiKeyUnreadable: true } as never)
+    expect(buildProviderRows(broken, [], [])[0]!.key).toEqual({ source: 'unreadable' })
+    const brokenProfile = profile({ hasApiKey: true, apiKeyUnreadable: true } as never)
+    expect(buildProviderRows(settings(), [brokenProfile], [])[1]!.key).toEqual({ source: 'unreadable' })
+  })
+
   it('prices a model by the usage rule: list, override, or nothing', () => {
     const rows = buildProviderRows(settings(), [profile()], [
       model(),

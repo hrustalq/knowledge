@@ -795,6 +795,8 @@ export interface AiSettingsResponse {
   hasApiKey: boolean;
   /** Last-4 hint of the stored key, when one is stored in the DB. */
   apiKeyHint: string | null;
+  /** A key is stored but no longer decrypts (#1106): calls go without one until it is saved again. */
+  apiKeyUnreadable: boolean;
   temperature: number;
   maxToolCalls: number;
   timeoutMs: number;
@@ -963,6 +965,8 @@ export interface AiProviderSummary {
   baseUrl: string | null;
   hasApiKey: boolean;
   apiKeyHint: string | null;
+  /** A key is stored but no longer decrypts (#1106): calls go without one until it is saved again. */
+  apiKeyUnreadable: boolean;
   temperature: number | null;
   maxToolCalls: number | null;
   timeoutMs: number | null;

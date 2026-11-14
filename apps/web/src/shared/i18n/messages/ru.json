@@ -3023,6 +3023,7 @@
       "keyEnvironment": "ключ из окружения",
       "keyDefault": "ключ провайдера по умолчанию",
       "keyMissing": "нет ключа",
+      "keyUnreadable": "сохранённый ключ не расшифровывается — сохраните его заново",
       "price": "{prompt} вход · {completion} выход за 1 млн токенов",
       "priceList": "прайс-лист",
       "priceCached": "{price} из кэша",

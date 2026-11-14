@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { encryptSecret } from '../src/ai/secret-box.js';
+import { slots } from '../src/ai/secret-slots.js';
 import { AiConfigService } from '../src/ai/ai-config.service.js';
 import { AiProvidersService } from '../src/ai/ai-providers.service.js';
 
@@ -76,7 +77,7 @@ describe('saving a provider', () => {
     const service = new AiProvidersService(prisma as never, { invalidate: vi.fn() } as never, config(over) as never);
     return { service, update, create };
   }
-  const stored = { id: 'p1', workspaceId: WS, name: 'P', provider: 'openai-compatible', baseUrl: 'https://203.0.113.10/v1', apiKeyCipher: encryptSecret('sk-theirs', key) };
+  const stored = { id: 'p1', workspaceId: WS, name: 'P', provider: 'openai-compatible', baseUrl: 'https://203.0.113.10/v1', apiKeyCipher: encryptSecret('sk-theirs', key, slots.aiProviderKey({ id: 'p1', workspaceId: WS })) };
 
   it('drops the stored key when the base URL moves and no key comes with it', async () => {
     const { service, update } = providers(stored);

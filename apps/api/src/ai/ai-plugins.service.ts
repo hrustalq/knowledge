@@ -6,7 +6,9 @@ import type { AiPluginSummary, AiPluginTestResponse, AiPluginTool, AiPluginTrans
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AiConfigService } from './ai-config.service.js';
+import { randomUUID } from 'node:crypto';
 import { decryptSecret, encryptSecret } from './secret-box.js';
+import { slots } from './secret-slots.js';
 import {
   assertSafePluginUrl,
   McpClientService,
@@ -75,14 +77,16 @@ export class AiPluginsService {
     if (clash) throw new ConflictException(t('error.ai.pluginNameTaken', { name: input.name }));
     await assertSafePluginUrl(input.url, this.allowPrivateUrls);
 
+    const id = randomUUID();
     const plugin = await this.prisma.aiPlugin.create({
       data: {
+        id,
         workspaceId,
         name: input.name,
         transport: input.transport ?? 'streamable-http',
         url: input.url,
         authHeader: input.authHeader ?? null,
-        authValueCipher: this.encrypt(input.authValue),
+        authValueCipher: this.encrypt(input.authValue, { id, workspaceId }),
         enabled: input.enabled ?? true,
         enabledTools: input.enabledTools ?? [],
         createdBy: actorId ?? null,
@@ -115,7 +119,7 @@ export class AiPluginsService {
         ...(input.authHeader === undefined ? {} : { authHeader: input.authHeader }),
         // undefined keeps the stored credential, null clears it — the same
         // write-only convention the provider API key uses.
-        ...(input.authValue === undefined ? {} : { authValueCipher: this.encrypt(input.authValue) }),
+        ...(input.authValue === undefined ? {} : { authValueCipher: this.encrypt(input.authValue, current) }),
         ...(input.enabled === undefined ? {} : { enabled: input.enabled }),
         ...(input.enabledTools === undefined ? {} : { enabledTools: input.enabledTools }),
       },
@@ -246,14 +250,14 @@ export class AiPluginsService {
     return plugin;
   }
 
-  private encrypt(value: string | null | undefined): string | null {
+  private encrypt(value: string | null | undefined, row: { id: string; workspaceId: string }): string | null {
     if (value === undefined) return null;
     if (value === null || value === '') return null;
-    return encryptSecret(value, this.aiConfig.encryptionKey);
+    return encryptSecret(value, this.aiConfig.encryptionKey, slots.aiPluginAuth(row));
   }
 
   private decrypt(plugin: AiPlugin): string | null {
-    return decryptSecret(plugin.authValueCipher, this.aiConfig.encryptionKey);
+    return decryptSecret(plugin.authValueCipher, this.aiConfig.encryptionKey, slots.aiPluginAuth(plugin));
   }
 }
 

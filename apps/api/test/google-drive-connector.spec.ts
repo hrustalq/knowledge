@@ -25,6 +25,7 @@ vi.mock('../src/common/safe-fetch.js', () => ({ safeFetch: vi.fn() }));
 
 const { safeFetch } = await import('../src/common/safe-fetch.js');
 const { encryptSecret } = await import('../src/ai/secret-box.js');
+const { slots } = await import('../src/ai/secret-slots.js');
 const {
   GoogleDriveAdapter,
   drivePermissionsToAcl,
@@ -430,7 +431,7 @@ describe('Test connection', () => {
         connector: { findUnique: async () => row },
         // The key reaches the adapter through the connection's credential (#857).
         connection: { findUnique: async () => ({ workspaceId: 'ws-1', method: 'token', credentialId: 'cred-1' }) },
-        credential: { findUnique: async () => ({ secret: encryptSecret(KEY_JSON, key) }) },
+        credential: { findUnique: async () => ({ secret: encryptSecret(KEY_JSON, key, slots.credential({ id: 'cred-1' }, 'secret')) }) },
       } as never,
       { get: (k: string) => settings[k] } as never,
       { resolve: () => adapter } as never,

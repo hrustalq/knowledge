@@ -8,7 +8,7 @@
  * Client-only by nature — there is nothing to render before someone asks — so
  * the markdown parser and the citation pass load on the first answer, and the
  * reader's own bundle stays the size it was. The answer is sanitized here as
- * model output (core/markdown/untrusted, #1099), as MarkdownView's `untrusted`
+ * model output (shared/utils/untrusted-markdown, #1099), as MarkdownView's `untrusted`
  * does; the API sends markdown.
  */
 import { computed, nextTick, ref } from 'vue'
@@ -60,7 +60,7 @@ function hrefOf(source: PublicSiteAskSource): string {
 async function render(res: PublicSiteAskResponse) {
   const [{ markdownToHtml }, { sanitizeUntrusted }, cites] = await Promise.all([
     import('@/core/markdown/render'),
-    import('@/core/markdown/untrusted'),
+    import('@/shared/utils/untrusted-markdown'),
     loadCitations(),
   ])
   anchorOf = (path) => cites.headingAnchor(path)

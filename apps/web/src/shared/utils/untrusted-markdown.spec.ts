@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
-import { markdownToHtml } from './render'
-import { sanitizeUntrusted, sanitizeUntrustedSvg } from './untrusted'
+import { markdownToHtml } from '@/core/markdown/render'
+import { sanitizeUntrusted, sanitizeUntrustedSvg } from './untrusted-markdown'
 
 // #1099: model output is text another page could have written. An image in it
 // loads the moment it renders — while the answer is still streaming — and its

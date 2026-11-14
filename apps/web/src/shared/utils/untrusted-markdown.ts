@@ -17,7 +17,7 @@
  */
 import DOMPurify from 'dompurify'
 import { parseAttachmentPath } from '@knowledge/contracts/publishing'
-import { SANITIZE_CONFIG } from './render'
+import { SANITIZE_CONFIG } from '@/core/markdown/render'
 
 /** Elements that fetch on render, beyond <img>. DOMPurify compares lowercased names. */
 const REMOTE_TAGS = ['picture', 'source', 'video', 'audio', 'track', 'image', 'feimage', 'mglyph']

@@ -15,7 +15,7 @@ import { nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import DOMPurify from 'dompurify'
 import { markdownToHtml, SANITIZE_CONFIG, slugifyHeading } from '@/core/markdown/render'
-import { sanitizeUntrusted, sanitizeUntrustedSvg } from '@/core/markdown/untrusted'
+import { sanitizeUntrusted, sanitizeUntrustedSvg } from '@/shared/utils/untrusted-markdown'
 import { parseScene, renderSceneToSvg } from '@/core/markdown/drawing'
 import { KN, attachmentKind, carryDiagramLayout, embedItemsOf, escapeHtml } from '@/core/markdown/nodes'
 import { embedTile } from '@/entities/document/model/embeds'
@@ -48,7 +48,7 @@ const props = withDefaults(
      * A model wrote this (#1099): an assistant answer, an agent's reply, a
      * workflow draft. Nothing in it may load from another host by itself, so
      * an external image becomes a link and a diagram's stylesheet loses its
-     * remote url()s (core/markdown/untrusted).
+     * remote url()s (shared/utils/untrusted-markdown).
      */
     untrusted?: boolean
   }>(),

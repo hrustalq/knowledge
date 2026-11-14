@@ -101,7 +101,7 @@ live when not on the app's origin; dev MinIO by default outside production)
 (pages hotlink external images; that waits for an image proxy). Public paths
 and site hosts never get it. Model output is guarded in the renderer instead:
 `MarkdownView`'s `untrusted` (and `SiteAsk`) goes through
-`core/markdown/untrusted.ts`, which drops everything that fetches on render
+`shared/utils/untrusted-markdown.ts`, which drops everything that fetches on render
 and keeps an `<img>` only for an attachment path or a `data:` image, before
 the HTML reaches the DOM. Text from a model is rendered `untrusted`: assistant
 answers, agent replies in threads, workflow drafts and descriptions of merge

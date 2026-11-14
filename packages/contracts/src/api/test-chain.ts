@@ -763,7 +763,8 @@ export async function runTestPlan(
     for (const [name, raw] of Object.entries(capture)) {
       const rule = parseCaptureRule(raw);
       const v = rule ? evaluateCapture(rule, { headers: res.headers, body }) : undefined;
-      if (v === undefined || v === null) return settle(key, { ...outcomeOf('fail', `capture:${name}`), status: res.status, durationMs, captures });
+      // A guarded request's captures never reach a row, a failed one's partial set included (#1103).
+      if (v === undefined || v === null) return settle(key, { ...outcomeOf('fail', `capture:${name}`), status: res.status, durationMs, captures: filledFromGuarded ? {} : captures });
       captures[name] = typeof v === 'string' ? v : JSON.stringify(v);
     }
     if (!filledFromGuarded) {

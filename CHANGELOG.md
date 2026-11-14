@@ -17,6 +17,11 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- Several smaller surfaces now check the page they act on. Acting on an agent's finding re-checks the page it cites
+  (or where its draft would land) at the moment you act. Editing or revoking a share link needs edit on its page, an
+  ingestion job is readable only by people who can read its page and branch, and a profile's open-work counts leave
+  out pages the reader cannot open. "Save to knowledge base" on an assistant reply now follows the captures switch,
+  and an MCP tool that names a memo, page or run in another workspace is refused. (#1090)
 - A memo's analysis is now as private as the memo. Other members no longer see its summary or drafted pages in the
   agent runs list or the run page, cannot act on its findings, and a memo's draft can no longer be published
   directly as a page; it opens as a merge request. (#1089)

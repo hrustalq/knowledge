@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CAPTURE_KIT_CLIENTS, MCP_LEARNING_TARGET, SKILL_DIRS, SKILL_DIR_KEYS, type CaptureKitClient, type SkillDirKey } from '@knowledge/contracts';
@@ -427,11 +427,24 @@ export class McpService extends McpServices {
     if (!feature) return;
     const id = (key: string) => (typeof args[key] === 'string' ? (args[key] as string) : null);
     const documentId = id('documentId');
+    const memoId = id('memoId');
     const runId = tool === 'knowledge_get_workflow_run' ? id('runId') : null;
-    const workspaceId =
-      id('workspaceId') ??
-      (documentId ? await this.access.workspaceOfDocument(documentId) : null) ??
-      (runId ? await this.access.workspaceOf('workflow-run', runId) : null);
+    // The section is the subject's workspace's, not whatever `workspaceId`
+    // says (#1090): a tool acts on the memo, page or run it names, so a call
+    // naming one under another workspace is refused rather than gated by the
+    // wrong workspace's switch — `knowledge_resolve_conflict`'s rule, for all.
+    const subjectWs = documentId
+      ? await this.access.workspaceOfDocument(documentId)
+      : memoId
+        ? await this.access.workspaceOf('memo', memoId)
+        : runId
+          ? await this.access.workspaceOf('workflow-run', runId)
+          : null;
+    const named = id('workspaceId');
+    if (named && subjectWs && named !== subjectWs) {
+      throw new NotFoundException({ statusCode: 404, message: t('error.workspace.subjectElsewhere', { workspaceId: named }) });
+    }
+    const workspaceId = subjectWs ?? named;
     if (!workspaceId) return;
     await this.access.requireRole(principal, workspaceId, 'viewer', false, { allowGuest: true });
     await this.features.require(workspaceId, feature);

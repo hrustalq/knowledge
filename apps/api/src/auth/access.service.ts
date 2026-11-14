@@ -161,6 +161,27 @@ export class AccessService {
     return { workspaceId: mr.document.workspaceId, documentId: mr.documentId };
   }
 
+  /** A share link is its page's (#1090): changing or revoking one is held to the page, as creating one is. */
+  async documentOfShareLink(shareLinkId: string): Promise<{ workspaceId: string; documentId: string }> {
+    const link = await this.prisma.shareLink.findUnique({ where: { id: shareLinkId }, select: { workspaceId: true, documentId: true } });
+    if (!link) throw new NotFoundException(t('error.share.notFound', { id: shareLinkId }));
+    return link;
+  }
+
+  /**
+   * An ingestion job is its revision's (#1090): the page it indexes, and the
+   * branch that revision is on, so a restricted page's job or a private
+   * branch's is refused as the revision itself would be.
+   */
+  async revisionOfIngestionJob(jobId: string): Promise<{ workspaceId: string; documentId: string; revisionId: string }> {
+    const job = await this.prisma.ingestionJob.findUnique({ where: { id: jobId }, select: { workspaceId: true, revisionId: true } });
+    const revision = job
+      ? await this.prisma.documentRevision.findUnique({ where: { id: job.revisionId }, select: { documentId: true } })
+      : null;
+    if (!job || !revision) throw new NotFoundException(t('error.ingestionJob.notFound', { id: jobId }));
+    return { workspaceId: job.workspaceId, documentId: revision.documentId, revisionId: job.revisionId };
+  }
+
   /**
    * A workflow run is its root page's (#1085): its nodes hold drafts written
    * from that page, so whoever may not open the page may not open the run.

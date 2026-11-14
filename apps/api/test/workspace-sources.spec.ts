@@ -23,8 +23,9 @@ describe('WORKSPACE_SOURCES', () => {
     await expect(missing).rejects.toThrow(WORKSPACE_SOURCES[source].missing);
   });
 
-  // These two resolve to a page (`documentOfMergeRequest`, `rootOfWorkflowRun`), not through `workspaceOf`.
-  it.each(SOURCES.filter((s) => s !== 'merge-request' && s !== 'workflow-run'))('the guard reads %s from its param and refuses a malformed id', async (source) => {
+  // These resolve to a page (`documentOfMergeRequest`, `rootOfWorkflowRun`, …), not through `workspaceOf`.
+  const PAGE_SOURCES: string[] = ['merge-request', 'workflow-run', 'share-link', 'job'];
+  it.each(SOURCES.filter((s) => !PAGE_SOURCES.includes(s)))('the guard reads %s from its param and refuses a malformed id', async (source) => {
     const row = WORKSPACE_SOURCES[source];
     const seen: unknown[] = [];
     const access = { workspaceOf: async (_: string, id: unknown) => (seen.push(id), WS), requireRole: async () => undefined, requireOwnThread: async () => undefined };
@@ -84,6 +85,49 @@ describe('WORKSPACE_SOURCES', () => {
         }),
       } as never);
       expect(asked).toEqual([[WS, { type: 'document', id: ID }, 'editor']]);
+    });
+  });
+
+  describe('share links and ingestion jobs resolve to their page (#1090)', () => {
+    const guardFor = (source: string, access: object, permissions: object, role = 'editor') =>
+      new AclGuard(
+        { getAllAndOverride: () => undefined, get: () => ({ role, source, operator: false }) } as never,
+        access as never,
+        permissions as never,
+        {} as never,
+      ).canActivate({
+        getHandler: () => undefined,
+        getClass: () => undefined,
+        switchToHttp: () => ({
+          getRequest: () => ({ principal: { userId: 'u', mode: 'session' }, method: 'GET', params: { id: ID }, query: {}, body: {} }),
+        }),
+      } as never);
+
+    it('holds a share link to its page', async () => {
+      const asked: unknown[] = [];
+      await guardFor(
+        'share-link',
+        { documentOfShareLink: async () => ({ workspaceId: WS, documentId: 'page-1' }) },
+        { requireResource: async (...args: unknown[]) => void asked.push(args.slice(1, 4)) },
+      );
+      expect(asked).toEqual([[WS, { type: 'document', id: 'page-1' }, 'editor']]);
+    });
+
+    it("holds an ingestion job to its page and its revision's branch", async () => {
+      const asked: unknown[] = [];
+      await guardFor(
+        'job',
+        { revisionOfIngestionJob: async () => ({ workspaceId: WS, documentId: 'page-1', revisionId: 'rev-1' }) },
+        {
+          requireResource: async (...args: unknown[]) => void asked.push(args.slice(1, 4)),
+          requireBranches: async (...args: unknown[]) => void asked.push(args.slice(2)),
+        },
+        'viewer',
+      );
+      expect(asked).toEqual([
+        [WS, { type: 'document', id: 'page-1' }, 'viewer'],
+        ['page-1', { branchNames: [], branchIds: [], revisionIds: ['rev-1'] }, 'view'],
+      ]);
     });
   });
 });

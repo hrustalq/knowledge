@@ -120,7 +120,7 @@ export class AclGuard implements CanActivate {
       return true; // AUTH_MODE=none
     }
 
-    const { workspaceId, resource } = await this.resolveTarget(spec, req);
+    const { workspaceId, resource, refs } = await this.resolveTarget(spec, req);
     // From here on every record carries the tenant — including records from
     // services that never receive a workspaceId argument at all.
     bindTrace({ workspaceId });
@@ -131,15 +131,11 @@ export class AclGuard implements CanActivate {
         capture: spec.capture === true,
         capability: spec.capability,
       });
-      // Then any of its branches the route names: a private one narrows the page (#474).
-      if (spec.source === 'document') {
-        await this.permissions.requireBranches(
-          principal,
-          workspaceId,
-          resource.id,
-          branchRefsOf(req),
-          spec.role === 'viewer' ? 'view' : 'edit',
-        );
+      // Then any of its branches the route names: a private one narrows the page
+      // (#474). A source that stands for a revision (an ingestion job) names it.
+      const named = spec.source === 'document' ? branchRefsOf(req) : refs;
+      if (named) {
+        await this.permissions.requireBranches(principal, workspaceId, resource.id, named, spec.role === 'viewer' ? 'view' : 'edit');
       }
     } else {
       await this.access.requireRole(principal, workspaceId, spec.role, spec.operator, {
@@ -179,11 +175,26 @@ export class AclGuard implements CanActivate {
     await this.permissions.requireHistoryAs(principal, workspaceId, onPage ? req.params?.id : undefined, always ? undefined : revisionIds);
   }
 
-  /** The workspace, plus the resource page permissions apply to when the route names one. */
-  private async resolveTarget(spec: AccessSpec, req: Req): Promise<{ workspaceId: string; resource?: AccessResource }> {
+  /**
+   * The workspace, plus the resource page permissions apply to when the route
+   * names one (and the revision it stands for, when the id is a revision's).
+   */
+  private async resolveTarget(
+    spec: AccessSpec,
+    req: Req,
+  ): Promise<{ workspaceId: string; resource?: AccessResource; refs?: BranchRefs }> {
     if (spec.source === 'merge-request') {
       const { workspaceId, documentId } = await this.access.documentOfMergeRequest(this.uuid(req.params?.id, 'mergeRequest'));
       return { workspaceId, resource: { type: 'document', id: documentId } };
+    }
+    // Held to its page, as creating one is (#1090).
+    if (spec.source === 'share-link') {
+      const { workspaceId, documentId } = await this.access.documentOfShareLink(this.uuid(req.params?.id, 'shareLink'));
+      return { workspaceId, resource: { type: 'document', id: documentId } };
+    }
+    if (spec.source === 'job') {
+      const { workspaceId, documentId, revisionId } = await this.access.revisionOfIngestionJob(this.uuid(req.params?.id, 'job'));
+      return { workspaceId, resource: { type: 'document', id: documentId }, refs: { branchNames: [], branchIds: [], revisionIds: [revisionId] } };
     }
     if (spec.source === 'workflow-run') return this.access.rootOfWorkflowRun(this.uuid(req.params?.id, 'workflowRun'));
     const workspaceId = await this.resolveWorkspace(spec.source, req);

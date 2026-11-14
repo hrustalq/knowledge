@@ -527,6 +527,19 @@ describe('McpService over a principal', () => {
     expect(features.require).not.toHaveBeenCalled();
   });
 
+  it("gates a tool on its subject's workspace, and refuses a subject named under another workspace (#1090)", async () => {
+    const access = accessWith('editor');
+    vi.spyOn(access, 'workspaceOf').mockResolvedValue(WS_B);
+    const { mcp, features } = service(access);
+    const gate = (mcp as unknown as { featureGate: (p: Principal, tool: string, args: object) => Promise<void> }).featureGate.bind(mcp);
+    const p = keyPrincipal({ id: 'k', scope: 'write', workspaceId: null });
+    const memoId = '99999999-9999-4999-8999-999999999999';
+    await expect(gate(p, 'knowledge_get_memo', { workspaceId: WS_A, memoId })).rejects.toMatchObject({ status: 404 });
+    expect(features.require).not.toHaveBeenCalled();
+    await gate(p, 'knowledge_get_memo', { workspaceId: WS_B, memoId });
+    expect(features.require).toHaveBeenCalledWith(WS_B, 'memos');
+  });
+
   describe('the offer follows the sections a connection reaches (#945)', () => {
     const QA = MCP_TOOLSETS.qa.tools;
 

@@ -777,6 +777,88 @@ describe('page permissions (e2e, #76)', () => {
     });
   });
 
+  describe('checked on execution (#1090)', () => {
+    let runId: string;
+    let destination: Connector;
+    let shareId: string;
+
+    beforeAll(async () => {
+      // A connector whose pages land under P, which bob may not open.
+      destination = await prisma.connector.create({
+        data: { workspaceId: WORKSPACE, kind: 'codebase', name: `ACL dest ${nonce}`, projectId, parentId: ids.P, createdBy: people.admin.id },
+      });
+      // A run written before P was hidden from bob, as a curator or archaeologist leaves one.
+      runId = (
+        await prisma.agentRun.create({
+          data: {
+            workspaceId: WORKSPACE,
+            agentKey: 'curator',
+            trigger: 'manual',
+            createdBy: people.admin.id,
+            status: 'succeeded',
+            input: { connectorId: destination.id },
+            findings: [
+              // `orphan`, so the code before the fix stops at a 400 and never reaches a model.
+              { kind: 'orphan', severity: 'info', title: 'Orphan', detail: 'x', documentIds: [ids.P], documentTitles: [titles.P] },
+              { kind: 'stale', severity: 'info', title: 'Stale', detail: 'x', documentIds: [ids.P], documentTitles: [titles.P] },
+              { kind: 'gap', severity: 'info', title: 'Draft', detail: 'x', documentIds: [], documentTitles: [], draft: { title: `Planted ${nonce}`, markdown: 'x' } },
+            ],
+          },
+        })
+      ).id;
+      shareId = (
+        await prisma.shareLink.create({
+          data: { workspaceId: WORKSPACE, documentId: ids.P, tokenHash: `acl-e2e-${nonce}`, createdBy: people.admin.id },
+        })
+      ).id;
+    });
+
+    afterAll(async () => {
+      if (shareId) await prisma.shareLink.deleteMany({ where: { id: shareId } });
+      if (runId) await prisma.agentRun.deleteMany({ where: { id: runId } });
+      if (destination) await prisma.connector.deleteMany({ where: { id: destination.id } });
+    });
+
+    it('re-checks the page a finding acts on, and where its draft would land', async () => {
+      const verb = (name: string, index: number) =>
+        http().post(`/v1/ai/agents/runs/${runId}/findings/${index}/${name}`).query({ workspaceId: WORKSPACE }).set(as(people.bob)).send({});
+      for (const [name, index] of [['propose', 0], ['mark-outdated', 1], ['create-page', 2]] as const) {
+        const res = await verb(name, index);
+        expect([name, res.status]).toEqual([name, 403]);
+        expect(JSON.stringify(res.body)).not.toContain(word);
+      }
+      expect((await prisma.document.findUniqueOrThrow({ where: { id: ids.P } })).verificationFlag ?? null).not.toBe('outdated');
+      expect(await prisma.document.count({ where: { title: `Planted ${nonce}` } })).toBe(0);
+    });
+
+    it("holds a share link's edit and revoke to its page", async () => {
+      // The page's refusal, not "sharing is off": the workspace has share links switched off here.
+      for (const res of [
+        await http().patch(`/v1/shares/${shareId}`).set(as(people.bob)).send({ expiresAt: null }),
+        await http().delete(`/v1/shares/${shareId}`).set(as(people.bob)),
+      ]) {
+        expect(res.status).toBe(403);
+        expect(res.body.details).toMatchObject({ canRequestAccess: true, resourceType: 'document', resourceId: ids.P });
+      }
+      expect((await prisma.shareLink.findUniqueOrThrow({ where: { id: shareId } })).revokedAt).toBeNull();
+    });
+
+    it("holds an ingestion job to its page", async () => {
+      const revisions = await prisma.documentRevision.findMany({ where: { documentId: ids.P }, select: { id: true } });
+      const job = await prisma.ingestionJob.findFirstOrThrow({ where: { revisionId: { in: revisions.map((r) => r.id) } } });
+      expect(await status(people.bob, `/v1/ingestion/jobs/${job.id}`)).toBe(403);
+      expect(await status(people.alice, `/v1/ingestion/jobs/${job.id}`)).toBe(200);
+    });
+
+    it("counts only open work on pages the reader may open in someone's profile", async () => {
+      await http().post(`/v1/documents/${ids.P}/threads`).set(as(people.admin)).send({ body: `Open question ${nonce}` }).expect(ok(201));
+      const open = async (p: Person) =>
+        (await http().get(`/v1/profiles/${people.admin.id}`).query({ workspaceId: WORKSPACE }).set(as(p)).expect(ok(200))).body.openWork
+          .unresolvedThreads as number;
+      expect((await open(people.alice)) - (await open(people.bob))).toBe(1);
+    });
+  });
+
   describe('private drafts (#474)', () => {
     const draftTitle = `Draft memo ${word}`;
     const draftText = `# ${draftTitle}\n\nThe ${word} payroll ledger draft: what changes in the bonuses, and who signs it.\n`;
@@ -957,6 +1039,15 @@ describe('page permissions (e2e, #76)', () => {
       expect(await revisionIds(people.bob)).not.toContain(privateRev);
       expect(await branchNames(people.alice)).toContain(`draft/${people.alice.id}`);
       expect(await revisionIds(people.alice)).toContain(privateRev);
+    });
+
+    it("refuses finalizing a revision on it, and reading its ingestion job, to someone it is not shared with (#1090)", async () => {
+      await http().post(`/v1/documents/${page}/revisions/${privateRev}/finalize`).set(as(people.bob)).send({}).expect(ok(403));
+      const job = await prisma.ingestionJob.findFirst({ where: { revisionId: privateRev } });
+      if (job) {
+        expect(await status(people.bob, `/v1/ingestion/jobs/${job.id}`)).toBe(403);
+        expect(await status(people.alice, `/v1/ingestion/jobs/${job.id}`)).toBe(200);
+      }
     });
 
     it('refuses every read that names it, over REST and MCP, with no content in the body', async () => {

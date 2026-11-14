@@ -518,6 +518,8 @@ export class AgentFindingsService {
     if (!document || document.workspaceId !== workspaceId) {
       throw new BadRequestException(t('error.ai.findingDocumentGone', { documentId }));
     }
+    // `propose`'s rule (#1090): asked now, and the refusal carries no title.
+    await this.requireEdit(principal, workspaceId, documentId);
 
     return this.underClaim(runId, index, 'proposal', async () => {
       const result = await this.relations.propose(

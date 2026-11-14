@@ -803,6 +803,7 @@ describe('page permissions (e2e, #76)', () => {
               { kind: 'orphan', severity: 'info', title: 'Orphan', detail: 'x', documentIds: [ids.P], documentTitles: [titles.P] },
               { kind: 'stale', severity: 'info', title: 'Stale', detail: 'x', documentIds: [ids.P], documentTitles: [titles.P] },
               { kind: 'gap', severity: 'info', title: 'Draft', detail: 'x', documentIds: [], documentTitles: [], draft: { title: `Planted ${nonce}`, markdown: 'x' } },
+              { kind: 'orphan', severity: 'info', title: 'Relate', detail: 'x', documentIds: [ids.P], documentTitles: [titles.P], relations: [{ type: 'DEPENDS_ON', target: `service:acl-${nonce}` }] },
             ],
           },
         })
@@ -823,13 +824,15 @@ describe('page permissions (e2e, #76)', () => {
     it('re-checks the page a finding acts on, and where its draft would land', async () => {
       const verb = (name: string, index: number) =>
         http().post(`/v1/ai/agents/runs/${runId}/findings/${index}/${name}`).query({ workspaceId: WORKSPACE }).set(as(people.bob)).send({});
-      for (const [name, index] of [['propose', 0], ['mark-outdated', 1], ['create-page', 2]] as const) {
+      const mrsBefore = await prisma.mergeRequest.count({ where: { documentId: ids.P } });
+      for (const [name, index] of [['propose', 0], ['mark-outdated', 1], ['create-page', 2], ['apply-relations', 3]] as const) {
         const res = await verb(name, index);
         expect([name, res.status]).toEqual([name, 403]);
         expect(JSON.stringify(res.body)).not.toContain(word);
       }
       expect((await prisma.document.findUniqueOrThrow({ where: { id: ids.P } })).verificationFlag ?? null).not.toBe('outdated');
       expect(await prisma.document.count({ where: { title: `Planted ${nonce}` } })).toBe(0);
+      expect(await prisma.mergeRequest.count({ where: { documentId: ids.P } })).toBe(mrsBefore);
     });
 
     it("holds a share link's edit and revoke to its page", async () => {

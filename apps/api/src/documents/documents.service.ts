@@ -1449,10 +1449,20 @@ export class DocumentsService {
     return this.getDocument(documentId);
   }
 
-  /** Features 07 + 08 (docs/features): rename, recategorize, move in the tree. */
-  async updateDocument(documentId: string, dto: UpdateDocumentDto, actorId?: string): Promise<DocumentSummary> {
+  /**
+   * Features 07 + 08 (docs/features): rename, recategorize, move in the tree.
+   * `scope` is the caller's: a move lands the page where they must be able to
+   * create one (#1087).
+   */
+  async updateDocument(documentId: string, dto: UpdateDocumentDto, scope: AccessScope, actorId?: string): Promise<DocumentSummary> {
     const document = await this.getDocumentOrThrow(documentId);
     this.assertNotArchived(document);
+    const projectChanged = dto.projectId !== undefined && dto.projectId !== document.projectId;
+    if (projectChanged || (dto.parentId !== undefined && dto.parentId !== document.parentId)) {
+      // A project move with no parent re-roots the page (below).
+      const parentId = dto.parentId !== undefined ? dto.parentId : projectChanged ? null : document.parentId;
+      await this.requireDestination(scope, projectChanged ? dto.projectId! : document.projectId, parentId);
+    }
 
     // Ownership is its own act with its own event and notification
     // (docs/features/39). It commits with the rest of the patch, inside the
@@ -1648,6 +1658,18 @@ export class DocumentsService {
   }
 
   /**
+   * A moved page inherits its new chain's restrictions, so placing it is
+   * creating it there (#1087): `requireCreateUnder`, asked before anything is
+   * read about the destination, so a hidden parent or sibling answers exactly
+   * as it does to create and the move cannot probe the tree. Without it an
+   * editor could hide any page they edit, from everyone and themselves, by
+   * moving it under a restricted one.
+   */
+  private async requireDestination(scope: AccessScope, projectId: string, parentId: string | null): Promise<void> {
+    await this.permissions.requireCreateUnder(scope, { projectId, ...(parentId ? { parentId } : {}) });
+  }
+
+  /**
    * Re-point a moved page's descendants at its new path, in one statement for a
    * subtree of any size. Left-anchored LIKE, so the (workspace_id, path) index
    * serves it; the old upward walk could not express this at all.
@@ -1707,9 +1729,10 @@ export class DocumentsService {
    * a partial update would make two concurrent drops each write an index
    * computed against a tree the other had already changed.
    */
-  async moveDocument(documentId: string, dto: MoveDocumentDto, actorId?: string): Promise<DocumentSummary> {
+  async moveDocument(documentId: string, dto: MoveDocumentDto, scope: AccessScope, actorId?: string): Promise<DocumentSummary> {
     const document = await this.getDocumentOrThrow(documentId);
     const parentId = dto.parentId;
+    if (parentId !== document.parentId) await this.requireDestination(scope, document.projectId, parentId);
 
     const updated = await this.prisma.withTransaction(async () => {
       // The lock first, even for a reorder, and the page read again under it

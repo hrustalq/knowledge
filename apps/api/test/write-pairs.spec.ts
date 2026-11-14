@@ -155,7 +155,8 @@ describe('#658 write pairs commit together', () => {
     const { prisma, committed } = fakePrisma({ 'document.update': { id: 'd1' } });
     const activity = recorder(prisma);
     const commits = { lock: async () => undefined, uniqueSlug: async () => 't' };
-    const svc = new DocumentsService(prisma, _, _, _, activity as never, _, _, _, _, _, _, _, _, _, _, commits as never);
+    const permissions = { requireCreateUnder: async () => undefined };
+    const svc = new DocumentsService(prisma, _, _, _, activity as never, _, _, _, _, _, permissions as never, _, _, _, _, commits as never);
     const doc = { id: 'd1', workspaceId: WS, projectId: 'p1', ownerId: 'old', parentId: null, archivedAt: null, title: 'T', path: '/d1/', depth: 0 };
     stub(svc, {
       getDocumentOrThrow: async () => ({ ...doc }),
@@ -166,7 +167,7 @@ describe('#658 write pairs commit together', () => {
       },
     });
 
-    await expect(svc.updateDocument('d1', { ownerId: 'new', parentId: 'p-elsewhere' } as never, 'u1')).rejects.toThrow('bad parent');
+    await expect(svc.updateDocument('d1', { ownerId: 'new', parentId: 'p-elsewhere' } as never, {} as never, 'u1')).rejects.toThrow('bad parent');
     expect(committed).toEqual([]);
     expect(activity.fired).toEqual([]);
   });

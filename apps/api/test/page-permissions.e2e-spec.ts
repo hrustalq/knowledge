@@ -331,6 +331,67 @@ describe('page permissions (e2e, #76)', () => {
     });
   });
 
+  describe('moving a page (#1087)', () => {
+    let page: string;
+    let closedProject: string;
+    /** What creating a page there answers bob: the answer a move must match. */
+    const createAt = (at: { projectId: string; parentId?: string }) =>
+      http()
+        .post('/v1/documents')
+        .set(as(people.bob))
+        .send({ workspaceId: WORKSPACE, title: `Nope ${nonce}`, visibility: 'workspace', ...at });
+
+    beforeAll(async () => {
+      page = (
+        await http()
+          .post('/v1/documents')
+          .set(as(people.bob))
+          .send({ workspaceId: WORKSPACE, projectId, title: `Bob's notes ${nonce}`, visibility: 'workspace' })
+          .expect(ok(201))
+      ).body.documentId;
+      // Empty, so the switch alone restricts it: no page under it needs re-stamping.
+      closedProject = (
+        await prisma.project.create({ data: { workspaceId: WORKSPACE, name: `ACL closed ${nonce}`, restricted: true } })
+      ).id;
+    });
+
+    afterAll(async () => {
+      // Put it back wherever a red run left it, so later blocks see the tree they expect.
+      await prisma.document.findUnique({ where: { id: page } }).then(async (row) => {
+        if (row && (row.parentId !== null || row.projectId !== projectId)) {
+          await http().patch(`/v1/documents/${page}`).set(as(people.admin)).send({ projectId, parentId: null });
+        }
+      });
+      await http().post(`/v1/documents/${page}/archive`).set(as(people.admin)).send({});
+    });
+
+    it('refuses a move under a page the mover may not open, as create does', async () => {
+      const created = await createAt({ projectId, parentId: ids.P });
+      expect(created.status).toBe(403);
+      const moved = await http().post(`/v1/documents/${page}/move`).set(as(people.bob)).send({ parentId: ids.P });
+      expect(moved.status).toBe(403);
+      expect(moved.body.details).toEqual(created.body.details);
+      const patched = await http().patch(`/v1/documents/${page}`).set(as(people.bob)).send({ parentId: ids.P });
+      expect(patched.status).toBe(403);
+      expect(patched.body.details).toEqual(created.body.details);
+      expect(await status(people.bob, `/v1/documents/${page}`)).toBe(200);
+    });
+
+    it('refuses a move into a project the mover may not open, as create does', async () => {
+      const created = await createAt({ projectId: closedProject });
+      expect(created.status).toBe(403);
+      const patched = await http().patch(`/v1/documents/${page}`).set(as(people.bob)).send({ projectId: closedProject });
+      expect(patched.status).toBe(403);
+      expect(patched.body.details).toEqual(created.body.details);
+      expect((await prisma.document.findUniqueOrThrow({ where: { id: page } })).projectId).toBe(projectId);
+    });
+
+    it('still moves a page under one the mover may edit', async () => {
+      await http().post(`/v1/documents/${page}/move`).set(as(people.bob)).send({ parentId: ids.O }).expect(ok(201));
+      await http().patch(`/v1/documents/${page}`).set(as(people.bob)).send({ parentId: null }).expect(ok(200));
+    });
+  });
+
   describe('retrieval', () => {
     it('search never returns a restricted page, in any mode, and still fills the limit', async () => {
       const modes = fulltext ? (['semantic', 'keyword', 'hybrid'] as const) : (['semantic', 'hybrid'] as const);

@@ -1135,6 +1135,9 @@
       "deliveryId": {
         "type": "string"
       },
+      "signed": {
+        "type": "string"
+      },
       "threadId": {
         "type": "string"
       }
@@ -2202,6 +2205,9 @@
         "type": "string",
         "nullable": true
       },
+      "apiKeyUnreadable": {
+        "type": "boolean"
+      },
       "temperature": {
         "type": "number",
         "nullable": true
@@ -2243,6 +2249,7 @@
       "baseUrl",
       "hasApiKey",
       "apiKeyHint",
+      "apiKeyUnreadable",
       "temperature",
       "maxToolCalls",
       "timeoutMs",
@@ -2311,6 +2318,9 @@
       "apiKeyHint": {
         "type": "string",
         "nullable": true
+      },
+      "apiKeyUnreadable": {
+        "type": "boolean"
       },
       "temperature": {
         "type": "number"
@@ -2401,6 +2411,7 @@
       "model",
       "hasApiKey",
       "apiKeyHint",
+      "apiKeyUnreadable",
       "temperature",
       "maxToolCalls",
       "timeoutMs",
@@ -7277,6 +7288,39 @@
     "required": [
       "integrations",
       "enabled"
+    ]
+  },
+  "ChatLinkPending": {
+    "type": "object",
+    "properties": {
+      "kind": {
+        "$ref": "#/components/schemas/ChatPlatformKind"
+      },
+      "integrationName": {
+        "type": "string"
+      },
+      "botUsername": {
+        "type": "string",
+        "nullable": true
+      },
+      "externalUserName": {
+        "type": "string",
+        "nullable": true
+      },
+      "proof": {
+        "type": "string"
+      },
+      "expiresAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "kind",
+      "integrationName",
+      "botUsername",
+      "externalUserName",
+      "proof",
+      "expiresAt"
     ]
   },
   "ChatLinkPreview": {

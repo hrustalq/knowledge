@@ -12,6 +12,7 @@ import { closeBacktest, configureBacktest, createRootLogger } from '@knowledge/o
 import { traceMiddleware } from '@knowledge/observability/express';
 import { IDP_PRESETS, type IdpPreset } from '@knowledge/contracts';
 import { decryptSecret, parseKey } from '../src/ai/secret-box.js';
+import { slots } from '../src/ai/secret-slots.js';
 import { AuthFlowService } from '../src/auth/auth-flow.service.js';
 import { OIDC_PRESETS } from '../src/auth/sso/oidc-presets.js';
 import { identityFromClaims } from '../src/auth/sso/oidc-claims.js';
@@ -706,7 +707,7 @@ describe('OIDC provider setup', () => {
     const view = await svc.create(WS, body(preset), admin);
 
     expect(view).toMatchObject({ kind: 'oidc', preset, hasSecret: true, config: { clientId: 'knowledge' } });
-    expect(decryptSecret(rows[0].secretCipher, parseKey(ENC_KEY))).toBe(SECRET);
+    expect(decryptSecret(rows[0].secretCipher, parseKey(ENC_KEY), slots.identityProviderSecret(rows[0]))).toBe(SECRET);
     const json = JSON.stringify(view);
     expect(json).not.toContain(SECRET);
     expect(json).not.toContain(rows[0].secretCipher);

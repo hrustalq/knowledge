@@ -200,10 +200,9 @@ ${diffExcerpt(shown, MAX_DIFF_CHARS)}`,
           ) +
           `
 
-<page title=${JSON.stringify(candidate.title)} documentId="${candidate.documentId}">
+The page (documentId ${candidate.documentId}):
 ` +
-          `${content.markdown.slice(0, MAX_PAGE_CHARS)}
-</page>` +
+          wrapUntrusted(`Title: ${candidate.title}\n\n${content.markdown.slice(0, MAX_PAGE_CHARS)}`, 'tied_page', 'document') +
           apiNote,
       },
     ];

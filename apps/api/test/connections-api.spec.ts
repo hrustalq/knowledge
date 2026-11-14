@@ -19,6 +19,7 @@ vi.mock('../src/i18n/t.js', () => ({ t: (key: string, args?: object) => `${key} 
 const { ConnectionsService } = await import('../src/connectors/connections.service.js');
 const { CredentialsService } = await import('../src/connectors/credentials.service.js');
 const { decryptSecret } = await import('../src/ai/secret-box.js');
+const { slots } = await import('../src/ai/secret-slots.js');
 
 const WS = '11111111-1111-4111-8111-111111111111';
 const WS_B = '22222222-2222-4222-8222-222222222222';
@@ -51,7 +52,7 @@ function setup(members: Array<{ workspaceId: string; userId: string }> = []) {
       findMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) => pick(credentials, where)),
       findUnique: vi.fn(async ({ where }: { where: { id: string } }) => credentials.find((r) => r.id === where.id) ?? null),
       create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
-        const row = { accountId: null, accountLabel: null, accountAvatarUrl: null, ...data, id: `cred-${++seq}`, createdAt: new Date(), updatedAt: new Date() };
+        const row = { accountId: null, accountLabel: null, accountAvatarUrl: null, ...data, id: (data.id as string | undefined) ?? `cred-${++seq}`, createdAt: new Date(), updatedAt: new Date() };
         credentials.push(row);
         return row;
       }),
@@ -127,7 +128,7 @@ describe('token connections', () => {
     expect(connections).toHaveLength(1);
     // The connection dials with the new token; nothing is copied onto its connectors (#857).
     const dialed = credentials.find((c) => c.id === connections[0].credentialId)!;
-    expect(decryptSecret(dialed.secret as string, Buffer.from(key, 'base64'))).toBe('ghp_ann_2');
+    expect(decryptSecret(dialed.secret as string, Buffer.from(key, 'base64'), slots.credential(dialed as { id: string }, 'secret'))).toBe('ghp_ann_2');
     expect(again.credentialHint).toBe(dialed.secretHint);
     expect(connectors[0]).not.toHaveProperty('credential');
 
@@ -162,7 +163,8 @@ describe('token connections', () => {
 describe('credentials (#857)', () => {
   const secretOf = (ctx: ReturnType<typeof setup>, connectionId: string) => {
     const c = ctx.connections.find((r) => r.id === connectionId)!;
-    return decryptSecret(ctx.credentials.find((r) => r.id === c.credentialId)!.secret as string, Buffer.from(key, 'base64'));
+    const row = ctx.credentials.find((r) => r.id === c.credentialId)!;
+    return decryptSecret(row.secret as string, Buffer.from(key, 'base64'), slots.credential(row as { id: string }, 'secret'));
   };
 
   it("reuses the owner's pasted token in another workspace with no re-paste, and nobody else may bind it", async () => {
@@ -208,7 +210,7 @@ describe('credentials (#857)', () => {
     const rebound = await ctx.service.rotate(conn.id, { credential: 'ghp_ann_7' }, BOB);
     expect(rebound).toMatchObject({ id: conn.id, ownerId: BOB, ownerLeft: false });
     // Ann's own credential was not touched: Bob's paste is Bob's.
-    expect(decryptSecret(ctx.credentials.find((c) => c.userId === ANN)!.secret as string, Buffer.from(key, 'base64'))).toBe('ghp_ann_1');
+    expect(decryptSecret(ctx.credentials.find((c) => c.userId === ANN)!.secret as string, Buffer.from(key, 'base64'), slots.credential(ctx.credentials.find((c) => c.userId === ANN) as { id: string }, 'secret'))).toBe('ghp_ann_1');
   });
 
   it('keeps one Atlassian credential across sites, probing it on the site it is used on', async () => {

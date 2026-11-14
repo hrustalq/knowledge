@@ -37,6 +37,8 @@ export type ProviderKeyState =
   | { source: 'environment' }
   | { source: 'default' }
   | { source: 'missing' }
+  /** A key is stored but no longer decrypts (#1106): calls go without one until it is saved again. */
+  | { source: 'unreadable' }
 
 export interface ModelRow {
   id: string
@@ -119,7 +121,9 @@ export function buildProviderRows(
     name: null,
     kind: settings.provider,
     host: settings.provider === 'none' ? null : providerHost(settings.baseUrl, settings.provider),
-    key: !settings.hasApiKey
+    key: settings.apiKeyUnreadable
+      ? { source: 'unreadable' }
+      : !settings.hasApiKey
       ? { source: 'missing' }
       : sources.apiKey === 'db'
         ? { source: 'stored', hint: settings.apiKeyHint }
@@ -153,7 +157,7 @@ export function buildProviderRows(
         name: p.name,
         kind: p.provider,
         host: providerHost(p.baseUrl, p.provider),
-        key: p.hasApiKey ? { source: 'stored', hint: p.apiKeyHint } : { source: 'default' },
+        key: p.apiKeyUnreadable ? { source: 'unreadable' } : p.hasApiKey ? { source: 'stored', hint: p.apiKeyHint } : { source: 'default' },
         models: rowsOf(p.id),
         enabled: p.enabled,
         fromEnvironment: false,

@@ -5,6 +5,7 @@ import 'reflect-metadata';
 import { BadRequestException } from '@nestjs/common';
 import { SignedXml } from 'xml-crypto';
 import { decryptSecret, encryptSecret, parseKey } from '../src/ai/secret-box.js';
+import { slots } from '../src/ai/secret-slots.js';
 import { generateSpKeyPair, parseCertificates } from '../src/auth/sso/saml-cert.js';
 import { identityFromSamlProfile } from '../src/auth/sso/saml-profile.js';
 import { API, fakeConfig, identityProvidersHarness, ssoHarness, WS, type Row } from './sso-fakes.js';
@@ -28,16 +29,19 @@ const config = () => fakeConfig({ SETTINGS_ENCRYPTION_KEY: ENC_KEY });
 
 function harness(samlOver: Row = {}) {
   const h = ssoHarness(config());
-  const provider = (over: Row = {}) =>
-    h.provider({
+  const provider = (over: Row = {}) => {
+    const id = (over.id as string | undefined) ?? randomUUID();
+    return h.provider({
+      id,
       kind: 'saml',
       preset: 'generic',
       name: 'Corp SAML',
       config: { idpEntityId: IDP, ssoUrl: 'https://idp.test/sso', idpCert: idp.certPem, spCert: sp.certPem, ...samlOver },
-      secretCipher: encryptSecret(sp.privateKeyPem, parseKey(ENC_KEY)),
+      secretCipher: encryptSecret(sp.privateKeyPem, parseKey(ENC_KEY), slots.identityProviderSecret({ id, workspaceId: WS })),
       groupsClaim: 'groups',
       ...over,
     });
+  };
   return { ...h, provider };
 }
 
@@ -278,7 +282,7 @@ describe('SAML provider setup', () => {
     await svc.update(WS, row.id, { clientSecret: 'nope', idpEntityId: 'https://idp.test/other' }, admin);
     expect(row.secretCipher).toBe(secretCipher);
     expect(row.config).toMatchObject({ idpEntityId: 'https://idp.test/other', spCert });
-    expect(createPrivateKey(decryptSecret(row.secretCipher, parseKey(ENC_KEY))!).asymmetricKeyType).toBe('rsa');
+    expect(createPrivateKey(decryptSecret(row.secretCipher, parseKey(ENC_KEY), slots.identityProviderSecret(row))!).asymmetricKeyType).toBe('rsa');
   });
 
   it.each([

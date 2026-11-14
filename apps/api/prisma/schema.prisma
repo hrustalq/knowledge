@@ -3164,7 +3164,7 @@ model Credential {
   accountLabel     String? @map("account_label")
   accountAvatarUrl String? @map("account_avatar_url")
 
-  /// secret-box envelopes ("gcm$iv$tag$ct"). Never leave the API.
+  /// secret-box envelopes (`gcm2$<key id>$iv$tag$ct`, sealed to this row and column; old `gcm$` still read). Never leave the API.
   secret        String
   /// Last-4 hint, as on connections.
   secretHint    String? @map("secret_hint")
@@ -3874,6 +3874,14 @@ model ChatLinkCode {
   codeHash         String    @unique @map("code_hash")
   expiresAt        DateTime  @map("expires_at") @db.Timestamptz
   usedAt           DateTime? @map("used_at") @db.Timestamptz
+  /// Who confirmed on the web (#1104). Not linked yet: the link is written only
+  /// once `proofHash`'s number comes back from `externalChatId`. No FK, per house policy.
+  confirmedBy      String?   @map("confirmed_by") @db.Uuid
+  confirmedAt      DateTime? @map("confirmed_at") @db.Timestamptz
+  /// SHA-256 of `<id>:<number>`, the one-time number the confirmation page showed.
+  proofHash        String?   @map("proof_hash")
+  /// Wrong numbers sent back; the code is spent at CHAT_LINK_PROOF_MAX_ATTEMPTS.
+  proofAttempts    Int       @default(0) @map("proof_attempts")
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   integration ChatIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)

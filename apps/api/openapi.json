@@ -41375,7 +41375,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ChatIdentityEntry"
+                  "$ref": "#/components/schemas/ChatLinkPending"
                 }
               }
             }
@@ -41401,7 +41401,7 @@
             }
           }
         },
-        "summary": "Link the messenger account that asked for this code to the signed-in person",
+        "summary": "Confirm a link code: returns the number to send to the bot from that private chat, which is what links the account",
         "tags": [
           "chat"
         ]
@@ -54027,6 +54027,9 @@
           "deliveryId": {
             "type": "string"
           },
+          "signed": {
+            "type": "string"
+          },
           "threadId": {
             "type": "string"
           }
@@ -55094,6 +55097,9 @@
             "type": "string",
             "nullable": true
           },
+          "apiKeyUnreadable": {
+            "type": "boolean"
+          },
           "temperature": {
             "type": "number",
             "nullable": true
@@ -55135,6 +55141,7 @@
           "baseUrl",
           "hasApiKey",
           "apiKeyHint",
+          "apiKeyUnreadable",
           "temperature",
           "maxToolCalls",
           "timeoutMs",
@@ -55203,6 +55210,9 @@
           "apiKeyHint": {
             "type": "string",
             "nullable": true
+          },
+          "apiKeyUnreadable": {
+            "type": "boolean"
           },
           "temperature": {
             "type": "number"
@@ -55293,6 +55303,7 @@
           "model",
           "hasApiKey",
           "apiKeyHint",
+          "apiKeyUnreadable",
           "temperature",
           "maxToolCalls",
           "timeoutMs",
@@ -60169,6 +60180,39 @@
         "required": [
           "integrations",
           "enabled"
+        ]
+      },
+      "ChatLinkPending": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ChatPlatformKind"
+          },
+          "integrationName": {
+            "type": "string"
+          },
+          "botUsername": {
+            "type": "string",
+            "nullable": true
+          },
+          "externalUserName": {
+            "type": "string",
+            "nullable": true
+          },
+          "proof": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "integrationName",
+          "botUsername",
+          "externalUserName",
+          "proof",
+          "expiresAt"
         ]
       },
       "ChatLinkPreview": {

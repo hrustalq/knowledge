@@ -453,6 +453,9 @@ export const KNOWN_EVENT_TYPES = [
   // Plaud sign-in lapsed and needs linking again.
   'plaud.pending',
   'plaud.reconnect',
+  // A messenger account was linked to you (#1104), told to you alone so a link
+  // you did not make is seen.
+  'chat.identity.linked',
   // A source-backed page took a new version from its source (#674), told to
   // the connector's owner; an alert is directed at them (reason `alert`).
   'source.updated',

@@ -90,6 +90,9 @@ interface Delivery {
  * account that is not linked gets the link instruction and nothing else: no
  * model call, no claim row.
  */
+/** A link confirmation's number (#1104): six digits and nothing else. */
+const PROOF_RE = /^\s*\d{6}\s*$/;
+
 @Injectable()
 export class ChatAnswersService {
   private readonly logger = new Logger(ChatAnswersService.name);
@@ -177,6 +180,16 @@ export class ChatAnswersService {
     // A reaction is not addressed to the bot the way a command is: from anyone
     // but a linked editor it is just a reaction, and passes in silence.
     if (inbound.harvestReaction) return userId ? this.harvest(d, userId, locale) : undefined;
+
+    // The number a link confirmation showed (#1104), sent back from the
+    // private chat its code was issued to: the step that actually links. A
+    // six-digit message with no confirmation waiting is an ordinary message.
+    if (inbound.isDm && !command && PROOF_RE.test(inbound.text)) {
+      const outcome = await this.identities.redeemProof(integration, inbound, inbound.text);
+      if (outcome === 'mismatch') return this.notice(d, t('chat.link.proofWrong'));
+      if (outcome === 'refused') return this.notice(d, t('chat.link.proofRefused', { workspace: d.workspaceName }));
+      if (outcome === 'linked') return;
+    }
 
     // Kept for a harvest (#82): a DM's forwards wait for `/capture` instead of
     // being answered; a listening group's messages are kept and then handled

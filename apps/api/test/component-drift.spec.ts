@@ -306,7 +306,7 @@ describe('the sentinel with component ties', () => {
     expect(result.details!.affectedUsages).toMatchObject({ hiddenPages: 2, undocumented: ['apps/web/src/lib/menu.ts'], undocumentedTotal: 1 });
     const firstPrompt = (client.chat.mock.calls[0] as unknown as [unknown, Array<{ content: string }>])[1][1].content;
     expect(firstPrompt).toContain('declares');
-    expect(firstPrompt).toContain('documentId="decl"');
+    expect(firstPrompt).toContain('(documentId decl)');
   });
 
   it('turns a removed declared file into a path fix, folded into the verdict on that page', async () => {

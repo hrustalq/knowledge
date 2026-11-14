@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import {
   BadRequestException,
   ConflictException,
@@ -30,6 +30,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { AuditService } from '../auth/audit.service.js';
 import { decryptSecret, encryptSecret, maskSecret, parseKey } from '../ai/secret-box.js';
+import { slots } from '../ai/secret-slots.js';
 import { assertSafeExternalUrl } from '../common/safe-url.js';
 import { t } from '../i18n/t.js';
 import { ChatAdapterRegistry } from './adapters/chat-adapter.registry.js';
@@ -108,14 +109,14 @@ export class ChatIntegrationsService {
 
   /** What one call to the platform needs. A token that no longer decrypts is no token. */
   context(row: ChatIntegration): ChatAdapterContext | null {
-    const token = decryptSecret(row.credential, this.key);
+    const token = decryptSecret(row.credential, this.key, slots.chatIntegration(row, 'credential'));
     return token
       ? {
           token,
           botUsername: row.botUsername,
           serverUrl: row.serverUrl || null,
           actionUrl: this.webhookUrl(row.id),
-          signingSecret: decryptSecret(row.signingSecret, this.key),
+          signingSecret: decryptSecret(row.signingSecret, this.key, slots.chatIntegration(row, 'signing_secret')),
         }
       : null;
   }
@@ -140,15 +141,17 @@ export class ChatIntegrationsService {
     const botUsername = await this.identify(dto.kind, token, serverUrl);
     let row: ChatIntegration;
     try {
+      const at = { id: randomUUID(), workspaceId: dto.workspaceId };
       row = await this.prisma.chatIntegration.create({
         data: {
+          id: at.id,
           workspaceId: dto.workspaceId,
           kind: dto.kind,
           name: dto.name.trim(),
           serverUrl,
-          credential: encryptSecret(token, this.key),
+          credential: encryptSecret(token, this.key, slots.chatIntegration(at, 'credential')),
           credentialHint: maskSecret(token),
-          signingSecret: signingSecret ? encryptSecret(signingSecret, this.key) : null,
+          signingSecret: signingSecret ? encryptSecret(signingSecret, this.key, slots.chatIntegration(at, 'signing_secret')) : null,
           botUsername,
           defaultAgentKey: dto.defaultAgentKey ?? null,
           locale: dto.locale ?? 'en',
@@ -176,19 +179,19 @@ export class ChatIntegrationsService {
     if (dto.signingSecret !== undefined) {
       const secret = this.signingSecretFor(kind, dto.signingSecret);
       if (!this.key) throw new BadRequestException(t('error.chat.noEncryptionKey'));
-      data.signingSecret = secret ? encryptSecret(secret, this.key) : null;
+      data.signingSecret = secret ? encryptSecret(secret, this.key, slots.chatIntegration(row, 'signing_secret')) : null;
     }
     const token = dto.token?.trim();
     const serverUrl = dto.serverUrl !== undefined ? await this.serverUrlFor(kind, dto.serverUrl) : row.serverUrl;
     const moved = serverUrl !== row.serverUrl;
     if (token || moved) {
       // A new server is asked again who the bot is, with whichever token applies.
-      const proof = token || decryptSecret(row.credential, this.key);
+      const proof = token || decryptSecret(row.credential, this.key, slots.chatIntegration(row, 'credential'));
       if (!proof || !this.key) throw new BadRequestException(t('error.chat.noEncryptionKey'));
       data.botUsername = await this.identify(kind, proof, serverUrl);
       data.serverUrl = serverUrl;
       if (token) {
-        data.credential = encryptSecret(token, this.key);
+        data.credential = encryptSecret(token, this.key, slots.chatIntegration(row, 'credential'));
         data.credentialHint = maskSecret(token);
       }
     }

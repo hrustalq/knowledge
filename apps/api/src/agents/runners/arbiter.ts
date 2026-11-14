@@ -141,8 +141,8 @@ async function arbitrate(
           {
             role: 'user',
             content:
-              `Passage A, from the page "${titleA}":\n${wrapUntrusted(pair.a.text, 'arbiter', 'page')}\n\n` +
-              `Passage B, from the page "${titleB}":\n${wrapUntrusted(pair.b.text, 'arbiter', 'page')}`,
+              `Passage A:\n${wrapUntrusted(`Page: ${titleA}\n\n${pair.a.text}`, 'arbiter', 'page')}\n\n` +
+              `Passage B:\n${wrapUntrusted(`Page: ${titleB}\n\n${pair.b.text}`, 'arbiter', 'page')}`,
           },
         ],
         { json: true },

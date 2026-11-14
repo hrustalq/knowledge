@@ -6,6 +6,7 @@ import type { IdentityProvider } from '@prisma/client';
 import { Client, ResultCodeError, SizeLimitExceededError, type Entry } from 'ldapts';
 import type { TestIdentityProviderResponse } from '@knowledge/contracts';
 import { decryptSecret, parseKey } from '../../ai/secret-box.js';
+import { slots } from '../../ai/secret-slots.js';
 import { guardedLookup } from '../../common/safe-fetch.js';
 import type { Env } from '../../config/env.js';
 import { ldapConfigOf, ldapUrlProblem, userFilterFor } from './ldap-profile.js';
@@ -108,7 +109,7 @@ export class LdapService {
     const client = this.client(config.url, host, url.protocol === 'ldaps:');
     try {
       if (url.protocol === 'ldap:' && config.startTls) await client.startTLS(this.tlsOptions(host));
-      if (config.bindDn) await client.bind(config.bindDn, decryptSecret(provider.secretCipher, this.key) ?? '');
+      if (config.bindDn) await client.bind(config.bindDn, decryptSecret(provider.secretCipher, this.key, slots.identityProviderSecret(provider)) ?? '');
       return await body(client);
     } catch (e) {
       return { ok: false, failure: 'unavailable', detail: (e as Error).message.slice(0, 300) };

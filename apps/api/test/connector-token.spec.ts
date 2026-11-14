@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from 'vitest';
  */
 vi.mock('../src/common/safe-url.js', () => ({ assertSafeExternalUrl: vi.fn(async () => undefined) }));
 const { encryptSecret, decryptSecret } = await import('../src/ai/secret-box.js');
+const { slots } = await import('../src/ai/secret-slots.js');
 const { ConnectorsService } = await import('../src/connectors/connectors.service.js');
 
 const WS = '11111111-1111-4111-8111-111111111111';
@@ -15,7 +16,7 @@ const key = randomBytes(32);
 
 function setup() {
   let seq = 0;
-  const credentials = [{ id: 'cred-1', userId: null, provider: 'github', method: 'token', site: null, secret: encryptSecret('ghp_x', key), secretHint: '…p_x' }];
+  const credentials = [{ id: 'cred-1', userId: null, provider: 'github', method: 'token', site: null, secret: encryptSecret('ghp_x', key, slots.credential({ id: 'cred-1' }, 'secret')), secretHint: '…p_x' }];
   const connections: Array<Record<string, unknown>> = [{ id: 'cx-1', workspaceId: WS, provider: 'github', site: null, method: 'token', credentialId: 'cred-1', createdAt: new Date(0) }];
   const row: Record<string, unknown> = {
     id: 'k-1',
@@ -50,7 +51,7 @@ function setup() {
     credential: {
       findMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) => credentials.filter((c) => matches(c, where))),
       create: vi.fn(async ({ data }: { data: (typeof credentials)[number] }) => {
-        const c = { ...data, id: `cred-${++seq + 1}` };
+        const c = { id: `cred-${++seq + 1}`, ...data };
         credentials.push(c);
         return c;
       }),
@@ -62,7 +63,7 @@ function setup() {
   const service = new ConnectorsService(prisma as never, { get: (k: string) => settings[k] ?? false } as never, {} as never, {} as never, {} as never, {} as never);
   const secretOf = (connectionId: unknown) => {
     const c = connections.find((r) => r.id === connectionId)!;
-    return decryptSecret(credentials.find((r) => r.id === c.credentialId)!.secret, key);
+    return decryptSecret(credentials.find((r) => r.id === c.credentialId)!.secret, key, slots.credential({ id: c.credentialId! }, 'secret'));
   };
   return { service, row, connections, secretOf };
 }

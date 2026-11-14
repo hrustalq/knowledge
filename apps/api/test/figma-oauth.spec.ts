@@ -12,6 +12,7 @@ vi.mock('../src/common/safe-fetch.js', () => ({ safeFetch: vi.fn() }));
 vi.mock('../src/i18n/t.js', () => ({ t: (key: string) => key }));
 const { safeFetch } = await import('../src/common/safe-fetch.js');
 const { decryptSecret, encryptSecret } = await import('../src/ai/secret-box.js');
+const { slots } = await import('../src/ai/secret-slots.js');
 const { signState } = await import('../src/connectors/github/github-jwt.js');
 const { FigmaOauthService } = await import('../src/embeds/figma-oauth.service.js');
 const { FigmaOauthController } = await import('../src/embeds/figma-oauth.controller.js');
@@ -35,7 +36,7 @@ function setup(env: Record<string, unknown> = {}) {
         return c ? { ...c } : null;
       },
       create: async ({ data }: { data: Omit<Cred, 'id'> }) => {
-        const row = { ...data, id: `cred-${data.accountId}` } as Cred;
+        const row = { id: `cred-${data.accountId}`, ...data } as Cred;
         creds.set(row.accountId, row);
         return row;
       },
@@ -100,7 +101,7 @@ describe('FigmaOauthService', () => {
 
     const state = service.verify(params.get('state')!)!;
     expect(state).toMatchObject({ workspaceId: 'ws', userId: 'user', connectorId: 'c1' });
-    const verifier = decryptSecret(state.pkce, KEY)!;
+    const verifier = decryptSecret(state.pkce, KEY, slots.oauthStatePkce('figma', state))!;
     expect(createHash('sha256').update(verifier).digest('base64url')).toBe(params.get('code_challenge'));
   });
 
@@ -132,10 +133,10 @@ describe('FigmaOauthService', () => {
     const form = new URLSearchParams(String(init!.body));
     expect(form.get('grant_type')).toBe('authorization_code');
     expect(form.get('code')).toBe('code-1');
-    expect(form.get('code_verifier')).toBe(decryptSecret(state.pkce, KEY));
+    expect(form.get('code_verifier')).toBe(decryptSecret(state.pkce, KEY, slots.oauthStatePkce('figma', state)));
     expect((mockFetch.mock.calls[1]![1]!.headers as Record<string, string>).authorization).toBe('Bearer at');
 
-    expect(decryptSecret(creds.get('fig-1')!.secret, KEY)).toBe('at');
+    expect(decryptSecret(creds.get('fig-1')!.secret, KEY, slots.credential(creds.get('fig-1')!, 'secret'))).toBe('at');
     expect(creds.get('fig-1')!.userId).toBe('user');
     expect(connectors.get('c1')).toMatchObject({
       config: { allowlist: 'team:1', [FIGMA_GRANT_CONFIG_KEY]: 'fig-1', [FIGMA_HANDLE_CONFIG_KEY]: 'ada' },
@@ -156,7 +157,7 @@ describe('FigmaOauthService', () => {
     expect(prisma.connection.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { workspaceId_provider_method_externalRef: { workspaceId: 'ws', provider: 'figma', method: 'oauth', externalRef: 'fig-1' } },
-        update: { accountId: 'fig-1', accountLabel: 'ada', credentialId: 'cred-fig-1' },
+        update: { accountId: 'fig-1', accountLabel: 'ada', credentialId: creds.get('fig-1')!.id },
       }),
     );
   });
@@ -188,8 +189,8 @@ describe('FigmaOauthService', () => {
       provider: 'figma',
       method: 'oauth',
       accountId: 'fig-1',
-      secret: encryptSecret('old', KEY),
-      refreshSecret: encryptSecret('rt', KEY),
+      secret: encryptSecret('old', KEY, slots.credential({ id: 'cred-1' }, 'secret')),
+      refreshSecret: encryptSecret('rt', KEY, slots.credential({ id: 'cred-1' }, 'refresh_secret')),
       expiresAt: new Date(Date.now() - 1000),
       refreshingUntil: null,
     });
@@ -200,7 +201,7 @@ describe('FigmaOauthService', () => {
     expect(mockFetch.mock.calls[0]![0]).toBe('https://api.figma.com/v1/oauth/refresh');
     expect(new URLSearchParams(String(mockFetch.mock.calls[0]![1]!.body)).get('refresh_token')).toBe('rt');
     expect(creds.get('fig-1')!.refreshingUntil).toBeNull();
-    expect(decryptSecret(creds.get('fig-1')!.secret, KEY)).toBe('new');
+    expect(decryptSecret(creds.get('fig-1')!.secret, KEY, slots.credential(creds.get('fig-1')!, 'secret'))).toBe('new');
 
     // A fresh token is returned as is; one Figma just refused is renewed.
     await expect(service.tokenFor('fig-1')).resolves.toBe('new');

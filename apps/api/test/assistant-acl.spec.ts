@@ -210,22 +210,31 @@ describe('applied documents (documentRefs)', () => {
     const agent = { instructions: 'You help.', config: { webAccess: { effective: 'off' } }, skillIds: [], key: 'researcher' };
     const prepared = await (svc as unknown as { prepareTurn: (...a: unknown[]) => Promise<{ messages: Array<{ content: string }>; collected: Map<string, unknown> }> })
       .prepareTurn(thread, { content: 'What do we pay?', documentRefs }, 'm-1', agent, 'ask', DEV_PRINCIPAL);
-    return { system: prepared.messages[0]!.content, collected: prepared.collected, documents };
+    return {
+      system: prepared.messages[0]!.content as string,
+      user: prepared.messages.at(-1)!.content as string,
+      collected: prepared.collected,
+      documents,
+    };
   }
 
   it('drops a page the member cannot open, unread and untitled', async () => {
-    const { system, collected, documents } = await turn([SECRET, MISSING]);
-    expect(system).not.toContain('CEO earns 1M');
-    expect(system).not.toContain('Salaries');
+    const { system, user, collected, documents } = await turn([SECRET, MISSING]);
+    for (const text of [system, user]) {
+      expect(text).not.toContain('CEO earns 1M');
+      expect(text).not.toContain('Salaries');
+    }
     expect(system).toContain('2 other document(s) the user applied are not available to you');
     expect(collected.has(SECRET)).toBe(false);
     expect(documents.getContent).not.toHaveBeenCalledWith(SECRET);
   });
 
   it('still includes a page the member can open', async () => {
-    const { system, collected } = await turn([OPEN, SECRET]);
-    expect(system).toContain('Read the handbook');
-    expect(system).toContain('"Onboarding"');
+    const { system, user, collected } = await turn([OPEN, SECRET]);
+    // #1102: the page is DATA, in the user turn inside the one wrapper, never beside the instructions.
+    expect(user).toMatch(/<documents tool="applied_document">[\s\S]*Onboarding[\s\S]*Read the handbook[\s\S]*<\/documents>/);
+    expect(system).not.toContain('Read the handbook');
+    expect(system).not.toContain('Onboarding');
     expect(system).toContain('1 other document(s)');
     expect(collected.has(OPEN)).toBe(true);
   });

@@ -9,6 +9,7 @@ import {
   type CredentialSummary,
 } from '@knowledge/contracts';
 import { encryptSecret, maskSecret, parseKey } from '../ai/secret-box.js';
+import { slots } from '../ai/secret-slots.js';
 import type { Env } from '../config/env.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -33,9 +34,9 @@ export class CredentialsService {
     this.key = parseKey(config.get('SETTINGS_ENCRYPTION_KEY', { infer: true }));
   }
 
-  /** The caller's credential for a pasted secret, reused when they pasted it before. The caller encrypts. */
-  saveToken(userId: string | null, provider: ConnectionProvider, site: string | null, secret: string, envelope: string, account: ProviderAccount | null) {
-    return tokenCredential(this.prisma, { userId, provider, site, secret, envelope, hint: maskSecret(secret), account }, this.key);
+  /** The caller's credential for a pasted secret, reused when they pasted it before. The caller checked the key is set. */
+  saveToken(userId: string | null, provider: ConnectionProvider, site: string | null, secret: string, account: ProviderAccount | null) {
+    return tokenCredential(this.prisma, { userId, provider, site, secret, hint: maskSecret(secret), account }, this.key);
   }
 
   /** The caller's own credential, or 403 — nobody else's is ever bound, rotated or shown. */
@@ -65,7 +66,7 @@ export class CredentialsService {
     return this.prisma.credential.update({
       where: { id: row.id },
       data: {
-        secret: encryptSecret(secret, this.key),
+        secret: encryptSecret(secret, this.key, slots.credential(row, 'secret')),
         secretHint: maskSecret(secret),
         ...(account ? { accountId: account.id, accountLabel: account.label, accountAvatarUrl: account.avatarUrl } : {}),
       },

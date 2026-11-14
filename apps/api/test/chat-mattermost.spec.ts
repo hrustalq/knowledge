@@ -1,3 +1,4 @@
+import { createHash, createHmac } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const safeFetch = vi.hoisted(() => vi.fn());
@@ -164,8 +165,12 @@ describe.each(PLATFORMS)('$kind', ({ kind, server }) => {
   describe('button presses', () => {
     const data = 'v:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa:u';
 
+    const later = Math.floor(Date.now() / 1000) + 3600;
+    /** A context as the bot signs it for a post in `channel`. */
+    const signed = (a = data, channel = 'ch-1', e = later, token = TOKEN) => ({ a, c: channel, e, s: signAction(a, channel, e, token) });
+
     it('verifies a press signed with the bot token, and normalises it', () => {
-      const raw = press({ a: data, s: signAction(data, TOKEN) });
+      const raw = press(signed());
       expect(adapter.verifyInbound(raw, null, ctx)).toBe(true);
       expect(adapter.parseInbound(raw, BOT)).toEqual([
         {
@@ -186,18 +191,28 @@ describe.each(PLATFORMS)('$kind', ({ kind, server }) => {
     });
 
     it('refuses a forged, re-targeted or unsigned context, and a message pushed at the webhook', () => {
-      expect(adapter.verifyInbound(press({ a: data, s: 'forged' }), null, ctx)).toBe(false);
+      expect(adapter.verifyInbound(press({ ...signed(), s: 'forged' }), null, ctx)).toBe(false);
       // A real signature over other data: the signature is over exactly what comes back.
-      expect(adapter.verifyInbound(press({ a: data.replace(':u', ':d'), s: signAction(data, TOKEN) }), null, ctx)).toBe(false);
+      expect(adapter.verifyInbound(press({ ...signed(), a: data.replace(':u', ':d') }), null, ctx)).toBe(false);
       // Signed by another bot's token.
-      expect(adapter.verifyInbound(press({ a: data, s: signAction(data, 'other') }), null, ctx)).toBe(false);
+      expect(adapter.verifyInbound(press(signed(data, 'ch-1', later, 'other')), null, ctx)).toBe(false);
       expect(adapter.verifyInbound(press({ a: data }), null, ctx)).toBe(false);
       expect(adapter.verifyInbound(posted({ message: '@knowledge hi' }), null, ctx)).toBe(false);
-      expect(adapter.verifyInbound(press({ a: data, s: signAction(data, TOKEN) }), null, null)).toBe(false);
+      expect(adapter.verifyInbound(press(signed()), null, null)).toBe(false);
+    });
+
+    // #1104: the presser and channel come from the unsigned body, so the signature
+    // binds the channel the button was posted in, and the button expires.
+    it('refuses a press replayed into another channel, an expired one, and a context signed over the action alone', () => {
+      expect(adapter.verifyInbound(press(signed(), { channel_id: 'ch-2' }), null, ctx)).toBe(false);
+      expect(adapter.verifyInbound(press(signed(data, 'ch-2')), null, ctx)).toBe(false);
+      expect(adapter.verifyInbound(press(signed(data, 'ch-1', Math.floor(Date.now() / 1000) - 1)), null, ctx)).toBe(false);
+      const legacy = createHmac('sha256', createHash('sha256').update(`chat-action\0${TOKEN}`, 'utf8').digest()).update(data, 'utf8').digest('base64url');
+      expect(adapter.verifyInbound(press({ a: data, s: legacy }), null, ctx)).toBe(false);
     });
 
     it('a signed press is read as a press only, never as a message riding along', () => {
-      const raw = press({ a: data, s: signAction(data, TOKEN) }, { event: 'posted', data: { post: '{}' } });
+      const raw = press(signed(), { event: 'posted', data: { post: '{}' } });
       expect(adapter.parseInbound(raw, BOT)).toHaveLength(1);
       expect(adapter.parseInbound(raw, BOT)[0].action).not.toBeNull();
     });
@@ -208,7 +223,7 @@ describe.each(PLATFORMS)('$kind', ({ kind, server }) => {
     });
 
     it('answers the press in the HTTP response: the note as ephemeral_text', async () => {
-      const [m] = adapter.parseInbound(press({ a: data, s: signAction(data, TOKEN) }, { trigger_id: 'trig-ack' }), BOT);
+      const [m] = adapter.parseInbound(press(signed(), { trigger_id: 'trig-ack' }), BOT);
       let finish!: () => void;
       const handled = new Promise<void>((r) => (finish = r));
       const response = adapter.respondToAction(m, handled);
@@ -284,11 +299,13 @@ describe.each(PLATFORMS)('$kind', ({ kind, server }) => {
               id: 'a0x0',
               name: '👍',
               type: 'button',
-              integration: { url: ctx.actionUrl, context: { a: 'v:x:u', s: signAction('v:x:u', TOKEN) } },
+              integration: { url: ctx.actionUrl, context: { a: 'v:x:u', c: 'ch-1', e: expect.any(Number), s: expect.any(String) } },
             },
           ],
         },
       ]);
+      // The button it posted verifies as a press from that channel.
+      expect(adapter.verifyInbound(press(body.props.attachments[0].actions[0].integration.context), null, ctx)).toBe(true);
     });
 
     it('starts a thread under a top-level channel message, but not under a direct one', async () => {

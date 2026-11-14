@@ -51,27 +51,49 @@ function harness(code: Partial<{ usedAt: Date | null; expiresAt: Date }> = {}, m
         return data;
       }),
       findUnique: vi.fn(async ({ where }: { where: { codeHash: string } }) => (where.codeHash === row.codeHash ? row : null)),
-      updateMany: vi.fn(async () => ({ count: 1 })),
+      findFirst: vi.fn(async ({ where }: { where: Record<string, unknown> }) =>
+        where.integrationId === row.integrationId &&
+        where.externalUserId === row.externalUserId &&
+        where.externalChatId === row.externalChatId &&
+        row.usedAt === null &&
+        (row as Record<string, unknown>).confirmedBy
+          ? row
+          : null,
+      ),
+      updateMany: vi.fn(async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+        if (where.usedAt === null && row.usedAt !== null) return { count: 0 };
+        const { proofAttempts, ...rest } = data;
+        if (typeof proofAttempts === 'object') (row as Record<string, unknown>).proofAttempts = Number((row as Record<string, unknown>).proofAttempts ?? 0) + 1;
+        else if (proofAttempts !== undefined) (row as Record<string, unknown>).proofAttempts = proofAttempts;
+        Object.assign(row, rest);
+        return { count: 1 };
+      }),
     },
     chatIdentity: {
       upsert: vi.fn(async ({ create }: { create: Record<string, unknown> }) => ({ id: 'ident-1', linkedAt: new Date(), ...create })),
     },
     workspace: { findUnique: vi.fn(async () => ({ name: 'Acme' })) },
   };
+  const membership = { member };
   const access = {
     requireRole: vi.fn(async () => {
-      if (!member) throw new ForbiddenException('not a member');
+      if (!membership.member) throw new ForbiddenException('not a member');
     }),
+    principalFor: vi.fn(async (userId: string) => ({ ...alice, userId })),
   };
   const postMessage = vi.fn(async () => ({ chatId: '42', messageId: '1' }));
+  const notify = vi.fn(async () => [{ userId: 'u-alice' }]);
+  const announce = vi.fn(async () => undefined);
   const svc = new ChatIdentityService(
     prisma as never,
     access as never,
     { context: () => ({ token: 'T', botUsername: 'kn_bot' }) } as never,
     { get: () => ({ postMessage, render: (v: unknown) => v }) } as never,
     { get: (k: string) => ({ CHAT_LINK_CODE_TTL_MINUTES: 15, WEB_BASE_URL: 'https://kn.test/' })[k] } as never,
+    { notify } as never,
+    { announce } as never,
   );
-  return { svc, prisma, access, codes, postMessage };
+  return { svc, prisma, access, codes, postMessage, row, notify, membership };
 }
 
 describe('issueCode', () => {
@@ -92,13 +114,17 @@ describe('issueCode', () => {
   });
 });
 
+// #1104: the confirmation proves a person, the code proves the account, and
+// only a number sent back from that account's own private chat ties the two.
 describe('confirm', () => {
-  it('links the account to the signed-in member and tells the chat', async () => {
+  it('hands back a one-time number and links nothing yet', async () => {
     const h = harness();
-    const entry = await h.svc.confirm('the-code', alice);
-    expect(entry).toMatchObject({ userId: 'u-alice', externalUserId: '42', workspaceId: WS, kind: 'telegram' });
+    const pending = await h.svc.confirm('the-code', alice);
+    expect(pending).toMatchObject({ proof: expect.stringMatching(/^\d{6}$/), botUsername: 'kn_bot', kind: 'telegram' });
     expect(h.access.requireRole).toHaveBeenCalledWith(alice, WS, 'viewer');
-    await vi.waitFor(() => expect(h.postMessage).toHaveBeenCalledOnce());
+    expect(h.prisma.chatIdentity.upsert).not.toHaveBeenCalled();
+    expect(h.row).toMatchObject({ confirmedBy: 'u-alice', usedAt: null });
+    expect(JSON.stringify(h.row)).not.toContain(`"${pending.proof}"`);
   });
 
   it('refuses an unknown, used or expired code', async () => {
@@ -111,17 +137,56 @@ describe('confirm', () => {
     });
   });
 
-  it('refuses somebody who is not a member of the bot’s workspace, before spending the code', async () => {
+  it('refuses somebody who is not a member of the bot’s workspace, before touching the code', async () => {
     const h = harness({}, false);
     await expect(h.svc.confirm('the-code', alice)).rejects.toBeInstanceOf(ForbiddenException);
     expect(h.prisma.chatLinkCode.updateMany).not.toHaveBeenCalled();
     expect(h.prisma.chatIdentity.upsert).not.toHaveBeenCalled();
   });
+});
 
-  it('two confirmations racing link once', async () => {
+describe('redeemProof', () => {
+  const account = { externalUserId: '42', chatId: '42' };
+
+  it('links once the number comes back from the same private chat, tells the chat and notifies the person', async () => {
     const h = harness();
-    h.prisma.chatLinkCode.updateMany.mockResolvedValueOnce({ count: 0 });
-    await expect(h.svc.confirm('the-code', alice)).rejects.toMatchObject({ response: { reason: 'chat.linkCodeUsed' } });
+    const { proof } = await h.svc.confirm('the-code', alice);
+    await expect(h.svc.redeemProof(integration as never, account, proof)).resolves.toBe('linked');
+    expect(h.prisma.chatIdentity.upsert).toHaveBeenCalledWith(expect.objectContaining({ create: expect.objectContaining({ userId: 'u-alice', externalUserId: '42' }) }));
+    expect(h.row.usedAt).not.toBeNull();
+    await vi.waitFor(() => expect(h.postMessage).toHaveBeenCalledOnce());
+    await vi.waitFor(() =>
+      expect(h.notify).toHaveBeenCalledWith(expect.objectContaining({ userIds: ['u-alice'], type: 'chat.identity.linked', workspaceId: WS })),
+    );
+  });
+
+  it('ignores a number from another account or chat', async () => {
+    const h = harness();
+    const { proof } = await h.svc.confirm('the-code', alice);
+    await expect(h.svc.redeemProof(integration as never, { externalUserId: '43', chatId: '43' }, proof)).resolves.toBe('none');
+    expect(h.prisma.chatIdentity.upsert).not.toHaveBeenCalled();
+  });
+
+  it('has nothing to redeem before anybody confirmed', async () => {
+    const h = harness();
+    await expect(h.svc.redeemProof(integration as never, account, '123456')).resolves.toBe('none');
+  });
+
+  it('spends the code after five wrong numbers', async () => {
+    const h = harness();
+    const { proof } = await h.svc.confirm('the-code', alice);
+    const wrong = proof === '000000' ? '000001' : '000000';
+    for (let i = 0; i < 5; i++) await expect(h.svc.redeemProof(integration as never, account, wrong)).resolves.toBe('mismatch');
+    expect(h.row.usedAt).not.toBeNull();
+    await expect(h.svc.redeemProof(integration as never, account, proof)).resolves.toBe('none');
+    expect(h.prisma.chatIdentity.upsert).not.toHaveBeenCalled();
+  });
+
+  it('refuses when the confirming person has left the workspace since', async () => {
+    const h = harness();
+    const { proof } = await h.svc.confirm('the-code', alice);
+    h.membership.member = false;
+    await expect(h.svc.redeemProof(integration as never, account, proof)).resolves.toBe('refused');
     expect(h.prisma.chatIdentity.upsert).not.toHaveBeenCalled();
   });
 });

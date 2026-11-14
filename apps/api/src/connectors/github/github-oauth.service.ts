@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
 import { decryptSecret, encryptSecret, parseKey } from '../../ai/secret-box.js';
+import { slots } from '../../ai/secret-slots.js';
 import { safeFetch } from '../../common/safe-fetch.js';
 import type { Env } from '../../config/env.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
@@ -184,12 +185,12 @@ export class GithubOauthService {
     if (!row) return null;
 
     const fresh = !row.expiresAt || row.expiresAt.getTime() - RENEW_MARGIN_MS > Date.now();
-    if (fresh) return decryptSecret(row.secret, this.key);
+    if (fresh) return decryptSecret(row.secret, this.key, slots.credential(row, 'secret'));
 
     // Expired, and a refresh token is the only way back. Without one the App
     // does not have expiring tokens switched on, in which case `expiresAt` is
     // null and we never reach here.
-    const refresh = decryptSecret(row.refreshSecret, this.key);
+    const refresh = decryptSecret(row.refreshSecret, this.key, slots.credential(row, 'refresh_secret'));
     if (!refresh || (row.refreshExpiresAt && row.refreshExpiresAt.getTime() < Date.now())) {
       return null;
     }
@@ -261,23 +262,27 @@ export class GithubOauthService {
 
   private async store(userId: string, token: TokenResponse, identity: RawUser): Promise<void> {
     const now = Date.now();
-    const signIn = {
+    // Sealed for the row they land in (#1106), so the row is chosen first.
+    const signIn = (id: string) => ({
       accountId: String(identity.id),
       accountLabel: identity.login,
       accountAvatarUrl: identity.avatar_url ?? null,
-      secret: encryptSecret(token.access_token!, this.key),
-      refreshSecret: token.refresh_token ? encryptSecret(token.refresh_token, this.key) : null,
+      secret: encryptSecret(token.access_token!, this.key, slots.credential({ id }, 'secret')),
+      refreshSecret: token.refresh_token ? encryptSecret(token.refresh_token, this.key, slots.credential({ id }, 'refresh_secret')) : null,
       // Absent when the App does not expire user tokens, which is a valid
       // configuration — `tokenFor` reads null as "never stale".
       expiresAt: token.expires_in ? new Date(now + token.expires_in * 1000) : null,
       refreshExpiresAt: token.refresh_token_expires_in ? new Date(now + token.refresh_token_expires_in * 1000) : null,
-    };
+    });
     await this.prisma.$transaction(async (tx) => {
       // One per person: signing in as another GitHub account replaces it.
       const [kept, ...stale] = await tx.credential.findMany({ where: { userId, ...GITHUB_SIGN_IN }, orderBy: { updatedAt: 'desc' } });
       if (stale.length) await tx.credential.deleteMany({ where: { id: { in: stale.map((c) => c.id) } } });
-      if (kept) await tx.credential.update({ where: { id: kept.id }, data: signIn });
-      else await tx.credential.create({ data: { userId, ...GITHUB_SIGN_IN, site: null, ...signIn } });
+      if (kept) await tx.credential.update({ where: { id: kept.id }, data: signIn(kept.id) });
+      else {
+        const id = randomUUID();
+        await tx.credential.create({ data: { id, userId, ...GITHUB_SIGN_IN, site: null, ...signIn(id) } });
+      }
     });
   }
 }

@@ -5,6 +5,7 @@ import type { IdentityProvider } from '@prisma/client';
 import { SAML, ValidateInResponseTo, type CacheProvider, type Profile } from '@node-saml/node-saml';
 import type { TestIdentityProviderResponse } from '@knowledge/contracts';
 import { decryptSecret, parseKey } from '../../ai/secret-box.js';
+import { slots } from '../../ai/secret-slots.js';
 import type { Env } from '../../config/env.js';
 import { parseCertificates } from './saml-cert.js';
 import { samlConfigOf } from './saml-profile.js';
@@ -125,7 +126,7 @@ export class SamlService {
       ? 'IdP certificate does not parse'
       : !certs.some((c) => new Date(new X509Certificate(c).validTo) > now)
         ? 'every IdP certificate has expired'
-        : !decryptSecret(provider.secretCipher, this.key)
+        : !decryptSecret(provider.secretCipher, this.key, slots.identityProviderSecret(provider))
           ? 'the SP key cannot be decrypted (SETTINGS_ENCRYPTION_KEY changed or unset)'
           : null;
     return { ok: error === null, issuer: idpEntityId || null, authorizationEndpoint: ssoUrl || null, error };
@@ -133,7 +134,7 @@ export class SamlService {
 
   private instance(provider: IdentityProvider, validateInResponseTo: ValidateInResponseTo, cacheProvider?: CacheProvider): SAML {
     const cfg = samlConfigOf(provider);
-    const spKey = decryptSecret(provider.secretCipher, this.key);
+    const spKey = decryptSecret(provider.secretCipher, this.key, slots.identityProviderSecret(provider));
     if (!spKey) throw new Error('the SP key cannot be decrypted (SETTINGS_ENCRYPTION_KEY changed or unset)');
     const entityId = this.entityId(provider.id);
     return new SAML({

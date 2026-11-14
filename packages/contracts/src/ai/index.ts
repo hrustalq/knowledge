@@ -795,6 +795,8 @@ export interface AiSettingsResponse {
   hasApiKey: boolean;
   /** Last-4 hint of the stored key, when one is stored in the DB. */
   apiKeyHint: string | null;
+  /** A key is stored but no longer decrypts (#1106): calls go without one until it is saved again. */
+  apiKeyUnreadable: boolean;
   temperature: number;
   maxToolCalls: number;
   timeoutMs: number;
@@ -963,6 +965,8 @@ export interface AiProviderSummary {
   baseUrl: string | null;
   hasApiKey: boolean;
   apiKeyHint: string | null;
+  /** A key is stored but no longer decrypts (#1106): calls go without one until it is saved again. */
+  apiKeyUnreadable: boolean;
   temperature: number | null;
   maxToolCalls: number | null;
   timeoutMs: number | null;
@@ -1802,6 +1806,12 @@ export interface AgentRunEvent {
    * however often the sender retries it.
    */
   deliveryId?: string;
+  /**
+   * SHA-256 hex of what a `webhook` delivery's signature covers
+   * (`<timestamp>.<body>`), #1106. The delivery id is not signed, so a captured
+   * request resent under a fresh id is recognised by this instead.
+   */
+  signed?: string;
   /** The discussion a `comment.mention` run answers into. */
   threadId?: string;
 }

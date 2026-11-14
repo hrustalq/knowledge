@@ -21,6 +21,7 @@ import { AiModelsService } from './ai-models.service.js';
 import { SourcePolicyService } from './source-policy.service.js';
 import { assertSafeBaseUrl, movesEndpoint } from './provider-endpoint.js';
 import { encryptSecret, maskSecret, MissingEncryptionKeyError } from './secret-box.js';
+import { slots } from './secret-slots.js';
 import { currentLocale, t } from '../i18n/t.js';
 
 export interface UpdateAiSettingsInput {
@@ -118,6 +119,7 @@ export class AiSettingsService {
       model: effective.model,
       hasApiKey: effective.apiKey !== '',
       apiKeyHint: effective.sources.apiKey === 'db' ? maskSecret(effective.apiKey) : null,
+      apiKeyUnreadable: effective.apiKeyUnreadable === true,
       temperature: effective.temperature,
       maxToolCalls: effective.maxToolCalls,
       timeoutMs: effective.timeoutMs,
@@ -214,7 +216,7 @@ export class AiSettingsService {
       ...pick(input, 'captureAmendThreshold'),
       ...pick(input, 'captureParentDocumentId'),
       ...(input.enforceBudget === undefined ? {} : { enforceBudget: input.enforceBudget }),
-      ...(input.apiKey === undefined ? (moves ? { apiKeyCipher: null } : {}) : { apiKeyCipher: this.encryptKey(input.apiKey) }),
+      ...(input.apiKey === undefined ? (moves ? { apiKeyCipher: null } : {}) : { apiKeyCipher: this.encryptKey(input.apiKey, workspaceId) }),
       updatedBy: actorId ?? null,
     };
 
@@ -354,10 +356,10 @@ export class AiSettingsService {
     return routed ?? (await this.decision.routeFor(workspaceId))?.config.model ?? DECISION_DEFAULT_MODEL;
   }
 
-  private encryptKey(apiKey: string | null): string | null {
+  private encryptKey(apiKey: string | null, workspaceId: string): string | null {
     if (apiKey === null || apiKey === '') return null; // explicit clear
     try {
-      return encryptSecret(apiKey, this.aiConfig.encryptionKey);
+      return encryptSecret(apiKey, this.aiConfig.encryptionKey, slots.aiSettingsKey(workspaceId));
     } catch (err) {
       if (err instanceof MissingEncryptionKeyError) {
         throw new BadRequestException(

@@ -357,10 +357,11 @@ export function reportJudgementPrompt(
     `A reader says the page below is wrong. Decide whether the PAGE needs correcting, judging the report against ` +
     `the page and what the tools show you; the report itself may be mistaken. Report id ${report.id}.\n\n` +
     wrapUntrusted(body, 'knowledge_report_issue', 'report') +
-    `\n\n<page title=${JSON.stringify(page.title)} documentId="${page.id}">\n${page.markdown.slice(0, maxPageChars)}\n</page>` +
+    `\n\nThe page (documentId ${page.id}):\n` +
+    wrapUntrusted(`Title: ${page.title}\n\n${page.markdown.slice(0, maxPageChars)}`, 'reported_page', 'document') +
     (reported
       ? `\n\nThe reporter read an earlier revision (${reported.revisionId}); the page has changed since. That revision, for context only:\n` +
-        `<page title=${JSON.stringify(page.title)} documentId="${page.id}" revisionId="${reported.revisionId}">\n${reported.markdown.slice(0, maxPageChars)}\n</page>`
+        wrapUntrusted(`Title: ${page.title}\n\n${reported.markdown.slice(0, maxPageChars)}`, 'reported_revision', 'document')
       : '')
   );
 }

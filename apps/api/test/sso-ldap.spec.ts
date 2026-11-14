@@ -4,6 +4,7 @@ import 'reflect-metadata';
 import { BadRequestException, ForbiddenException, NotFoundException, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { LDAP_DEFAULT_USER_FILTER } from '@knowledge/contracts';
 import { decryptSecret, parseKey } from '../src/ai/secret-box.js';
+import { slots } from '../src/ai/secret-slots.js';
 import { identityFromLdapEntry, ldapUrlProblem, userFilterFor, userFilterValid } from '../src/auth/sso/ldap-profile.js';
 import { fakeConfig, identityProvidersHarness, ssoHarness, WS, type Row } from './sso-fakes.js';
 
@@ -291,14 +292,14 @@ describe('LDAP provider setup', () => {
     expect(view).toMatchObject({ kind: 'ldap', hasSecret: true, redirectUri: '', backchannelLogoutUri: null, saml: null });
     expect(view.ldap).toEqual({ url: 'ldaps://127.0.0.1:636', startTls: false, bindDn: SVC, baseDn: body.baseDn, userFilter: null, emailAttribute: null, nameAttribute: null });
     expect(JSON.stringify(view)).not.toContain('s3cret');
-    expect(decryptSecret(rows[0].secretCipher, parseKey(ENC_KEY))).toBe('s3cret');
+    expect(decryptSecret(rows[0].secretCipher, parseKey(ENC_KEY), slots.identityProviderSecret(rows[0]))).toBe('s3cret');
     // The audit row says the password changed, never to what.
     expect(JSON.stringify(audit.record.mock.calls)).not.toContain('s3cret');
     expect((audit.record.mock.calls as unknown as Row[][])[0][0].params.fields).toContain('bindPassword');
 
     // A stray clientSecret is not the bind password; an absent bindPassword keeps it.
     await svc.update(WS, view.id, { clientSecret: 'nope', baseDn: 'dc=corp,dc=example' }, admin);
-    expect(decryptSecret(rows[0].secretCipher, parseKey(ENC_KEY))).toBe('s3cret');
+    expect(decryptSecret(rows[0].secretCipher, parseKey(ENC_KEY), slots.identityProviderSecret(rows[0]))).toBe('s3cret');
     expect(rows[0].config.baseDn).toBe('dc=corp,dc=example');
   });
 

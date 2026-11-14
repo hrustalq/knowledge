@@ -12,6 +12,7 @@ import {
   type SiteAudienceRuleInput,
 } from '@knowledge/contracts';
 import { encryptSecret } from '../src/ai/secret-box.js';
+import { slots } from '../src/ai/secret-slots.js';
 import { SiteAudienceStamper, pathIds } from '../src/publishing/site-audience.stamper.js';
 import { SiteAudiencesService } from '../src/publishing/site-audiences.service.js';
 import { safeReturnTo } from '../src/common/safe-return-to.js';
@@ -178,7 +179,7 @@ function sessions(opts: { authMode?: 'none' | 'api-key'; member?: boolean } = {}
   };
   const values: Record<string, unknown> = { SITE_VISITOR_TTL_MIN: 60, AUTH_MODE: opts.authMode ?? 'api-key', SETTINGS_ENCRYPTION_KEY: KEY_B64 };
   const service = new SiteSessionService({ kv: store } as never, prisma as never, { get: (k: string) => values[k] } as never);
-  const site = { id: SITE, workspaceId: WS, visitorSecretCipher: encryptSecret(SECRET, KEY) as string | null };
+  const site = { id: SITE, workspaceId: WS, visitorSecretCipher: encryptSecret(SECRET, KEY, slots.publishedSiteVisitor({ id: SITE, workspaceId: WS })) as string | null };
   return { service, store, site, setMember: (m: typeof member) => (member = m) };
 }
 
@@ -228,7 +229,7 @@ describe('SiteSessionService', () => {
   it('rotating or clearing the secret ends visitor sessions; without a secret no token is accepted', async () => {
     const { service, site } = sessions();
     const opened = await service.redeemToken(site, jwt({ exp: inAnHour() }));
-    const rotated = { ...site, visitorSecretCipher: encryptSecret('new-secret', KEY) };
+    const rotated = { ...site, visitorSecretCipher: encryptSecret('new-secret', KEY, slots.publishedSiteVisitor(site)) };
     expect(await service.viewer(rotated, cookie(opened!.session))).toEqual({ kind: 'anonymous' });
     const cleared = { ...site, visitorSecretCipher: null };
     expect(await service.viewer(cleared, cookie(opened!.session))).toEqual({ kind: 'anonymous' });
@@ -374,7 +375,7 @@ describe('SiteAudiencesService', () => {
     const { secret } = await service.rotateVisitorSecret(SITE);
     expect(secret.length).toBeGreaterThanOrEqual(40);
     const stored = (prisma.publishedSite.update.mock.calls[0] as unknown as [{ data: { visitorSecretCipher: string } }])[0].data.visitorSecretCipher;
-    expect(stored.startsWith('gcm$')).toBe(true);
+    expect(stored.startsWith('gcm2$')).toBe(true);
     expect(stored).not.toContain(secret);
     expect((await service.list(SITE)).visitorAuth.configured).toBe(true);
 

@@ -60,11 +60,14 @@ same builder.
 matching `guard.doc` / `guard.ws` / `guard.project` call — the per-tool twin of
 `@Access`, pinned by a test that fails if the guard is removed.
 
-**One code path, byte-identical.** REST, web and MCP all call
+**One code path, one text.** REST, web and MCP all call
 `AiReadableService`. The web tier is a pass-through proxy — status, bytes, ETag
 and cache headers are the API's — and the MCP handlers call the same service
 methods the controllers do (without `ifNoneMatch`: MCP has no conditional read).
-A test compares the MCP read with the REST response byte for byte.
+The MCP read is the REST text inside one `wrapUntrusted(…, 'document')` block
+(#1141): a client hands a resource to its model as it hands a tool result, and
+the page's authors wrote it. A test compares the MCP read with the wrapped REST
+response.
 
 **Derived at read time, freshness is the ETag.** No stored copy, no
 regeneration job. A page's ETag hashes revision id, title, project and the

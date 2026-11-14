@@ -1,8 +1,10 @@
+import { randomUUID } from 'node:crypto';
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, type ApiTestEnvironment as Row } from '@prisma/client';
 import type { ApiTestEnvironment, SaveApiTestEnvironmentRequest } from '@knowledge/contracts';
 import { MissingEncryptionKeyError, decryptSecret, encryptSecret, parseKey } from '../ai/secret-box.js';
+import { slots } from '../ai/secret-slots.js';
 import type { Env } from '../config/env.js';
 import { t } from '../i18n/t.js';
 import type { AccessScope } from '../permissions/access-scope.js';
@@ -83,15 +85,17 @@ export class ApiTestEnvironmentsService {
     const secrets = mergeSecrets({}, dto.secrets);
     const projectId = await this.checkProject(scope, dto.projectId ?? null);
     try {
+      const id = randomUUID();
       const row = await this.prisma.apiTestEnvironment.create({
         data: {
+          id,
           workspaceId,
           name,
           server: checkServer(dto.server ?? null),
           inputs: checkValues(dto.inputs ?? {}),
           secretOrigins: checkOrigins(dto.secretOrigins ?? []),
           projectId,
-          ...this.seal(secrets),
+          ...this.seal(secrets, { id, workspaceId }),
           createdBy: userId,
           updatedBy: userId,
         },
@@ -119,8 +123,8 @@ export class ApiTestEnvironmentsService {
     // Binding a shared environment narrows who may use it; any other change of project widens.
     const shared = projectId !== row.projectId && row.projectId !== null;
     const widened = shared || [...after].some((origin) => !before.has(origin));
-    if (widened) Object.assign(data, this.seal(mergeSecrets({}, dto.secrets)));
-    else if (dto.secrets !== undefined) Object.assign(data, this.seal(mergeSecrets(this.open(row), dto.secrets)));
+    if (widened) Object.assign(data, this.seal(mergeSecrets({}, dto.secrets), row));
+    else if (dto.secrets !== undefined) Object.assign(data, this.seal(mergeSecrets(this.open(row), dto.secrets), row));
     try {
       return toInfo(await this.prisma.apiTestEnvironment.update({ where: { id }, data }));
     } catch (e) {
@@ -177,16 +181,16 @@ export class ApiTestEnvironmentsService {
 
   private open(row: Row): Record<string, string> {
     if (!row.secretsCipher) return {};
-    const plain = decryptSecret(row.secretsCipher, this.key);
+    const plain = decryptSecret(row.secretsCipher, this.key, slots.apiTestEnvironmentSecrets(row));
     if (plain === null) throw new BadRequestException(t('error.apiTestEnvironment.unreadable', { name: row.name }));
     return JSON.parse(plain) as Record<string, string>;
   }
 
-  private seal(secrets: Record<string, string>): { secretsCipher: string | null; secretNames: string[] } {
+  private seal(secrets: Record<string, string>, row: { id: string; workspaceId: string }): { secretsCipher: string | null; secretNames: string[] } {
     const names = Object.keys(secrets).sort();
     if (!names.length) return { secretsCipher: null, secretNames: [] };
     try {
-      return { secretsCipher: encryptSecret(JSON.stringify(secrets), this.key), secretNames: names };
+      return { secretsCipher: encryptSecret(JSON.stringify(secrets), this.key, slots.apiTestEnvironmentSecrets(row)), secretNames: names };
     } catch (e) {
       if (e instanceof MissingEncryptionKeyError) throw new BadRequestException(t('error.apiTestEnvironment.keyMissing'));
       throw e;

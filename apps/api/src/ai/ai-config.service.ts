@@ -14,7 +14,8 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { AiProvidersService } from './ai-providers.service.js';
 import { AiModelsService, modelAvailable, modelPrices, type AiModelRow } from './ai-models.service.js';
 import { SourcePolicyService } from './source-policy.service.js';
-import { decryptSecret, parseKey } from './secret-box.js';
+import { decryptSecret, parseKey, secretStatus } from './secret-box.js';
+import { slots } from './secret-slots.js';
 import { resolveExternalAiActions } from './external-ai-actions.js';
 import { resolveCaptureSettings } from './capture-settings.js';
 import { resolveDecisionSettings } from './decision-settings.js';
@@ -30,6 +31,12 @@ export interface ResolvedAiConfig {
   model: string;
   /** Never leaves the API process — controllers get `hasApiKey` instead. */
   apiKey: string;
+  /**
+   * A key is stored for this connection but no longer decrypts (another
+   * SETTINGS_ENCRYPTION_KEY, an envelope moved from another row), #1106. The
+   * connection then has no key: it does not fall back to the env credential.
+   */
+  apiKeyUnreadable?: boolean;
   /**
    * Whether `baseUrl` may resolve to a private address: true for the operator's
    * ASSISTANT_BASE_URL endpoint, and for a workspace's own base URL only under
@@ -139,9 +146,11 @@ export class AiConfigService {
     const envBaseUrl = this.config.get('ASSISTANT_BASE_URL', { infer: true });
     const envModel = this.config.get('ASSISTANT_MODEL', { infer: true });
     const envKey = this.config.get('ASSISTANT_API_KEY', { infer: true });
-    // A row written under a rotated/absent key decrypts to null and falls back
-    // to the env credential rather than taking the assistant down.
-    const dbKey = decryptSecret(row?.apiKeyCipher, this.key);
+    // A stored key that no longer decrypts is reported, never replaced by the
+    // env credential behind the admin's back (#1106).
+    const keySlot = slots.aiSettingsKey(workspaceId);
+    const dbKey = decryptSecret(row?.apiKeyCipher, this.key, keySlot);
+    const apiKeyUnreadable = secretStatus(row?.apiKeyCipher, this.key, keySlot) === 'unreadable';
 
     const model = row?.model || (row?.provider ? '' : envModel) || defaults?.model || '';
     const baseUrl = (row?.baseUrl || (row?.provider ? '' : envBaseUrl) || defaults?.baseUrl || '').replace(/\/$/, '');
@@ -161,7 +170,8 @@ export class AiConfigService {
       provider,
       baseUrl,
       model,
-      apiKey: dbKey ?? (onEnvEndpoint ? envKey : ''),
+      apiKey: dbKey ?? (onEnvEndpoint && !apiKeyUnreadable ? envKey : ''),
+      apiKeyUnreadable,
       privateOk: onEnvEndpoint || this.allowPrivate,
       temperature: row?.temperature ?? 0.2,
       maxToolCalls: row?.maxToolCalls ?? this.config.get('ASSISTANT_MAX_TOOL_CALLS', { infer: true }),
@@ -275,7 +285,7 @@ export class AiConfigService {
     const resolved = await this.providers.resolveRow(providerId);
     // Belt and braces against a provider from another tenant.
     if (!resolved || resolved.row.workspaceId !== base.workspaceId) return null;
-    const { row, apiKey } = resolved;
+    const { row, apiKey, apiKeyUnreadable } = resolved;
     const defaults = PROVIDER_DEFAULTS[row.provider];
     const baseUrl = endpointOf(row.provider, row.baseUrl);
     // A key-less provider borrows the default config's key only when it dials
@@ -287,7 +297,8 @@ export class AiConfigService {
       provider: row.provider,
       baseUrl,
       model: defaults?.model || '',
-      apiKey: apiKey ?? (sameEndpoint ? base.apiKey : ''),
+      apiKey: apiKey ?? (sameEndpoint && !apiKeyUnreadable ? base.apiKey : ''),
+      apiKeyUnreadable,
       privateOk: sameEndpoint ? base.privateOk : this.allowPrivate,
       temperature: row.temperature ?? base.temperature,
       maxToolCalls: row.maxToolCalls ?? base.maxToolCalls,

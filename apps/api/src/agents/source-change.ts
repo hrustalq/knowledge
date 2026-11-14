@@ -122,10 +122,11 @@ export function sourceChangePrompt(
   maxPageChars: number,
 ): string {
   return (
-    `The page below links "${source.title}", a page synced from ${source.url}. A new version of that source ` +
+    `The page below links a page synced from ${source.url}. A new version of that source ` +
     `changed the sections shown. Decide whether the page below is now wrong.\n\n` +
-    wrapUntrusted(excerpt, 'source', 'web') +
-    `\n\n<page title=${JSON.stringify(page.title)} documentId="${page.id}">\n${page.markdown.slice(0, maxPageChars)}\n</page>`
+    wrapUntrusted(`Source page: ${source.title}\n\n${excerpt}`, 'source', 'web') +
+    `\n\nThe page (documentId ${page.id}):\n` +
+    wrapUntrusted(`Title: ${page.title}\n\n${page.markdown.slice(0, maxPageChars)}`, 'linking_page', 'document')
   );
 }
 

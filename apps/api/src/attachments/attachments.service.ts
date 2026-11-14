@@ -94,7 +94,7 @@ export class AttachmentsService {
         documentId: document.id,
         filename: dto.filename,
         contentType: dto.contentType,
-        sizeBytes: dto.sizeBytes ?? 0,
+        sizeBytes: dto.sizeBytes,
         s3Key,
         status: 'pending',
         uploadedBy: userId ?? AUTHOR_ID_STUB,
@@ -102,7 +102,7 @@ export class AttachmentsService {
     });
 
     const expiresInSeconds = 900;
-    const url = await this.storage.presignPut(s3Key, dto.contentType, expiresInSeconds);
+    const url = await this.storage.presignPut(s3Key, dto.contentType, expiresInSeconds, { contentLength: dto.sizeBytes });
     return {
       attachment: this.toSummary(row),
       upload: {

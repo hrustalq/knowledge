@@ -32,9 +32,12 @@ function harness(opts: { token: string | null; visible: string[] }) {
   const browse = new GithubBrowseService(prisma as never, app as never, oauth as never);
   (browse as unknown as { userInstallations: unknown }).userInstallations = async () => opts.visible.map((installationId) => ({ installationId }));
   const config = { get: () => 'https://web.example.test' };
-  const controller = new GithubController(app as never, oauth as never, browse, config as never, {} as never);
+  // The starter's own browser (#1095): its session cookie names the user the state names.
+  const tokenAuth = { resolveSessionCookie: async () => ({ userId: USER }) };
+  const controller = new GithubController(app as never, oauth as never, browse, config as never, {} as never, tokenAuth as never);
   const res = { redirect: vi.fn() };
-  const call = (installationId: string, code?: string) => controller.callback(res as never, 'signed', code, installationId);
+  const req = { headers: { cookie: 'kn_token=ks_starter' } };
+  const call = (installationId: string, code?: string) => controller.callback(req as never, res as never, 'signed', code, installationId);
   return { prisma, res, call };
 }
 
@@ -89,5 +92,23 @@ describe('binding a connector to an app connection', () => {
 
   it('binds when the caller reaches it', async () => {
     await expect(via(async (id) => id === '999')).resolves.toMatchObject({ connectionId: 'conn-1' });
+  });
+});
+
+describe('naming an installation in connector config (GHSA-52pw-fwcw-7mmf, the config path)', () => {
+  const ask = async (config: Record<string, string>, stored: Record<string, unknown>, reach?: (id: string) => Promise<boolean>) => {
+    const { assertInstallationReach } = await import('../src/connectors/connectors.service.js');
+    return assertInstallationReach(config, stored, reach);
+  };
+
+  it('refuses an installation the caller cannot reach, or with nobody to ask', async () => {
+    await expect(ask({ githubInstallationId: '999' }, {}, async () => false)).rejects.toThrow(/githubNotVisible/);
+    await expect(ask({ githubInstallationId: '999' }, {})).rejects.toThrow(/githubNotVisible/);
+  });
+
+  it('lets through one the caller reaches, the one the row already holds, and config naming none', async () => {
+    await expect(ask({ githubInstallationId: '111' }, {}, async (id) => id === '111')).resolves.toBeUndefined();
+    await expect(ask({ githubInstallationId: '999' }, { githubInstallationId: '999' })).resolves.toBeUndefined();
+    await expect(ask({ repoUrl: 'https://github.com/a/b' }, {})).resolves.toBeUndefined();
   });
 });

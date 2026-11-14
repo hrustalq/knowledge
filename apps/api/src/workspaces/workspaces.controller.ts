@@ -64,7 +64,7 @@ export class WorkspacesController {
 
   @Post()
   @Returns('CreateWorkspaceResponse')
-  @ApiOperation({ summary: 'Create a workspace — the creator becomes its admin + trusted operator' })
+  @ApiOperation({ summary: 'Create a workspace — the creator becomes its admin + trusted operator (platform admins only while AUTH_SIGNUP_ENABLED=false)' })
   create(@CurrentPrincipal() principal: Principal, @Body() dto: CreateWorkspaceDto): Promise<CreateWorkspaceResponse> {
     return this.workspaces.create(principal, dto.name);
   }
@@ -181,12 +181,13 @@ export class WorkspacesController {
   @Get(':id/candidates')
   @Returns('ListWorkspaceCandidatesResponse')
   @Access('admin', 'workspace')
-  @ApiOperation({ summary: 'Users who are not members yet, for the add-member picker (workspace admin)' })
+  @ApiOperation({ summary: 'Users who are not members yet, for the add-member picker (workspace admin: one full email; platform admin: any fragment)' })
   listCandidates(
+    @CurrentPrincipal() principal: Principal,
     @Param('id', ParseUUIDPipe) id: string,
     @Query() query: ListCandidatesQueryDto,
   ): Promise<ListWorkspaceCandidatesResponse> {
-    return this.workspaces.listCandidates(id, query.q, query.limit ?? 20);
+    return this.workspaces.listCandidates(principal, id, query.q, query.limit ?? 20);
   }
 
   @Post(':id/members')

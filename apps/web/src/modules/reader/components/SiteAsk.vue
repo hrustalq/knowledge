@@ -7,8 +7,9 @@
  *
  * Client-only by nature — there is nothing to render before someone asks — so
  * the markdown parser and the citation pass load on the first answer, and the
- * reader's own bundle stays the size it was. The answer is sanitized here with
- * the app's SANITIZE_CONFIG, as MarkdownView does; the API sends markdown.
+ * reader's own bundle stays the size it was. The answer is sanitized here as
+ * model output (shared/utils/untrusted-markdown, #1099), as MarkdownView's `untrusted`
+ * does; the API sends markdown.
  */
 import { computed, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -57,13 +58,14 @@ function hrefOf(source: PublicSiteAskSource): string {
 }
 
 async function render(res: PublicSiteAskResponse) {
-  const [{ markdownToHtml, SANITIZE_CONFIG }, cites, { default: DOMPurify }] = await Promise.all([
+  const [{ markdownToHtml }, { sanitizeUntrusted }, cites] = await Promise.all([
     import('@/core/markdown/render'),
+    import('@/shared/utils/untrusted-markdown'),
     loadCitations(),
-    import('dompurify'),
   ])
   anchorOf = (path) => cites.headingAnchor(path)
-  html.value = DOMPurify.sanitize(markdownToHtml(res.answer), SANITIZE_CONFIG)
+  // A model's answer: nothing in it loads from another host by itself (#1099).
+  html.value = sanitizeUntrusted(markdownToHtml(res.answer))
   await nextTick()
   if (body.value) {
     for (const a of body.value.querySelectorAll('a[href]')) {
@@ -157,7 +159,7 @@ defineExpose({ focus: () => input.value?.focus() })
         <p v-else-if="answer && !answer.answer" class="text-sm text-muted-foreground">{{ t('siteReader.askNoAnswer') }}</p>
 
         <template v-else-if="answer">
-          <!-- eslint-disable-next-line vue/no-v-html -- sanitized above with the app's SANITIZE_CONFIG -->
+          <!-- eslint-disable-next-line vue/no-v-html -- sanitized above as model output (sanitizeUntrusted) -->
           <div ref="body" class="markdown-body max-w-none text-sm" @click="onAnswerClick" v-html="html" />
 
           <div v-if="answer.sources.length" class="mt-4 border-t pt-3">

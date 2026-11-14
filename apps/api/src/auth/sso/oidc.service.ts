@@ -5,6 +5,7 @@ import * as client from 'openid-client';
 import { createRemoteJWKSet, customFetch, jwtVerify, type JWTVerifyGetKey } from 'jose';
 import type { OidcProviderConfig, TestIdentityProviderResponse } from '@knowledge/contracts';
 import { decryptSecret, parseKey } from '../../ai/secret-box.js';
+import { slots } from '../../ai/secret-slots.js';
 import { safeFetch } from '../../common/safe-fetch.js';
 import type { Env } from '../../config/env.js';
 import { identityFromClaims, identityFromYandex, type ClaimsResult } from './oidc-claims.js';
@@ -205,7 +206,7 @@ export class OidcService {
     const preset = OIDC_PRESETS[presetOf(provider.preset)];
     const { issuer: typed, clientId } = oidcConfigOf(provider);
     const issuer = preset.issuer ?? typed;
-    const secret = decryptSecret(provider.secretCipher, this.key) ?? undefined;
+    const secret = decryptSecret(provider.secretCipher, this.key, slots.identityProviderSecret(provider)) ?? undefined;
     const auth = secret ? client.ClientSecretPost(secret) : client.None();
     const fetchVia: client.CustomFetch = (url, options) =>
       safeFetch(url, options as unknown as RequestInit, this.allowPrivate);

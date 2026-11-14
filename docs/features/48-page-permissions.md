@@ -29,7 +29,11 @@ and connector mirroring in [19 §Access mirroring](19-connectors.md#access-mirro
   node on the chain project → root page → … → page. Restricting a page hides its
   whole subtree. A child can narrow its parent's restriction but never reopen
   it. A page moved under a restricted parent is restricted in the same
-  transaction, and moving it out lifts that at once.
+  transaction, and moving it out lifts that at once. Placing a page counts as
+  creating it there (#1087): a move or reparent (`PATCH` `parentId` /
+  `projectId`, `POST :id/move`) asks `requireCreateUnder` of the destination,
+  so it answers exactly as create does and cannot hide a page from its own
+  mover or probe a hidden parent.
 - **The workspace role is the ceiling.** A `viewer` with an `edit` grant still
   only reads. Edit is decided by the nearest restricted node that carries any
   edit or manage grant; with none, an `editor` edits as before.
@@ -157,13 +161,17 @@ pending requests expire after `ACCESS_REQUEST_TTL_DAYS`.
 
 | Surface | Behaviour |
 | --- | --- |
-| REST | The guard checks the page behind `document`, `merge-request` and `project` routes. Lists, the tree, breadcrumbs, project overviews, entity views, the knowledge-health dashboard and profiles take the caller's scope. |
+| REST | The guard checks the page behind `document`, `merge-request`, `workflow-run`, `share-link` and `project` routes, and behind an ingestion `job` (with its revision's branch, #1090). Lists, the tree, breadcrumbs, project overviews, entity views, the knowledge-health dashboard and profiles take the caller's scope. |
 | Search | All three legs (vector, BM25, graph expansion). PG has the final say; the stores get a deny or allow list as a prefilter. Results still fill `limit` when enough visible pages match. |
 | Graph | Hidden pages' edges are dropped, then every entity only those edges named, so a restricted page cannot leak an entity name. |
 | Assistant | The scope is read **on every tool call**, so revoking access mid-turn applies to the next call. A hidden page reads as "not found" to the model. Write tools need `edit`. |
 | Agents, workflows, chat bots | Output posted where others read it uses the **audience clamp**: a source page is usable only if everyone who can read the destination could read it too ([06 §The audience clamp](../architecture/06-auth-acl.md#the-audience-clamp)). |
 | MCP | Same guard per page. `knowledge_search`, the tree and project tools are scoped, and guests may use them. New tools are `knowledge_get_page_access` (read) and `knowledge_request_access` (write; hidden from read-only keys). |
-| Notifications, activity, live events | Delivered or listed only for people who can open the page. Live connections get `acl.changed`, which names no page, after any grant, restriction or group change, and refetch. |
+| Notifications, activity, live events | Delivered or listed only for people who can open the page. Live connections get `acl.changed`, which names no page, after any grant, restriction or group change, and refetch. A page-less row or `project.*` frame is judged by its project (#1088). So are a connector's rows (filed under the connector's project when recorded) and every page-less frame that carries `projectId`: `connector.run.*`, `connector.item.reverted`, `capture.approved` (#1140). A private run's `agent.run.*` frame (a memo's, a restricted project's drift check) is addressed to its creator alone. A row about a page or project that has been deleted is listed only for those who see everything, since nothing left records whether it was restricted. |
+| Release tags | A project's tag is listed only while its project exists and the caller may see it (#1088). |
+| Agent findings | A verb is checked when it runs, not when the run was made (#1090). Propose and mark-outdated take edit on the cited page, and create-page takes `requireCreateUnder` at its destination. A page restricted after the run is refused, with no title. The draft proposal the component, scribe and memo sweepers open takes `requireCreateUnder` too, and add-term files into the finding's project only for someone who may edit it (#1140). A learning cannot cite a finding of a run its author may not read, and a learning's evidence from such a run is counted, never named. |
+| Glossary | A project's term is created, changed or removed only by someone with edit on that project (#1140), whatever their workspace role; a workspace term stays a workspace admin's. |
+| Profiles | Open-work counts are over the pages the reader may open, as the page list is (#1090). |
 | Share links, published sites, llms.txt, export | A restricted page cannot be shared publicly, and an existing link to it 404s. It is left out of site snapshots and of the workspace and project `llms.txt`. An export holds only what the requester may open. |
 | Connectors | With mirroring on, a page private at the source arrives restricted the same way. See [19 §Access mirroring](19-connectors.md#access-mirroring-76-phase-6). |
 | Connected repositories | A repository follows its connector's project (#553, `canSeeProject`): the assistant's repository list, `code_*` and the work-item tools treat one in a project the caller cannot open as not found, checked on every call. Agent runs are clamped, so none reads a restricted project's repository. The connector routes follow it too (#555): the list (REST and `knowledge_list_connectors`) drops such a connector, and its id and run routes answer 404. |

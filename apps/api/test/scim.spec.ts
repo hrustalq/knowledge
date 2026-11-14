@@ -65,6 +65,8 @@ function fakeDb() {
   const tables: Record<string, Row[]> = {
     user: [], scimUser: [], scimGroup: [], scimGroupMember: [], scimToken: [], idpGroupMapping: [],
     workspaceMember: [], workspaceSettings: [], ssoDomain: [], identityProvider: [], session: [],
+    apiKey: [], passwordResetToken: [], emailVerificationToken: [], chatIdentity: [],
+    chatLinkCode: [], plaudLink: [], credential: [], connection: [],
   };
   const related = (table: string, row: Row, name: string): Row | Row[] | null => {
     const rel = RELATIONS[table]?.[name];
@@ -243,7 +245,7 @@ const config = {
 let app: INestApplication;
 let db: ReturnType<typeof fakeDb>;
 let audit: { record: ReturnType<typeof vi.fn> };
-let sessions: { revokeAllForUser: ReturnType<typeof vi.fn> };
+let sessions: { revokeAllForUser: ReturnType<typeof vi.fn>; revokeIssuedBy: ReturnType<typeof vi.fn> };
 let tokens: ScimTokensService;
 let mappings: GroupMappingsService;
 
@@ -251,7 +253,7 @@ beforeEach(async () => {
   await app?.close();
   db = fakeDb();
   audit = { record: vi.fn(async () => undefined) };
-  sessions = { revokeAllForUser: vi.fn(async () => 1) };
+  sessions = { revokeAllForUser: vi.fn(async () => 1), revokeIssuedBy: vi.fn(async () => 0) };
   db.tables.scimToken.push(
     { id: randomUUID(), workspaceId: WS_A, name: 'Entra', tokenHash: sha(TOKEN_A), prefix: 'kscim_aaaaaaaa', lastUsedAt: null, revokedAt: null, createdAt: new Date() },
     { id: randomUUID(), workspaceId: WS_B, name: 'Okta', tokenHash: sha(TOKEN_B), prefix: 'kscim_bbbbbbbb', lastUsedAt: null, revokedAt: null, createdAt: new Date() },
@@ -379,8 +381,8 @@ describe('SCIM Users', () => {
     expect(res.body).not.toHaveProperty('password');
   });
 
-  it('links an existing account by address instead of creating a second one', async () => {
-    db.tables.user.push({ id: randomUUID(), email: 'ada@corp.example', displayName: 'Ada (manual)', createdAt: new Date(), disabledAt: null });
+  it('links an existing (verified) account by address instead of creating a second one', async () => {
+    db.tables.user.push({ id: randomUUID(), email: 'ada@corp.example', displayName: 'Ada (manual)', createdAt: new Date(), disabledAt: null, emailVerifiedAt: new Date() });
     const id = await createAda();
     expect(db.tables.user).toHaveLength(1);
     expect(db.tables.user[0]).toMatchObject({ id, displayName: 'Ada (manual)' });
@@ -417,13 +419,15 @@ describe('SCIM Users', () => {
   it.each([
     ['path active, "False"', ENTRA_DISABLE],
     ['path-less {active: "False"}', PATHLESS_FALSE],
-  ])('PATCH %s removes the membership and revokes sessions, without disabling an unverified domain', async (_label, body) => {
+  ])('PATCH %s removes the membership and only the sessions its own IdP opened, without disabling an unverified domain', async (_label, body) => {
     const id = await createAda();
     const res = await entra.patch(`/Users/${id}`, body);
     expect(res.status).toBe(200);
     expect(res.body.active).toBe(false);
     expect(member(WS_A, id)).toBeUndefined();
-    expect(sessions.revokeAllForUser).toHaveBeenCalledWith(id);
+    // Without the domain, only the sessions this workspace's own IdP opened end (#1096).
+    expect(sessions.revokeAllForUser).not.toHaveBeenCalled();
+    expect(sessions.revokeIssuedBy).toHaveBeenCalledWith(id, WS_A);
     expect(db.tables.user.find((u) => u.id === id)!.disabledAt).toBeNull();
     expect(actions()).toContain('scim.user_deactivated');
 
@@ -438,6 +442,7 @@ describe('SCIM Users', () => {
     expect(db.tables.user.find((u) => u.id === id)!.emailVerifiedAt).toBeInstanceOf(Date);
     await entra.patch(`/Users/${id}`, ENTRA_DISABLE);
     expect(db.tables.user.find((u) => u.id === id)!.disabledAt).toBeInstanceOf(Date);
+    expect(sessions.revokeAllForUser).toHaveBeenCalledWith(id);
     await entra.patch(`/Users/${id}`, { Operations: [{ op: 'Replace', path: 'active', value: 'True' }] });
     expect(db.tables.user.find((u) => u.id === id)!.disabledAt).toBeNull();
 
@@ -472,7 +477,8 @@ describe('SCIM Users', () => {
     const id = await createAda();
     expect((await entra.delete(`/Users/${id}`)).status).toBe(204);
     expect(member(WS_A, id)).toBeUndefined();
-    expect(sessions.revokeAllForUser).toHaveBeenCalledWith(id);
+    expect(sessions.revokeAllForUser).not.toHaveBeenCalled();
+    expect(sessions.revokeIssuedBy).toHaveBeenCalledWith(id, WS_A);
     expect(db.tables.user).toHaveLength(1);
     expectScimError(await entra.get(`/Users/${id}`), 404);
     expectScimError(await entra.get('/Groups/not-a-uuid'), 404);
@@ -488,7 +494,8 @@ describe('SCIM Users', () => {
   });
 
   it('takes over a membership a sign-in created, so deactivation reaches it', async () => {
-    const existing = { id: randomUUID(), email: 'ada@corp.example', displayName: 'Ada', createdAt: new Date(), disabledAt: null };
+    // A JIT sign-in proves the address (doc 54), so the account is verified.
+    const existing = { id: randomUUID(), email: 'ada@corp.example', displayName: 'Ada', createdAt: new Date(), disabledAt: null, emailVerifiedAt: new Date() };
     db.tables.user.push(existing);
     db.tables.workspaceMember.push({ workspaceId: WS_A, userId: existing.id, role: 'editor', trustedOperator: false, source: 'jit' });
     await createAda();
@@ -673,5 +680,70 @@ describe('SCIM tokens and isolation', () => {
     await tokens.revoke(WS_A, created.token.id, { userId: 'admin' } as never);
     expect((await as(created.secret).get('/Users')).status).toBe(401);
     expect(actions()).toEqual(expect.arrayContaining(['scim.token_created', 'scim.token_revoked']));
+  });
+});
+
+describe('SCIM and accounts it does not own (#1094, #1096)', () => {
+  /** Someone registered the address before the directory pushed it, and left a way in of every kind. */
+  function squatter(emailVerifiedAt: Date | null = null) {
+    const user = { id: randomUUID(), email: 'ada@corp.example', displayName: 'Squatter', createdAt: new Date(), disabledAt: null, emailVerifiedAt, passwordHash: 'scrypt$squatter' };
+    db.tables.user.push(user);
+    db.tables.session.push({ id: randomUUID(), userId: user.id, revokedAt: null });
+    db.tables.apiKey.push({ id: randomUUID(), userId: user.id, revokedAt: null });
+    db.tables.passwordResetToken.push({ id: randomUUID(), userId: user.id, usedAt: null });
+    db.tables.emailVerificationToken.push({ id: randomUUID(), userId: user.id, usedAt: null });
+    db.tables.chatIdentity.push({ id: randomUUID(), userId: user.id });
+    return user;
+  }
+
+  it('claims an unverified account it links under a verified domain: the squatter is out', async () => {
+    db.tables.ssoDomain.push({ domain: 'corp.example', workspaceId: WS_A, verifiedAt: new Date() });
+    const user = squatter();
+    expect(await createAda()).toBe(user.id);
+    expect(user.passwordHash).toBeNull();
+    expect(user.emailVerifiedAt).toBeInstanceOf(Date);
+    expect(db.tables.session[0].revokedAt).toBeInstanceOf(Date);
+    expect(db.tables.apiKey[0].revokedAt).toBeInstanceOf(Date);
+    expect(db.tables.passwordResetToken[0].usedAt).toBeInstanceOf(Date);
+    expect(db.tables.emailVerificationToken[0].usedAt).toBeInstanceOf(Date);
+    expect(db.tables.chatIdentity).toHaveLength(0);
+  });
+
+  it('refuses to link an unverified account without the domain: the squatter gets no membership (#1143)', async () => {
+    const user = squatter();
+    const res = await entra.post('/Users', ENTRA_CREATE);
+    expect(res.status).toBe(409);
+    expect(res.body.scimType).toBe('uniqueness');
+    expect(db.tables.scimUser.filter((r) => r.userId === user.id)).toHaveLength(0);
+    expect(db.tables.workspaceMember.filter((m) => m.userId === user.id)).toHaveLength(0);
+    expect(user.passwordHash).toBe('scrypt$squatter');
+    expect(db.tables.session[0].revokedAt).toBeNull();
+  });
+
+  it('claims nothing of an account already verified', async () => {
+    const user = squatter();
+
+    db.tables.ssoDomain.push({ domain: 'corp.example', workspaceId: WS_B, verifiedAt: new Date() });
+    db.tables.user.find((u) => u.id === user.id)!.emailVerifiedAt = new Date('2026-01-01');
+    await okta.post('/Users', OKTA_CREATE('ada@corp.example'));
+    expect(user.passwordHash).toBe('scrypt$squatter');
+    expect(db.tables.apiKey[0].revokedAt).toBeNull();
+  });
+
+  it('moves an address only to another domain this workspace verified', async () => {
+    db.tables.ssoDomain.push({ domain: 'corp.example', workspaceId: WS_A, verifiedAt: new Date() });
+    const id = await createAda();
+    const moveTo = (value: string) => ({ Operations: [{ op: 'Replace', path: 'emails[type eq "work"].value', value }] });
+    await entra.patch(`/Users/${id}`, moveTo('ada@elsewhere.example'));
+    expect(db.tables.user.find((u) => u.id === id)!.email).toBe('ada@corp.example');
+    await entra.patch(`/Users/${id}`, moveTo('ada.k@corp.example'));
+    expect(db.tables.user.find((u) => u.id === id)!.email).toBe('ada.k@corp.example');
+  });
+
+  it('deactivating an account linked without domain authority signs out no session it did not issue', async () => {
+    const user = squatter(new Date());
+    await entra.post('/Users', { ...ENTRA_CREATE, active: false });
+    expect(sessions.revokeAllForUser).not.toHaveBeenCalled();
+    expect(sessions.revokeIssuedBy).toHaveBeenCalledWith(user.id, WS_A);
   });
 });

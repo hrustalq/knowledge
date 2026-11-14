@@ -1,3 +1,4 @@
+import { clampInt } from '../common/clamp.js';
 import {
   BadRequestException,
   Body,
@@ -101,6 +102,10 @@ function csv(value?: string, single?: string): string[] {
   return [...new Set(parts)];
 }
 
+/** Query ceilings (#1109): one page of a list, and how many tree levels one call loads. */
+const MAX_LIST_LIMIT = 200;
+const MAX_TREE_DEPTH = 10;
+
 @ApiTags('documents')
 @Controller('v1/documents')
 export class DocumentsController {
@@ -169,7 +174,7 @@ export class DocumentsController {
     // The singular params predate the facets and still work; each is folded
     // into its plural so callers never have to know which one won.
     const scope = await this.permissions.scopeFor(principal, workspaceId);
-    return this.documents.listDocuments(scope, limit ? Number(limit) : 20, cursor, {
+    return this.documents.listDocuments(scope, clampInt(limit, 1, MAX_LIST_LIMIT, 20), cursor, {
       categories: csv(categories, category),
       projectIds: csv(projectIds, projectId),
       tags: csv(tags),
@@ -198,7 +203,7 @@ export class DocumentsController {
     const scope = await this.permissions.scopeFor(principal, workspaceId);
     return this.documents.getTree(scope, projectId || undefined, {
       parentId: parentId || null,
-      ...(depth ? { depth: Number(depth) } : {}),
+      ...(depth ? { depth: clampInt(depth, 1, MAX_TREE_DEPTH, 1) } : {}),
       includeArchived: flag(includeArchived),
     });
   }
@@ -249,12 +254,12 @@ export class DocumentsController {
   @Returns('DocumentSummary')
   @Access('editor', 'document')
   @ApiOperation({ summary: 'Update title / category / parent (features 07 + 08); parentId: null re-roots' })
-  update(
+  async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateDocumentDto,
     @CurrentPrincipal() principal: Principal,
   ): Promise<DocumentSummary> {
-    return this.documents.updateDocument(id, dto, principal?.userId);
+    return this.documents.updateDocument(id, dto, await this.permissions.scopeForDocument(principal, id), principal?.userId);
   }
 
   @Post(':id/move')
@@ -266,12 +271,12 @@ export class DocumentsController {
       'parentId: null re-roots; beforeId names the sibling it lands above, omitted appends last',
   })
   @ApiResponse({ status: 409, description: 'beforeId no longer names a child of parentId — the tree moved' })
-  move(
+  async move(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: MoveDocumentDto,
     @CurrentPrincipal() principal: Principal,
   ): Promise<DocumentSummary> {
-    return this.documents.moveDocument(id, dto, principal?.userId);
+    return this.documents.moveDocument(id, dto, await this.permissions.scopeForDocument(principal, id), principal?.userId);
   }
 
   @Post(':id/publish')

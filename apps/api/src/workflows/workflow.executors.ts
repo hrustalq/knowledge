@@ -218,8 +218,8 @@ export class WorkflowExecutors {
         content: [
           step.prompt?.user ?? '',
           run.note ? `\nExtra instructions for this run: ${run.note}` : '',
-          `\n\n--- SOURCE: ${context.title} ---\n${context.markdown}`,
-          context.parentSummary ? `\n\n--- PARENT ITEM ---\n${context.parentSummary}` : '',
+          `\n\nThe source page:\n${wrapUntrusted(`Title: ${context.title}\n\n${context.markdown}`, 'workflow_source', 'document')}`,
+          context.parentSummary ? `\n\nThe parent item:\n${wrapUntrusted(context.parentSummary, 'workflow_parent', 'draft')}` : '',
           operations.length
             ? `\n\nAPI operations an item may be about:\n${wrapUntrusted(
                 operations.map((o) => `${o.entityKey} — ${o.method ?? ''} ${o.path}${o.summary ? ` — ${o.summary}` : ''}`).join('\n'),
@@ -300,8 +300,8 @@ export class WorkflowExecutors {
           step.prompt?.user ?? '',
           run.note ? `\nExtra instructions for this run: ${run.note}` : '',
           `\n\nWrite the page for: ${title}`,
-          context.parentSummary ? `\n\nWhat it covers: ${context.parentSummary}` : '',
-          `\n\n--- SOURCE: ${context.title} ---\n${context.markdown}`,
+          context.parentSummary ? `\n\nWhat it covers:\n${wrapUntrusted(context.parentSummary, 'workflow_parent', 'draft')}` : '',
+          `\n\nThe source page:\n${wrapUntrusted(`Title: ${context.title}\n\n${context.markdown}`, 'workflow_source', 'document')}`,
           operation
             ? `\n\nThe API operation (${operation.specTitle}):\n${wrapUntrusted(
                 operation.markdown.slice(0, MAX_OPERATION_CHARS),

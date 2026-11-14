@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import type { Prisma } from '@prisma/client';
 import { PermissionService } from '../permissions/permission.service.js';
 import { visibilityWhere } from '../permissions/access-scope.js';
+import { canSeeUser, seesAccountFlags } from '../permissions/can-see-user.js';
 import { userAvatarUrl } from '../common/avatar-url.js';
 import type { Principal } from '../auth/principal.js';
 import { t } from '../i18n/t.js';
@@ -46,7 +47,14 @@ export class ProfilesService {
     if (!user && userId === AUTHOR_ID_STUB && principal.mode === 'dev') {
       return this.devProfile(principal, workspaceId);
     }
-    if (!user) throw new NotFoundException(t('error.user.notFound', { id: userId }));
+    // Someone the reader shares no workspace with does not exist for them
+    // (#1091): the same 404 an unknown id gets, so the route is no lookup of
+    // another tenant's people.
+    if (!user || !(await canSeeUser(this.prisma, principal, userId))) {
+      throw new NotFoundException(t('error.user.notFound', { id: userId }));
+    }
+    // Account flags are the subject's business and a platform admin's, not a colleague's.
+    const flags = seesAccountFlags(principal, userId);
 
     const membership = await this.prisma.workspaceMember.findUnique({
       where: { workspaceId_userId: { workspaceId, userId } },
@@ -58,7 +66,7 @@ export class ProfilesService {
     const [pages, pageCount, openWork] = await Promise.all([
       this.pagesFor(workspaceId, userId, visible),
       this.pageCountFor(workspaceId, userId, visible),
-      this.openWorkFor(workspaceId, userId),
+      this.openWorkFor(workspaceId, userId, visible),
     ]);
 
     return {
@@ -66,15 +74,15 @@ export class ProfilesService {
       email: user.email,
       displayName: user.displayName,
       avatarUrl: userAvatarUrl(user),
-      isAdmin: user.isAdmin,
+      isAdmin: flags ? user.isAdmin : null,
       disabled: user.disabledAt !== null,
       createdAt: user.createdAt.toISOString(),
       role: (membership?.role as WorkspaceRole | undefined) ?? null,
       trustedOperator: membership?.trustedOperator ?? false,
       memberSince: membership?.createdAt.toISOString() ?? null,
       isSelf: principal.userId === userId,
-      hasPassword: user.passwordHash !== null,
-      hasApiKey: user.apiKeys.length > 0,
+      hasPassword: flags ? user.passwordHash !== null : null,
+      hasApiKey: flags ? user.apiKeys.length > 0 : null,
       pages,
       pageCount,
       openWork,
@@ -161,9 +169,12 @@ export class ProfilesService {
    * What is still owed. Every number here is a link the profile can offer, so
    * a zero is as informative as a five — "nothing open" is the answer someone
    * came for as often as its opposite.
+   *
+   * Counted over the pages the *reader* may open (#1090), as the page list is:
+   * a count is a link, and it must not stand for work on a page they cannot.
    */
-  private async openWorkFor(workspaceId: string, userId: string): Promise<ProfileOpenWork> {
-    const inWorkspace = { document: { workspaceId } } as const;
+  private async openWorkFor(workspaceId: string, userId: string, visible: Prisma.DocumentWhereInput): Promise<ProfileOpenWork> {
+    const inWorkspace = { document: { workspaceId, AND: [visible] } };
 
     const [authoredMergeRequests, reviewing, threadIds] = await Promise.all([
       this.prisma.mergeRequest.count({ where: { ...inWorkspace, authorId: userId, status: 'open' } }),
@@ -204,7 +215,7 @@ export class ProfilesService {
     const [pages, pageCount, openWork] = await Promise.all([
       this.pagesFor(workspaceId, AUTHOR_ID_STUB, {}),
       this.pageCountFor(workspaceId, AUTHOR_ID_STUB, {}),
-      this.openWorkFor(workspaceId, AUTHOR_ID_STUB),
+      this.openWorkFor(workspaceId, AUTHOR_ID_STUB, {}),
     ]);
     return {
       userId: AUTHOR_ID_STUB,

@@ -54,14 +54,34 @@ export function newTraceId(): string {
  * `code` and `state` are the OAuth callback pair (#297): the SSO callback and
  * the GitHub App setup callback both arrive as `?code=…&state=…`, and a share
  * site's `?code=` and the chat link's are single-use credentials too. Nothing
- * uses either name for a value an operator needs to read.
+ * uses either name for a value an operator needs to read. `jwt_token` is a
+ * published site's visitor JWT, reusable until it expires (#1112).
  */
-const SECRET_QUERY_KEYS = /([?&](?:token|access_token|api_key|code|state)=)[^&#]*/gi;
+const SECRET_QUERY_KEYS = /([?&](?:token|access_token|api_key|jwt_token|code|state)=)[^&#]*/gi;
+
+/**
+ * A share link's `kp_` token is a bearer credential carried in the path, not the
+ * query (#1112): the API's `/v1/public/shares/<token>/…` and the web's
+ * `/s/<token>/…`. Any `kp_` segment after either prefix goes, well-formed or not.
+ */
+const SHARE_PATH_TOKEN = /(\/(?:shares|s)\/kp_)[^/?#]*/g;
 
 export function redactUrl(url: string): string;
 export function redactUrl(url: string | undefined): string | undefined;
 export function redactUrl(url: string | undefined): string | undefined {
-  return url?.replace(SECRET_QUERY_KEYS, '$1[REDACTED]');
+  return url?.replace(SECRET_QUERY_KEYS, '$1[REDACTED]').replace(SHARE_PATH_TOKEN, '$1[REDACTED]');
+}
+
+/**
+ * An inbound X-Request-Id is kept only when it looks like an id (#1112): a UUID
+ * is one case of the pattern. Anything else (oversized, marked up, chosen text)
+ * would be echoed and stamped on every record and `ops_events` row, so it is
+ * replaced by a fresh one.
+ */
+const INBOUND_TRACE_ID = /^[A-Za-z0-9_-]{8,64}$/;
+
+export function acceptTraceId(inbound: string | undefined): string | undefined {
+  return inbound && INBOUND_TRACE_ID.test(inbound) ? inbound : undefined;
 }
 
 /** Build a context for a unit of work starting now. */

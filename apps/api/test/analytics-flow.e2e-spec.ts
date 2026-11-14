@@ -3,6 +3,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import request from 'supertest';
 import type { AnalyticsQueryService } from '../src/analytics/analytics-query.service.js';
 import type { PrismaService } from '../src/prisma/prisma.service.js';
+import { readPageText } from '../src/common/page-text.js';
 
 /**
  * #79 phase 5: the whole recording loop, end to end against live infra. A
@@ -208,6 +209,6 @@ describe('usage analytics, recorded end to end (e2e, #79)', () => {
     expect(text).toContain(missing);
 
     const insights = await mcp('knowledge_get_page_insights', { documentId });
-    expect(JSON.parse(insights.content[0]!.text)).toMatchObject({ documentId, byClass: { human: 1 } });
+    expect(readPageText(insights.content[0]!.text)).toMatchObject({ documentId, byClass: { human: 1 } });
   });
 });

@@ -50,7 +50,11 @@ const activeWorkspaceName = computed(
   () => workspaces.items.find((w) => w.workspaceId === activeWs.value)?.name ?? t('nav.workspace'),
 )
 
-/** Any authenticated principal may create a workspace — they become its admin. */
+/**
+ * Offered only where the API would take it (#1142): signup open, or a platform
+ * admin, and no key pinned to one workspace. The creator becomes its admin.
+ */
+const canCreateWorkspace = computed(() => auth.authenticated && auth.me?.canCreateWorkspace === true)
 const showWorkspaceRow = computed(() => workspaces.items.length > 0)
 </script>
 
@@ -61,7 +65,7 @@ const showWorkspaceRow = computed(() => workspaces.items.length > 0)
         :model-value="activeWs"
         :label="t('nav.workspaces')"
         :options="workspaceOptions"
-        :create-label="auth.authenticated ? t('nav.newWorkspace') : undefined"
+        :create-label="canCreateWorkspace ? t('nav.newWorkspace') : undefined"
         @update:model-value="workspaces.switchWorkspace($event)"
         @create="emit('create', 'workspace', $event)"
       >

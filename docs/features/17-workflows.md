@@ -187,6 +187,17 @@ authority editing a page wants. New `WorkspaceSource` values
 `workflow-definition` and `workflow-run` resolve the workspace in PostgreSQL
 from the id, so another tenant's run id is a 403 before the handler runs.
 
+A run is its root page's (#1085). Its nodes hold drafts written from that
+page, so `AclGuard` resolves `workflow-run` to the page and holds every run
+route to the page level (viewer→view, editor→edit), MCP's
+`knowledge_get_workflow_run` included. Starting one takes edit on the page,
+the list leaves out runs rooted at a page the caller cannot open, and a run
+whose page is gone follows its project. Materialising a node asks
+`requireCreateUnder` where the page lands, at execution (#1140): as the
+approver on the interactive path, as the run's owner in
+`WorkflowMaterializeSweeper`. A grant lost between approval and a retry fails
+the node instead of writing under a page its owner can no longer edit.
+
 MCP gained `knowledge_list_workflows`, `knowledge_start_workflow` and
 `knowledge_get_workflow_run`. Approval is deliberately absent: it writes pages,
 and stdio has no principal to attribute that to. An agent can start a chain and

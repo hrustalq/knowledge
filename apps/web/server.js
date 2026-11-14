@@ -3,11 +3,12 @@ import express from 'express'
 import { configureBacktest, createRootLogger, envLogLevel } from '@knowledge/observability'
 import { traceMiddleware } from '@knowledge/observability/express'
 import { aiReadableMiddleware } from './server/ai-readable.js'
-import { appHostMiddleware } from './server/app-host.js'
+import { appHostMiddleware, publicResponseHeaders } from './server/app-host.js'
 import { createRenderCache, renderCacheKey } from './server/render-cache.js'
 import { createSiteHostResolver, siteFilesMiddleware } from './server/site-files.js'
 import { siteWidgetRoute } from './server/site-widget.js'
 import { exportRenderRoute } from './server/export-render.js'
+import { spliceTemplate } from './server/splice-template.js'
 
 // Vue's compile-time flags. The SSR bundles leave `vue-i18n` external, so
 // Node loads its esm build unreplaced, and its plugin install() reads
@@ -131,7 +132,27 @@ app.use(async (req, res, next) => {
 
 // The app host's security headers and robots.txt (issue #277). A site's host
 // and the public paths keep whatever their own handlers set.
-app.use(appHostMiddleware(PUBLIC_PATH))
+// CSP_ASSET_ORIGINS: where presigned attachment URLs live when not on this
+// origin (#1099). Production proxies the bucket under its own host, so none;
+// local dev presigns against MinIO on :9000.
+const CSP_ASSET_ORIGINS = (process.env.CSP_ASSET_ORIGINS ?? (isProduction ? '' : 'http://localhost:9000'))
+  .split(/\s+/)
+  .filter(Boolean)
+// A site on its own host still presigns against the app's storage origin, so
+// its PDF previews need that origin too (#1142).
+const SITE_HOST_ASSET_ORIGINS = (() => {
+  try {
+    return process.env.WEB_BASE_URL ? [...CSP_ASSET_ORIGINS, new URL(process.env.WEB_BASE_URL).origin] : CSP_ASSET_ORIGINS
+  } catch {
+    return CSP_ASSET_ORIGINS
+  }
+})()
+publicResponseHeaders(SITE_HOST_ASSET_ORIGINS, undefined) // a bad origin fails at boot, as it does for the app's policy
+// CSP_IMAGE_ORIGINS: more hosts the app's own UI shows pictures from — a
+// self-hosted GitLab's or Jira's account avatars (#1133). Page images need none:
+// they come through the API's image proxy.
+const CSP_IMAGE_ORIGINS = (process.env.CSP_IMAGE_ORIGINS ?? '').split(/\s+/).filter(Boolean)
+app.use(appHostMiddleware(PUBLIC_PATH, { assetOrigins: CSP_ASSET_ORIGINS, imageOrigins: CSP_IMAGE_ORIGINS }))
 
 // A site's embeddable Ask widget script (issue #77 phase 3): `/widget.js` on
 // its host or `/pub/<slug>/widget.js`, before the reader takes it for a page.
@@ -196,7 +217,12 @@ function readCookie(header, name) {
   for (const part of header.split(';')) {
     const eq = part.indexOf('=')
     if (eq > 0 && part.slice(0, eq).trim() === name) {
-      return decodeURIComponent(part.slice(eq + 1).trim())
+      // A value that does not decode is absent, not a failed render (#1112).
+      try {
+        return decodeURIComponent(part.slice(eq + 1).trim())
+      } catch {
+        return null
+      }
     }
   }
   return null
@@ -281,14 +307,10 @@ async function renderPublic(req, res, url, siteHost) {
     res.set(rendered.headers ?? {}).redirect(302, rendered.redirect)
     return
   }
-  const html = template
-    .replace(`<!--app-lang-->`, locale)
-    .replace(`<!--app-css-->`, devStyles)
-    .replace(`<!--app-head-->`, rendered.head ?? '')
-    .replace(`<!--app-html-->`, rendered.html ?? '')
+  const html = spliceTemplate(template, { lang: locale, css: devStyles, head: rendered.head, html: rendered.html })
   res
     .status(rendered.status ?? 200)
-    .set({ 'Content-Type': 'text/html', ...rendered.headers })
+    .set({ 'Content-Type': 'text/html', ...publicResponseHeaders(siteHost ? SITE_HOST_ASSET_ORIGINS : CSP_ASSET_ORIGINS, rendered.headers) })
     .send(html)
 }
 
@@ -346,13 +368,14 @@ app.use('*all', async (req, res) => {
       traceId: typeof headerTraceId === 'string' ? headerTraceId : null,
     })
 
-    const html = template
-      .replace(`<!--app-lang-->`, locale)
-      .replace(`<!--app-css-->`, devStyles)
+    const html = spliceTemplate(template, {
+      lang: locale,
+      css: devStyles,
       // The route's own name (#644), already escaped; signed out it stays "Knowledge".
-      .replace(`<title>Knowledge</title>`, () => `<title>${rendered.title ?? 'Knowledge'}</title>`)
-      .replace(`<!--app-head-->`, rendered.head ?? '')
-      .replace(`<!--app-html-->`, rendered.html ?? '')
+      title: rendered.title ?? null,
+      head: rendered.head,
+      html: rendered.html,
+    })
 
     // One member's render, behind their cookie: never a shared cache's, and
     // never reused without asking.

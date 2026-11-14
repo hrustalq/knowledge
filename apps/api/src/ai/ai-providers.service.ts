@@ -6,7 +6,9 @@ import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AiModelsService } from './ai-models.service.js';
 import { assertSafeBaseUrl, movesEndpoint } from './provider-endpoint.js';
-import { decryptSecret, encryptSecret, maskSecret, MissingEncryptionKeyError, parseKey } from './secret-box.js';
+import { randomUUID } from 'node:crypto';
+import { decryptSecret, encryptSecret, maskSecret, MissingEncryptionKeyError, parseKey, secretStatus } from './secret-box.js';
+import { slots } from './secret-slots.js';
 import { t } from '../i18n/t.js';
 
 export interface UpsertProviderInput {
@@ -59,10 +61,14 @@ export class AiProvidersService {
   }
 
   /** The raw row, with its credential decrypted — for config resolution only. */
-  async resolveRow(id: string): Promise<{ row: AiProvider; apiKey: string | null } | null> {
+  async resolveRow(id: string): Promise<{ row: AiProvider; apiKey: string | null; apiKeyUnreadable: boolean } | null> {
     const row = await this.prisma.aiProvider.findUnique({ where: { id } });
     if (!row || !row.enabled) return null;
-    return { row, apiKey: decryptSecret(row.apiKeyCipher, this.key) };
+    return {
+      row,
+      apiKey: decryptSecret(row.apiKeyCipher, this.key, slots.aiProviderKey(row)),
+      apiKeyUnreadable: secretStatus(row.apiKeyCipher, this.key, slots.aiProviderKey(row)) === 'unreadable',
+    };
   }
 
   async create(workspaceId: string, input: UpsertProviderInput, actorId?: string): Promise<AiProviderSummary> {
@@ -72,13 +78,15 @@ export class AiProvidersService {
     if (clash) throw new ConflictException(t('error.ai.providerNameTaken', { name: input.name }));
     await assertSafeBaseUrl(input.baseUrl, this.allowPrivate);
 
+    const id = randomUUID();
     const row = await this.prisma.aiProvider.create({
       data: {
+        id,
         workspaceId,
         name: input.name,
         provider: input.provider,
         baseUrl: input.baseUrl ?? null,
-        apiKeyCipher: this.encrypt(input.apiKey),
+        apiKeyCipher: this.encrypt(input.apiKey, { id, workspaceId }),
         temperature: input.temperature ?? null,
         maxToolCalls: input.maxToolCalls ?? null,
         timeoutMs: input.timeoutMs ?? null,
@@ -102,7 +110,7 @@ export class AiProvidersService {
     // types (GHSA-7hf4-5chc-29gr): moving it drops the key unless a new one
     // comes in the same request.
     const apiKeyCipher =
-      input.apiKey !== undefined ? this.encrypt(input.apiKey) : movesEndpoint(current, input) ? null : undefined;
+      input.apiKey !== undefined ? this.encrypt(input.apiKey, current) : movesEndpoint(current, input) ? null : undefined;
     const row = await this.prisma.aiProvider.update({
       where: { id },
       data: {
@@ -156,10 +164,10 @@ export class AiProvidersService {
     return row;
   }
 
-  private encrypt(apiKey: string | null | undefined): string | null {
+  private encrypt(apiKey: string | null | undefined, row: { id: string; workspaceId: string }): string | null {
     if (apiKey === undefined || apiKey === null || apiKey === '') return null;
     try {
-      return encryptSecret(apiKey, this.key);
+      return encryptSecret(apiKey, this.key, slots.aiProviderKey(row));
     } catch (err) {
       if (err instanceof MissingEncryptionKeyError) throw new MissingEncryptionKeyError();
       throw err;
@@ -167,7 +175,7 @@ export class AiProvidersService {
   }
 
   private toSummary(row: AiProvider): AiProviderSummary {
-    const key = decryptSecret(row.apiKeyCipher, this.key);
+    const key = decryptSecret(row.apiKeyCipher, this.key, slots.aiProviderKey(row));
     return {
       id: row.id,
       workspaceId: row.workspaceId,
@@ -176,6 +184,7 @@ export class AiProvidersService {
       baseUrl: row.baseUrl,
       hasApiKey: row.apiKeyCipher !== null,
       apiKeyHint: key ? maskSecret(key) : null,
+      apiKeyUnreadable: row.apiKeyCipher !== null && key === null,
       temperature: row.temperature,
       maxToolCalls: row.maxToolCalls,
       timeoutMs: row.timeoutMs,

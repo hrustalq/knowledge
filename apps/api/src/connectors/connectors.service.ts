@@ -1,4 +1,6 @@
+import { randomUUID } from 'node:crypto';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { hasUrlLogin, stripUrlLogins } from './url-login.js';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, type Connector, type ConnectorRun } from '@prisma/client';
 import {
@@ -27,6 +29,7 @@ import {
   type DocumentCategory,
 } from '@knowledge/contracts';
 import { decryptSecret, encryptSecret, MissingEncryptionKeyError, parseKey } from '../ai/secret-box.js';
+import { slots } from '../ai/secret-slots.js';
 import { assertSafeExternalUrl } from '../common/safe-url.js';
 import { withSubjectLock } from '../common/subject-lock.js';
 import type { Env } from '../config/env.js';
@@ -199,6 +202,7 @@ export class ConnectorsService {
 
     const config = withServerKeys(input.config ?? {}, {});
     await this.validateConfig(info.kind, config);
+    if (!input.connectionId) await assertInstallationReach(config, {}, reach);
     const via = input.connectionId ? await this.viaConnection(input.workspaceId, info.kind, input.connectionId, config, reach) : null;
     const token = via ? null : this.token(input.credential ?? null);
 
@@ -207,8 +211,10 @@ export class ConnectorsService {
     });
     if (taken) throw new ConflictException(t('error.connector.nameTaken', { name: input.name }));
 
+    const id = randomUUID();
     const row = await this.prisma.connector.create({
       data: {
+        id,
         workspaceId: input.workspaceId,
         kind: info.kind,
         name: input.name,
@@ -223,7 +229,7 @@ export class ConnectorsService {
         syncMode: input.syncMode ?? 'auto',
         preserveHierarchy: input.preserveHierarchy ?? false,
         syncIntervalMinutes: input.syncIntervalMinutes ?? null,
-        webhookSecret: this.encrypt(input.webhookSecret ?? null),
+        webhookSecret: this.encrypt(input.webhookSecret ?? null, { id, workspaceId: input.workspaceId }),
         enabled: input.enabled ?? true,
         locale: currentLocale(),
         createdBy: userId ?? null,
@@ -242,6 +248,7 @@ export class ConnectorsService {
     }
     if (input.config !== undefined) await this.validateConfig(kind, input.config);
     const config = input.config === undefined ? null : withServerKeys(input.config, row.config);
+    if (config && !input.connectionId) await assertInstallationReach(config, row.config, reach);
     const via = input.connectionId
       ? await this.viaConnection(
           row.workspaceId,
@@ -281,7 +288,7 @@ export class ConnectorsService {
         ...keep('enabled'),
         ...(config === null ? {} : { config: config as Prisma.InputJsonValue }),
         ...(input.direction === undefined ? {} : { direction: this.checkDirection(kind, input.direction) }),
-        ...(input.webhookSecret === undefined ? {} : { webhookSecret: this.encrypt(input.webhookSecret) }),
+        ...(input.webhookSecret === undefined ? {} : { webhookSecret: this.encrypt(input.webhookSecret, row) }),
         ...via,
       },
     });
@@ -419,13 +426,14 @@ export class ConnectorsService {
       connectorId: row.id,
       workspaceId: row.workspaceId,
       config: (row.config ?? {}) as Record<string, string>,
-      webhookSecret: decryptSecret(row.webhookSecret, this.key),
+      webhookSecret: decryptSecret(row.webhookSecret, this.key, slots.connectorWebhook(row)),
       onStage,
       debug,
       // Read once per context for the same reason `debug` is, and handed to
       // `connectorFetch` so the SSRF guard runs at the dial rather than only
       // when an admin saved the base URL.
       allowPrivate: this.allowPrivateFor(row.kind),
+      archiveMaxBytes: this.config.get('ARCHIVE_MAX_INFLATED_BYTES', { infer: true }),
       // Who to bill and which language to answer in (docs/features/27). Both
       // come off the row rather than a request, because the path that needs
       // them most is the worker's, where there is no request at all.
@@ -699,24 +707,26 @@ export class ConnectorsService {
 
   /** A pasted token, sealed; null or empty = none. */
   private token(plaintext: string | null): ConnectorToken | null {
-    const envelope = this.encrypt(plaintext);
-    return envelope ? { secret: plaintext!, envelope } : null;
+    if (plaintext === null || plaintext === '') return null;
+    // Sealed by the binder into the credential row it lands in; refused here when it could not be.
+    if (!this.key) throw new BadRequestException(t('error.connector.encryptionKeyMissing'));
+    return { secret: plaintext };
   }
 
   /** The token a connector dials with now, so an update that does not touch it keeps it. */
   private async currentToken(connectionId: string | null): Promise<ConnectorToken | null> {
     const connection = connectionId
-      ? await this.prisma.connection.findUnique({ where: { id: connectionId }, select: { method: true, credentialRow: { select: { secret: true } } } })
+      ? await this.prisma.connection.findUnique({ where: { id: connectionId }, select: { method: true, credentialRow: { select: { id: true, secret: true } } } })
       : null;
-    const envelope = connection?.method === 'token' ? connection.credentialRow?.secret : undefined;
-    const secret = decryptSecret(envelope, this.key);
-    return secret ? { secret, envelope: envelope! } : null;
+    const row = connection?.method === 'token' ? connection.credentialRow : null;
+    const secret = row ? decryptSecret(row.secret, this.key, slots.credential(row, 'secret')) : null;
+    return secret ? { secret } : null;
   }
 
-  private encrypt(plaintext: string | null): string | null {
+  private encrypt(plaintext: string | null, row: { id: string; workspaceId: string }): string | null {
     if (plaintext === null || plaintext === '') return null;
     try {
-      return encryptSecret(plaintext, this.key);
+      return encryptSecret(plaintext, this.key, slots.connectorWebhook(row));
     } catch (err) {
       if (err instanceof MissingEncryptionKeyError) {
         throw new BadRequestException(t('error.connector.encryptionKeyMissing'));
@@ -737,6 +747,11 @@ export class ConnectorsService {
         throw new BadRequestException(t('error.connector.missingField', { kind: info.label, field: field.label }));
       }
       if (present && /url$/i.test(field.key)) {
+        // A token belongs in the credential store; config is returned to every
+        // viewer of the connector list (#1114).
+        if (hasUrlLogin(String(value))) {
+          throw new BadRequestException(t('error.connector.urlCredentials', { field: field.label }));
+        }
         await assertSafeExternalUrl(String(value), this.allowPrivateFor(kind), {
           invalid: 'error.connector.urlInvalid',
           notHttps: 'error.connector.urlNotHttps',
@@ -780,7 +795,8 @@ export class ConnectorsService {
       kind: row.kind as ConnectorKind,
       name: row.name,
       enabled: row.enabled,
-      config: (row.config ?? {}) as Record<string, string>,
+      // A row saved before #1138 may still hold a URL login: never hand it out (#1142).
+      config: stripUrlLogins((row.config ?? {}) as Record<string, string>),
       hasCredential: row.connectionId !== null,
       credentialHint: connection?.credentialRow?.secretHint ?? null,
       connectionId: row.connectionId,
@@ -891,6 +907,20 @@ export async function addToRun(
  * Whatever the request says, the stored values stand.
  */
 const SERVER_CONFIG_KEYS = [FIGMA_GRANT_CONFIG_KEY, FIGMA_HANDLE_CONFIG_KEY];
+
+/**
+ * An installation named in a request's config, the GitHub repo picker's path:
+ * the person's own GitHub account must reach it, the question the picker and
+ * `viaConnection` ask (GHSA-52pw-fwcw-7mmf). Otherwise an admin could name any
+ * installation id and read its repositories. The one the row already holds
+ * asks nothing again.
+ */
+export async function assertInstallationReach(config: Record<string, string>, stored: Prisma.JsonValue, reach?: InstallationReach): Promise<void> {
+  const named = config[GITHUB_INSTALLATION_CONFIG_KEY]?.trim();
+  if (!named) return;
+  if (named === String(((stored ?? {}) as Record<string, unknown>)[GITHUB_INSTALLATION_CONFIG_KEY] ?? '').trim()) return;
+  if (!(reach && (await reach(named)))) throw new ForbiddenException(t('error.connection.githubNotVisible'));
+}
 
 export function withServerKeys(incoming: Record<string, string>, stored: Prisma.JsonValue): Record<string, string> {
   const kept = (stored ?? {}) as Record<string, unknown>;

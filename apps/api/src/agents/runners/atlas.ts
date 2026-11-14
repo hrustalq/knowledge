@@ -78,8 +78,8 @@ async function chart(
     await report({ stage: 'summarising', progress: 0.1 + (0.85 * attempted) / Math.min(budget, tree.length) });
     const listing = (
       node.level === 0
-        ? pages.slice(0, 25).map((id) => `## ${titleOf.get(id)}\n${wrapUntrusted((opening.get(id)?.text ?? '').slice(0, 600), 'atlas', 'page')}`)
-        : children.slice(0, 25).map((c) => `## ${c.title}\n${wrapUntrusted(c.summary, 'atlas', 'page')}`)
+        ? pages.slice(0, 25).map((id) => wrapUntrusted(`## ${titleOf.get(id)}\n${(opening.get(id)?.text ?? '').slice(0, 600)}`, 'atlas', 'page'))
+        : children.slice(0, 25).map((c) => wrapUntrusted(`## ${c.title}\n${c.summary}`, 'atlas', 'page'))
     ).join('\n\n');
     try {
       const raw = await svc.client.chat(call, [{ role: 'system', content: system }, { role: 'user', content: listing }], { json: true });

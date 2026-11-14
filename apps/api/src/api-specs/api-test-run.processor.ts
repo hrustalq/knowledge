@@ -3,7 +3,7 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import {
   apiServerOptions,
-  isSecretName,
+  storableRunResults,
   runTestPlan,
   testRunCounts,
   type TestRunPlan,
@@ -105,7 +105,7 @@ export class ApiTestRunProcessor extends WorkerHost {
         return { status: res.status, headers: res.headers, body: res.encoding === 'utf8' ? res.body : '', durationMs: res.durationMs };
       };
       const results = await runTestPlan(plan, env.values, send, undefined, undefined, guarded);
-      const stored = withoutSecrets(Object.fromEntries(results));
+      const stored = storableRunResults(Object.fromEntries(results), Object.values(env.secrets));
       const counts = testRunCounts(plan, stored);
       await this.runs.finish(run.id, { status: counts.failed || counts.notRun ? 'failed' : 'passed', results: stored, counts });
     } catch (e) {
@@ -118,11 +118,4 @@ export class ApiTestRunProcessor extends WorkerHost {
 function targetsOf(plan: TestRunPlan): TestRunTarget[] {
   const steps = [...plan.setup, ...plan.teardown, ...plan.cases.flatMap((c) => [...c.setup, ...c.teardown])];
   return [...plan.cases.map((c) => c.target), ...steps.flatMap((s) => (s.kind === 'call' ? [s.target] : []))];
-}
-
-/** A run record keeps what was captured, never a capture named like a secret. */
-function withoutSecrets(results: Record<string, TestRunResult>): Record<string, TestRunResult> {
-  return Object.fromEntries(
-    Object.entries(results).map(([key, r]) => [key, { ...r, captures: Object.fromEntries(Object.entries(r.captures).filter(([name]) => !isSecretName(name))) }]),
-  );
 }

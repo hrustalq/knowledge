@@ -1,7 +1,7 @@
 services:
   postgres:
-    image: postgres:17-alpine
-    ports: ["5432:5432"]
+    image: postgres:17-alpine@sha256:d3244e8ce3f165ee3c93d9c4a4b1d0fe48b3a89e2287b717fdcbbde92d405065
+    ports: ["127.0.0.1:5432:5432"]
     environment:
       POSTGRES_USER: knowledge
       POSTGRES_PASSWORD: knowledge
@@ -25,7 +25,7 @@ services:
     # which the healthcheck below uses. Bump both lines together.
     image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z@sha256:b6bfe7239bfc83fb90d31612d9704d86039dd714f7904b3f1ad68f211e602372
     command: server /data --console-address ":9001"
-    ports: ["9000:9000", "9001:9001"]
+    ports: ["127.0.0.1:9000:9000", "127.0.0.1:9001:9001"]
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
@@ -50,8 +50,8 @@ services:
       mc version enable local/knowledge"
 
   redis:
-    image: redis:7-alpine
-    ports: ["6379:6379"]
+    image: redis:7-alpine@sha256:7f7d30b7fdd09467bac58198a1f166dd69789d348d4fe859cccb20e0cf287fbe
+    ports: ["127.0.0.1:6379:6379"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -66,7 +66,7 @@ services:
     # A volume written by 26.9.1-SNAPSHOT or 26.11.1-SNAPSHOT opens on it.
     # Keep docker-compose.prod.yml in step.
     image: arcadedata/arcadedb:26.10.2@sha256:7a498ebbbb9a5f02f7d43487c13b6632f83eb7fff345968baf220ac9266fd791
-    ports: ["2480:2480", "2424:2424"]
+    ports: ["127.0.0.1:2480:2480", "127.0.0.1:2424:2424"]
     environment:
       JAVA_OPTS: >-
         -Darcadedb.server.rootPassword=playwithdata
@@ -85,9 +85,9 @@ services:
   # Phase 5 optional BM25 layer (plan.md §11). Not started by default:
   # make infra-up-opensearch  (+ FULLTEXT_PROVIDER=opensearch in apps/api/.env)
   opensearch:
-    image: opensearchproject/opensearch:2
+    image: opensearchproject/opensearch:2@sha256:3bfa1ec74d56928c2e018033d45c460ce2c0ea65a5cedd577de3102326c31b89
     profiles: ["opensearch"]
-    ports: ["9200:9200"]
+    ports: ["127.0.0.1:9200:9200"]
     environment:
       discovery.type: single-node
       plugins.security.disabled: "true"
@@ -111,7 +111,7 @@ services:
   # Its JSON API is off by default; searxng/settings.yml turns it on. Without
   # `formats: [json]` every query answers HTML and the provider looks broken.
   searxng:
-    image: searxng/searxng:latest
+    image: searxng/searxng:latest@sha256:eb8b09ffa83aebbe8b8d3ded23cfd224b2d3b01db4f3af9eb03876ef6def6dda
     profiles: ["searxng"]
     # Loopback only. Its settings.yml runs with `limiter: false` (the API is
     # called by this platform, not by browsers), so a 0.0.0.0 bind would put an
@@ -134,7 +134,7 @@ services:
   # message lands in the inbox at http://localhost:8025 instead. Loopback only:
   # it relays nothing, but its UI shows every reset link it has ever caught.
   mailpit:
-    image: axllent/mailpit:v1.31
+    image: axllent/mailpit:v1.31@sha256:23fe39e81bde596a918000b3135c0f85dc8bb4c9ea6be274b051143f3e300387
     profiles: ["mailpit"]
     ports: ["127.0.0.1:1025:1025", "127.0.0.1:8025:8025"]
 
@@ -146,7 +146,7 @@ services:
   # requester downloads. The allow-list keeps it to its own upload folder.
   # Loopback only, on 3100 because the API owns 3000.
   gotenberg:
-    image: gotenberg/gotenberg:8
+    image: gotenberg/gotenberg:8@sha256:53073e798c8ef39ea2187e44cb67bab77894ea2509100b94c4fe3b461f7b2996
     profiles: ["gotenberg"]
     ports: ["127.0.0.1:3100:3000"]
     command: ["gotenberg", "--chromium-allow-list=^file:///tmp/.*", "--api-timeout=300s"]
@@ -159,7 +159,7 @@ services:
   # keycloak/realm-knowledge.json seeds test users ada/ada (verified) and
   # eve/eve (unverified address). Admin console: admin/admin. Loopback only.
   keycloak:
-    image: quay.io/keycloak/keycloak:26.4
+    image: quay.io/keycloak/keycloak:26.4@sha256:9409c59bdfb65dbffa20b11e6f18b8abb9281d480c7ca402f51ed3d5977e6007
     profiles: ["keycloak"]
     command: ["start-dev", "--import-realm", "--http-port=8180"]
     ports: ["127.0.0.1:8180:8180"]

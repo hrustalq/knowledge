@@ -189,7 +189,7 @@ describe('every surface meets the same check', () => {
       const tokenAuth = { resolve: vi.fn(async () => principal), blocksUnverified: () => false };
       const gw = new LiveGateway(config as never, tokenAuth as never, accessWith(policy), {} as never, {} as never);
       const socket = { on: vi.fn(), close: vi.fn(), send: vi.fn() };
-      await gw.handleConnection(socket as never, { url: '/v1/events/ws?token=ks_x', headers: {} } as never);
+      await gw.handleConnection(socket as never, { url: '/v1/events/ws', headers: { authorization: 'Bearer ks_x' } } as never);
       await (gw as unknown as { handleMessage(s: unknown, raw: string): Promise<void> }).handleMessage(
         socket,
         JSON.stringify({ type: 'subscribe', workspaceId: WS }),
@@ -296,7 +296,7 @@ describe('enforced SSO through the real transports (#75 criterion 11)', () => {
     const tokenAuth = { resolve: vi.fn(async () => principals.ks_admin), blocksUnverified: () => false };
     const gw = new LiveGateway(config as never, tokenAuth as never, accessWith(policy, null), {} as never, {} as never);
     const socket = { on: vi.fn(), close: vi.fn(), send: vi.fn() };
-    await gw.handleConnection(socket as never, { url: '/v1/events/ws?token=ks_admin', headers: {} } as never);
+    await gw.handleConnection(socket as never, { url: '/v1/events/ws', headers: { authorization: 'Bearer ks_admin' } } as never);
     const handle = (gw as unknown as { handleMessage(s: unknown, raw: string): Promise<void> }).handleMessage.bind(gw);
     await handle(socket, JSON.stringify({ type: 'subscribe', workspaceId: WS }));
     expect(socket.send.mock.calls.map(([frame]) => (JSON.parse(frame as string) as { type: string }).type)).toEqual(['subscribed']);

@@ -45,6 +45,7 @@ import { identityFromLdapEntry, ldapConfigOf } from './ldap-profile.js';
 import { LOGOUT_TOKEN_MAX_AGE_SEC } from './oidc.service.js';
 import { UUID_RE } from '@knowledge/contracts';
 import { hashToken } from '../auth-tokens.js';
+import { speaksFor } from './domain-proof.js';
 
 /** The fragment code's lifetime: long enough for one page load, short enough to be useless later. */
 const EXCHANGE_TTL_MS = 60_000;
@@ -140,17 +141,29 @@ export class SsoFlowService {
       },
       orderBy: [{ name: 'asc' }, { id: 'asc' }],
     });
+    // #1143: a button for a domain the provider's workspace never proved is a
+    // phishing aid (sign-in would refuse it anyway). The enforced domain is
+    // proven by definition, so its providers stay.
+    const viaEnforced = (r: (typeof rows)[number]) =>
+      !!enforced && (enforced.providerId ? r.id === enforced.providerId : r.workspaceId === enforced.workspaceId || r.platformWide);
+    const offered = [];
+    for (const r of rows) if (viaEnforced(r) || (await speaksFor(this.prisma, r, domain))) offered.push(r);
     const passwordPast = !enforced || this.policy.isBreakGlass(normalized) || enforced.allowPasswordForAdmins;
     return {
-      method: rows.length ? 'sso' : 'password',
-      providers: rows.map(toLoginProvider),
+      method: offered.length ? 'sso' : 'password',
+      providers: offered.map(toLoginProvider),
       passwordAllowed: passwordAllowedFor(normalized, this.config) && passwordPast,
       enforced: enforced !== null,
     };
   }
 
-  /** Open a transaction and answer where to send the browser — the IdP, or back to /login on failure. */
-  async start(providerId: string, returnTo: string | undefined): Promise<string> {
+  /**
+   * Open a transaction and answer where to send the browser — the IdP, or back
+   * to /login on failure. `browser` is the flow cookie the controller set on
+   * this browser (`mintBrowserBinding`); only its hash is stored, and the
+   * exchange requires it, so a sign-in finishes only where it began (#1095).
+   */
+  async start(providerId: string, returnTo: string | undefined, browser: string): Promise<string> {
     const back = safeReturnTo(returnTo, DEFAULT_RETURN);
     const provider = await this.liveProvider(providerId, 'oidc');
     if (!provider) return this.loginUrl('failed', back);
@@ -170,6 +183,7 @@ export class SsoFlowService {
           nonce: checks.nonce,
           codeVerifier: checks.codeVerifier,
           returnTo: back,
+          browserHash: hashToken(browser),
           expiresAt: new Date(Date.now() + this.stateTtlMs),
         },
       });
@@ -228,7 +242,7 @@ export class SsoFlowService {
   }
 
   /** SAML, SP-initiated: record the AuthnRequest, then send the browser to the IdP with it. */
-  async samlStart(providerId: string, returnTo: string | undefined): Promise<string> {
+  async samlStart(providerId: string, returnTo: string | undefined, browser: string): Promise<string> {
     const back = safeReturnTo(returnTo, DEFAULT_RETURN);
     const provider = await this.liveProvider(providerId, 'saml');
     if (!provider) return this.loginUrl('failed', back);
@@ -242,6 +256,7 @@ export class SsoFlowService {
           stateHash: hashToken(relayState),
           samlRequestId: requestId,
           returnTo: back,
+          browserHash: hashToken(browser),
           expiresAt: new Date(Date.now() + this.stateTtlMs),
         },
       });
@@ -498,12 +513,22 @@ export class SsoFlowService {
    * signal an admin looks for), and the 400 carries the `/login?error=`
    * category for the page to show. A spent code's hash is gone, so its row is
    * not found and the audit row names no provider.
+   *
+   * The browser must be the one that started the sign-in (#1095): the code
+   * rides in a URL fragment for 60 s, and a forwarded
+   * `/auth/sso/complete#code=…` would otherwise sign someone else's browser in
+   * as the sender (login CSRF). Checked before the code is spent, so the
+   * forwarded attempt burns nothing. A row no browser started — an unsolicited
+   * SAML response the provider allows — has no binding to check.
    */
-  async exchange(code: string, meta: RequestMeta): Promise<Issued<SsoExchangeResponse>> {
+  async exchange(code: string, meta: RequestMeta, browser: string | undefined): Promise<Issued<SsoExchangeResponse>> {
     const hash = hashToken(code);
     const row = await this.prisma.ssoAuthRequest.findUnique({ where: { exchangeCodeHash: hash }, include: { provider: true } });
     if (!row || !row.userId) throw this.exchangeRefused(row?.provider ?? null, 'exchange code unknown or already spent', meta);
     if (row.expiresAt < new Date()) throw this.exchangeRefused(row.provider, 'exchange code expired', meta, row.userId);
+    if (row.browserHash && (!browser || hashToken(browser) !== row.browserHash)) {
+      throw this.exchangeRefused(row.provider, 'exchange from a browser that did not start the sign-in', meta, row.userId);
+    }
     const spent = await this.prisma.ssoAuthRequest.updateMany({
       where: { id: row.id, exchangeCodeHash: hash },
       data: { exchangeCodeHash: null },

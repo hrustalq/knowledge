@@ -9,15 +9,16 @@ import {
   type ConnectionProvider,
   type ConnectorKind,
 } from '@knowledge/contracts';
-import { decryptSecret, maskSecret } from '../ai/secret-box.js';
+import { randomUUID } from 'node:crypto';
+import { decryptSecret, encryptSecret, maskSecret } from '../ai/secret-box.js';
+import { slots } from '../ai/secret-slots.js';
 import type { ProviderAccount } from './adapters/connection-providers.js';
 
 type Db = Pick<PrismaClient, 'connection' | 'connector' | 'githubInstallation' | 'credential'>;
 export type BindableConnector = Pick<Connector, 'id' | 'workspaceId' | 'kind' | 'config' | 'createdBy'>;
-/** A pasted token, in plaintext to match by and sealed to store. */
+/** A pasted token, in plaintext: matched by, and sealed only into the credential row that keeps it (#1106). */
 export interface ConnectorToken {
   secret: string;
-  envelope: string;
 }
 
 /**
@@ -57,18 +58,18 @@ async function connectionFor(db: Db, row: BindableConnector, key: Buffer | null,
   }
 
   if (!token) return null;
-  const { secret, envelope } = token;
+  const { secret } = token;
   const { provider, site } = connectionProviderFor(row.kind as ConnectorKind, config);
   const tokens = await db.connection.findMany({
     where: { workspaceId: row.workspaceId, provider, site, method: 'token' },
-    include: { credentialRow: { select: { secret: true } } },
+    include: { credentialRow: { select: { id: true, secret: true } } },
     orderBy: { createdAt: 'asc' },
   });
-  const same = tokens.find((c) => decryptSecret(c.credentialRow?.secret, key) === secret);
+  const same = tokens.find((c) => c.credentialRow && decryptSecret(c.credentialRow.secret, key, slots.credential(c.credentialRow, 'secret')) === secret);
   if (same) return same.id;
   const credential = await tokenCredential(
     db,
-    { userId: row.createdBy, provider, site, envelope, secret, hint: maskSecret(secret), account: null },
+    { userId: row.createdBy, provider, site, secret, hint: maskSecret(secret), account: null },
     key,
   );
   const created = await db.connection.create({
@@ -114,8 +115,7 @@ export interface TokenCredentialInput {
   provider: string;
   /** The connection's site; `credentialSiteFor` decides what the credential keeps. */
   site: string | null;
-  /** The secret-box envelope to store, and its plaintext to match by. */
-  envelope: string;
+  /** The plaintext, to match by; sealed here for the row that keeps it. */
   secret: string;
   hint: string | null;
   account: ProviderAccount | null;
@@ -134,19 +134,21 @@ export async function tokenCredential(db: Pick<PrismaClient, 'credential'>, inpu
     where: { userId: input.userId, provider: input.provider, method: 'token', site },
     orderBy: { createdAt: 'asc' },
   });
-  const same = mine.find((c) => decryptSecret(c.secret, key) === input.secret);
+  const same = mine.find((c) => decryptSecret(c.secret, key, slots.credential(c, 'secret')) === input.secret);
   const account = input.account
     ? { accountId: input.account.id, accountLabel: input.account.label, accountAvatarUrl: input.account.avatarUrl }
     : {};
   if (same) return input.account ? db.credential.update({ where: { id: same.id }, data: account }) : same;
+  const id = randomUUID();
   return db.credential.create({
     data: {
+      id,
       userId: input.userId,
       provider: input.provider,
       method: 'token',
       site,
       ...account,
-      secret: input.envelope,
+      secret: encryptSecret(input.secret, key, slots.credential({ id }, 'secret')),
       secretHint: input.hint,
     },
   });
@@ -160,5 +162,5 @@ export async function connectionSecret(
 ): Promise<string | null> {
   if (!connection.credentialId) return null;
   const row = await db.credential.findUnique({ where: { id: connection.credentialId }, select: { secret: true } });
-  return decryptSecret(row?.secret, key);
+  return decryptSecret(row?.secret, key, slots.credential({ id: connection.credentialId }, 'secret'));
 }

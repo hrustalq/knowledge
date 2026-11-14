@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Post } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { ChatIdentitiesResponse, ChatIdentityEntry, ChatLinkPreview } from '@knowledge/contracts';
-import { CurrentPrincipal } from '../auth/access.decorator.js';
+import type { ChatIdentitiesResponse, ChatLinkPending, ChatLinkPreview } from '@knowledge/contracts';
+import { CurrentPrincipal, SessionOnly } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ChatIdentityService } from './chat-identity.service.js';
@@ -25,6 +25,7 @@ export class ChatLinkController {
 
   @Post('chat/link/preview')
   @Returns('ChatLinkPreview')
+  @SessionOnly()
   @HttpCode(200)
   @ApiOperation({ summary: 'Who is asking to be linked, before confirming' })
   preview(@Body() dto: ChatLinkCodeDto, @CurrentPrincipal() principal: Principal): Promise<ChatLinkPreview> {
@@ -32,9 +33,12 @@ export class ChatLinkController {
   }
 
   @Post('chat/link')
-  @Returns('ChatIdentityEntry')
-  @ApiOperation({ summary: 'Link the messenger account that asked for this code to the signed-in person' })
-  link(@Body() dto: ChatLinkCodeDto, @CurrentPrincipal() principal: Principal): Promise<ChatIdentityEntry> {
+  @Returns('ChatLinkPending')
+  @SessionOnly()
+  @ApiOperation({
+    summary: 'Confirm a link code: returns the number to send to the bot from that private chat, which is what links the account',
+  })
+  link(@Body() dto: ChatLinkCodeDto, @CurrentPrincipal() principal: Principal): Promise<ChatLinkPending> {
     return this.identities.confirm(dto.code, principal);
   }
 
@@ -47,6 +51,7 @@ export class ChatLinkController {
 
   @Delete('me/chat-identities/:id')
   @HttpCode(204)
+  @SessionOnly()
   @ApiOperation({ summary: 'Unlink one of my messenger accounts' })
   async unlink(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<void> {
     await this.identities.removeMine(id, principal.userId);

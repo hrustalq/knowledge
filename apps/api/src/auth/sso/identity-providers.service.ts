@@ -15,7 +15,9 @@ import {
   type WorkspaceRole,
 } from '@knowledge/contracts';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { randomUUID } from 'node:crypto';
 import { encryptSecret, MissingEncryptionKeyError, parseKey } from '../../ai/secret-box.js';
+import { slots } from '../../ai/secret-slots.js';
 import { assertSafeExternalUrl } from '../../common/safe-url.js';
 import type { Env } from '../../config/env.js';
 import { t } from '../../i18n/t.js';
@@ -103,9 +105,10 @@ export class IdentityProvidersService {
 
   async create(workspaceId: string, dto: CreateIdentityProviderDto, principal: Principal): Promise<IdentityProviderView> {
     if (!liveIdpKinds(this.config).includes(dto.kind)) throw new BadRequestException(t('error.sso.kindNotSupported', { kind: dto.kind }));
-    const fields = await this.fields(workspaceId, dto.kind, dto, principal, null);
+    const at = { id: randomUUID(), workspaceId };
+    const fields = await this.fields(at, dto.kind, dto, principal, null);
     const row = await this.prisma.identityProvider.create({
-      data: { workspaceId, kind: dto.kind, name: dto.name.trim(), ...fields, ...(dto.kind === 'saml' ? this.spKeyPair(fields) : {}) },
+      data: { id: at.id, workspaceId, kind: dto.kind, name: dto.name.trim(), ...fields, ...(dto.kind === 'saml' ? this.spKeyPair(fields, at) : {}) },
     });
     void this.audit.record({ ...this.entry(principal, row, changedFields(dto)), action: 'sso.provider_created' });
     // Which providers satisfy enforced SSO may have changed — here and, for a platform-wide one, everywhere.
@@ -120,7 +123,7 @@ export class IdentityProvidersService {
     principal: Principal,
   ): Promise<IdentityProviderView> {
     const existing = await this.owned(workspaceId, providerId);
-    const fields = await this.fields(workspaceId, existing.kind as IdpKind, dto, principal, existing);
+    const fields = await this.fields(existing, existing.kind as IdpKind, dto, principal, existing);
     const row = await this.prisma.identityProvider.update({
       where: { id: existing.id },
       data: { ...(dto.name !== undefined ? { name: dto.name.trim() } : {}), ...fields },
@@ -163,7 +166,7 @@ export class IdentityProvidersService {
 
   /** Validate and translate a create/update body into columns. `existing` is null on create. */
   private async fields(
-    workspaceId: string,
+    at: { id: string; workspaceId: string },
     kind: IdpKind,
     dto: UpdateIdentityProviderDto,
     principal: Principal,
@@ -192,7 +195,7 @@ export class IdentityProvidersService {
       const changed = added.length > 0 || kept.some((d) => !allowedDomains!.includes(d));
       const platformWide = dto.platformWide ?? existing?.platformWide ?? false;
       if (platformWide && changed && !principal.isAdmin) throw new ForbiddenException(t('error.sso.platformWideDomainsAdminOnly'));
-      const unproven = await unprovenDomains(this.prisma, { workspaceId, platformWide, allowedDomains }, added);
+      const unproven = await unprovenDomains(this.prisma, { workspaceId: at.workspaceId, platformWide, allowedDomains }, added);
       if (unproven.length > 0) throw new BadRequestException(t('error.sso.providerDomainNotVerified', { domain: unproven[0] }));
     }
 
@@ -200,8 +203,8 @@ export class IdentityProvidersService {
       ...(kind === 'saml'
         ? this.samlFields(dto, existing)
         : kind === 'ldap'
-          ? await this.ldapFields(dto, existing)
-          : await this.oidcFields(dto, existing)),
+          ? await this.ldapFields(dto, existing, at)
+          : await this.oidcFields(dto, existing, at)),
       ...(dto.enabled !== undefined ? { enabled: dto.enabled } : {}),
       ...(dto.showOnLogin !== undefined ? { showOnLogin: dto.showOnLogin } : {}),
       ...(dto.platformWide !== undefined ? { platformWide: dto.platformWide } : {}),
@@ -214,7 +217,7 @@ export class IdentityProvidersService {
     };
   }
 
-  private async oidcFields(dto: UpdateIdentityProviderDto, existing: IdentityProvider | null): Promise<ProviderColumns> {
+  private async oidcFields(dto: UpdateIdentityProviderDto, existing: IdentityProvider | null, at: { id: string; workspaceId: string }): Promise<ProviderColumns> {
     const preset = presetOf(dto.preset ?? existing?.preset ?? 'generic');
     const current = existing ? oidcConfigOf(existing) : { issuer: '', clientId: '', scopes: [] };
     const issuer = (dto.issuer ?? current.issuer).trim().replace(/\/+$/, '');
@@ -231,16 +234,16 @@ export class IdentityProvidersService {
     return {
       preset,
       config: { issuer: OIDC_PRESETS[preset].issuer ?? issuer, clientId, scopes },
-      ...this.secret(dto.clientSecret),
+      ...this.secret(dto.clientSecret, at),
     };
   }
 
   /** A write-only secret: a value is stored encrypted, `''` clears it, absent keeps it. */
-  private secret(value: string | undefined): Pick<ProviderColumns, 'secretCipher'> {
+  private secret(value: string | undefined, at: { id: string; workspaceId: string }): Pick<ProviderColumns, 'secretCipher'> {
     if (value === undefined) return {};
     if (value === '') return { secretCipher: null };
     try {
-      return { secretCipher: encryptSecret(value, this.key) };
+      return { secretCipher: encryptSecret(value, this.key, slots.identityProviderSecret(at)) };
     } catch (e) {
       if (e instanceof MissingEncryptionKeyError) throw new BadRequestException(t('error.sso.secretKeyMissing'));
       throw e;
@@ -254,7 +257,7 @@ export class IdentityProvidersService {
    * flag off stops a clear-text provider at once. The service-account
    * password is `bindPassword`; a stray `clientSecret` is ignored.
    */
-  private async ldapFields(dto: UpdateIdentityProviderDto, existing: IdentityProvider | null): Promise<ProviderColumns> {
+  private async ldapFields(dto: UpdateIdentityProviderDto, existing: IdentityProvider | null, at: { id: string; workspaceId: string }): Promise<ProviderColumns> {
     const current = ldapConfigOf(existing ?? { config: {} });
     const url = (dto.ldapUrl ?? current.url).trim().replace(/\/+$/, '');
     const secure = url.toLowerCase().startsWith('ldaps:');
@@ -280,7 +283,7 @@ export class IdentityProvidersService {
         emailAttribute: optional(dto.emailAttribute, current.emailAttribute),
         nameAttribute: optional(dto.nameAttribute, current.nameAttribute),
       },
-      ...this.secret(dto.bindPassword),
+      ...this.secret(dto.bindPassword, at),
     };
   }
 
@@ -327,11 +330,11 @@ export class IdentityProvidersService {
 
   /** A new SAML provider's SP key pair: the key into secret-box, the certificate beside the settings. */
   // ponytail: made once on create, no rotation route; add one when an IdP asks for an SP cert rollover or SETTINGS_ENCRYPTION_KEY is rotated.
-  private spKeyPair(fields: ProviderColumns): Pick<ProviderColumns, 'config' | 'secretCipher'> {
+  private spKeyPair(fields: ProviderColumns, at: { id: string; workspaceId: string }): Pick<ProviderColumns, 'config' | 'secretCipher'> {
     const pair = generateSpKeyPair('Knowledge SAML SP');
     let secretCipher: string;
     try {
-      secretCipher = encryptSecret(pair.privateKeyPem, this.key);
+      secretCipher = encryptSecret(pair.privateKeyPem, this.key, slots.identityProviderSecret(at));
     } catch (e) {
       if (e instanceof MissingEncryptionKeyError) throw new BadRequestException(t('error.sso.secretKeyMissing'));
       throw e;

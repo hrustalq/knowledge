@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../src/common/safe-fetch.js', () => ({ safeFetch: vi.fn() }));
 const { safeFetch } = await import('../src/common/safe-fetch.js');
 const { decryptSecret, encryptSecret } = await import('../src/ai/secret-box.js');
+const { slots } = await import('../src/ai/secret-slots.js');
 const { signState } = await import('../src/connectors/github/github-jwt.js');
 const { PlaudOauthService } = await import('../src/plaud/plaud-oauth.service.js');
 const { parsePlaudAnswer, PlaudError } = await import('../src/plaud/plaud.client.js');
@@ -38,7 +39,7 @@ function setup(env: Record<string, unknown> = {}) {
       return c ? { ...c } : null;
     },
     create: async ({ data }: { data: Omit<Cred, 'id'> }) => {
-      creds.push({ ...data, id: `cred-${creds.length}` } as Cred);
+      creds.push({ id: `cred-${creds.length}`, ...data } as Cred);
       return creds.at(-1);
     },
     update: async ({ where, data }: { where: { id: string }; data: Partial<Cred> }) => Object.assign(creds.find((c) => c.id === where.id)!, data),
@@ -131,7 +132,7 @@ describe('PlaudOauthService', () => {
     expect(creds).toHaveLength(1);
     expect(creds[0]).toMatchObject({ provider: 'plaud', method: 'oauth', userId: USER, accountId: 'plaud-user', accountLabel: 'Rec Owner' });
     expect(creds[0].secret).not.toContain('access-1');
-    expect(decryptSecret(creds[0].secret, KEY)).toBe('access-1');
+    expect(decryptSecret(creds[0].secret, KEY, slots.credential(creds[0], 'secret'))).toBe('access-1');
     expect(creds[0].refreshExpiresAt).toEqual(new Date(2_000_000_000_000));
     // The exchange names the public client and carries the verifier; there is no secret to send.
     const body = new URLSearchParams(mockFetch.mock.calls[0][1]!.body as string);
@@ -170,7 +171,7 @@ describe('PlaudOauthService', () => {
     expect(await Promise.all([service.tokenFor(USER), service.tokenFor(USER)])).toEqual(['access-2', 'access-2']);
     expect(mockFetch).toHaveBeenCalledTimes(1);
     expect(new URLSearchParams(mockFetch.mock.calls[0][1]!.body as string).get('grant_type')).toBe('refresh_token');
-    expect(decryptSecret(creds[0].refreshSecret, KEY)).toBe(jwt({ exp: 2_000_000_600 }));
+    expect(decryptSecret(creds[0].refreshSecret, KEY, slots.credential(creds[0], 'refresh_secret'))).toBe(jwt({ exp: 2_000_000_600 }));
     expect(creds[0].refreshExpiresAt).toEqual(new Date(2_000_000_600_000));
     expect(creds[0].refreshingUntil).toBeNull();
   });
@@ -193,7 +194,7 @@ describe('PlaudOauthService', () => {
   it('unlinks only the caller', async () => {
     const { service, creds } = setup();
     await link(service);
-    creds.push({ ...creds[0], id: 'other', userId: 'someone-else', secret: encryptSecret('x', KEY) });
+    creds.push({ ...creds[0], id: 'other', userId: 'someone-else', secret: encryptSecret('x', KEY, slots.credential({ id: 'other' }, 'secret')) });
     await service.unlink(USER);
     expect(creds.map((c) => c.userId)).toEqual(['someone-else']);
   });

@@ -50,7 +50,7 @@ function gateway() {
   };
   const gw = new LiveGateway(config as never, tokenAuth as never, access as never, {} as never, {} as never);
   const socket = new FakeSocket();
-  const connected = gw.handleConnection(socket as never, { url: '/v1/events/ws?token=ks_x', headers: {} } as never);
+  const connected = gw.handleConnection(socket as never, { url: '/v1/events/ws', headers: { authorization: 'Bearer ks_x' } } as never);
   return { auth, access, socket, connected };
 }
 

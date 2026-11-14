@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { VERIFICATION_FLAGS, EXPORT_FORMATS, SHARE_PASSWORD_MAX_CHARS, SHARE_PASSWORD_MIN_CHARS, VERIFICATION_NOTE_MAX_CHARS, REQUESTABLE_ACCESS_LEVELS, parseEmbedUrl } from '@knowledge/contracts';
 import { flowAnswersArg, runFlow } from '../flow-tools.js';
-import { wrapUntrusted } from '../../common/untrusted.js';
-import { json, type McpToolContext } from './context.js';
+import { pageText } from '../../common/page-text.js';
+import { json, pageJson, type McpToolContext } from './context.js';
 
 /** Snapshot images knowledge_get_embed returns inline, and the largest one it will send (#470). */
 const EMBED_MCP_MAX_IMAGES = 8;
@@ -35,7 +35,9 @@ export function registerPagesTools(ctx: McpToolContext): void {
       const workspaceId = await guard.doc(documentId, state === 'outdated' ? 'editor' : 'viewer');
       if (state === 'outdated') {
         const source = { kind: 'mcp' as const, by: principal.userId };
-        return json(
+        // The flow's question offers subpage titles: page text (#1136).
+        return pageJson(
+          'knowledge_flag_document',
           await runFlow(
             server,
             'knowledge_flag_document',
@@ -161,7 +163,7 @@ export function registerPagesTools(ctx: McpToolContext): void {
       await guard.exportJob(exportId, 'viewer');
       const job = await svc.exports.get(exportId, principal);
       const download = job.status === 'completed' ? await svc.exports.download(exportId, principal) : null;
-      return json({ ...job, download });
+      return pageJson('knowledge_get_export', { ...job, download });
     },
   );
 
@@ -178,7 +180,7 @@ export function registerPagesTools(ctx: McpToolContext): void {
     },
     async ({ documentId }) => {
       await guard.doc(documentId, 'viewer');
-      return json(await svc.resourceAccess.get(principal, { type: 'document', id: documentId }));
+      return pageJson('knowledge_get_page_access', await svc.resourceAccess.get(principal, { type: 'document', id: documentId }));
     },
   );
 
@@ -202,7 +204,8 @@ export function registerPagesTools(ctx: McpToolContext): void {
     async ({ documentId, level, message }) => {
       const workspaceId = await svc.access.workspaceOfDocument(documentId);
       await guard.pages(workspaceId);
-      return json(
+      return pageJson(
+        'knowledge_request_access',
         await svc.accessRequests.create(principal, {
           workspaceId,
           resourceType: 'document',
@@ -241,15 +244,16 @@ export function registerPagesTools(ctx: McpToolContext): void {
       const content: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [
         {
           type: 'text',
-          text: JSON.stringify(
+          // Caption (the page's), frame name and text (the design file's) are all text: one wrapper (#1136).
+          text: pageText(
             {
               documentId,
               revisionId: revision,
               group: group ?? 0,
-              items: items.map(({ snapshotKey, text, ...rest }) => ({ ...rest, hasSnapshot: !!snapshotKey, ...(text ? { text: wrapUntrusted(text, 'knowledge_get_embed', 'page') } : {}) })),
+              items: items.map(({ snapshotKey, text, ...rest }) => ({ ...rest, hasSnapshot: !!snapshotKey, ...(text ? { text } : {}) })),
             },
-            null,
-            2,
+            'knowledge_get_embed',
+            'page',
           ),
         },
       ];
@@ -275,11 +279,11 @@ export function registerPagesTools(ctx: McpToolContext): void {
     async ({ workspaceId, figmaUrl, fileKey }) => {
       await guard.ws(workspaceId, 'viewer');
       const ref = figmaUrl ? parseEmbedUrl(figmaUrl) : null;
-      if (figmaUrl && !ref) return json({ pages: [], note: 'Not a Figma design, prototype or FigJam link.' });
+      if (figmaUrl && !ref) return pageJson('knowledge_find_embeds', { pages: [], note: 'Not a Figma design, prototype or FigJam link.' });
       const key = ref?.fileKey ?? fileKey;
-      if (!key) return json({ pages: [], note: 'Pass figmaUrl or fileKey.' });
+      if (!key) return pageJson('knowledge_find_embeds', { pages: [], note: 'Pass figmaUrl or fileKey.' });
       const scope = await guard.scope(workspaceId);
-      return json({ pages: await svc.embeds.usages(scope, { fileKey: key, nodeId: ref?.nodeId ?? undefined }) });
+      return pageJson('knowledge_find_embeds', { pages: await svc.embeds.usages(scope, { fileKey: key, nodeId: ref?.nodeId ?? undefined }) });
     },
   );
 
@@ -320,7 +324,7 @@ export function registerPagesTools(ctx: McpToolContext): void {
     },
     async ({ documentId }) => {
       const scope = await guard.scope(await guard.doc(documentId, 'viewer'));
-      return json(await svc.quality.forDocument(scope, documentId));
+      return pageJson('knowledge_get_page_quality', await svc.quality.forDocument(scope, documentId));
     },
   );
 }

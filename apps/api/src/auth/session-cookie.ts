@@ -1,4 +1,6 @@
+import { randomBytes } from 'node:crypto';
 import type { Request, Response } from 'express';
+import { readCookie } from '../common/cookies.js';
 import { SESSION_COOKIE } from '@knowledge/contracts';
 
 /**
@@ -45,4 +47,28 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
  */
 export function cookieCsrfOk(req: Pick<Request, 'method' | 'headers'>): boolean {
   return SAFE_METHODS.has(req.method.toUpperCase()) || typeof req.headers['x-requested-with'] === 'string';
+}
+
+/**
+ * The SSO flow cookie (#1095): a random value set on the browser that starts a
+ * sign-in, whose hash the login transaction keeps. The exchange requires it,
+ * so the 60 s fragment code finishes a sign-in only in the browser that began
+ * it — a forwarded `/auth/sso/complete#code=…` signs nobody in. `SameSite=Lax`
+ * and path `/`, so the web's same-site POST to the exchange carries it.
+ */
+export const SSO_FLOW_COOKIE = 'kn_sso';
+
+/** Mint the flow cookie, set it for `ttlSec`, and answer its value for the service to hash. */
+export function setSsoFlowCookie(res: Response, webBaseUrl: string, ttlSec: number): string {
+  const value = randomBytes(32).toString('base64url');
+  res.cookie(SSO_FLOW_COOKIE, value, { ...cookieOptions(webBaseUrl), maxAge: ttlSec * 1000 });
+  return value;
+}
+
+export function readSsoFlowCookie(req: Pick<Request, 'headers'>): string | undefined {
+  return readCookie(req.headers.cookie, SSO_FLOW_COOKIE) ?? undefined;
+}
+
+export function clearSsoFlowCookie(res: Response, webBaseUrl: string): void {
+  res.clearCookie(SSO_FLOW_COOKIE, cookieOptions(webBaseUrl));
 }

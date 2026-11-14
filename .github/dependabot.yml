@@ -1,0 +1,54 @@
+# Dependency updates (#1111). Version updates only, into `dev`, weekly and
+# grouped, so one PR a week per ecosystem goes through CI like any other change
+# and ships with the next release. Security alerts are a repository setting
+# (Settings → Code security → Dependabot alerts); Dependabot's own security
+# PRs are left off because they always target the default branch (`main`),
+# which only takes promotions from `dev` (CONTRIBUTING.md#release).
+version: 2
+updates:
+  - package-ecosystem: npm # pnpm workspace: root package.json + pnpm-lock.yaml
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      production:
+        dependency-type: production
+        update-types: [minor, patch]
+      development:
+        dependency-type: development
+        update-types: [minor, patch]
+
+  # Every action is pinned to a commit SHA with its version in a comment
+  # (#1113); Dependabot moves both together.
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "ci(deps)"
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Compose images are pinned by tag and digest (#1114); this moves the digest
+  # when the tag does. The Dockerfiles' node image is an ARG default, which
+  # Dependabot does not read: bump NODE_IMAGE in Dockerfile.api and
+  # Dockerfile.web together by hand.
+  - package-ecosystem: docker-compose
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      images:
+        patterns: ["*"]

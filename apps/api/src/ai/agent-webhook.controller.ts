@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   BadRequestException,
   Controller,
@@ -48,7 +49,10 @@ export interface AgentWebhookResponse {
  *      so the replay window in step 4 cannot be dodged by rewriting a header;
  *   4. the timestamp is within `AGENT_WEBHOOK_TOLERANCE_SECONDS`;
  *   5. the delivery id — `webhook:<id>` is the run's subject, and
- *      `AgentTriggerService` refuses a subject it has started before.
+ *      `AgentTriggerService` refuses a subject it has started before. The id
+ *      is not signed, so the run also records a hash of what the signature
+ *      covers, and a second run with the same hash is refused: a captured
+ *      request resent under fresh ids inside the window starts nothing (#1106).
  *
  * Then one `fire`, inline: at most one insert and one enqueue, the model work
  * is the worker's. Everything past step 5 — the trigger off, the owner over
@@ -107,7 +111,7 @@ export class AgentWebhookController {
 
     const outcome = await this.triggers.fire(trigger, {
       workspaceId: trigger.workspaceId,
-      event: { type: 'webhook', source: 'webhook', deliveryId },
+      event: { type: 'webhook', source: 'webhook', deliveryId, signed: createHash('sha256').update(`${timestamp}.${body}`).digest('hex') },
       subjectKey: `webhook:${deliveryId}`,
       projectId: trigger.projectId,
       ...(body ? { payload: body.slice(0, AGENT_WEBHOOK_PAYLOAD_MAX_CHARS) } : {}),

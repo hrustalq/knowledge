@@ -2,6 +2,7 @@ import { ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { McpToolContext } from './context.js';
 import { STACK_CORE_SKILL, stackToolsets } from '../skill.js';
 import { TOOLSET_SKILLS } from '../skill-sections.js';
+import { wrapUntrusted } from '../../common/untrusted.js';
 
 /** The skill as a resource and a prompt, and the AI-readable resource templates (#68). */
 export function registerResourcesTools(ctx: McpToolContext): void {
@@ -54,8 +55,10 @@ export function registerResourcesTools(ctx: McpToolContext): void {
   // ------------------------------------------------- AI-readable (#68)
   // The /markdown and llms.txt representations as resource templates. Reads,
   // not tools, so WRITE_TOOLS is untouched. Each read goes through
-  // AiReadableService — the REST code path — so the text is byte-identical,
-  // and each starts with the same guard as the REST route's @Access.
+  // AiReadableService — the REST code path — so the text is the same, wrapped
+  // untrusted (#1141): a client hands a resource to its model as it hands a
+  // tool result, and the page's authors wrote it. Each starts with the same
+  // guard as the REST route's @Access. The skill resources above are ours.
   // AI_READABLE_ENABLED=false: the templates are simply not offered.
   // No llms-full resource: too large for one read; use search + page reads.
   if (svc.aiReadable.enabled()) {
@@ -72,7 +75,7 @@ export function registerResourcesTools(ctx: McpToolContext): void {
         await guard.doc(id, 'viewer');
         const result = await svc.aiReadable.pageMarkdown(id, { frontmatter: false });
         if (result.status === 200) void svc.analytics.view(caller, id);
-        return { contents: [{ uri: uri.href, mimeType: 'text/markdown', text: result.status === 200 ? result.body : '' }] };
+        return { contents: [{ uri: uri.href, mimeType: 'text/markdown', text: wrapUntrusted(result.status === 200 ? result.body : '', 'document-markdown', 'document') }] };
       },
     );
     server.registerResource(
@@ -87,7 +90,7 @@ export function registerResourcesTools(ctx: McpToolContext): void {
         const id = String(workspaceId);
         await guard.ws(id, 'viewer');
         const result = await svc.aiReadable.workspaceIndex(id);
-        return { contents: [{ uri: uri.href, mimeType: 'text/plain', text: result.status === 200 ? result.body : '' }] };
+        return { contents: [{ uri: uri.href, mimeType: 'text/plain', text: wrapUntrusted(result.status === 200 ? result.body : '', 'workspace-llms-txt', 'document') }] };
       },
     );
     server.registerResource(
@@ -102,7 +105,7 @@ export function registerResourcesTools(ctx: McpToolContext): void {
         const id = String(projectId);
         await guard.project(id, 'viewer');
         const result = await svc.aiReadable.projectIndex(id);
-        return { contents: [{ uri: uri.href, mimeType: 'text/plain', text: result.status === 200 ? result.body : '' }] };
+        return { contents: [{ uri: uri.href, mimeType: 'text/plain', text: wrapUntrusted(result.status === 200 ? result.body : '', 'project-llms-txt', 'document') }] };
       },
     );
   }

@@ -123,6 +123,8 @@ export function renderPublicMarkdown(markdown: string, options: PublicRenderOpti
   renderEmbeds(host, doc, options)
   renderFiles(host, doc, options)
   renderDrawings(host, doc)
+  // Mermaid is drawn in the browser; until then its block carries the width the sanitizer stripped (#1098).
+  for (const node of host.querySelectorAll(`[${KN.mermaid}]`)) carryDiagramLayout(node, node)
   renderToc(host, doc, headings, options)
 
   return { html: host.innerHTML, headings, description: describe(host) }

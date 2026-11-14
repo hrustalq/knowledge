@@ -312,6 +312,12 @@ export class CreateUploadDto {
   @IsString()
   @IsNotEmpty()
   filename!: string;
+
+  /** The body's exact size in bytes: the presigned PUT is signed for it, so another size is refused by the store. */
+  @ApiProperty({ example: 2_048, minimum: 0 })
+  @IsInt()
+  @Min(0)
+  sizeBytes!: number;
 }
 
 export class CreateRevisionDto {

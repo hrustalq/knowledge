@@ -81,7 +81,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create an account with email + password; sets the HttpOnly kn_token session cookie */
+        /** Create an account with email + password; sets the HttpOnly kn_token session cookie. 429 past 10/min per IP or 3/min per address */
         post: operations["AuthFlowController_signup"];
         delete?: never;
         options?: never;
@@ -149,7 +149,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Request a password-reset token (never reveals whether the email exists) */
+        /** Request a password-reset token (never reveals whether the email exists). 429 past 10/min per IP or 3/min per address */
         post: operations["AuthFlowController_forgotPassword"];
         delete?: never;
         options?: never;
@@ -166,7 +166,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Set a new password with a kr_ reset token; revokes all sessions */
+        /** Set a new password with a kr_ reset token; revokes all sessions. 429 past 10/min per IP */
         post: operations["AuthFlowController_resetPassword"];
         delete?: never;
         options?: never;
@@ -183,7 +183,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Confirm the account address with the kv_ token from the mailed link (docs/features/41) */
+        /** Confirm the account address with the kv_ token from the mailed link (docs/features/41). 429 past 20/min per IP */
         post: operations["AuthFlowController_verifyEmail"];
         delete?: never;
         options?: never;
@@ -200,7 +200,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Mail a fresh confirmation link to the caller's address (at most one a minute) */
+        /** Mail a fresh confirmation link to the caller's address (at most one a minute). 429 past 3/min per account or 10/min per IP */
         post: operations["AuthFlowController_resendVerification"];
         delete?: never;
         options?: never;
@@ -234,7 +234,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Change own password (requires the current one); revokes other sessions */
+        /** Change own password (requires the current one, from a session — never an API key); revokes other sessions. 429 past 5/min per account */
         post: operations["AuthFlowController_changePassword"];
         delete?: never;
         options?: never;
@@ -706,7 +706,7 @@ export interface paths {
         /** Caller's workspaces (platform admins see all) */
         get: operations["WorkspacesController_list"];
         put?: never;
-        /** Create a workspace — the creator becomes its admin + trusted operator */
+        /** Create a workspace — the creator becomes its admin + trusted operator (platform admins only while AUTH_SIGNUP_ENABLED=false) */
         post: operations["WorkspacesController_create"];
         delete?: never;
         options?: never;
@@ -828,7 +828,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Users who are not members yet, for the add-member picker (workspace admin) */
+        /** Users who are not members yet, for the add-member picker (workspace admin: one full email; platform admin: any fragment) */
         get: operations["WorkspacesController_listCandidates"];
         put?: never;
         post?: never;
@@ -2640,6 +2640,23 @@ export interface paths {
         put?: never;
         /** Confirm the upload and make it the project’s avatar */
         post: operations["AvatarsController_completeProject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/image-proxy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An external image from a page, fetched through the API (member app only) */
+        get: operations["ImageProxyController_image"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -7720,7 +7737,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Link the messenger account that asked for this code to the signed-in person */
+        /** Confirm a link code: returns the number to send to the bot from that private chat, which is what links the account */
         post: operations["ChatLinkController_link"];
         delete?: never;
         options?: never;
@@ -8996,6 +9013,8 @@ export interface components {
             contentType: string;
             /** @example source.md */
             filename: string;
+            /** @example 2048 */
+            sizeBytes: number;
         };
         CreateRevisionDto: {
             /** @description Default: main. */
@@ -9176,7 +9195,7 @@ export interface components {
              */
             contentType: "image/png" | "image/jpeg" | "image/gif" | "image/webp" | "image/avif" | "application/pdf" | "text/plain" | "text/csv" | "text/markdown" | "application/json" | "application/zip" | "application/msword" | "application/vnd.openxmlformats-officedocument.wordprocessingml.document" | "application/vnd.ms-excel" | "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" | "application/vnd.ms-powerpoint" | "application/vnd.openxmlformats-officedocument.presentationml.presentation";
             /** @example 148231 */
-            sizeBytes?: number;
+            sizeBytes: number;
         };
         EmbedItemStatusDto: {
             fileKey: string;
@@ -9258,7 +9277,7 @@ export interface components {
             sizeBytes: number;
         };
         CompleteAvatarUploadDto: {
-            /** @description The uploadId returned by the reserve step. */
+            /** @description The uploadId returned by the reserve step (a UUID). */
             uploadId: string;
             filename: string;
         };
@@ -11791,6 +11810,7 @@ export interface components {
             documentId?: string;
             revisionId?: string;
             deliveryId?: string;
+            signed?: string;
             threadId?: string;
         };
         AgentRunInput: {
@@ -12040,6 +12060,7 @@ export interface components {
             baseUrl: string | null;
             hasApiKey: boolean;
             apiKeyHint: string | null;
+            apiKeyUnreadable: boolean;
             temperature: number | null;
             maxToolCalls: number | null;
             timeoutMs: number | null;
@@ -12065,6 +12086,7 @@ export interface components {
             model: string;
             hasApiKey: boolean;
             apiKeyHint: string | null;
+            apiKeyUnreadable: boolean;
             temperature: number;
             maxToolCalls: number;
             timeoutMs: number;
@@ -13201,6 +13223,14 @@ export interface components {
         ChatIntegrationsResponse: {
             integrations: components["schemas"]["ChatIntegrationSummary"][];
             enabled: boolean;
+        };
+        ChatLinkPending: {
+            kind: components["schemas"]["ChatPlatformKind"];
+            integrationName: string;
+            botUsername: string | null;
+            externalUserName: string | null;
+            proof: string;
+            expiresAt: string;
         };
         ChatLinkPreview: {
             kind: components["schemas"]["ChatPlatformKind"];
@@ -15345,6 +15375,7 @@ export interface components {
             authMethod: components["schemas"]["AuthMethod"] | null;
             emailVerified: boolean;
             emailVerificationRequired: boolean;
+            canCreateWorkspace: boolean;
             memberships: components["schemas"]["WorkspaceMembership"][];
         };
         /** @enum {string} */
@@ -17371,15 +17402,15 @@ export interface components {
             email: string;
             displayName: string;
             avatarUrl: components["schemas"]["AvatarUrl"];
-            isAdmin: boolean;
+            isAdmin: boolean | null;
             disabled: boolean;
             createdAt: string;
             role: components["schemas"]["WorkspaceRole"] | null;
             trustedOperator: boolean;
             memberSince: string | null;
             isSelf: boolean;
-            hasPassword: boolean;
-            hasApiKey: boolean;
+            hasPassword: boolean | null;
+            hasApiKey: boolean | null;
             pages: components["schemas"]["ProfilePage"][];
             pageCount: number;
             openWork: components["schemas"]["ProfileOpenWork"];
@@ -26677,6 +26708,47 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CompleteAvatarUploadResponse"];
                 };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ImageProxyController_image: {
+        parameters: {
+            query: {
+                /** @description The http(s) address of the image */
+                url: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
             "4XX": {
@@ -43715,7 +43787,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ChatIdentityEntry"];
+                    "application/json": components["schemas"]["ChatLinkPending"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

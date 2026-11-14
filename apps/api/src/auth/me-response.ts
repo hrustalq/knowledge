@@ -1,6 +1,7 @@
 import { memberCapabilitiesOf, membershipSourceOf, type MeResponse, type WorkspaceRole } from '@knowledge/contracts';
 import type { WorkspaceMember } from '@prisma/client';
 import type { Principal } from './principal.js';
+import { workspaceCreationRefusal } from './workspace-creation.js';
 
 /**
  * GET /v1/me, PATCH /v1/me and signup/login all answer with the same identity.
@@ -11,6 +12,7 @@ export function toMeResponse(
   principal: Principal,
   memberships: Pick<WorkspaceMember, 'workspaceId' | 'role' | 'trustedOperator' | 'capabilities' | 'source'>[],
   verificationRequired: boolean,
+  signupEnabled: boolean,
 ): MeResponse {
   return {
     userId: principal.userId,
@@ -23,6 +25,7 @@ export function toMeResponse(
     authMethod: principal.mode === 'session' ? (principal.authMethod ?? 'password') : null,
     emailVerified: principal.emailVerified ?? true,
     emailVerificationRequired: verificationRequired,
+    canCreateWorkspace: workspaceCreationRefusal(principal, signupEnabled) === null,
     memberships: memberships.map((m) => ({
       workspaceId: m.workspaceId,
       role: m.role as WorkspaceRole,

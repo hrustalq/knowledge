@@ -11,6 +11,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { toItemInfo } from './connector-items.service.js';
 import { sha256 } from './connector-markdown.js';
+import { wrapUntrusted } from '../common/untrusted.js';
 import type { ItemDraft } from './connector-staging.service.js';
 
 /** Enough of a page to reason about; the rest is ballast for a repair job. */
@@ -100,7 +101,7 @@ export class ConnectorItemAiService {
           'did not survive. Transcribe, never summarise: do not shorten, reword or ' +
           'drop anything that carries meaning. Reply with the corrected Markdown only.',
       },
-      { role: 'user' as const, content: `Title: ${title}\n\n${markdown.slice(0, MAX_SOURCE_CHARS)}${lost}` },
+      { role: 'user' as const, content: `${wrapUntrusted(`Title: ${title}\n\n${markdown.slice(0, MAX_SOURCE_CHARS)}`, 'connector_item', 'document')}${lost}` },
     ];
   }
 
@@ -138,10 +139,10 @@ export class ConnectorItemAiService {
       {
         role: 'user' as const,
         content:
-          `Title: ${item.title}\n\n` +
-          `## Last agreed version\n\n${base.slice(0, MAX_SOURCE_CHARS)}\n\n` +
-          `## Our current page\n\n${local.slice(0, MAX_SOURCE_CHARS)}\n\n` +
-          `## Incoming version\n\n${incoming.slice(0, MAX_SOURCE_CHARS)}`,
+          `Title: ${wrapUntrusted(item.title, 'connector_item', 'document')}\n\n` +
+          `Last agreed version:\n${wrapUntrusted(base.slice(0, MAX_SOURCE_CHARS), 'last_agreed', 'document')}\n\n` +
+          `Our current page:\n${wrapUntrusted(local.slice(0, MAX_SOURCE_CHARS), 'our_page', 'document')}\n\n` +
+          `Incoming version:\n${wrapUntrusted(incoming.slice(0, MAX_SOURCE_CHARS), 'incoming', 'document')}`,
       },
     ];
   }

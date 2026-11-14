@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { MAX_INLINE_TEXT_CHARS } from '../../documents/dto/documents.dto.js';
-import { json, type McpToolContext } from './context.js';
+import { json, pageJson, type McpToolContext } from './context.js';
 
 /** Merge requests: open, list, review, merge (plan.md §7). */
 export function registerMergeRequestsTools(ctx: McpToolContext): void {
@@ -57,7 +57,7 @@ export function registerMergeRequestsTools(ctx: McpToolContext): void {
     },
     async (query) => {
       await guard.ws(query.workspaceId, 'viewer');
-      return json(await svc.mergeRequests.listWorkspace(query, await guard.scope(query.workspaceId)));
+      return pageJson('knowledge_list_merge_requests', await svc.mergeRequests.listWorkspace(query, await guard.scope(query.workspaceId)));
     },
   );
 
@@ -78,8 +78,8 @@ export function registerMergeRequestsTools(ctx: McpToolContext): void {
     },
     async ({ mergeRequestId, includeDiff, semantic, includeConflicts }) => {
       const workspaceId = await guard.mr(mergeRequestId, 'viewer');
-      if (includeConflicts) return json(await svc.mergeRequests.mergeConflicts(mergeRequestId, await guard.scope(workspaceId)));
-      return json(
+      if (includeConflicts) return pageJson('knowledge_get_merge_request', await svc.mergeRequests.mergeConflicts(mergeRequestId, await guard.scope(workspaceId)));
+      return pageJson('knowledge_get_merge_request', 
           includeDiff
             ? await svc.mergeRequests.diff(mergeRequestId, await guard.scope(workspaceId), { semantic })
             : await svc.mergeRequests.get(mergeRequestId),
@@ -97,7 +97,7 @@ export function registerMergeRequestsTools(ctx: McpToolContext): void {
     },
     async ({ mergeRequestId }) => {
       await guard.mr(mergeRequestId, 'editor');
-      return json(await svc.mergeRequests.approve(mergeRequestId, principal.userId));
+      return pageJson('knowledge_approve_merge_request', await svc.mergeRequests.approve(mergeRequestId, principal.userId));
     },
   );
 
@@ -109,7 +109,7 @@ export function registerMergeRequestsTools(ctx: McpToolContext): void {
     },
     async ({ mergeRequestId }) => {
       await guard.mr(mergeRequestId, 'editor');
-      return json(await svc.mergeRequests.close(mergeRequestId, principal.userId));
+      return pageJson('knowledge_close_merge_request', await svc.mergeRequests.close(mergeRequestId, principal.userId));
     },
   );
 
@@ -127,7 +127,7 @@ export function registerMergeRequestsTools(ctx: McpToolContext): void {
     },
     async ({ mergeRequestId, body, threadId }) => {
       await guard.mr(mergeRequestId, 'editor');
-      return json(
+      return pageJson('knowledge_comment_merge_request', 
           threadId
             ? await svc.mergeRequestThreads.reply(mergeRequestId, threadId, body, principal.userId)
             : await svc.mergeRequestThreads.createThread(mergeRequestId, { body }, principal.userId),
@@ -150,7 +150,7 @@ export function registerMergeRequestsTools(ctx: McpToolContext): void {
     },
     async ({ mergeRequestId, strategy }) => {
       await guard.mr(mergeRequestId, 'editor');
-      return json(await svc.mergeRequests.merge(mergeRequestId, strategy ?? 'merge-commit', principal));
+      return pageJson('knowledge_merge_revision', await svc.mergeRequests.merge(mergeRequestId, strategy ?? 'merge-commit', principal));
     },
   );
 
@@ -172,7 +172,7 @@ export function registerMergeRequestsTools(ctx: McpToolContext): void {
     },
     async ({ mergeRequestId, resolutions }) => {
       await guard.mr(mergeRequestId, 'editor');
-      return json(await svc.mergeRequests.updateBranch(mergeRequestId, { resolutions }, principal));
+      return pageJson('knowledge_update_merge_request_branch', await svc.mergeRequests.updateBranch(mergeRequestId, { resolutions }, principal));
     },
   );
 }

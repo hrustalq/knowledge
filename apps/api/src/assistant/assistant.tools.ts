@@ -29,6 +29,7 @@ import { openDraftMergeRequest } from '../documents/draft-merge-request.js';
 import { AiConfigService } from '../ai/ai-config.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { WEB_SEARCH_KINDS, WebResearchService, webSearchKind } from './web-research.service.js';
+import { webFetchTarget } from './web-fetch-target.js';
 import { AssistantReadToolsService } from './assistant-read-tools.service.js';
 import { CodeResearchService } from '../connectors/code-research/code-research.service.js';
 import { WorkItemToolsService } from '../connectors/work-item-tools.service.js';
@@ -1010,10 +1011,16 @@ export class AssistantToolsService {
   }
 
   private async webFetch(args: Record<string, unknown>, ctx: AssistantToolContext): Promise<AssistantToolResult> {
-    const url = typeof args.url === 'string' ? args.url.trim() : '';
-    if (!url) return this.fail('url is required');
+    const asked = typeof args.url === 'string' ? args.url.trim() : '';
+    if (!asked) return this.fail('url is required');
+    const target = webFetchTarget(asked, ctx.seenUrl ?? (() => false));
+    if (!target.ok) return this.fail(target.error);
     const { webAccess } = await this.aiConfig.resolve(ctx.workspaceId);
-    return this.web.fetchPage(ctx.workspaceId, url, webAccess.effective);
+    const result = await this.web.fetchPage(ctx.workspaceId, target.url, webAccess.effective);
+    // Said, so the model does not retry variations: the query is gone by rule.
+    return target.trimmed && result.ok
+      ? { ...result, content: `Fetched ${target.url} without the query: only a URL the user pasted or a web result returned is fetched with one.\n${result.content}` }
+      : result;
   }
 
   private fail(message: string): AssistantToolResult {

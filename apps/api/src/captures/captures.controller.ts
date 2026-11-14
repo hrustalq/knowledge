@@ -130,6 +130,8 @@ export class CapturesController {
  * another tenant 403s before the handler runs.
  */
 @ApiTags('assistant')
+// Gone with the `captures` section, as the inbox and the MCP capture tools are (#1090).
+@Feature('captures')
 @Controller('v1/assistant')
 export class AssistantCaptureController {
   constructor(private readonly inbox: CaptureInboxService) {}

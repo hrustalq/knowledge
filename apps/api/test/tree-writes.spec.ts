@@ -120,6 +120,7 @@ function rig(seed: Array<Partial<Doc> & { id: string }>) {
 
   // Restrictions follow the path, as `restricted_by` does.
   const permissions = {
+    requireCreateUnder: async () => undefined,
     recomputeRestrictedBy: async () => {
       for (const d of docs.values()) d.restrictedBy = d.path.split('/').filter((id) => id && id !== d.id && docs.get(id)?.restricted);
     },
@@ -167,8 +168,8 @@ describe('#807 tree writes read the tree under the lock', () => {
   it('two crossed moves: one lands, the other is refused as a cycle', async () => {
     const r = rig([{ id: 'A' }, { id: 'B', position: 1 }]);
     const results = await Promise.allSettled([
-      r.svc.moveDocument('A', { parentId: 'B' } as never),
-      r.svc.moveDocument('B', { parentId: 'A' } as never),
+      r.svc.moveDocument('A', { parentId: 'B' } as never, {} as never),
+      r.svc.moveDocument('B', { parentId: 'A' } as never, {} as never),
     ]);
     expect(results.map((x) => x.status).sort()).toEqual(['fulfilled', 'rejected']);
     expect((results.find((x) => x.status === 'rejected') as PromiseRejectedResult).reason).toMatchObject({ status: 400 });
@@ -179,8 +180,8 @@ describe('#807 tree writes read the tree under the lock', () => {
   it('the same crossed pair through PATCH parentId', async () => {
     const r = rig([{ id: 'A' }, { id: 'B', position: 1 }]);
     const results = await Promise.allSettled([
-      r.svc.updateDocument('A', { parentId: 'B' } as never),
-      r.svc.updateDocument('B', { parentId: 'A' } as never),
+      r.svc.updateDocument('A', { parentId: 'B' } as never, {} as never),
+      r.svc.updateDocument('B', { parentId: 'A' } as never, {} as never),
     ]);
     expect(results.map((x) => x.status).sort()).toEqual(['fulfilled', 'rejected']);
     expect(r.consistent()).toBe(true);
@@ -190,7 +191,7 @@ describe('#807 tree writes read the tree under the lock', () => {
     const r = rig([{ id: 'R', restricted: true }, { id: 'P', position: 1 }]);
     await Promise.all([
       r.svc.createDocument({ workspaceId: WS, projectId: 'p1', title: 'C', parentId: 'P' } as never, 'u1', { headless: true }),
-      r.svc.moveDocument('P', { parentId: 'R' } as never),
+      r.svc.moveDocument('P', { parentId: 'R' } as never, {} as never),
     ]);
     const child = [...r.docs.values()].find((d) => d.title === 'C')!;
     expect(child.path).toBe(`/R/P/${child.id}/`);
@@ -210,8 +211,8 @@ describe('#807 tree writes read the tree under the lock', () => {
   it('two reorders into one run end in an order one of them, run after the other, would give', async () => {
     const r = rig([{ id: 'A' }, { id: 'B', position: 1 }, { id: 'C', position: 2 }]);
     await Promise.all([
-      r.svc.moveDocument('A', { parentId: null, beforeId: null } as never),
-      r.svc.moveDocument('C', { parentId: null, beforeId: 'A' } as never),
+      r.svc.moveDocument('A', { parentId: null, beforeId: null } as never, {} as never),
+      r.svc.moveDocument('C', { parentId: null, beforeId: 'A' } as never, {} as never),
     ]);
     const order = [...r.docs.values()].sort((a, b) => a.position - b.position).map((d) => d.id).join('');
     // A to the end then C before A: BCA. C before A then A to the end: CBA.

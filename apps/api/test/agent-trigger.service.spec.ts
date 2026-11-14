@@ -304,6 +304,17 @@ describe('AgentTriggerService.fire', () => {
       expect(runs).toHaveLength(2);
     });
 
+    // #1106: the delivery id is not signed, so a captured request resent under
+    // a fresh id is the same signed delivery and must not start a second run.
+    it('the same signed delivery under a new delivery id starts no second run', async () => {
+      const { service, runs } = harness();
+      const signed = (id: string): TriggerFacts => ({ ...delivery(id), event: { ...delivery(id).event, signed: 'a'.repeat(64) } });
+      expect((await service.fire(onWebhook, signed('d-1'), NOW)).started).toBe(true);
+      runs[0].status = 'succeeded';
+      expect(await service.fire(onWebhook, signed('d-2'), NOW)).toEqual({ started: false, reason: 'already-seen' });
+      expect(runs).toHaveLength(1);
+    });
+
     it('an owner passed by the caller runs and bills in place of the trigger owner — and stands in for a missing one', async () => {
       const COMMENTER = '55555555-5555-4555-8555-555555555555';
       const { service, runs, usage, prisma } = harness();

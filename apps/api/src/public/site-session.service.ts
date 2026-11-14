@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { siteSessionCookieName, type SiteViewer } from '@knowledge/contracts';
 import { decryptSecret, parseKey } from '../ai/secret-box.js';
+import { slots } from '../ai/secret-slots.js';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PublicStore } from './public-store.js';
@@ -159,7 +160,11 @@ export class SiteSessionService {
   }
 
   private visitorSecret(site: SessionSite): string | null {
-    return decryptSecret(site.visitorSecretCipher, parseKey(this.config.get('SETTINGS_ENCRYPTION_KEY', { infer: true })));
+    return decryptSecret(
+      site.visitorSecretCipher,
+      parseKey(this.config.get('SETTINGS_ENCRYPTION_KEY', { infer: true })),
+      slots.publishedSiteVisitor(site),
+    );
   }
 
   /**

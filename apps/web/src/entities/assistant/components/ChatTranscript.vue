@@ -436,6 +436,7 @@ defineExpose({ scrollToEnd })
                   <MarkdownView
                     v-if="live!.text"
                     :markdown="live!.text"
+                    untrusted
                     :streaming="!live!.stopped"
                     class="max-w-[72ch]"
                     @rendered="decorateCitations($event, new Set())"

@@ -289,7 +289,7 @@ function approve() {
             #{{ tag }}
           </span>
         </div>
-        <MarkdownView v-if="node.draft.markdown" :markdown="node.draft.markdown" />
+        <MarkdownView v-if="node.draft.markdown" :markdown="node.draft.markdown" untrusted />
         <p v-else class="text-muted-foreground text-sm italic">
           {{ t('workflow.node.noBody') }}
         </p>

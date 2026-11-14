@@ -26,6 +26,12 @@ const boolish = (fallback: boolean) =>
     .default(fallback);
 
 export const envSchema = z.object({
+  /**
+   * The default is `development`, so the production refusals in `validateEnv`
+   * (#1093) hang on this line. Dockerfile.api and Dockerfile.web pin
+   * `ENV NODE_ENV=production` in the image, so a deployment whose env lost the
+   * line still runs as production (#1143).
+   */
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(3000),
 
@@ -85,6 +91,18 @@ export const envSchema = z.object({
 
   /** Phase 5 auth: 'none' = dev principal with full access (Phase 0-4 flows keep working); 'api-key' = Bearer auth (kn_ API keys AND ks_ login session tokens). */
   AUTH_MODE: z.enum(['none', 'api-key']).default('none'),
+  /**
+   * #1093: NODE_ENV=production with AUTH_MODE=none refuses to start — a
+   * deployment that lost its AUTH_MODE line would otherwise serve everything to
+   * anyone as a platform admin. Set this to run such a process on purpose.
+   */
+  AUTH_ALLOW_NONE_IN_PRODUCTION: boolish(false),
+  /**
+   * #1093: forgot-password and resend-verification return the live token as
+   * `debugToken`, so a dev or e2e flow needs no inbox. Off unless asked for;
+   * refused under NODE_ENV=production.
+   */
+  AUTH_ECHO_TOKENS: boolish(false),
   /** Auth flow: login session lifetime. */
   AUTH_SESSION_TTL_HOURS: z.coerce.number().int().positive().default(720),
   /** Auth flow: password-reset token lifetime. */
@@ -107,9 +125,11 @@ export const envSchema = z.object({
   AUTH_INVITE_TTL_HOURS: z.coerce.number().int().positive().default(72),
   /**
    * Refuse session principals whose address is unproven (403 `emailUnverified`)
-   * everywhere but the routes that let them prove it. Off by default: an
-   * unverified person can work and is nagged by a banner. API keys are minted
-   * by an admin and are never refused for this.
+   * everywhere but the routes that let them prove it. Off by default outside
+   * production: an unverified person can work and is nagged by a banner. Under
+   * NODE_ENV=production an unset value means on (#1143, `validateEnv`), so a
+   * deployment that lost the line fails closed; `false` still turns it off.
+   * API keys are minted by an admin and are never refused for this.
    */
   AUTH_REQUIRE_VERIFIED_EMAIL: boolish(false),
 
@@ -649,6 +669,13 @@ export const envSchema = z.object({
    */
   API_TEST_RUNNER_MODE: z.enum(['off', 'on']).default('off'),
 
+  /**
+   * Let the image proxy (#1133) fetch from private/loopback ranges: intranet
+   * images hotlinked in pages on a self-hosted deployment. Off, such an image
+   * no longer loads in the member app, whose CSP sends it through the proxy.
+   */
+  IMAGE_PROXY_ALLOW_PRIVATE_URLS: boolish(false),
+
   /** Allow web targets on private/loopback ranges (self-hosted SearXNG, intranet). */
   WEB_ALLOW_PRIVATE_URLS: boolish(false),
 
@@ -710,6 +737,19 @@ export const envSchema = z.object({
   IMPORT_MAX_BYTES: z.coerce.number().int().positive().default(52_428_800),
   /** Wall-clock ceiling for one parse, so a pathological file fails instead of pinning a worker. */
   IMPORT_PARSE_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
+
+  /**
+   * Size ceilings checked before a body is read whole (#1109). A revision's
+   * body, from the bucket's own HEAD at finalize and from `git cat-file -s`
+   * before a pushed blob is read; what an archive (PPTX, DOCX, a repository)
+   * may inflate to in total, counted from each entry's declared size before it
+   * is inflated, and what a downloaded repository archive may weigh; and an
+   * embed snapshot fetched from Figma's render host, cut off while it streams
+   * (a web source keeps its own 5 MB ceiling, counted the same way).
+   */
+  REVISION_MAX_BYTES: z.coerce.number().int().positive().default(52_428_800),
+  ARCHIVE_MAX_INFLATED_BYTES: z.coerce.number().int().positive().default(536_870_912),
+  FETCH_MAX_BYTES: z.coerce.number().int().positive().default(10_485_760),
 
   /**
    * Memos (#551, docs/features/68): speech-to-text over any OpenAI-compatible
@@ -1153,9 +1193,24 @@ function smtpUrlHasUserinfo(url: string): boolean {
 
 /** Fail-fast env validation, plugged into @nestjs/config `validate`. */
 export function validateEnv(config: Record<string, unknown>): Env {
+  // #1143: production's default for an unset line is the closed one.
+  if (config.NODE_ENV === 'production' && config.AUTH_REQUIRE_VERIFIED_EMAIL === undefined) {
+    config = { ...config, AUTH_REQUIRE_VERIFIED_EMAIL: true };
+  }
   const parsed = envSchema.safeParse(config);
   if (!parsed.success) {
     throw new Error(`Invalid environment:\n${parsed.error.issues.map((i) => `  ${i.path.join('.')}: ${i.message}`).join('\n')}`);
+  }
+  // #1093: the insecure branch is never the one an omission picks.
+  if (parsed.data.NODE_ENV === 'production') {
+    if (parsed.data.AUTH_MODE === 'none' && !parsed.data.AUTH_ALLOW_NONE_IN_PRODUCTION) {
+      throw new Error(
+        'Invalid environment:\n  AUTH_MODE: is none (every request a platform admin) under NODE_ENV=production — set AUTH_MODE=api-key, or AUTH_ALLOW_NONE_IN_PRODUCTION=true to mean it',
+      );
+    }
+    if (parsed.data.AUTH_ECHO_TOKENS) {
+      throw new Error('Invalid environment:\n  AUTH_ECHO_TOKENS: returns reset and verification tokens to anonymous callers; refused under NODE_ENV=production');
+    }
   }
   // Opting into SMTP without a server would otherwise boot, then fail every send.
   if (parsed.data.MAIL_TRANSPORT === 'smtp' && !parsed.data.MAIL_SMTP_URL) {

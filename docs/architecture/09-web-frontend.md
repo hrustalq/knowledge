@@ -92,6 +92,38 @@ render returns the `Content-Security-Policy: frame-ancestors` header built
 from the site's `embedOrigins`, which is the only thing standing between the
 frame and an origin the admin did not list.
 
+The member app's own responses carry `server/app-host.js`'s headers, and a
+first Content-Security-Policy (#1099): `base-uri 'none'; form-action 'self';
+object-src 'self'` plus `CSP_ASSET_ORIGINS` (where presigned attachment URLs
+live when not on the app's origin; dev MinIO by default outside production)
+`; img-src 'self' data: blob:` plus the asset origins, `THIRD_PARTY_IMAGE_SOURCES`
+(the third-party avatars and Figma thumbnails the app's own UI shows) and
+`CSP_IMAGE_ORIGINS` (an operator's additions, such as a self-hosted GitLab)
+`; frame-ancestors 'none'`. Page images meet that `img-src` through the API's
+image proxy (#1133): `imageSrc` (`shared/api/api.ts`) turns any http(s) `src`
+into `/api/v1/image-proxy?url=…`, applied by `proxyImages` in `MarkdownView`
+before the HTML reaches the DOM, by the editor's image node and by the SSR read
+view (`static-body.ts`). The proxy is session-authenticated, fetches through
+`safeFetch` (a private address is refused unless
+`IMAGE_PROXY_ALLOW_PRIVATE_URLS`), accepts only image types up to 10 MB,
+forwards nothing of the reader, and answers with `sandbox` CSP so a proxied
+SVG opened directly runs nothing. The policy is nonce-free on purpose, so it
+names no `script-src` (the inline state script needs nonces, #277). Public
+paths and site hosts never get it: their HTML goes out with
+`publicResponseHeaders` instead (#1142), which adds
+`X-Content-Type-Options: nosniff` and the same three directives, and keeps the
+render's own `frame-ancestors` (the widget's list) or states `'none'`. They
+have no `img-src`: their readers have no session for the proxy. On a site's own host `object-src` also names the
+app's origin (`WEB_BASE_URL`), where its PDF previews are presigned. Model output is guarded in the renderer instead:
+`MarkdownView`'s `untrusted` (and `SiteAsk`) goes through
+`shared/utils/untrusted-markdown.ts`, which drops everything that fetches on render
+and keeps an `<img>` only for an attachment path or a `data:` image, before
+the HTML reaches the DOM. Text from a model is rendered `untrusted`: assistant
+answers, agent replies in threads, workflow drafts and descriptions of merge
+requests that a person did not open; so are glossary definitions (a model's or
+a capture's words) and the source-recipe preview of freshly fetched content
+(#1142).
+
 Whether a host is a site's is decided once per request, first thing
 (`server/site-files.js`, `res.locals.siteHost`). The host is `Host`, or
 `X-Forwarded-Host` when the peer is internal. In production that header is

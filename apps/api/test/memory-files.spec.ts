@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { ForbiddenException } from '@nestjs/common';
+import { describe, expect, it, vi } from 'vitest';
 import {
   directoryListing,
   editedSnippet,
@@ -12,7 +13,7 @@ import {
   replaceOnce,
   VIEW_MAX_CHARS,
 } from '../src/memory/memory-files.js';
-import { memoryToolRole } from '../src/memory/memory-files.service.js';
+import { MemoryFilesService, memoryToolRole, type MemoryToolCallerFor } from '../src/memory/memory-files.service.js';
 
 const refusal = (fn: () => unknown): string => {
   try {
@@ -184,5 +185,42 @@ describe('memory file recall chunks', () => {
     expect(chunks.join('\n')).toBe(lines.join('\n'));
     expect(fileChunks('z'.repeat(4500), 100).map((c) => c.length)).toEqual([2000, 2000, 500]);
     expect(fileChunks('w'.repeat(10_000), 2).map((c) => c.length)).toEqual([5000, 5000]);
+  });
+});
+
+describe('a capture key creates, it never overwrites (#1108)', () => {
+  const caller = { principal: { userId: 'u1', locale: 'en' }, workspaceId: 'ws', scope: {} } as never;
+  const bank = { id: 'b1', bankId: 'notes', workspaceId: 'ws' };
+  /** A capture key: lifted to editor for `create`, refused editor without the lift. */
+  const captureKey: MemoryToolCallerFor = vi.fn(async (_role, opts) => {
+    if (!opts?.capture) throw new ForbiddenException('editor required');
+    return caller;
+  });
+  function service(existing: boolean) {
+    const prisma = {
+      withTransaction: (fn: () => Promise<unknown>) => fn(),
+      $executeRaw: vi.fn(async () => 1),
+      $queryRaw: vi.fn(async () => []),
+      memoryFile: {
+        findUnique: vi.fn(async () => (existing ? { id: 'f1', content: 'the team’s notes' } : null)),
+        findFirst: vi.fn(async () => null),
+        upsert: vi.fn(async () => ({ id: 'f1' })),
+      },
+    };
+    const config = { get: (key: string) => (key === 'MEMORY_RETAIN_MAX_CHARS' ? 10_000 : 20) };
+    const svc = new MemoryFilesService(prisma as never, {} as never, { ensure: async () => bank } as never, {} as never, {} as never, { check: async () => undefined } as never, config as never);
+    return { svc, prisma };
+  }
+
+  it('refuses to empty or replace a file that exists, and writes nothing', async () => {
+    const { svc, prisma } = service(true);
+    await expect(svc.execute(captureKey, 'notes', { command: 'create', path: '/memories/team.md', file_text: '' })).rejects.toThrow(ForbiddenException);
+    expect(prisma.memoryFile.upsert).not.toHaveBeenCalled();
+  });
+
+  it('still creates a file at a free path', async () => {
+    const { svc, prisma } = service(false);
+    expect(await svc.execute(captureKey, 'notes', { command: 'create', path: '/memories/new.md', file_text: 'hello' })).toEqual({ content: 'File created successfully at: /memories/new.md', is_error: false });
+    expect(prisma.memoryFile.upsert).toHaveBeenCalledOnce();
   });
 });

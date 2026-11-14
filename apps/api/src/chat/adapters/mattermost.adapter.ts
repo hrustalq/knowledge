@@ -48,12 +48,22 @@ function actionKey(token: string): Buffer {
   return createHash('sha256').update(`chat-action\0${token}`, 'utf8').digest();
 }
 
-export function signAction(data: string, token: string): string {
-  return createHmac('sha256', actionKey(token)).update(data, 'utf8').digest('base64url');
+/** How long a posted button keeps working (#1104). */
+const ACTION_TTL_SECONDS = 30 * 86_400;
+
+/**
+ * A button's signature, over the action, the channel it was posted in and when
+ * it stops working (#1104). The press body names the presser and the channel
+ * unsigned, so a signature over the action alone could be replayed from any
+ * channel, forever.
+ */
+export function signAction(data: string, channelId: string, expiresAt: number, token: string): string {
+  return createHmac('sha256', actionKey(token)).update(`${data}\n${channelId}\n${expiresAt}`, 'utf8').digest('base64url');
 }
 
-function verifyAction(data: string, signature: string, token: string): boolean {
-  const a = Buffer.from(signAction(data, token));
+function verifyAction(data: string, channelId: string, expiresAt: number, signature: string, token: string): boolean {
+  if (!Number.isInteger(expiresAt) || expiresAt * 1000 <= Date.now()) return false;
+  const a = Buffer.from(signAction(data, channelId, expiresAt, token));
   const b = Buffer.from(signature);
   return a.length === b.length && timingSafeEqual(a, b);
 }
@@ -136,8 +146,10 @@ export class MattermostAdapter implements ChatAdapter {
     if (!ctx) return false;
     const press = parseJson<MattermostActionRequest>(raw.body);
     const context = press?.context;
-    if (typeof context?.a !== 'string' || typeof context.s !== 'string') return false;
-    return verifyAction(context.a, context.s, ctx.token);
+    if (typeof context?.a !== 'string' || typeof context.s !== 'string' || typeof context.c !== 'string' || typeof context.e !== 'number') return false;
+    // The channel the press says it came from must be the one the button was signed for.
+    if (press!.channel_id !== context.c) return false;
+    return verifyAction(context.a, context.c, context.e, context.s, ctx.token);
   }
 
   /**
@@ -301,13 +313,13 @@ export class MattermostAdapter implements ChatAdapter {
     const post = await this.call<{ id: string }>(ctx, 'POST', '/posts', {
       channel_id: target.chatId,
       ...(rootId ? { root_id: rootId } : {}),
-      ...this.body(ctx, msg),
+      ...this.body(ctx, msg, target.chatId),
     });
     return { chatId: target.chatId, messageId: post.id };
   }
 
   async editMessage(ctx: ChatAdapterContext, ref: ChatMessageRef, msg: ChatOutMessage): Promise<void> {
-    await this.call(ctx, 'PUT', `/posts/${encodeURIComponent(ref.messageId)}/patch`, this.body(ctx, msg));
+    await this.call(ctx, 'PUT', `/posts/${encodeURIComponent(ref.messageId)}/patch`, this.body(ctx, msg, ref.chatId));
   }
 
   /** Hands the note to the press's waiting HTTP response. A press already answered (timed out) keeps its silence. */
@@ -328,6 +340,23 @@ export class MattermostAdapter implements ChatAdapter {
     }).finally(() => this.pendingAcks.delete(id));
     // An empty object leaves the post as it is: any change to it is the core's own edit.
     return note ? { ephemeral_text: note } : {};
+  }
+
+  /**
+   * The press's `user_id` is the body's word: Mattermost signs nothing in it.
+   * The button's own signature already ties it to its channel, so the presser
+   * must at least be a member there, as the bot sees it (#1104). Inside the
+   * channel a replayed context could still name another member; Mattermost
+   * keeps a button's `integration` out of what it sends clients, so that takes
+   * the server's admin or the request itself (documented limit, doc 47).
+   */
+  async confirmPresser(ctx: ChatAdapterContext, inbound: ChatInbound): Promise<boolean> {
+    try {
+      await this.call(ctx, 'GET', `/channels/${encodeURIComponent(inbound.chatId)}/members/${encodeURIComponent(inbound.externalUserId)}`);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async identify(ctx: ChatAdapterContext): Promise<{ username: string }> {
@@ -425,8 +454,9 @@ export class MattermostAdapter implements ChatAdapter {
   }
 
   /** `message` plus buttons. Each row of action buttons is one attachment, which is what lays them out in rows. */
-  private body(ctx: ChatAdapterContext, msg: ChatOutMessage): Record<string, unknown> {
+  private body(ctx: ChatAdapterContext, msg: ChatOutMessage, channelId: string): Record<string, unknown> {
     const links = linkLine(msg.buttons);
+    const e = Math.floor(Date.now() / 1000) + ACTION_TTL_SECONDS;
     const rows = msg.buttons.map((row) => row.filter((b): b is ChatActionButton => !('url' in b))).filter((r) => r.length);
     const attachments = rows.map((row, r) => ({
       actions: row.map((b, i) => ({
@@ -434,7 +464,7 @@ export class MattermostAdapter implements ChatAdapter {
         id: `a${r}x${i}`,
         name: b.label,
         type: 'button',
-        integration: { url: ctx.actionUrl, context: { a: b.action, s: signAction(b.action, ctx.token) } },
+        integration: { url: ctx.actionUrl, context: { a: b.action, c: channelId, e, s: signAction(b.action, channelId, e, ctx.token) } },
       })),
     }));
     return {
@@ -520,5 +550,5 @@ interface MattermostActionRequest {
   team_id?: string;
   post_id?: string;
   trigger_id?: string;
-  context?: { a?: unknown; s?: unknown };
+  context?: { a?: unknown; c?: unknown; e?: unknown; s?: unknown };
 }

@@ -33,6 +33,8 @@ import { GithubBrowseService } from './github/github-browse.service.js';
 import { GithubCoreModule } from './github/github-core.module.js';
 import { GithubOauthService } from './github/github-oauth.service.js';
 import { GithubController } from './github/github.controller.js';
+import { WebhookReplay } from './webhook-replay.js';
+import { RedisModule } from '../redis/redis.module.js';
 import { GithubWebhookController } from './github/github-webhook.controller.js';
 import { AgentQueueModule } from '../agents/agent-queue.module.js';
 import { DriftTriggerService } from './drift/drift-trigger.service.js';
@@ -74,6 +76,8 @@ import { RepoGuidanceService } from './guidance/repo-guidance.service.js';
     EventsSubscriberModule,
     HarvestCoreModule,
     NotificationsCoreModule,
+    // #1143: the webhook replay memory (Redis).
+    RedisModule,
   ],
   // GithubWebhookController comes FIRST, before ConnectorWebhookController:
   // `/v1/connectors/github/webhook` and `/v1/connectors/:id/webhook` have the
@@ -95,6 +99,7 @@ import { RepoGuidanceService } from './guidance/repo-guidance.service.js';
     CredentialsController,
   ],
   providers: [
+    WebhookReplay,
     ConnectorConflictSweeper,
     // #424: API-only, here rather than in WorkItemHandoffModule (which MCP imports).
     WorkItemSyncSweeper,

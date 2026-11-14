@@ -71,8 +71,8 @@ describe('TokenAuthService.resolveTicket', () => {
 });
 
 describe('TokenAuthService.isCurrent', () => {
-  const rows = (o: { disabledAt?: Date | null; key?: object | null; session?: object | null }) => ({
-    user: { findUnique: async () => ({ disabledAt: o.disabledAt ?? null }) },
+  const rows = (o: { disabledAt?: Date | null; isAdmin?: boolean; key?: object | null; session?: object | null }) => ({
+    user: { findUnique: async () => ({ disabledAt: o.disabledAt ?? null, isAdmin: o.isAdmin ?? false }) },
     apiKey: { findUnique: async () => (o.key === undefined ? { revokedAt: null, expiresAt: null } : o.key) },
     session: { findUnique: async () => (o.session === undefined ? { revokedAt: null, expiresAt: new Date(Date.now() + 1e6) } : o.session) },
   });
@@ -88,6 +88,14 @@ describe('TokenAuthService.isCurrent', () => {
     expect(await authWith(rows({ key: { revokedAt: new Date(), expiresAt: null } })).auth.isCurrent(keyed)).toBe(false);
     expect(await authWith(rows({ key: { revokedAt: null, expiresAt: new Date(1) } })).auth.isCurrent(keyed)).toBe(false);
     expect(await authWith(rows({ session: null })).auth.isCurrent(alice)).toBe(false);
+  });
+
+  it('fails for a principal that held platform admin and no longer does (#1143)', async () => {
+    const admin: Principal = { ...alice, isAdmin: true };
+    expect(await authWith(rows({ isAdmin: true })).auth.isCurrent(admin)).toBe(true);
+    expect(await authWith(rows({ isAdmin: false })).auth.isCurrent(admin)).toBe(false);
+    // Gaining admin does not end a stream: it carries less than the person now holds.
+    expect(await authWith(rows({ isAdmin: true })).auth.isCurrent(alice)).toBe(true);
   });
 
   it('always holds for the dev principal', async () => {

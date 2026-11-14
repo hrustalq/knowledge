@@ -40,10 +40,10 @@ export interface MemoryToolResult {
   is_error: boolean;
 }
 
-/** The caller, resolved on execution for the role the command needs. `capture` lifts a capture key, for `create` only. */
+/** The caller, resolved on execution for the role the command needs. `capture` lifts a capture key, for a `create` at a free path only. */
 export type MemoryToolCallerFor = (role: MemoryRole, opts?: { capture?: boolean }) => Promise<MemoryCaller>;
 
-/** The role each command needs (#1006): `view` a viewer, `create` an editor or a capture key, every other an editor. */
+/** The role each command needs (#1006): `view` a viewer, `create` an editor or a capture key (an editor again over an existing file, #1108), every other an editor. */
 export function memoryToolRole(command: string | null): { role: MemoryRole; capture?: boolean } {
   if (command === 'create') return { role: 'editor', capture: true };
   if (command === 'str_replace' || command === 'insert' || command === 'delete' || command === 'rename') return { role: 'editor' };
@@ -112,7 +112,7 @@ export class MemoryFilesService {
         case 'view':
           return ok(await this.view(caller, bankId, command.path, command.view_range));
         case 'create':
-          return ok(await this.create(caller, bankId, command.path, command.file_text));
+          return ok(await this.create(caller, bankId, command.path, command.file_text, callerFor));
         case 'str_replace':
           return ok(await this.edit(caller, bankId, command.path, (content) => replaceOnce(command.path, content, command.old_str, command.new_str), editedSnippet));
         case 'insert':
@@ -146,7 +146,7 @@ export class MemoryFilesService {
     return directoryListing(shown, p, under);
   }
 
-  private async create(caller: MemoryCaller, bankId: string, shown: string, text: string): Promise<string> {
+  private async create(caller: MemoryCaller, bankId: string, shown: string, text: string, callerFor: MemoryToolCallerFor): Promise<string> {
     const p = memoryPath(shown);
     // The root is a directory, and so is any path files sit under: the SDK's answer for a directory in the way.
     if (isRoot(p)) throw new MemoryToolError(`File ${shown} already exists`);
@@ -157,6 +157,8 @@ export class MemoryFilesService {
     const file = await withSubjectLock(this.prisma, filesLock(bank), async () => {
       await this.assertNoFileAbove(bank, p, shown);
       if ((await this.filesUnder(bank, p)).length) throw new MemoryToolError(`File ${shown} already exists`);
+      // A capture key creates and nothing more (#1108): replacing a file is an edit, so ask for an editor again, without the lift.
+      if (await this.prisma.memoryFile.findUnique({ where: { bankId_path: { bankId: bank.id, path: p.path } }, select: { id: true } })) await callerFor('editor');
       // Overwrites a file that exists: the documentation allows it, and Claude's tool description says "creates or overwrites".
       return this.prisma.memoryFile.upsert({
         where: { bankId_path: { bankId: bank.id, path: p.path } },

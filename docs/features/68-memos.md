@@ -124,6 +124,11 @@ in `workspace-teardown.inventory.ts`.
 - **Uploader only.** `MemosService.require` matches `created_by` unless the caller is a platform admin.
   Anyone else gets a bare **404** (`Memo not found`, no id, no title), over REST and MCP alike. The ACL
   source `memo` resolves the workspace in PG first, so another tenant's id is a 403.
+- **So is its analysis** (#1089). The `secretary` run's summary and drafts are the recording in other words.
+  `ai/run-privacy.ts` holds the one rule: a run whose `subject_key` starts `memo:` is its `created_by`'s,
+  platform admins aside. The run list and its counts leave it out, the run detail 404s, and every finding
+  verb 404s through `findingOf`. The uploader cannot `create-page` a memo draft either: it opens as a
+  merge request (`MemoPublishSweeper`), as a component draft does.
 - **Uploading takes `editor`**, and a project the caller can see. A viewer's memo could open no merge
   request. Reads take `viewer`, so a person demoted after uploading still reads their own memos.
 - **The stored content type is the format's own** (`MEMO_FORMATS`), never the client's claim: the audio

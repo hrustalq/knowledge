@@ -12,7 +12,7 @@ import type { Env } from '../../config/env.js';
 import { SsoEnabledGuard, ssoEnabled } from './sso-enabled.guard.js';
 import { SsoFlowService } from './sso-flow.service.js';
 import { Returns } from '../../common/returns.decorator.js';
-import { setSessionCookie } from '../session-cookie.js';
+import { clearSsoFlowCookie, readSsoFlowCookie, setSessionCookie, setSsoFlowCookie } from '../session-cookie.js';
 import { CachePolicy } from '../../common/http-cache.js';
 
 /**
@@ -84,8 +84,15 @@ export class SsoController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<SsoExchangeResponse> {
-    const issued = await this.sso.exchange(dto.code, requestMeta(req));
-    return setSessionCookie(res, issued, this.config.get('WEB_BASE_URL', { infer: true }));
+    const web = this.config.get('WEB_BASE_URL', { infer: true });
+    const issued = await this.sso.exchange(dto.code, requestMeta(req), readSsoFlowCookie(req));
+    clearSsoFlowCookie(res, web);
+    return setSessionCookie(res, issued, web);
+  }
+
+  /** The flow cookie outlives the state (start → callback) by the exchange's window. */
+  private flowCookie(res: Response): string {
+    return setSsoFlowCookie(res, this.config.get('WEB_BASE_URL', { infer: true }), this.config.get('AUTH_SSO_STATE_TTL_SEC', { infer: true }) + 120);
   }
 
   @Public()
@@ -96,7 +103,7 @@ export class SsoController {
     @Res() res: Response,
     @Query('returnTo') returnTo?: string,
   ): Promise<void> {
-    res.redirect(await this.sso.start(providerId, returnTo));
+    res.redirect(await this.sso.start(providerId, returnTo, this.flowCookie(res)));
   }
 
   @Public()
@@ -115,7 +122,7 @@ export class SsoController {
     @Res() res: Response,
     @Query('returnTo') returnTo?: string,
   ): Promise<void> {
-    res.redirect(await this.sso.samlStart(providerId, returnTo));
+    res.redirect(await this.sso.samlStart(providerId, returnTo, this.flowCookie(res)));
   }
 
   /** The IdP's HTTP-POST binding. 303, so the browser follows with a GET rather than re-posting. */

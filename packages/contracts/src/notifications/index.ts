@@ -114,6 +114,8 @@ const NOTIFIED_ACCESS_TYPES: readonly string[] = [
   'access.denied',
   'access.expired',
   'access.granted',
+  // A messenger account now answers as you (#1104).
+  'chat.identity.linked',
 ];
 
 /**

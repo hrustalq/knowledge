@@ -3,6 +3,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ChatWebhookController } from '../src/chat/chat-webhook.controller.js';
 import { SlackAdapter, markdownForSlack, slackPlainText, slackSignature } from '../src/chat/adapters/slack.adapter.js';
 import { ChatPlatformError, type ChatAdapterContext, type RawInbound } from '../src/chat/adapters/chat-adapter.types.js';
+import { safeFetch } from '../src/common/safe-fetch.js';
+
+// The guarded dial passes through to the stubbed global, so a test sees both (#1110).
+vi.mock('../src/common/safe-fetch.js', () => ({ safeFetch: vi.fn((url: string, init: RequestInit) => globalThis.fetch(url, init)) }));
 
 /**
  * Slack (#380), the adapter on its own: the request signature, the URL
@@ -159,6 +163,8 @@ describe('button presses', () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('https://hooks.slack.com/actions/T1/1/abc');
     expect(JSON.parse(init.body as string)).toEqual({ response_type: 'ephemeral', replace_original: false, text: 'Thanks' });
+    // #1110: a redirect from the response URL is never followed, and the dial is the guarded one.
+    expect(vi.mocked(safeFetch)).toHaveBeenCalledWith('https://hooks.slack.com/actions/T1/1/abc', expect.objectContaining({ redirect: 'error' }));
   });
 
   it('a link button’s click is nothing, and a response_url off Slack is never followed', async () => {

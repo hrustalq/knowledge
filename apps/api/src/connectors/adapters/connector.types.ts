@@ -188,6 +188,8 @@ export interface ConnectorContext {
    * whether this install is one before it refuses a private address.
    */
   allowPrivate: boolean;
+  /** `ARCHIVE_MAX_INFLATED_BYTES`: what a downloaded archive may weigh and inflate to; its default when unset (#1109). */
+  archiveMaxBytes?: number;
   /**
    * A warning for the run as a whole, raised during discovery (#338): files
    * the adapter will not import, said once per folder rather than never.

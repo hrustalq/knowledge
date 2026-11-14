@@ -160,7 +160,7 @@ export class MemosService {
     return {
       memo: toInfo(updated),
       upload: {
-        url: await this.storage.presignPut(audioKey, contentType),
+        url: await this.storage.presignPut(audioKey, contentType, 900, { contentLength: input.sizeBytes }),
         method: 'PUT',
         headers: { 'Content-Type': contentType },
         expiresAt: new Date(Date.now() + 900_000).toISOString(),

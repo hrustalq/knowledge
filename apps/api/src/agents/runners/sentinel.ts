@@ -9,7 +9,8 @@ import { ApiDriftService, type ApiDriftResult } from '../../connectors/code-rese
 import type { ChangeImpact } from '../../components/component-usages.service.js';
 import { declaredPathFixes } from '../../components/component-match.js';
 import { wrapUntrusted } from '../../common/untrusted.js';
-import { visibilityWhere, type AccessScope } from '../../permissions/access-scope.js';
+import { canSeeProject, clampToAudience, visibilityWhere, type AccessScope } from '../../permissions/access-scope.js';
+import { restrictedNodeIds } from '../../permissions/acl-read.js';
 import type { ResolvedAgent } from '../agent-registry.service.js';
 import type { Principal } from '../../auth/principal.js';
 import { DRIFT_OUTPUT_CONTRACT, MAX_DIFF_CHARS, MAX_DRIFT_PAGES, MAX_PAGE_CHARS, MAX_SEARCHED_PAGES, affectedUsagesDetails, componentPathFinding, diffExcerpt, listOf, linkedCandidates, mentionedFiles, readDriftVerdict, readReportVerdict, reportJudgementPrompt, REPORT_OUTPUT_CONTRACT, scopeFiles, searchQueryFor, subdirOf, type DriftCandidate } from '../drift.js';
@@ -81,12 +82,21 @@ async function checkDrift(
 
   // --- which pages it touches, strongest tie first
   await report({ stage: 'related', progress: 0.2 });
-  const scope = await svc.runScope(run, principal);
-  const apiSpecs = api ? await visibleSpecs(svc, scope, api.specs, report) : [];
+  const confined = await confinedProject(svc, run, principal, connector.projectId);
+  const scope = confined?.scope ?? (await svc.runScope(run, principal));
+  const here = async (ids: string[]): Promise<Set<string>> =>
+    confined
+      ? new Set((await svc.prisma.document.findMany({ where: { id: { in: ids }, projectId: confined.projectId }, select: { id: true } })).map((d) => d.id))
+      : new Set(ids);
+  const specsHere = api ? await here(api.specs.map((s) => s.documentId)) : new Set<string>();
+  const apiSpecs = api ? await visibleSpecs(svc, scope, api.specs.filter((s) => specsHere.has(s.documentId)), report) : [];
   // Certain, like a path fix: static analysis, whatever the model says.
   const apiFindings = apiSpecs.map((s) => apiDriftFinding(s, pr)).filter((f): f is AgentFinding => !!f);
   const impact = files.length ? await changeImpact(svc, scope, connector, pr, files, report) : null;
-  const all = files.length ? await driftCandidates(svc, scope, connector, pr, files, impact, report) : [];
+  const tied = files.length ? await driftCandidates(svc, scope, connector, pr, files, impact, report) : [];
+  // A repository only its project may read is judged against that project's pages alone.
+  const pagesHere = await here([...tied.map((c) => c.documentId), ...(impact?.declared ?? []).map((p) => p.documentId)]);
+  const all = tied.filter((c) => pagesHere.has(c.documentId));
   // A spec page is the repository's file: its drift is the comparison
   // above, and a model-written body would be overwritten by the next sync.
   const specIds = await specDocumentIds(svc, all.map((c) => c.documentId));
@@ -96,7 +106,7 @@ async function checkDrift(
   // A declared path the change removes or moves is known from the diff
   // alone, so it is a finding whatever the model says, or whether one runs.
   const pathFindings = new Map<string, AgentFinding>();
-  for (const page of impact?.declared ?? []) {
+  for (const page of (impact?.declared ?? []).filter((p) => pagesHere.has(p.documentId))) {
     const fixes = declaredPathFixes(page.paths, files, impact?.overlay?.baseFiles ?? null);
     if (fixes.length > 0) pathFindings.set(page.documentId, componentPathFinding({ id: page.documentId, title: page.title }, page.paths, fixes, pr));
   }
@@ -200,10 +210,9 @@ ${diffExcerpt(shown, MAX_DIFF_CHARS)}`,
           ) +
           `
 
-<page title=${JSON.stringify(candidate.title)} documentId="${candidate.documentId}">
+The page (documentId ${candidate.documentId}):
 ` +
-          `${content.markdown.slice(0, MAX_PAGE_CHARS)}
-</page>` +
+          wrapUntrusted(`Title: ${candidate.title}\n\n${content.markdown.slice(0, MAX_PAGE_CHARS)}`, 'tied_page', 'document') +
           apiNote,
       },
     ];
@@ -310,6 +319,26 @@ async function visibleSpecs(svc: AgentServices, scope: AccessScope, specs: ApiDr
   const hidden = specs.filter((s) => !visible.has(s.documentId)).length;
   if (hidden > 0) await report({ warning: t('agent.drift.api.hidden', { count: hidden }) });
   return specs.filter((s) => visible.has(s.documentId));
+}
+
+/**
+ * The project a repository connector's code is confined to (#553): one the
+ * workspace audience cannot see. Its change may only reach readers of that
+ * project, so the run judges with the owner's scope clamped to the project's
+ * audience, keeps only the project's pages, and is private to its owner
+ * (`RESTRICTED_RUN_PREFIX`, set by `DriftTriggerService`). Null otherwise.
+ */
+async function confinedProject(
+  svc: AgentServices,
+  run: AgentRun,
+  principal: Principal,
+  projectId: string | null,
+): Promise<{ projectId: string; scope: AccessScope } | null> {
+  if (!projectId) return null;
+  const project = await svc.prisma.project.findUnique({ where: { id: projectId }, select: { id: true, restricted: true } });
+  if (!project || canSeeProject(await svc.runScope(run, principal), project)) return null;
+  const owner = await svc.permissions.scopeFor(principal, run.workspaceId);
+  return { projectId, scope: clampToAudience(owner, await restrictedNodeIds(svc.prisma, run.workspaceId), new Set([projectId])) };
 }
 
 /** Which of these pages are spec documents. */

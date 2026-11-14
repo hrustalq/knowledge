@@ -100,10 +100,81 @@ describe('LiveVisibility', () => {
     expect(permissions.scopeFor).toHaveBeenCalledTimes(2);
   });
 
+  describe('frames about a project (#1088)', () => {
+    const projects = (rows: Record<string, { restricted: boolean }>) => ({
+      findUnique: vi.fn(async ({ where }: { where: { id: string } }) =>
+        rows[where.id] ? { id: where.id, workspaceId: WS, restricted: rows[where.id].restricted } : null,
+      ),
+    });
+
+    it('reaches only those who can see the project', async () => {
+      const { live, prisma } = visibility({ [ALICE]: scope(ALICE, []), [BOB]: scope(BOB, [SECRET]) });
+      Object.assign(prisma, { project: projects({ [SECRET]: { restricted: true }, [OPEN]: { restricted: false } }) });
+      const updated = (id: string) => frame({ type: 'project.updated', subjectId: id, patch: { description: 'x' } });
+      expect(await live.allows(updated(SECRET), [p(ALICE), p(BOB)])).toEqual([true, false]);
+      expect(await live.allows(updated(OPEN), [p(ALICE), p(BOB)])).toEqual([true, true]);
+    });
+
+    it('passes a deleted project’s frame, which carries only its id', async () => {
+      const { live, prisma } = visibility({ [BOB]: scope(BOB, [OPEN]) });
+      Object.assign(prisma, { project: projects({}) });
+      expect(await live.allows(frame({ type: 'project.deleted', subjectId: SECRET }), [p(BOB)])).toEqual([true]);
+    });
+
+    it('judges a page-less frame that names its project by that project (#1140)', async () => {
+      // connector.run.* and capture.approved carry no page and no project.* type.
+      const { live, prisma } = visibility({ [ALICE]: scope(ALICE, []), [BOB]: scope(BOB, [SECRET]) });
+      Object.assign(prisma, { project: projects({ [SECRET]: { restricted: true }, [OPEN]: { restricted: false } }) });
+      const run = (projectId: string) => frame({ type: 'connector.run.succeeded', subjectId: OPEN, projectId, title: 'secret repo' });
+      expect(await live.allows(run(SECRET), [p(ALICE), p(BOB)])).toEqual([true, false]);
+      expect(await live.allows(run(OPEN), [p(ALICE), p(BOB)])).toEqual([true, true]);
+    });
+
+    it('never reads the project for listeners nothing is hidden from', async () => {
+      const { live, prisma } = visibility({ [ALICE]: scope(ALICE, []) });
+      const project = projects({});
+      Object.assign(prisma, { project });
+      expect(await live.allows(frame({ type: 'project.updated', subjectId: SECRET }), [p(ALICE)])).toEqual([true]);
+      expect(project.findUnique).not.toHaveBeenCalled();
+    });
+  });
+
   it('delivers nothing about pages when the scope cannot be computed', async () => {
     const { live, permissions } = visibility({});
     permissions.scopeFor.mockRejectedValueOnce(new Error('not a member'));
     expect(await live.allows(frame({ documentId: OPEN }), [p(BOB)])).toEqual([false]);
+  });
+});
+
+describe('ActivityService.record project of a page-less row (#1140)', () => {
+  const recorder = (connectorProject: string | null) => {
+    const create = vi.fn(async () => ({}));
+    const publish = vi.fn(async () => undefined);
+    const prisma = {
+      activityLog: { create },
+      document: { findUnique: vi.fn(), updateMany: vi.fn() },
+      connector: { findUnique: vi.fn(async () => (connectorProject ? { projectId: connectorProject } : null)) },
+    };
+    return { service: new ActivityService(prisma as never, { publish } as never), create, publish };
+  };
+
+  it('files a connector row under the connector’s project and says so on the frame', async () => {
+    const { service, create, publish } = recorder(SECRET);
+    await service.record({ workspaceId: WS, actor: ALICE, action: 'connector.created', subjectId: OPEN, metadata: { title: 'repo' } });
+    expect(create.mock.calls[0]).toMatchObject([{ data: { projectId: SECRET } }]);
+    expect(publish.mock.calls[0]).toMatchObject([{ type: 'connector.created', projectId: SECRET }]);
+  });
+
+  it('puts a caller-given project on a page-less frame', async () => {
+    const { service, publish } = recorder(null);
+    await service.record({ workspaceId: WS, actor: ALICE, action: 'capture.approved', projectId: SECRET, subjectId: OPEN });
+    expect(publish.mock.calls[0]).toMatchObject([{ projectId: SECRET }]);
+  });
+
+  it('leaves the project off a frame about a page, which is judged by the page', async () => {
+    const { service, publish } = recorder(null);
+    await service.record({ workspaceId: WS, actor: ALICE, action: 'document.updated', documentId: OPEN, projectId: SECRET });
+    expect((publish.mock.calls[0] as unknown as [KnowledgeEvent])[0].projectId).toBeUndefined();
   });
 });
 
@@ -115,16 +186,28 @@ describe('ActivityService.list visibility', () => {
     await service.list(WS, { limit: 10, cursor: OPEN }, scope(BOB, [SECRET]));
     const sql = queryRaw.mock.calls[0] as unknown as [TemplateStringsArray, ...unknown[]];
     const text = JSON.stringify(sql);
-    expect(text).toContain('NOT EXISTS');
     expect(text).toContain('restricted_by');
+    // A page-less row is judged by its project (#1088).
+    expect(text).toContain('FROM \\"projects\\" p');
     expect(text).toContain('(a.\\"created_at\\", a.\\"id\\") <');
   });
 
-  it('runs no visibility predicate for a caller nothing is hidden from', async () => {
+  it('runs no visibility predicate for a caller who sees everything', async () => {
+    const queryRaw = vi.fn(async () => []);
+    const prisma = { $queryRaw: queryRaw, activityLog: { findMany: vi.fn(async () => []) }, document: { findMany: vi.fn() } };
+    await new ActivityService(prisma as never, {} as never).list(WS, {}, { ...scope(ALICE, []), bypass: true });
+    expect(JSON.stringify(queryRaw.mock.calls[0])).not.toContain('EXISTS');
+  });
+
+  it('hides rows about a page or project that is gone even when nothing is restricted now (#1088)', async () => {
+    // A deleted restricted project leaves `denied` empty; its rows must not surface.
     const queryRaw = vi.fn(async () => []);
     const prisma = { $queryRaw: queryRaw, activityLog: { findMany: vi.fn(async () => []) }, document: { findMany: vi.fn() } };
     await new ActivityService(prisma as never, {} as never).list(WS, {}, scope(ALICE, []));
-    expect(JSON.stringify(queryRaw.mock.calls[0])).not.toContain('EXISTS');
+    const text = JSON.stringify(queryRaw.mock.calls[0]);
+    expect(text).toContain('FROM \\"documents\\" d');
+    expect(text).toContain('FROM \\"projects\\" p');
+    expect(text).not.toContain('restricted_by');
   });
 
   it('keeps a guest to rows about pages they can open', async () => {

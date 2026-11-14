@@ -55,4 +55,11 @@ describe('staticBodyHtml', () => {
   it('points attachments at the browser-facing API base', () => {
     expect(render('![a](/v1/attachments/1/file)')).toContain('src="/api/v1/attachments/1/file"')
   })
+
+  // #1133: the member CSP holds img-src to the app's origin.
+  it('sends an external image through the image proxy', () => {
+    expect(render('![a](https://img.example/a.png?x=1)')).toContain(
+      `src="/api/v1/image-proxy?url=${encodeURIComponent('https://img.example/a.png?x=1').replace(/&/g, '&amp;')}"`,
+    )
+  })
 })

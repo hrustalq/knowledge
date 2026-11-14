@@ -6,6 +6,7 @@ import { writeFrontmatter } from '../common/frontmatter.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { TemplatesService } from '../templates/templates.service.js';
 import { t } from '../i18n/t.js';
+import { PermissionService } from '../permissions/permission.service.js';
 
 /**
  * Turns an approved draft into a real page (docs/features/17).
@@ -25,6 +26,7 @@ export class WorkflowMaterializerService {
     private readonly prisma: PrismaService,
     private readonly documents: DocumentsService,
     private readonly templates: TemplatesService,
+    private readonly permissions: PermissionService,
   ) {}
 
   /**
@@ -38,7 +40,7 @@ export class WorkflowMaterializerService {
     node: WorkflowRunNode,
     run: WorkflowRun,
     step: WorkflowStep,
-    userId?: string,
+    userId: string,
   ): Promise<string | null> {
     if (node.documentId) return node.documentId;
     if (!step.produces) return null;
@@ -68,6 +70,14 @@ export class WorkflowMaterializerService {
         : []),
     ];
     const parentDocumentId = parent?.id ?? null;
+    const nestUnder = step.produces.nestUnderParent !== false && parentDocumentId ? parentDocumentId : null;
+    // Asked here, at execution (#1140): starting the run checked edit on its
+    // root page, not on where this page lands, and a grant can change between
+    // approval and a sweeper's retry. Refused like any create under a node.
+    await this.permissions.requireCreateUnder(await this.permissions.scopeForUser(userId, run.workspaceId), {
+      projectId: run.projectId,
+      ...(nestUnder ? { parentId: nestUnder } : {}),
+    });
     const template = await this.provenanceOf(run, draft);
 
     const created = await this.documents.createDocument(
@@ -77,9 +87,7 @@ export class WorkflowMaterializerService {
         title: draft.title.trim(),
         content: { mode: 'inline', format: 'markdown', text: this.withFrontmatter(draft) },
         category: step.produces.category,
-        ...(step.produces.nestUnderParent !== false && parentDocumentId
-          ? { parentId: parentDocumentId }
-          : {}),
+        ...(nestUnder ? { parentId: nestUnder } : {}),
         relations,
         // `content` is present, so this is recorded rather than rendered: the
         // draft already carries the template's structure and defaults.

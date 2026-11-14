@@ -7,6 +7,7 @@ import type { ResolvedAgent } from '../agent-registry.service.js';
 import type { Principal } from '../../auth/principal.js';
 import { DIGEST_OUTPUT_CONTRACT, MAX_DIGEST_MERGES, MAX_DIGEST_PAGES, digestKnown, digestListing, digestMarkdown, digestSince, highlightFinding, isQuietDigest, isoDay, readDigestHighlights, type DigestFacts, type DigestHighlight } from '../digest.js';
 import { parseModelJson } from '../../common/model-json.js';
+import { wrapUntrusted } from '../../common/untrusted.js';
 import { type AgentServices, type AgentRunner, type AgentReporter, type AgentRunResult, reasonOf, runBrief } from '../agent-services.js';
 
 export const digestRunner: AgentRunner = { key: 'digest', run: digest };
@@ -51,7 +52,8 @@ async function digest(
             `${agent.instructions}\n\n${DIGEST_OUTPUT_CONTRACT}` +
             await svc.guidance(run, agent),
         },
-        { role: 'user', content: runBrief(run.input) + digestListing(facts) },
+        // Page and change titles are written by members: listed as data (#1141).
+        { role: 'user', content: runBrief(run.input) + wrapUntrusted(digestListing(facts), 'digest', 'document') },
       ];
       const raw = await svc.callModel(call, agent, messages, svc.readTool(run, principal));
       const parsed = parseModelJson(raw);

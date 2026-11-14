@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { CredentialResponse, CredentialsResponse } from '@knowledge/contracts';
-import { CurrentPrincipal } from '../auth/access.decorator.js';
+import { CurrentPrincipal, SessionOnly } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { Returns } from '../common/returns.decorator.js';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
@@ -31,6 +31,7 @@ export class CredentialsController {
 
   @Patch(':id')
   @Returns('CredentialResponse')
+  @SessionOnly()
   @ApiOperation({ summary: 'Rotate one of my credentials (same account only), in every workspace using it' })
   async rotate(
     @Param('id', ParseUUIDPipe) id: string,
@@ -42,6 +43,7 @@ export class CredentialsController {
 
   @Delete(':id')
   @HttpCode(204)
+  @SessionOnly()
   @ApiOperation({ summary: 'Disconnect one of my credentials (409 while a workspace uses it)' })
   async remove(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<void> {
     await this.credentials.remove(id, principal.userId);

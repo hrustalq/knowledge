@@ -18,6 +18,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { filterOf } from '../agents/agent-trigger.service.js';
 import { decryptSecret, encryptSecret, parseKey } from './secret-box.js';
+import { slots } from './secret-slots.js';
 import type { CreateAgentTriggerDto, UpdateAgentTriggerDto } from './ai.dto.js';
 
 /**
@@ -72,7 +73,7 @@ export class AgentTriggersService {
   async forWebhook(id: string): Promise<{ trigger: AgentTrigger; secret: string | null } | null> {
     const trigger = await this.prisma.agentTrigger.findUnique({ where: { id } });
     if (!trigger || trigger.event !== 'webhook') return null;
-    return { trigger, secret: decryptSecret(trigger.webhookSecret, this.key) };
+    return { trigger, secret: decryptSecret(trigger.webhookSecret, this.key, slots.agentTriggerWebhook(trigger)) };
   }
 
   /**
@@ -93,7 +94,7 @@ export class AgentTriggersService {
     const secret = randomBytes(32).toString('base64url');
     const trigger = await this.prisma.agentTrigger.update({
       where: { id },
-      data: { webhookSecret: encryptSecret(secret, this.key) },
+      data: { webhookSecret: encryptSecret(secret, this.key, slots.agentTriggerWebhook(existing)) },
     });
     return { trigger, response: { secret, url: this.webhookUrl(id) } };
   }

@@ -13,6 +13,7 @@ import { SearchService } from '../search/search.service.js';
 import { firstPerPage } from '../search/ranking.js';
 import { readFrontmatterRelations, readFrontmatterTags } from '../common/relations.js';
 import { wrapUntrusted } from '../common/untrusted.js';
+import { pageText, withPageText } from '../common/page-text.js';
 import { TemplatesService } from '../templates/templates.service.js';
 import { CommunitiesService } from '../communities/communities.service.js';
 import { MAX_COMMUNITY_LEVELS } from '../agents/communities.js';
@@ -446,12 +447,18 @@ export class AssistantReadToolsService {
       ? await this.prisma.user.findMany({ where: { id: { in: ownerIds } }, select: { id: true, displayName: true } })
       : [];
     const ownerName = new Map(owners.map((u) => [u.id, u.displayName]));
-    const results = firstPerPage(res.results).map((r) => ({
+    const hits = firstPerPage(res.results);
+    // Page text — titles, trails, headings, snippets — is DATA (#1102), in the
+    // wrapper below; the rows here are what this database says about each hit.
+    const text = hits.map((r) => ({
       documentId: r.documentId,
       title: r.title,
       breadcrumb: trails.get(r.documentId) || '(top level)',
       section: r.headingPath?.length ? r.headingPath.join(' › ') : undefined,
       snippet: r.snippet,
+    }));
+    const results = hits.map((r) => ({
+      documentId: r.documentId,
       // Where the page sits (#475): derived from its keys and the atlas's tree.
       ...(r.layer ? { layer: r.layer } : {}),
       ...(r.communityPath ? { communityPath: r.communityPath } : {}),
@@ -468,7 +475,7 @@ export class AssistantReadToolsService {
       ...this.citeOf(ctx, seen.get(r.documentId)!),
     }));
     return {
-      content: JSON.stringify({ results }),
+      content: withPageText({ results }, { results: text }, 'search_knowledge'),
       ok: true,
       sources,
     };
@@ -491,7 +498,7 @@ export class AssistantReadToolsService {
     const results = communities.map((c) => ({
       title: c.title,
       level: c.level,
-      summary: wrapUntrusted(c.summary, 'global_overview', 'page'),
+      summary: c.summary,
       pages: c.documents.map((d) => {
         let source = seen.get(d.documentId);
         if (!source) {
@@ -502,7 +509,8 @@ export class AssistantReadToolsService {
         return { documentId: d.documentId, title: d.title, ...this.citeOf(ctx, source) };
       }),
     }));
-    return { content: JSON.stringify({ communities: results }), ok: true, sources };
+    // Titles and summaries are page text (#1141): ids, levels and cite labels stay facts.
+    return { content: pageText({ communities: results }, 'global_overview', 'page'), ok: true, sources };
   }
 
   /**
@@ -562,13 +570,11 @@ export class AssistantReadToolsService {
       const trails = await this.documents.breadcrumbsFor(scope, [documentId]);
       const source: AssistantAskSource = { documentId, title: doc.title, revisionId: content.revisionId, factClass: 'explicit' };
       return {
-        content: JSON.stringify({
-          documentId,
-          title: doc.title,
-          breadcrumb: trails.get(documentId) || '(top level)',
-          ...this.citeOf(ctx, source),
-          markdown: content.markdown.slice(0, MAX_DOC_CHARS),
-        }),
+        content: withPageText(
+          { documentId, ...this.citeOf(ctx, source) },
+          { title: doc.title, breadcrumb: trails.get(documentId) || '(top level)', markdown: content.markdown.slice(0, MAX_DOC_CHARS) },
+          'read_document',
+        ),
         ok: true,
         sources: [source],
         passages: new Map([[assistantSourceKey(source), content.markdown.slice(0, MAX_DOC_CHARS)]]),
@@ -636,7 +642,7 @@ export class AssistantReadToolsService {
     walk(tree.roots, 0);
 
     return {
-      content: JSON.stringify({
+      content: wrapUntrusted(JSON.stringify({
         parentId: parentId ?? null,
         projectId: tree.projectId,
         nodes: rows,
@@ -645,7 +651,7 @@ export class AssistantReadToolsService {
         ...(truncated
           ? { truncated: true, note: `Only the first ${MAX_TREE_NODES} nodes are listed. Pass parentId to look inside a section.` }
           : {}),
-      }),
+      }), 'list_document_tree', 'document'),
       ok: true,
       sources: [],
     };
@@ -680,7 +686,7 @@ export class AssistantReadToolsService {
       .slice(0, 8)
       .map((n) => ({ documentId: n.id, title: n.label, factClass: factOf.get(n.id) ?? 'inferred' }));
     return {
-      content: JSON.stringify({
+      content: wrapUntrusted(JSON.stringify({
         documentId,
         nodes: graph.nodes.map((n) => ({
           id: n.id,
@@ -690,7 +696,7 @@ export class AssistantReadToolsService {
           ...(n.kind === 'document' ? this.citeOf(ctx, sources.find((s) => s.documentId === n.id) ?? { documentId: n.id, title: n.label }) : {}),
         })),
         edges: graph.edges.map((e) => ({ from: e.from, to: e.to, type: e.type, confidence: e.confidence })),
-      }),
+      }), 'explore_document_graph', 'document'),
       ok: true,
       sources,
     };
@@ -719,10 +725,8 @@ export class AssistantReadToolsService {
 
     const source: AssistantAskSource = { documentId, title: doc.title, factClass: 'explicit' };
     return {
-      content: JSON.stringify({
-        documentId,
+      content: withPageText({ documentId, ...this.citeOf(ctx, source) }, {
         title: doc.title,
-        ...this.citeOf(ctx, source),
         declared: readFrontmatterRelations(content?.frontmatter).map((r) => ({
           type: r.type,
           targetKey: r.target.key,
@@ -736,7 +740,7 @@ export class AssistantReadToolsService {
           extractor: r.provenance.extractor,
           confidence: r.provenance.confidence,
         })),
-      }),
+      }, 'list_relations'),
       ok: true,
       sources: [source],
     };

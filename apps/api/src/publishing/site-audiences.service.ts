@@ -13,6 +13,7 @@ import {
 } from '@knowledge/contracts';
 import { ActivityService } from '../activity/activity.service.js';
 import { encryptSecret, parseKey } from '../ai/secret-box.js';
+import { slots } from '../ai/secret-slots.js';
 import type { Env } from '../config/env.js';
 import { hasRealPath } from '../documents/documents.service.js';
 import { t } from '../i18n/t.js';
@@ -136,7 +137,7 @@ export class SiteAudiencesService {
     const setAt = new Date();
     await this.prisma.publishedSite.update({
       where: { id: siteId },
-      data: { visitorSecretCipher: encryptSecret(secret, key), visitorSecretSetAt: setAt },
+      data: { visitorSecretCipher: encryptSecret(secret, key, slots.publishedSiteVisitor({ id: siteId, workspaceId: site.workspaceId })), visitorSecretSetAt: setAt },
     });
     this.record(site, 'site.visitorSecret.rotated', actorId);
     return { secret, setAt: setAt.toISOString() };

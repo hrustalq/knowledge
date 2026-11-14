@@ -4,6 +4,7 @@ import type { Credential } from '@prisma/client';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { PlaudLinkResponse } from '@knowledge/contracts';
 import { decryptSecret, encryptSecret, parseKey } from '../ai/secret-box.js';
+import { slots } from '../ai/secret-slots.js';
 import { safeFetch } from '../common/safe-fetch.js';
 import type { Env } from '../config/env.js';
 import { signState, verifyState, type OauthState } from '../connectors/github/github-jwt.js';
@@ -70,12 +71,13 @@ export class PlaudOauthService {
   authorizeUrl(workspaceId: string, userId: string, returnTo: string): string | null {
     if (!this.configured) return null;
     const verifier = randomBytes(32).toString('base64url');
+    const nonce = randomUUID();
     const state: PlaudOauthState = {
       workspaceId,
       userId,
       returnTo,
-      pkce: encryptSecret(verifier, this.key),
-      nonce: randomUUID(),
+      pkce: encryptSecret(verifier, this.key, slots.oauthStatePkce('plaud', { workspaceId, nonce })),
+      nonce,
       exp: Math.floor(Date.now() / 1000) + STATE_TTL_SECONDS,
     };
     const params = new URLSearchParams({
@@ -105,7 +107,7 @@ export class PlaudOauthService {
    */
   async completeAuthorization(state: PlaudOauthState, code: string): Promise<'connected' | 'auth-failed'> {
     if (!this.configured) return 'auth-failed';
-    const verifier = decryptSecret(state.pkce, this.key);
+    const verifier = decryptSecret(state.pkce, this.key, slots.oauthStatePkce('plaud', state));
     if (!verifier) return 'auth-failed';
     const token = await this.post({ grant_type: 'authorization_code', code, redirect_uri: this.redirectUri(), code_verifier: verifier });
     if (!token?.access_token || !token.refresh_token) return 'auth-failed';
@@ -119,11 +121,14 @@ export class PlaudOauthService {
     }
     if (typeof me?.id !== 'string' || !me.id) return 'auth-failed';
 
-    const signIn = { accountId: me.id, accountLabel: me.nickname || me.email || '', ...this.sealed(token), refreshingUntil: null };
+    const signIn = (id: string) => ({ accountId: me.id, accountLabel: me.nickname || me.email || '', ...this.sealed(token, { id }), refreshingUntil: null });
     await this.prisma.$transaction(async (tx) => {
       const held = await tx.credential.findFirst({ where: { ...PLAUD_SIGN_IN, userId: state.userId }, orderBy: { createdAt: 'asc' } });
-      if (held) await tx.credential.update({ where: { id: held.id }, data: signIn });
-      else await tx.credential.create({ data: { ...PLAUD_SIGN_IN, userId: state.userId, site: null, ...signIn } });
+      if (held) await tx.credential.update({ where: { id: held.id }, data: signIn(held.id) });
+      else {
+        const id = randomUUID();
+        await tx.credential.create({ data: { id, ...PLAUD_SIGN_IN, userId: state.userId, site: null, ...signIn(id) } });
+      }
     });
     return 'connected';
   }
@@ -149,7 +154,7 @@ export class PlaudOauthService {
     for (let waited = 0; waited <= LEASE_MS; waited += WAIT_STEP_MS) {
       const row = await this.own(userId);
       if (!row) return null;
-      const token = decryptSecret(row.secret, this.key);
+      const token = decryptSecret(row.secret, this.key, slots.credential(row, 'secret'));
       if (token && token !== rejected && row.expiresAt && row.expiresAt.getTime() - RENEW_MARGIN_MS > Date.now()) return token;
       if (lapsed(row)) return null;
 
@@ -186,7 +191,7 @@ export class PlaudOauthService {
 
   /** Holds the lease; releases it on failure so the next caller can try. */
   private async refresh(row: Credential): Promise<string | null> {
-    const refreshToken = decryptSecret(row.refreshSecret, this.key);
+    const refreshToken = decryptSecret(row.refreshSecret, this.key, slots.credential(row, 'refresh_secret'));
     const body = refreshToken ? await this.post({ grant_type: 'refresh_token', refresh_token: refreshToken }) : null;
     if (!body?.access_token) {
       await this.prisma.credential.updateMany({ where: { id: row.id }, data: { refreshingUntil: null } });
@@ -197,15 +202,16 @@ export class PlaudOauthService {
   }
 
   /** Both tokens and their expiries. A refresh that returns no new refresh token keeps the one it had. */
-  private sealed(token: TokenResponse, previous?: Pick<Credential, 'refreshSecret' | 'refreshExpiresAt'>) {
+  private sealed(token: TokenResponse, row: { id: string } & Partial<Pick<Credential, 'refreshSecret' | 'refreshExpiresAt'>>) {
     const refreshExp = token.refresh_token ? expOf(token.refresh_token) : undefined;
+    const previous = row;
     return {
-      secret: encryptSecret(token.access_token!, this.key),
+      secret: encryptSecret(token.access_token!, this.key, slots.credential(row, 'secret')),
       expiresAt: new Date(Date.now() + (token.expires_in ?? 86_400) * 1000),
-      refreshSecret: token.refresh_token ? encryptSecret(token.refresh_token, this.key) : (previous?.refreshSecret ?? null),
+      refreshSecret: token.refresh_token ? encryptSecret(token.refresh_token, this.key, slots.credential(row, 'refresh_secret')) : (previous.refreshSecret ?? null),
       refreshExpiresAt: token.refresh_token
         ? new Date(refreshExp ? refreshExp * 1000 : Date.now() + 7 * DAY_MS)
-        : (previous?.refreshExpiresAt ?? null),
+        : (previous.refreshExpiresAt ?? null),
     };
   }
 

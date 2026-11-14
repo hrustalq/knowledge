@@ -45,9 +45,10 @@ const heading = computed(() => props.term.term)
     <!--
       `glossary` is not a prop on MarkdownView any more, so a definition cannot
       link its own vocabulary and recurse — which is the behaviour this needs,
-      arrived at by deletion rather than by a flag.
+      arrived at by deletion rather than by a flag. `untrusted`: a definition may
+      be a model's or a capture's words (#1142), so a remote image is a link.
     -->
-    <MarkdownView :markdown="term.definition" class="text-sm text-muted-foreground" />
+    <MarkdownView :markdown="term.definition" untrusted class="text-sm text-muted-foreground" />
     <div class="flex items-center justify-between gap-3 pt-0.5">
       <RouterLink
         :to="href"

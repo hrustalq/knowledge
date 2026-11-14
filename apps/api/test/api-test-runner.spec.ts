@@ -36,7 +36,7 @@ describe('test environments (#483, phase 5)', () => {
     const info = await service.create(SCOPE, { name: 'Staging', server: 'https://staging.example.com/', inputs: { 'input.currency': 'EUR' }, secrets: { 'secret.qaPassword': 'hunter2' } }, 'u1');
     expect(info).toMatchObject({ server: 'https://staging.example.com', secrets: ['secret.qaPassword'] });
     expect(JSON.stringify(info)).not.toContain('hunter2');
-    expect(String(stored().secretsCipher)).toMatch(/^gcm\$/u);
+    expect(String(stored().secretsCipher)).toMatch(/^gcm2\$/u);
     expect(String(stored().secretsCipher)).not.toContain('hunter2');
 
     await service.update(SCOPE, 'e1', { secrets: { TOKEN: 'abc', 'secret.qaPassword': null } }, 'u1');
@@ -199,7 +199,8 @@ describe('the server runner (#483, phase 5)', () => {
     expect(sent[0].body).toContain('hunter2');
     const out = finish.mock.calls[0][1] as { status: string; results: Record<string, { captures: Record<string, string> }> };
     expect(out.status).toBe('passed');
-    expect(out.results['setup/login'].captures).toEqual({ userId: 'u-9' });
+    // #1103: the login was filled with a secret, so nothing it captured is stored, however it is named.
+    expect(out.results['setup/login'].captures).toEqual({});
     expect(JSON.stringify(out)).not.toContain('t0k');
   });
 

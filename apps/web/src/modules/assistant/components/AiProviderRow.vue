@@ -49,6 +49,7 @@ const keyLabel = computed(() => {
   if (key.source === 'stored') return key.hint ?? t('ai.providerRow.keyStored')
   if (key.source === 'environment') return t('ai.providerRow.keyEnvironment')
   if (key.source === 'default') return t('ai.providerRow.keyDefault')
+  if (key.source === 'unreadable') return t('ai.providerRow.keyUnreadable')
   return t('ai.providerRow.keyMissing')
 })
 </script>
@@ -96,7 +97,7 @@ const keyLabel = computed(() => {
           <span class="break-all">{{ row.host }}</span>
           <span aria-hidden="true">·</span>
         </template>
-        <span :class="[row.key.source === 'missing' && 'text-destructive', row.key.source === 'stored' && row.key.hint && 'font-mono']">
+        <span :class="[(row.key.source === 'missing' || row.key.source === 'unreadable') && 'text-destructive', row.key.source === 'stored' && row.key.hint && 'font-mono']">
           {{ keyLabel }}
         </span>
       </p>

@@ -400,6 +400,8 @@ export type I18nTranslations = {
             "success": string;
             "unlinked": string;
             "notLinked": string;
+            "proofWrong": string;
+            "proofRefused": string;
         };
         "answer": {
             "thinking": string;
@@ -738,6 +740,8 @@ export type I18nTranslations = {
             "apiKeyCaptureOnly": string;
             "apiKeyMcpOnly": string;
             "apiKeyToolNotOffered": string;
+            "sessionRequired": string;
+            "apiKeyPinnedNoCreate": string;
             "apiKeyNeedsSession": string;
             "apiKeyNotFound": string;
             "apiKeyWorkspaceNotMember": string;
@@ -756,6 +760,8 @@ export type I18nTranslations = {
             "notFound": string;
             "noUserWithEmail": string;
             "notAMember": string;
+            "creationClosed": string;
+            "subjectElsewhere": string;
             "lastAdminDemote": string;
             "lastAdminRemove": string;
             "deleteConfirmMismatch": string;
@@ -788,6 +794,7 @@ export type I18nTranslations = {
             "nothingToUpdate": string;
             "contentIsDraft": string;
             "uploadMissing": string;
+            "revisionTooLarge": string;
             "revisionNotDraft": string;
             "archived": string;
             "ownerNotMember": string;
@@ -841,6 +848,7 @@ export type I18nTranslations = {
             "discussionsReadOnly": string;
             "concurrentChange": string;
             "isDraft": string;
+            "pushDiffers": string;
             "needsApprovals": string;
             "nothingToMerge": string;
             "conflict": string;
@@ -921,6 +929,7 @@ export type I18nTranslations = {
             "profileNotFound": string;
             "bankIdInvalid": string;
             "contentNotText": string;
+            "documentIdReserved": string;
             "itemsRequired": string;
             "itemTooLong": string;
             "timestampInvalid": string;
@@ -1068,6 +1077,7 @@ export type I18nTranslations = {
             "agentWebhookDeliveryId": string;
             "skillNoUpstream": string;
             "findingComponentDraft": string;
+            "findingMemoDraft": string;
             "findingNoTerm": string;
             "findingTermAdded": string;
         };
@@ -1158,6 +1168,7 @@ export type I18nTranslations = {
             "urlInvalid": string;
             "urlNotHttps": string;
             "urlPrivate": string;
+            "urlCredentials": string;
             "hostUnresolved": string;
             "disabled": string;
             "pullNotSupported": string;
@@ -1234,6 +1245,11 @@ export type I18nTranslations = {
             "none": string;
             "forbidden": string;
             "noDevAvatar": string;
+        };
+        "imageProxy": {
+            "invalid": string;
+            "blocked": string;
+            "unavailable": string;
         };
         "notification": {
             "subjectNotInWorkspace": string;
@@ -1701,6 +1717,9 @@ export type I18nTranslations = {
                 "reviewRequired": string;
                 "newOnDefault": string;
                 "cannotEdit": string;
+                "cannotCreate": string;
+                "tooLarge": string;
+                "pushTooLarge": string;
                 "cannotRepresent": string;
                 "rejected": string;
                 "mrCreated": string;

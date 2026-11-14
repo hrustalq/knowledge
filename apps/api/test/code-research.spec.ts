@@ -92,6 +92,14 @@ describe('compileSearch', () => {
     // A quantified group without a quantifier inside is fine.
     expect(() => compileSearch('(ab)+', { regex: true, caseSensitive: false })).not.toThrow();
   });
+
+  it('stops a pattern the shape check misses once the search runs out of time (#1109)', () => {
+    // Overlapping alternation backtracks exponentially and has no quantifier inside its group.
+    const m = compileSearch('^(a|a)*b$', { regex: true, caseSensitive: false });
+    const started = Date.now();
+    expect(() => m('a'.repeat(27))).toThrow(/too long/);
+    expect(Date.now() - started).toBeLessThan(5_000);
+  }, 120_000);
 });
 
 describe('listTree', () => {

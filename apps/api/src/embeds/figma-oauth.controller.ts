@@ -1,7 +1,10 @@
-import { BadRequestException, Controller, Delete, Get, Param, Query, Res } from '@nestjs/common';
+import { BadRequestException, Controller, Delete, Get, Param, Query, Req, Res } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiExcludeEndpoint, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
+import { TokenAuthService } from '../auth/token-auth.service.js';
+import { startedInThisBrowser } from '../auth/oauth-callback-binding.js';
+
 import { oauthLandingPath, type FigmaAuthorizeResponse, type FigmaOauthStatusResponse } from '@knowledge/contracts';
 import { Access, CurrentPrincipal, Public } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
@@ -25,6 +28,7 @@ export class FigmaOauthController {
     private readonly oauth: FigmaOauthService,
     private readonly connectors: ConnectorsService,
     private readonly config: ConfigService<Env, true>,
+    private readonly tokenAuth: TokenAuthService,
   ) {}
 
   @Get('figma/oauth')
@@ -90,11 +94,12 @@ export class FigmaOauthController {
   @Get('figma/callback')
   @Public()
   @ApiExcludeEndpoint()
-  async callback(@Res() res: Response, @Query('state') rawState?: string, @Query('code') code?: string): Promise<void> {
+  async callback(@Req() req: Request, @Res() res: Response, @Query('state') rawState?: string, @Query('code') code?: string): Promise<void> {
     const web = this.config.get('WEB_BASE_URL', { infer: true }).replace(/\/+$/, '');
     const state = rawState ? this.oauth.verify(rawState) : null;
-    if (!state) {
-      res.redirect(`${web}${oauthLandingPath('figma', 'error')}`);
+    // A forged state, or a browser other than the starter's (#1095): nothing stored.
+    if (!state || !(await startedInThisBrowser(this.tokenAuth, req, state.userId))) {
+      res.redirect(`${web}${oauthLandingPath('figma', 'error', state?.returnTo)}`);
       return;
     }
     // No code: the person pressed Cancel on figma.com.

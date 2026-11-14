@@ -8,6 +8,7 @@ import { AiUsageService } from '../ai/ai-usage.service.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 import { t, withLocale } from '../i18n/t.js';
 import { asLocale } from '../i18n/locale.js';
+import { runFrameAddress } from '../ai/run-privacy.js';
 import { AGENT_QUEUE, MAX_RUN_WARNINGS } from './agent.constants.js';
 import { AgentExecutor } from './agent.executor.js';
 import type { AgentReporter } from './agent-services.js';
@@ -113,6 +114,7 @@ export class AgentProcessor extends WorkerHost {
           type: 'agent.run.started',
           workspaceId: row.workspaceId,
           subjectId: row.id,
+          ...runFrameAddress(row),
         });
 
         const result = await this.executor.run(row, agent, principal, report);
@@ -146,6 +148,7 @@ export class AgentProcessor extends WorkerHost {
           type: 'agent.run.succeeded',
           workspaceId: row.workspaceId,
           subjectId: row.id,
+          ...runFrameAddress(row),
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -168,6 +171,7 @@ export class AgentProcessor extends WorkerHost {
           type: 'agent.run.failed',
           workspaceId: row.workspaceId,
           subjectId: row.id,
+          ...runFrameAddress(row),
         });
       }
     });

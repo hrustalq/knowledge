@@ -111,6 +111,9 @@
 	# `?token=` still authenticates SSE and <img> requests (the @QueryTokenOk
 	# routes, #102), and a presigned object URL is a bearer credential until it
 	# expires, so mask both before the URI reaches the access log.
+	# A share link's kp_ token travels in the path instead (#1112): the API's
+	# /api/v1/public/shares/<token>/… and the web's /s/<token>/…, the same rule
+	# as redactUrl in packages/observability.
 	# Authorization and Cookie headers are already redacted by Caddy's default;
 	# the edge secret is not, and the log records headers as they arrived.
 	log {
@@ -118,10 +121,10 @@
 		format filter {
 			wrap console
 			fields {
-				request>uri query {
-					replace token REDACTED
-					replace X-Amz-Signature REDACTED
-				}
+				# One filter per field, so the query rule and the share-path rule are one
+				# regexp: the value after a credential query key (the app's list) or after
+				# /shares/kp_ and /s/kp_ goes, up to the next delimiter.
+				request>uri regexp "((?:[?&](?:token|access_token|api_key|jwt_token|code|state|X-Amz-Signature)=)|/(?:shares|s)/kp_)[^/?#&]*" "${1}REDACTED"
 				request>headers>X-Knowledge-Edge replace REDACTED
 			}
 		}

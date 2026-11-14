@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { ShareLink } from '@prisma/client';
@@ -12,6 +12,7 @@ import {
 } from '@knowledge/contracts';
 import { ActivityService } from '../activity/activity.service.js';
 import { decryptSecret, encryptSecret, parseKey } from '../ai/secret-box.js';
+import { slots } from '../ai/secret-slots.js';
 import { hashPassword } from '../auth/password.js';
 import type { Env } from '../config/env.js';
 import { t } from '../i18n/t.js';
@@ -122,13 +123,15 @@ export class ShareLinksService {
 
     const token = `${SHARE_TOKEN_PREFIX}${randomBytes(32).toString('base64url')}`;
     const key = this.secretKey();
+    const id = randomUUID();
     const row = await this.prisma.shareLink.create({
       data: {
+        id,
         workspaceId: document.workspaceId,
         documentId,
         includeSubtree: input.includeSubtree ?? false,
         tokenHash: hashToken(token),
-        tokenCipher: key ? encryptSecret(token, key) : null,
+        tokenCipher: key ? encryptSecret(token, key, slots.shareLinkToken({ id, workspaceId: document.workspaceId })) : null,
         passwordHash: hasPassword ? await hashPassword(input.password as string) : null,
         allowDownload: input.allowDownload ?? false,
         expiresAt,
@@ -240,7 +243,7 @@ export class ShareLinksService {
   }
 
   private toSummary(row: ShareRow): ShareLinkSummary {
-    const token = decryptSecret(row.tokenCipher, this.secretKey());
+    const token = decryptSecret(row.tokenCipher, this.secretKey(), slots.shareLinkToken(row));
     return {
       id: row.id,
       workspaceId: row.workspaceId,

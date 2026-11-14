@@ -401,7 +401,7 @@
             }
           }
         },
-        "summary": "Create an account with email + password; sets the HttpOnly kn_token session cookie",
+        "summary": "Create an account with email + password; sets the HttpOnly kn_token session cookie. 429 past 10/min per IP or 3/min per address",
         "tags": [
           "auth"
         ]
@@ -645,7 +645,7 @@
             }
           }
         },
-        "summary": "Request a password-reset token (never reveals whether the email exists)",
+        "summary": "Request a password-reset token (never reveals whether the email exists). 429 past 10/min per IP or 3/min per address",
         "tags": [
           "auth"
         ]
@@ -711,7 +711,7 @@
             }
           }
         },
-        "summary": "Set a new password with a kr_ reset token; revokes all sessions",
+        "summary": "Set a new password with a kr_ reset token; revokes all sessions. 429 past 10/min per IP",
         "tags": [
           "auth"
         ]
@@ -777,7 +777,7 @@
             }
           }
         },
-        "summary": "Confirm the account address with the kv_ token from the mailed link (docs/features/41)",
+        "summary": "Confirm the account address with the kv_ token from the mailed link (docs/features/41). 429 past 20/min per IP",
         "tags": [
           "auth"
         ]
@@ -833,7 +833,7 @@
             }
           }
         },
-        "summary": "Mail a fresh confirmation link to the caller's address (at most one a minute)",
+        "summary": "Mail a fresh confirmation link to the caller's address (at most one a minute). 429 past 3/min per account or 10/min per IP",
         "tags": [
           "auth"
         ]
@@ -955,7 +955,7 @@
             }
           }
         },
-        "summary": "Change own password (requires the current one); revokes other sessions",
+        "summary": "Change own password (requires the current one, from a session — never an API key); revokes other sessions. 429 past 5/min per account",
         "tags": [
           "auth"
         ]
@@ -3408,7 +3408,7 @@
             }
           }
         },
-        "summary": "Create a workspace — the creator becomes its admin + trusted operator",
+        "summary": "Create a workspace — the creator becomes its admin + trusted operator (platform admins only while AUTH_SIGNUP_ENABLED=false)",
         "tags": [
           "workspaces"
         ]
@@ -4245,7 +4245,7 @@
             }
           }
         },
-        "summary": "Users who are not members yet, for the add-member picker (workspace admin)",
+        "summary": "Users who are not members yet, for the add-member picker (workspace admin: one full email; platform admin: any fragment)",
         "tags": [
           "workspaces"
         ]
@@ -14471,6 +14471,64 @@
         "summary": "Confirm the upload and make it the project’s avatar",
         "tags": [
           "avatars"
+        ]
+      }
+    },
+    "/v1/image-proxy": {
+      "get": {
+        "operationId": "ImageProxyController_image",
+        "parameters": [
+          {
+            "name": "url",
+            "required": true,
+            "in": "query",
+            "description": "The http(s) address of the image",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "An external image from a page, fetched through the API (member app only)",
+        "tags": [
+          "image-proxy"
         ]
       }
     },
@@ -41375,7 +41433,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ChatIdentityEntry"
+                  "$ref": "#/components/schemas/ChatLinkPending"
                 }
               }
             }
@@ -41401,7 +41459,7 @@
             }
           }
         },
-        "summary": "Link the messenger account that asked for this code to the signed-in person",
+        "summary": "Confirm a link code: returns the number to send to the bot from that private chat, which is what links the account",
         "tags": [
           "chat"
         ]
@@ -44626,7 +44684,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.53.1",
+    "version": "0.53.2",
     "contact": {}
   },
   "tags": [],
@@ -46291,11 +46349,17 @@
           "filename": {
             "type": "string",
             "example": "source.md"
+          },
+          "sizeBytes": {
+            "type": "number",
+            "example": 2048,
+            "minimum": 0
           }
         },
         "required": [
           "contentType",
-          "filename"
+          "filename",
+          "sizeBytes"
         ]
       },
       "CreateRevisionDto": {
@@ -46779,7 +46843,8 @@
         },
         "required": [
           "filename",
-          "contentType"
+          "contentType",
+          "sizeBytes"
         ]
       },
       "EmbedItemStatusDto": {
@@ -47107,7 +47172,7 @@
         "properties": {
           "uploadId": {
             "type": "string",
-            "description": "The uploadId returned by the reserve step."
+            "description": "The uploadId returned by the reserve step (a UUID)."
           },
           "filename": {
             "type": "string",
@@ -54027,6 +54092,9 @@
           "deliveryId": {
             "type": "string"
           },
+          "signed": {
+            "type": "string"
+          },
           "threadId": {
             "type": "string"
           }
@@ -55094,6 +55162,9 @@
             "type": "string",
             "nullable": true
           },
+          "apiKeyUnreadable": {
+            "type": "boolean"
+          },
           "temperature": {
             "type": "number",
             "nullable": true
@@ -55135,6 +55206,7 @@
           "baseUrl",
           "hasApiKey",
           "apiKeyHint",
+          "apiKeyUnreadable",
           "temperature",
           "maxToolCalls",
           "timeoutMs",
@@ -55203,6 +55275,9 @@
           "apiKeyHint": {
             "type": "string",
             "nullable": true
+          },
+          "apiKeyUnreadable": {
+            "type": "boolean"
           },
           "temperature": {
             "type": "number"
@@ -55293,6 +55368,7 @@
           "model",
           "hasApiKey",
           "apiKeyHint",
+          "apiKeyUnreadable",
           "temperature",
           "maxToolCalls",
           "timeoutMs",
@@ -60169,6 +60245,39 @@
         "required": [
           "integrations",
           "enabled"
+        ]
+      },
+      "ChatLinkPending": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ChatPlatformKind"
+          },
+          "integrationName": {
+            "type": "string"
+          },
+          "botUsername": {
+            "type": "string",
+            "nullable": true
+          },
+          "externalUserName": {
+            "type": "string",
+            "nullable": true
+          },
+          "proof": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "integrationName",
+          "botUsername",
+          "externalUserName",
+          "proof",
+          "expiresAt"
         ]
       },
       "ChatLinkPreview": {
@@ -69576,6 +69685,9 @@
           "emailVerificationRequired": {
             "type": "boolean"
           },
+          "canCreateWorkspace": {
+            "type": "boolean"
+          },
           "memberships": {
             "type": "array",
             "items": {
@@ -69594,6 +69706,7 @@
           "authMethod",
           "emailVerified",
           "emailVerificationRequired",
+          "canCreateWorkspace",
           "memberships"
         ]
       },
@@ -78303,7 +78416,8 @@
             "$ref": "#/components/schemas/AvatarUrl"
           },
           "isAdmin": {
-            "type": "boolean"
+            "type": "boolean",
+            "nullable": true
           },
           "disabled": {
             "type": "boolean"
@@ -78330,10 +78444,12 @@
             "type": "boolean"
           },
           "hasPassword": {
-            "type": "boolean"
+            "type": "boolean",
+            "nullable": true
           },
           "hasApiKey": {
-            "type": "boolean"
+            "type": "boolean",
+            "nullable": true
           },
           "pages": {
             "type": "array",

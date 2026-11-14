@@ -253,6 +253,13 @@ export interface ChatAdapter {
    * whichever is first. Absent where acknowledging is a call of its own.
    */
   respondToAction?(inbound: ChatInbound, handled: Promise<void>): Promise<unknown>;
+  /**
+   * For a platform whose press names its presser unsigned (Time, #1104):
+   * whether that person is in the press's channel, asked of the platform as
+   * the bot. False on any doubt; the press then does nothing. Absent where
+   * the platform vouches for who pressed.
+   */
+  confirmPresser?(ctx: ChatAdapterContext, inbound: ChatInbound): Promise<boolean>;
 
   /** Who the token belongs to — the health check, and how `botUsername` is learned. */
   identify(ctx: ChatAdapterContext): Promise<{ username: string }>;

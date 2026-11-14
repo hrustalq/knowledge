@@ -7,6 +7,7 @@ import {
   Injectable,
   Logger,
   UnauthorizedException,
+  Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type {
@@ -19,7 +20,7 @@ import type { User } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { userAvatarUrl } from '../common/avatar-url.js';
 import { MailProducer } from '../mail/mail.producer.js';
-import { hashPassword, verifyPassword } from './password.js';
+import { burnPasswordCheck, hashPassword, verifyPassword } from './password.js';
 import type { Principal } from './principal.js';
 import { SessionsService, type SessionMeta } from './sessions.service.js';
 import type { Issued } from './session-cookie.js';
@@ -28,6 +29,8 @@ import { AuthPolicyService, type EnforcedDomain } from './auth-policy.service.js
 import { AuditService } from './audit.service.js';
 import type { RequestMeta } from '../common/client-ip.js';
 import { hashToken, mintToken } from './auth-tokens.js';
+import { LoginBackoff } from './login-backoff.js';
+import { RateLimitedException } from '../public/public-rate-limit.js';
 import { toMeResponse } from './me-response.js';
 import { asLocale } from '../i18n/locale.js';
 import { currentLocale, t } from '../i18n/t.js';
@@ -62,11 +65,17 @@ export class AuthFlowService {
     private readonly mail: MailProducer,
     private readonly audit: AuditService,
     private readonly policy: AuthPolicyService,
+    // Optional so a spec that builds the service by hand needs none.
+    @Optional() private readonly backoff?: LoginBackoff,
   ) {}
 
-  /** `debugToken` outside production: a dev or e2e flow must not need an inbox. */
+  /**
+   * `debugToken` only when AUTH_ECHO_TOKENS asks for it (#1093): a dev or e2e
+   * flow need not have an inbox, but a deployment that forgot NODE_ENV must
+   * not hand a reset token to whoever typed the address.
+   */
   private get echoTokens(): boolean {
-    return this.config.get<string>('NODE_ENV') !== 'production';
+    return this.config.get<boolean>('AUTH_ECHO_TOKENS') === true;
   }
 
   async signup(email: string, displayName: string, password: string, meta?: RequestMeta): Promise<Issued<AuthSessionResponse>> {
@@ -118,6 +127,9 @@ export class AuthFlowService {
 
   async login(email: string, password: string, meta?: RequestMeta): Promise<Issued<AuthSessionResponse>> {
     const normalized = email.trim().toLowerCase();
+    // Before anything is looked up: a guess in the wait costs nothing and says nothing.
+    const wait = meta && this.backoff ? await this.backoff.retryAfter(normalized, meta.ip) : 0;
+    if (wait > 0) throw new RateLimitedException(t('error.auth.rateLimited'), wait, 'login-backoff');
     // The ceiling is instance-wide, so saying so reveals nothing about the account.
     if (!passwordAllowedFor(normalized, this.config)) {
       this.recordFailure(normalized, 'password-login-disabled', meta);
@@ -133,15 +145,18 @@ export class AuthFlowService {
       throw this.domainRefusal(enforced);
     }
     const user = await this.prisma.user.findUnique({ where: { email: normalized } });
+    if (!user?.passwordHash) await burnPasswordCheck(password);
     const reason = !user
       ? 'unknown-email'
       : !user.passwordHash
         ? 'no-password'
-        : user.disabledAt
-          ? 'disabled'
-          : (await verifyPassword(password, user.passwordHash))
-            ? null
-            : 'wrong-password';
+        : // #1143: checked before the account state, so a disabled account
+          // spends the same scrypt a wrong password does.
+          !(await verifyPassword(password, user.passwordHash))
+          ? 'wrong-password'
+          : user.disabledAt
+            ? 'disabled'
+            : null;
     // With the admin exception on, the refusal is the same 403 for a wrong
     // password, an unknown address and a non-admin — so the answer never says
     // which addresses belong to an admin. Only the right admin password passes.
@@ -153,8 +168,10 @@ export class AuthFlowService {
     // The reason goes to the audit trail only, which a platform admin reads.
     if (reason || !user) {
       this.recordFailure(normalized, reason ?? 'unknown-email', meta, user?.id);
+      if (meta) await this.backoff?.failed(normalized, meta.ip);
       throw new UnauthorizedException(t('error.auth.invalidCredentials'));
     }
+    await this.backoff?.cleared(normalized, meta?.ip);
     return this.issueSession(user, meta, {
       authMethod: 'password',
       workspaceId: domain?.workspaceId ?? null,
@@ -269,6 +286,9 @@ export class AuthFlowService {
       // An invite sets a first password; there was no previous one to warn about.
       if (reset.purpose !== 'invite') this.prisma.onCommit(() => this.mail.enqueue({ template: 'password-changed', userId: reset.userId }));
     });
+    // The address is proven: guesses before the reset stop slowing its owner down.
+    const owner = await this.prisma.user.findUnique({ where: { id: reset.userId }, select: { email: true } });
+    if (owner) await this.backoff?.cleared(owner.email);
   }
 
   async changePassword(principal: Principal, currentPassword: string, newPassword: string): Promise<void> {
@@ -394,6 +414,7 @@ export class AuthFlowService {
       },
       memberships,
       this.config.get<boolean>('AUTH_REQUIRE_VERIFIED_EMAIL') === true,
+      this.config.get<boolean>('AUTH_SIGNUP_ENABLED') === true,
     );
     return { token, expiresAt: session.expiresAt.toISOString(), me };
   }

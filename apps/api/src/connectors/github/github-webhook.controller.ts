@@ -15,6 +15,7 @@ import { ConnectorWorkItemsService } from '../connector-work-items.service.js';
 import { GithubIssuesService, toWorkItem } from './github-issues.service.js';
 import { DriftTriggerService } from '../drift/drift-trigger.service.js';
 import { readGithubMergedPullRequest, readGithubPullRequest } from '../drift/pull-request-delivery.js';
+import { WebhookReplay } from '../webhook-replay.js';
 
 /**
  * The App-level webhook (docs/features/32).
@@ -53,6 +54,7 @@ export class GithubWebhookController {
     private readonly drift: DriftTriggerService,
     private readonly producer: ConnectorProducer,
     private readonly github: GithubIssuesService,
+    private readonly replay: WebhookReplay,
   ) {
     this.secret = this.config.get('GITHUB_APP_WEBHOOK_SECRET', { infer: true }).trim();
   }
@@ -74,7 +76,14 @@ export class GithubWebhookController {
       // Answering 401 without having touched anything is the point of verifying first.
       throw new UnauthorizedException(t('error.connector.webhookInvalidSignature'));
     }
+    // A signed body is acted on once (#1143): GitHub stamps no time into it.
+    return this.replay.once('github-app', rawBody, { accepted: true, handled: 0 }, () => this.handle(headers, rawBody));
+  }
 
+  // --- internals ---
+
+  /** A verified delivery, seen for the first time. */
+  private async handle(headers: Record<string, string>, rawBody: string): Promise<{ accepted: boolean; handled: number }> {
     const payload = safeJson(rawBody);
     const event = headers['x-github-event'] ?? '';
     if (!payload || !event) return { accepted: true, handled: 0 };
@@ -97,8 +106,6 @@ export class GithubWebhookController {
     }
     return { accepted: true, handled };
   }
-
-  // --- internals ---
 
   /**
    * The connectors this delivery is about.

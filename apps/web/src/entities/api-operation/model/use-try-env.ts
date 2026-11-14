@@ -1,4 +1,5 @@
 import { reactive, watch } from 'vue'
+import { onForgetSignedIn, TRY_ENV_PREFIX } from '@/shared/utils/signed-in-storage'
 
 /** One operation's console values — what the code samples print and the console sends. */
 export interface TryDraft {
@@ -29,8 +30,10 @@ export interface TryEnv {
   basicPassword: string
 }
 
-const KEY = (documentId: string) => `kn_try:${documentId}`
+const KEY = (documentId: string) => `${TRY_ENV_PREFIX}${documentId}`
 const envs = new Map<string, TryEnv>()
+// Sign-out forgets the storage keys; this forgets the copies held here (#1142).
+onForgetSignedIn(() => envs.clear())
 
 function blank(): TryEnv {
   return { serverUrl: null, via: 'browser', token: '', apiKey: '', basicUser: '', basicPassword: '' }

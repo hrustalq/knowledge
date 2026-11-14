@@ -1135,6 +1135,9 @@
       "deliveryId": {
         "type": "string"
       },
+      "signed": {
+        "type": "string"
+      },
       "threadId": {
         "type": "string"
       }
@@ -2202,6 +2205,9 @@
         "type": "string",
         "nullable": true
       },
+      "apiKeyUnreadable": {
+        "type": "boolean"
+      },
       "temperature": {
         "type": "number",
         "nullable": true
@@ -2243,6 +2249,7 @@
       "baseUrl",
       "hasApiKey",
       "apiKeyHint",
+      "apiKeyUnreadable",
       "temperature",
       "maxToolCalls",
       "timeoutMs",
@@ -2311,6 +2318,9 @@
       "apiKeyHint": {
         "type": "string",
         "nullable": true
+      },
+      "apiKeyUnreadable": {
+        "type": "boolean"
       },
       "temperature": {
         "type": "number"
@@ -2401,6 +2411,7 @@
       "model",
       "hasApiKey",
       "apiKeyHint",
+      "apiKeyUnreadable",
       "temperature",
       "maxToolCalls",
       "timeoutMs",
@@ -7277,6 +7288,39 @@
     "required": [
       "integrations",
       "enabled"
+    ]
+  },
+  "ChatLinkPending": {
+    "type": "object",
+    "properties": {
+      "kind": {
+        "$ref": "#/components/schemas/ChatPlatformKind"
+      },
+      "integrationName": {
+        "type": "string"
+      },
+      "botUsername": {
+        "type": "string",
+        "nullable": true
+      },
+      "externalUserName": {
+        "type": "string",
+        "nullable": true
+      },
+      "proof": {
+        "type": "string"
+      },
+      "expiresAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "kind",
+      "integrationName",
+      "botUsername",
+      "externalUserName",
+      "proof",
+      "expiresAt"
     ]
   },
   "ChatLinkPreview": {
@@ -16684,6 +16728,9 @@
       "emailVerificationRequired": {
         "type": "boolean"
       },
+      "canCreateWorkspace": {
+        "type": "boolean"
+      },
       "memberships": {
         "type": "array",
         "items": {
@@ -16702,6 +16749,7 @@
       "authMethod",
       "emailVerified",
       "emailVerificationRequired",
+      "canCreateWorkspace",
       "memberships"
     ]
   },
@@ -25411,7 +25459,8 @@
         "$ref": "#/components/schemas/AvatarUrl"
       },
       "isAdmin": {
-        "type": "boolean"
+        "type": "boolean",
+        "nullable": true
       },
       "disabled": {
         "type": "boolean"
@@ -25438,10 +25487,12 @@
         "type": "boolean"
       },
       "hasPassword": {
-        "type": "boolean"
+        "type": "boolean",
+        "nullable": true
       },
       "hasApiKey": {
-        "type": "boolean"
+        "type": "boolean",
+        "nullable": true
       },
       "pages": {
         "type": "array",

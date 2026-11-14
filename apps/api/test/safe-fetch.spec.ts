@@ -10,11 +10,15 @@ describe('isPrivateAddress', () => {
     '::1', '::', 'fe80::1', 'fe90::1', 'febf::1', 'fec0::1', 'fc00::1', 'fd00::1',
     '::ffff:127.0.0.1', '::ffff:7f00:1', '::ffff:169.254.169.254', '::ffff:a9fe:a9fe', '::ffff:a00:1',
     '64:ff9b::7f00:1', '::127.0.0.1',
+    // #1110: IETF protocol assignments, benchmarking, multicast, reserved (incl. broadcast)
+    '192.0.0.1', '198.18.0.1', '198.19.255.254', '224.0.0.1', '239.255.255.250', '240.0.0.1', '255.255.255.255',
+    // #1110: 6to4 and Teredo embed an IPv4 address; IPv6 multicast
+    '2002:7f00:1::1', '2002:a9fe:a9fe::', '2001:0:4136:e378:8000:63bf:3fff:fdd2', 'ff02::1', 'ff05::1:3',
   ])('refuses %s', (address) => {
     expect(isPrivateAddress(address)).toBe(true);
   });
 
-  it.each(['8.8.8.8', '1.1.1.1', '172.32.0.1', '100.128.0.1', '2606:4700:4700::1111', '::ffff:808:808'])('allows %s', (address) => {
+  it.each(['8.8.8.8', '1.1.1.1', '172.32.0.1', '100.128.0.1', '2606:4700:4700::1111', '::ffff:808:808', '192.0.1.1', '198.20.0.1', '223.255.255.1', '2001:4860:4860::8888', '2003::1'])('allows %s', (address) => {
     expect(isPrivateAddress(address)).toBe(false);
   });
 });

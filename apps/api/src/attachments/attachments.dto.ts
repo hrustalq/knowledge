@@ -14,11 +14,10 @@ export class CreateAttachmentDto {
   @IsIn(ATTACHMENT_CONTENT_TYPES as readonly string[])
   contentType!: string;
 
-  /** Advisory: lets the API reject an oversized upload before the bytes move. */
-  @ApiPropertyOptional({ example: 148_231, minimum: 0 })
-  @IsOptional()
+  /** The file's exact size: the presigned PUT is signed for it, so another size is refused by the store. */
+  @ApiProperty({ example: 148_231, minimum: 0 })
   @IsInt()
   @Min(0, { message: vmsg('min') })
   @Max(Number.MAX_SAFE_INTEGER, { message: vmsg('max') })
-  sizeBytes?: number;
+  sizeBytes!: number;
 }

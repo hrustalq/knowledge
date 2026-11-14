@@ -242,7 +242,7 @@ describe('AuthFlowService — verification', () => {
       },
     };
     const mail = { enqueue: vi.fn(async () => undefined) };
-    const flow = new AuthFlowService(prisma as never, config() as never, {} as never, mail as never, {} as never, noAuthPolicy);
+    const flow = new AuthFlowService(prisma as never, config({ AUTH_ECHO_TOKENS: true }) as never, {} as never, mail as never, {} as never, noAuthPolicy);
     return { flow, mail, created, userUpdates };
   }
   const session: Principal = { ...DEV_PRINCIPAL, userId: 'u1', mode: 'session', isAdmin: false, emailVerified: false };

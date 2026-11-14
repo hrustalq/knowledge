@@ -22,7 +22,7 @@ const WS = '11111111-1111-4111-8111-111111111111';
 const DOC = '22222222-2222-4222-8222-222222222222';
 const KEY = 'AbCdEfGhIj12';
 const figma = (config: Record<string, string>, enabled = true) => ({ id: 'c1', kind: 'figma', enabled, config, createdAt: new Date() });
-const env = { EMBED_MAX_ITEMS: 2, EMBED_SNAPSHOT_SCALE: 2, EMBED_SNAPSHOT_MAX_PX: 4096, EMBED_TEXT_MAX_BYTES: 20 } as Record<string, unknown>;
+const env = { EMBED_MAX_ITEMS: 2, EMBED_SNAPSHOT_SCALE: 2, EMBED_SNAPSHOT_MAX_PX: 4096, EMBED_TEXT_MAX_BYTES: 20, FETCH_MAX_BYTES: 2_000_000 } as Record<string, unknown>;
 const config = { get: (k: string) => env[k] } as never;
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
 
@@ -188,6 +188,26 @@ describe('EmbedSnapshotService.render', () => {
     });
     expect(ingestion.enqueue).toHaveBeenCalledWith('job-1');
   });
+
+  it('stops reading a render past FETCH_MAX_BYTES and records the failure (#1109)', async () => {
+    const prisma = fakePrisma({ connectors: [figma({ allowlist: 'project:222' })], files: [{ fileKey: KEY, projectId: '222', teamId: null, connectorId: 'c1' }] });
+    const storage = { putObjectBytes: vi.fn(async () => undefined) };
+    const connectors = { contextFor: vi.fn(async (row: { config: unknown }) => ({ config: row.config, credential: 'figd_x', allowPrivate: false, debug: () => undefined })) };
+    let pulls = 0;
+    mockFetch.mockImplementation(async (url) => {
+      const u = new URL(String(url));
+      if (u.pathname === `/v1/files/${KEY}/nodes`) return json({ nodes: { '1:2': { document: { type: 'FRAME', name: 'Big' } } } });
+      if (u.pathname === `/v1/images/${KEY}`) return json({ images: { '1:2': 'https://figma-renders.example/big.png' } });
+      if (u.host === 'figma-renders.example') {
+        return new Response(new ReadableStream<Uint8Array>({ pull: (c) => void (pulls += 1, pulls > 64 ? c.close() : c.enqueue(new Uint8Array(1024 * 1024))) }));
+      }
+      return json({ folders: [], files: [{ key: KEY, name: 'App' }] });
+    });
+    await snapshots(prisma, storage, connectors).render({ workspaceId: WS, fileKey: KEY, nodeId: '1:2', version: '7' });
+    expect(pulls).toBeLessThan(10);
+    expect(storage.putObjectBytes).not.toHaveBeenCalled();
+    expect((prisma.embedNode.upsert.mock.calls[0]![0] as { create: Record<string, unknown> }).create.error).toMatch(/large/);
+  }, 10_000);
 
   it('records a file the allowlist does not reach, and calls Figma for nothing else', async () => {
     const prisma = fakePrisma({ connectors: [figma({ allowlist: 'project:222' })] });

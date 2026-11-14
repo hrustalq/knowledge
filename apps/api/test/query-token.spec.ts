@@ -223,20 +223,25 @@ describe('opt-in allowlists', () => {
 });
 
 describe('live WebSocket keeps its own ?token= path', () => {
-  it('resolves the upgrade query token (it never passes through AuthGuard)', async () => {
+  it('refuses a kn_ key in the upgrade query, as HTTP does (#1097), and resolves one in the header', async () => {
     const resolve = vi.fn(async () => principal);
+    const resolveTicket = vi.fn(async () => {
+      throw new UnauthorizedException('credential in url');
+    });
     const config = {
       get: (k: string) =>
         ({ LIVE_WS_ENABLED: true, LIVE_TRACKED_EVENTS: '', LIVE_WS_MAX_SUBSCRIPTIONS: 10 })[k],
     };
-    const gw = new LiveGateway(config as never, { resolve, blocksUnverified: () => false } as never, {} as never, {} as never);
-    const socket = { on: vi.fn(), close: vi.fn(), send: vi.fn() };
-    await gw.handleConnection(socket as never, {
-      url: `/v1/events/ws?token=${GOOD}`,
-      headers: {},
-    } as never);
+    const gw = new LiveGateway(config as never, { resolve, resolveTicket, blocksUnverified: () => false } as never, {} as never, {} as never, {} as never);
+    const inUrl = { on: vi.fn(), close: vi.fn(), send: vi.fn(), readyState: 1, OPEN: 1 };
+    await gw.handleConnection(inUrl as never, { url: `/v1/events/ws?token=${GOOD}`, headers: {} } as never);
+    expect(resolve).not.toHaveBeenCalledWith(GOOD);
+    expect(inUrl.close).toHaveBeenCalledWith(4401, 'authentication failed');
+
+    const inHeader = { on: vi.fn(), close: vi.fn(), send: vi.fn() };
+    await gw.handleConnection(inHeader as never, { url: '/v1/events/ws', headers: { authorization: `Bearer ${GOOD}` } } as never);
     expect(resolve).toHaveBeenCalledWith(GOOD);
-    expect(socket.close).not.toHaveBeenCalled();
+    expect(inHeader.close).not.toHaveBeenCalled();
   });
 
   it('takes a kt_ ticket through the ticket rules, the way the web connects (#650)', async () => {

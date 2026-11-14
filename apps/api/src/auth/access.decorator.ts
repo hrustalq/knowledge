@@ -6,6 +6,7 @@ export const ACCESS_META = 'knowledge:access';
 export const PUBLIC_META = 'knowledge:public';
 export const PLATFORM_ADMIN_META = 'knowledge:platform-admin';
 export const READ_KEY_OK_META = 'knowledge:read-key-ok';
+export const SESSION_ONLY_META = 'knowledge:session-only';
 export const MCP_KEY_OK_META = 'knowledge:mcp-key-ok';
 export const QUERY_TOKEN_OK_META = 'knowledge:query-token-ok';
 export const UNVERIFIED_OK_META = 'knowledge:unverified-ok';
@@ -79,6 +80,14 @@ export const Feature = (feature: WorkspaceFeature) => SetMetadata(FEATURE_META, 
  * guard reads those keys itself.
  */
 export const History = () => SetMetadata(HISTORY_META, true);
+
+/**
+ * An account-security route (#1092): reached from a signed-in browser, never
+ * with an API key. A leaked key, however narrow, must not guess the owner's
+ * password, sign their sessions out, take over a credential or link a chat
+ * account that then answers as them. The dev principal passes.
+ */
+export const SessionOnly = () => SetMetadata(SESSION_ONLY_META, true);
 
 /** Route restricted to platform admins (users.is_admin) — user management surface. */
 export const PlatformAdmin = () => SetMetadata(PLATFORM_ADMIN_META, true);

@@ -137,8 +137,13 @@ plain objects.
 - Authentication is done by the gateway, using `TokenAuthService` — extracted
   out of `AuthGuard` and exported by the global `AuthModule` precisely so both
   paths apply the same rules (`AUTH_MODE=none` → dev principal; `ks_` sessions
-  and `kn_` API keys otherwise, disabled users refused on both). Bearer header
-  or `?token=`, mirroring SSE.
+  and `kn_` API keys otherwise, disabled users refused on both). A `kn_`/`ks_`
+  only in the Bearer header; `?token=` takes a `kt_` ticket and nothing else,
+  mirroring SSE (#1097).
+- Every open socket is re-judged each `LIVE_RECHECK_MS` (30 s,
+  `events/live-recheck.ts`): a credential that no longer stands closes it with
+  4401, a workspace the person may no longer read loses its subscription. The
+  SSE stream runs the same check and completes.
 - A failure sends an `ApiErrorPayload` frame — the same envelope as HTTP, see
   [07-api-client-errors.md](07-api-client-errors.md) — and then closes with
   **4401**. A disabled gateway (`LIVE_WS_ENABLED=false`) answers 503 and closes
@@ -225,6 +230,14 @@ sites, so SSE and WS cannot disagree:
 - It denies by default. A scope that cannot be computed delivers nothing about
   pages, and a page that cannot be read (deleted) reaches only those who see
   everything. Workspace-level frames and addressed frames pass unchanged.
+- A frame with no page but a `projectId` (a connector's run or revert, a
+  capture approved into a project, any page-less activity row whose project
+  `ActivityService.record` resolved) or a `project.*` frame is judged by that
+  project with `canSeeProject` (#1088, #1140). A frame about a project that is
+  gone passes, since it carries nothing but ids.
+- A private run (`run-privacy.ts`: a memo's, a restricted project's) publishes
+  its `agent.run.*` frames addressed to its creator (`runFrameAddress`), so
+  the bus never tells the workspace such a run exists.
 
 ## The client: LiveClient and the live cache
 

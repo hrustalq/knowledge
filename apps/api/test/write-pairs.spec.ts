@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { WIKI_AUTO_REGENERATE_CONFIG_KEY, WIKI_CONFIG_KEY } from '@knowledge/contracts';
 import { describe, expect, it, vi } from 'vitest';
 import { BadRequestException } from '@nestjs/common';
@@ -155,7 +156,8 @@ describe('#658 write pairs commit together', () => {
     const { prisma, committed } = fakePrisma({ 'document.update': { id: 'd1' } });
     const activity = recorder(prisma);
     const commits = { lock: async () => undefined, uniqueSlug: async () => 't' };
-    const svc = new DocumentsService(prisma, _, _, _, activity as never, _, _, _, _, _, _, _, _, _, _, commits as never);
+    const permissions = { requireCreateUnder: async () => undefined };
+    const svc = new DocumentsService(prisma, _, _, _, activity as never, _, _, _, _, _, permissions as never, _, _, _, _, commits as never);
     const doc = { id: 'd1', workspaceId: WS, projectId: 'p1', ownerId: 'old', parentId: null, archivedAt: null, title: 'T', path: '/d1/', depth: 0 };
     stub(svc, {
       getDocumentOrThrow: async () => ({ ...doc }),
@@ -166,7 +168,7 @@ describe('#658 write pairs commit together', () => {
       },
     });
 
-    await expect(svc.updateDocument('d1', { ownerId: 'new', parentId: 'p-elsewhere' } as never, 'u1')).rejects.toThrow('bad parent');
+    await expect(svc.updateDocument('d1', { ownerId: 'new', parentId: 'p-elsewhere' } as never, {} as never, 'u1')).rejects.toThrow('bad parent');
     expect(committed).toEqual([]);
     expect(activity.fired).toEqual([]);
   });
@@ -339,14 +341,16 @@ describe('#658 write pairs commit together', () => {
     });
   });
 
+  // #1104: the pair moved from the web confirmation to the number coming back from the chat.
   it('chat link: no spent code without an identity', async () => {
-    const { prisma, committed } = fakePrisma({ 'chatLinkCode.updateMany': { count: 1 }, 'chatIdentity.upsert': boom });
-    const svc = stub(new ChatIdentityService(prisma, {} as never, {} as never, {} as never, config({ CHAT_LINK_CODE_TTL_MINUTES: 10, WEB_BASE_URL: 'http://x' })), {
-      redeemable: async () => ({ row: { id: 'code1', externalUserId: '42', externalUserName: null, externalChatId: '42' }, integration: { id: 'int1', workspaceId: WS } }),
-      assertMember: async () => undefined,
-    });
-    await expect(svc.confirm('code', { userId: 'u1' } as never)).rejects.toThrow('boom');
-    expect(committed).toEqual([]);
+    const proofHash = createHash('sha256').update('code1:123456', 'utf8').digest('hex');
+    const row = { id: 'code1', externalUserId: '42', externalUserName: null, externalChatId: '42', confirmedBy: 'u1', proofHash, proofAttempts: 0 };
+    const { prisma, committed } = fakePrisma({ 'chatLinkCode.findFirst': row, 'chatLinkCode.updateMany': { count: 1 }, 'chatIdentity.upsert': boom });
+    const access = { principalFor: async () => ({ userId: 'u1' }), requireRole: async () => undefined };
+    const svc = new ChatIdentityService(prisma, access as never, {} as never, {} as never, config({ CHAT_LINK_CODE_TTL_MINUTES: 10, WEB_BASE_URL: 'http://x' }), {} as never, {} as never);
+    await expect(svc.redeemProof({ id: 'int1', workspaceId: WS, locale: 'en' } as never, { externalUserId: '42', chatId: '42' }, '123456')).rejects.toThrow('boom');
+    // Only the attempt claim (#1141) commits on its own; the spend rolls back with the identity.
+    expect(committed).toEqual(['chatLinkCode.updateMany']);
   });
 
   it('chat answer: no assistant thread without its conversation', async () => {
@@ -396,11 +400,15 @@ describe('#658 write pairs commit together', () => {
     const create = vi.fn(({ data }: { data: Record<string, unknown> }) => ({ ...data, status: 'uploading', createdAt: new Date(), updatedAt: new Date() }));
     const { prisma, committed } = fakePrisma({ 'importJob.create': create });
     const storage = { importObjectKey: (ws: string, id: string, f: string) => `w/${ws}/imports/${id}/${f}`, presignPut: async () => 'url' };
-    const svc = new ImportService(prisma, storage as never, { requireProjectInWorkspace: async () => undefined } as never, _, _, _, _, config({ IMPORT_MAX_BYTES: 1e9 }));
-    await svc.create({ workspaceId: WS, projectId: 'p1', filename: 'a.md', contentType: 'text/markdown', sizeBytes: 10 } as never).catch(() => undefined);
+    const permissions = { scopeFor: async () => ({}), requireCreateUnder: async () => undefined };
+    const svc = new ImportService(prisma, storage as never, { requireProjectInWorkspace: async () => undefined } as never, _, _, _, _, permissions as never, config({ IMPORT_MAX_BYTES: 1e9 }));
+    await svc
+      .create({ workspaceId: WS, projectId: 'p1', filename: 'a.md', contentType: 'text/markdown', sizeBytes: 10 } as never, { userId: 'u1' } as never)
+      .catch(() => undefined);
     expect(committed).toEqual(['importJob.create']);
     const data = create.mock.calls[0][0].data as { id: string; s3Key: string };
-    expect(data.s3Key).toBe(`w/${WS}/imports/${data.id}/a.md`);
+    // A fixed name, never the upload's own (#1086).
+    expect(data.s3Key).toBe(`w/${WS}/imports/${data.id}/source`);
   });
 
   it('attachment over the limit: the row goes before the object', async () => {
@@ -425,7 +433,7 @@ describe('#656 revoke and offboard commit with the change', () => {
   const G = '33333333-3333-4333-8333-333333333333';
   const P = '44444444-4444-4444-8444-444444444444';
   const audit = recorder;
-  const failingSessions = () => ({ revokeAllForUser: vi.fn(boom) });
+  const failingSessions = () => ({ revokeAllForUser: vi.fn(boom), revokeIssuedBy: vi.fn(boom) });
   const scimConfig = config({ API_PUBLIC_URL: 'http://x', AUTH_SCIM_MAX_PAGE: 100, AUTH_SCIM_ENABLED: true, AUTH_MODE: 'api-key' });
   const caller = { workspaceId: WS, tokenId: 't1' };
 
@@ -768,6 +776,7 @@ describe('#811 one revision writer', () => {
       documents,
       logger: { warn: vi.fn() },
       writeBackPage: boom,
+      permissions: { scopeFor: async () => ({}), requireCreateUnder: async () => undefined },
     });
     await expect(svc.createPage(WS, 'run1', 0, { userId: 'u1' } as never)).rejects.toThrow('boom');
     expect(documents.createDocument).toHaveBeenCalled();

@@ -2,6 +2,7 @@ import type { INestApplication } from '@nestjs/common';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import request from 'supertest';
 import type { PrismaService } from '../src/prisma/prisma.service.js';
+import { readPageText } from '../src/common/page-text.js';
 
 /**
  * #74 phase 5 acceptance, end to end against live infra: the quality reads
@@ -225,6 +226,6 @@ describe('docs quality reads (e2e, #74)', () => {
       .expect(ok(200));
     const result = res.body.result as { isError?: boolean; content: Array<{ text: string }> };
     expect(result.isError).toBeFalsy();
-    expect(JSON.parse(result.content[0].text)).toEqual(rest.body);
+    expect(readPageText(result.content[0].text)).toEqual(rest.body);
   });
 });

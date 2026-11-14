@@ -555,8 +555,9 @@ export class AiController {
     @Query('agentKey') agentKey?: string,
     @Query('status') status?: string,
     @Query('cursor') cursor?: string,
+    @CurrentPrincipal() principal?: Principal,
   ): Promise<ListAgentRunsResponse> {
-    return this.runs.list(workspaceId, { agentKey, status, cursor });
+    return this.runs.list(workspaceId, { agentKey, status, cursor }, principal!);
   }
 
   @Get('agents/runs/:id')
@@ -567,8 +568,9 @@ export class AiController {
   getAgentRun(
     @Param('id', ParseUUIDPipe) id: string,
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @CurrentPrincipal() principal: Principal,
   ): Promise<AgentRunSummary> {
-    return this.runs.get(workspaceId, id);
+    return this.runs.get(workspaceId, id, principal);
   }
 
   // Triggers (#70). Declared before ':key' so "triggers" is not read as an
@@ -671,6 +673,7 @@ export class AiController {
         },
         (ids) => this.permissions.visibleDocumentIds(scope, ids),
         scope.denied,
+        principal,
       ),
       promptLimit: this.learnings.promptLimit,
     };
@@ -689,7 +692,7 @@ export class AiController {
     // Active text reaches a prompt at once, so making it so is the admin's act
     // here exactly as it is on PATCH.
     if (dto.status === 'active') await this.access.requireRole(principal, dto.workspaceId, 'admin');
-    const learning = await this.learnings.create(dto, principal.userId);
+    const learning = await this.learnings.create(dto, principal);
     await this.activity.record({
       workspaceId: learning.workspaceId,
       actor: principal?.userId,

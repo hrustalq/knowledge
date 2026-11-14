@@ -225,7 +225,7 @@ async function acceptTerm(message: ChatMessage, suggestion: GlossaryTermSuggesti
           {{ m.content }}
         </div>
         <div v-else class="max-w-[95%] space-y-2 rounded-lg rounded-bl-sm bg-muted/60 px-3 py-2 text-sm">
-          <MarkdownView :markdown="m.content" />
+          <MarkdownView :markdown="m.content" untrusted />
 
           <!-- Glossary proposals: one accept button each, never a bulk import -->
           <ul v-if="m.glossary?.length" class="space-y-1.5 border-t pt-2">

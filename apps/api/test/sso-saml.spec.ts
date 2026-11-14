@@ -5,6 +5,7 @@ import 'reflect-metadata';
 import { BadRequestException } from '@nestjs/common';
 import { SignedXml } from 'xml-crypto';
 import { decryptSecret, encryptSecret, parseKey } from '../src/ai/secret-box.js';
+import { slots } from '../src/ai/secret-slots.js';
 import { generateSpKeyPair, parseCertificates } from '../src/auth/sso/saml-cert.js';
 import { identityFromSamlProfile } from '../src/auth/sso/saml-profile.js';
 import { API, fakeConfig, identityProvidersHarness, ssoHarness, WS, type Row } from './sso-fakes.js';
@@ -16,6 +17,8 @@ import { API, fakeConfig, identityProvidersHarness, ssoHarness, WS, type Row } f
  * the replay markers, the fragment code — is the real code.
  */
 
+/** The flow cookie the browser that started the sign-in carries (#1095). */
+const BROWSER = 'browser-binding-of-the-starter';
 const ENC_KEY = randomBytes(32).toString('base64');
 const IDP = 'https://idp.test/realms/corp';
 const idp = generateSpKeyPair('Test IdP');
@@ -26,16 +29,19 @@ const config = () => fakeConfig({ SETTINGS_ENCRYPTION_KEY: ENC_KEY });
 
 function harness(samlOver: Row = {}) {
   const h = ssoHarness(config());
-  const provider = (over: Row = {}) =>
-    h.provider({
+  const provider = (over: Row = {}) => {
+    const id = (over.id as string | undefined) ?? randomUUID();
+    return h.provider({
+      id,
       kind: 'saml',
       preset: 'generic',
       name: 'Corp SAML',
       config: { idpEntityId: IDP, ssoUrl: 'https://idp.test/sso', idpCert: idp.certPem, spCert: sp.certPem, ...samlOver },
-      secretCipher: encryptSecret(sp.privateKeyPem, parseKey(ENC_KEY)),
+      secretCipher: encryptSecret(sp.privateKeyPem, parseKey(ENC_KEY), slots.identityProviderSecret({ id, workspaceId: WS })),
       groupsClaim: 'groups',
       ...over,
     });
+  };
   return { ...h, provider };
 }
 
@@ -102,7 +108,7 @@ function signedResponse(o: AssertionOpts, key = idp): string {
 
 /** The browser's first leg: our redirect to the IdP, and the AuthnRequest id and RelayState in it. */
 async function start(h: ReturnType<typeof harness>, providerId: string, returnTo = '/documents/x') {
-  const url = new URL(await h.sso.samlStart(providerId, returnTo));
+  const url = new URL(await h.sso.samlStart(providerId, returnTo, BROWSER));
   expect(url.origin + url.pathname).toBe('https://idp.test/sso');
   expect(url.searchParams.get('SigAlg')).toBe('http://www.w3.org/2001/04/xmldsig-more#rsa-sha256');
   expect(url.searchParams.get('Signature')).toBeTruthy();
@@ -127,7 +133,7 @@ describe('SAML sign-in, SP-initiated', () => {
     expect(h.db.users[0]).toMatchObject({ email: 'ada@corp.example', displayName: 'Ada L', passwordHash: null });
     expect(h.db.identities[0]).toMatchObject({ providerId: p.id, subject: 'kc-1' });
 
-    const res = await h.sso.exchange(decodeURIComponent(code!), meta);
+    const res = await h.sso.exchange(decodeURIComponent(code!), meta, BROWSER);
     expect(res.returnTo).toBe('/documents/x');
     expect(res.me.authMethod).toBe('saml');
     expect(h.sessions.create).toHaveBeenCalledWith(h.db.users[0].id, expect.objectContaining({ authMethod: 'saml', providerId: p.id }));
@@ -187,7 +193,7 @@ describe('SAML sign-in, SP-initiated', () => {
   it('a disabled provider starts nothing and accepts nothing', async () => {
     const h = harness();
     const p = h.provider({ enabled: false });
-    expect(errorOf(await h.sso.samlStart(p.id, '/documents'))).toBe('failed');
+    expect(errorOf(await h.sso.samlStart(p.id, '/documents', BROWSER))).toBe('failed');
     expect(errorOf(await h.sso.samlAcs(p.id, { SAMLResponse: 'x' }, meta))).toBe('failed');
   });
 });
@@ -206,7 +212,7 @@ describe('SAML sign-in, IdP-initiated', () => {
     const body = { SAMLResponse: signedResponse({ providerId: p.id }), RelayState: 'portal-tile' };
     const code = codeOf(await h.sso.samlAcs(p.id, body, meta));
     expect(code).toBeTruthy();
-    expect((await h.sso.exchange(decodeURIComponent(code!), meta)).returnTo).toBe('/documents');
+    expect((await h.sso.exchange(decodeURIComponent(code!), meta, BROWSER)).returnTo).toBe('/documents');
     expect(errorOf(await h.sso.samlAcs(p.id, body, meta))).toBe('invalid-state');
     expect(h.failures().at(-1)).toMatchObject({ error: 'assertion replayed' });
   });
@@ -276,7 +282,7 @@ describe('SAML provider setup', () => {
     await svc.update(WS, row.id, { clientSecret: 'nope', idpEntityId: 'https://idp.test/other' }, admin);
     expect(row.secretCipher).toBe(secretCipher);
     expect(row.config).toMatchObject({ idpEntityId: 'https://idp.test/other', spCert });
-    expect(createPrivateKey(decryptSecret(row.secretCipher, parseKey(ENC_KEY))!).asymmetricKeyType).toBe('rsa');
+    expect(createPrivateKey(decryptSecret(row.secretCipher, parseKey(ENC_KEY), slots.identityProviderSecret(row))!).asymmetricKeyType).toBe('rsa');
   });
 
   it.each([

@@ -1,4 +1,5 @@
-import { unzipSync } from 'fflate';
+import { readCapped } from '../../common/read-capped.js';
+import { ArchiveTooLargeError, DEFAULT_ARCHIVE_MAX_INFLATED_BYTES, unzipBounded } from '../../common/unzip-bounded.js';
 import { gitProviderOf } from '@knowledge/contracts';
 import { safeFetch } from '../../common/safe-fetch.js';
 import { t } from '../../i18n/t.js';
@@ -264,28 +265,33 @@ async function download(ctx: ConnectorContext, tag?: string): Promise<RepoArchiv
     // A missing tag is not a missing branch; the explanation would mislead.
     throw tag ? err : await explain404(ctx, err, branch);
   }
-  const archive = new Uint8Array(await res.arrayBuffer());
+  // Bounded twice (#1109): the download while it streams, then what it inflates to, from each entry's
+  // declared size before it is inflated. A file over the per-file cap is never inflated at all.
+  const max = ctx.archiveMaxBytes ?? DEFAULT_ARCHIVE_MAX_INFLATED_BYTES;
+  const download = await readCapped(res, max);
+  if (!download.whole) throw new ArchiveTooLargeError(max);
+  const archive = download.bytes;
   const headSha = zipCommentSha(archive);
-  const zip = unzipSync(archive);
 
   const files = new Map<string, Uint8Array>();
   const skipped = { oversize: 0, binary: 0 };
   const skippedPaths: string[] = [];
+  // Archives are wrapped in a single `<repo>-<ref>/` directory; a directory entry ends in `/`.
+  const pathOf = (name: string) => name.split('/').slice(1).join('/');
+  const zip = unzipBounded(archive, max, ({ name, originalSize }) => {
+    const path = pathOf(name);
+    if (!path || path.endsWith('/') || path.split('/').some((s) => IGNORED_SEGMENTS.has(s))) return false;
+    if (originalSize > MAX_FILE_BYTES) {
+      skipped.oversize += 1;
+      skippedPaths.push(path);
+      return false;
+    }
+    return true;
+  });
 
   for (const [name, bytes] of Object.entries(zip)) {
-    // Archives are wrapped in a single `<repo>-<ref>/` directory.
-    const path = name.split('/').slice(1).join('/');
-    // A directory entry ends in `/`.
-    if (!path || path.endsWith('/')) continue;
-
-    const segments = path.split('/');
-    if (segments.some((s) => IGNORED_SEGMENTS.has(s))) continue;
+    const path = pathOf(name);
     if (bytes.length === 0) {
-      skippedPaths.push(path);
-      continue;
-    }
-    if (bytes.length > MAX_FILE_BYTES) {
-      skipped.oversize += 1;
       skippedPaths.push(path);
       continue;
     }

@@ -4,7 +4,7 @@ import { DOCUMENT_CATEGORIES, DOCUMENT_VISIBILITIES, API_DOCUMENT_KINDS, API_SPE
 import { keepFrontmatter } from '../../common/frontmatter.js';
 import { applyLineEdits } from '../line-patch.js';
 import { contentLines } from '../../documents/content-lines.js';
-import { json, type McpToolContext } from './context.js';
+import { json, pageJson, type McpToolContext } from './context.js';
 import type { McpServices } from '../mcp-services.js';
 
 /** Pages, their revisions and branches: read, create, revise, upload and reindex. */
@@ -28,7 +28,7 @@ export function registerDocumentsTools(ctx: McpToolContext): void {
       const doc = await svc.documents.getDocument(documentId, revisionId);
       void svc.analytics.view(caller, documentId, revisionId);
       const { backlinks } = await svc.documents.getBacklinks(documentId, await guard.scope(workspaceId));
-      return json({ ...doc, backlinks });
+      return pageJson('knowledge_get_document', { ...doc, backlinks });
     },
   );
 
@@ -55,7 +55,7 @@ export function registerDocumentsTools(ctx: McpToolContext): void {
       if (revisionId) await guard.history(workspaceId, documentId, [revisionId]);
       const content = await svc.documents.getContent(documentId, revisionId);
       void svc.analytics.view(caller, documentId, content.revisionId);
-      return json(lines ? contentLines(content, lines, svc.webUrl()) : content);
+      return pageJson('knowledge_get_document_content', lines ? contentLines(content, lines, svc.webUrl()) : content);
     },
   );
 
@@ -72,7 +72,7 @@ export function registerDocumentsTools(ctx: McpToolContext): void {
       const workspaceId = await guard.doc(documentId, 'viewer');
       if (branch) await guard.branches(documentId, { branchNames: [branch] }, 'viewer');
       await guard.history(workspaceId, documentId);
-      return json(await svc.documents.listRevisions(documentId, await guard.scope(workspaceId), branch));
+      return pageJson('knowledge_list_revisions', await svc.documents.listRevisions(documentId, await guard.scope(workspaceId), branch));
     },
   );
 
@@ -93,7 +93,7 @@ export function registerDocumentsTools(ctx: McpToolContext): void {
       const workspaceId = await guard.doc(documentId, 'viewer');
       await guard.branches(documentId, { revisionIds: [fromRevisionId, toRevisionId] }, 'viewer');
       await guard.history(workspaceId, documentId);
-      return json(
+      return pageJson('knowledge_compare_revisions', 
           await svc.compare.compare(documentId, fromRevisionId, toRevisionId, mode ?? 'direct', {
             structural: true,
             semantic: includeSemanticDiff ?? false,
@@ -217,7 +217,7 @@ export function registerDocumentsTools(ctx: McpToolContext): void {
       const { branches } = await svc.mergeRequests.projectBranches(projectId, scope, { name, openOnly });
       const from = Number(cursor ?? 0);
       const end = from + limit;
-      return json({ projectId, branches: branches.slice(from, end), nextCursor: end < branches.length ? String(end) : null });
+      return pageJson('knowledge_list_branches', { projectId, branches: branches.slice(from, end), nextCursor: end < branches.length ? String(end) : null });
     },
   );
 
@@ -253,7 +253,7 @@ export function registerDocumentsTools(ctx: McpToolContext): void {
       },
     },
     async ({ workspaceId, projectId, parentId, depth, includeArchived }) => {
-      return json(
+      return pageJson('knowledge_list_documents', 
         await svc.documents.getTree(await guard.pages(workspaceId), projectId, {
           parentId: parentId ?? null,
           ...(depth ? { depth } : {}),
@@ -281,6 +281,7 @@ export function registerDocumentsTools(ctx: McpToolContext): void {
           .optional()
           .describe('Markdown body; YAML frontmatter is allowed and indexed. Required unless templateRef or upload is given'),
         upload: z.boolean().optional().describe('Create the page empty and return an upload URL for its first revision (as knowledge_start_upload)'),
+        sizeBytes: z.number().int().min(0).optional().describe("With upload: the file's exact size in bytes (wc -c). The URL is signed for that size"),
         parentId: z.string().uuid().optional().describe('Nest under this page'),
         category: z.enum(DOCUMENT_CATEGORIES).optional().describe('Defaults to the template’s category'),
         templateRef: z
@@ -302,10 +303,11 @@ export function registerDocumentsTools(ctx: McpToolContext): void {
           ),
       },
     },
-    async ({ workspaceId, projectId, title, content, upload, parentId, category, templateRef, templateVersion, values, kind, syntax, visibility }) => {
+    async ({ workspaceId, projectId, title, content, upload, sizeBytes, parentId, category, templateRef, templateVersion, values, kind, syntax, visibility }) => {
       await guard.ws(workspaceId, 'editor');
       if (upload && (content || templateRef)) throw new Error('upload replaces content and templateRef: pass one of them.');
       if (!content && !templateRef && !upload) throw new Error('Pass content, a templateRef to start from, or upload: true.');
+      if (upload) assertUploadSize(svc, sizeBytes);
       await svc.permissions.requireCreateUnder(await guard.scope(workspaceId), {
         projectId,
         ...(parentId ? { parentId } : {}),
@@ -329,7 +331,7 @@ export function registerDocumentsTools(ctx: McpToolContext): void {
       );
       if (!upload) return json(created);
       // With no content the page is created with an empty draft revision: that is the one to upload into.
-      return json({ ...created, ...(await uploadTicket(svc, created.documentId, created.revisionId)) });
+      return json({ ...created, ...(await uploadTicket(svc, created.documentId, created.revisionId, sizeBytes!)) });
     },
   );
 
@@ -351,16 +353,18 @@ export function registerDocumentsTools(ctx: McpToolContext): void {
         baseRevisionId: z.string().uuid().optional(),
         message: z.string().optional(),
         syntax: z.enum(API_SPEC_SYNTAXES).optional().describe('API spec and test fixture documents only: yaml (default) or json'),
+        sizeBytes: z.number().int().min(0).describe("The file's exact size in bytes (wc -c). The URL is signed for that size: another size is refused"),
       },
     },
-    async ({ documentId, branch, baseRevisionId, message, syntax }) => {
+    async ({ documentId, branch, baseRevisionId, message, syntax, sizeBytes }) => {
+      assertUploadSize(svc, sizeBytes);
       await guard.doc(documentId, 'editor');
       await guard.branches(
         documentId,
         { ...(branch ? { branchNames: [branch] } : {}), ...(baseRevisionId ? { revisionIds: [baseRevisionId] } : {}) },
         'editor',
       );
-      return json(await startUpload(svc, documentId, { branch, baseRevisionId, message, syntax }, principal));
+      return json(await startUpload(svc, documentId, { branch, baseRevisionId, message, syntax, sizeBytes }, principal));
     },
   );
 
@@ -430,7 +434,7 @@ export async function createRevision(
 async function startUpload(
   svc: McpServices,
   documentId: string,
-  opts: { branch?: string; baseRevisionId?: string; message?: string; syntax?: ApiSpecSyntax },
+  opts: { branch?: string; baseRevisionId?: string; message?: string; syntax?: ApiSpecSyntax; sizeBytes: number },
   principal: Principal,
 ) {
   const document = await svc.prisma.document.findUniqueOrThrow({ where: { id: documentId }, select: { kind: true } });
@@ -446,14 +450,20 @@ async function startUpload(
     opts.baseRevisionId,
     principal.userId,
   );
-  return uploadTicket(svc, documentId, draft.revisionId);
+  return uploadTicket(svc, documentId, draft.revisionId, opts.sizeBytes);
+}
+
+/** A size the ticket can be signed for: given, and within the revision ceiling finalize holds a body to. */
+function assertUploadSize(svc: McpServices, sizeBytes: number | undefined): void {
+  if (sizeBytes === undefined) throw new Error("upload needs sizeBytes: the file's exact size in bytes (wc -c).");
+  if (sizeBytes > svc.storage.revisionMaxBytes) throw new Error(`The file is larger than a revision may be (${svc.storage.revisionMaxBytes} bytes).`);
 }
 
 /** The presigned PUT for an existing draft revision's object. */
-async function uploadTicket(
-  svc: McpServices,documentId: string, revisionId: string) {
+async function uploadTicket(svc: McpServices, documentId: string, revisionId: string, sizeBytes: number) {
   const row = await svc.prisma.documentRevision.findUniqueOrThrow({ where: { id: revisionId } });
-  const url = await svc.storage.presignPut(row.s3Key, row.contentType);
+  // Signed for the declared size: curl --upload-file sends exactly the file's.
+  const url = await svc.storage.presignPut(row.s3Key, row.contentType, 900, { contentLength: sizeBytes });
   return {
     revisionId: row.id,
     upload: { method: 'PUT', url, headers: { 'Content-Type': row.contentType }, expiresInSeconds: 900 },

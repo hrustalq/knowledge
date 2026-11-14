@@ -8,6 +8,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module.js';
 import { ApiExceptionFilter } from './common/api-exception.filter.js';
 import { HttpCacheInterceptor } from './common/http-cache.js';
+import { applySecurityHeaders } from './common/security-headers.js';
 import { SCIM_CONTENT_TYPE } from './common/scim-error-body.js';
 import { validationExceptionFactory } from './common/validation.js';
 import { createOpenApiDocument } from './config/swagger.js';
@@ -36,6 +37,7 @@ async function bootstrap() {
 
   // Ahead of the router, so an unmatched path is traced and counted too.
   app.use(traceMiddleware);
+  applySecurityHeaders(app);
 
   // The app had no body parser configured at all, so it silently inherited
   // Express's 100 kB default: a pasted page, a long comment or an import submit

@@ -4,6 +4,7 @@ import type { Connector } from '@prisma/client';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import request from 'supertest';
 import type { PrismaService } from '../src/prisma/prisma.service.js';
+import { readPageText } from '../src/common/page-text.js';
 
 /**
  * #76 acceptance, end to end against live infra: page restrictions hold for
@@ -331,6 +332,67 @@ describe('page permissions (e2e, #76)', () => {
     });
   });
 
+  describe('moving a page (#1087)', () => {
+    let page: string;
+    let closedProject: string;
+    /** What creating a page there answers bob: the answer a move must match. */
+    const createAt = (at: { projectId: string; parentId?: string }) =>
+      http()
+        .post('/v1/documents')
+        .set(as(people.bob))
+        .send({ workspaceId: WORKSPACE, title: `Nope ${nonce}`, visibility: 'workspace', ...at });
+
+    beforeAll(async () => {
+      page = (
+        await http()
+          .post('/v1/documents')
+          .set(as(people.bob))
+          .send({ workspaceId: WORKSPACE, projectId, title: `Bob's notes ${nonce}`, visibility: 'workspace' })
+          .expect(ok(201))
+      ).body.documentId;
+      // Empty, so the switch alone restricts it: no page under it needs re-stamping.
+      closedProject = (
+        await prisma.project.create({ data: { workspaceId: WORKSPACE, name: `ACL closed ${nonce}`, restricted: true } })
+      ).id;
+    });
+
+    afterAll(async () => {
+      // Put it back wherever a red run left it, so later blocks see the tree they expect.
+      await prisma.document.findUnique({ where: { id: page } }).then(async (row) => {
+        if (row && (row.parentId !== null || row.projectId !== projectId)) {
+          await http().patch(`/v1/documents/${page}`).set(as(people.admin)).send({ projectId, parentId: null });
+        }
+      });
+      await http().post(`/v1/documents/${page}/archive`).set(as(people.admin)).send({});
+    });
+
+    it('refuses a move under a page the mover may not open, as create does', async () => {
+      const created = await createAt({ projectId, parentId: ids.P });
+      expect(created.status).toBe(403);
+      const moved = await http().post(`/v1/documents/${page}/move`).set(as(people.bob)).send({ parentId: ids.P });
+      expect(moved.status).toBe(403);
+      expect(moved.body.details).toEqual(created.body.details);
+      const patched = await http().patch(`/v1/documents/${page}`).set(as(people.bob)).send({ parentId: ids.P });
+      expect(patched.status).toBe(403);
+      expect(patched.body.details).toEqual(created.body.details);
+      expect(await status(people.bob, `/v1/documents/${page}`)).toBe(200);
+    });
+
+    it('refuses a move into a project the mover may not open, as create does', async () => {
+      const created = await createAt({ projectId: closedProject });
+      expect(created.status).toBe(403);
+      const patched = await http().patch(`/v1/documents/${page}`).set(as(people.bob)).send({ projectId: closedProject });
+      expect(patched.status).toBe(403);
+      expect(patched.body.details).toEqual(created.body.details);
+      expect((await prisma.document.findUniqueOrThrow({ where: { id: page } })).projectId).toBe(projectId);
+    });
+
+    it('still moves a page under one the mover may edit', async () => {
+      await http().post(`/v1/documents/${page}/move`).set(as(people.bob)).send({ parentId: ids.O }).expect(ok(201));
+      await http().patch(`/v1/documents/${page}`).set(as(people.bob)).send({ parentId: null }).expect(ok(200));
+    });
+  });
+
   describe('retrieval', () => {
     it('search never returns a restricted page, in any mode, and still fills the limit', async () => {
       const modes = fulltext ? (['semantic', 'keyword', 'hybrid'] as const) : (['semantic', 'hybrid'] as const);
@@ -371,7 +433,7 @@ describe('page permissions (e2e, #76)', () => {
     it('MCP search and reads honour the restriction for a scoped key', async () => {
       const results = async (p: Person) => {
         const res = await mcp(p, 'knowledge_search', { workspaceId: WORKSPACE, query: `payroll ${word}`, projectIds: [projectId] });
-        return (JSON.parse(res.content[0].text).results as Hit[]).map((h) => h.documentId);
+        return (readPageText(res.content[0].text).results as Hit[]).map((h) => h.documentId);
       };
       const bob = await results(people.bob);
       expect(bob.includes(ids.P) || bob.includes(ids.C)).toBe(false);
@@ -380,6 +442,61 @@ describe('page permissions (e2e, #76)', () => {
       const read = await mcp(people.bob, 'knowledge_get_document', { documentId: ids.P });
       expect(read.isError).toBe(true);
       expect(JSON.stringify(read)).not.toContain(word);
+    });
+  });
+
+  describe('a restricted project in the feed, frames and tags (#1088)', () => {
+    // Not `word`: bob's feed holds rows about O, whose title carries it.
+    const vault = `quaz${nonce}`;
+    let vaultProject: string;
+    let vaultPage: string;
+    const feedOf = async (p: Person) =>
+      JSON.stringify((await http().get('/v1/activity').query({ workspaceId: WORKSPACE, limit: 200 }).set(as(p)).expect(ok(200))).body);
+    const tagsOf = async (p: Person) =>
+      JSON.stringify((await http().get('/v1/release-tags').query({ workspaceId: WORKSPACE }).set(as(p)).expect(ok(200))).body);
+
+    beforeAll(async () => {
+      vaultProject = (
+        await http().post('/v1/projects').set(as(people.admin)).send({ workspaceId: WORKSPACE, name: `Vault ${vault}` }).expect(ok(201))
+      ).body.project.projectId;
+      vaultPage = (
+        await http()
+          .post('/v1/documents')
+          .set(as(people.admin))
+          .send({ workspaceId: WORKSPACE, projectId: vaultProject, title: `Vault ledger ${vault}`, visibility: 'workspace' })
+          .expect(ok(201))
+      ).body.documentId;
+      await http().put(`/v1/projects/${vaultProject}/access`).set(as(people.admin)).send({ restricted: true, grants: [] }).expect(ok(200));
+      await http().patch(`/v1/projects/${vaultProject}`).set(as(people.admin)).send({ description: `Vault plans ${vault}` }).expect(ok(200));
+      await http()
+        .post('/v1/release-tags')
+        .set(as(people.admin))
+        .send({ workspaceId: WORKSPACE, projectId: vaultProject, name: `vault-${vault}`, note: `Vault note ${vault}` })
+        .expect(ok(201));
+    });
+
+    it('names a restricted project in no feed row and no release tag for a member without a grant', async () => {
+      expect(await feedOf(people.admin)).toContain(vault);
+      expect(await feedOf(people.bob)).not.toContain(vault);
+      expect(await tagsOf(people.admin)).toContain(vault);
+      expect(await tagsOf(people.bob)).not.toContain(vault);
+      const mcpTags = await mcp(people.bob, 'knowledge_list_release_tags', { workspaceId: WORKSPACE });
+      expect(JSON.stringify(mcpTags)).not.toContain(vault);
+      const timeline = await http().get('/v1/graph/timeline').query({ workspaceId: WORKSPACE }).set(as(people.bob)).expect(ok(200));
+      expect(JSON.stringify(timeline.body)).not.toContain(vault);
+    });
+
+    it('shows nothing about its pages once the project is deleted', async () => {
+      await http()
+        .delete(`/v1/projects/${vaultProject}`)
+        .query({ mode: 'cascade', confirm: `Vault ${vault}` })
+        .set(as(people.admin))
+        .expect(ok(200));
+      expect(await prisma.document.count({ where: { id: vaultPage } })).toBe(0);
+      expect(await feedOf(people.bob)).not.toContain(vault);
+      expect(await feedOf(people.admin)).toContain(vault);
+      // The tag outlives its project; it must not outlive the restriction.
+      expect(await tagsOf(people.bob)).not.toContain(vault);
     });
   });
 
@@ -398,10 +515,81 @@ describe('page permissions (e2e, #76)', () => {
 
     it('applies the same scope to knowledge_get_document over MCP', async () => {
       const read = async (p: Person) =>
-        (JSON.parse((await mcp(p, 'knowledge_get_document', { documentId: ids.O })).content[0].text) as { backlinks: Array<{ documentId: string }> })
+        (readPageText((await mcp(p, 'knowledge_get_document', { documentId: ids.O })).content[0].text) as { backlinks: Array<{ documentId: string }> })
           .backlinks.map((b) => b.documentId);
       expect(await read(people.alice)).toEqual([ids.P]);
       expect(await read(people.bob)).toEqual([]);
+    });
+  });
+
+  describe("a memo's analysis (#1089)", () => {
+    // Not `word`: the shared pages carry it, and these assertions read whole bodies.
+    const memoWord = `mumble${nonce}`;
+    let runId: string;
+    const runsOf = async (p: Person) =>
+      (
+        await http().get('/v1/ai/agents/runs').query({ workspaceId: WORKSPACE, agentKey: 'secretary' }).set(as(p)).expect(ok(200))
+      ).body;
+
+    beforeAll(async () => {
+      // Shaped as MemosProcessor.analyse and the secretary leave it: the run is
+      // the uploader's, and its findings draft pages from a private recording.
+      runId = (
+        await prisma.agentRun.create({
+          data: {
+            workspaceId: WORKSPACE,
+            agentKey: 'secretary',
+            trigger: 'manual',
+            subjectKey: `memo:${randomUUID()}`,
+            createdBy: people.alice.id,
+            status: 'succeeded',
+            input: { memo: { memoId: randomUUID() } },
+            summary: `Memo summary ${memoWord}`,
+            findings: [
+              {
+                kind: 'gap',
+                severity: 'info',
+                title: `Draft ${memoWord}`,
+                detail: `Said in the recording: ${memoWord}`,
+                documentIds: [],
+                documentTitles: [],
+                draft: { title: `Draft ${memoWord}`, markdown: `# Draft\n\n${memoWord}` },
+              },
+            ],
+          },
+        })
+      ).id;
+    });
+
+    afterAll(async () => {
+      if (runId) await prisma.agentRun.deleteMany({ where: { id: runId } });
+    });
+
+    it('lists and opens the run for its uploader only', async () => {
+      expect(JSON.stringify(await runsOf(people.alice))).toContain(runId);
+      // Not even a workspace admin: a memo is its uploader's (MemosService.require).
+      for (const p of [people.bob, people.admin]) {
+        const body = await runsOf(p);
+        expect(JSON.stringify(body)).not.toContain(memoWord);
+        expect(JSON.stringify(body)).not.toContain(runId);
+      }
+      expect(await status(people.alice, `/v1/ai/agents/runs/${runId}?workspaceId=${WORKSPACE}`)).toBe(200);
+      const other = await http().get(`/v1/ai/agents/runs/${runId}`).query({ workspaceId: WORKSPACE }).set(as(people.bob));
+      expect(other.status).toBe(404);
+      expect(JSON.stringify(other.body)).not.toContain(memoWord);
+    });
+
+    it("answers 404 to someone else's finding verbs, and never publishes a memo draft directly", async () => {
+      const verb = (p: Person, name: string) =>
+        http().post(`/v1/ai/agents/runs/${runId}/findings/0/${name}`).query({ workspaceId: WORKSPACE }).set(as(p)).send({});
+      for (const name of ['create-page', 'dismiss', 'mark-outdated', 'propose']) {
+        const res = await verb(people.bob, name);
+        expect([name, res.status]).toEqual([name, 404]);
+      }
+      const before = await prisma.document.count({ where: { workspaceId: WORKSPACE, title: `Draft ${memoWord}` } });
+      // The uploader's drafts open as merge requests (MemoPublishSweeper), as component drafts do.
+      expect((await verb(people.alice, 'create-page')).status).toBe(400);
+      expect(await prisma.document.count({ where: { workspaceId: WORKSPACE, title: `Draft ${memoWord}` } })).toBe(before);
     });
   });
 
@@ -580,13 +768,223 @@ describe('page permissions (e2e, #76)', () => {
       const rest = await usagesAs(people.bob);
       const byPage = await mcp(people.bob, 'knowledge_code_usages', { documentId: ids.O });
       const byPath = await mcp(people.bob, 'knowledge_code_usages', { workspaceId: WORKSPACE, path: 'lib/money.ts' });
-      expect(JSON.parse(byPage.content[0].text).usages).toEqual(rest.usages);
-      expect(JSON.parse(byPath.content[0].text).usages).toEqual(rest.usages);
+      expect(readPageText(byPage.content[0].text).usages).toEqual(rest.usages);
+      expect(readPageText(byPath.content[0].text).usages).toEqual(rest.usages);
       expect(byPath.content[0].text).not.toContain(titles.P);
     });
 
     it('is a 404 for a guest, like the page itself', async () => {
       expect(await status(people.gus, `/v1/documents/${ids.O}/component/usages`)).toBe(404);
+    });
+  });
+
+  describe('checked on execution (#1090)', () => {
+    let runId: string;
+    let destination: Connector;
+    let shareId: string;
+
+    beforeAll(async () => {
+      // A connector whose pages land under P, which bob may not open.
+      destination = await prisma.connector.create({
+        data: { workspaceId: WORKSPACE, kind: 'codebase', name: `ACL dest ${nonce}`, projectId, parentId: ids.P, createdBy: people.admin.id },
+      });
+      // A run written before P was hidden from bob, as a curator or archaeologist leaves one.
+      runId = (
+        await prisma.agentRun.create({
+          data: {
+            workspaceId: WORKSPACE,
+            agentKey: 'curator',
+            trigger: 'manual',
+            createdBy: people.admin.id,
+            status: 'succeeded',
+            input: { connectorId: destination.id },
+            findings: [
+              // `orphan`, so the code before the fix stops at a 400 and never reaches a model.
+              { kind: 'orphan', severity: 'info', title: 'Orphan', detail: 'x', documentIds: [ids.P], documentTitles: [titles.P] },
+              { kind: 'stale', severity: 'info', title: 'Stale', detail: 'x', documentIds: [ids.P], documentTitles: [titles.P] },
+              { kind: 'gap', severity: 'info', title: 'Draft', detail: 'x', documentIds: [], documentTitles: [], draft: { title: `Planted ${nonce}`, markdown: 'x' } },
+              { kind: 'orphan', severity: 'info', title: 'Relate', detail: 'x', documentIds: [ids.P], documentTitles: [titles.P], relations: [{ type: 'DEPENDS_ON', target: `service:acl-${nonce}` }] },
+            ],
+          },
+        })
+      ).id;
+      shareId = (
+        await prisma.shareLink.create({
+          data: { workspaceId: WORKSPACE, documentId: ids.P, tokenHash: `acl-e2e-${nonce}`, createdBy: people.admin.id },
+        })
+      ).id;
+    });
+
+    afterAll(async () => {
+      if (shareId) await prisma.shareLink.deleteMany({ where: { id: shareId } });
+      if (runId) await prisma.agentRun.deleteMany({ where: { id: runId } });
+      if (destination) await prisma.connector.deleteMany({ where: { id: destination.id } });
+    });
+
+    it('re-checks the page a finding acts on, and where its draft would land', async () => {
+      const verb = (name: string, index: number) =>
+        http().post(`/v1/ai/agents/runs/${runId}/findings/${index}/${name}`).query({ workspaceId: WORKSPACE }).set(as(people.bob)).send({});
+      const mrsBefore = await prisma.mergeRequest.count({ where: { documentId: ids.P } });
+      for (const [name, index] of [['propose', 0], ['mark-outdated', 1], ['create-page', 2], ['apply-relations', 3]] as const) {
+        const res = await verb(name, index);
+        expect([name, res.status]).toEqual([name, 403]);
+        expect(JSON.stringify(res.body)).not.toContain(word);
+      }
+      expect((await prisma.document.findUniqueOrThrow({ where: { id: ids.P } })).verificationFlag ?? null).not.toBe('outdated');
+      expect(await prisma.document.count({ where: { title: `Planted ${nonce}` } })).toBe(0);
+      expect(await prisma.mergeRequest.count({ where: { documentId: ids.P } })).toBe(mrsBefore);
+    });
+
+    it("holds a share link's edit and revoke to its page", async () => {
+      // The page's refusal, not "sharing is off": the workspace has share links switched off here.
+      for (const res of [
+        await http().patch(`/v1/shares/${shareId}`).set(as(people.bob)).send({ expiresAt: null }),
+        await http().delete(`/v1/shares/${shareId}`).set(as(people.bob)),
+      ]) {
+        expect(res.status).toBe(403);
+        expect(res.body.details).toMatchObject({ canRequestAccess: true, resourceType: 'document', resourceId: ids.P });
+      }
+      expect((await prisma.shareLink.findUniqueOrThrow({ where: { id: shareId } })).revokedAt).toBeNull();
+    });
+
+    it("holds an ingestion job to its page", async () => {
+      const revisions = await prisma.documentRevision.findMany({ where: { documentId: ids.P }, select: { id: true } });
+      const job = await prisma.ingestionJob.findFirstOrThrow({ where: { revisionId: { in: revisions.map((r) => r.id) } } });
+      expect(await status(people.bob, `/v1/ingestion/jobs/${job.id}`)).toBe(403);
+      expect(await status(people.alice, `/v1/ingestion/jobs/${job.id}`)).toBe(200);
+    });
+
+    it("counts only open work on pages the reader may open in someone's profile", async () => {
+      await http().post(`/v1/documents/${ids.P}/threads`).set(as(people.admin)).send({ body: `Open question ${nonce}` }).expect(ok(201));
+      const open = async (p: Person) =>
+        (await http().get(`/v1/profiles/${people.admin.id}`).query({ workspaceId: WORKSPACE }).set(as(p)).expect(ok(200))).body.openWork
+          .unresolvedThreads as number;
+      expect((await open(people.alice)) - (await open(people.bob))).toBe(1);
+    });
+  });
+
+  describe('a restricted project behind connectors, private runs and finding creates (#1140)', () => {
+    // Not `word`: bob's feed holds rows about O, whose title carries it.
+    const crypt = `vexil${nonce}`;
+    let cryptProject: string;
+    const planted: { runs: string[]; definitionId?: string } = { runs: [] };
+    const feedOf = async (p: Person) =>
+      JSON.stringify((await http().get('/v1/activity').query({ workspaceId: WORKSPACE, limit: 200 }).set(as(p)).expect(ok(200))).body);
+    const run = async (data: Record<string, unknown>) => {
+      const row = await prisma.agentRun.create({
+        data: { workspaceId: WORKSPACE, trigger: 'manual', status: 'succeeded', finishedAt: new Date(), ...data } as never,
+      });
+      planted.runs.push(row.id);
+      return row.id;
+    };
+
+    beforeAll(async () => {
+      cryptProject = (
+        await http().post('/v1/projects').set(as(people.admin)).send({ workspaceId: WORKSPACE, name: `Crypt ${crypt}` }).expect(ok(201))
+      ).body.project.projectId;
+      await http().put(`/v1/projects/${cryptProject}/access`).set(as(people.admin)).send({ restricted: true, grants: [] }).expect(ok(200));
+    });
+
+    afterAll(async () => {
+      if (planted.runs.length) await prisma.agentRun.deleteMany({ where: { id: { in: planted.runs } } });
+      await prisma.workflowRun.deleteMany({ where: { rootDocumentId: ids.P, createdBy: people.bob.id } });
+      if (planted.definitionId) await prisma.workflowDefinition.deleteMany({ where: { id: planted.definitionId } });
+      await prisma.glossaryTerm.deleteMany({ where: { term: `Crypt term ${crypt}` } });
+    });
+
+    it("keeps a restricted project's connector out of the feed of a member without a grant", async () => {
+      const connector = await prisma.connector.create({
+        data: { workspaceId: WORKSPACE, kind: 'codebase', name: `Crypt repo ${crypt}`, projectId: cryptProject, createdBy: people.admin.id },
+      });
+      await http().delete(`/v1/connectors/${connector.id}`).set(as(people.admin)).expect(ok(200));
+      // Recording is fire-and-forget: wait for the admin's row before reading bob's.
+      for (let i = 0; i < 20 && !(await feedOf(people.admin)).includes(crypt); i++) await new Promise((r) => setTimeout(r, 250));
+      expect(await feedOf(people.admin)).toContain(crypt);
+      expect(await feedOf(people.bob)).not.toContain(crypt);
+    });
+
+    it("refuses a learning sourced from a finding of someone else's memo run", async () => {
+      const runId = await run({
+        agentKey: 'secretary',
+        subjectKey: `memo:${randomUUID()}`,
+        createdBy: people.alice.id,
+        findings: [{ kind: 'gap', severity: 'info', title: `Memo ${crypt}`, detail: 'x', documentIds: [ids.O], documentTitles: [titles.O] }],
+      });
+      const res = await http()
+        .post('/v1/ai/agents/learnings')
+        .set(as(people.bob))
+        .send({ workspaceId: WORKSPACE, text: 'x', sourceKind: 'finding', runId, findingIndex: 0 });
+      expect(res.status).toBe(400);
+      expect(JSON.stringify(res.body)).not.toContain(crypt);
+      expect(await prisma.agentLearning.count({ where: { runId } })).toBe(0);
+    });
+
+    it("refuses to add a finding's term to a project the member may not edit", async () => {
+      const runId = await run({
+        agentKey: 'curator',
+        createdBy: people.admin.id,
+        findings: [
+          {
+            kind: 'gap',
+            severity: 'info',
+            title: 'Term',
+            detail: 'x',
+            documentIds: [ids.O],
+            documentTitles: [titles.O],
+            term: { term: `Crypt term ${crypt}`, aliases: [], definition: 'x', projectId: cryptProject },
+          },
+        ],
+      });
+      const res = await http().post(`/v1/ai/agents/runs/${runId}/findings/0/add-term`).query({ workspaceId: WORKSPACE }).set(as(people.bob)).send({});
+      expect(res.status).toBe(403);
+      expect(await prisma.glossaryTerm.count({ where: { term: `Crypt term ${crypt}` } })).toBe(0);
+    });
+
+    it('materializes no workflow page where the run owner may no longer create', async () => {
+      const { WorkflowMaterializeSweeper } = await import('../src/workflows/workflow-materialize.sweeper.js');
+      const step = { id: 'write', kind: 'review', title: 'Write', next: [], fanOut: false, autoApprove: false, produces: { category: 'guide', relationToParent: 'IMPLEMENTS' } };
+      planted.definitionId = (
+        await prisma.workflowDefinition.create({
+          data: { workspaceId: WORKSPACE, name: `ACL sweep ${nonce}`, graph: { steps: [step] }, createdBy: people.admin.id } as never,
+        })
+      ).id;
+      // A run bob started while he could edit P, swept after P was closed to him.
+      const wf = await prisma.workflowRun.create({
+        data: {
+          workspaceId: WORKSPACE,
+          projectId,
+          definitionId: planted.definitionId,
+          definitionSnapshot: { steps: [step] },
+          rootDocumentId: ids.P,
+          status: 'running',
+          createdBy: people.bob.id,
+          nodes: { create: { stepId: 'write', status: 'materializing', draft: { title: `Swept ${crypt}`, markdown: '# x' } } },
+        },
+      });
+      const sweeper = app.get(WorkflowMaterializeSweeper);
+      for (let i = 0; i < 40; i++) {
+        await sweeper.sweep();
+        const node = await prisma.workflowRunNode.findFirstOrThrow({ where: { runId: wf.id } });
+        if (node.status !== 'materializing') break;
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      expect(await prisma.document.count({ where: { title: `Swept ${crypt}` } })).toBe(0);
+      expect((await prisma.workflowRunNode.findFirstOrThrow({ where: { runId: wf.id } })).status).toBe('failed');
+    });
+
+    it("opens no component draft in a project its owner may not create in", async () => {
+      const { ComponentDraftSweeper } = await import('../src/components/component-draft.sweeper.js');
+      const runId = await run({
+        agentKey: 'archaeologist',
+        subjectKey: `component:${randomUUID()}:src/crypt.ts`,
+        createdBy: people.bob.id,
+        input: { connectorId: randomUUID(), component: { name: 'Crypt', paths: ['src/crypt.ts'], projectId: cryptProject } },
+        findings: [{ kind: 'gap', severity: 'info', title: 'Crypt', detail: 'x', documentIds: [], documentTitles: [], draft: { title: `Drafted ${crypt}`, markdown: '# x' } }],
+      });
+      await app.get(ComponentDraftSweeper).sweep();
+      expect(await prisma.document.count({ where: { title: `Drafted ${crypt}` } })).toBe(0);
+      const findings = (await prisma.agentRun.findUniqueOrThrow({ where: { id: runId } })).findings as Array<{ mergeRequestId?: string }>;
+      expect(findings[0]!.mergeRequestId).toBeUndefined();
     });
   });
 
@@ -621,7 +1019,7 @@ describe('page permissions (e2e, #76)', () => {
         title: `Agent notes ${word}`,
         content: `Notes for ${word}.`,
       });
-      draft.mcp = JSON.parse(viaMcp.content[0].text).documentId;
+      draft.mcp = readPageText(viaMcp.content[0].text).documentId;
       draft.open = (await createAs(people.alice, { title: `Open child ${word}`, parentId: draft.rest, visibility: 'workspace' })).documentId;
       draft.nested = (await createAs(people.alice, { title: `Private child ${word}`, parentId: draft.rest })).documentId;
       // What import, connector pulls and workflows call: no visibility, no person behind it.
@@ -756,7 +1154,7 @@ describe('page permissions (e2e, #76)', () => {
       expect(branch.body.branch).toMatchObject({ restricted: true, ownerId: people.alice.id });
       const rev = await createRevision(people.alice, `draft/${people.alice.id}`, `# Handbook\n\nThe ${secret} rewrite.\n`);
       expect(rev.isError).toBeFalsy();
-      privateRev = JSON.parse(rev.content[0].text).revisionId;
+      privateRev = readPageText(rev.content[0].text).revisionId;
       // Not recorded, so never published: no feed row, live frame, watcher notification or workflow trigger.
       expect(await prisma.activityLog.count({ where: { subjectId: privateRev } })).toBe(0);
     });
@@ -770,6 +1168,15 @@ describe('page permissions (e2e, #76)', () => {
       expect(await revisionIds(people.bob)).not.toContain(privateRev);
       expect(await branchNames(people.alice)).toContain(`draft/${people.alice.id}`);
       expect(await revisionIds(people.alice)).toContain(privateRev);
+    });
+
+    it("refuses finalizing a revision on it, and reading its ingestion job, to someone it is not shared with (#1090)", async () => {
+      await http().post(`/v1/documents/${page}/revisions/${privateRev}/finalize`).set(as(people.bob)).send({}).expect(ok(403));
+      const job = await prisma.ingestionJob.findFirst({ where: { revisionId: privateRev } });
+      if (job) {
+        expect(await status(people.bob, `/v1/ingestion/jobs/${job.id}`)).toBe(403);
+        expect(await status(people.alice, `/v1/ingestion/jobs/${job.id}`)).toBe(200);
+      }
     });
 
     it('refuses every read that names it, over REST and MCP, with no content in the body', async () => {
@@ -835,7 +1242,7 @@ describe('page permissions (e2e, #76)', () => {
     const write = async (p: Person, branch: string, text: string) => {
       const res = await mcp(p, 'knowledge_create_revision', { documentId: page, branch, content: text });
       expect(res.isError).toBeFalsy();
-      return JSON.parse(res.content[0].text).revisionId as string;
+      return readPageText(res.content[0].text).revisionId as string;
     };
     const publish = (branchId: string, body: Record<string, unknown> = {}) =>
       http().post(`/v1/documents/${page}/branches/${branchId}/publish`).set(as(people.alice)).send({ title: 'Edit', ...body });
@@ -853,12 +1260,16 @@ describe('page permissions (e2e, #76)', () => {
       (await http().get(`/v1/documents/${page}/content`).set(as(people.bob)).expect(ok(200))).body.markdown as string;
 
     beforeAll(async () => {
+      // A project of its own: a working draft is one per person and project
+      // (#636), and the block above leaves alice's in review, which a page
+      // joining it would share. The next run's setup destroys this project.
+      const own = await prisma.project.create({ data: { workspaceId: WORKSPACE, name: `ACL e2e publishing ${nonce}` } });
       const created = await http()
         .post('/v1/documents')
         .set(as(people.alice))
         .send({
           workspaceId: WORKSPACE,
-          projectId,
+          projectId: own.id,
           title: `Publishing handbook ${word}`,
           visibility: 'workspace',
           content: { mode: 'inline', format: 'markdown', text: `# Handbook\n\nThe first ${word} text.\n` },
@@ -915,14 +1326,155 @@ describe('page permissions (e2e, #76)', () => {
     it('refuses a publish over a head the author has not seen, and lands over it once named', async () => {
       const { branchId, name } = (await mine()).body.branch;
       await write(people.alice, name, `# Handbook\n\nThe ${word} text, mine again.\n`);
-      const theirs = await write(people.bob, 'main', `# Handbook\n\nThe ${word} text, bob's.\n`);
+      // Moved by the admin: the default publish mode is `review` (#958), which
+      // holds an editor's write to the default branch and lets an admin's through.
+      const theirs = await write(people.admin, 'main', `# Handbook\n\nThe ${word} text, the admin's.\n`);
       const mrsBefore = await prisma.mergeRequest.count({ where: { documentId: page } });
       const refused = await publish(branchId).expect(ok(409));
-      expect(refused.body.details).toMatchObject({ reason: 'diverged', currentHeadRevisionId: theirs });
+      // Both sides rewrote the same line: the 3-way merge overlaps (2601325c renamed `diverged` here).
+      expect(refused.body.details).toMatchObject({ reason: 'conflict', currentHeadRevisionId: theirs });
       // Refused before an MR could make the branch readable.
       expect(await prisma.mergeRequest.count({ where: { documentId: page } })).toBe(mrsBefore);
       await publishThrough(branchId, { onTopOf: [theirs] });
       expect(await published()).toContain('mine again');
+    });
+  });
+
+  describe('workflow runs (#1085)', () => {
+    let definitionId: string;
+    let runId: string;
+    let nodeId: string;
+    const runIdsFor = async (p: Person) =>
+      (
+        (await http().get('/v1/workflows/runs').query({ workspaceId: WORKSPACE, limit: 100 }).set(as(p)).expect(ok(200))).body as {
+          runs: Array<{ id: string }>;
+        }
+      ).runs.map((r) => r.id);
+
+    beforeAll(async () => {
+      // A pure human gate: no model call, and nothing in this app consumes the queue.
+      const definition = await http()
+        .post('/v1/workflows')
+        .set(as(people.admin))
+        .send({
+          workspaceId: WORKSPACE,
+          projectId: null,
+          name: `ACL review ${nonce}`,
+          graph: { steps: [{ id: 'check', kind: 'review', title: 'Check', next: [], fanOut: false, autoApprove: false }] },
+        })
+        .expect(ok(201));
+      definitionId = definition.body.id;
+      runId = (
+        await http()
+          .post('/v1/workflows/runs')
+          .set(as(people.admin))
+          .send({ workspaceId: WORKSPACE, definitionId, rootDocumentId: ids.P })
+          .expect(ok(201))
+      ).body.id;
+      nodeId = (await prisma.workflowRunNode.findFirstOrThrow({ where: { runId }, select: { id: true } })).id;
+    });
+
+    afterAll(async () => {
+      if (runId) await http().post(`/v1/workflows/runs/${runId}/events`).set(as(people.admin)).send({ type: 'CANCEL' });
+      if (definitionId) await http().delete(`/v1/workflows/${definitionId}`).set(as(people.admin));
+    });
+
+    it('refuses to start a run on a page the editor may not edit, with no title', async () => {
+      const res = await http()
+        .post('/v1/workflows/runs')
+        .set(as(people.bob))
+        .send({ workspaceId: WORKSPACE, definitionId, rootDocumentId: ids.C });
+      expect(res.status).toBe(403);
+      expect(res.body.details).toMatchObject({ canRequestAccess: true, resourceType: 'document' });
+      expect(JSON.stringify(res.body)).not.toContain(word);
+      expect(await prisma.workflowRun.count({ where: { rootDocumentId: ids.C } })).toBe(0);
+    });
+
+    it('leaves a run on a restricted page out of the list for whoever cannot open the page', async () => {
+      expect(await runIdsFor(people.alice)).toContain(runId);
+      expect(await runIdsFor(people.bob)).not.toContain(runId);
+      const bob = await http().get('/v1/workflows/runs').query({ workspaceId: WORKSPACE, limit: 100 }).set(as(people.bob));
+      expect(JSON.stringify(bob.body)).not.toContain(word);
+      expect(Object.values(bob.body.counts as Record<string, number>).reduce((a, b) => a + b, 0)).toBe(bob.body.runs.length);
+    });
+
+    it('refuses the run and its node routes as the page would', async () => {
+      expect(await status(people.alice, `/v1/workflows/runs/${runId}`)).toBe(200);
+      const detail = await http().get(`/v1/workflows/runs/${runId}`).set(as(people.bob));
+      expect(detail.status).toBe(403);
+      expect(JSON.stringify(detail.body)).not.toContain(word);
+      await http().post(`/v1/workflows/runs/${runId}/events`).set(as(people.bob)).send({ type: 'PAUSE' }).expect(ok(403));
+      await http()
+        .patch(`/v1/workflows/runs/${runId}/nodes/${nodeId}`)
+        .set(as(people.bob))
+        .send({ draft: { title: 'x', markdown: 'x' } })
+        .expect(ok(403));
+      await http().post(`/v1/workflows/runs/${runId}/nodes/${nodeId}/events`).set(as(people.bob)).send({ type: 'SKIP' }).expect(ok(403));
+    });
+
+    it('applies the same rule to knowledge_get_workflow_run', async () => {
+      const read = await mcp(people.bob, 'knowledge_get_workflow_run', { runId });
+      expect(read.isError).toBe(true);
+      expect(JSON.stringify(read)).not.toContain(word);
+      expect((await mcp(people.alice, 'knowledge_get_workflow_run', { runId })).isError).toBeFalsy();
+    });
+  });
+
+  describe('imports (#1086)', () => {
+    const reserve = (p: Person, extra: Record<string, unknown> = {}) =>
+      http()
+        .post('/v1/imports')
+        .set(as(p))
+        .send({ workspaceId: WORKSPACE, projectId, filename: 'parsed.md', contentType: 'text/markdown', sizeBytes: 64, ...extra });
+    /** Where the parser would leave it; nothing in this app consumes the import queue. */
+    const parsed = (id: string) => prisma.importJob.update({ where: { id }, data: { status: 'parsed', title: `Staged ${word}` } });
+
+    it('answers 404 to anyone but the uploader on every import route', async () => {
+      const id = (await reserve(people.alice).expect(ok(201))).body.import.importId as string;
+      await parsed(id);
+      expect(await status(people.alice, `/v1/imports/${id}`)).toBe(200);
+      for (const suffix of ['', '/content', '/images/0']) {
+        const res = await http().get(`/v1/imports/${id}${suffix}`).set(as(people.bob));
+        expect([suffix, res.status]).toEqual([suffix, 404]);
+        expect(JSON.stringify(res.body)).not.toContain(word);
+      }
+      await http().post(`/v1/imports/${id}/start`).set(as(people.bob)).send({}).expect(ok(404));
+      await http().post(`/v1/imports/${id}/submit`).set(as(people.bob)).send({ title: 'x', markdown: 'x' }).expect(ok(404));
+      await http().delete(`/v1/imports/${id}`).set(as(people.bob)).expect(ok(404));
+      expect(await prisma.importJob.count({ where: { id } })).toBe(1);
+      // A workspace admin may tidy up, as with exports.
+      expect(await status(people.admin, `/v1/imports/${id}`)).toBe(200);
+      await http().delete(`/v1/imports/${id}`).set(as(people.alice)).expect(ok(200));
+    });
+
+    it('stores the upload under a fixed name, so a file called parsed.md is not its own parse', async () => {
+      const res = await reserve(people.alice).expect(ok(201));
+      const row = await prisma.importJob.findUniqueOrThrow({ where: { id: res.body.import.importId } });
+      expect(row.s3Key.endsWith('/parsed.md')).toBe(false);
+      await http().delete(`/v1/imports/${row.id}`).set(as(people.alice)).expect(ok(200));
+    });
+
+    it('refuses a destination the caller may not create under, exactly as POST /v1/documents does', async () => {
+      const direct = await http()
+        .post('/v1/documents')
+        .set(as(people.bob))
+        .send({ workspaceId: WORKSPACE, projectId, parentId: ids.P, title: 'x' });
+      expect(direct.status).toBe(403);
+      const reserved = await reserve(people.bob, { parentId: ids.P });
+      expect(reserved.status).toBe(403);
+      expect(reserved.body.details).toEqual(direct.body.details);
+
+      const id = (await reserve(people.bob).expect(ok(201))).body.import.importId as string;
+      await parsed(id);
+      const before = await prisma.document.count({ where: { parentId: ids.P } });
+      const submitted = await http()
+        .post(`/v1/imports/${id}/submit`)
+        .set(as(people.bob))
+        .send({ title: `Planted ${word}`, markdown: 'planted', parentId: ids.P });
+      expect(submitted.status).toBe(403);
+      expect(JSON.stringify(submitted.body)).not.toContain(word);
+      expect(await prisma.document.count({ where: { parentId: ids.P } })).toBe(before);
+      await http().delete(`/v1/imports/${id}`).set(as(people.bob)).expect(ok(200));
     });
   });
 

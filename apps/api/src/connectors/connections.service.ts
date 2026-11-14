@@ -17,7 +17,8 @@ import {
   type UpdateConnectionRequest,
 } from '@knowledge/contracts';
 import { AUTHOR_ID_STUB } from '../activity/actor.js';
-import { decryptSecret, encryptSecret, MissingEncryptionKeyError, parseKey } from '../ai/secret-box.js';
+import { decryptSecret, parseKey } from '../ai/secret-box.js';
+import { slots } from '../ai/secret-slots.js';
 import { assertSafeExternalUrl } from '../common/safe-url.js';
 import type { Env } from '../config/env.js';
 import { FigmaOauthService } from '../embeds/figma-oauth.service.js';
@@ -103,7 +104,8 @@ export class ConnectionsService {
     if (!input.credential) throw new BadRequestException(t('error.credential.oneOf'));
     const site = await this.siteFor(input.provider, input.site ?? null);
     const account = await this.probe(input.provider, site, input.credential);
-    const credential = await this.credentials.saveToken(userId, input.provider, site, input.credential, this.encrypt(input.credential), account);
+    this.assertKey();
+    const credential = await this.credentials.saveToken(userId, input.provider, site, input.credential, account);
     return this.attach(input.workspaceId, credential, site, userId);
   }
 
@@ -134,7 +136,7 @@ export class ConnectionsService {
 
   /** An Atlassian credential names no site: it is probed on the one it is about to be used on. */
   private async probeAt(credential: Credential, site: string | null): Promise<void> {
-    if (credential.site === null && site) await this.probe(credential.provider as ConnectionProvider, site, decryptSecret(credential.secret, this.key) ?? '');
+    if (credential.site === null && site) await this.probe(credential.provider as ConnectionProvider, site, decryptSecret(credential.secret, this.key, slots.credential(credential, 'secret')) ?? '');
   }
 
   /** Points the workspace's connection for this account (or this credential) at it, or creates one. */
@@ -190,7 +192,8 @@ export class ConnectionsService {
       await this.credentials.rotate(current, secret, account);
       return this.get(id);
     }
-    const credential = await this.credentials.saveToken(userId, row.provider as ConnectionProvider, row.site, secret, this.encrypt(secret), account);
+    this.assertKey();
+    const credential = await this.credentials.saveToken(userId, row.provider as ConnectionProvider, row.site, secret, account);
     await this.prisma.connection.update({ where: { id }, data: onCredential(credential) });
     return this.get(id);
   }
@@ -409,13 +412,9 @@ export class ConnectionsService {
     };
   }
 
-  private encrypt(plaintext: string): string {
-    try {
-      return encryptSecret(plaintext, this.key);
-    } catch (err) {
-      if (err instanceof MissingEncryptionKeyError) throw new BadRequestException(t('error.connector.encryptionKeyMissing'));
-      throw err;
-    }
+  /** A pasted secret is sealed where its credential row is chosen; this refuses it first when it could not be. */
+  private assertKey(): void {
+    if (!this.key) throw new BadRequestException(t('error.connector.encryptionKeyMissing'));
   }
 }
 

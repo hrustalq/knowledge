@@ -107,8 +107,9 @@ async function arbitrate(
         svc.decision.noul(
           decision,
           {
-            pageA: { title: titleOf.get(pair.a.documentId), passage: wrapUntrusted(pair.a.text, 'arbiter', 'page') },
-            pageB: { title: titleOf.get(pair.b.documentId), passage: wrapUntrusted(pair.b.text, 'arbiter', 'page') },
+            // The title rides inside the wrapper, as in the judge's prompt below (#1141).
+            pageA: { passage: wrapUntrusted(`Page: ${titleOf.get(pair.a.documentId)}\n\n${pair.a.text}`, 'arbiter', 'page') },
+            pageB: { passage: wrapUntrusted(`Page: ${titleOf.get(pair.b.documentId)}\n\n${pair.b.text}`, 'arbiter', 'page') },
           },
           CONTRADICTION_QUESTION,
         ),
@@ -141,8 +142,8 @@ async function arbitrate(
           {
             role: 'user',
             content:
-              `Passage A, from the page "${titleA}":\n${wrapUntrusted(pair.a.text, 'arbiter', 'page')}\n\n` +
-              `Passage B, from the page "${titleB}":\n${wrapUntrusted(pair.b.text, 'arbiter', 'page')}`,
+              `Passage A:\n${wrapUntrusted(`Page: ${titleA}\n\n${pair.a.text}`, 'arbiter', 'page')}\n\n` +
+              `Passage B:\n${wrapUntrusted(`Page: ${titleB}\n\n${pair.b.text}`, 'arbiter', 'page')}`,
           },
         ],
         { json: true },

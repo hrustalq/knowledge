@@ -23,6 +23,7 @@ import { DocumentsService } from './documents.service.js';
 import { parseAgentMentions } from './mentions.js';
 import { t, withLocale } from '../i18n/t.js';
 import { parseModelJson } from '../common/model-json.js';
+import { wrapUntrusted } from '../common/untrusted.js';
 
 /**
  * Which discussion an agent was mentioned in. The two thread tables are
@@ -430,10 +431,15 @@ export class MentionRepliesService {
       });
       if (mr) {
         revisionId = mr.sourceBranch.headRevisionId ?? undefined;
+        // Everything a person wrote is DATA (#1102): through the one wrapper,
+        // which a title or description cannot close.
         parts.push(
-          `<merge_request>\nTitle: ${mr.title}\nStatus: ${mr.status}\nMerging: ${mr.sourceBranch.name} → ${mr.targetBranch.name}\n${
-            mr.description ? `Description: ${mr.description}\n` : ''
-          }</merge_request>`,
+          wrapUntrusted(
+            `Merge request: ${mr.title}\nStatus: ${mr.status}\nMerging: ${mr.sourceBranch.name} → ${mr.targetBranch.name}` +
+              (mr.description ? `\nDescription: ${mr.description}` : ''),
+            'merge_request',
+            'discussion',
+          ),
         );
       }
     }
@@ -454,17 +460,22 @@ export class MentionRepliesService {
       if (anchor && 'quote' in anchor && typeof anchor.quote === 'string') anchorQuote = anchor.quote;
       else if (anchor && 'excerpt' in anchor && typeof anchor.excerpt === 'string') anchorQuote = anchor.excerpt;
       if (anchorQuote) {
-        parts.push(`<passage_under_discussion>\n${anchorQuote}\n</passage_under_discussion>`);
+        parts.push(wrapUntrusted(`The passage under discussion:\n${anchorQuote}`, 'passage', 'document'));
       }
 
       // Pending siblings carry no text yet, and an agent reading its own empty
       // placeholder as a turn in the conversation is a confusing way to start.
-      const said = thread.comments
-        .filter((c) => !c.pending && c.body.trim().length > 0)
+      const spoken = thread.comments.filter((c) => !c.pending && c.body.trim().length > 0);
+      // The comment that mentioned the agent is the asker's own request, like a
+      // chat message; the comments before it are the discussion's DATA.
+      const asked = spoken.at(-1);
+      const said = spoken
+        .slice(0, -1)
         .map((c) => `${c.agentKey ? `${c.agentKey} (agent)` : 'A reviewer'} wrote:\n${c.body}`)
         .join('\n\n');
       question = thread.comments.at(-1)?.body ?? '';
-      parts.push(`<discussion>\n${clamp(said, MAX_THREAD_CHARS)}\n</discussion>`);
+      if (said) parts.push(wrapUntrusted(clamp(said, MAX_THREAD_CHARS), 'discussion', 'discussion'));
+      if (asked) parts.push(`The comment that mentioned you:\n${clamp(asked.body, MAX_THREAD_CHARS)}`);
     }
 
     const [content, page] = await Promise.all([
@@ -475,15 +486,18 @@ export class MentionRepliesService {
       }),
     ]);
     if (content) {
-      const title = (page?.title ?? '').replace(/"/g, "'");
       parts.push(
-        `<page title="${title}" category="${page?.category ?? ''}">\n${clamp(
-          content.markdown,
-          MAX_PAGE_CHARS,
-        )}\n</page>`,
+        wrapUntrusted(
+          `Title: ${page?.title ?? ''}${page?.category ? `\nCategory: ${page.category}` : ''}\n\n${clamp(content.markdown, MAX_PAGE_CHARS)}`,
+          'page',
+          'document',
+        ),
       );
     }
 
+    // The request last, after its context, where the model reads it as the turn.
+    const request = parts.findIndex((p) => p.startsWith('The comment that mentioned you:'));
+    if (request >= 0) parts.push(...parts.splice(request, 1));
     return { prompt: parts.join('\n\n'), question };
   }
 

@@ -13,6 +13,215 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.54.0] — 2026-11-14
+
+### Breaking
+
+- `POST /v1/chat/link` no longer links the messenger account. It returns the account, the bot and a six-digit
+  `proof`; the account is linked when that number is sent to the bot from the private chat the link came from.
+  `HTTP` **Migration:** show `proof` to the person and tell them to send it to the bot themselves; read the link
+  from `GET /v1/me/chat-identities` afterwards. (#1104)
+- MCP tools that return page text (`knowledge_search`, `knowledge_get_document_content`, `knowledge_get_document`,
+  `knowledge_get_draft`, merge-request reads and diffs, graph and relation reads, template reads and more; the full
+  list is in `test/mcp-page-text.spec.ts`) now answer with one line of plain JSON — ids, cite labels, trust status,
+  counts, dates — followed by the titles, snippets, markdown and diffs inside one `<documents>` block that marks
+  them as data. `MCP` **Migration:** parse the first line as JSON for ids; read page text from the block, or merge the
+  two as `readPageText` in `apps/api/src/common/page-text.ts` does. A result with no page text is the JSON line
+  alone. (#1136)
+- Creating or editing a connector whose URL carries a login (`https://user:token@host/…`) is refused with 400
+  `error.connector.urlCredentials`: connector settings are shown to every member who can see the connector, so a
+  token there was readable by all of them. `HTTP` **Migration:** remove the login from the URL and paste the token
+  as the connector's credential. Connectors saved that way before keep running until they are next edited. (#1114)
+- The MCP resources `knowledge://documents/{id}.md` and the workspace and project `llms.txt` now return their text
+  inside one `<documents>` block that marks it as data, as the page-text tools already do. `MCP` **Migration:** read
+  the text from inside the block, or use `readPageText` in `apps/api/src/common/page-text.ts`. (#1141)
+
+### Changed
+
+- The address a request is counted and recorded as is now the right-most `X-Forwarded-For` entry that is not a
+  private address, rather than the first one, so a client can no longer choose its own address for rate limits
+  and audit rows by sending the header itself. An inbound `X-Request-Id` is kept only when it is 8–64 letters,
+  digits, `-` or `_` (a UUID fits); anything else gets a fresh id. (#1112)
+- A custom agent with no tool list no longer gets MCP plugin tools; an empty list now means the built-in tools only.
+  To keep a plugin's tools, name them (`mcp__<slug>__<tool>`) in the agent's tool list. (#1141)
+- "New workspace" is offered only when the API would allow it (signup open, or a platform admin), and `GET /v1/me`
+  carries `canCreateWorkspace`. (#1140)
+
+### Fixed
+
+- A share link's token no longer appears in logs: the API's and the web app's request logs, error records and the
+  Caddy access log now mask the token in `/v1/public/shares/<token>/…` and `/s/<token>/…`. A malformed cookie no
+  longer fails the request with a server error. (#1112)
+- API and git remote responses no longer say they run on Express, and every API response tells the browser not to
+  guess its content type. (#1114)
+- A page can no longer give instructions to the coding agent reading it over MCP: page text in MCP tool results now
+  arrives marked as data, as it already did for the assistant. Results are about the same size as before. (#1136)
+- Over git, a clone or fetch now follows the workspace's history setting: when history is kept to editors, a viewer
+  (or a read-only key) can no longer clone. Pushing a new top-level page now needs edit on the project, as creating
+  it in the app does. A pushed file larger than a page may be is refused before it is read. Merging a merge request
+  by pushing a merge commit now lands only what merging it in the app would; a merge commit that changes the
+  reviewed text, or leaves it out, is refused, and a conflict resolved locally is pushed to the merge request's
+  branch first. (#1107)
+- A key that may only capture memories can no longer overwrite or delete them: a retain under a `graph:` or `file:`
+  document id is refused, and writing a file over an existing one needs an editor. (#1108)
+- One editor, connected repository or remote host can no longer exhaust the server's memory with a single large
+  file: uploaded page bodies, slide decks, Word documents, repository archives, Drive files, web-source pages, design
+  renders and search bodies now stop at a size limit instead of being read whole first. A bad page size or tree depth
+  on the documents list is no longer an error, a code search with a runaway pattern stops after two seconds, and an
+  avatar upload id must be the one the upload step returned. (#1109)
+- The outbound address filter now also refuses multicast, reserved, benchmarking and protocol-assignment ranges and
+  IPv6 forms that carry an IPv4 address (6to4, Teredo). Slack and Teams replies no longer follow a redirect. (#1110)
+
+- Linking a Telegram, Mattermost or Time account can no longer be done for you by someone who sends you their link.
+  Confirming on the web now shows a six-digit number that you send to the bot from your own private chat with it;
+  five wrong numbers spend the link. You get a notification whenever an account is linked to you. Buttons on
+  Mattermost and Time messages now work only in the channel they were posted in and for 30 days; buttons posted
+  before this release stop working. (#1104)
+- Page text, titles, comments, attached files and plugin results can no longer pass themselves off as instructions
+  to the assistant or the agents by closing the block that marks them as data. The current page, applied pages and
+  attachments now reach the model beside your question rather than among its instructions. (#1102)
+- A QA server run no longer stores, shows or sends to another host a value captured from a request a stored secret
+  was filled into, whatever the capture is called. (#1103)
+- With open web access, the assistant fetches a web address with its query only when you typed it or a web search
+  returned it; any other address loses its query and must be short. An agent with a tool list no longer gets MCP
+  plugin tools it does not name, and chat bots are never offered them. (#1105)
+- A signed agent webhook resent with a new delivery id no longer starts a second run. Stored credentials are now
+  bound to the row they were saved in, so one copied elsewhere does not decrypt there; existing credentials keep
+  working and are re-sealed the next time they are saved. An AI key that no longer decrypts is shown as such on the
+  provider and calls go without it, instead of quietly switching to the server's key. (#1106)
+- Text a model wrote no longer loads anything from another site by itself. In assistant answers, agent replies in
+  threads, workflow drafts, merge requests an agent opened and a published site's Ask answers, an external image
+  now shows as a link you can choose to open, other media is dropped, and a diagram cannot fetch remote styles.
+  Images attached to pages still show. The member app now sends a first Content-Security-Policy: forms may only
+  post to the app, the page base cannot be changed, embedded objects load only from the app (and its file storage),
+  and the app cannot be framed. (#1099)
+- Setting up a connector no longer keeps the pasted token or webhook secret in the browser's storage. A setup you
+  resume asks for the token again. Signing out now also removes an unfinished connector setup and every page edit
+  not yet published from this browser. (#1101)
+- A page title containing `` $` ``, `$'` or `$&` no longer breaks the app for everyone who can see it in the sidebar.
+  The server used to expand those patterns when it built the page, which duplicated the document and stopped the app
+  from loading its state. (#1100)
+- Comments, merge-request descriptions, assistant answers and shared pages can no longer carry a stylesheet, a form,
+  form controls or inline styles. These used to survive the sanitizer, so one comment could restyle or hide parts of
+  the app, or place an invisible button that posted to another site. A diagram keeps the width set for it. (#1098)
+- Live updates stop when access does. An open live connection is checked again every 30 seconds, so signing out,
+  revoking a key, a disabled account or removal from the workspace ends it within one check. The live socket no
+  longer accepts an API key or session token in its address; it takes the single-use ticket the web already uses, or
+  a header. (#1097)
+- A workspace's directory sync (SCIM) can no longer sign someone out everywhere. Without a domain the workspace has
+  verified, deactivating a person ends only the sessions that workspace's own single sign-on opened. (#1096)
+- Connecting GitHub, Figma or Plaud now finishes only in the browser that started it, signed in as the same person,
+  so an authorization link forwarded to a colleague cannot store their account as yours. A single sign-on link
+  likewise completes only in the browser that began the sign-in. (#1095)
+- When single sign-on or directory sync first links an account whose address was never confirmed, whoever registered
+  that address first loses their password, sessions, API keys and linked chat accounts, and the address counts as
+  confirmed. Directory sync can move an address only to another domain the workspace verified. (#1094)
+- The API no longer starts with `NODE_ENV=production` and `AUTH_MODE=none` unless `AUTH_ALLOW_NONE_IN_PRODUCTION=true`.
+  Password-reset and confirmation tokens are returned in the response only with the new `AUTH_ECHO_TOKENS=true`
+  (development only; refused in production), no longer whenever `NODE_ENV` is unset. (#1093)
+- Forgot-password, reset-password, email confirmation, signup and change-password now have rate limits.
+  Change-password, signing out one of your sessions, editing or removing a connected account and linking a chat
+  account now need a signed-in session, not an API key, and a key limited to one workspace cannot create another.
+  Sign-in takes the same time whether or not an address is registered. (#1092)
+- A profile is visible only to people who share a workspace with that person, and whether they are a platform admin,
+  have a password or have an API key only to themselves and platform admins. The add-member picker finds an account
+  only by its full email address, except for platform admins, and with signup turned off only a platform admin can
+  create a workspace. (#1091)
+- Several smaller surfaces now check the page they act on. Acting on an agent's finding re-checks the page it cites
+  (or where its draft would land) at the moment you act. Editing or revoking a share link needs edit on its page, an
+  ingestion job is readable only by people who can read its page and branch, and a profile's open-work counts leave
+  out pages the reader cannot open. "Save to knowledge base" on an assistant reply now follows the captures switch,
+  and an MCP tool that names a memo, page or run in another workspace is refused. (#1090)
+- A memo's analysis is now as private as the memo. Other members no longer see its summary or drafted pages in the
+  agent runs list or the run page, cannot act on its findings, and a memo's draft can no longer be published
+  directly as a page; it opens as a merge request. (#1089)
+- Moving a page under another page, or into another project, now needs the same access as creating a page there. An
+  editor can no longer move a page into a restricted area they cannot open, which used to hide it from everyone,
+  themselves included. (#1087)
+- A restricted project no longer shows its name, description or release tags to members without access, in the
+  activity feed, live updates, the release tag list, the graph timeline or over MCP. After a page or project is
+  deleted, its activity is shown only to workspace admins, so a deleted restricted project leaves nothing readable
+  behind. (#1088)
+- A workflow run follows its source page's permissions. Starting one needs edit on the page, and a run on a page you
+  cannot open no longer shows in the run list, opens, or takes review actions, in the app or over MCP. (#1085)
+- An import in progress belongs to whoever uploaded it. Other members can no longer open its staged text, submit it or
+  discard it (a workspace admin still can), and the "parsed" and "failed" notices go only to the uploader. Importing
+  into a project or under a page you could not create a page in is now refused, as creating the page directly is.
+  A file named `parsed.md` no longer has its upload overwritten by its own parse. (#1086)
+
+### Security
+
+- Production dependencies updated to releases without known high or critical advisories on paths the app uses:
+  the MCP SDK, undici, zod, Nest and its Express adapter (multer), the web server's express, compression and
+  axios, DOMPurify and vue-i18n, plus their transitive packages. (#1111)
+- Members denied a restricted project no longer see its connectors' names in the activity feed or in live run
+  frames, nor `capture.approved` frames about it. A memo's or a restricted project's agent run is announced only to
+  the person who started it. (#1140)
+- A learning can no longer cite a finding of an agent run its author may not read, and a learning's evidence from
+  such a run is counted, never named. (#1140)
+- Adding, changing or removing a project's glossary term now takes edit on that project, from the glossary routes
+  and from a finding's "Add to glossary". Workflow pages, and the draft pages the component, ticket and memo
+  sweepers propose, are checked against where they land when they are written, not only when the run started. (#1140)
+- SCIM no longer links an existing account whose address was never confirmed unless the workspace has verified that
+  domain (409, no membership). The email-first sign-in page no longer offers a provider for a domain its workspace
+  never proved. (#1140)
+- `POST /v1/auth/resend-verification` answers 429 past 3 a minute per account or 10 per address. Signing in to a
+  disabled account now takes as long as a wrong password. Live update streams close when their credential cannot be
+  re-checked (database unreachable) or when the person lost platform-admin rights; the web client reconnects. (#1143)
+- A replayed GitHub or repository webhook delivery is ignored for 90 days, so it can no longer restart agent runs,
+  overwrite newer ticket state or queue a drift check of an old commit. (#1143)
+- Relation extraction, the assistant's review and suggest, `global_overview` and the curator, cartographer, digest
+  and arbiter agents now pass page text and titles to the model as untrusted data. A page can no longer close its
+  untrusted block with a zero-width or fullwidth spelling of the closing tag. (#1141)
+- The five-attempt cap on the chat account-linking number now holds when several wrong numbers arrive at once. (#1141)
+- Share links and published site pages send `X-Content-Type-Options: nosniff` and a Content-Security-Policy
+  (`base-uri 'none'`, `form-action 'self'`, a narrow `object-src`, `frame-ancestors 'none'` except the Ask widget's
+  own embed list). Glossary definitions and the source-recipe preview render as untrusted, so a remote image in them
+  shows as a link. Signing out also clears try-it values (third-party API tokens and passwords) and project and
+  workflow wizard drafts. (#1142)
+- `GET /v1/connectors` no longer returns a login embedded in a connector URL saved before such URLs were refused.
+  (#1142)
+- An external image in a page, comment or glossary card no longer loads from its own host in the reader's browser:
+  the member app fetches it through the API (`GET /v1/image-proxy`, signed-in readers only), so whoever wrote the
+  markdown cannot log who read it. The proxy refuses private addresses and anything that is not an image, sends the
+  host no cookie or referrer, and serves SVG inert. The member app's Content-Security-Policy now carries `img-src`
+  (the app, attachments, and the third-party avatars and Figma thumbnails its own screens show). Share links and
+  published sites still load page images directly. (#1133)
+
+### Operations
+
+- Migration `20270124100000_chat_link_proof` adds four columns to `chat_link_codes` (nullable, or with a default);
+  rolling back leaves them unused. No new env vars. Link codes confirmed before the upgrade but not yet used need
+  confirming again. (#1104)
+- New env vars, all with defaults and none required in production: `REVISION_MAX_BYTES` (52428800: the largest page
+  body finalize or a git push accepts), `ARCHIVE_MAX_INFLATED_BYTES` (536870912: what a slide deck, Word document or
+  repository archive may inflate to, and what a repository download may weigh) and `FETCH_MAX_BYTES` (10485760: the
+  largest embed render read from Figma). No migration. (#1107, #1109)
+- The deploy workflow refuses a tag that is not `vX.Y.Z`, runs every action from a pinned commit and checks
+  kubeseal against its published sha256. A changed `deploy.yml` can be held by GitHub until approved on the run.
+  Dependabot now opens weekly grouped update PRs into `dev` (npm, GitHub Actions, compose images). Repository
+  settings this repo cannot set: enable Dependabot alerts, add a tag ruleset restricting who may create `v*`, and
+  give the `production` environment a required reviewer. `scripts/env-to-github.mjs` now files any URL carrying a
+  login as a secret. (#1111, #1113)
+- `docker-compose.yml` (development) publishes its datastores on `127.0.0.1` only; reach them from another
+  machine through an SSH tunnel. `docker-compose.prod.yml` and the Dockerfiles pin their base images by digest.
+  The Caddyfile's access-log filter changed (synced to the cluster with the release). No new env vars, no
+  migration. (#1112, #1114)
+- `AUTH_REQUIRE_VERIFIED_EMAIL` now defaults to `true` when `NODE_ENV=production` and the line is missing (an
+  explicit `false` still wins). Production sets it explicitly, so nothing changes as deployed. (#1143)
+- On first boot the API re-seals every legacy `gcm$` secret envelope to its row (`gcm2$`) and logs
+  `Legacy secret envelopes: N re-sealed, M unreadable under this key`; a non-zero `unreadable` means rows sealed
+  under another key, already unusable. Redis now keeps one small `kn:wh:*` key per webhook delivery for 90 days, so
+  GitHub's "Redeliver" on a delivery that already succeeded does nothing. No new env vars, no migration. (#1141,
+  #1143)
+- A connector still holding `https://user:token@…` keeps syncing, but its edit form now shows the URL without the
+  login and saving drops it: move the token into the connector credential and rotate it, since every viewer of the
+  connector list could read it until this release. Dev compose pins `mailpit` and `keycloak` by digest. (#1142)
+- New env vars, both optional with defaults: `IMAGE_PROXY_ALLOW_PRIVATE_URLS` (API, `false`; set `true` on a
+  self-hosted deployment whose pages hotlink intranet images, which otherwise stop loading) and `CSP_IMAGE_ORIGINS`
+  (web, empty; space-separated origins the app's own screens show pictures from, such as a self-hosted GitLab's or
+  Jira's account avatars, which otherwise appear broken). No migration. (#1133)
+
 ## [0.53.2] — 2026-11-13
 
 ### Changed
@@ -7093,7 +7302,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.53.2...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.54.0...HEAD
+[0.54.0]: https://github.com/hrustalq/knowledge/compare/v0.53.2...v0.54.0
 [0.53.2]: https://github.com/hrustalq/knowledge/compare/v0.53.1...v0.53.2
 [0.53.1]: https://github.com/hrustalq/knowledge/compare/v0.53.0...v0.53.1
 [0.53.0]: https://github.com/hrustalq/knowledge/compare/v0.52.1...v0.53.0

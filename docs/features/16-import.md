@@ -33,7 +33,9 @@ and coming back rejoins the same parse (`kn_import_active` in sessionStorage).
 document does — that is the whole point. `import_jobs` is its own table.
 
 The parsed markdown is **not** stored in that row: it goes to
-`workspaces/{ws}/imports/{id}/parsed.md` beside the original, keeping the
+`workspaces/{ws}/imports/{id}/parsed.md` beside the original (stored as
+`source`, never under the uploaded name, so a file called `parsed.md` is not
+overwritten by its own parse), keeping the
 three-store split honest (PG = transactional truth, MinIO = bytes) and keeping
 the row the wizard polls every second small.
 
@@ -94,6 +96,15 @@ The house rule, applied twice:
 ACLs use a new `'import'` `WorkspaceSource`: `:id` → owning workspace, resolved
 in Postgres before the handler runs. It is the only thing standing between one
 tenant's import id and another tenant's staged file.
+
+Inside the workspace an import is its uploader's (#1086). The staged markdown
+is a whole file nobody has reviewed yet, and no page exists to carry a
+restriction. `ImportService.require` answers 404 to anyone but the uploader or
+a workspace admin, on every `:id` route. The `import.parsed` / `import.failed`
+frames are addressed to the uploader (`userId`), like `export.*`. Reserving and
+submitting both ask `requireCreateUnder` of the destination, the check
+`POST /v1/documents` makes. Submit asks again because it may change the
+destination and grants may have changed since the upload.
 
 ## Web
 

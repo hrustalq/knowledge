@@ -10,7 +10,7 @@ import { ACTIVITY_KINDS, activityKindFor, FRESHNESS_ACTIONS } from '@knowledge/c
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { activeTransaction } from '../prisma/transaction.js';
-import { hidesAnything, visibilitySql, type AccessScope } from '../permissions/access-scope.js';
+import { visibilitySql, type AccessScope } from '../permissions/access-scope.js';
 import { actorIdentities, DEV_ACTOR } from './actor.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 
@@ -88,6 +88,9 @@ export class ActivityService {
         workspaceId: input.workspaceId,
         documentId: input.documentId,
         subjectId: input.subjectId,
+        // A page-less row's frame carries its project, so `LiveVisibility`
+        // keeps a restricted project's connector or capture from every member (#1140).
+        ...(!input.documentId && projectId ? { projectId } : {}),
         actor: input.actor ?? DEV_ACTOR,
         title: typeof input.metadata?.title === 'string' ? input.metadata.title : undefined,
         ...(input.patch ? { patch: input.patch } : {}),
@@ -123,6 +126,15 @@ export class ActivityService {
       return doc?.projectId ?? null;
     }
     if (input.subjectId && input.action.startsWith('project.')) return input.subjectId;
+    // A connector belongs to one project (#1140): its rows name the connector,
+    // which a member denied that project must not read in the feed.
+    if (input.subjectId && input.action.startsWith('connector.')) {
+      const connector = await this.prisma.connector.findUnique({
+        where: { id: input.subjectId },
+        select: { projectId: true },
+      });
+      return connector?.projectId ?? null;
+    }
     return null;
   }
 
@@ -238,9 +250,18 @@ export class ActivityService {
    * eight characters would be worse than showing none.
    *
    * Visibility (#76): a row about a page the caller cannot open is left out,
-   * metadata and all. A row about a page that is gone stays, as it did. A
-   * guest, who reads nothing they were not granted, sees only rows about a page
-   * they can open — never the workspace-level ones (settings, connectors).
+   * metadata and all. A guest, who reads nothing they were not granted, sees
+   * only rows about a page they can open — never the workspace-level ones
+   * (settings, connectors).
+   *
+   * A row is judged by its page when it has one, else by its project (#1088):
+   * a project row (`project.created` / `updated`, with its name and the
+   * description it changed) is left out where the project is denied to the
+   * caller. A row about a page or project that is gone reaches only those who
+   * see everything — the rule `LiveVisibility` applies to frames. Once a
+   * restricted project is deleted nothing records that it was restricted, so
+   * "gone" is the only safe reading, and it holds for rows written before
+   * this rule. A page moved out of a deleted project keeps its history.
    */
   private conditionsFor(workspaceId: string, opts: ActivityFilter, scope: AccessScope): Prisma.Sql[] {
     const where: Prisma.Sql[] = [Prisma.sql`a."workspace_id" = ${workspaceId}::uuid`];
@@ -250,13 +271,21 @@ export class ActivityService {
     if (opts.actor) where.push(Prisma.sql`a."actor" = ANY(${actorIdentities(opts.actor)}::text[])`);
     if (opts.from) where.push(Prisma.sql`a."created_at" >= ${opts.from}`);
     if (opts.to) where.push(Prisma.sql`a."created_at" <= ${opts.to}`);
-    if (scope.guest && !scope.bypass) {
+    if (scope.bypass) return where;
+    if (scope.guest) {
       where.push(Prisma.sql`EXISTS (SELECT 1 FROM "documents" d
         WHERE d."id" = a."document_id" AND ${visibilitySql(scope, 'd')})`);
-    } else if (hidesAnything(scope)) {
-      where.push(Prisma.sql`NOT EXISTS (SELECT 1 FROM "documents" d
-        WHERE d."id" = a."document_id" AND NOT (${visibilitySql(scope, 'd')}))`);
+      return where;
     }
+    const projectSeen =
+      scope.denied.size > 0
+        ? Prisma.sql`EXISTS (SELECT 1 FROM "projects" p WHERE p."id" = a."project_id" AND NOT (p."id" = ANY(${[...scope.denied]}::uuid[])))`
+        : Prisma.sql`EXISTS (SELECT 1 FROM "projects" p WHERE p."id" = a."project_id")`;
+    where.push(Prisma.sql`(CASE
+      WHEN a."document_id" IS NOT NULL THEN EXISTS (SELECT 1 FROM "documents" d
+        WHERE d."id" = a."document_id" AND ${visibilitySql(scope, 'd')})
+      WHEN a."project_id" IS NOT NULL THEN ${projectSeen}
+      ELSE TRUE END)`);
     return where;
   }
 }

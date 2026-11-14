@@ -366,6 +366,7 @@
     "agentWebhookDeliveryId": "X-Knowledge-Delivery is missing or invalid: 1–200 letters, digits and . _ : -",
     "skillNoUpstream": "Skill {id} has no upstream change to accept",
     "findingComponentDraft": "A component draft opens as a merge request, never as a published page.",
+    "findingMemoDraft": "A memo's draft opens as a merge request, never as a published page.",
     "findingNoTerm": "This finding proposes no glossary term.",
     "findingTermAdded": "This finding has already been added to the glossary."
   },

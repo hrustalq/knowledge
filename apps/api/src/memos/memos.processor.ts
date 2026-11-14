@@ -19,6 +19,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { asLocale } from '../i18n/locale.js';
 import { t, withLocale } from '../i18n/t.js';
+import { MEMO_RUN_PREFIX } from '../ai/run-privacy.js';
 import { SPEAKER_CHUNK_SECONDS, SPEAKER_OVERLAP_SECONDS, detectPauses, fixedCuts, pauseCuts, probeSeconds, splitAudio } from './audio.js';
 import { MEMO_QUEUE } from './memos.constants.js';
 import { TranscriptionClient } from './transcription.client.js';
@@ -195,7 +196,7 @@ export class MemosProcessor extends WorkerHost {
           agentKey: 'secretary',
           agentId: override?.id ?? null,
           trigger: 'manual',
-          subjectKey: `memo:${row.id}`,
+          subjectKey: `${MEMO_RUN_PREFIX}${row.id}`,
           createdBy: row.createdBy,
           locale: row.locale,
           input: input as unknown as Prisma.InputJsonValue,

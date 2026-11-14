@@ -17,6 +17,9 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- A memo's analysis is now as private as the memo. Other members no longer see its summary or drafted pages in the
+  agent runs list or the run page, cannot act on its findings, and a memo's draft can no longer be published
+  directly as a page; it opens as a merge request. (#1089)
 - Moving a page under another page, or into another project, now needs the same access as creating a page there. An
   editor can no longer move a page into a restricted area they cannot open, which used to hide it from everyone,
   themselves included. (#1087)

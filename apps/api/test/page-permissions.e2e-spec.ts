@@ -521,6 +521,77 @@ describe('page permissions (e2e, #76)', () => {
     });
   });
 
+  describe("a memo's analysis (#1089)", () => {
+    // Not `word`: the shared pages carry it, and these assertions read whole bodies.
+    const memoWord = `mumble${nonce}`;
+    let runId: string;
+    const runsOf = async (p: Person) =>
+      (
+        await http().get('/v1/ai/agents/runs').query({ workspaceId: WORKSPACE, agentKey: 'secretary' }).set(as(p)).expect(ok(200))
+      ).body;
+
+    beforeAll(async () => {
+      // Shaped as MemosProcessor.analyse and the secretary leave it: the run is
+      // the uploader's, and its findings draft pages from a private recording.
+      runId = (
+        await prisma.agentRun.create({
+          data: {
+            workspaceId: WORKSPACE,
+            agentKey: 'secretary',
+            trigger: 'manual',
+            subjectKey: `memo:${randomUUID()}`,
+            createdBy: people.alice.id,
+            status: 'succeeded',
+            input: { memo: { memoId: randomUUID() } },
+            summary: `Memo summary ${memoWord}`,
+            findings: [
+              {
+                kind: 'gap',
+                severity: 'info',
+                title: `Draft ${memoWord}`,
+                detail: `Said in the recording: ${memoWord}`,
+                documentIds: [],
+                documentTitles: [],
+                draft: { title: `Draft ${memoWord}`, markdown: `# Draft\n\n${memoWord}` },
+              },
+            ],
+          },
+        })
+      ).id;
+    });
+
+    afterAll(async () => {
+      if (runId) await prisma.agentRun.deleteMany({ where: { id: runId } });
+    });
+
+    it('lists and opens the run for its uploader only', async () => {
+      expect(JSON.stringify(await runsOf(people.alice))).toContain(runId);
+      // Not even a workspace admin: a memo is its uploader's (MemosService.require).
+      for (const p of [people.bob, people.admin]) {
+        const body = await runsOf(p);
+        expect(JSON.stringify(body)).not.toContain(memoWord);
+        expect(JSON.stringify(body)).not.toContain(runId);
+      }
+      expect(await status(people.alice, `/v1/ai/agents/runs/${runId}?workspaceId=${WORKSPACE}`)).toBe(200);
+      const other = await http().get(`/v1/ai/agents/runs/${runId}`).query({ workspaceId: WORKSPACE }).set(as(people.bob));
+      expect(other.status).toBe(404);
+      expect(JSON.stringify(other.body)).not.toContain(memoWord);
+    });
+
+    it("answers 404 to someone else's finding verbs, and never publishes a memo draft directly", async () => {
+      const verb = (p: Person, name: string) =>
+        http().post(`/v1/ai/agents/runs/${runId}/findings/0/${name}`).query({ workspaceId: WORKSPACE }).set(as(p)).send({});
+      for (const name of ['create-page', 'dismiss', 'mark-outdated', 'propose']) {
+        const res = await verb(people.bob, name);
+        expect([name, res.status]).toEqual([name, 404]);
+      }
+      const before = await prisma.document.count({ where: { workspaceId: WORKSPACE, title: `Draft ${memoWord}` } });
+      // The uploader's drafts open as merge requests (MemoPublishSweeper), as component drafts do.
+      expect((await verb(people.alice, 'create-page')).status).toBe(400);
+      expect(await prisma.document.count({ where: { workspaceId: WORKSPACE, title: `Draft ${memoWord}` } })).toBe(before);
+    });
+  });
+
   describe('glossary (#712)', () => {
     let termId: string;
     const glossaryTitle = async (p: Person) => {

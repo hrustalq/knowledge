@@ -14,6 +14,7 @@ import type {
   ProposeRelationsResponse,
 } from '@knowledge/contracts';
 import { composeFrontmatter, withComponentPaths } from '../common/frontmatter.js';
+import { isMemoRun, mayReadRun } from './run-privacy.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
@@ -88,7 +89,7 @@ export class AgentFindingsService {
     principal: Principal,
     learning?: { text: string; projectId?: string | null; allAgents?: boolean },
   ): Promise<DismissAgentFindingResponse> {
-    const { run } = await this.findingOf(workspaceId, runId, index);
+    const { run } = await this.findingOf(workspaceId, runId, index, principal);
 
     const at = new Date().toISOString();
     const won = await this.prisma.$transaction(async (tx) => {
@@ -145,7 +146,7 @@ export class AgentFindingsService {
     index: number,
     principal: Principal,
   ): Promise<ProposeAgentFindingResponse> {
-    const { run, finding } = await this.findingOf(workspaceId, runId, index);
+    const { run, finding } = await this.findingOf(workspaceId, runId, index, principal);
     if (finding.mergeRequestId) {
       throw new ConflictException({
         statusCode: 409,
@@ -232,7 +233,7 @@ export class AgentFindingsService {
     index: number,
     principal: Principal,
   ): Promise<FlagFindingOutdatedResponse> {
-    const { run, finding } = await this.findingOf(workspaceId, runId, index);
+    const { run, finding } = await this.findingOf(workspaceId, runId, index, principal);
     if (finding.kind !== 'stale') throw new BadRequestException(t('error.ai.findingNotStale'));
     const documentId = finding.documentIds[0];
     if (!documentId) throw new BadRequestException(t('error.ai.findingNoDocument'));
@@ -274,7 +275,7 @@ export class AgentFindingsService {
     principal: Principal,
     edits: { term?: string; definition?: string; aliases?: string[] } = {},
   ): Promise<AddFindingTermResponse> {
-    const { run, finding } = await this.findingOf(workspaceId, runId, index);
+    const { run, finding } = await this.findingOf(workspaceId, runId, index, principal);
     const proposed = finding.term;
     if (!proposed) throw new BadRequestException(t('error.ai.findingNoTerm'));
     if (finding.termId) {
@@ -329,12 +330,14 @@ export class AgentFindingsService {
     index: number,
     principal: Principal,
   ): Promise<CreatePageFromFindingResponse> {
-    const { run, finding } = await this.findingOf(workspaceId, runId, index);
+    const { run, finding } = await this.findingOf(workspaceId, runId, index, principal);
     const draft = finding.draft;
     if (!draft?.title || !draft.markdown) throw new BadRequestException(t('error.ai.findingNoDraft'));
     // A component draft (#236) is never published directly: it opens as a
     // merge request (`proposePage`), and this button must not be a way round it.
     if ((run.input as AgentRunInput | null)?.component) throw new BadRequestException(t('error.ai.findingComponentDraft'));
+    // Nor is a memo's (#1089): `MemoPublishSweeper` opens it as a merge request.
+    if (isMemoRun(run)) throw new BadRequestException(t('error.ai.findingMemoDraft'));
     if (finding.documentIds.length > 0) {
       throw new ConflictException({
         statusCode: 409,
@@ -414,7 +417,7 @@ export class AgentFindingsService {
     principal: Principal,
     place: { projectId: string; parentId?: string | null },
   ): Promise<DraftPageProposalResponse> {
-    const { run, finding } = await this.findingOf(workspaceId, runId, index);
+    const { run, finding } = await this.findingOf(workspaceId, runId, index, principal);
     const draft = finding.draft;
     if (!draft?.title || !draft.markdown) throw new BadRequestException(t('error.ai.findingNoDraft'));
     if (finding.mergeRequestId) {
@@ -484,7 +487,7 @@ export class AgentFindingsService {
     index: number,
     principal: Principal,
   ): Promise<ProposeRelationsResponse> {
-    const { run, finding } = await this.findingOf(workspaceId, runId, index);
+    const { run, finding } = await this.findingOf(workspaceId, runId, index, principal);
     if (finding.mergeRequestId) {
       throw new ConflictException({
         statusCode: 409,
@@ -668,10 +671,21 @@ export class AgentFindingsService {
     return markdown;
   }
 
-  /** The run and its finding at `index`, both of this workspace: a 404 otherwise. */
-  private async findingOf(workspaceId: string, runId: string, index: number): Promise<{ run: AgentRun; finding: AgentFinding }> {
+  /**
+   * The run and its finding at `index`, both of this workspace and readable by
+   * `principal` (a memo's analysis is its uploader's, #1089): a 404 otherwise,
+   * so every verb follows the run's own visibility.
+   */
+  private async findingOf(
+    workspaceId: string,
+    runId: string,
+    index: number,
+    principal: Principal,
+  ): Promise<{ run: AgentRun; finding: AgentFinding }> {
     const run = await this.prisma.agentRun.findUnique({ where: { id: runId } });
-    if (!run || run.workspaceId !== workspaceId) throw new NotFoundException(t('error.ai.agentRunNotFound', { id: runId }));
+    if (!run || run.workspaceId !== workspaceId || !mayReadRun(run, principal)) {
+      throw new NotFoundException(t('error.ai.agentRunNotFound', { id: runId }));
+    }
     const findings = Array.isArray(run.findings) ? (run.findings as unknown as AgentFinding[]) : [];
     const finding = findings[index];
     if (!finding) throw new NotFoundException(t('error.ai.findingNotFound', { runId, index }));

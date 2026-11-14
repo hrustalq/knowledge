@@ -109,7 +109,7 @@ describe('the sentinel judging a source change', () => {
     };
     const client = {
       chat: vi.fn(async (_call: unknown, messages: Array<{ content: string }>) =>
-        messages[1]!.content.includes('documentId="a"')
+        messages[1]!.content.includes('(documentId a)')
           ? JSON.stringify({ drifted: true, severity: 'warning', title: 'Limit', detail: 'Says 100.', quote: '', markdown: null })
           : JSON.stringify({ drifted: false }),
       ),

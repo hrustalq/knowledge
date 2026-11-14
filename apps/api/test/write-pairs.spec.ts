@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { WIKI_AUTO_REGENERATE_CONFIG_KEY, WIKI_CONFIG_KEY } from '@knowledge/contracts';
 import { describe, expect, it, vi } from 'vitest';
 import { BadRequestException } from '@nestjs/common';
@@ -340,13 +341,14 @@ describe('#658 write pairs commit together', () => {
     });
   });
 
+  // #1104: the pair moved from the web confirmation to the number coming back from the chat.
   it('chat link: no spent code without an identity', async () => {
-    const { prisma, committed } = fakePrisma({ 'chatLinkCode.updateMany': { count: 1 }, 'chatIdentity.upsert': boom });
-    const svc = stub(new ChatIdentityService(prisma, {} as never, {} as never, {} as never, config({ CHAT_LINK_CODE_TTL_MINUTES: 10, WEB_BASE_URL: 'http://x' })), {
-      redeemable: async () => ({ row: { id: 'code1', externalUserId: '42', externalUserName: null, externalChatId: '42' }, integration: { id: 'int1', workspaceId: WS } }),
-      assertMember: async () => undefined,
-    });
-    await expect(svc.confirm('code', { userId: 'u1' } as never)).rejects.toThrow('boom');
+    const proofHash = createHash('sha256').update('code1:123456', 'utf8').digest('hex');
+    const row = { id: 'code1', externalUserId: '42', externalUserName: null, externalChatId: '42', confirmedBy: 'u1', proofHash, proofAttempts: 0 };
+    const { prisma, committed } = fakePrisma({ 'chatLinkCode.findFirst': row, 'chatLinkCode.updateMany': { count: 1 }, 'chatIdentity.upsert': boom });
+    const access = { principalFor: async () => ({ userId: 'u1' }), requireRole: async () => undefined };
+    const svc = new ChatIdentityService(prisma, access as never, {} as never, {} as never, config({ CHAT_LINK_CODE_TTL_MINUTES: 10, WEB_BASE_URL: 'http://x' }), {} as never, {} as never);
+    await expect(svc.redeemProof({ id: 'int1', workspaceId: WS, locale: 'en' } as never, { externalUserId: '42', chatId: '42' }, '123456')).rejects.toThrow('boom');
     expect(committed).toEqual([]);
   });
 

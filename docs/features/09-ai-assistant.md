@@ -74,8 +74,17 @@ context engineering / prompt injection:
   tools are enforced for every caller. `AssistantToolsService.execute` also
   refuses a write tool unless the context's `mode` is `agent` (absent means
   Ask).
-- Retrieved content is framed as untrusted data in the system prompt (the
-  model is told to flag embedded instructions, not follow them), tool errors
+- Retrieved content is untrusted data and travels as such (#1102): the
+  current page, the draft, applied pages and attachments — titles and
+  breadcrumbs included — go in the user turn, each through `wrapUntrusted`
+  (`common/untrusted.ts`, origins `document` / `attachment`), and the system
+  message keeps only what the code wrote (instructions, cite labels, ids). The
+  read tools return the row's facts (ids, cite labels, trust status) as plain
+  JSON and the page's text inside the wrapper. The wrapper defuses any
+  wrapper's closing tag in the payload (`&lt;/pages`), so text cannot end its
+  own block; plugin output goes through it too (origin `plugin`).
+  `untrusted-coverage.spec.ts` fails on a hand-written `<page>` / `<document>`
+  block in `assistant/`, `agents/`, mention replies or memo triage. Tool errors
   return `{"error"}` payloads instead of stack traces, and when the budget is
   spent the final round runs without tools so the model must answer.
 - The response reports `toolCalls` (tool, arguments, ok) and `model` for

@@ -6,6 +6,7 @@ import type { ResolvedAgent } from '../agent-registry.service.js';
 import type { Principal } from '../../auth/principal.js';
 import { parseModelJson } from '../../common/model-json.js';
 import { type AgentServices, type AgentRunner, type AgentReporter, type AgentRunResult, MAX_FINDINGS, reasonOf, pageScope, runBrief } from '../agent-services.js';
+import { wrapUntrusted } from '../../common/untrusted.js';
 
 /** Pages the reviewer reads in one pass — one model call each, so this is the cost. */
 const MAX_REVIEWED = 8;
@@ -86,7 +87,8 @@ async function review(
           { role: 'system', content: agent.instructions + skillText },
           {
             role: 'user',
-            content: `${runBrief(run.input)}Title: ${doc.title}\n\nPage:\n\n${content.markdown.slice(0, MAX_REVIEW_CHARS)}`,
+            // The page is DATA (#1102): title and body through the one wrapper.
+            content: `${runBrief(run.input)}${wrapUntrusted(`Title: ${doc.title}\n\n${content.markdown.slice(0, MAX_REVIEW_CHARS)}`, 'review_page', 'document')}`,
           },
         ],
         { json: true },

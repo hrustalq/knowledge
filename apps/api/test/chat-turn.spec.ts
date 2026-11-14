@@ -180,8 +180,14 @@ describe('search_knowledge with a pinned project', () => {
     const [dto] = search.mock.calls[0] as unknown as [Record<string, unknown>];
     expect(dto).not.toHaveProperty('expandGraph');
     expect(dto).not.toHaveProperty('filters');
-    const out = JSON.parse(res.content) as { results: { documentId: string; snippet: string }[]; related?: unknown };
-    expect(out.results.map((r) => [r.documentId, r.snippet])).toEqual([['a', 'a1'], ['b', 'b1']]);
+    // #1102: the row facts first, then the page text inside the one wrapper.
+    const [factsLine] = res.content.split('\n');
+    const out = JSON.parse(factsLine!) as { results: { documentId: string }[]; related?: unknown };
+    expect(out.results.map((r) => r.documentId)).toEqual(['a', 'b']);
     expect(out).not.toHaveProperty('related');
+    const wrapped = /<documents tool="search_knowledge">\n[^\n]*\n(.*)\n<\/documents>$/su.exec(res.content);
+    const text = JSON.parse(wrapped![1]!) as { results: { documentId: string; snippet: string }[] };
+    expect(text.results.map((r) => [r.documentId, r.snippet])).toEqual([['a', 'a1'], ['b', 'b1']]);
+    expect(JSON.stringify(out)).not.toContain('a1');
   });
 });

@@ -13,6 +13,13 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.54.1] — 2026-11-14
+
+### Fixed
+
+- The API image builds again. v0.54.0's failed at its build-time import check, which ran under the production
+  `AUTH_MODE` refusal from #1131 with no `AUTH_MODE` set, so v0.54.0 never deployed. (#1151)
+
 ## [0.54.0] — 2026-11-14
 
 ### Breaking
@@ -7302,7 +7309,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.54.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.54.1...HEAD
+[0.54.1]: https://github.com/hrustalq/knowledge/compare/v0.54.0...v0.54.1
 [0.54.0]: https://github.com/hrustalq/knowledge/compare/v0.53.2...v0.54.0
 [0.53.2]: https://github.com/hrustalq/knowledge/compare/v0.53.1...v0.53.2
 [0.53.1]: https://github.com/hrustalq/knowledge/compare/v0.53.0...v0.53.1

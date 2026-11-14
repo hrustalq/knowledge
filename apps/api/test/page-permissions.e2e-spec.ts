@@ -1132,12 +1132,16 @@ describe('page permissions (e2e, #76)', () => {
       (await http().get(`/v1/documents/${page}/content`).set(as(people.bob)).expect(ok(200))).body.markdown as string;
 
     beforeAll(async () => {
+      // A project of its own: a working draft is one per person and project
+      // (#636), and the block above leaves alice's in review, which a page
+      // joining it would share. The next run's setup destroys this project.
+      const own = await prisma.project.create({ data: { workspaceId: WORKSPACE, name: `ACL e2e publishing ${nonce}` } });
       const created = await http()
         .post('/v1/documents')
         .set(as(people.alice))
         .send({
           workspaceId: WORKSPACE,
-          projectId,
+          projectId: own.id,
           title: `Publishing handbook ${word}`,
           visibility: 'workspace',
           content: { mode: 'inline', format: 'markdown', text: `# Handbook\n\nThe first ${word} text.\n` },
@@ -1194,10 +1198,13 @@ describe('page permissions (e2e, #76)', () => {
     it('refuses a publish over a head the author has not seen, and lands over it once named', async () => {
       const { branchId, name } = (await mine()).body.branch;
       await write(people.alice, name, `# Handbook\n\nThe ${word} text, mine again.\n`);
-      const theirs = await write(people.bob, 'main', `# Handbook\n\nThe ${word} text, bob's.\n`);
+      // Moved by the admin: the default publish mode is `review` (#958), which
+      // holds an editor's write to the default branch and lets an admin's through.
+      const theirs = await write(people.admin, 'main', `# Handbook\n\nThe ${word} text, the admin's.\n`);
       const mrsBefore = await prisma.mergeRequest.count({ where: { documentId: page } });
       const refused = await publish(branchId).expect(ok(409));
-      expect(refused.body.details).toMatchObject({ reason: 'diverged', currentHeadRevisionId: theirs });
+      // Both sides rewrote the same line: the 3-way merge overlaps (2601325c renamed `diverged` here).
+      expect(refused.body.details).toMatchObject({ reason: 'conflict', currentHeadRevisionId: theirs });
       // Refused before an MR could make the branch readable.
       expect(await prisma.mergeRequest.count({ where: { documentId: page } })).toBe(mrsBefore);
       await publishThrough(branchId, { onTopOf: [theirs] });

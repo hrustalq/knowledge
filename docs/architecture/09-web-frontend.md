@@ -92,6 +92,21 @@ render returns the `Content-Security-Policy: frame-ancestors` header built
 from the site's `embedOrigins`, which is the only thing standing between the
 frame and an origin the admin did not list.
 
+The member app's own responses carry `server/app-host.js`'s headers, and a
+first Content-Security-Policy (#1099): `base-uri 'none'; form-action 'self';
+object-src 'self'` plus `CSP_ASSET_ORIGINS` (where presigned attachment URLs
+live when not on the app's origin; dev MinIO by default outside production)
+`; frame-ancestors 'none'`. It is nonce-free on purpose, so it names no
+`script-src` (the inline state script needs nonces, #277) and no `img-src`
+(pages hotlink external images; that waits for an image proxy). Public paths
+and site hosts never get it. Model output is guarded in the renderer instead:
+`MarkdownView`'s `untrusted` (and `SiteAsk`) goes through
+`core/markdown/untrusted.ts`, which drops everything that fetches on render
+and keeps an `<img>` only for an attachment path or a `data:` image, before
+the HTML reaches the DOM. Text from a model is rendered `untrusted`: assistant
+answers, agent replies in threads, workflow drafts and descriptions of merge
+requests that a person did not open.
+
 Whether a host is a site's is decided once per request, first thing
 (`server/site-files.js`, `res.locals.siteHost`). The host is `Host`, or
 `X-Forwarded-Host` when the peer is internal. In production that header is

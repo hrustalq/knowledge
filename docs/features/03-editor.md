@@ -82,7 +82,9 @@ or a crash lost them. Now:
   `localStorage` under `kn:unstaged:v1:<workspace>:<document|new>` once
   editing pauses (600 ms), and immediately on `pagehide` or when the tab is
   hidden. A browser that refuses the write (quota, blocked storage) is reported
-  in the header rather than claimed safe.
+  in the header rather than claimed safe. Signing out removes every
+  `kn:unstaged:v1:` key from the browser (`shared/utils/signed-in-storage.ts`,
+  #1101): the copies are not keyed by person.
 - "Unstaged" is **measured, not flagged**: the current page against the
   published baseline, normalised the way publishing would (`samePage`). The
   baseline is captured after the editor has parsed the page (`@ready` →

@@ -70,6 +70,12 @@ export interface AssistantToolContext {
    * checked on execution. Absent is Ask.
    */
   mode?: AssistantChatMode;
+  /**
+   * Whether a URL was handed to the model rather than written by it: typed by
+   * the person in this thread, or returned by this turn's web tools (#1105).
+   * `web_fetch` sends any other URL without its query. Absent = none was.
+   */
+  seenUrl?: (url: string) => boolean;
 }
 
 export interface AssistantToolResult {

@@ -104,6 +104,15 @@ So the policy applies to every fetch, with no provenance exception. A refused
 paste says so plainly — this domain is not allowed here, an admin can add it in
 AI settings — rather than failing quietly.
 
+Provenance does decide **what of the URL is sent** (#1105). The policy judges
+the host, so in `open` mode a steered model could put whatever the asker can
+read into a query string. The harness knows two sources of URLs the model did
+not write: the person's own messages in the thread (`PreparedTurn.typed`, never
+grounding) and this turn's web results. `webFetchTarget` sends those as they
+are (up to 2048 characters); any other URL loses its query and fragment and is
+refused when it is still over 300 characters. That narrows the channel to a
+short path per call; `allowlist` mode is what closes it.
+
 The paste case also already has its own door: feature 16 imports a URL into a
 document, with its own guard and its own review step. `web_fetch` does not need
 to serve it twice.

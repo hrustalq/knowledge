@@ -77,7 +77,9 @@ allowlist that could add a tool would let a settings row widen what the model
 can reach, which is the one thing agent configuration must never do. The
 built-in lists are exactly what the chat offered before this feature, so an
 untouched workspace is unchanged and an admin who unticks a tool actually loses
-it.
+it. MCP plugin tools obey the list too (#1105): an agent with a list gets a
+plugin tool only when it names `mcp__<slug>__<tool>`, and a chat-bot turn is
+never offered one.
 
 **Skills stay composable.** An agent _references_ skills rather than replacing
 them: `ai_skills` is still picked in the composer and still matched by trigger

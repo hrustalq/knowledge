@@ -64,6 +64,12 @@ import type {
 } from './assistant.dto.js';
 import { currentLocale, t } from '../i18n/t.js';
 import { applyDraftEdit, refuseDraftEdit } from './draft-edits.js';
+import { scopeToAgent } from './tool-scope.js';
+import { seenIn } from './web-fetch-target.js';
+
+/** The URLs this turn's web tools handed back. */
+const webUrlsOf = (collected: Map<string, AssistantSource>): string[] =>
+  [...collected.values()].flatMap((s) => ('kind' in s && s.kind === 'web' ? [s.url] : []));
 import { templateClause } from './template-clause.js';
 import { TemplatesService } from '../templates/templates.service.js';
 import { scanPartialObject } from './partial-args.js';
@@ -275,6 +281,12 @@ interface PreparedTurn {
   /** The workspace has a searchable group (#339) — false means `search_chat` is not offered. */
   chat: boolean;
   messages: ChatCompletionMessageParam[];
+  /**
+   * What the person typed in this thread (earlier questions and this one),
+   * never grounding: the only text besides this turn's web results that may
+   * hand `web_fetch` a URL with its query (#1105).
+   */
+  typed?: string[];
   collected: Map<string, AssistantSource>;
   uiBlocks: AssistantUiBlock[];
   emittedUiBlocks: number;
@@ -680,6 +692,9 @@ export class AssistantService {
       turn.messages,
       this.scopeToAgent(
         [
+          // No MCP plugin tools here (#1105): a chat turn answers whoever is in
+          // the chat, and a plugin reaches a system outside this one with
+          // arguments the model chose.
           ...this.tools.definitions('ask', {
             ui: false,
             web: turn.agent.config.webAccess.effective !== 'off',
@@ -687,7 +702,6 @@ export class AssistantService {
             tasks: turn.taskRepos.length > 0,
             chat: turn.chat,
           }),
-          ...(await this.plugins.toolsFor(thread.workspaceId)),
         ],
         turn.agent,
       ),
@@ -1075,6 +1089,7 @@ export class AssistantService {
       workspaceId: thread.workspaceId,
       cite: (source) => turn.labels.label(source),
       mode: turn.mode,
+      seenUrl: (url) => seenIn([...(turn.typed ?? []), ...webUrlsOf(turn.collected)])(url),
       ...(ctx.projectId ? { projectId: ctx.projectId } : {}),
       ...(ctx.audience ? { audience: ctx.audience } : {}),
       ...(ctx.channel ? { channel: ctx.channel } : {}),
@@ -1174,22 +1189,8 @@ export class AssistantService {
     };
   }
 
-  /**
-   * Narrow the offered tools to the agent's allowlist (docs/features/20).
-   *
-   * The built-in lists are exactly what `definitions(mode, { ui })` returns, so
-   * an untouched workspace is unchanged; an admin who unticks a tool actually
-   * loses it. Intersection, never union: an allowlist that could *add* a tool
-   * would let a settings row widen what the model can reach, which is the one
-   * thing agent configuration must never do.
-   *
-   * MCP plugin tools pass through — they are namespaced `mcp__<slug>__<tool>`
-   * and governed by the plugin's own enabled-tools list.
-   */
   private scopeToAgent<T extends { function: { name: string } }>(offered: T[], agent: ResolvedAgent): T[] {
-    if (agent.tools.length === 0) return offered;
-    const allowed = new Set(agent.tools);
-    return offered.filter((tool) => allowed.has(tool.function.name) || tool.function.name.startsWith('mcp__'));
+    return scopeToAgent(offered, agent.tools);
   }
 
   /**
@@ -1408,6 +1409,7 @@ export class AssistantService {
       taskRepos,
       chat,
       messages: [{ role: 'system', content: system }, ...history, { role: 'user', content: dto.content }],
+      typed: [...priorTurns.filter((m) => m.role === 'user').map((m) => m.content), dto.content],
       collected: new Map<string, AssistantSource>([
         ...(groundingDoc
           ? ([[groundingDoc.id, labels.tag({ documentId: groundingDoc.id, title: groundingDoc.title, factClass: 'explicit' })]] as const)

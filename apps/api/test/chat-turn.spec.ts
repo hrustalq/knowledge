@@ -111,6 +111,16 @@ describe('AssistantService.runChatTurn', () => {
     for (const name of [...ASSISTANT_WRITE_TOOL_NAMES, ...PANE_TOOLS]) expect(h.offered()).not.toContain(name);
   });
 
+  // #1105: a group or private chat turn never offers MCP plugin tools.
+  it('offers no plugin tool, even when the workspace has one enabled', async () => {
+    const h = harness();
+    (h.svc as unknown as { plugins: { toolsFor: () => Promise<unknown[]> } }).plugins.toolsFor = async () => [
+      { type: 'function', function: { name: 'mcp__crm__export_contacts', parameters: {} } },
+    ];
+    await h.svc.runChatTurn('t-1', { content: 'how do we deploy?', agentKey: 'researcher' }, DEV_PRINCIPAL);
+    expect(h.offered().some((name) => name.startsWith('mcp__'))).toBe(false);
+  });
+
   it('records the turn under the chat surface', async () => {
     const h = harness();
     await h.svc.runChatTurn('t-1', { content: 'how do we deploy?' }, DEV_PRINCIPAL);

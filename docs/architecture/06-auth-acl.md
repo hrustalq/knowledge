@@ -404,6 +404,15 @@ verify and change-password fail closed when Redis is down (#1092). Discovery
 fails open. Login runs one scrypt whatever the address (`burnPasswordCheck`),
 so timing does not tell a registered address from an unknown one.
 
+**Login backoff** (`auth/login-backoff.ts`) sits on top of the window: from
+the 5th consecutive failure for an address *from one IP*, a wait of 2 s
+doubling to 15 minutes; from the 50th for the address *from anywhere*, 1
+minute doubling to 15 minutes. A login in the wait is a 429 (`reason:
+login-backoff`, `Retry-After`) before any lookup. A success or a password
+reset clears it. Never a hard lockout: the wait is capped, and the per-IP rung
+cannot hold the owner out from another address. Redis down waits nothing (the
+window already fails closed).
+
 **Session-only routes** (#1092): `@SessionOnly()` refuses any API key in
 `AclGuard`. It sits on change-password, session revoke, `PATCH|DELETE
 /v1/me/credentials/:id` and the chat-link routes: a leaked key must not guess

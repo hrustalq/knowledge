@@ -14,6 +14,7 @@ import { AuthRateLimitGuard } from './auth-rate-limit.guard.js';
 import { MeController } from './me.controller.js';
 import { AuthTokensModule } from './auth-tokens.module.js';
 import { PublicRateLimiter } from '../public/public-rate-limit.js';
+import { LoginBackoff } from './login-backoff.js';
 import { RedisModule } from '../redis/redis.module.js';
 
 /**
@@ -30,6 +31,8 @@ import { RedisModule } from '../redis/redis.module.js';
   providers: [
     ApiKeysService,
     AuthFlowService,
+    // Failed logins slow down per address (#1092 leftover); counted in the same Redis.
+    LoginBackoff,
     // The anonymous auth routes' budgets (#75): the same Redis fixed window the
     // public routes count with, registered here as api-specs registers it.
     PublicRateLimiter,

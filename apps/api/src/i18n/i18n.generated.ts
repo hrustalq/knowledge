@@ -738,6 +738,8 @@ export type I18nTranslations = {
             "apiKeyCaptureOnly": string;
             "apiKeyMcpOnly": string;
             "apiKeyToolNotOffered": string;
+            "sessionRequired": string;
+            "apiKeyPinnedNoCreate": string;
             "apiKeyNeedsSession": string;
             "apiKeyNotFound": string;
             "apiKeyWorkspaceNotMember": string;
@@ -756,6 +758,7 @@ export type I18nTranslations = {
             "notFound": string;
             "noUserWithEmail": string;
             "notAMember": string;
+            "creationClosed": string;
             "subjectElsewhere": string;
             "lastAdminDemote": string;
             "lastAdminRemove": string;

@@ -430,7 +430,7 @@ describe('#656 revoke and offboard commit with the change', () => {
   const G = '33333333-3333-4333-8333-333333333333';
   const P = '44444444-4444-4444-8444-444444444444';
   const audit = recorder;
-  const failingSessions = () => ({ revokeAllForUser: vi.fn(boom) });
+  const failingSessions = () => ({ revokeAllForUser: vi.fn(boom), revokeIssuedBy: vi.fn(boom) });
   const scimConfig = config({ API_PUBLIC_URL: 'http://x', AUTH_SCIM_MAX_PAGE: 100, AUTH_SCIM_ENABLED: true, AUTH_MODE: 'api-key' });
   const caller = { workspaceId: WS, tokenId: 't1' };
 

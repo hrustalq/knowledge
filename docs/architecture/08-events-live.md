@@ -137,8 +137,13 @@ plain objects.
 - Authentication is done by the gateway, using `TokenAuthService` — extracted
   out of `AuthGuard` and exported by the global `AuthModule` precisely so both
   paths apply the same rules (`AUTH_MODE=none` → dev principal; `ks_` sessions
-  and `kn_` API keys otherwise, disabled users refused on both). Bearer header
-  or `?token=`, mirroring SSE.
+  and `kn_` API keys otherwise, disabled users refused on both). A `kn_`/`ks_`
+  only in the Bearer header; `?token=` takes a `kt_` ticket and nothing else,
+  mirroring SSE (#1097).
+- Every open socket is re-judged each `LIVE_RECHECK_MS` (30 s,
+  `events/live-recheck.ts`): a credential that no longer stands closes it with
+  4401, a workspace the person may no longer read loses its subscription. The
+  SSE stream runs the same check and completes.
 - A failure sends an `ApiErrorPayload` frame — the same envelope as HTTP, see
   [07-api-client-errors.md](07-api-client-errors.md) — and then closes with
   **4401**. A disabled gateway (`LIVE_WS_ENABLED=false`) answers 503 and closes

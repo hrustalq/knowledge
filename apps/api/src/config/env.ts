@@ -85,6 +85,18 @@ export const envSchema = z.object({
 
   /** Phase 5 auth: 'none' = dev principal with full access (Phase 0-4 flows keep working); 'api-key' = Bearer auth (kn_ API keys AND ks_ login session tokens). */
   AUTH_MODE: z.enum(['none', 'api-key']).default('none'),
+  /**
+   * #1093: NODE_ENV=production with AUTH_MODE=none refuses to start — a
+   * deployment that lost its AUTH_MODE line would otherwise serve everything to
+   * anyone as a platform admin. Set this to run such a process on purpose.
+   */
+  AUTH_ALLOW_NONE_IN_PRODUCTION: boolish(false),
+  /**
+   * #1093: forgot-password and resend-verification return the live token as
+   * `debugToken`, so a dev or e2e flow needs no inbox. Off unless asked for;
+   * refused under NODE_ENV=production.
+   */
+  AUTH_ECHO_TOKENS: boolish(false),
   /** Auth flow: login session lifetime. */
   AUTH_SESSION_TTL_HOURS: z.coerce.number().int().positive().default(720),
   /** Auth flow: password-reset token lifetime. */
@@ -1156,6 +1168,17 @@ export function validateEnv(config: Record<string, unknown>): Env {
   const parsed = envSchema.safeParse(config);
   if (!parsed.success) {
     throw new Error(`Invalid environment:\n${parsed.error.issues.map((i) => `  ${i.path.join('.')}: ${i.message}`).join('\n')}`);
+  }
+  // #1093: the insecure branch is never the one an omission picks.
+  if (parsed.data.NODE_ENV === 'production') {
+    if (parsed.data.AUTH_MODE === 'none' && !parsed.data.AUTH_ALLOW_NONE_IN_PRODUCTION) {
+      throw new Error(
+        'Invalid environment:\n  AUTH_MODE: is none (every request a platform admin) under NODE_ENV=production — set AUTH_MODE=api-key, or AUTH_ALLOW_NONE_IN_PRODUCTION=true to mean it',
+      );
+    }
+    if (parsed.data.AUTH_ECHO_TOKENS) {
+      throw new Error('Invalid environment:\n  AUTH_ECHO_TOKENS: returns reset and verification tokens to anonymous callers; refused under NODE_ENV=production');
+    }
   }
   // Opting into SMTP without a server would otherwise boot, then fail every send.
   if (parsed.data.MAIL_TRANSPORT === 'smtp' && !parsed.data.MAIL_SMTP_URL) {

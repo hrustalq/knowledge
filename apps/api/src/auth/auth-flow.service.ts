@@ -19,7 +19,7 @@ import type { User } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { userAvatarUrl } from '../common/avatar-url.js';
 import { MailProducer } from '../mail/mail.producer.js';
-import { hashPassword, verifyPassword } from './password.js';
+import { burnPasswordCheck, hashPassword, verifyPassword } from './password.js';
 import type { Principal } from './principal.js';
 import { SessionsService, type SessionMeta } from './sessions.service.js';
 import type { Issued } from './session-cookie.js';
@@ -64,9 +64,13 @@ export class AuthFlowService {
     private readonly policy: AuthPolicyService,
   ) {}
 
-  /** `debugToken` outside production: a dev or e2e flow must not need an inbox. */
+  /**
+   * `debugToken` only when AUTH_ECHO_TOKENS asks for it (#1093): a dev or e2e
+   * flow need not have an inbox, but a deployment that forgot NODE_ENV must
+   * not hand a reset token to whoever typed the address.
+   */
   private get echoTokens(): boolean {
-    return this.config.get<string>('NODE_ENV') !== 'production';
+    return this.config.get<boolean>('AUTH_ECHO_TOKENS') === true;
   }
 
   async signup(email: string, displayName: string, password: string, meta?: RequestMeta): Promise<Issued<AuthSessionResponse>> {
@@ -133,6 +137,7 @@ export class AuthFlowService {
       throw this.domainRefusal(enforced);
     }
     const user = await this.prisma.user.findUnique({ where: { email: normalized } });
+    if (!user?.passwordHash) await burnPasswordCheck(password);
     const reason = !user
       ? 'unknown-email'
       : !user.passwordHash

@@ -81,7 +81,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create an account with email + password; sets the HttpOnly kn_token session cookie */
+        /** Create an account with email + password; sets the HttpOnly kn_token session cookie. 429 past 10/min per IP or 3/min per address */
         post: operations["AuthFlowController_signup"];
         delete?: never;
         options?: never;
@@ -149,7 +149,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Request a password-reset token (never reveals whether the email exists) */
+        /** Request a password-reset token (never reveals whether the email exists). 429 past 10/min per IP or 3/min per address */
         post: operations["AuthFlowController_forgotPassword"];
         delete?: never;
         options?: never;
@@ -166,7 +166,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Set a new password with a kr_ reset token; revokes all sessions */
+        /** Set a new password with a kr_ reset token; revokes all sessions. 429 past 10/min per IP */
         post: operations["AuthFlowController_resetPassword"];
         delete?: never;
         options?: never;
@@ -183,7 +183,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Confirm the account address with the kv_ token from the mailed link (docs/features/41) */
+        /** Confirm the account address with the kv_ token from the mailed link (docs/features/41). 429 past 20/min per IP */
         post: operations["AuthFlowController_verifyEmail"];
         delete?: never;
         options?: never;
@@ -234,7 +234,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Change own password (requires the current one); revokes other sessions */
+        /** Change own password (requires the current one, from a session — never an API key); revokes other sessions. 429 past 5/min per account */
         post: operations["AuthFlowController_changePassword"];
         delete?: never;
         options?: never;
@@ -706,7 +706,7 @@ export interface paths {
         /** Caller's workspaces (platform admins see all) */
         get: operations["WorkspacesController_list"];
         put?: never;
-        /** Create a workspace — the creator becomes its admin + trusted operator */
+        /** Create a workspace — the creator becomes its admin + trusted operator (platform admins only while AUTH_SIGNUP_ENABLED=false) */
         post: operations["WorkspacesController_create"];
         delete?: never;
         options?: never;
@@ -828,7 +828,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Users who are not members yet, for the add-member picker (workspace admin) */
+        /** Users who are not members yet, for the add-member picker (workspace admin: one full email; platform admin: any fragment) */
         get: operations["WorkspacesController_listCandidates"];
         put?: never;
         post?: never;
@@ -17371,15 +17371,15 @@ export interface components {
             email: string;
             displayName: string;
             avatarUrl: components["schemas"]["AvatarUrl"];
-            isAdmin: boolean;
+            isAdmin: boolean | null;
             disabled: boolean;
             createdAt: string;
             role: components["schemas"]["WorkspaceRole"] | null;
             trustedOperator: boolean;
             memberSince: string | null;
             isSelf: boolean;
-            hasPassword: boolean;
-            hasApiKey: boolean;
+            hasPassword: boolean | null;
+            hasApiKey: boolean | null;
             pages: components["schemas"]["ProfilePage"][];
             pageCount: number;
             openWork: components["schemas"]["ProfileOpenWork"];

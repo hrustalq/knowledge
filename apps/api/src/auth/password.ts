@@ -32,3 +32,16 @@ export async function verifyPassword(password: string, stored: string): Promise<
   });
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
+
+/** A hash of nothing anyone can type: what {@link burnPasswordCheck} compares against. */
+const NOTHING = `scrypt$${N}$${R}$${P}$${Buffer.alloc(16).toString('base64')}$${Buffer.alloc(KEYLEN).toString('base64')}`;
+
+/**
+ * The same scrypt a real check costs, for an account that has no password to
+ * check (#1092): an unknown address and an SSO-only account answer in the time
+ * a wrong password takes, so timing does not say which addresses are registered.
+ */
+export async function burnPasswordCheck(password: string): Promise<false> {
+  await verifyPassword(password, NOTHING);
+  return false;
+}

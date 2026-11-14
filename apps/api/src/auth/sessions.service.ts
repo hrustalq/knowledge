@@ -129,6 +129,21 @@ export class SessionsService {
   }
 
   /** Revoke every live session of a user (password reset / disable), optionally keeping one. */
+  /**
+   * End the sessions that one workspace's own identity providers opened for
+   * this person (#1096): what a workspace may sign out without owning the
+   * account. Password sessions and other workspaces' SSO stay.
+   */
+  async revokeIssuedBy(userId: string, workspaceId: string): Promise<number> {
+    const providers = await this.prisma.identityProvider.findMany({ where: { workspaceId }, select: { id: true } });
+    if (providers.length === 0) return 0;
+    const { count } = await this.prisma.session.updateMany({
+      where: { userId, revokedAt: null, providerId: { in: providers.map((p) => p.id) } },
+      data: { revokedAt: new Date() },
+    });
+    return count;
+  }
+
   async revokeAllForUser(userId: string, exceptSessionId?: string): Promise<number> {
     const { count } = await this.prisma.session.updateMany({
       where: { userId, revokedAt: null, ...(exceptSessionId ? { id: { not: exceptSessionId } } : {}) },

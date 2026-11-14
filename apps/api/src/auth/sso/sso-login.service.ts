@@ -1,3 +1,4 @@
+import { claimUnverifiedAccount } from '../account-claim.js';
 import { Injectable } from '@nestjs/common';
 import { Prisma, type IdentityProvider, type User } from '@prisma/client';
 import type { SsoLoginError } from '@knowledge/contracts';
@@ -87,9 +88,24 @@ export class SsoLoginService {
         if (existing.isAdmin) {
           return { ok: false, error: 'admin-link-refused', reason: 'platform admin accounts are not linked by address', userId: existing.id };
         }
-        await this.prisma.userIdentity.create({
-          data: { userId: existing.id, providerId: provider.id, subject: identity.subject, emailAtLink: email },
+        // The link and the claim commit together: a provider that speaks for
+        // the domain now owns an address signup never proved (#1094).
+        const claimed = await this.prisma.withTransaction(async () => {
+          await this.prisma.userIdentity.create({
+            data: { userId: existing.id, providerId: provider.id, subject: identity.subject, emailAtLink: email },
+          });
+          return existing.emailVerifiedAt ? false : claimUnverifiedAccount(this.prisma, existing.id);
         });
+        if (claimed) {
+          void this.audit.record({
+            workspaceId: provider.workspaceId,
+            actor: existing.id,
+            action: 'auth.account_claimed',
+            params: { via: 'sso', providerId: provider.id },
+            ok: true,
+            target: existing.id,
+          });
+        }
         void this.audit.record({
           workspaceId: provider.workspaceId,
           actor: existing.id,

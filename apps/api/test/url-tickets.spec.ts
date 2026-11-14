@@ -14,6 +14,7 @@ import { EventsController } from '../src/events/events.controller.js';
 import { EventsSubscriber } from '../src/events/events.subscriber.js';
 import { LiveVisibility } from '../src/events/live-visibility.js';
 import { TokenAuthService } from '../src/auth/token-auth.service.js';
+import { AccessService } from '../src/auth/access.service.js';
 import { UrlTicketsService, type TicketStore } from '../src/auth/url-tickets.service.js';
 import { DEV_PRINCIPAL, type Principal } from '../src/auth/principal.js';
 import { of } from 'rxjs';
@@ -161,6 +162,8 @@ describe('url tickets over HTTP (real AuthGuard, real controllers)', () => {
         { provide: PublicRateLimiter, useValue: { hit: async () => true } },
         { provide: EventsSubscriber, useValue: { stream } },
         { provide: LiveVisibility, useValue: { observe: () => undefined, allows: async (_e: unknown, ps: unknown[]) => ps.map(() => true) } },
+        // The stream's periodic re-check (#1097); these requests end long before a tick.
+        { provide: AccessService, useValue: { requireRole: async () => 'viewer' } },
         { provide: APP_GUARD, useClass: AuthGuard },
       ],
     }).compile();

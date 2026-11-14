@@ -17,6 +17,29 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- Live updates stop when access does. An open live connection is checked again every 30 seconds, so signing out,
+  revoking a key, a disabled account or removal from the workspace ends it within one check. The live socket no
+  longer accepts an API key or session token in its address; it takes the single-use ticket the web already uses, or
+  a header. (#1097)
+- A workspace's directory sync (SCIM) can no longer sign someone out everywhere. Without a domain the workspace has
+  verified, deactivating a person ends only the sessions that workspace's own single sign-on opened. (#1096)
+- Connecting GitHub, Figma or Plaud now finishes only in the browser that started it, signed in as the same person,
+  so an authorization link forwarded to a colleague cannot store their account as yours. A single sign-on link
+  likewise completes only in the browser that began the sign-in. (#1095)
+- When single sign-on or directory sync first links an account whose address was never confirmed, whoever registered
+  that address first loses their password, sessions, API keys and linked chat accounts, and the address counts as
+  confirmed. Directory sync can move an address only to another domain the workspace verified. (#1094)
+- The API no longer starts with `NODE_ENV=production` and `AUTH_MODE=none` unless `AUTH_ALLOW_NONE_IN_PRODUCTION=true`.
+  Password-reset and confirmation tokens are returned in the response only with the new `AUTH_ECHO_TOKENS=true`
+  (development only; refused in production), no longer whenever `NODE_ENV` is unset. (#1093)
+- Forgot-password, reset-password, email confirmation, signup and change-password now have rate limits.
+  Change-password, signing out one of your sessions, editing or removing a connected account and linking a chat
+  account now need a signed-in session, not an API key, and a key limited to one workspace cannot create another.
+  Sign-in takes the same time whether or not an address is registered. (#1092)
+- A profile is visible only to people who share a workspace with that person, and whether they are a platform admin,
+  have a password or have an API key only to themselves and platform admins. The add-member picker finds an account
+  only by its full email address, except for platform admins, and with signup turned off only a platform admin can
+  create a workspace. (#1091)
 - Several smaller surfaces now check the page they act on. Acting on an agent's finding re-checks the page it cites
   (or where its draft would land) at the moment you act. Editing or revoking a share link needs edit on its page, an
   ingestion job is readable only by people who can read its page and branch, and a profile's open-work counts leave

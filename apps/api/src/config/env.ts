@@ -724,6 +724,18 @@ export const envSchema = z.object({
   IMPORT_PARSE_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
 
   /**
+   * Size ceilings checked before a body is read whole (#1109). A revision's
+   * body, from the bucket's own HEAD at finalize and from `git cat-file -s`
+   * before a pushed blob is read; what an archive (PPTX, DOCX, a repository)
+   * may inflate to in total, counted from each entry's declared size before it
+   * is inflated; and a body fetched from a host someone else chose (a web
+   * source, an embed snapshot), cut off while it streams.
+   */
+  REVISION_MAX_BYTES: z.coerce.number().int().positive().default(52_428_800),
+  ARCHIVE_MAX_INFLATED_BYTES: z.coerce.number().int().positive().default(536_870_912),
+  FETCH_MAX_BYTES: z.coerce.number().int().positive().default(10_485_760),
+
+  /**
    * Memos (#551, docs/features/68): speech-to-text over any OpenAI-compatible
    * `/audio/transcriptions` endpoint — hosted Whisper, whisper.cpp, speaches.
    * Env only, the operator's URL, so it is fetched plainly (as EMBEDDING_* is)

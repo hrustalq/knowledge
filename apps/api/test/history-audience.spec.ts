@@ -7,6 +7,7 @@ import { ACCESS_META, HISTORY_META } from '../src/auth/access.decorator.js';
 import { PermissionService } from '../src/permissions/permission.service.js';
 import { CAPTURE_TOOLS, WRITE_TOOLS } from '../src/mcp/mcp-tools.js';
 import type { AccessScope } from '../src/permissions/access-scope.js';
+import { GitAccessService } from '../src/git/git-access.service.js';
 
 /**
  * History audience (#958): with `history_audience: editors` a caller below
@@ -84,6 +85,30 @@ describe('PermissionService.requireHistory', () => {
     await service.requireHistory(scope(), DOC, [HEAD]);
     await refused(service.requireHistory(scope(), DOC, [OLD]));
     await refused(service.requireHistory(scope(), DOC, [HEAD, OLD]));
+  });
+});
+
+describe('a git fetch is the whole history (#1107)', () => {
+  const PROJECT = '55555555-5555-4555-8555-555555555555';
+  function git(audience: 'everyone' | 'editors', as: Partial<AccessScope>) {
+    const { service } = permissions(audience);
+    vi.spyOn(service, 'requireResource').mockResolvedValue(undefined as never);
+    vi.spyOn(service, 'scopeFor').mockResolvedValue(scope(as));
+    const prisma = { project: { findUnique: vi.fn(async () => ({ workspaceId: WS })) } };
+    const tokens = { resolve: vi.fn(async () => ({ mode: 'api-key', userId: 'u', locale: 'en' })) };
+    const config = { get: (key: string) => ({ GIT_REMOTE_ENABLED: true, PUBLIC_RATE_LIMIT_PER_MIN: 60, AUTH_MODE: 'none' })[key] };
+    const access = new GitAccessService(prisma as never, tokens as never, service, { require: vi.fn(async () => undefined) } as never, {} as never, config as never);
+    return access.authorize({ headers: {} } as never, WS, `${PROJECT}.git`);
+  }
+
+  it('editors: a viewer of the project cannot clone or fetch it, an editor can', async () => {
+    await refused(git('editors', { role: 'viewer' }).then(() => undefined));
+    await refused(git('editors', { role: 'editor', readOnly: true }).then(() => undefined));
+    await expect(git('editors', { role: 'editor' })).resolves.toMatchObject({ scope: { role: 'editor' } });
+  });
+
+  it('everyone: a viewer still clones', async () => {
+    await expect(git('everyone', { role: 'viewer' })).resolves.toMatchObject({ scope: { role: 'viewer' } });
   });
 });
 

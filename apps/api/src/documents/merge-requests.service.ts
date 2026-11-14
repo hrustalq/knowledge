@@ -52,7 +52,7 @@ import { EditingPolicyService } from '../auth/editing-policy.service.js';
 import { ConflictsService } from '../conflicts/conflicts.service.js';
 import { LintChecksService } from './lint/lint-checks.service.js';
 import { lintGateEnforced, overridable } from './lint/lint-check.js';
-import { ProjectCommitsService, type PagePlace } from '../git/project-commits.service.js';
+import { ProjectCommitsService, type PagePlace, type Place } from '../git/project-commits.service.js';
 import { sourcePages } from './mr-pages.js';
 import { hasConflictMarkers, threeWay, type ThreeWayResult } from './three-way.js';
 import { AUTHOR_ID_STUB } from '../activity/actor.js';
@@ -126,6 +126,17 @@ const behind = (p: MrPage): boolean => p.target.headRevisionId !== null && p.mer
  * breaks its API waits for an admin's acknowledgement under a `block` policy
  * (#78).
  */
+
+/**
+ * What a merge by push writes on a merge request's pages (#1107): each page's
+ * last body (none when it keeps the target's), and the place of each page it
+ * moves, renames or archives. Held against the web merge by `mergeByPush`.
+ */
+export interface PushLanding {
+  bodies: ReadonlyMap<string, string>;
+  places: ReadonlyMap<string, Place>;
+}
+
 @Injectable()
 export class MergeRequestsService {
   private readonly logger = new Logger(MergeRequestsService.name);
@@ -873,10 +884,11 @@ export class MergeRequestsService {
    * `land` returns the merged revision on the merge request's own page, if
    * the push changed it.
    */
-  async mergeByPush(mergeRequestId: string, principal: Principal, land: () => Promise<string | null>): Promise<MergeRequestInfo> {
+  async mergeByPush(mergeRequestId: string, principal: Principal, land: () => Promise<string | null>, pushed: PushLanding): Promise<MergeRequestInfo> {
     const mr = await this.getMrOrThrow(mergeRequestId);
     const { pages, places, projectId } = await this.gates(mr, principal);
     await this.breakingGate(mr, pages);
+    await this.assertPushLandsMerge(mr, pages, places, pushed);
     const revisionId = await this.prisma.withTransaction(
       async () => {
         await this.commits.lock(projectId);
@@ -887,6 +899,39 @@ export class MergeRequestsService {
       { timeout: 30_000, maxWait: 10_000 },
     );
     return (await this.afterMerge(mr, 'merge-commit', revisionId, principal, pages.length)).mergeRequest;
+  }
+
+  /**
+   * A merge by push lands exactly what the web merge would (#1107): the
+   * approvals were given to the source head, so a merge commit whose tree says
+   * anything else — an "evil merge", or one that leaves the change out — is
+   * refused, ids never titles. Each page's body is the clean 3-way result or the
+   * source head (`mergedBodies`, so a conflict refuses as on the web), and each
+   * page lands where the source branch puts it. A page the push left alone must
+   * already read as the merge would land it.
+   */
+  private async assertPushLandsMerge(mr: MrWithBranches, pages: MrPage[], places: PagePlace[], pushed: PushLanding): Promise<void> {
+    const bodies = await this.mergedBodies(pages, { target: mr.targetBranch.name, source: mr.sourceBranch.name });
+    const differs = (documentId: string) =>
+      new ConflictException({ statusCode: 409, message: t('error.mergeRequest.pushDiffers'), reason: 'merge-differs', documentId });
+    const content = new Set(pages.map((p) => p.documentId));
+    for (const p of pages) {
+      const want = bodies.get(p.documentId)!.text;
+      const got = pushed.bodies.get(p.documentId) ?? (p.target.headRevisionId ? (await this.bodyOf(p.target.headRevisionId)).text : '');
+      if (got !== want) throw differs(p.documentId);
+    }
+    // A body the push writes on a page whose content the request does not change is not the request's.
+    for (const id of pushed.bodies.keys()) if (!content.has(id)) throw differs(id);
+    const expected = new Map(places.map((p) => [p.documentId, p]));
+    const rows = await this.prisma.document.findMany({ where: { id: { in: [...pushed.places.keys()] } }, select: { id: true, parentId: true, slug: true, archivedAt: true } });
+    const now = new Map(rows.map((d) => [d.id, d]));
+    for (const [id, got] of pushed.places) {
+      const d = now.get(id);
+      // Where the web merge puts it: the source branch's place, else where it stands now.
+      const want: Place = expected.get(id) ?? { parentDocumentId: d?.parentId ?? null, slug: d?.slug ?? '', removed: d?.archivedAt != null };
+      if (got.removed !== want.removed || (!got.removed && (got.parentDocumentId !== want.parentDocumentId || (want.slug !== '' && got.slug !== want.slug)))) throw differs(id);
+    }
+    for (const id of expected.keys()) if (!pushed.places.has(id)) throw differs(id);
   }
 
   /** Guarded status flip, and the pages that existed only as this merge request join the tree (#73). */

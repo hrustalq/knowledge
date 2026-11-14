@@ -12,6 +12,7 @@
  */
 import { DOMParser, DOMSerializer } from '@tiptap/pm/model'
 import { editorSchema } from '@knowledge/editor-schema'
+import { imageSrc } from '@/shared/api/api'
 
 /** The browser-facing API base: `<img src>` here is read by the reader's browser, never by the SSR process. */
 const ASSET_BASE = import.meta.env.VITE_API_URL ?? '/api'
@@ -23,7 +24,11 @@ export function staticBodyHtml(html: string, document: Document): string {
   const doc = DOMParser.fromSchema(editorSchema).parse(body)
   const out = document.createElement('div')
   out.appendChild(DOMSerializer.fromSchema(editorSchema).serializeFragment(doc.content, { document }))
-  // Attachments are API routes (resolveAssetUrl does this in the node views).
+  // Images as the image node draws them: an attachment under the API, an
+  // external one through the image proxy (#1133). First, so a proxied URL is
+  // never prefixed again below.
+  for (const img of out.querySelectorAll('img[src]')) img.setAttribute('src', imageSrc(img.getAttribute('src')!))
+  // Attachment links are API routes too (resolveAssetUrl does this in the node views).
   for (const el of out.querySelectorAll('[src^="/v1/"], [href^="/v1/"]')) {
     for (const attr of ['src', 'href']) {
       const v = el.getAttribute(attr)

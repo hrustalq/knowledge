@@ -1246,6 +1246,11 @@ export type I18nTranslations = {
             "forbidden": string;
             "noDevAvatar": string;
         };
+        "imageProxy": {
+            "invalid": string;
+            "blocked": string;
+            "unavailable": string;
+        };
         "notification": {
             "subjectNotInWorkspace": string;
             "nothingToMark": string;

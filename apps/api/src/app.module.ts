@@ -17,6 +17,7 @@ import { DocumentsModule } from './documents/documents.module.js';
 import { AttachmentsModule } from './attachments/attachments.module.js';
 import { EmbedsModule } from './embeds/embeds.module.js';
 import { AvatarsModule } from './avatars/avatars.module.js';
+import { ImageProxyModule } from './image-proxy/image-proxy.module.js';
 import { SearchModule } from './search/search.module.js';
 import { EntitiesModule } from './entities/entities.module.js';
 import { ActivityModule } from './activity/activity.module.js';
@@ -74,6 +75,7 @@ import { MemoryModule } from './memory/memory.module.js';
     AttachmentsModule,
     EmbedsModule,
     AvatarsModule,
+    ImageProxyModule,
     SearchModule,
     EntitiesModule,
     GraphQueryModule,

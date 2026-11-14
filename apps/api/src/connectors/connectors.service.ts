@@ -744,6 +744,11 @@ export class ConnectorsService {
         throw new BadRequestException(t('error.connector.missingField', { kind: info.label, field: field.label }));
       }
       if (present && /url$/i.test(field.key)) {
+        // A token belongs in the credential store; config is returned to every
+        // viewer of the connector list (#1114).
+        if (/^[a-z][a-z0-9+.-]*:\/\/[^/?#]*@/i.test(String(value).trim())) {
+          throw new BadRequestException(t('error.connector.urlCredentials', { field: field.label }));
+        }
         await assertSafeExternalUrl(String(value), this.allowPrivateFor(kind), {
           invalid: 'error.connector.urlInvalid',
           notHttps: 'error.connector.urlNotHttps',

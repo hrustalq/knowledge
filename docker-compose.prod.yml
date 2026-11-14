@@ -24,7 +24,7 @@ name: knowledge
 
 services:
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2-alpine@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0
     restart: unless-stopped
     ports:
       # Tailscale Funnel's target (`tailscale funnel --bg 8088`), and the
@@ -49,7 +49,7 @@ services:
       - minio
 
   postgres:
-    image: postgres:17-alpine
+    image: postgres:17-alpine@sha256:d3244e8ce3f165ee3c93d9c4a4b1d0fe48b3a89e2287b717fdcbbde92d405065
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-knowledge}
@@ -64,7 +64,7 @@ services:
       retries: 10
 
   redis:
-    image: redis:7-alpine
+    image: redis:7-alpine@sha256:7f7d30b7fdd09467bac58198a1f166dd69789d348d4fe859cccb20e0cf287fbe
     restart: unless-stopped
     volumes:
       - redisdata:/data
@@ -253,7 +253,7 @@ services:
   # to its own upload folder — a page can embed any URL, and whatever it
   # fetched would be printed into a PDF the requester downloads.
   gotenberg:
-    image: gotenberg/gotenberg:8
+    image: gotenberg/gotenberg:8@sha256:53073e798c8ef39ea2187e44cb67bab77894ea2509100b94c4fe3b461f7b2996
     profiles: ["gotenberg"]
     restart: unless-stopped
     command: ["gotenberg", "--chromium-allow-list=^file:///tmp/.*", "--api-timeout=300s"]
@@ -271,7 +271,7 @@ services:
   # restarts like a datastore. Turning it on later needs a reindex
   # (POST /v1/ingestion/reindex) to mirror pages indexed before it.
   opensearch:
-    image: opensearchproject/opensearch:2
+    image: opensearchproject/opensearch:2@sha256:3bfa1ec74d56928c2e018033d45c460ce2c0ea65a5cedd577de3102326c31b89
     profiles: ["opensearch"]
     restart: unless-stopped
     environment:
@@ -332,7 +332,7 @@ services:
   # SEARXNG_SECRET below overrides (SearXNG reads server.secret_key from that
   # variable when it is set), so the real secret lives in the environment.
   searxng:
-    image: searxng/searxng:latest
+    image: searxng/searxng:latest@sha256:eb8b09ffa83aebbe8b8d3ded23cfd224b2d3b01db4f3af9eb03876ef6def6dda
     restart: unless-stopped
     init: true
     # No host binding, same as the four datastores above: the only callers are

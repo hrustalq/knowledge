@@ -84,3 +84,13 @@ describe('a connector update and its token (#857)', () => {
     expect(cleared).toMatchObject({ connectionId: null, hasCredential: false, credentialHint: null });
   });
 });
+
+describe('a connector URL carrying credentials (#1114)', () => {
+  it('is refused, so a token never lands in the config every viewer reads', async () => {
+    const { service, row } = setup();
+    for (const repoUrl of ['https://x-access-token:ghp_secret@github.com/acme/runbooks', 'https://ghp_secret@github.com/acme/runbooks']) {
+      await expect(service.update('k-1', { config: { repoUrl } })).rejects.toMatchObject({ status: 400 });
+    }
+    expect(row.config).toEqual({ repoUrl: 'https://github.com/acme/runbooks' });
+  });
+});

@@ -20,15 +20,22 @@ function isInternal(address: string): boolean {
  * and the web SSR calls it over the internal network, both from a private
  * address, both carrying the visitor in X-Forwarded-For (see Caddyfile and
  * apps/web/server.js). So the header is believed only when the peer is
- * internal, and then its first entry is the visitor. A peer on a public
- * address is counted as itself, whatever header it sends.
+ * internal. A peer on a public address is counted as itself, whatever header
+ * it sends.
+ *
+ * Inside the header, the visitor is the right-most entry that is not an
+ * internal address (#1112): every hop that appends (apps/web/server.js does)
+ * passes along whatever the caller wrote on the left, so only what our own
+ * proxies added is believed. When every entry is internal (a LAN or dev
+ * visitor), the left-most is the best there is.
  */
 export function clientIp(req: { ip?: string; socket?: { remoteAddress?: string }; headers: Record<string, unknown> }): string {
   const peer = req.socket?.remoteAddress ?? req.ip ?? 'unknown';
   const forwarded = req.headers['x-forwarded-for'];
   if (isInternal(peer) && typeof forwarded === 'string' && forwarded.trim()) {
-    const first = forwarded.split(',')[0].trim();
-    if (isIP(first)) return first;
+    const chain = forwarded.split(',').map((entry) => entry.trim()).filter((entry) => isIP(entry));
+    const visitor = chain.findLast((entry) => !isInternal(entry)) ?? chain[0];
+    if (visitor) return visitor;
   }
   return peer;
 }

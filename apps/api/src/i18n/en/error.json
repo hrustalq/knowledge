@@ -462,6 +462,7 @@
     "urlInvalid": "That does not look like a URL",
     "urlNotHttps": "Connector URLs must use https",
     "urlPrivate": "{address} is on a private network; set CONNECTOR_ALLOW_PRIVATE_URLS to allow it",
+    "urlCredentials": "{field} must not carry a username or token; add the token as the connector credential",
     "hostUnresolved": "{host} could not be resolved",
     "disabled": "This connector is disabled",
     "pullNotSupported": "{kind} connectors cannot pull",

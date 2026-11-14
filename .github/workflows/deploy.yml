@@ -47,22 +47,39 @@ jobs:
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
     steps:
+      # The ref name is caller-chosen text (git allows shell metacharacters in a
+      # tag), so it reaches the script as an environment variable, never as
+      # expression text, and only a release tag's shape is let through (#1113).
       - id: tag
-        run: echo "tag=${{ inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::not a release tag (vX.Y.Z) — refusing to deploy"
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           ref: ${{ steps.tag.outputs.tag }}
           fetch-depth: 0
 
       # A tag can be cut from any commit, including one that never passed CI on
       # main. Releases come from main or they do not happen.
+      #
+      # This step runs from the tagged commit's own copy of this file, so a tag on
+      # an edited workflow skips it: the real gate is the `production`
+      # environment's protection and the tag ruleset, configured in the repo
+      # settings (#1113).
       - name: Verify the tag is on main
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
         run: |
           git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
           sha=$(git rev-parse HEAD)
           if ! git merge-base --is-ancestor "$sha" origin/main; then
-            echo "::error::${{ steps.tag.outputs.tag }} ($sha) is not an ancestor of origin/main — refusing to deploy"
+            echo "::error::$TAG ($sha) is not an ancestor of origin/main — refusing to deploy"
             exit 1
           fi
 
@@ -83,14 +100,17 @@ jobs:
     env:
       TAG: ${{ needs.verify.outputs.tag }}
       KUBESEAL_VERSION: 0.41.2
+      # sha256 of kubeseal-<version>-linux-amd64.tar.gz, from the release's
+      # sealed-secrets_<version>_checksums.txt. Change both together (#1113).
+      KUBESEAL_SHA256: 666b5db6788ad1dedb56e2d97064e1cc3779aa77bbd6f4b56b62beeb1941ed79
       APP_DIR: homelab/k8s/apps/knowledge
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           ref: ${{ env.TAG }}
           path: knowledge
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           repository: hrustalq/homelab
           ssh-key: ${{ secrets.DEPLOY_HOMELAB_SSH_KEY }}
@@ -109,8 +129,10 @@ jobs:
           ENV_SECRETS: ${{ toJSON(secrets) }}
         run: |
           set -euo pipefail
-          curl -fsSL "https://github.com/bitnami-labs/sealed-secrets/releases/download/v${KUBESEAL_VERSION}/kubeseal-${KUBESEAL_VERSION}-linux-amd64.tar.gz" \
-            | tar -xz -C /usr/local/bin kubeseal
+          curl -fsSL -o "$RUNNER_TEMP/kubeseal.tar.gz" \
+            "https://github.com/bitnami-labs/sealed-secrets/releases/download/v${KUBESEAL_VERSION}/kubeseal-${KUBESEAL_VERSION}-linux-amd64.tar.gz"
+          echo "${KUBESEAL_SHA256}  $RUNNER_TEMP/kubeseal.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/kubeseal.tar.gz" -C /usr/local/bin kubeseal
           umask 077
           env_json=$(jq -n '
             def named: with_entries(select(.key | test("^[A-Z][A-Z0-9_]*$")) | select(.key | startswith("DEPLOY_") | not)
@@ -156,6 +178,9 @@ jobs:
           git -C homelab diff --stat
 
       - name: Commit to the homelab repo (Argo CD deploys it)
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
         run: |
           set -euo pipefail
           cd homelab
@@ -163,7 +188,7 @@ jobs:
           git config user.email "deploy@knowledge.hrustalq.dev"
           git add k8s/apps/knowledge
           if git diff --cached --quiet; then echo "nothing changed"; exit 0; fi
-          git commit -m "knowledge: deploy $TAG" -m "From hrustalq/knowledge@${{ github.sha }} (run ${{ github.run_id }})."
+          git commit -m "knowledge: deploy $TAG" -m "From hrustalq/knowledge@$SOURCE_SHA (run $RUN_ID)."
           git push origin HEAD:main
 
       # Argo CD polls every 2 minutes; migrations and the rollout follow. The

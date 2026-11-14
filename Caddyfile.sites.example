@@ -44,7 +44,10 @@
 		reverse_proxy api:3000
 	}
 
+	# Uploads served on the app's own origin: never sniffed into HTML, never a script.
 	handle /{$S3_BUCKET:knowledge}/* {
+		header X-Content-Type-Options nosniff
+		header Content-Security-Policy "script-src 'none'"
 		reverse_proxy minio:9000
 	}
 
@@ -57,10 +60,10 @@
 		format filter {
 			wrap console
 			fields {
-				request>uri query {
-					replace token REDACTED
-					replace X-Amz-Signature REDACTED
-				}
+				# One filter per field, so the query rule and the share-path rule are one
+				# regexp: the value after ?token= / &X-Amz-Signature= or after
+				# /shares/kp_ and /s/kp_ goes, up to the next delimiter.
+				request>uri regexp "((?:[?&](?:token|X-Amz-Signature)=)|/(?:shares|s)/kp_)[^/?#&]*" "${1}REDACTED"
 			}
 		}
 	}

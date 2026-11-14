@@ -16,7 +16,7 @@
 # ../../../../packages/*. This is why `pnpm deploy --prod` cannot be used here
 # (it relinks workspace packages into the virtual store, whose realpath IS under
 # node_modules) and why --node-linker=hoisted and any bundling step are out.
-ARG NODE_IMAGE=node:24.21.0-bookworm-slim
+ARG NODE_IMAGE=node:24.21.0-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20
 
 # --------------------------------------------------------------------- base
 FROM ${NODE_IMAGE} AS base

@@ -28,9 +28,25 @@ in the pull request that introduces them — see
   them as data. `MCP` **Migration:** parse the first line as JSON for ids; read page text from the block, or merge the
   two as `readPageText` in `apps/api/src/common/page-text.ts` does. A result with no page text is the JSON line
   alone. (#1136)
+- Creating or editing a connector whose URL carries a login (`https://user:token@host/…`) is refused with 400
+  `error.connector.urlCredentials`: connector settings are shown to every member who can see the connector, so a
+  token there was readable by all of them. `HTTP` **Migration:** remove the login from the URL and paste the token
+  as the connector's credential. Connectors saved that way before keep running until they are next edited. (#1114)
+
+### Changed
+
+- The address a request is counted and recorded as is now the right-most `X-Forwarded-For` entry that is not a
+  private address, rather than the first one, so a client can no longer choose its own address for rate limits
+  and audit rows by sending the header itself. An inbound `X-Request-Id` is kept only when it is 8–64 letters,
+  digits, `-` or `_` (a UUID fits); anything else gets a fresh id. (#1112)
 
 ### Fixed
 
+- A share link's token no longer appears in logs: the API's and the web app's request logs, error records and the
+  Caddy access log now mask the token in `/v1/public/shares/<token>/…` and `/s/<token>/…`. A malformed cookie no
+  longer fails the request with a server error. (#1112)
+- API and git remote responses no longer say they run on Express, and every API response tells the browser not to
+  guess its content type. (#1114)
 - A page can no longer give instructions to the coding agent reading it over MCP: page text in MCP tool results now
   arrives marked as data, as it already did for the assistant. Results are about the same size as before. (#1136)
 - Over git, a clone or fetch now follows the workspace's history setting: when history is kept to editors, a viewer
@@ -126,6 +142,12 @@ in the pull request that introduces them — see
   into a project or under a page you could not create a page in is now refused, as creating the page directly is.
   A file named `parsed.md` no longer has its upload overwritten by its own parse. (#1086)
 
+### Security
+
+- Production dependencies updated to releases without known high or critical advisories on paths the app uses:
+  the MCP SDK, undici, zod, Nest and its Express adapter (multer), the web server's express, compression and
+  axios, DOMPurify and vue-i18n, plus their transitive packages. (#1111)
+
 ### Operations
 
 - Migration `20270124100000_chat_link_proof` adds four columns to `chat_link_codes` (nullable, or with a default);
@@ -135,6 +157,16 @@ in the pull request that introduces them — see
   body finalize or a git push accepts), `ARCHIVE_MAX_INFLATED_BYTES` (536870912: what a slide deck, Word document or
   repository archive may inflate to, and what a repository download may weigh) and `FETCH_MAX_BYTES` (10485760: the
   largest embed render read from Figma). No migration. (#1107, #1109)
+- The deploy workflow refuses a tag that is not `vX.Y.Z`, runs every action from a pinned commit and checks
+  kubeseal against its published sha256. A changed `deploy.yml` can be held by GitHub until approved on the run.
+  Dependabot now opens weekly grouped update PRs into `dev` (npm, GitHub Actions, compose images). Repository
+  settings this repo cannot set: enable Dependabot alerts, add a tag ruleset restricting who may create `v*`, and
+  give the `production` environment a required reviewer. `scripts/env-to-github.mjs` now files any URL carrying a
+  login as a secret. (#1111, #1113)
+- `docker-compose.yml` (development) publishes its datastores on `127.0.0.1` only; reach them from another
+  machine through an SSH tunnel. `docker-compose.prod.yml` and the Dockerfiles pin their base images by digest.
+  The Caddyfile's access-log filter changed (synced to the cluster with the release). No new env vars, no
+  migration. (#1112, #1114)
 
 ## [0.53.2] — 2026-11-13
 

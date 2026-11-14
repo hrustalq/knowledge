@@ -16,6 +16,12 @@ vi.mock('../src/connectors/adapters/connection-providers.js', () => ({
   listBranches: vi.fn(),
 }));
 vi.mock('../src/i18n/t.js', () => ({ t: (key: string, args?: object) => `${key} ${JSON.stringify(args ?? {})}` }));
+// The site URL filter resolves the host: answer with a public address instead
+// of asking the machine's resolver (a fake-IP VPN answers 240.0.0.0/4).
+vi.mock('node:dns/promises', () => {
+  const lookup = vi.fn(async () => [{ address: '140.82.112.3', family: 4 }]);
+  return { lookup, default: { lookup } };
+});
 const { ConnectionsService } = await import('../src/connectors/connections.service.js');
 const { CredentialsService } = await import('../src/connectors/credentials.service.js');
 const { decryptSecret } = await import('../src/ai/secret-box.js');

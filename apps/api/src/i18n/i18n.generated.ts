@@ -400,6 +400,8 @@ export type I18nTranslations = {
             "success": string;
             "unlinked": string;
             "notLinked": string;
+            "proofWrong": string;
+            "proofRefused": string;
         };
         "answer": {
             "thinking": string;
@@ -792,6 +794,7 @@ export type I18nTranslations = {
             "nothingToUpdate": string;
             "contentIsDraft": string;
             "uploadMissing": string;
+            "revisionTooLarge": string;
             "revisionNotDraft": string;
             "archived": string;
             "ownerNotMember": string;
@@ -845,6 +848,7 @@ export type I18nTranslations = {
             "discussionsReadOnly": string;
             "concurrentChange": string;
             "isDraft": string;
+            "pushDiffers": string;
             "needsApprovals": string;
             "nothingToMerge": string;
             "conflict": string;
@@ -925,6 +929,7 @@ export type I18nTranslations = {
             "profileNotFound": string;
             "bankIdInvalid": string;
             "contentNotText": string;
+            "documentIdReserved": string;
             "itemsRequired": string;
             "itemTooLong": string;
             "timestampInvalid": string;
@@ -1706,6 +1711,9 @@ export type I18nTranslations = {
                 "reviewRequired": string;
                 "newOnDefault": string;
                 "cannotEdit": string;
+                "cannotCreate": string;
+                "tooLarge": string;
+                "pushTooLarge": string;
                 "cannotRepresent": string;
                 "rejected": string;
                 "mrCreated": string;

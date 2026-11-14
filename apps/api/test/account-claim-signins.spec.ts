@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { PrismaService } from '../prisma/prisma.service.js';
-import { claimUnverifiedAccount } from './account-claim.js';
+import type { PrismaService } from '../src/prisma/prisma.service.js';
+import { claimUnverifiedAccount } from '../src/auth/account-claim.js';
 
 /** A Prisma stand-in that records every write the claim makes. */
 function fakePrisma(opts: { claimed: boolean; boundCredentialIds?: string[] }) {

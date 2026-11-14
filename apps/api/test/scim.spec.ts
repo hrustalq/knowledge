@@ -66,6 +66,7 @@ function fakeDb() {
     user: [], scimUser: [], scimGroup: [], scimGroupMember: [], scimToken: [], idpGroupMapping: [],
     workspaceMember: [], workspaceSettings: [], ssoDomain: [], identityProvider: [], session: [],
     apiKey: [], passwordResetToken: [], emailVerificationToken: [], chatIdentity: [],
+    chatLinkCode: [], plaudLink: [], credential: [], connection: [],
   };
   const related = (table: string, row: Row, name: string): Row | Row[] | null => {
     const rel = RELATIONS[table]?.[name];

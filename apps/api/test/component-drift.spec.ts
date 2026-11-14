@@ -173,6 +173,8 @@ describe('ComponentUsagesService.forChange', () => {
 
   function service(visible: string[]) {
     const prisma = {
+      // An open project: the change is judged against the workspace's pages (restricted ones: e8fd875e).
+      project: { findUnique: async () => ({ id: 'p', restricted: false }) },
       componentDeclaration: { findMany: async () => declarations },
       connectorLink: { findMany: async () => [] },
       document: {
@@ -225,14 +227,22 @@ describe('the sentinel with component ties', () => {
     uses: [POPOVER],
   }));
 
-  function sentinel(opts: { removed?: boolean; drifted?: boolean } = {}) {
+  function sentinel(opts: { removed?: boolean; drifted?: boolean; restricted?: boolean } = {}) {
     const file = opts.removed
       ? { path: POPOVER, previousPath: null, status: 'removed', patch: null }
       : { path: POPOVER, previousPath: null, status: 'modified', patch: '@@ -1 +1 @@' };
     const prisma = {
+      // An open project unless `restricted`: then only `decl` is in it.
+      project: {
+        findUnique: async () => ({ id: 'p', restricted: !!opts.restricted }),
+        findMany: async () => (opts.restricted ? [{ id: 'p' }] : []),
+      },
       connector: { findFirst: async () => ({ id: 'c1', name: 'app', kind: 'codebase', config: {}, projectId: 'p', parentId: null }) },
       connectorLink: { findMany: async () => [] },
-      document: { findMany: async () => [] },
+      document: {
+        findMany: async (args?: { where?: { projectId?: string; id?: { in: string[] } } }) =>
+          args?.where?.projectId ? (args.where.id?.in ?? []).filter((id) => id === 'decl').map((id) => ({ id })) : [],
+      },
     };
     const componentUsages = {
       forChange: vi.fn(async () => ({
@@ -264,8 +274,10 @@ describe('the sentinel with component ties', () => {
       {} as never,
       { get: () => undefined } as never,
       {
-        scopeFor: async (_p: unknown, workspaceId: string) => ({ workspaceId, bypass: true }),
-        audienceScope: async (scope: unknown) => scope,
+        scopeFor: async (_p: unknown, workspaceId: string) => ({ workspaceId, bypass: true, guest: false, denied: new Set(), granted: new Set() }),
+        // The workspace audience: a restricted project's nodes are denied to it.
+        audienceScope: async (scope: Record<string, unknown>) =>
+          opts.restricted ? { ...scope, bypass: false, denied: new Set(['p']) } : scope,
       } as never,
       { promptFor: async () => ({ prompt: '', learningIds: [] }), dismissedPrompt: async () => '' } as never,
       componentUsages as never,
@@ -319,6 +331,13 @@ describe('the sentinel with component ties', () => {
     // #81: the verdict on the page is a doc↔code conflict, keyed by page + pull request.
     expect(onDecl[0].conflictId).toBe('conflict-1');
     expect(conflicts.record).toHaveBeenCalledWith(expect.objectContaining({ kind: 'doc-code', b: null, refreshOpen: true, findingIndex: null }));
+  });
+
+  it("judges a restricted project's change against that project's pages only, and nothing outside it", async () => {
+    const { executor, run, agent, client } = sentinel({ restricted: true, drifted: true });
+    const result = await executor.run(run, agent as never, { userId: 'u-owner' } as never, async () => undefined);
+    expect(client.chat).toHaveBeenCalledTimes(1);
+    expect(result.findings.flatMap((f) => f.documentIds)).toEqual(['decl']);
   });
 
   it('still reports the path fix when no model is configured', async () => {
@@ -375,6 +394,8 @@ describe('DriftPublishSweeper with component findings', () => {
   function sweeper(run: Partial<AgentRun>) {
     const findings = { propose: vi.fn(async () => ({ mergeRequestId: 'mr-1' })) };
     const prisma = {
+      // An open project: the change is judged against the workspace's pages (restricted ones: e8fd875e).
+      project: { findUnique: async () => ({ id: 'p', restricted: false }) },
       connector: {
         findUnique: async () => ({ id: 'c1', name: 'app', enabled: true, workspaceId: 'w', config: { driftCheck: 'propose', driftFlagPages: false } }),
       },

@@ -132,6 +132,11 @@ export function fakePrisma() {
     passwordResetToken: { updateMany: vi.fn(async () => ({ count: 0 })) },
     emailVerificationToken: { updateMany: vi.fn(async () => ({ count: 0 })) },
     chatIdentity: { deleteMany: vi.fn(async () => ({ count: 0 })) },
+    // What the account claim also ends (#1094 leftover): pending chat links, Plaud links, personal credentials.
+    chatLinkCode: { updateMany: vi.fn(async () => ({ count: 0 })) },
+    plaudLink: { deleteMany: vi.fn(async () => ({ count: 0 })) },
+    credential: { deleteMany: vi.fn(async () => ({ count: 0 })), updateMany: vi.fn(async () => ({ count: 0 })) },
+    connection: { findMany: vi.fn(async () => []) },
     workspaceMember: {
       createMany: vi.fn(async ({ data }: Row) => {
         for (const m of data as Row[]) {

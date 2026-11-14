@@ -35,8 +35,13 @@ import type { CreateImportDto, SubmitImportDto } from './dto/imports.dto.js';
 import { currentLocale, t } from '../i18n/t.js';
 import { formatBytes } from '../common/format-bytes.js';
 import { AUTHOR_ID_STUB } from '../activity/actor.js';
+import { PermissionService } from '../permissions/permission.service.js';
+import type { Principal } from '../auth/principal.js';
 
 /** Author fallback in AUTH_MODE=none, the same stub the rest of the API uses. */
+
+/** The uploaded file's object name under the import's prefix. */
+const SOURCE_OBJECT = 'source';
 
 /** Staged images the parser produced, referenced from the parsed markdown. */
 const STAGED_IMAGE_RE = /\/v1\/imports\/([0-9a-f-]{36})\/images\/(\d+)/g;
@@ -54,6 +59,7 @@ export class ImportService {
     private readonly activity: ActivityService,
     private readonly producer: ImportProducer,
     private readonly templates: TemplatesService,
+    private readonly permissions: PermissionService,
     config: ConfigService<Env, true>,
   ) {
     this.maxBytes = config.get('IMPORT_MAX_BYTES', { infer: true });
@@ -66,7 +72,8 @@ export class ImportService {
    * told a 40 MB file is the wrong type once it has finished uploading is the
    * single rudest thing an import flow can do.
    */
-  async create(dto: CreateImportDto, userId?: string): Promise<CreateImportResponse> {
+  async create(dto: CreateImportDto, principal: Principal): Promise<CreateImportResponse> {
+    const userId = principal.userId;
     const format = importFormatFor(dto.filename, dto.contentType);
     if (!format) {
       throw new UnsupportedMediaTypeException(
@@ -82,12 +89,16 @@ export class ImportService {
       );
     }
     await this.projects.requireProjectInWorkspace(dto.projectId, dto.workspaceId);
+    // The page this becomes lands here, so placing it is creating it (#1086).
+    await this.requireCreateUnder(principal, dto.workspaceId, dto.projectId, dto.parentId);
     if (dto.parentId) await this.requireParent(dto.parentId, dto.projectId);
 
     // The id is minted here so the key is known before the insert: one
     // statement, never a row with an empty key (#658).
     const id = randomUUID();
-    const s3Key = this.storage.importObjectKey(dto.workspaceId, id, dto.filename);
+    // A fixed name, never the uploaded one: a file called `parsed.md` would
+    // otherwise be overwritten by its own parse (#1086).
+    const s3Key = this.storage.importObjectKey(dto.workspaceId, id, SOURCE_OBJECT);
     const row = await this.prisma.importJob.create({
       data: {
         id,
@@ -127,8 +138,8 @@ export class ImportService {
    * capability, and a capability that only checks the claimed size checks
    * nothing.
    */
-  async start(importId: string): Promise<ImportJobInfo> {
-    const row = await this.require(importId);
+  async start(importId: string, principal: Principal): Promise<ImportJobInfo> {
+    const row = await this.require(importId, principal);
     if (row.status === 'running') return toInfo(row);
     // Enqueued again rather than returned (#657): the row may have committed
     // while its job did not, and the same jobId makes a live job absorb it.
@@ -143,7 +154,7 @@ export class ImportService {
     const head = await this.storage.headObject(row.s3Key);
     if (!head) throw new BadRequestException(t('error.import.uploadMissing'));
     if (head.contentLength > this.maxBytes) {
-      await this.discard(importId);
+      await this.discard(importId, principal);
       throw new PayloadTooLargeException(
         t('error.import.tooLarge', { size: formatBytes(head.contentLength), limit: formatBytes(this.maxBytes) }),
       );
@@ -163,13 +174,13 @@ export class ImportService {
     return toInfo(updated);
   }
 
-  async get(importId: string): Promise<ImportJobInfo> {
-    return toInfo(await this.require(importId));
+  async get(importId: string, principal: Principal): Promise<ImportJobInfo> {
+    return toInfo(await this.require(importId, principal));
   }
 
   /** The parsed markdown, read once at the point the review step opens. */
-  async content(importId: string): Promise<ImportContentResponse> {
-    const row = await this.require(importId);
+  async content(importId: string, principal: Principal): Promise<ImportContentResponse> {
+    const row = await this.require(importId, principal);
     if (row.status !== 'parsed' && row.status !== 'submitted') {
       throw new ConflictException(t('error.import.notReviewable', { status: t(`status.import.${row.status}`) }));
     }
@@ -186,8 +197,8 @@ export class ImportService {
   }
 
   /** Presigned read for a staged image, so the review step shows the real picture. */
-  async imageUrl(importId: string, index: number): Promise<string> {
-    const row = await this.require(importId);
+  async imageUrl(importId: string, index: number, principal: Principal): Promise<string> {
+    const row = await this.require(importId, principal);
     const prefix = this.storage.importObjectKey(row.workspaceId, row.id, `images/${index}`);
     // The extension is part of the key, so the exact object is found by probing
     // the handful of types a parser can emit rather than by listing the bucket.
@@ -215,8 +226,9 @@ export class ImportService {
    * doing this in pieces would leave a page with broken images every time a
    * step failed halfway.
    */
-  async submit(importId: string, dto: SubmitImportDto, userId?: string): Promise<SubmitImportResponse> {
-    const row = await this.require(importId);
+  async submit(importId: string, dto: SubmitImportDto, principal: Principal): Promise<SubmitImportResponse> {
+    const userId = principal.userId;
+    const row = await this.require(importId, principal);
     if (row.status === 'submitted') {
       throw new ConflictException(t('error.import.alreadySubmitted'));
     }
@@ -229,6 +241,9 @@ export class ImportService {
     const projectId = dto.projectId ?? row.projectId;
     await this.projects.requireProjectInWorkspace(projectId, row.workspaceId);
     const parentId = dto.parentId === undefined ? row.parentId : dto.parentId;
+    // Asked again here, of the destination as it stands now: the submit may
+    // move it, and the grants may have changed since the upload (#1086).
+    await this.requireCreateUnder(principal, row.workspaceId, projectId, parentId);
     if (parentId) await this.requireParent(parentId, projectId);
     // Resolved out here for the same reason: an unknown or archived template is
     // a 404/409 before anything is claimed.
@@ -349,8 +364,8 @@ export class ImportService {
   }
 
   /** Abandoning at the review step is a normal outcome, not an error. */
-  async discard(importId: string): Promise<{ deleted: true }> {
-    const row = await this.require(importId);
+  async discard(importId: string, principal: Principal): Promise<{ deleted: true }> {
+    const row = await this.require(importId, principal);
     await this.cleanup(row).catch(() => undefined);
     await this.prisma.importJob.delete({ where: { id: row.id } });
     return { deleted: true };
@@ -358,10 +373,28 @@ export class ImportService {
 
   // --- internals ------------------------------------------------------------
 
-  private async require(importId: string): Promise<ImportJob> {
+  /**
+   * An import is its uploader's (#1086): it holds a whole file's parsed text
+   * before any page exists to hang permissions off. Anyone else gets the 404
+   * of a missing import — except a workspace admin, who may see everything in
+   * the workspace and tidy up, as with exports. The uploader, who polls this
+   * every second, costs one read.
+   */
+  private async require(importId: string, principal: Principal): Promise<ImportJob> {
     const row = await this.prisma.importJob.findUnique({ where: { id: importId } });
     if (!row) throw new NotFoundException(t('error.import.notFound', { id: importId }));
+    if (row.createdBy === principal.userId) return row;
+    const scope = await this.permissions.scopeFor(principal, row.workspaceId).catch(() => null);
+    if (!scope?.bypass) throw new NotFoundException(t('error.import.notFound', { id: importId }));
     return row;
+  }
+
+  /** `POST /v1/documents`'s check, for the page an import becomes. */
+  private async requireCreateUnder(principal: Principal, workspaceId: string, projectId: string, parentId?: string | null): Promise<void> {
+    await this.permissions.requireCreateUnder(await this.permissions.scopeFor(principal, workspaceId), {
+      projectId,
+      ...(parentId ? { parentId } : {}),
+    });
   }
 
   private async requireParent(parentId: string, projectId: string): Promise<void> {

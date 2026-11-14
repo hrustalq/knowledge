@@ -396,11 +396,15 @@ describe('#658 write pairs commit together', () => {
     const create = vi.fn(({ data }: { data: Record<string, unknown> }) => ({ ...data, status: 'uploading', createdAt: new Date(), updatedAt: new Date() }));
     const { prisma, committed } = fakePrisma({ 'importJob.create': create });
     const storage = { importObjectKey: (ws: string, id: string, f: string) => `w/${ws}/imports/${id}/${f}`, presignPut: async () => 'url' };
-    const svc = new ImportService(prisma, storage as never, { requireProjectInWorkspace: async () => undefined } as never, _, _, _, _, config({ IMPORT_MAX_BYTES: 1e9 }));
-    await svc.create({ workspaceId: WS, projectId: 'p1', filename: 'a.md', contentType: 'text/markdown', sizeBytes: 10 } as never).catch(() => undefined);
+    const permissions = { scopeFor: async () => ({}), requireCreateUnder: async () => undefined };
+    const svc = new ImportService(prisma, storage as never, { requireProjectInWorkspace: async () => undefined } as never, _, _, _, _, permissions as never, config({ IMPORT_MAX_BYTES: 1e9 }));
+    await svc
+      .create({ workspaceId: WS, projectId: 'p1', filename: 'a.md', contentType: 'text/markdown', sizeBytes: 10 } as never, { userId: 'u1' } as never)
+      .catch(() => undefined);
     expect(committed).toEqual(['importJob.create']);
     const data = create.mock.calls[0][0].data as { id: string; s3Key: string };
-    expect(data.s3Key).toBe(`w/${WS}/imports/${data.id}/a.md`);
+    // A fixed name, never the upload's own (#1086).
+    expect(data.s3Key).toBe(`w/${WS}/imports/${data.id}/source`);
   });
 
   it('attachment over the limit: the row goes before the object', async () => {

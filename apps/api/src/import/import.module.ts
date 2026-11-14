@@ -7,6 +7,7 @@ import { ImportQueueModule } from './import-queue.module.js';
 import { TemplatesCoreModule } from '../templates/templates-core.module.js';
 import { ImportController } from './import.controller.js';
 import { ImportService } from './import.service.js';
+import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 
 /**
  * Document import (docs/features/16), API side.
@@ -18,7 +19,7 @@ import { ImportService } from './import.service.js';
  * worker.module.ts.
  */
 @Module({
-  imports: [StorageModule, ProjectsModule, DocumentsModule, ActivityModule, ImportQueueModule, TemplatesCoreModule],
+  imports: [StorageModule, ProjectsModule, DocumentsModule, ActivityModule, ImportQueueModule, TemplatesCoreModule, PermissionsCoreModule],
   controllers: [ImportController],
   providers: [ImportService],
 })

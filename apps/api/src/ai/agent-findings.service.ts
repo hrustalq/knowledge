@@ -30,6 +30,7 @@ import { GlossaryService } from '../glossary/glossary.service.js';
 import { ConflictsService } from '../conflicts/conflicts.service.js';
 import type { Principal } from '../auth/principal.js';
 import { systemScope } from '../permissions/access-scope.js';
+import { PermissionService } from '../permissions/permission.service.js';
 
 /** How much of a cited page the drafter is shown. The workflow executor's cap. */
 const MAX_DOC_CHARS = 24_000;
@@ -66,6 +67,7 @@ export class AgentFindingsService {
     private readonly learnings: AgentLearningsService,
     private readonly glossary: GlossaryService,
     private readonly conflicts: ConflictsService,
+    private readonly permissions: PermissionService,
   ) {}
 
   /**
@@ -162,13 +164,15 @@ export class AgentFindingsService {
     // here rather than sent to a model that would invent an edit.
     const documentId = finding.documentIds[0];
     if (!documentId) throw new BadRequestException(t('error.ai.findingNoDocument'));
-    if (finding.kind === 'orphan') {
-      throw new BadRequestException(t('error.ai.findingOrphan'));
-    }
-
     const document = await this.prisma.document.findUnique({ where: { id: documentId } });
     if (!document || document.workspaceId !== workspaceId) {
       throw new BadRequestException(t('error.ai.findingDocumentGone', { documentId }));
+    }
+    // Asked now, not when the run was made (#1090): the page may have been
+    // restricted since, and the refusal carries no title.
+    await this.requireEdit(principal, workspaceId, documentId);
+    if (finding.kind === 'orphan') {
+      throw new BadRequestException(t('error.ai.findingOrphan'));
     }
 
     // Claim the slot before the model is called, in one statement Postgres
@@ -241,6 +245,8 @@ export class AgentFindingsService {
     if (!document || document.workspaceId !== workspaceId) {
       throw new BadRequestException(t('error.ai.findingDocumentGone', { documentId }));
     }
+    // The REST twin (`POST /v1/documents/:id/outdated`) is editor on the page (#1090).
+    await this.requireEdit(principal, workspaceId, documentId);
 
     const pr = ((run.input ?? {}) as AgentRunInput).pullRequest;
     const res = await this.verification.markOutdated(documentId, {
@@ -361,6 +367,11 @@ export class AgentFindingsService {
       (await this.prisma.project.findFirst({ where: { workspaceId }, orderBy: { createdAt: 'asc' }, select: { id: true } }))
         ?.id;
     if (!projectId) throw new BadRequestException(t('error.ai.findingNoDraft'));
+    // `POST /v1/documents`'s check, for where the draft lands (#1090).
+    await this.permissions.requireCreateUnder(await this.permissions.scopeFor(principal, workspaceId), {
+      projectId,
+      ...(connector?.parentId ? { parentId: connector.parentId } : {}),
+    });
 
     // Same guard as `propose`: two presses race here, and only one may create.
     return this.underClaim(runId, index, 'create-page', async () => {
@@ -669,6 +680,11 @@ export class AgentFindingsService {
       .trim();
     if (!markdown) throw new BadRequestException(t('error.ai.emptyPage'));
     return markdown;
+  }
+
+  /** Edit on the page a verb is about to change, as the route that changes it directly asks. */
+  private async requireEdit(principal: Principal, workspaceId: string, documentId: string): Promise<void> {
+    await this.permissions.requireLevel(await this.permissions.scopeFor(principal, workspaceId), { type: 'document', id: documentId }, 'edit');
   }
 
   /**

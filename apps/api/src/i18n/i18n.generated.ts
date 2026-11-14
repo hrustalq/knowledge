@@ -756,6 +756,7 @@ export type I18nTranslations = {
             "notFound": string;
             "noUserWithEmail": string;
             "notAMember": string;
+            "subjectElsewhere": string;
             "lastAdminDemote": string;
             "lastAdminRemove": string;
             "deleteConfirmMismatch": string;

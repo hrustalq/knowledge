@@ -773,6 +773,7 @@ describe('#811 one revision writer', () => {
       documents,
       logger: { warn: vi.fn() },
       writeBackPage: boom,
+      permissions: { scopeFor: async () => ({}), requireCreateUnder: async () => undefined },
     });
     await expect(svc.createPage(WS, 'run1', 0, { userId: 'u1' } as never)).rejects.toThrow('boom');
     expect(documents.createDocument).toHaveBeenCalled();

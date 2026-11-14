@@ -58,7 +58,7 @@ export class ProfilesService {
     const [pages, pageCount, openWork] = await Promise.all([
       this.pagesFor(workspaceId, userId, visible),
       this.pageCountFor(workspaceId, userId, visible),
-      this.openWorkFor(workspaceId, userId),
+      this.openWorkFor(workspaceId, userId, visible),
     ]);
 
     return {
@@ -161,9 +161,12 @@ export class ProfilesService {
    * What is still owed. Every number here is a link the profile can offer, so
    * a zero is as informative as a five — "nothing open" is the answer someone
    * came for as often as its opposite.
+   *
+   * Counted over the pages the *reader* may open (#1090), as the page list is:
+   * a count is a link, and it must not stand for work on a page they cannot.
    */
-  private async openWorkFor(workspaceId: string, userId: string): Promise<ProfileOpenWork> {
-    const inWorkspace = { document: { workspaceId } } as const;
+  private async openWorkFor(workspaceId: string, userId: string, visible: Prisma.DocumentWhereInput): Promise<ProfileOpenWork> {
+    const inWorkspace = { document: { workspaceId, AND: [visible] } };
 
     const [authoredMergeRequests, reviewing, threadIds] = await Promise.all([
       this.prisma.mergeRequest.count({ where: { ...inWorkspace, authorId: userId, status: 'open' } }),
@@ -204,7 +207,7 @@ export class ProfilesService {
     const [pages, pageCount, openWork] = await Promise.all([
       this.pagesFor(workspaceId, AUTHOR_ID_STUB, {}),
       this.pageCountFor(workspaceId, AUTHOR_ID_STUB, {}),
-      this.openWorkFor(workspaceId, AUTHOR_ID_STUB),
+      this.openWorkFor(workspaceId, AUTHOR_ID_STUB, {}),
     ]);
     return {
       userId: AUTHOR_ID_STUB,

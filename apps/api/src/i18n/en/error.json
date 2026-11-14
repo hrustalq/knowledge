@@ -54,6 +54,7 @@
     "notFound": "Workspace {id} not found",
     "noUserWithEmail": "No user with that email — create the account first (signup or POST /v1/users)",
     "notAMember": "User {userId} is not a member of workspace {workspaceId}",
+    "subjectElsewhere": "Not found in workspace {workspaceId}",
     "lastAdminDemote": "Cannot demote the last admin of the workspace",
     "lastAdminRemove": "Cannot remove the last admin of the workspace",
     "deleteConfirmMismatch": "Type the workspace name exactly to confirm the deletion",

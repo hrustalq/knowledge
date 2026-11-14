@@ -669,6 +669,13 @@ export const envSchema = z.object({
    */
   API_TEST_RUNNER_MODE: z.enum(['off', 'on']).default('off'),
 
+  /**
+   * Let the image proxy (#1133) fetch from private/loopback ranges: intranet
+   * images hotlinked in pages on a self-hosted deployment. Off, such an image
+   * no longer loads in the member app, whose CSP sends it through the proxy.
+   */
+  IMAGE_PROXY_ALLOW_PRIVATE_URLS: boolish(false),
+
   /** Allow web targets on private/loopback ranges (self-hosted SearXNG, intranet). */
   WEB_ALLOW_PRIVATE_URLS: boolish(false),
 

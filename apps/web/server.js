@@ -148,7 +148,11 @@ const SITE_HOST_ASSET_ORIGINS = (() => {
   }
 })()
 publicResponseHeaders(SITE_HOST_ASSET_ORIGINS, undefined) // a bad origin fails at boot, as it does for the app's policy
-app.use(appHostMiddleware(PUBLIC_PATH, { assetOrigins: CSP_ASSET_ORIGINS }))
+// CSP_IMAGE_ORIGINS: more hosts the app's own UI shows pictures from — a
+// self-hosted GitLab's or Jira's account avatars (#1133). Page images need none:
+// they come through the API's image proxy.
+const CSP_IMAGE_ORIGINS = (process.env.CSP_IMAGE_ORIGINS ?? '').split(/\s+/).filter(Boolean)
+app.use(appHostMiddleware(PUBLIC_PATH, { assetOrigins: CSP_ASSET_ORIGINS, imageOrigins: CSP_IMAGE_ORIGINS }))
 
 // A site's embeddable Ask widget script (issue #77 phase 3): `/widget.js` on
 // its host or `/pub/<slug>/widget.js`, before the reader takes it for a page.

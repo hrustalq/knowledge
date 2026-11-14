@@ -5,7 +5,7 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
-import { resolveAssetUrl } from '@/shared/api/api'
+import { imageSrc } from '@/shared/api/api'
 import { ZOOM_ATTR, zoomLabel } from '@knowledge/ui/lightbox'
 import { startWidthDrag } from './width-drag'
 
@@ -13,7 +13,7 @@ const props = defineProps(nodeViewProps)
 const { t } = useI18n()
 const figure = ref<HTMLElement | null>(null)
 
-const src = computed(() => resolveAssetUrl((props.node.attrs.src as string) ?? ''))
+const src = computed(() => imageSrc((props.node.attrs.src as string) ?? ''))
 const width = computed(() => (props.node.attrs.width ? `${props.node.attrs.width}px` : undefined))
 
 /**

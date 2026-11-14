@@ -11,10 +11,10 @@ import { APP_ROBOTS_TXT, APP_SECURITY_HEADERS, appContentSecurityPolicy, appHost
 // server.js's PUBLIC_PATH.
 const PUBLIC_PATH = /^\/(?:s\/[^/?#]+(?:\/[^/?#]+)?\/?|pub\/[a-z0-9-]+(?:\/[^?#]*)?)(?:[?#].*)?$/
 
-function run(path, { siteHost = null, method = 'GET', assetOrigins } = {}) {
+function run(path, { siteHost = null, method = 'GET', assetOrigins, imageOrigins } = {}) {
   const res = { locals: { siteHost }, set: vi.fn(() => res), send: vi.fn(() => res) }
   const next = vi.fn()
-  appHostMiddleware(PUBLIC_PATH, { assetOrigins })({ path: path.split('?')[0], originalUrl: path, method }, res, next)
+  appHostMiddleware(PUBLIC_PATH, { assetOrigins, imageOrigins })({ path: path.split('?')[0], originalUrl: path, method }, res, next)
   return { res, next }
 }
 
@@ -40,10 +40,21 @@ describe('appHostMiddleware', () => {
     expect(d['form-action']).toEqual(["'self'"])
     expect(d['object-src']).toEqual(["'self'"])
     expect(d['frame-ancestors']).toEqual(["'none'"])
-    // Not yet: script-src needs nonces for the inline scripts, img-src an image proxy.
+    // Not yet: script-src needs nonces for the inline scripts (#277).
     expect(d['script-src']).toBeUndefined()
     expect(d['default-src']).toBeUndefined()
-    expect(d['img-src']).toBeUndefined()
+  })
+
+  // #1133: page images come through the image proxy on the app's origin, so
+  // img-src names no wildcard host — only the app's own UI's third parties.
+  it('holds images to the app, the asset origins and the listed third parties', () => {
+    const { res } = run('/documents/x', { assetOrigins: ['http://localhost:9000'], imageOrigins: ['https://gitlab.acme.test'] })
+    const img = directives(res.set.mock.calls[0][0]['Content-Security-Policy'])['img-src']
+    expect(img.slice(0, 4)).toEqual(["'self'", 'data:', 'blob:', 'http://localhost:9000'])
+    expect(img).toContain('https://avatars.githubusercontent.com')
+    expect(img).toContain('https://gitlab.acme.test')
+    expect(img.filter((s) => s === '*' || /^https?:$/.test(s))).toEqual([])
+    expect(() => appContentSecurityPolicy([], ["https://x; img-src *"])).toThrow()
   })
 
   it('lets PDFs preview from the asset origins it is given (presigned URLs off the app origin)', () => {

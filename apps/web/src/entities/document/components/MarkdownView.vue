@@ -16,6 +16,7 @@ import { useI18n } from 'vue-i18n'
 import DOMPurify from 'dompurify'
 import { markdownToHtml, SANITIZE_CONFIG, slugifyHeading } from '@/core/markdown/render'
 import { sanitizeUntrusted, sanitizeUntrustedSvg } from '@/shared/utils/untrusted-markdown'
+import { proxyImages } from '@/shared/utils/proxy-images'
 import { parseScene, renderSceneToSvg } from '@/core/markdown/drawing'
 import { KN, attachmentKind, carryDiagramLayout, embedItemsOf, escapeHtml } from '@/core/markdown/nodes'
 import { embedTile } from '@/entities/document/model/embeds'
@@ -90,8 +91,9 @@ async function render() {
   const markdown = props.markdown ?? ''
   const resolvePage = await pageRefResolver(markdown)
   const raw = markdownToHtml(markdown, { resolvePage })
-  // Stripped before it reaches the DOM: an image starts loading the moment it is inserted.
-  html.value = props.untrusted ? sanitizeUntrusted(raw) : DOMPurify.sanitize(raw, { ...SANITIZE_CONFIG })
+  // Stripped and its images pointed home (attachments, the image proxy) before
+  // it reaches the DOM: an image starts loading the moment it is inserted.
+  html.value = proxyImages(props.untrusted ? sanitizeUntrusted(raw) : DOMPurify.sanitize(raw, { ...SANITIZE_CONFIG }))
   await nextTick()
   if (props.streaming) {
     const root = host.value
@@ -159,20 +161,10 @@ function wrapTables() {
   for (const pre of root.querySelectorAll('pre:not([tabindex])')) pre.setAttribute('tabindex', '0')
 }
 
-/**
- * Attachment links are stored as bare `/v1/...` paths so the markdown stays
- * portable. The environment prefix and the credential are added here, at
- * render time — `<img>` cannot send an Authorization header.
- */
+/** Image sources are already resolved (proxyImages, in render); this makes them lazy and zoomable. */
 function resolveAssets() {
   const root = host.value
   if (!root) return
-  for (const img of root.querySelectorAll<HTMLImageElement>('img[src^="/v1/"]')) {
-    // The selector guarantees a `/v1/…` src, so read it straight: an `?? ''`
-    // fallback here was unreachable, and an empty src is exactly the bug it
-    // looked like it was guarding against.
-    img.src = resolveAssetUrl(img.getAttribute('src')!)
-  }
   // Every image, not only attachments: an external one below the fold is no
   // more urgent than ours.
   for (const img of root.querySelectorAll<HTMLImageElement>('img')) {

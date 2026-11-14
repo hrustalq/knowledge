@@ -181,6 +181,12 @@ in the pull request that introduces them — see
   workflow wizard drafts. (#1142)
 - `GET /v1/connectors` no longer returns a login embedded in a connector URL saved before such URLs were refused.
   (#1142)
+- An external image in a page, comment or glossary card no longer loads from its own host in the reader's browser:
+  the member app fetches it through the API (`GET /v1/image-proxy`, signed-in readers only), so whoever wrote the
+  markdown cannot log who read it. The proxy refuses private addresses and anything that is not an image, sends the
+  host no cookie or referrer, and serves SVG inert. The member app's Content-Security-Policy now carries `img-src`
+  (the app, attachments, and the third-party avatars and Figma thumbnails its own screens show). Share links and
+  published sites still load page images directly. (#1133)
 
 ### Operations
 
@@ -211,6 +217,10 @@ in the pull request that introduces them — see
 - A connector still holding `https://user:token@…` keeps syncing, but its edit form now shows the URL without the
   login and saving drops it: move the token into the connector credential and rotate it, since every viewer of the
   connector list could read it until this release. Dev compose pins `mailpit` and `keycloak` by digest. (#1142)
+- New env vars, both optional with defaults: `IMAGE_PROXY_ALLOW_PRIVATE_URLS` (API, `false`; set `true` on a
+  self-hosted deployment whose pages hotlink intranet images, which otherwise stop loading) and `CSP_IMAGE_ORIGINS`
+  (web, empty; space-separated origins the app's own screens show pictures from, such as a self-hosted GitLab's or
+  Jira's account avatars, which otherwise appear broken). No migration. (#1133)
 
 ## [0.53.2] — 2026-11-13
 

@@ -540,6 +540,11 @@
     "forbidden": "You do not share a workspace with this person.",
     "noDevAvatar": "Pictures cannot be set in AUTH_MODE=none — the dev principal has no account to attach one to."
   },
+  "imageProxy": {
+    "invalid": "That is not an http(s) image address.",
+    "blocked": "That image is on a private address and cannot be fetched.",
+    "unavailable": "That image could not be loaded."
+  },
   "notification": {
     "subjectNotInWorkspace": "A subject can only be watched from the workspace it belongs to.",
     "nothingToMark": "Nothing to mark read: pass `ids` or `all`."

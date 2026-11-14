@@ -452,6 +452,21 @@ export function resolveAssetUrl(path: string): string {
   return path.startsWith('/v1/') ? `${base}${path}` : path
 }
 
+/** The API as the reader's browser sees it: an `<img src>` is fetched there, never by the SSR process. */
+const browserBase = import.meta.env.VITE_API_URL ?? '/api'
+
+/**
+ * An `<img src>` from page content that the member app's CSP lets load
+ * (#1133): an attachment path gets the API prefix, any other http(s) image
+ * goes through the API's image proxy, and `data:`/`blob:` stay as they are.
+ */
+export function imageSrc(src: string): string {
+  if (/^(https?:)?\/\//i.test(src)) {
+    return `${browserBase}/v1/image-proxy?url=${encodeURIComponent(src.startsWith('//') ? `https:${src}` : src)}`
+  }
+  return src.startsWith('/v1/') ? `${browserBase}${src}` : src
+}
+
 /**
  * Kept as the shared entry point its 11 call sites already import; the actual
  * formatting moved to lib/format so it follows the UI language rather than the

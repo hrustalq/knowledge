@@ -3781,6 +3781,16 @@
       "platformAdmin": false
     },
     {
+      "method": "GET",
+      "path": "/v1/image-proxy",
+      "tag": "image-proxy",
+      "summary": "An external image from a page, fetched through the API (member app only)",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "POST",
       "path": "/v1/imports",
       "tag": "imports",

@@ -65,6 +65,8 @@ export class GitAccessService {
         // A guest's visible set is not closed upward, so a path could name a page they cannot open.
         if (scope.guest) throw new ForbiddenException(t('error.git.guest'));
         await this.features.require(workspaceId, 'git');
+        // A clone carries every commit of every page it shows: history, held to the workspace's audience (#958, #1107).
+        await this.permissions.requireHistory(scope);
         return { principal, scope, locale };
       });
     });

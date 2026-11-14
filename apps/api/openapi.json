@@ -47107,7 +47107,7 @@
         "properties": {
           "uploadId": {
             "type": "string",
-            "description": "The uploadId returned by the reserve step."
+            "description": "The uploadId returned by the reserve step (a UUID)."
           },
           "filename": {
             "type": "string",

@@ -10,6 +10,7 @@ import { promisify } from 'node:util';
 import request from 'supertest';
 import { vi } from 'vitest';
 import type { PrismaService } from '../src/prisma/prisma.service.js';
+import { readPageText } from '../src/common/page-text.js';
 
 /**
  * #636 phases 3, 4 and 5a acceptance: a project is a git remote. Real `git`
@@ -123,12 +124,20 @@ describe('git remote (e2e, #636)', () => {
     expect(res.body.result.isError).toBeFalsy();
   }
 
+  /** The workspace's editing policy, told to both processes (each caches it). */
+  async function policy(input: { publishMode?: 'direct' | 'review'; historyAudience?: 'everyone' | 'editors' | null }): Promise<void> {
+    const { EditingPolicyService } = await import('../src/auth/editing-policy.service.js');
+    for (const a of [app, gitApp]) await a.get(EditingPolicyService).set(WORKSPACE, input, people.admin.id);
+  }
+
   beforeAll(async () => {
     process.env.AUTH_MODE = 'api-key';
     process.env.GIT_REMOTE_ENABLED = 'true';
     process.env.GIT_CACHE_DIR = cache;
     // Every credentialed git request counts against the per-IP limit, and this spec makes a few hundred.
     process.env.PUBLIC_RATE_LIMIT_PER_MIN = '100000';
+    // #1107: small enough for one test file to cross, far above every page here.
+    process.env.REVISION_MAX_BYTES = '300000';
     const [{ createE2eApp }, { NestFactory }, { GitModule }, { PrismaService }] = await Promise.all([
       import('./e2e-app.js'),
       import('@nestjs/core'),
@@ -146,6 +155,8 @@ describe('git remote (e2e, #636)', () => {
     people.alice = await person('alice', 'editor');
     people.bob = await person('bob', 'editor');
     people.gus = await person('gus', 'guest');
+    // Written for direct publishing; the default became `review` in #958. A case that needs review sets it.
+    await policy({ publishMode: 'direct', historyAudience: null });
     projectId = (await prisma.project.create({ data: { workspaceId: WORKSPACE, name: `Git e2e ${nonce}` } })).id;
     for (const old of await prisma.project.findMany({ where: { workspaceId: WORKSPACE, id: { not: projectId } } })) {
       await http().delete(`/v1/projects/${old.id}`).query({ mode: 'cascade', confirm: old.name }).set(as(people.admin.key)).expect(ok(200));
@@ -613,7 +624,7 @@ describe('git remote (e2e, #636)', () => {
         .expect(ok(200))
         .then((res) => {
           expect(res.body.result.isError).toBeFalsy();
-          return JSON.parse(res.body.result.content[0].text);
+          return readPageText(res.body.result.content[0].text);
         });
     await mcp('knowledge_create_branch', { documentId: guide.id, name: 'mcp-terms' });
     await write(people.bob, guide.id, 'mcp-terms', `# Style guide ${nonce}\n\nOne, from MCP.\n`);
@@ -621,6 +632,107 @@ describe('git remote (e2e, #636)', () => {
     expect(listed.branches.find((b: { name: string }) => b.name === 'mcp-terms').pages).toEqual([{ documentId: guide.id, title: `Style guide ${nonce}` }]);
     const opened = await mcp('knowledge_create_merge_request', { projectId, sourceBranch: 'mcp-terms', title: 'Terms over MCP' });
     expect(opened.mergeRequest).toMatchObject({ documentId: guide.id, pageCount: 1 });
+  });
+
+  it('a clone is history: held to the workspace\'s history audience (#1107)', async () => {
+    await policy({ historyAudience: 'editors' });
+    try {
+      // Bob's read key reads as a viewer; his write key is an editor's.
+      expect(await refs(people.bob.read)).toMatchObject({ status: 403, text: expect.stringMatching(/history/i) });
+      expect((await refs(people.bob.key)).status).toBe(200);
+    } finally {
+      await policy({ historyAudience: null });
+    }
+  });
+
+  it('a push creating a root page needs edit on the project, as REST does (#1107)', async () => {
+    // Bob may view the project, not edit in it; Alice keeps editing for the cases after this one.
+    const grants = (level: string) => [
+      { subjectType: 'user', subjectId: people.bob.id, level },
+      { subjectType: 'user', subjectId: people.alice.id, level: 'edit' },
+    ];
+    await http().put(`/v1/projects/${projectId}/access`).set(as(people.admin.key)).send({ restricted: true, grants: grants('view') }).expect(ok(200));
+    try {
+      const bob = await clone(people.bob.key, 'bob-root');
+      await git(['checkout', '-q', '-b', 'bob-root'], bob);
+      writeFileSync(join(bob, 'bob-root-page.md'), `# Bob root ${nonce}\n`);
+      await git(['add', '.'], bob);
+      await git(['commit', '-qm', 'A root page'], bob);
+      expect(await gitFails(['push', 'origin', 'HEAD:bob-root'], bob)).toMatch(/bob-root-page\.md/);
+      expect(await prisma.document.count({ where: { projectId, title: `Bob root ${nonce}` } })).toBe(0);
+
+      await http().put(`/v1/projects/${projectId}/access`).set(as(people.admin.key)).send({ restricted: true, grants: grants('edit') }).expect(ok(200));
+      expect(mrIdIn(await gitAll(['push', 'origin', 'HEAD:bob-root'], bob))).toBeTruthy();
+      expect(await prisma.document.count({ where: { projectId, title: `Bob root ${nonce}` } })).toBe(1);
+    } finally {
+      await http().put(`/v1/projects/${projectId}/access`).set(as(people.admin.key)).send({ restricted: false, grants: [] }).expect(ok(200));
+    }
+  });
+
+  it('refuses a file over the revision ceiling before reading it (#1107)', async () => {
+    const dir = join(work, 'alice-w');
+    await git(['checkout', '-q', 'main'], dir);
+    await git(['pull', '-q', '--ff-only', 'origin', 'main'], dir);
+    await git(['checkout', '-q', '-b', 'too-big'], dir);
+    // Compresses to almost nothing: the ceiling is on what it inflates to.
+    writeFileSync(join(dir, 'too-big.md'), `# Too big\n\n${'a'.repeat(400_000)}\n`);
+    await git(['add', '.'], dir);
+    await git(['commit', '-qm', 'Too big'], dir);
+    expect(await gitFails(['push', 'origin', 'HEAD:too-big'], dir)).toMatch(/too-big\.md/);
+    expect(await prisma.document.count({ where: { projectId, title: 'Too big' } })).toBe(0);
+    await git(['checkout', '-q', 'main'], dir);
+  });
+
+  it('a merge by push lands only what a web merge would (#1107)', async () => {
+    const dir = join(work, 'alice-w');
+    await git(['checkout', '-q', 'main'], dir);
+    await git(['pull', '-q', '--ff-only', 'origin', 'main'], dir);
+    await git(['checkout', '-q', '-b', 'reviewed'], dir);
+    edit(dir, `${slugs.open}.md`, (x) => `${x}\nThe reviewed line.\n`);
+    await git(['commit', '-qam', 'Reviewed'], dir);
+    const mrId = mrIdIn(await gitAll(['push', '-o', 'merge_request.create', 'origin', 'HEAD:reviewed'], dir))!;
+    await http().post(`/v1/merge-requests/${mrId}/approve`).set(as(people.admin.key)).expect(ok(201));
+    const status = async () => (await prisma.mergeRequest.findUniqueOrThrow({ where: { id: mrId } })).status;
+    const main = () => git(['ls-remote', repo(people.admin.read), 'refs/heads/main']);
+    const before = await main();
+    await git(['checkout', '-q', 'main'], dir);
+
+    // The merge commit's own tree says something nobody reviewed.
+    await git(['merge', '-q', '--no-ff', '--no-commit', 'reviewed'], dir);
+    edit(dir, `${slugs.open}.md`, (x) => x.replace('The reviewed line.', 'A line nobody reviewed.'));
+    await git(['commit', '-qam', 'Merge reviewed'], dir);
+    expect(await gitFails(['push', 'origin', 'HEAD:main'], dir)).toMatch(/merge-differs/);
+    expect(await status()).toBe('open');
+    expect(await main()).toBe(before);
+
+    // A merge that leaves the reviewed change out ("ours") would flip the request with nothing landed.
+    await git(['reset', '-q', '--hard', 'origin/main'], dir);
+    await git(['merge', '-q', '-s', 'ours', '--no-edit', 'reviewed'], dir);
+    expect(await gitFails(['push', 'origin', 'HEAD:main'], dir)).toMatch(/merge-differs/);
+    expect(await status()).toBe('open');
+
+    // An earlier commit in the push that edits the request's page is a direct edit, held to the publish mode,
+    // even when a later one takes it back and the merge then lands exactly what a web merge would.
+    await git(['reset', '-q', '--hard', 'origin/main'], dir);
+    edit(dir, `${slugs.open}.md`, (x) => `${x}\nSlipped in first.\n`);
+    await git(['commit', '-qam', 'Slip'], dir);
+    edit(dir, `${slugs.open}.md`, (x) => x.replace('\nSlipped in first.\n', ''));
+    await git(['commit', '-qam', 'Unslip'], dir);
+    await git(['merge', '-q', '--no-ff', '--no-edit', 'reviewed'], dir);
+    await policy({ publishMode: 'review' });
+    try {
+      expect(await gitFails(['push', 'origin', 'HEAD:main'], dir)).toMatch(/review required/);
+    } finally {
+      await policy({ publishMode: 'direct' });
+    }
+    expect(await status()).toBe('open');
+    expect(await main()).toBe(before);
+
+    // The honest merge lands.
+    await git(['reset', '-q', '--hard', 'origin/main'], dir);
+    await git(['merge', '-q', '--no-ff', '--no-edit', 'reviewed'], dir);
+    expect(await gitAll(['push', 'origin', 'HEAD:main'], dir)).toMatch(/Merged merge request/);
+    expect(await status()).toBe('merged');
   });
 
   it('404s with the workspace toggle off', async () => {

@@ -1,4 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { pageJson } from './tools/context.js';
 import { z } from 'zod';
 import {
   AUTHORABLE_RELATION_TYPES,
@@ -66,6 +67,8 @@ const PROPOSES =
 export function registerCaptureTools(server: McpServer, deps: CaptureToolDeps): void {
   const { captures, principal, guard, json } = deps;
   const run = async (fn: () => Promise<unknown>) => json(await fn());
+  /** A read whose result carries page titles and capture text (#1136). */
+  const runPage = async (tool: string, fn: () => Promise<unknown>) => pageJson(tool, await fn());
 
   server.registerTool(
     'knowledge_capture_decision',
@@ -261,7 +264,7 @@ export function registerCaptureTools(server: McpServer, deps: CaptureToolDeps): 
     async ({ workspaceId, projectId, text: query, title, kind, limit }) => {
       await guard.ws(workspaceId, 'viewer');
       const scope = await guard.scope(workspaceId);
-      return run(() =>
+      return runPage('knowledge_find_similar', () =>
         captures.findSimilar(principal, scope, {
           text: query,
           ...(title ? { title } : {}),
@@ -294,7 +297,7 @@ export function registerCaptureTools(server: McpServer, deps: CaptureToolDeps): 
     async ({ workspaceId, status, kind, projectId, mine, cursor, limit, includePayload }) => {
       await guard.ws(workspaceId, 'viewer');
       const scope = await guard.scope(workspaceId);
-      return run(async () => {
+      return runPage('knowledge_list_captures', async () => {
         const listed = await captures.list(
           {
             workspaceId,

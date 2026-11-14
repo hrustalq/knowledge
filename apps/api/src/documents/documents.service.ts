@@ -1,7 +1,7 @@
 import { EditingPolicyService } from '../auth/editing-policy.service.js';
 import type { WriteAuthority } from './write-authority.js';
 import { createHash, randomUUID } from 'node:crypto';
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, PayloadTooLargeException } from '@nestjs/common';
 import * as Y from 'yjs';
 import { readPageSource } from '../common/frontmatter.js';
 import type {
@@ -37,7 +37,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { toRevisionInfo } from './revision-info.js';
 import { sourceConnectorOf, sourceSyncOf } from './source-backed.js';
 import { normalizeRelationTarget, tagFilterKey } from '../common/relations.js';
-import { StorageService } from '../storage/storage.service.js';
+import { ObjectTooLargeError, StorageService } from '../storage/storage.service.js';
 import { GraphService } from '../graph/graph.service.js';
 import type { TemporalPoint } from '../graph/temporal.js';
 import { IngestionProducer } from '../ingestion/ingestion.producer.js';
@@ -583,7 +583,11 @@ export class DocumentsService {
     }
 
     // One read (#818): the hashed bytes and the stored version are the same object.
-    const stored = await this.storage.getObjectVersion(revision.s3Key);
+    const stored = await this.storage.getObjectVersion(revision.s3Key).catch((e: unknown) => {
+      // The draft stays: a smaller body can be uploaded to the same revision (#1109).
+      if (e instanceof ObjectTooLargeError) throw new PayloadTooLargeException(t('error.document.revisionTooLarge', { max: e.max }));
+      throw e;
+    });
     if (!stored) {
       throw new BadRequestException(t('error.document.uploadMissing', { key: revision.s3Key }));
     }

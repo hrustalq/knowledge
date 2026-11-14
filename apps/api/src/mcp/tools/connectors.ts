@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { WIKI_SECTIONS, WORK_ITEM_SOURCE_KINDS } from '@knowledge/contracts';
 import { toRunInfo } from '../../connectors/connectors.service.js';
-import { json, type McpToolContext } from './context.js';
+import { json, pageJson, type McpToolContext } from './context.js';
 
 /** Connectors, the repo wiki and tracker work items (docs/features/19, 32, 46). */
 export function registerConnectorsTools(ctx: McpToolContext): void {
@@ -56,7 +56,7 @@ export function registerConnectorsTools(ctx: McpToolContext): void {
     async ({ runId }) => {
       await guard.connectorRun(runId, 'viewer');
       const run = await svc.prisma.connectorRun.findUnique({ where: { id: runId }, select: { workspaceId: true } });
-      return json(await svc.connectors.getRun(runId, await guard.scope(run!.workspaceId)));
+      return pageJson('knowledge_get_connector_run', await svc.connectors.getRun(runId, await guard.scope(run!.workspaceId)));
     },
   );
 
@@ -73,7 +73,7 @@ export function registerConnectorsTools(ctx: McpToolContext): void {
     },
     async ({ connectorId }) => {
       await guard.connector(connectorId, 'viewer');
-      return json(await svc.repoWiki.info(connectorId));
+      return pageJson('knowledge_repo_wiki', await svc.repoWiki.info(connectorId));
     },
   );
 
@@ -122,7 +122,7 @@ export function registerConnectorsTools(ctx: McpToolContext): void {
       // A ticket on a page the caller cannot open is omitted, never refused (#424).
       const items = await svc.workItems.list(await guard.scope(row.workspaceId), row);
       const wanted = state ?? 'all';
-      return json(
+      return pageJson('knowledge_list_work_items', 
         items.filter((item) =>
           wanted === 'all' ? true : wanted === 'closed' ? item.state !== 'open' : item.state === 'open',
         ),
@@ -158,7 +158,7 @@ export function registerConnectorsTools(ctx: McpToolContext): void {
         ...(connectorId ? { connectorId } : {}),
         ...(attach ? { attach } : {}),
       });
-      return json(workItem);
+      return pageJson('knowledge_handoff_work_item', workItem);
     },
   );
 }

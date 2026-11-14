@@ -8,6 +8,10 @@ import { deflateSync } from 'node:zlib';
  */
 export type GitObjectType = 'commit' | 'tree' | 'blob';
 
+/** The largest push read into memory, and what its pages may inflate to in total (#1107). */
+// ponytail: a push is buffered whole; stream it into index-pack if pushes this large become routine.
+export const MAX_PUSH_BYTES = 256 * 1024 * 1024;
+
 export interface GitObject {
   type: GitObjectType;
   body: Buffer;

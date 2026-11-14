@@ -9258,7 +9258,7 @@ export interface components {
             sizeBytes: number;
         };
         CompleteAvatarUploadDto: {
-            /** @description The uploadId returned by the reserve step. */
+            /** @description The uploadId returned by the reserve step (a UUID). */
             uploadId: string;
             filename: string;
         };

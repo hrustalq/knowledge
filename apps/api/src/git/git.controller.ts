@@ -6,10 +6,8 @@ import { t, withLocale } from '../i18n/t.js';
 import { GitAccessService, type GitCaller } from './git-access.service.js';
 import { GitRepoService } from './git-repo.service.js';
 import { GitPushService } from './git-push.service.js';
+import { MAX_PUSH_BYTES } from './git-objects.js';
 
-/** The largest push read into memory. */
-// ponytail: a push is buffered whole; stream it into index-pack if pushes this large become routine.
-const MAX_PUSH_BYTES = 256 * 1024 * 1024;
 
 /**
  * Smart HTTP for a project as a git remote (#636): `git clone` / `git fetch`

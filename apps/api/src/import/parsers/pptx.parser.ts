@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { unzipSync } from 'fflate';
+import { DEFAULT_ARCHIVE_MAX_INFLATED_BYTES, unzipBounded } from '../../common/unzip-bounded.js';
 import type { ImportParserId } from '@knowledge/contracts';
 import { extensionFor, imagePath } from './docx.parser.js';
 import {
@@ -31,7 +31,7 @@ export class PptxParser implements DocumentParser {
 
   async parse(bytes: Uint8Array, ctx: ParseContext): Promise<ParseResult> {
     await ctx.onStage(t('import.stage.unpacking-deck'), 0.15);
-    const zip = unzipSync(bytes);
+    const zip = unzipBounded(bytes, ctx.maxInflatedBytes ?? DEFAULT_ARCHIVE_MAX_INFLATED_BYTES);
 
     const slideNames = Object.keys(zip)
       .filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name))

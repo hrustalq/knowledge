@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { AGENT_LEARNING_MAX_CHARS, AGENT_LEARNING_STATUSES, type AiAgentChoice } from '@knowledge/contracts';
-import { json, type McpToolContext } from './context.js';
+import { json, pageJson, type McpToolContext } from './context.js';
 
 /** Agents, their learnings and document workflows (docs/features/17, 20, #70). */
 export function registerAgentsTools(ctx: McpToolContext): void {
@@ -24,7 +24,7 @@ export function registerAgentsTools(ctx: McpToolContext): void {
     },
     async ({ workspaceId, agentKey, status }) => {
       await guard.ws(workspaceId, 'viewer');
-      return json({
+      return pageJson('knowledge_list_agent_learnings', {
         learnings: await svc.learnings.list(workspaceId, { status: status ?? 'active', ...(agentKey ? { agentKey } : {}) }),
       });
     },
@@ -145,7 +145,7 @@ export function registerAgentsTools(ctx: McpToolContext): void {
     },
     async ({ runId }) => {
       await guard.workflowRun(runId, 'viewer');
-      return json(await svc.workflows.getRun(runId));
+      return pageJson('knowledge_get_workflow_run', await svc.workflows.getRun(runId));
     },
   );
 }

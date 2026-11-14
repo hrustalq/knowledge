@@ -29,6 +29,16 @@ export interface HeadResult {
   contentType: string | null;
 }
 
+/** An object over the ceiling its reader set, refused from its length before its body is read (#1109). */
+export class ObjectTooLargeError extends Error {
+  constructor(
+    readonly size: number,
+    readonly max: number,
+  ) {
+    super(`object of ${size} bytes is over the ${max}-byte ceiling`);
+  }
+}
+
 @Injectable()
 export class StorageService {
   private readonly s3: S3Client;
@@ -40,9 +50,11 @@ export class StorageService {
    */
   private readonly presigner: S3Client;
   private readonly bucket: string;
+  private readonly revisionMaxBytes: number;
 
   constructor(config: ConfigService<Env, true>) {
     this.bucket = config.get('S3_BUCKET', { infer: true });
+    this.revisionMaxBytes = config.get('REVISION_MAX_BYTES', { infer: true });
     const endpoint = config.get('S3_ENDPOINT', { infer: true });
     const publicEndpoint = config.get('S3_PUBLIC_ENDPOINT', { infer: true });
     const client = (url: string) =>
@@ -303,10 +315,16 @@ export class StorageService {
   /**
    * One GetObject: the bytes and the version they came from, so finalize
    * hashes exactly the version it records (#818). `null` when the key is absent.
+   * A body over `REVISION_MAX_BYTES` is refused from the response's own length
+   * before it is read (#1109): the same response, so no HEAD-then-GET race.
    */
   async getObjectVersion(objectKey: string): Promise<{ text: string; versionId: string | null } | null> {
     try {
       const res = await this.s3.send(new GetObjectCommand({ Bucket: this.bucket, Key: objectKey }));
+      if ((res.ContentLength ?? 0) > this.revisionMaxBytes) {
+        (res.Body as Readable | undefined)?.destroy?.();
+        throw new ObjectTooLargeError(res.ContentLength!, this.revisionMaxBytes);
+      }
       return { text: (await res.Body?.transformToString('utf-8')) ?? '', versionId: res.VersionId ?? null };
     } catch (e: unknown) {
       if ((e as { name?: string }).name === 'NoSuchKey') return null;

@@ -1,4 +1,5 @@
 import { setTimeout as sleep } from 'node:timers/promises';
+import { readCapped } from '../../common/read-capped.js';
 import { Injectable } from '@nestjs/common';
 import { load as parseYaml } from 'js-yaml';
 import { webCrawls, type ApiSpecKind, type ApiSpecSyntax, type ConnectorCapabilities, type ConnectorKind } from '@knowledge/contracts';
@@ -163,7 +164,8 @@ export class WebAdapter implements ConnectorAdapter {
         xml = await this.polite(ctx, url, async () => {
           const headers = { accept: 'application/xml, text/xml', 'user-agent': WEB_SOURCE_USER_AGENT, ...credentialHeaders(ctx.credential) };
           const res = await connectorFetch(url, { headers, signal: this.signal(ctx), redirect: 'follow' }, ctx);
-          return (await res.text()).slice(0, MAX_BYTES);
+          // Cut off while it streams (#1109): a sitemap past the ceiling is read for what fits.
+          return new TextDecoder().decode((await readCapped(res, MAX_BYTES)).bytes);
         });
       } catch {
         continue;
@@ -230,8 +232,10 @@ export class WebAdapter implements ConnectorAdapter {
 
     const length = Number(res.headers.get('content-length') ?? 0);
     if (length > MAX_BYTES) throw new Error(t('error.source.tooLarge', { mb: MAX_BYTES / 1024 / 1024 }));
-    const body = await res.text();
-    if (body.length > MAX_BYTES) throw new Error(t('error.source.tooLarge', { mb: MAX_BYTES / 1024 / 1024 }));
+    // Counted while it streams (#1109): a body with no length, or a false one, stops at the ceiling.
+    const read = await readCapped(res, MAX_BYTES);
+    if (!read.whole) throw new Error(t('error.source.tooLarge', { mb: MAX_BYTES / 1024 / 1024 }));
+    const body = new TextDecoder().decode(read.bytes);
 
     const version = writeValidators(res.headers.get('etag'), res.headers.get('last-modified'));
     const nextRef: ExternalRef = { ...ref, url, ...(version ? { version } : {}) };

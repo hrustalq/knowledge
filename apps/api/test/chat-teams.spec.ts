@@ -2,6 +2,10 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair, type JWK, type KeyLike } from 'jose';
 import { TeamsAdapter, splitConversation, teamsCredential, teamsText } from '../src/chat/adapters/teams.adapter.js';
 import type { ChatAdapterContext, RawInbound } from '../src/chat/adapters/chat-adapter.types.js';
+import { safeFetch } from '../src/common/safe-fetch.js';
+
+// The guarded dial passes through to the stubbed global, so a test sees both (#1110).
+vi.mock('../src/common/safe-fetch.js', () => ({ safeFetch: vi.fn((url: string, init: RequestInit) => globalThis.fetch(url, init)) }));
 
 /**
  * Microsoft Teams (#381), the adapter on its own: Bot Framework JWT validation
@@ -194,6 +198,8 @@ describe('outbound', () => {
     expect(edit.init.method).toBe('PUT');
     expect(edit.url).toBe(`https://smba.trafficmanager.net/emea/v3/conversations/${encodeURIComponent(`${CHANNEL};messageid=1700000000001`)}/activities/bot-1`);
     expect(edit.body.attachments).toEqual([]);
+    // #1110: the service URL is dialled guarded, and a redirect from it is never followed.
+    expect(vi.mocked(safeFetch)).toHaveBeenCalledWith(post.url, expect.objectContaining({ redirect: 'error' }));
   });
 
   it('a personal chat is answered in the chat itself; an unknown conversation uses the global service URL', async () => {

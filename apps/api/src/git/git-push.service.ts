@@ -13,14 +13,14 @@ import { PermissionService } from '../permissions/permission.service.js';
 import { canSee, visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { CompareService } from '../documents/compare.service.js';
-import { MergeRequestsService } from '../documents/merge-requests.service.js';
+import { MergeRequestsService, type PushLanding } from '../documents/merge-requests.service.js';
 import { ActivityService } from '../activity/activity.service.js';
 import { t } from '../i18n/t.js';
 import type { GitCaller } from './git-access.service.js';
 import { runGit, GitRepoService, type Project } from './git-repo.service.js';
-import { isValidRefName } from './git-objects.js';
+import { isValidRefName, MAX_PUSH_BYTES } from './git-objects.js';
 import { stripIdLine, withIdLine, type GitView, type IdLine, type ModelCommit, type PageExt } from './git-view.js';
-import { ProjectCommitsService, type CommitChange } from './project-commits.service.js';
+import { ProjectCommitsService, type CommitChange, type Place } from './project-commits.service.js';
 import { parseMarkdown } from '../common/frontmatter.js';
 import { FILENAME_FORBIDDEN, RESERVED_STEM } from './slug.js';
 
@@ -141,6 +141,7 @@ export class GitPushService {
   private readonly logger = new Logger(GitPushService.name);
   private readonly root: string;
   private readonly webBaseUrl: string;
+  private readonly maxBlobBytes: number;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -157,6 +158,7 @@ export class GitPushService {
   ) {
     this.root = config.get('GIT_CACHE_DIR', { infer: true });
     this.webBaseUrl = config.get('WEB_BASE_URL', { infer: true }).replace(/\/+$/, '');
+    this.maxBlobBytes = config.get('REVISION_MAX_BYTES', { infer: true });
   }
 
   /** The receive-pack advertisement: the caller's refs. A read key gets it too, and learns why in `remote:` on push. */
@@ -187,7 +189,7 @@ export class GitPushService {
           await this.repos.withRepo(workspaceId, projectId, caller.scope, true, async (repo) => {
             const env = { GIT_OBJECT_DIRECTORY: quarantine, GIT_ALTERNATE_OBJECT_DIRECTORIES: join(repo.dir, 'objects') };
             const git = (args: string[], input?: Buffer | string) => runGit(['--git-dir', repo.dir, ...args], input, env);
-            if (!unpacked && pack.length > 0) await git(['index-pack', '--stdin', '--fix-thin'], pack);
+            if (!unpacked && pack.length > 0) await git(['index-pack', '--stdin', '--fix-thin', `--max-input-size=${MAX_PUSH_BYTES}`], pack);
             unpacked = true;
             messages.push(...(await this.one(workspaceId, projectId, caller, c, options, repo, git)));
           });
@@ -242,7 +244,7 @@ export class GitPushService {
     const planned = await this.plan(c, branch, head, view, project, git);
     const isDefault = branch === project.defaultBranch;
     const created = planned.flatMap((p) => p.changes.filter((ch) => ch.isNew));
-    await this.assertMayWrite(planned, scope);
+    await this.assertMayWrite(planned, scope, projectId);
 
     // Invariant 1: what we would serve back is what was pushed, or nothing lands.
     const blobs = new Map(planned.flatMap((p) => p.changes.filter((ch) => ch.content).map((ch) => [ch.revisionId, ch.blob] as const)));
@@ -255,14 +257,25 @@ export class GitPushService {
       const mr = await this.mergedBy(projectId, branch, planned.at(-1)!);
       const changes = planned.flatMap((p) => p.changes);
       if (mr) {
-        // What the push carries beside the merge request passes the checks a direct push would (#769).
+        // What the push carries beside the merge request passes the checks a direct push would (#769), and
+        // only the merge commit itself carries the request's pages: an earlier commit touching one is a direct edit (#1107).
         const spanned = await this.mergeRequests.spannedPages(mr.id);
-        await this.assertMayGoDirect(changes.filter((ch) => !spanned.has(ch.documentId)), branch, principal);
+        const last = planned.at(-1)!;
+        await this.assertMayGoDirect(
+          planned.flatMap((p) => p.changes.filter((ch) => p !== last || !spanned.has(ch.documentId))),
+          branch,
+          principal,
+        );
         const merged = await this.mergeRequests
-          .mergeByPush(mr.id, principal, async () => {
-            const ids = await write(internalWrite('merge'));
-            return ids.revisionFor(mr.documentId);
-          })
+          .mergeByPush(
+            mr.id,
+            principal,
+            async () => {
+              const ids = await write(internalWrite('merge'));
+              return ids.revisionFor(mr.documentId);
+            },
+            landing(planned, spanned, head ? view.index(head) : new Map()),
+          )
           .catch((e: unknown) => this.gateRefusal(e));
         return [t('error.git.push.mrMerged', { title: merged.title, url: this.mrUrl(merged.mergeRequestId) })];
       }
@@ -296,6 +309,8 @@ export class GitPushService {
     git: (args: string[], input?: Buffer | string) => Promise<Buffer>,
   ): Promise<PlannedCommit[]> {
     const known = [...view.branchRefs().values()];
+    // What the push's pages inflate to, across all its commits: the body cap counts compressed bytes (#1107).
+    const budget = { left: MAX_PUSH_BYTES };
     const list = (await git(['rev-list', '--topo-order', '--reverse', '--end-of-options', c.newSha, ...known.map((sha) => `^${sha}`)]))
       .toString()
       .split('\n')
@@ -320,7 +335,7 @@ export class GitPushService {
       if (parents.some((p) => p == null)) throw new PushRefused('unknown parent', t('error.git.push.unknownParent', { sha: sha.slice(0, 8) }));
       const ids = parents as string[];
       const subject = /\n\n([^\n]*)/.exec(header.toString('utf8'))?.[1]?.trim() ?? '';
-      const commit = await this.planOne(sha, ids, parentShas, git, indexOf, tentative);
+      const commit = await this.planOne(sha, ids, parentShas, git, indexOf, tentative, budget);
       const planned: PlannedCommit = { sha, id: randomUUID(), parents: ids, header, subject, ...commit };
       bySha.set(sha, planned);
       out.push(planned);
@@ -335,6 +350,7 @@ export class GitPushService {
     git: (args: string[], input?: Buffer | string) => Promise<Buffer>,
     indexOf: (id: string | null) => Map<string, Entry>,
     tentative: Set<string>,
+    budget: { left: number },
   ): Promise<{ changes: Planned[]; index: Map<string, Entry> }> {
     const before = indexOf(parents[0] ?? null);
     const other = parents[1] ? indexOf(parents[1]) : null;
@@ -355,6 +371,11 @@ export class GitPushService {
       if (mode !== '100644') throw new PushRefused('unsupported file mode', t('error.git.push.mode', { path }));
       const ext = extOf(path);
       if (!ext) throw new PushRefused('not a page', t('error.git.push.notPage', { path }));
+      // Sized before it is read: a blob that compresses to nothing can still inflate past any memory (#1107).
+      const size = Number((await git(['cat-file', '-s', blob])).toString().trim());
+      if (!(size <= this.maxBlobBytes)) throw new PushRefused('too large', t('error.git.push.tooLarge', { path, max: this.maxBlobBytes }));
+      budget.left -= size;
+      if (budget.left < 0) throw new PushRefused('too large', t('error.git.push.pushTooLarge', { max: MAX_PUSH_BYTES }));
       const bytes = await git(['cat-file', 'blob', blob]);
       try {
         new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
@@ -498,15 +519,26 @@ export class GitPushService {
     }
   }
 
-  /** The pusher may edit every page the push changes, and the parent of every page it creates. */
-  private async assertMayWrite(planned: PlannedCommit[], scope: GitCaller['scope']): Promise<void> {
-    const checked = new Set<string>();
+  /**
+   * The pusher may edit every page the push changes, and create every page it
+   * creates where it lands: edit on its parent, or on the project for a root
+   * page — `requireCreateUnder`, the question REST and MCP ask (#1107). A page
+   * under a parent this same push creates is covered by that parent's check.
+   */
+  private async assertMayWrite(planned: PlannedCommit[], scope: GitCaller['scope'], projectId: string): Promise<void> {
+    const fresh = new Set(planned.flatMap((p) => p.changes.filter((x) => x.isNew).map((x) => x.documentId)));
+    const asked = new Set<string>();
     for (const ch of planned.flatMap((p) => p.changes)) {
-      const id = ch.isNew ? ch.parentDocumentId : ch.documentId;
-      if (!id || checked.has(id) || planned.some((p) => p.changes.some((x) => x.isNew && x.documentId === id))) continue;
-      checked.add(id);
-      await this.permissions.requireLevel(scope, { type: 'document', id }, 'edit').catch((e: unknown) => {
-        if (e instanceof HttpException) throw new PushRefused('forbidden', t('error.git.push.cannotEdit', { path: ch.path }));
+      // A page this push creates is checked once, where it lands; a later commit editing it asks nothing more (#768).
+      if (ch.isNew ? ch.parentDocumentId && fresh.has(ch.parentDocumentId) : fresh.has(ch.documentId)) continue;
+      const key = ch.isNew ? `under:${ch.parentDocumentId ?? ''}` : ch.documentId;
+      if (asked.has(key)) continue;
+      asked.add(key);
+      const check = ch.isNew
+        ? this.permissions.requireCreateUnder(scope, { projectId, parentId: ch.parentDocumentId ?? undefined })
+        : this.permissions.requireLevel(scope, { type: 'document', id: ch.documentId }, 'edit');
+      await check.catch((e: unknown) => {
+        if (e instanceof HttpException) throw new PushRefused('forbidden', t(ch.isNew ? 'error.git.push.cannotCreate' : 'error.git.push.cannotEdit', { path: ch.path }));
         throw e;
       });
     }
@@ -721,6 +753,37 @@ export class GitPushService {
   private mrUrl(id: string): string {
     return `${this.webBaseUrl}/merge-requests/${id}`;
   }
+}
+
+/**
+ * What a merge by push lands on the merge request's pages (#1107), for
+ * `mergeByPush` to hold against what a web merge would: each page's last body
+ * the push writes (a merge node that keeps this side's body writes none), and
+ * the place of each page the push moves, renames or archives relative to
+ * `base`, the branch as the pusher fetched it.
+ */
+function landing(planned: PlannedCommit[], spanned: ReadonlySet<string>, base: ReadonlyMap<string, { documentId: string; parentDocumentId: string | null; slug: string }>): PushLanding {
+  const bodies = new Map<string, string>();
+  const written = new Map<string, string>();
+  for (const ch of planned.flatMap((p) => p.changes)) {
+    if (!ch.content) continue;
+    const text = 'body' in ch.content ? ch.content.body.toString('utf8') : written.get(ch.content.copyOf);
+    if (text === undefined) continue;
+    written.set(ch.revisionId, text);
+    if (spanned.has(ch.documentId)) bodies.set(ch.documentId, text);
+  }
+  const placeIn = (index: Iterable<{ documentId: string; parentDocumentId: string | null; slug: string }>, id: string): Place => {
+    for (const e of index) if (e.documentId === id) return { parentDocumentId: e.parentDocumentId, slug: e.slug, removed: false };
+    return { parentDocumentId: null, slug: '', removed: true };
+  };
+  const places = new Map<string, Place>();
+  const last = planned.at(-1)!.index;
+  for (const id of spanned) {
+    const before = placeIn(base.values(), id);
+    const after = placeIn(last.values(), id);
+    if (before.removed !== after.removed || before.parentDocumentId !== after.parentDocumentId || before.slug !== after.slug) places.set(id, after);
+  }
+  return { bodies, places };
 }
 
 /** A commit object's parent SHAs and everything after its `tree` and `parent` lines, verbatim. */

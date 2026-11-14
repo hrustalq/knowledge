@@ -4,6 +4,7 @@ import type { Connector } from '@prisma/client';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import request from 'supertest';
 import type { PrismaService } from '../src/prisma/prisma.service.js';
+import { readPageText } from '../src/common/page-text.js';
 
 /**
  * #76 acceptance, end to end against live infra: page restrictions hold for
@@ -432,7 +433,7 @@ describe('page permissions (e2e, #76)', () => {
     it('MCP search and reads honour the restriction for a scoped key', async () => {
       const results = async (p: Person) => {
         const res = await mcp(p, 'knowledge_search', { workspaceId: WORKSPACE, query: `payroll ${word}`, projectIds: [projectId] });
-        return (JSON.parse(res.content[0].text).results as Hit[]).map((h) => h.documentId);
+        return (readPageText(res.content[0].text).results as Hit[]).map((h) => h.documentId);
       };
       const bob = await results(people.bob);
       expect(bob.includes(ids.P) || bob.includes(ids.C)).toBe(false);
@@ -514,7 +515,7 @@ describe('page permissions (e2e, #76)', () => {
 
     it('applies the same scope to knowledge_get_document over MCP', async () => {
       const read = async (p: Person) =>
-        (JSON.parse((await mcp(p, 'knowledge_get_document', { documentId: ids.O })).content[0].text) as { backlinks: Array<{ documentId: string }> })
+        (readPageText((await mcp(p, 'knowledge_get_document', { documentId: ids.O })).content[0].text) as { backlinks: Array<{ documentId: string }> })
           .backlinks.map((b) => b.documentId);
       expect(await read(people.alice)).toEqual([ids.P]);
       expect(await read(people.bob)).toEqual([]);
@@ -767,8 +768,8 @@ describe('page permissions (e2e, #76)', () => {
       const rest = await usagesAs(people.bob);
       const byPage = await mcp(people.bob, 'knowledge_code_usages', { documentId: ids.O });
       const byPath = await mcp(people.bob, 'knowledge_code_usages', { workspaceId: WORKSPACE, path: 'lib/money.ts' });
-      expect(JSON.parse(byPage.content[0].text).usages).toEqual(rest.usages);
-      expect(JSON.parse(byPath.content[0].text).usages).toEqual(rest.usages);
+      expect(readPageText(byPage.content[0].text).usages).toEqual(rest.usages);
+      expect(readPageText(byPath.content[0].text).usages).toEqual(rest.usages);
       expect(byPath.content[0].text).not.toContain(titles.P);
     });
 
@@ -890,7 +891,7 @@ describe('page permissions (e2e, #76)', () => {
         title: `Agent notes ${word}`,
         content: `Notes for ${word}.`,
       });
-      draft.mcp = JSON.parse(viaMcp.content[0].text).documentId;
+      draft.mcp = readPageText(viaMcp.content[0].text).documentId;
       draft.open = (await createAs(people.alice, { title: `Open child ${word}`, parentId: draft.rest, visibility: 'workspace' })).documentId;
       draft.nested = (await createAs(people.alice, { title: `Private child ${word}`, parentId: draft.rest })).documentId;
       // What import, connector pulls and workflows call: no visibility, no person behind it.
@@ -1025,7 +1026,7 @@ describe('page permissions (e2e, #76)', () => {
       expect(branch.body.branch).toMatchObject({ restricted: true, ownerId: people.alice.id });
       const rev = await createRevision(people.alice, `draft/${people.alice.id}`, `# Handbook\n\nThe ${secret} rewrite.\n`);
       expect(rev.isError).toBeFalsy();
-      privateRev = JSON.parse(rev.content[0].text).revisionId;
+      privateRev = readPageText(rev.content[0].text).revisionId;
       // Not recorded, so never published: no feed row, live frame, watcher notification or workflow trigger.
       expect(await prisma.activityLog.count({ where: { subjectId: privateRev } })).toBe(0);
     });
@@ -1113,7 +1114,7 @@ describe('page permissions (e2e, #76)', () => {
     const write = async (p: Person, branch: string, text: string) => {
       const res = await mcp(p, 'knowledge_create_revision', { documentId: page, branch, content: text });
       expect(res.isError).toBeFalsy();
-      return JSON.parse(res.content[0].text).revisionId as string;
+      return readPageText(res.content[0].text).revisionId as string;
     };
     const publish = (branchId: string, body: Record<string, unknown> = {}) =>
       http().post(`/v1/documents/${page}/branches/${branchId}/publish`).set(as(people.alice)).send({ title: 'Edit', ...body });

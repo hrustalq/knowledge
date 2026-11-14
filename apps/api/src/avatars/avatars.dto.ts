@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsIn, IsInt, IsString, Length, Min } from 'class-validator';
+import { IsIn, IsInt, IsString, IsUUID, Length, Min } from 'class-validator';
 import { AVATAR_CONTENT_TYPES, AVATAR_MAX_BYTES } from '@knowledge/contracts';
 
 export class CreateAvatarUploadDto {
@@ -21,9 +21,8 @@ export class CreateAvatarUploadDto {
 }
 
 export class CompleteAvatarUploadDto {
-  @ApiProperty({ description: 'The uploadId returned by the reserve step.' })
-  @IsString()
-  @Length(1, 64)
+  @ApiProperty({ description: 'The uploadId returned by the reserve step (a UUID).' })
+  @IsUUID()
   uploadId!: string;
 
   @ApiProperty({ maxLength: 200 })

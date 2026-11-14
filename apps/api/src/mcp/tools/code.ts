@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { MAX_USAGE_LIMIT } from '../../components/component-match.js';
 import { COMPONENT_DRAFT_MAX_PATHS, API_CHANGE_RULE_IDS, CODE_SAMPLE_LANGS, normalizeEntityKey } from '@knowledge/contracts';
-import { json, type McpToolContext } from './context.js';
+import { json, pageJson, type McpToolContext } from './context.js';
 
 /** Code usages, component drafts and API specs (#236, #78). */
 export function registerCodeTools(ctx: McpToolContext): void {
@@ -40,11 +40,11 @@ export function registerCodeTools(ctx: McpToolContext): void {
       if (!documentId === !path) throw new Error('Give exactly one of documentId or path');
       if (documentId) {
         const scope = await guard.scope(await guard.doc(documentId, 'viewer'));
-        return json(await svc.componentUsages.forDocument(scope, documentId, { symbols, limit }));
+        return pageJson('knowledge_code_usages', await svc.componentUsages.forDocument(scope, documentId, { symbols, limit }));
       }
       if (!workspaceId) throw new Error('path needs a workspaceId');
       await guard.ws(workspaceId, 'viewer');
-      return json(
+      return pageJson('knowledge_code_usages', 
         await svc.componentUsages.forPath(await guard.scope(workspaceId), { path: path!, repository, symbols, limit }),
       );
     },
@@ -74,7 +74,7 @@ export function registerCodeTools(ctx: McpToolContext): void {
     async ({ workspaceId, documentId, query, limit }) => {
       await guard.ws(workspaceId, 'viewer');
       if (documentId) await guard.doc(documentId, 'viewer');
-      return json(await svc.apiSpecs.search(await guard.scope(workspaceId), { q: query, documentId, limit }));
+      return pageJson('knowledge_list_api_operations', await svc.apiSpecs.search(await guard.scope(workspaceId), { q: query, documentId, limit }));
     },
   );
 
@@ -108,7 +108,7 @@ export function registerCodeTools(ctx: McpToolContext): void {
       const linkedPages = edges
         .filter((e) => !specIds.has(e.documentId))
         .map((e) => ({ documentId: e.documentId, title: e.documentTitle, relationType: e.relationType, extractor: e.extractor }));
-      return json({ entityKey: key, operations: found.operations, linkedPages });
+      return pageJson('knowledge_get_api_operation', { entityKey: key, operations: found.operations, linkedPages });
     },
   );
 
@@ -134,7 +134,7 @@ export function registerCodeTools(ctx: McpToolContext): void {
       await guard.doc(documentId, 'viewer');
       await guard.branches(documentId, { revisionIds: [fromRevisionId, toRevisionId].filter((r): r is string => !!r) }, 'viewer');
       await guard.history(workspaceId, documentId);
-      return json(await svc.apiDiffs.require(documentId, fromRevisionId, toRevisionId));
+      return pageJson('knowledge_diff_api_spec', await svc.apiDiffs.require(documentId, fromRevisionId, toRevisionId));
     },
   );
 

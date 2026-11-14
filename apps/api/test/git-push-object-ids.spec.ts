@@ -35,7 +35,9 @@ function service() {
   return { receive: (b: Buffer) => svc.receive(WS, PROJECT, caller as never, b), repos };
 }
 
-beforeEach(() => runGit.mockClear());
+beforeEach(() => {
+  runGit.mockClear();
+});
 
 describe('git push object ids', () => {
   it.each([
@@ -57,5 +59,33 @@ describe('git push object ids', () => {
     const mergeBase = runGit.mock.calls.map(([args]) => args).find((args) => args.includes('merge-base'));
     expect(mergeBase).toBeDefined();
     expect(mergeBase!.indexOf('--end-of-options')).toBeLessThan(mergeBase!.indexOf(NEW));
+  });
+});
+
+describe('git push blob size (#1107)', () => {
+  const BLOB = 'c'.repeat(40);
+  it('asks a blob its size and refuses one over the ceiling without reading it', async () => {
+    runGit.mockImplementation(async (args: string[]) => {
+      const a = args.slice(2);
+      if (a[0] === 'rev-list') return Buffer.from(`${NEW}\n`);
+      if (a[0] === 'cat-file' && a[1] === 'commit') return Buffer.from(`tree ${'d'.repeat(40)}\nparent ${OLD}\nauthor a <a> 1 +0000\n\nBig\n`);
+      if (a[0] === 'diff-tree') return Buffer.from(`:000000 100644 ${'0'.repeat(40)} ${BLOB} A\0big.md\0`);
+      if (a[0] === 'cat-file' && a[1] === '-s') return Buffer.from('900000000\n');
+      return Buffer.alloc(0);
+    });
+    const view = { branchRefs: () => new Map([['main', OLD]]), idOf: () => 'c1', index: () => new Map() };
+    const repos = {
+      withRepo: vi.fn(async (_ws: string, _p: string, _s: unknown, _w: boolean, fn: (r: unknown) => Promise<unknown>) =>
+        fn({ dir: join(root, 'repo'), view, project: { model: { heads: new Map([['main', 'c1']]) }, defaultBranch: 'main', blobs: new Map() } }),
+      ),
+    };
+    const config = { get: (key: string) => ({ GIT_CACHE_DIR: root, WEB_BASE_URL: 'https://kn.test', REVISION_MAX_BYTES: 1_000_000 })[key] };
+    const svc = new GitPushService({} as never, {} as never, repos as never, {} as never, {} as never, {} as never, {} as never, { requireRole: vi.fn(async () => undefined) } as never, {} as never, {} as never, config as never);
+    const out = (await svc.receive(WS, PROJECT, { principal: { userId: 'u', apiKey: null }, scope: systemScope(WS) } as never, body(OLD, NEW))).toString();
+    expect(out).toContain('ng refs/heads/main too large');
+    const calls = runGit.mock.calls.map(([args]) => args.slice(2));
+    expect(calls).toContainEqual(['cat-file', '-s', BLOB]);
+    expect(calls.some((a) => a[0] === 'cat-file' && a[1] === 'blob')).toBe(false);
+    expect(runGit.mock.calls.find(([args]) => args.includes('index-pack'))?.[0]).toBeUndefined();
   });
 });

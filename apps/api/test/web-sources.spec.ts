@@ -49,8 +49,29 @@ function sentHeaders(call = 0): Record<string, string> {
   return (fetchMock.mock.calls[call]![1] as RequestInit).headers as Record<string, string>;
 }
 
+/** A 64 MB body with no length header, counting what was read of it (#1109). */
+function endless() {
+  let pulls = 0;
+  const stream = new ReadableStream<Uint8Array>({
+    pull(c) {
+      pulls += 1;
+      if (pulls > 64) return c.close();
+      c.enqueue(new TextEncoder().encode('a'.repeat(1024 * 1024)));
+    },
+  });
+  return { stream, pulls: () => pulls };
+}
+
 describe('WebAdapter', () => {
   const adapter = new WebAdapter();
+
+  it('stops reading a page with no length past the ceiling, and refuses it (#1109)', async () => {
+    fetchMock.mockReset();
+    const body = endless();
+    fetchMock.mockResolvedValueOnce(new Response(body.stream, { status: 200, headers: { 'content-type': 'text/plain' } }));
+    await expect(adapter.fetch(ctx(), { externalId: URL_MD, title: URL_MD, url: URL_MD })).rejects.toThrow(/tooLarge|MB/);
+    expect(body.pulls()).toBeLessThan(10);
+  }, 10_000);
 
   it('reads markdown as written and keeps the validators', async () => {
     fetchMock.mockReset();

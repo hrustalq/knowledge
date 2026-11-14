@@ -13,6 +13,7 @@ import { SearchService } from '../search/search.service.js';
 import { firstPerPage } from '../search/ranking.js';
 import { readFrontmatterRelations, readFrontmatterTags } from '../common/relations.js';
 import { wrapUntrusted } from '../common/untrusted.js';
+import { withPageText } from '../common/page-text.js';
 import { TemplatesService } from '../templates/templates.service.js';
 import { CommunitiesService } from '../communities/communities.service.js';
 import { MAX_COMMUNITY_LEVELS } from '../agents/communities.js';
@@ -72,15 +73,6 @@ const SEARCH_CHAT_TOOL: ChatCompletionFunctionTool = {
     },
   },
 };
-
-/**
- * A read tool's answer (#1102): what this database says about a page (ids,
- * cite labels, trust) as plain JSON, then everything the page's authors wrote
- * — titles, trails, text — inside the one untrusted wrapper.
- */
-function withPageText(facts: object, text: object, tool: string): string {
-  return `${JSON.stringify(facts)}\n${wrapUntrusted(JSON.stringify(text), tool, 'document')}`;
-}
 
 @Injectable()
 export class AssistantReadToolsService {

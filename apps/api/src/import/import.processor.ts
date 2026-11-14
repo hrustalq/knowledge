@@ -41,6 +41,7 @@ const STAGE_THROTTLE_MS = 400;
 export class ImportProcessor extends WorkerHost {
   private readonly logger = new Logger(ImportProcessor.name);
   private readonly timeoutMs: number;
+  private readonly maxInflatedBytes: number;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -51,6 +52,7 @@ export class ImportProcessor extends WorkerHost {
   ) {
     super();
     this.timeoutMs = config.get('IMPORT_PARSE_TIMEOUT_MS', { infer: true });
+    this.maxInflatedBytes = config.get('ARCHIVE_MAX_INFLATED_BYTES', { infer: true });
   }
 
   async process(job: Job<ImportJobData>): Promise<void> {
@@ -94,6 +96,7 @@ export class ImportProcessor extends WorkerHost {
           userId: row.createdBy ?? '',
           filename: row.sourceFilename,
           contentType: row.contentType,
+          maxInflatedBytes: this.maxInflatedBytes,
           onStage: async (stage, progress) => {
             const now = Date.now();
             if (now - lastStageWrite < STAGE_THROTTLE_MS) return;

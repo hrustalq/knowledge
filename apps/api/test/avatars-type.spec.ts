@@ -44,3 +44,15 @@ describe('avatar content types', () => {
     expect(storage.presignGet).not.toHaveBeenCalled();
   });
 });
+
+/** #1109: the reserve step hands out a UUID; anything else never reaches the object key. */
+describe('avatar uploadId', () => {
+  it('is a UUID, so it is one key segment', async () => {
+    const { validate } = await import('class-validator');
+    const { plainToInstance } = await import('class-transformer');
+    const { CompleteAvatarUploadDto } = await import('../src/avatars/avatars.dto.js');
+    const errors = async (uploadId: string) => (await validate(plainToInstance(CompleteAvatarUploadDto, { uploadId, filename: 'me.png' }))).length;
+    for (const bad of ['../../projects/p1/x', 'a/b', 'not-a-uuid', '']) expect(await errors(bad), bad).toBeGreaterThan(0);
+    expect(await errors('3f2b8c1e-9d4a-4e6b-8a2f-1c3d5e7f9a0b')).toBe(0);
+  });
+});

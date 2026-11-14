@@ -328,6 +328,11 @@ workspace segment must own the project, or the request 404s, which is the
 cross-tenant guard. `AUTH_MODE=none` lets the dev principal through, as
 elsewhere. Failed authentication is rate-limited like the public routes.
 
+A clone or fetch carries every commit of every page it shows, so it is history
+(feature 79): with `history_audience = editors`, `GitAccessService.authorize`
+asks `requireHistory(scope)` and a caller below editor (a read key reads as a
+viewer) gets `403 Page history in this workspace is kept to editors` (#1107).
+
 ## How it meets the house rules
 
 **"The API never streams file bodies."** Packs flow through a **sixth
@@ -670,6 +675,19 @@ header bytes. Where the build differs from the plan above:
   `MergeRequestsService.mergeByPush` runs the gates the web merge runs (shared
   as `gates` + `breakingGate`), lands the push inside the transaction that
   flips the merge request, and prints `Merged merge request`.
+- **A merge by push lands only what the web merge would** (#1107, decided
+  2026-11-14). The approvals were given to the source head, so each of the
+  request's pages must come out of the push with the web merge's body (the
+  clean 3-way result, else the source head; a conflict refuses as on the web)
+  and in the web merge's place; anything else — a merge commit whose tree says
+  something nobody reviewed, or an `-s ours` merge that leaves the change out —
+  is `ng main merge-differs`. Only the merge commit carries the request's
+  pages: an earlier commit in the same push that touches one is a direct edit,
+  held to the checks below. A conflict resolved locally is pushed to the
+  source branch and merged from there, not pushed into the target as a merge.
+- **A new page needs what REST asks to create one** (#1107):
+  `requireCreateUnder`, edit on its parent, or on the project for a root page.
+  A view grant on the project no longer lets a push add a root page.
 - **A direct push to the default branch** needs edit on every page it changes
   and is refused when any of them has a protected default branch, even for an
   admin. Only a merge by push reaches a protected branch, behind the same admin
@@ -683,7 +701,10 @@ header bytes. Where the build differs from the plan above:
 - The merge request URL is `${WEB_BASE_URL}/merge-requests/<id>`; merge
   requests have no short number.
 - A push is read whole into memory (256 MB cap), and page bodies go to MinIO
-  inside the transaction (`ponytail:` markers on both).
+  inside the transaction (`ponytail:` markers on both). Each pushed file is
+  sized with `git cat-file -s` before it is read and refused above
+  `REVISION_MAX_BYTES` (default 50 MiB), the pages of one push may inflate to
+  256 MB in all, and `index-pack` runs with `--max-input-size` (#1107).
 - Every push request counts against `PUBLIC_RATE_LIMIT_PER_MIN` per IP, as
   fetches do.
 - There is no `git.pushed` activity row yet: a pushed revision is a

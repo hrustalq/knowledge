@@ -223,6 +223,7 @@
     "profileNotFound": "No MCP tool set named {profile} on a memory bank",
     "bankIdInvalid": "A bank id is 1 to 200 characters with no control characters",
     "contentNotText": "Only text can be retained: `content` must be a string",
+    "documentIdReserved": "A `document_id` starting with `graph:` or `file:` belongs to another memory tool set; choose another id",
     "itemsRequired": "A retain request carries 1 to {max} items",
     "itemTooLong": "An item holds at most {max} characters",
     "timestampInvalid": "`timestamp` must be an ISO 8601 date or \"unset\"",

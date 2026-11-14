@@ -39,6 +39,13 @@ describe('retain items (#986)', () => {
       expect(() => readRetainItems(items as never, null, LIMITS)).toThrow(BadRequestException);
     }
   });
+
+  it('refuses a document id another wire owns: a graph observation or a file’s recall chunks (#1108)', () => {
+    for (const document_id of ['graph:3f1c:0000000001', 'graph:', 'file:/memories/notes.md', 'file:']) {
+      expect(() => readRetainItems([{ content: 'mine now', document_id }], null, LIMITS)).toThrow(BadRequestException);
+    }
+    expect(readRetainItems([{ content: 'a', document_id: 'graphs-of-q3' }], null, LIMITS)[0]!.documentId).toBe('graphs-of-q3');
+  });
 });
 
 describe('fact extraction, the pure half (#986)', () => {

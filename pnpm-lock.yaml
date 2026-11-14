@@ -678,8 +678,8 @@ importers:
         specifier: ^10.4.1
         version: 10.4.1(eslint@9.39.5(jiti@2.7.0))
       vue-i18n:
-        specifier: ^11.4.10
-        version: 11.4.10(vue@3.5.42(typescript@6.0.3))
+        specifier: ^11.4.20
+        version: 11.4.20(vue@3.5.42(typescript@6.0.3))
       vue-router:
         specifier: ^4.5.1
         version: 4.6.4(vue@3.5.42(typescript@6.0.3))
@@ -7842,12 +7842,6 @@ packages:
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
     peerDependencies:
       eslint: ^8.57.0 || ^9.0.0 || ^10.0.0
-
-  vue-i18n@11.4.10:
-    resolution: {integrity: sha512-Lp+BjOxqzOY87DS6Z8KrQrpiTr9IN/Lt4kZEilwyXG2Wrx+AcU6IVsAW92HNXtVcn1HFFPV6ty41p9e/qDpyvg==}
-    engines: {node: '>= 22'}
-    peerDependencies:
-      vue: ^3.0.0
 
   vue-i18n@11.4.20:
     resolution: {integrity: sha512-gyUMq9f+5T3ZvmkjWy+0dzKesaTVN95JdRzjJPW0qKrzFKy/NOqA0wMw9MPraMjTAjHmBhhRA4AwQOnoKztPEw==}
@@ -15952,14 +15946,6 @@ snapshots:
       semver: 7.8.5
     transitivePeerDependencies:
       - supports-color
-
-  vue-i18n@11.4.10(vue@3.5.42(typescript@6.0.3)):
-    dependencies:
-      '@intlify/core-base': 11.4.10
-      '@intlify/devtools-types': 11.4.10
-      '@intlify/shared': 11.4.10
-      '@vue/devtools-api': 6.6.4
-      vue: 3.5.42(typescript@6.0.3)
 
   vue-i18n@11.4.20(vue@3.5.42(typescript@6.0.3)):
     dependencies:

@@ -604,14 +604,14 @@ const tab = usePageTabs(tabs, 'members')
         <DialogHeader>
           <DialogTitle>{{ t('access.addMember') }}</DialogTitle>
           <DialogDescription>
-            {{ t('access.pickerSearchesNonMembers') }}
+            {{ canSeeAccounts ? t('access.pickerSearchesNonMembers') : t('access.pickerExactEmail') }}
           </DialogDescription>
         </DialogHeader>
         <form id="add-member" class="space-y-3" @submit.prevent="addMember">
           <Autocomplete
             v-model="pickedValue"
             :label="t('access.user')"
-            :placeholder="t('access.searchUsers')"
+            :placeholder="canSeeAccounts ? t('access.searchUsers') : t('access.fullEmail')"
             :multiple="false"
             :load="loadCandidates"
           />

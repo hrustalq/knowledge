@@ -1,3 +1,4 @@
+import { claimUnverifiedAccount } from '../auth/account-claim.js';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, type ScimGroup } from '@prisma/client';
@@ -129,6 +130,17 @@ export class ScimService {
         if (authority && user.displayName !== f.displayName) {
           user = await this.prisma.user.update({ where: { id: user.id }, data: { displayName: f.displayName } });
         }
+        // The workspace proved the domain: an address signup never confirmed is now the directory's person (#1094).
+        if (authority && !user.emailVerifiedAt && (await claimUnverifiedAccount(this.prisma, user.id))) {
+          void this.audit.record({
+            workspaceId: ws,
+            actor: 'scim',
+            action: 'auth.account_claimed',
+            params: { via: 'scim', tokenId: caller.tokenId },
+            ok: true,
+            target: user.id,
+          });
+        }
       } else {
         try {
           user = await this.prisma.user.create({
@@ -163,7 +175,7 @@ export class ScimService {
         ok: true,
         target: user.id,
       });
-      if (!f.active) await this.offboard(user.id, authority);
+      if (!f.active) await this.offboard(ws, user.id, authority);
       await this.roleSync.applyScim(ws, [user.id]);
       return user.id;
     }, SCIM_TX);
@@ -191,7 +203,7 @@ export class ScimService {
       await this.prisma.scimGroupMember.deleteMany({ where: { userId: rec.userId, group: { workspaceId: ws } } });
       await this.prisma.scimUser.deleteMany({ where: { workspaceId: ws, userId: rec.userId } });
       await this.roleSync.applyScim(ws, [rec.userId]);
-      const disabled = await this.offboard(rec.userId, authority);
+      const disabled = await this.offboard(ws, rec.userId, authority);
       void this.audit.record({
         workspaceId: ws,
         actor: 'scim',
@@ -218,7 +230,8 @@ export class ScimService {
       // The global account moves only under a domain this workspace has proven.
       const authority = await this.domainAuthority(ws, rec.user.email);
       const account: Prisma.UserUpdateInput = {};
-      if (authority && f.email !== rec.user.email) account.email = f.email;
+      // …and only to another address on a domain it proved, never off it (#1094).
+      if (authority && f.email !== rec.user.email && (await this.domainAuthority(ws, f.email))) account.email = f.email;
       if (authority && f.displayName !== rec.user.displayName) account.displayName = f.displayName;
       if (Object.keys(account).length) {
         try {
@@ -247,7 +260,7 @@ export class ScimService {
       ];
       if (f.active !== rec.active) await this.roleSync.applyScim(ws, [rec.userId]);
       if (!f.active && rec.active) {
-        const disabled = await this.offboard(rec.userId, authority);
+        const disabled = await this.offboard(ws, rec.userId, authority);
         void this.audit.record({
           workspaceId: ws,
           actor: 'scim',
@@ -272,12 +285,18 @@ export class ScimService {
   }
 
   /**
-   * Sessions end everywhere — they are not per workspace — and the account is
-   * disabled only under a verified domain. Returns whether it was disabled.
+   * Under a domain this workspace verified, the account is the workspace's to
+   * end: every session goes and the account is disabled. Without it the
+   * directory may name anyone's address, so it ends only what is its own —
+   * the membership (`applyScim`) and the sessions its own identity providers
+   * opened (#1096). Returns whether the account was disabled.
    */
-  private async offboard(userId: string, authority: boolean): Promise<boolean> {
+  private async offboard(workspaceId: string, userId: string, authority: boolean): Promise<boolean> {
+    if (!authority) {
+      await this.sessions.revokeIssuedBy(userId, workspaceId);
+      return false;
+    }
     await this.sessions.revokeAllForUser(userId);
-    if (!authority) return false;
     const { count } = await this.prisma.user.updateMany({ where: { id: userId, disabledAt: null }, data: { disabledAt: new Date() } });
     return count > 0;
   }

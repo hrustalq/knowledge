@@ -69,13 +69,16 @@ describe('the GitHub callback lands on /oauth/github (#564)', () => {
     const oauth = new GithubOauthService(config, {} as PrismaService);
     const recorded: string[] = [];
     const browse = { addInstallation: async (_ws: string, _user: string, id: string) => (recorded.push(id), { connectionId: 'c' }) } as unknown as GithubBrowseService;
-    const controller = new GithubController(new GithubAppService(config), oauth, browse, config);
+    // The starter's own browser (#1095).
+    const tokenAuth = { resolveSessionCookie: async () => ({ userId: 'u' }) };
+    const controller = new GithubController(new GithubAppService(config), oauth, browse, config, {} as never, tokenAuth as never);
+    const req = { headers: { cookie: 'kn_token=ks_u' } };
     const redirect = (url: string) => urls.push(url);
     const urls: string[] = [];
 
-    await controller.callback({ redirect } as never, 'forged');
+    await controller.callback(req as never, { redirect } as never, 'forged');
     const state = oauth.sign(WORKSPACE, 'u', '/projects/p1')!;
-    await controller.callback({ redirect } as never, state, undefined, '42');
+    await controller.callback(req as never, { redirect } as never, state, undefined, '42');
 
     expect(recorded).toEqual(['42']);
     expect(urls).toEqual([

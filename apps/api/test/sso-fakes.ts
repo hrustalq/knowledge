@@ -107,6 +107,11 @@ export function fakePrisma() {
     },
     user: {
       findUnique: vi.fn(async ({ where }: Row) => db.users.find((u) => (where.id ? u.id === where.id : u.email === where.email)) ?? null),
+      updateMany: vi.fn(async ({ where, data }: Row) => {
+        const rows = db.users.filter((u) => u.id === where.id && (!('emailVerifiedAt' in where) || (u.emailVerifiedAt ?? null) === where.emailVerifiedAt));
+        rows.forEach((u) => Object.assign(u, data));
+        return { count: rows.length };
+      }),
       create: vi.fn(async ({ data }: Row) => {
         const { identities, ...rest } = data;
         const user = { id: randomUUID(), isAdmin: false, disabledAt: null, avatarKey: null, avatarUpdatedAt: null, ...rest };
@@ -122,6 +127,11 @@ export function fakePrisma() {
         return { count: rows.length };
       }),
     },
+    // What a first link's claim of an unverified account ends (#1094); the specs that look add their own rows.
+    apiKey: { updateMany: vi.fn(async () => ({ count: 0 })) },
+    passwordResetToken: { updateMany: vi.fn(async () => ({ count: 0 })) },
+    emailVerificationToken: { updateMany: vi.fn(async () => ({ count: 0 })) },
+    chatIdentity: { deleteMany: vi.fn(async () => ({ count: 0 })) },
     workspaceMember: {
       createMany: vi.fn(async ({ data }: Row) => {
         for (const m of data as Row[]) {

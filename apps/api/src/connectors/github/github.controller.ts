@@ -1,7 +1,10 @@
-import { BadGatewayException, BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Post, Query, Res } from '@nestjs/common';
+import { BadGatewayException, BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Post, Query, Req, Res } from '@nestjs/common';
 import { ApiExcludeEndpoint, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
+import { TokenAuthService } from '../../auth/token-auth.service.js';
+import { startedInThisBrowser } from '../../auth/oauth-callback-binding.js';
+
 import {
   oauthLandingPath,
   type ConnectionResponse,
@@ -46,6 +49,7 @@ export class GithubController {
     private readonly browse: GithubBrowseService,
     private readonly config: ConfigService<Env, true>,
     private readonly connections: ConnectionsService,
+    private readonly tokenAuth: TokenAuthService,
   ) {}
 
   /**
@@ -193,6 +197,7 @@ export class GithubController {
   @Public()
   @ApiExcludeEndpoint()
   async callback(
+    @Req() req: Request,
     @Res() res: Response,
     @Query('state') rawState?: string,
     @Query('code') code?: string,
@@ -205,6 +210,12 @@ export class GithubController {
       // Deliberately not specific: a forged or replayed state should learn
       // nothing about why it was rejected.
       res.redirect(`${web}${oauthLandingPath('github', 'error')}`);
+      return;
+    }
+    // Only the browser that started the flow finishes it (#1095): a link
+    // forwarded to someone else must not store their grant as the sender's.
+    if (!(await startedInThisBrowser(this.tokenAuth, req, state.userId))) {
+      res.redirect(`${web}${oauthLandingPath('github', 'error', state.returnTo)}`);
       return;
     }
 

@@ -40,6 +40,8 @@ interface Grant {
   claims: Record<string, unknown>;
 }
 
+/** The flow cookie the browser that started the sign-in carries (#1095). */
+const BROWSER = 'browser-binding-of-the-starter';
 const op = {
   server: null as Server | null,
   issuer: '',
@@ -142,7 +144,7 @@ const person = (over: Row = {}) => ({ sub: 'kc-1', email: 'ada@corp.example', em
 
 /** start → IdP → callback, as the browser would; returns where the callback sent it. */
 async function signIn(h: ReturnType<typeof harness>, providerId: string, claims: Row, opts: { returnTo?: string; nonce?: string } = {}) {
-  const start = await h.sso.start(providerId, opts.returnTo ?? '/documents');
+  const start = await h.sso.start(providerId, opts.returnTo ?? '/documents', BROWSER);
   const back = authorize(start, claims, { nonce: opts.nonce });
   return h.sso.callback(providerId, back, meta);
 }
@@ -173,7 +175,7 @@ describe('OIDC sign-in', () => {
     expect(h.db.identities[0]).toMatchObject({ providerId: p.id, subject: 'kc-1', userId: h.db.users[0].id });
     expect(h.db.members).toEqual([{ workspaceId: WS, userId: h.db.users[0].id, role: 'editor', trustedOperator: false, source: 'jit' }]);
 
-    const res = await h.sso.exchange(code!, meta);
+    const res = await h.sso.exchange(code!, meta, BROWSER);
     expect(res.returnTo).toBe('/documents/abc');
     expect(res.me.authMethod).toBe('oidc');
     expect(res.token).toMatch(/^ks_/);
@@ -192,9 +194,9 @@ describe('OIDC sign-in', () => {
   it('a second sign-in reuses the account and the identity link', async () => {
     const h = harness();
     const p = h.provider();
-    await h.sso.exchange(fragmentCode(await signIn(h, p.id, person()))!, meta);
+    await h.sso.exchange(fragmentCode(await signIn(h, p.id, person()))!, meta, BROWSER);
     // The address changed at the IdP; the subject is what identifies the person.
-    await h.sso.exchange(fragmentCode(await signIn(h, p.id, person({ email: 'ada.l@corp.example' })))!, meta);
+    await h.sso.exchange(fragmentCode(await signIn(h, p.id, person({ email: 'ada.l@corp.example' })))!, meta, BROWSER);
     expect(h.db.users).toHaveLength(1);
     expect(h.db.identities).toHaveLength(1);
   });
@@ -213,10 +215,10 @@ describe('OIDC sign-in', () => {
     const h = harness();
     const p = h.provider();
     const code = fragmentCode(await signIn(h, p.id, person()))!;
-    await h.sso.exchange(code, meta);
+    await h.sso.exchange(code, meta, BROWSER);
     expect(h.failures()).toHaveLength(0);
 
-    await refusal(h.sso.exchange(code, meta));
+    await refusal(h.sso.exchange(code, meta, BROWSER));
     expect(h.failures()).toHaveLength(1);
     // The spent code's hash is cleared, so the row — and its provider — is not found.
     expect(h.failures()[0]).toMatchObject({
@@ -227,8 +229,29 @@ describe('OIDC sign-in', () => {
       params: { providerId: null, error: 'exchange-invalid' },
     });
 
-    await refusal(h.sso.exchange('forged', meta));
+    await refusal(h.sso.exchange('forged', meta, BROWSER));
     expect(h.failures()).toHaveLength(2);
+  });
+
+  it('an exchange in a browser that did not start the sign-in is refused, and spends nothing (#1095)', async () => {
+    const h = harness();
+    const p = h.provider();
+    const code = fragmentCode(await signIn(h, p.id, person()))!;
+    // The /auth/sso/complete#code=… link forwarded to someone else: their browser has no flow cookie, or another one.
+    await refusal(h.sso.exchange(code, meta, undefined));
+    await refusal(h.sso.exchange(code, meta, 'someone-elses-browser'));
+    expect(h.sessions.create).not.toHaveBeenCalled();
+    expect(h.failures()).toHaveLength(2);
+    // The browser that started it still finishes.
+    await expect(h.sso.exchange(code, meta, BROWSER)).resolves.toMatchObject({ token: expect.stringMatching(/^ks_/) });
+  });
+
+  it('stores only a hash of the flow cookie on the transaction', async () => {
+    const h = harness();
+    const p = h.provider();
+    await h.sso.start(p.id, '/documents', BROWSER);
+    expect(h.db.requests[0].browserHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(JSON.stringify(h.db.requests[0])).not.toContain(BROWSER);
   });
 
   it('an expired exchange code is refused, and audited under its provider', async () => {
@@ -236,7 +259,7 @@ describe('OIDC sign-in', () => {
     const p = h.provider();
     const code = fragmentCode(await signIn(h, p.id, person()))!;
     h.db.requests[0].expiresAt = new Date(Date.now() - 1);
-    await refusal(h.sso.exchange(code, meta));
+    await refusal(h.sso.exchange(code, meta, BROWSER));
     expect(h.sessions.create).not.toHaveBeenCalled();
     expect(h.failures()).toHaveLength(1);
     expect(h.failures()[0]).toMatchObject({
@@ -253,7 +276,7 @@ describe('OIDC sign-in', () => {
   it('a replayed state fails to /login?error=invalid-state with an audit row, and redeems no second code', async () => {
     const h = harness();
     const p = h.provider();
-    const start = await h.sso.start(p.id, '/documents');
+    const start = await h.sso.start(p.id, '/documents', BROWSER);
     const back = authorize(start, person());
     expect(fragmentCode(await h.sso.callback(p.id, back, meta))).toBeTruthy();
     const calls = op.tokenCalls;
@@ -270,7 +293,7 @@ describe('OIDC sign-in', () => {
   ])('a %s state fails to /login?error=invalid-state', async (_label, tamper) => {
     const h = harness();
     const p = h.provider();
-    const back = authorize(await h.sso.start(p.id, '/documents'), person());
+    const back = authorize(await h.sso.start(p.id, '/documents', BROWSER), person());
     tamper(back);
     expect(await h.sso.callback(p.id, back, meta)).toBe(`${WEB}/login?error=invalid-state`);
     expect(h.failures()).toHaveLength(1);
@@ -279,7 +302,7 @@ describe('OIDC sign-in', () => {
   it('an expired transaction fails, keeping where the person was going', async () => {
     const h = harness();
     const p = h.provider();
-    const back = authorize(await h.sso.start(p.id, '/projects/x'), person());
+    const back = authorize(await h.sso.start(p.id, '/projects/x', BROWSER), person());
     h.db.requests[0].expiresAt = new Date(Date.now() - 1);
     expect(await h.sso.callback(p.id, back, meta)).toBe(`${WEB}/login?error=invalid-state&redirect=%2Fprojects%2Fx`);
     expect(h.failures()).toHaveLength(1);
@@ -290,7 +313,7 @@ describe('OIDC sign-in', () => {
     const h = harness();
     const a = h.provider();
     const b = h.provider({ name: 'Other' });
-    const back = authorize(await h.sso.start(a.id, '/documents'), person());
+    const back = authorize(await h.sso.start(a.id, '/documents', BROWSER), person());
     expect(await h.sso.callback(b.id, back, meta)).toBe(`${WEB}/login?error=invalid-state`);
   });
 
@@ -306,7 +329,7 @@ describe('OIDC sign-in', () => {
   it("an IdP error comes back as provider-error, with the IdP's words kept for the audit row only", async () => {
     const h = harness();
     const p = h.provider();
-    const u = new URL(await h.sso.start(p.id, '/documents'));
+    const u = new URL(await h.sso.start(p.id, '/documents', BROWSER));
     const back = new URLSearchParams({ state: u.searchParams.get('state')!, error: 'access_denied', error_description: 'User cancelled' });
     expect(await h.sso.callback(p.id, back, meta)).toBe(`${WEB}/login?error=provider-error`);
     expect(h.failures()[0].error).toBe('access_denied: User cancelled');
@@ -338,7 +361,9 @@ describe('OIDC sign-in', () => {
       const h = harness();
       const p = h.provider({ jitEnabled: false });
       const user = existing(h);
-      const res = await h.sso.exchange(fragmentCode(await signIn(h, p.id, person()))!, meta);
+      // A confirmed address keeps its password; an unconfirmed one is claimed (#1094, account-claim.spec).
+      user.emailVerifiedAt = new Date() as never;
+      const res = await h.sso.exchange(fragmentCode(await signIn(h, p.id, person()))!, meta, BROWSER);
       expect(res.me.userId).toBe(user.id);
       expect(h.db.identities).toEqual([expect.objectContaining({ userId: user.id, providerId: p.id, subject: 'kc-1' })]);
       expect(h.db.users[0].passwordHash).toBe('scrypt$x');
@@ -367,7 +392,7 @@ describe('OIDC sign-in', () => {
       const p = h.provider();
       const user = existing(h);
       h.db.members.push({ workspaceId: WS, userId: user.id, role: 'admin', source: 'manual' });
-      await h.sso.exchange(fragmentCode(await signIn(h, p.id, person()))!, meta);
+      await h.sso.exchange(fragmentCode(await signIn(h, p.id, person()))!, meta, BROWSER);
       expect(h.db.members).toEqual([{ workspaceId: WS, userId: user.id, role: 'admin', source: 'manual' }]);
 
       user.disabledAt = new Date() as never;
@@ -379,7 +404,7 @@ describe('OIDC sign-in', () => {
     const h = harness();
     const p = h.provider();
     for (const evil of ['https://evil.example/x', '//evil.example', '/\\evil.example']) {
-      const res = await h.sso.exchange(fragmentCode(await signIn(h, p.id, person(), { returnTo: evil }))!, meta);
+      const res = await h.sso.exchange(fragmentCode(await signIn(h, p.id, person(), { returnTo: evil }))!, meta, BROWSER);
       expect(res.returnTo).toBe('/documents');
     }
   });
@@ -387,20 +412,20 @@ describe('OIDC sign-in', () => {
   it('a disabled provider cannot start a sign-in', async () => {
     const h = harness();
     const p = h.provider({ enabled: false });
-    expect(await h.sso.start(p.id, '/documents')).toBe(`${WEB}/login?error=failed`);
-    expect(await h.sso.start('not-a-uuid', '/documents')).toBe(`${WEB}/login?error=failed`);
+    expect(await h.sso.start(p.id, '/documents', BROWSER)).toBe(`${WEB}/login?error=failed`);
+    expect(await h.sso.start('not-a-uuid', '/documents', BROWSER)).toBe(`${WEB}/login?error=failed`);
   });
 
   it('an unreachable issuer sends the browser back with provider-error', async () => {
     const h = harness();
     const p = h.provider({ config: { issuer: 'http://127.0.0.1:1', clientId: 'x', scopes: [] } });
-    expect(await h.sso.start(p.id, '/documents')).toBe(`${WEB}/login?error=provider-error`);
+    expect(await h.sso.start(p.id, '/documents', BROWSER)).toBe(`${WEB}/login?error=provider-error`);
   });
 
   it('refuses a private issuer unless AUTH_SSO_ALLOW_PRIVATE_URLS', async () => {
     const h = harness(fakeConfig({ AUTH_SSO_ALLOW_PRIVATE_URLS: false }));
     const p = h.provider();
-    expect(await h.sso.start(p.id, '/documents')).toBe(`${WEB}/login?error=provider-error`);
+    expect(await h.sso.start(p.id, '/documents', BROWSER)).toBe(`${WEB}/login?error=provider-error`);
     expect(h.db.requests).toHaveLength(0);
   });
 });
@@ -449,7 +474,7 @@ describe('logs during an OIDC sign-in (#297)', () => {
   it('carry neither the IdP code, the state, the exchange code nor the ks_ token', async () => {
     const h = harness();
     const p = h.provider();
-    const start = await request('GET', `/v1/auth/oidc/${p.id}/start?returnTo=%2Fdocuments`, () => h.sso.start(p.id, '/documents'));
+    const start = await request('GET', `/v1/auth/oidc/${p.id}/start?returnTo=%2Fdocuments`, () => h.sso.start(p.id, '/documents', BROWSER));
     const back = authorize(start, person());
     const redirect = await request('GET', `/v1/auth/oidc/${p.id}/callback?${back}`, async () => {
       // A canary in the callback's scope: proves the capture sees a Nest
@@ -458,7 +483,7 @@ describe('logs during an OIDC sign-in (#297)', () => {
       return h.sso.callback(p.id, back, meta);
     });
     const exchangeCode = fragmentCode(redirect)!;
-    const res = await request('POST', '/v1/auth/sso/exchange', () => h.sso.exchange(exchangeCode, meta));
+    const res = await request('POST', '/v1/auth/sso/exchange', () => h.sso.exchange(exchangeCode, meta, BROWSER));
     expect(res.token).toMatch(/^ks_/);
 
     const canary = lines.map((l) => JSON.parse(l) as Row).find((r) => r.ctx === 'Canary');

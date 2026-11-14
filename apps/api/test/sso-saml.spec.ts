@@ -16,6 +16,8 @@ import { API, fakeConfig, identityProvidersHarness, ssoHarness, WS, type Row } f
  * the replay markers, the fragment code — is the real code.
  */
 
+/** The flow cookie the browser that started the sign-in carries (#1095). */
+const BROWSER = 'browser-binding-of-the-starter';
 const ENC_KEY = randomBytes(32).toString('base64');
 const IDP = 'https://idp.test/realms/corp';
 const idp = generateSpKeyPair('Test IdP');
@@ -102,7 +104,7 @@ function signedResponse(o: AssertionOpts, key = idp): string {
 
 /** The browser's first leg: our redirect to the IdP, and the AuthnRequest id and RelayState in it. */
 async function start(h: ReturnType<typeof harness>, providerId: string, returnTo = '/documents/x') {
-  const url = new URL(await h.sso.samlStart(providerId, returnTo));
+  const url = new URL(await h.sso.samlStart(providerId, returnTo, BROWSER));
   expect(url.origin + url.pathname).toBe('https://idp.test/sso');
   expect(url.searchParams.get('SigAlg')).toBe('http://www.w3.org/2001/04/xmldsig-more#rsa-sha256');
   expect(url.searchParams.get('Signature')).toBeTruthy();
@@ -127,7 +129,7 @@ describe('SAML sign-in, SP-initiated', () => {
     expect(h.db.users[0]).toMatchObject({ email: 'ada@corp.example', displayName: 'Ada L', passwordHash: null });
     expect(h.db.identities[0]).toMatchObject({ providerId: p.id, subject: 'kc-1' });
 
-    const res = await h.sso.exchange(decodeURIComponent(code!), meta);
+    const res = await h.sso.exchange(decodeURIComponent(code!), meta, BROWSER);
     expect(res.returnTo).toBe('/documents/x');
     expect(res.me.authMethod).toBe('saml');
     expect(h.sessions.create).toHaveBeenCalledWith(h.db.users[0].id, expect.objectContaining({ authMethod: 'saml', providerId: p.id }));
@@ -187,7 +189,7 @@ describe('SAML sign-in, SP-initiated', () => {
   it('a disabled provider starts nothing and accepts nothing', async () => {
     const h = harness();
     const p = h.provider({ enabled: false });
-    expect(errorOf(await h.sso.samlStart(p.id, '/documents'))).toBe('failed');
+    expect(errorOf(await h.sso.samlStart(p.id, '/documents', BROWSER))).toBe('failed');
     expect(errorOf(await h.sso.samlAcs(p.id, { SAMLResponse: 'x' }, meta))).toBe('failed');
   });
 });
@@ -206,7 +208,7 @@ describe('SAML sign-in, IdP-initiated', () => {
     const body = { SAMLResponse: signedResponse({ providerId: p.id }), RelayState: 'portal-tile' };
     const code = codeOf(await h.sso.samlAcs(p.id, body, meta));
     expect(code).toBeTruthy();
-    expect((await h.sso.exchange(decodeURIComponent(code!), meta)).returnTo).toBe('/documents');
+    expect((await h.sso.exchange(decodeURIComponent(code!), meta, BROWSER)).returnTo).toBe('/documents');
     expect(errorOf(await h.sso.samlAcs(p.id, body, meta))).toBe('invalid-state');
     expect(h.failures().at(-1)).toMatchObject({ error: 'assertion replayed' });
   });

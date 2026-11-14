@@ -12,7 +12,7 @@ import type {
   UrlTicketResponse,
   VerifyEmailResponse,
 } from '@knowledge/contracts';
-import { CurrentPrincipal, Public, ReadKeyOk, UnverifiedOk } from './access.decorator.js';
+import { CurrentPrincipal, Public, ReadKeyOk, SessionOnly, UnverifiedOk } from './access.decorator.js';
 import { AuthFlowService } from './auth-flow.service.js';
 import {
   ChangePasswordDto,
@@ -56,7 +56,9 @@ export class AuthFlowController {
   @Public()
   @Post('signup')
   @Returns('AuthSessionResponse')
-  @ApiOperation({ summary: 'Create an account with email + password; sets the HttpOnly kn_token session cookie' })
+  @UseGuards(AuthRateLimitGuard)
+  @AuthRateLimit('signup')
+  @ApiOperation({ summary: 'Create an account with email + password; sets the HttpOnly kn_token session cookie. 429 past 10/min per IP or 3/min per address' })
   async signup(
     @Body() dto: SignupDto,
     @Req() req: Request,
@@ -126,7 +128,9 @@ export class AuthFlowController {
   @HttpCode(200)
   @Post('forgot-password')
   @Returns('ForgotPasswordResponse')
-  @ApiOperation({ summary: 'Request a password-reset token (never reveals whether the email exists)' })
+  @UseGuards(AuthRateLimitGuard)
+  @AuthRateLimit('forgot')
+  @ApiOperation({ summary: 'Request a password-reset token (never reveals whether the email exists). 429 past 10/min per IP or 3/min per address' })
   forgotPassword(@Body() dto: ForgotPasswordDto): Promise<ForgotPasswordResponse> {
     return this.flow.forgotPassword(dto.email);
   }
@@ -135,7 +139,9 @@ export class AuthFlowController {
   @HttpCode(200)
   @Post('reset-password')
   @Returns('ResetPasswordResponse')
-  @ApiOperation({ summary: 'Set a new password with a kr_ reset token; revokes all sessions' })
+  @UseGuards(AuthRateLimitGuard)
+  @AuthRateLimit('reset')
+  @ApiOperation({ summary: 'Set a new password with a kr_ reset token; revokes all sessions. 429 past 10/min per IP' })
   async resetPassword(@Body() dto: ResetPasswordDto): Promise<ResetPasswordResponse> {
     await this.flow.resetPassword(dto.token, dto.password);
     return { ok: true };
@@ -145,7 +151,9 @@ export class AuthFlowController {
   @HttpCode(200)
   @Post('verify-email')
   @Returns('VerifyEmailResponse')
-  @ApiOperation({ summary: 'Confirm the account address with the kv_ token from the mailed link (docs/features/41)' })
+  @UseGuards(AuthRateLimitGuard)
+  @AuthRateLimit('verify')
+  @ApiOperation({ summary: 'Confirm the account address with the kv_ token from the mailed link (docs/features/41). 429 past 20/min per IP' })
   async verifyEmail(@Body() dto: VerifyEmailDto): Promise<VerifyEmailResponse> {
     await this.flow.verifyEmail(dto.token);
     return { ok: true };
@@ -188,7 +196,10 @@ export class AuthFlowController {
   @HttpCode(200)
   @Post('change-password')
   @Returns('ResetPasswordResponse')
-  @ApiOperation({ summary: 'Change own password (requires the current one); revokes other sessions' })
+  @SessionOnly()
+  @UseGuards(AuthRateLimitGuard)
+  @AuthRateLimit('password')
+  @ApiOperation({ summary: 'Change own password (requires the current one, from a session — never an API key); revokes other sessions. 429 past 5/min per account' })
   async changePassword(
     @CurrentPrincipal() principal: Principal,
     @Body() dto: ChangePasswordDto,

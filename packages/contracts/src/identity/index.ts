@@ -113,6 +113,7 @@ export const AUDIT_ACTIONS = [
   'sso.provider_deleted',
   'sso.jit_user_created',
   'sso.identity_linked',
+  'auth.account_claimed',
   'sso.group_mapping_created',
   'sso.group_mapping_deleted',
   'role_sync.applied',
@@ -849,8 +850,8 @@ export interface UserProfileResponse {
   email: string;
   displayName: string;
   avatarUrl: AvatarUrl;
-  /** Platform admin (users.is_admin). */
-  isAdmin: boolean;
+  /** Platform admin (users.is_admin). Null unless the reader is the subject or a platform admin (#1091). */
+  isAdmin: boolean | null;
   disabled: boolean;
   /** users.created_at — when the account was made, not when they joined here. */
   createdAt: string;
@@ -861,8 +862,10 @@ export interface UserProfileResponse {
   memberSince: string | null;
   /** True when this profile is the caller's own. */
   isSelf: boolean;
-  hasPassword: boolean;
-  hasApiKey: boolean;
+  /** Null unless the reader is the subject or a platform admin (#1091). */
+  hasPassword: boolean | null;
+  /** Null unless the reader is the subject or a platform admin (#1091). */
+  hasApiKey: boolean | null;
   pages: ProfilePage[];
   /** Distinct documents they have revised in this workspace (pages[] is capped). */
   pageCount: number;

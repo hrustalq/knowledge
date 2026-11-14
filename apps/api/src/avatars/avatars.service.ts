@@ -19,6 +19,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { projectAvatarUrl, userAvatarUrl } from '../common/avatar-url.js';
+import { canSeeUser } from '../permissions/can-see-user.js';
 import type { Principal } from '../auth/principal.js';
 import { t } from '../i18n/t.js';
 
@@ -159,28 +160,11 @@ export class AvatarsService {
   }
 
   /**
-   * May `principal` see this person's picture?
-   *
-   * A display name is already visible to anyone sharing a workspace, and a face
-   * is no more revealing than the name beside it — but "any authenticated
-   * caller" would let one tenant enumerate another's people by id, which is a
-   * different thing. So: yourself, a platform admin, or somebody you actually
-   * share a workspace with.
-   *
-   * Written as one indexed query rather than through AclGuard because there is
-   * no single workspace to resolve: a user belongs to several, and the answer is
-   * whether *any* of them overlaps.
+   * May `principal` see this person's picture? A face is no more revealing than
+   * the name beside it, so the rule is the profile's: {@link canSeeUser}.
    */
   async assertCanSeeUser(principal: Principal, userId: string): Promise<void> {
-    if (principal.mode === 'dev' || principal.isAdmin || principal.userId === userId) return;
-    const shared = await this.prisma.workspaceMember.findFirst({
-      where: {
-        userId,
-        workspace: { members: { some: { userId: principal.userId } } },
-      },
-      select: { workspaceId: true },
-    });
-    if (!shared) throw new ForbiddenException(t('error.avatar.forbidden'));
+    if (!(await canSeeUser(this.prisma, principal, userId))) throw new ForbiddenException(t('error.avatar.forbidden'));
   }
 
   private async keyOf(kind: AvatarOwner, ownerId: string): Promise<string | null> {

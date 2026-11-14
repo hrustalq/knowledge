@@ -1,4 +1,5 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   memberCapabilitiesOf,
   membershipSourceOf,
@@ -22,6 +23,9 @@ import { removeMemberGuarded, setRoleGuarded } from './membership-guards.js';
 import { WorkspaceTeardownService } from './workspace-teardown.service.js';
 import { WorkspaceTeardownSweeper } from './workspace-teardown.sweeper.js';
 
+/** A whole address, the only thing a non-platform-admin's picker matches (#1091). */
+const EXACT_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 /**
  * Access-control management: workspaces + workspace_members CRUD. Role checks
  * happen in AclGuard (@Access('admin', 'workspace') on mutating routes); this
@@ -35,6 +39,7 @@ export class WorkspacesService {
     private readonly audit: AuditService,
     private readonly teardown: WorkspaceTeardownService,
     private readonly sweeper: WorkspaceTeardownSweeper,
+    private readonly config: ConfigService,
   ) {}
 
   async list(principal: Principal): Promise<ListWorkspacesResponse> {
@@ -59,6 +64,15 @@ export class WorkspacesService {
   }
 
   async create(principal: Principal, name: string): Promise<CreateWorkspaceResponse> {
+    // Making a workspace makes its creator an admin there (#1091). With signup
+    // closed, accounts are handed out by an operator, and so are tenants.
+    // A key pinned to one workspace stays there; a new tenant is outside its pin (#1092).
+    if (principal.apiKey?.workspaceId) {
+      throw new ForbiddenException(t('error.auth.apiKeyPinnedNoCreate'));
+    }
+    if (!principal.isAdmin && principal.mode !== 'dev' && !this.config.get<boolean>('AUTH_SIGNUP_ENABLED')) {
+      throw new ForbiddenException(t('error.workspace.creationClosed'));
+    }
     // One transaction: a workspace whose founding admin never committed is
     // invisible to its creator (list scopes to membership), un-joinable (adding a
     // member is admin-gated) and undeletable — an
@@ -170,35 +184,46 @@ export class WorkspacesService {
 
   /**
    * Users who could still be added to the workspace (existing members filtered
-   * out). This is the only account lookup a workspace admin gets — it is
-   * capped, projects identity fields only, and exists because `addMember`
-   * takes an email of an *existing* account, which the picker has to find.
+   * out), for the add-member picker; `addMember` takes the email of an
+   * *existing* account.
+   *
+   * A workspace admin is anyone who made a workspace, so a fragment search
+   * would page through every tenant's people (#1091). Theirs takes one full
+   * address and answers at most that account; only a platform admin, who
+   * manages accounts anyway, searches by fragment.
    */
   async listCandidates(
+    principal: Principal,
     workspaceId: string,
     query: string | undefined,
     limit: number,
   ): Promise<ListWorkspaceCandidatesResponse> {
-    const members = await this.prisma.workspaceMember.findMany({
-      where: { workspaceId },
-      select: { userId: true },
-    });
     const needle = query?.trim();
-    const users = await this.prisma.user.findMany({
-      where: {
-        id: { notIn: members.map((m) => m.userId) },
-        ...(needle
-          ? {
-              OR: [
-                { email: { contains: needle, mode: 'insensitive' as const } },
-                { displayName: { contains: needle, mode: 'insensitive' as const } },
-              ],
-            }
-          : {}),
-      },
-      orderBy: { displayName: 'asc' },
-      take: limit,
-    });
+    const memberIds = async () =>
+      (await this.prisma.workspaceMember.findMany({ where: { workspaceId }, select: { userId: true } })).map((m) => m.userId);
+
+    let users: Array<{ id: string; email: string; displayName: string; disabledAt: Date | null }>;
+    if (principal.isAdmin || principal.mode === 'dev') {
+      users = await this.prisma.user.findMany({
+        where: {
+          id: { notIn: await memberIds() },
+          ...(needle
+            ? {
+                OR: [
+                  { email: { contains: needle, mode: 'insensitive' as const } },
+                  { displayName: { contains: needle, mode: 'insensitive' as const } },
+                ],
+              }
+            : {}),
+        },
+        orderBy: { displayName: 'asc' },
+        take: limit,
+      });
+    } else {
+      const email = needle?.toLowerCase();
+      const user = email && EXACT_EMAIL.test(email) ? await this.prisma.user.findUnique({ where: { email } }) : null;
+      users = user && !(await memberIds()).includes(user.id) ? [user] : [];
+    }
     return {
       workspaceId,
       candidates: users.map((u) => ({

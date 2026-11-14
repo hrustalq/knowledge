@@ -12,7 +12,7 @@ import type {
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.js';
 import { toMeResponse } from './me-response.js';
-import { CurrentPrincipal, UnverifiedOk } from './access.decorator.js';
+import { CurrentPrincipal, SessionOnly, UnverifiedOk } from './access.decorator.js';
 import { AccessService } from './access.service.js';
 import type { Principal } from './principal.js';
 import { UpdateMeDto } from './me.dto.js';
@@ -136,6 +136,7 @@ export class MeController {
   @Delete('sessions/:sessionId')
   @HttpCode(204)
   @UnverifiedOk()
+  @SessionOnly()
   @ApiOperation({ summary: "Revoke one of the caller's sessions; its token gets 401 from the next request" })
   async revokeSession(
     @CurrentPrincipal() principal: Principal,

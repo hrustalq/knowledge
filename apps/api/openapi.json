@@ -401,7 +401,7 @@
             }
           }
         },
-        "summary": "Create an account with email + password; sets the HttpOnly kn_token session cookie",
+        "summary": "Create an account with email + password; sets the HttpOnly kn_token session cookie. 429 past 10/min per IP or 3/min per address",
         "tags": [
           "auth"
         ]
@@ -645,7 +645,7 @@
             }
           }
         },
-        "summary": "Request a password-reset token (never reveals whether the email exists)",
+        "summary": "Request a password-reset token (never reveals whether the email exists). 429 past 10/min per IP or 3/min per address",
         "tags": [
           "auth"
         ]
@@ -711,7 +711,7 @@
             }
           }
         },
-        "summary": "Set a new password with a kr_ reset token; revokes all sessions",
+        "summary": "Set a new password with a kr_ reset token; revokes all sessions. 429 past 10/min per IP",
         "tags": [
           "auth"
         ]
@@ -777,7 +777,7 @@
             }
           }
         },
-        "summary": "Confirm the account address with the kv_ token from the mailed link (docs/features/41)",
+        "summary": "Confirm the account address with the kv_ token from the mailed link (docs/features/41). 429 past 20/min per IP",
         "tags": [
           "auth"
         ]
@@ -955,7 +955,7 @@
             }
           }
         },
-        "summary": "Change own password (requires the current one); revokes other sessions",
+        "summary": "Change own password (requires the current one, from a session — never an API key); revokes other sessions. 429 past 5/min per account",
         "tags": [
           "auth"
         ]
@@ -3408,7 +3408,7 @@
             }
           }
         },
-        "summary": "Create a workspace — the creator becomes its admin + trusted operator",
+        "summary": "Create a workspace — the creator becomes its admin + trusted operator (platform admins only while AUTH_SIGNUP_ENABLED=false)",
         "tags": [
           "workspaces"
         ]
@@ -4245,7 +4245,7 @@
             }
           }
         },
-        "summary": "Users who are not members yet, for the add-member picker (workspace admin)",
+        "summary": "Users who are not members yet, for the add-member picker (workspace admin: one full email; platform admin: any fragment)",
         "tags": [
           "workspaces"
         ]
@@ -44626,7 +44626,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.53.1",
+    "version": "0.53.2",
     "contact": {}
   },
   "tags": [],
@@ -78303,7 +78303,8 @@
             "$ref": "#/components/schemas/AvatarUrl"
           },
           "isAdmin": {
-            "type": "boolean"
+            "type": "boolean",
+            "nullable": true
           },
           "disabled": {
             "type": "boolean"
@@ -78330,10 +78331,12 @@
             "type": "boolean"
           },
           "hasPassword": {
-            "type": "boolean"
+            "type": "boolean",
+            "nullable": true
           },
           "hasApiKey": {
-            "type": "boolean"
+            "type": "boolean",
+            "nullable": true
           },
           "pages": {
             "type": "array",

@@ -305,7 +305,10 @@ overriding a password all **revoke sessions**.
 Reset, invite and verify links are **mailed** by the worker
 ([features/41](../features/41-mail.md)); under the default `MAIL_TRANSPORT=log`
 the whole message lands in the worker log instead. Reset and verify tokens are
-also echoed as `debugToken` outside production. Signup auto-joins
+echoed as `debugToken` only when `AUTH_ECHO_TOKENS=true` (#1093; off by default, set in
+`.env.example`, refused under `NODE_ENV=production`). `validateEnv` also refuses
+`NODE_ENV=production` with `AUTH_MODE=none` unless `AUTH_ALLOW_NONE_IN_PRODUCTION=true`.
+Signup auto-joins
 `AUTH_DEFAULT_WORKSPACE_ID` as `AUTH_DEFAULT_ROLE` and mails a confirmation
 link; any followed link sets `users.email_verified_at`. With
 `AUTH_REQUIRE_VERIFIED_EMAIL=true`, an unverified **session** reaches only the
@@ -393,10 +396,43 @@ it, so the token opens nothing else. Errors are built by
 lives there rather than in `scim/`). Disabling a global account is gated on the
 address's domain being verified by the provisioning workspace.
 
-**Rate limits** on the anonymous routes reuse `PublicRateLimiter` through
-`AuthRateLimitGuard` with a per-route bucket: per IP always, and per address or
-username where the body names one. Login, LDAP and exchange fail closed when
-Redis is down. Discovery fails open.
+**Rate limits** on the auth routes reuse `PublicRateLimiter` through
+`AuthRateLimitGuard` with a per-route bucket: per IP always, per address or
+username where the body names one, and per account where the route has one
+(`password`, on change-password). Login, LDAP, exchange, signup, forgot, reset,
+verify and change-password fail closed when Redis is down (#1092). Discovery
+fails open. Login runs one scrypt whatever the address (`burnPasswordCheck`),
+so timing does not tell a registered address from an unknown one.
+
+**Session-only routes** (#1092): `@SessionOnly()` refuses any API key in
+`AclGuard`. It sits on change-password, session revoke, `PATCH|DELETE
+/v1/me/credentials/:id` and the chat-link routes: a leaked key must not guess
+the owner's password, sign them out or link a messenger account that answers as
+them. A workspace-pinned key cannot create a workspace.
+
+**Accounts SSO or SCIM did not create** (#1094, #1096): when a provider that
+speaks for the domain (or SCIM under a verified domain) first links an account
+whose address was never confirmed, `claimUnverifiedAccount` ends the old
+password, sessions, API keys, open links and chat identities and marks the
+address verified, in the link's transaction. SCIM without domain authority
+revokes only the sessions its own workspace's providers opened
+(`SessionsService.revokeIssuedBy`), and moves an address only to another
+verified domain.
+
+**Browser binding** (#1095): the GitHub, Figma and Plaud callbacks complete only
+in a browser whose session cookie is the user the signed state names
+(`startedInThisBrowser`). SSO `start`/`samlStart` set an HttpOnly `kn_sso` flow
+cookie whose hash `sso_auth_requests.browser_hash` keeps, and `exchange`
+requires it (the SAML ACS is a cross-site POST a Lax cookie never reaches, so
+the check sits at the exchange, which both protocols pass through).
+Unsolicited SAML rows carry no hash.
+
+**Who can see whom** (#1091): a profile and an avatar are visible to yourself, a
+platform admin, or someone sharing a workspace (`permissions/can-see-user.ts`);
+account flags (`isAdmin`, `hasPassword`, `hasApiKey`) only to the subject and a
+platform admin. A workspace admin's add-member picker matches one full address;
+only a platform admin searches by fragment. With `AUTH_SIGNUP_ENABLED=false`,
+only a platform admin creates workspaces.
 
 ## The trusted-operator escape hatch
 

@@ -32,9 +32,12 @@ function harness(opts: { token: string | null; visible: string[] }) {
   const browse = new GithubBrowseService(prisma as never, app as never, oauth as never);
   (browse as unknown as { userInstallations: unknown }).userInstallations = async () => opts.visible.map((installationId) => ({ installationId }));
   const config = { get: () => 'https://web.example.test' };
-  const controller = new GithubController(app as never, oauth as never, browse, config as never, {} as never);
+  // The starter's own browser (#1095): its session cookie names the user the state names.
+  const tokenAuth = { resolveSessionCookie: async () => ({ userId: USER }) };
+  const controller = new GithubController(app as never, oauth as never, browse, config as never, {} as never, tokenAuth as never);
   const res = { redirect: vi.fn() };
-  const call = (installationId: string, code?: string) => controller.callback(res as never, 'signed', code, installationId);
+  const req = { headers: { cookie: 'kn_token=ks_starter' } };
+  const call = (installationId: string, code?: string) => controller.callback(req as never, res as never, 'signed', code, installationId);
   return { prisma, res, call };
 }
 

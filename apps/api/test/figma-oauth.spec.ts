@@ -215,10 +215,10 @@ describe('the callback', () => {
   it('stores nothing for a missing or forged state', async () => {
     const { service, config } = setup();
     const complete = vi.spyOn(service, 'completeAuthorization');
-    const controller = new FigmaOauthController(service, {} as never, config as never);
+    const controller = new FigmaOauthController(service, {} as never, config as never, { resolveSessionCookie: async () => ({ userId: 'user' }) } as never);
     const redirect = vi.fn();
-    await controller.callback({ redirect } as never, 'forged.state', 'code');
-    await controller.callback({ redirect } as never, undefined, 'code');
+    await controller.callback({ headers: { cookie: 'kn_token=ks_starter' } } as never, { redirect } as never, 'forged.state', 'code');
+    await controller.callback({ headers: { cookie: 'kn_token=ks_starter' } } as never, { redirect } as never, undefined, 'code');
     expect(redirect.mock.calls).toEqual([['https://kb.test/oauth/figma?outcome=error'], ['https://kb.test/oauth/figma?outcome=error']]);
     expect(complete).not.toHaveBeenCalled();
   });
@@ -226,10 +226,10 @@ describe('the callback', () => {
   it('lands a completed flow on /oauth/figma with the signed return path', async () => {
     const { service, config } = setup();
     vi.spyOn(service, 'completeAuthorization').mockResolvedValue('connected');
-    const controller = new FigmaOauthController(service, {} as never, config as never);
+    const controller = new FigmaOauthController(service, {} as never, config as never, { resolveSessionCookie: async () => ({ userId: 'user' }) } as never);
     const redirect = vi.fn();
     const state = stateOf(service.authorizeUrl('ws', 'user', null, '/settings/connectors?add=1')!).get('state')!;
-    await controller.callback({ redirect } as never, state, 'code');
+    await controller.callback({ headers: { cookie: 'kn_token=ks_starter' } } as never, { redirect } as never, state, 'code');
     expect(redirect).toHaveBeenCalledWith('https://kb.test/oauth/figma?outcome=connected&returnTo=%2Fsettings%2Fconnectors%3Fadd%3D1');
   });
 });

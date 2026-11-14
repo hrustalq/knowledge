@@ -13,6 +13,7 @@ import {
   PLATFORM_ADMIN_META,
   PUBLIC_META,
   READ_KEY_OK_META,
+  SESSION_ONLY_META,
   type AccessSpec,
   type WorkspaceSource,
 } from './access.decorator.js';
@@ -81,6 +82,10 @@ export class AclGuard implements CanActivate {
     }
     const req = ctx.switchToHttp().getRequest();
     const principal: Principal = req.principal;
+
+    if (principal.mode === 'api-key' && this.reflector.getAllAndOverride<boolean>(SESSION_ONLY_META, [ctx.getHandler(), ctx.getClass()])) {
+      throw new ForbiddenException(t('error.auth.sessionRequired'));
+    }
 
     if (this.reflector.getAllAndOverride<boolean>(PLATFORM_ADMIN_META, [ctx.getHandler(), ctx.getClass()])) {
       if (principal.mode !== 'dev' && !principal.isAdmin) {

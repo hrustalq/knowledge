@@ -124,7 +124,9 @@ function world(values: Record<string, unknown>) {
   const flow = new AuthFlowService(prisma as never, config as never, sessions, mail as never, audit as never, policy);
   const tokens = new TokenAuthService(config as never, prisma as never, sessions, {} as never);
   const templates = () => mail.enqueue.mock.calls.map((c) => (c as unknown as [{ template: string }])[0].template);
-  return { db, prisma, flow, tokens, policy, mail, templates };
+  /** The link the last mail carried — what the person would click (no `debugToken` by default, #1093). */
+  const mailedToken = () => (mail.enqueue.mock.calls.at(-1) as unknown as [{ token: string }])[0].token;
+  return { db, prisma, flow, tokens, policy, mail, templates, mailedToken };
 }
 
 const EMAIL = 'ada@example.com';
@@ -152,14 +154,15 @@ describe.each([
   });
 
   it('mints one reset link, and the reset signs every session out', async () => {
-    const { db, prisma, flow, templates } = world(values);
+    const { db, prisma, flow, templates, mailedToken } = world(values);
     await flow.signup(EMAIL, 'Ada', PASSWORD);
     const forgot = await flow.forgotPassword(EMAIL);
-    expect(forgot).toMatchObject({ ok: true, debugToken: expect.stringMatching(/^kr_/) });
+    // No token in the answer unless AUTH_ECHO_TOKENS asks for it (#1093).
+    expect(forgot).toEqual({ ok: true });
     expect(prisma.passwordResetToken.create).toHaveBeenCalledTimes(1);
     expect(templates()).toEqual(['verify-email', 'password-reset']);
 
-    await flow.resetPassword(forgot.debugToken!, 'a brand new secret');
+    await flow.resetPassword(mailedToken(), 'a brand new secret');
     expect(db.sessions.every((s) => s.revokedAt)).toBe(true);
     await expect(flow.login(EMAIL, PASSWORD)).rejects.toBeInstanceOf(UnauthorizedException);
     await expect(flow.login(EMAIL, 'a brand new secret')).resolves.toMatchObject({ me: { authMethod: 'password' } });
@@ -167,10 +170,12 @@ describe.each([
   });
 
   it('two submissions of one link set the password once, and a reset spends the older links (GHSA-5w5f)', async () => {
-    const { db, flow } = world(values);
+    const { db, flow, mailedToken } = world(values);
     await flow.signup(EMAIL, 'Ada', PASSWORD);
-    const older = await flow.forgotPassword(EMAIL);
-    const link = await flow.forgotPassword(EMAIL);
+    await flow.forgotPassword(EMAIL);
+    const older = { debugToken: mailedToken() };
+    await flow.forgotPassword(EMAIL);
+    const link = { debugToken: mailedToken() };
     // Both pass the read before either spends: only the guarded spend tells them apart.
     const secrets = ['first new secret', 'second new secret'];
     const results = await Promise.allSettled(secrets.map((p) => flow.resetPassword(link.debugToken!, p)));

@@ -25411,7 +25411,8 @@
         "$ref": "#/components/schemas/AvatarUrl"
       },
       "isAdmin": {
-        "type": "boolean"
+        "type": "boolean",
+        "nullable": true
       },
       "disabled": {
         "type": "boolean"
@@ -25438,10 +25439,12 @@
         "type": "boolean"
       },
       "hasPassword": {
-        "type": "boolean"
+        "type": "boolean",
+        "nullable": true
       },
       "hasApiKey": {
-        "type": "boolean"
+        "type": "boolean",
+        "nullable": true
       },
       "pages": {
         "type": "array",

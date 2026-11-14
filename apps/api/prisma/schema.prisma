@@ -4377,6 +4377,9 @@ model SsoAuthRequest {
   userId           String?   @map("user_id") @db.Uuid
   /// The IdP's session id (OIDC `sid`), carried from the callback to the session the exchange opens.
   idpSessionId     String?   @map("idp_session_id")
+  /// SHA-256 of the flow cookie set on the browser that started the sign-in (#1095); the exchange
+  /// requires it. Null only on the row an unsolicited SAML response creates, which no browser started.
+  browserHash      String?   @map("browser_hash")
   expiresAt        DateTime  @map("expires_at") @db.Timestamptz
   consumedAt       DateTime? @map("consumed_at") @db.Timestamptz
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz

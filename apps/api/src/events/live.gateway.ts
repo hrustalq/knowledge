@@ -19,7 +19,6 @@ import {
 } from '@knowledge/contracts';
 import { AccessService } from '../auth/access.service.js';
 import { TokenAuthService } from '../auth/token-auth.service.js';
-import { UrlTicketsService } from '../auth/url-tickets.service.js';
 import type { Principal } from '../auth/principal.js';
 import type { Env } from '../config/env.js';
 import { EventsSubscriber } from './events.subscriber.js';
@@ -28,6 +27,8 @@ import { DEFAULT_LOCALE, type Locale } from '@knowledge/contracts';
 import { localeFromRequest } from '../i18n/locale.js';
 import { t, withLocale } from '../i18n/t.js';
 import { bindTrace, startTrace, withTrace } from '@knowledge/observability';
+import { Ticker } from '../common/ticker.js';
+import { LIVE_RECHECK_MS, credentialStands, workspaceStands } from './live-recheck.js';
 
 interface SocketState {
   principal: Principal;
@@ -52,7 +53,8 @@ function matchesType(pattern: string, type: string): boolean {
  * or ?token= on the upgrade URL, resolved by TokenAuthService because
  * APP_GUARDs never run on WS upgrades. The web sends a single-use `kt_`
  * ticket (#650: its session is an HttpOnly cookie it cannot read); `kn_`/`ks_`
- * stay accepted for other clients. The cookie itself is never read here, so a
+ * only in an Authorization header, never in the URL (#1097). Every open
+ * socket is re-judged each LIVE_RECHECK_MS (`recheck`). The cookie itself is never read here, so a
  * cross-site page cannot open a socket as the reader. All errors are strict ApiErrorPayload
  * envelopes inside {type:'error'} frames; auth failures also close the socket
  * (4401). Lives in EventsApiModule — worker/MCP never load it.
@@ -70,6 +72,8 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   private heartbeat?: NodeJS.Timeout;
   /** Frames are judged one at a time, so a slow ACL read never reorders them. */
   private queue: Promise<void> = Promise.resolve();
+  /** Re-judges every open socket (#1097); see {@link recheck}. */
+  private readonly ticker = new Ticker(this.logger);
 
   constructor(
     config: ConfigService<Env, true>,
@@ -102,6 +106,42 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       }
     }, 30_000);
     this.heartbeat.unref();
+    this.ticker.every(LIVE_RECHECK_MS, () => this.recheck());
+  }
+
+  /**
+   * Re-judge every open socket the way it was judged when it opened (#1097):
+   * a credential that no longer stands — logout, a revoked key or session, a
+   * disabled account — closes the socket (4401), and a workspace the person
+   * may no longer read loses its subscription (an error frame, then
+   * `unsubscribed`). Page frames are also re-judged per frame
+   * (`LiveVisibility`); workspace-level frames had only this.
+   */
+  recheck(): Promise<void> {
+    return this.ticker.exclusive(async () => {
+      for (const [socket, st] of [...this.state]) {
+        const locale = this.localeOf(socket);
+        if (!(await credentialStands(this.tokenAuth, st.principal))) {
+          this.sendError(socket, 401, t('error.auth.invalidSession', undefined, locale));
+          socket.close(4401, 'authentication failed');
+          this.handleDisconnect(socket);
+          continue;
+        }
+        for (const workspaceId of [...st.subscriptions.keys()]) {
+          const standing = await withLocale(locale, () => workspaceStands(this.access, st.principal, workspaceId));
+          if (standing === 'ok') continue;
+          if (standing === 'unauthorized') {
+            this.sendError(socket, 401, t('error.auth.invalidSession', undefined, locale));
+            socket.close(4401, 'authentication failed');
+            this.handleDisconnect(socket);
+            break;
+          }
+          st.subscriptions.delete(workspaceId);
+          this.sendError(socket, 403, t('error.workspace.notAMember', { userId: st.principal.userId, workspaceId }, locale));
+          this.send(socket, { type: 'unsubscribed', workspaceId });
+        }
+      }
+    });
   }
 
   async handleConnection(socket: WebSocket, request: IncomingMessage): Promise<void> {
@@ -152,12 +192,14 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     const bearer = typeof header === 'string' && header.startsWith('Bearer ')
       ? header.slice('Bearer '.length).trim()
       : undefined;
-    const token = bearer ?? (url.searchParams.get('token') || undefined);
+    // A URL reaches access logs, so `?token=` takes a single-use `kt_` ticket
+    // and nothing else, as on HTTP (#1097); a `kn_`/`ks_` goes in a header.
+    const query = url.searchParams.get('token') || undefined;
     try {
       // withLocale so exceptions thrown deep inside tokenAuth come back
       // translated — their ambient t() has no request context out here.
       const principal = await withLocale(locale, () =>
-        token && UrlTicketsService.isTicket(token) ? this.tokenAuth.resolveTicket(token) : this.tokenAuth.resolve(token),
+        bearer || !query ? this.tokenAuth.resolve(bearer) : this.tokenAuth.resolveTicket(query),
       );
       if (this.tokenAuth.blocksUnverified(principal)) {
         authenticated(false);
@@ -181,6 +223,7 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   onModuleDestroy(): void {
     this.eventsSub?.unsubscribe();
     if (this.heartbeat) clearInterval(this.heartbeat);
+    this.ticker.stop();
   }
 
   private async handleMessage(socket: WebSocket, raw: string): Promise<void> {

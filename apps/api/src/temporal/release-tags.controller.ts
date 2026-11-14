@@ -26,8 +26,8 @@ export class ReleaseTagsController {
   @Returns('ListReleaseTagsResponse')
   @Access('viewer', 'query')
   @ApiOperation({ summary: 'Release tags of the workspace, oldest first' })
-  async list(@Query() query: ListReleaseTagsQueryDto): Promise<ListReleaseTagsResponse> {
-    return { tags: await this.tags.list(query.workspaceId, query.projectId) };
+  async list(@Query() query: ListReleaseTagsQueryDto, @CurrentPrincipal() principal: Principal): Promise<ListReleaseTagsResponse> {
+    return { tags: await this.tags.list(await this.permissions.scopeFor(principal, query.workspaceId), query.projectId) };
   }
 
   @Post('release-tags')

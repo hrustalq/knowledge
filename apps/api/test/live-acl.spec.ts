@@ -100,6 +100,36 @@ describe('LiveVisibility', () => {
     expect(permissions.scopeFor).toHaveBeenCalledTimes(2);
   });
 
+  describe('frames about a project (#1088)', () => {
+    const projects = (rows: Record<string, { restricted: boolean }>) => ({
+      findUnique: vi.fn(async ({ where }: { where: { id: string } }) =>
+        rows[where.id] ? { id: where.id, workspaceId: WS, restricted: rows[where.id].restricted } : null,
+      ),
+    });
+
+    it('reaches only those who can see the project', async () => {
+      const { live, prisma } = visibility({ [ALICE]: scope(ALICE, []), [BOB]: scope(BOB, [SECRET]) });
+      Object.assign(prisma, { project: projects({ [SECRET]: { restricted: true }, [OPEN]: { restricted: false } }) });
+      const updated = (id: string) => frame({ type: 'project.updated', subjectId: id, patch: { description: 'x' } });
+      expect(await live.allows(updated(SECRET), [p(ALICE), p(BOB)])).toEqual([true, false]);
+      expect(await live.allows(updated(OPEN), [p(ALICE), p(BOB)])).toEqual([true, true]);
+    });
+
+    it('passes a deleted project’s frame, which carries only its id', async () => {
+      const { live, prisma } = visibility({ [BOB]: scope(BOB, [OPEN]) });
+      Object.assign(prisma, { project: projects({}) });
+      expect(await live.allows(frame({ type: 'project.deleted', subjectId: SECRET }), [p(BOB)])).toEqual([true]);
+    });
+
+    it('never reads the project for listeners nothing is hidden from', async () => {
+      const { live, prisma } = visibility({ [ALICE]: scope(ALICE, []) });
+      const project = projects({});
+      Object.assign(prisma, { project });
+      expect(await live.allows(frame({ type: 'project.updated', subjectId: SECRET }), [p(ALICE)])).toEqual([true]);
+      expect(project.findUnique).not.toHaveBeenCalled();
+    });
+  });
+
   it('delivers nothing about pages when the scope cannot be computed', async () => {
     const { live, permissions } = visibility({});
     permissions.scopeFor.mockRejectedValueOnce(new Error('not a member'));
@@ -115,16 +145,28 @@ describe('ActivityService.list visibility', () => {
     await service.list(WS, { limit: 10, cursor: OPEN }, scope(BOB, [SECRET]));
     const sql = queryRaw.mock.calls[0] as unknown as [TemplateStringsArray, ...unknown[]];
     const text = JSON.stringify(sql);
-    expect(text).toContain('NOT EXISTS');
     expect(text).toContain('restricted_by');
+    // A page-less row is judged by its project (#1088).
+    expect(text).toContain('FROM \\"projects\\" p');
     expect(text).toContain('(a.\\"created_at\\", a.\\"id\\") <');
   });
 
-  it('runs no visibility predicate for a caller nothing is hidden from', async () => {
+  it('runs no visibility predicate for a caller who sees everything', async () => {
+    const queryRaw = vi.fn(async () => []);
+    const prisma = { $queryRaw: queryRaw, activityLog: { findMany: vi.fn(async () => []) }, document: { findMany: vi.fn() } };
+    await new ActivityService(prisma as never, {} as never).list(WS, {}, { ...scope(ALICE, []), bypass: true });
+    expect(JSON.stringify(queryRaw.mock.calls[0])).not.toContain('EXISTS');
+  });
+
+  it('hides rows about a page or project that is gone even when nothing is restricted now (#1088)', async () => {
+    // A deleted restricted project leaves `denied` empty; its rows must not surface.
     const queryRaw = vi.fn(async () => []);
     const prisma = { $queryRaw: queryRaw, activityLog: { findMany: vi.fn(async () => []) }, document: { findMany: vi.fn() } };
     await new ActivityService(prisma as never, {} as never).list(WS, {}, scope(ALICE, []));
-    expect(JSON.stringify(queryRaw.mock.calls[0])).not.toContain('EXISTS');
+    const text = JSON.stringify(queryRaw.mock.calls[0]);
+    expect(text).toContain('FROM \\"documents\\" d');
+    expect(text).toContain('FROM \\"projects\\" p');
+    expect(text).not.toContain('restricted_by');
   });
 
   it('keeps a guest to rows about pages they can open', async () => {

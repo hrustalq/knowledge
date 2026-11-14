@@ -139,7 +139,7 @@ export function registerGraphTools(ctx: McpToolContext): void {
     },
     async ({ workspaceId, projectId }) => {
       await guard.ws(workspaceId, 'viewer');
-      return json({ tags: await svc.releaseTags.list(workspaceId, projectId) });
+      return json({ tags: await svc.releaseTags.list(await guard.scope(workspaceId), projectId) });
     },
   );
 

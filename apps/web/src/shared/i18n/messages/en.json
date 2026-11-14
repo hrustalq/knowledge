@@ -7510,7 +7510,7 @@
       "tags": "Tags",
       "tagsHint": "Separated by commas; up to five are kept.",
       "newType": "No type quite fits. The recording looks like a “{name}”; an admin can add it under Memo types.",
-      "adoptType": "Add this type",
+      "adoptType": "Review and add this type",
       "confirm": "Confirm and analyse"
     },
     "types": {

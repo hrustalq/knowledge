@@ -17,6 +17,9 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- A page title containing `` $` ``, `$'` or `$&` no longer breaks the app for everyone who can see it in the sidebar.
+  The server used to expand those patterns when it built the page, which duplicated the document and stopped the app
+  from loading its state. (#1100)
 - Comments, merge-request descriptions, assistant answers and shared pages can no longer carry a stylesheet, a form,
   form controls or inline styles. These used to survive the sanitizer, so one comment could restyle or hide parts of
   the app, or place an invisible button that posted to another site. A diagram keeps the width set for it. (#1098)

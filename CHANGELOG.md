@@ -20,6 +20,10 @@ in the pull request that introduces them — see
 - Moving a page under another page, or into another project, now needs the same access as creating a page there. An
   editor can no longer move a page into a restricted area they cannot open, which used to hide it from everyone,
   themselves included. (#1087)
+- A restricted project no longer shows its name, description or release tags to members without access, in the
+  activity feed, live updates, the release tag list, the graph timeline or over MCP. After a page or project is
+  deleted, its activity is shown only to workspace admins, so a deleted restricted project leaves nothing readable
+  behind. (#1088)
 - A workflow run follows its source page's permissions. Starting one needs edit on the page, and a run on a page you
   cannot open no longer shows in the run list, opens, or takes review actions, in the app or over MCP. (#1085)
 - An import in progress belongs to whoever uploaded it. Other members can no longer open its staged text, submit it or

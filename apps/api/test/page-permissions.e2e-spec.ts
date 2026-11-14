@@ -444,6 +444,61 @@ describe('page permissions (e2e, #76)', () => {
     });
   });
 
+  describe('a restricted project in the feed, frames and tags (#1088)', () => {
+    // Not `word`: bob's feed holds rows about O, whose title carries it.
+    const vault = `quaz${nonce}`;
+    let vaultProject: string;
+    let vaultPage: string;
+    const feedOf = async (p: Person) =>
+      JSON.stringify((await http().get('/v1/activity').query({ workspaceId: WORKSPACE, limit: 200 }).set(as(p)).expect(ok(200))).body);
+    const tagsOf = async (p: Person) =>
+      JSON.stringify((await http().get('/v1/release-tags').query({ workspaceId: WORKSPACE }).set(as(p)).expect(ok(200))).body);
+
+    beforeAll(async () => {
+      vaultProject = (
+        await http().post('/v1/projects').set(as(people.admin)).send({ workspaceId: WORKSPACE, name: `Vault ${vault}` }).expect(ok(201))
+      ).body.project.projectId;
+      vaultPage = (
+        await http()
+          .post('/v1/documents')
+          .set(as(people.admin))
+          .send({ workspaceId: WORKSPACE, projectId: vaultProject, title: `Vault ledger ${vault}`, visibility: 'workspace' })
+          .expect(ok(201))
+      ).body.documentId;
+      await http().put(`/v1/projects/${vaultProject}/access`).set(as(people.admin)).send({ restricted: true, grants: [] }).expect(ok(200));
+      await http().patch(`/v1/projects/${vaultProject}`).set(as(people.admin)).send({ description: `Vault plans ${vault}` }).expect(ok(200));
+      await http()
+        .post('/v1/release-tags')
+        .set(as(people.admin))
+        .send({ workspaceId: WORKSPACE, projectId: vaultProject, name: `vault-${vault}`, note: `Vault note ${vault}` })
+        .expect(ok(201));
+    });
+
+    it('names a restricted project in no feed row and no release tag for a member without a grant', async () => {
+      expect(await feedOf(people.admin)).toContain(vault);
+      expect(await feedOf(people.bob)).not.toContain(vault);
+      expect(await tagsOf(people.admin)).toContain(vault);
+      expect(await tagsOf(people.bob)).not.toContain(vault);
+      const mcpTags = await mcp(people.bob, 'knowledge_list_release_tags', { workspaceId: WORKSPACE });
+      expect(JSON.stringify(mcpTags)).not.toContain(vault);
+      const timeline = await http().get('/v1/graph/timeline').query({ workspaceId: WORKSPACE }).set(as(people.bob)).expect(ok(200));
+      expect(JSON.stringify(timeline.body)).not.toContain(vault);
+    });
+
+    it('shows nothing about its pages once the project is deleted', async () => {
+      await http()
+        .delete(`/v1/projects/${vaultProject}`)
+        .query({ mode: 'cascade', confirm: `Vault ${vault}` })
+        .set(as(people.admin))
+        .expect(ok(200));
+      expect(await prisma.document.count({ where: { id: vaultPage } })).toBe(0);
+      expect(await feedOf(people.bob)).not.toContain(vault);
+      expect(await feedOf(people.admin)).toContain(vault);
+      // The tag outlives its project; it must not outlive the restriction.
+      expect(await tagsOf(people.bob)).not.toContain(vault);
+    });
+  });
+
   describe('backlinks (#673)', () => {
     const backlinks = async (p: Person) =>
       (await http().get(`/v1/documents/${ids.O}/backlinks`).set(as(p)).expect(ok(200))).body as {

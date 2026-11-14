@@ -4,7 +4,7 @@ import type { GraphTimelineResponse, ReleaseTagDto } from '@knowledge/contracts'
 import { PrismaService } from '../prisma/prisma.service.js';
 import { GraphService } from '../graph/graph.service.js';
 import { factChangeDays } from '../graph/temporal.js';
-import { visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
+import { canSeeProject, visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { t } from '../i18n/t.js';
 
@@ -21,13 +21,24 @@ export class ReleaseTagsService {
     private readonly permissions: PermissionService,
   ) {}
 
-  /** Workspace-wide tags plus, with a project, that project's; every tag without one. */
-  async list(workspaceId: string, projectId?: string): Promise<ReleaseTagDto[]> {
+  /**
+   * Workspace-wide tags plus, with a project, that project's; every tag without one.
+   * A project's tag (its name and note) is shown only while the project is
+   * there and `scope` may see it (#1088): a deleted project's tags stay
+   * behind with nothing left to say it was restricted.
+   */
+  async list(scope: AccessScope, projectId?: string): Promise<ReleaseTagDto[]> {
     const rows = await this.prisma.releaseTag.findMany({
-      where: { workspaceId, ...(projectId ? { OR: [{ projectId: null }, { projectId }] } : {}) },
+      where: { workspaceId: scope.workspaceId, ...(projectId ? { OR: [{ projectId: null }, { projectId }] } : {}) },
       orderBy: { at: 'asc' },
     });
-    return rows.map(toDto);
+    if (scope.bypass) return rows.map(toDto);
+    const ids = [...new Set(rows.flatMap((r) => (r.projectId ? [r.projectId] : [])))];
+    const projects = ids.length
+      ? await this.prisma.project.findMany({ where: { id: { in: ids }, workspaceId: scope.workspaceId }, select: { id: true, restricted: true } })
+      : [];
+    const seen = new Set(projects.filter((p) => canSeeProject(scope, p)).map((p) => p.id));
+    return rows.filter((r) => r.projectId === null || seen.has(r.projectId)).map(toDto);
   }
 
   async create(
@@ -83,7 +94,7 @@ export class ReleaseTagsService {
       const inProject = new Set(docs.map((d) => d.id));
       rows = rows.filter((r) => inProject.has(r.documentId));
     }
-    const tags = (await this.list(scope.workspaceId, opts.projectId)).filter((tag) => {
+    const tags = (await this.list(scope, opts.projectId)).filter((tag) => {
       const at = Date.parse(tag.at);
       return at >= from && at < to;
     });

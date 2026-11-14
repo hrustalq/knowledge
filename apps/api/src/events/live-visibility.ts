@@ -5,7 +5,7 @@ import type { Env } from '../config/env.js';
 import type { Principal } from '../auth/principal.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
-import { canSee, hidesAnything, type AccessScope, type VisibilityRow } from '../permissions/access-scope.js';
+import { canSee, canSeeProject, hidesAnything, type AccessScope, type VisibilityRow } from '../permissions/access-scope.js';
 
 interface CachedScope {
   scope: AccessScope;
@@ -53,10 +53,15 @@ export class LiveVisibility {
 
   /** Whether each listener may receive `event`, in the order given. */
   async allows(event: KnowledgeEvent, listeners: Principal[]): Promise<boolean[]> {
-    if (!event.documentId || event.userId) {
-      // Workspace-level frames, and frames addressed to one person (their own
-      // notification, already filtered when it was written), pass as before.
+    if (event.userId) {
+      // A frame addressed to one person (their own notification, already
+      // filtered when it was written) passes as before.
       return listeners.map(() => true);
+    }
+    if (!event.documentId) {
+      const projectId = event.type.startsWith('project.') ? event.subjectId : undefined;
+      // Workspace-level frames pass as before.
+      return projectId ? this.allowsProject(event.workspaceId, projectId, listeners) : listeners.map(() => true);
     }
     const scopes = await Promise.all(listeners.map((p) => this.scopeOf(p, event.workspaceId)));
     if (scopes.every((s) => s !== null && !hidesAnything(s))) return listeners.map(() => true);
@@ -66,6 +71,22 @@ export class LiveVisibility {
       if (!hidesAnything(scope)) return true;
       return row !== null && row.workspaceId === event.workspaceId && canSee(scope, row);
     });
+  }
+
+  /**
+   * A frame whose subject is a project (`project.updated` carries its name and
+   * description) reaches only those who can see the project (#1088). One that
+   * is gone passes: a deleted project's frame carries nothing but its id, and
+   * every member's project list needs it to drop the row.
+   */
+  private async allowsProject(workspaceId: string, projectId: string, listeners: Principal[]): Promise<boolean[]> {
+    const scopes = await Promise.all(listeners.map((p) => this.scopeOf(p, workspaceId)));
+    if (scopes.every((s) => s !== null && !hidesAnything(s))) return listeners.map(() => true);
+    const project = await this.prisma.project
+      .findUnique({ where: { id: projectId }, select: { id: true, workspaceId: true, restricted: true } })
+      .catch(() => null);
+    if (!project) return listeners.map(() => true);
+    return scopes.map((scope) => scope !== null && project.workspaceId === workspaceId && canSeeProject(scope, project));
   }
 
   private async scopeOf(principal: Principal, workspaceId: string): Promise<AccessScope | null> {

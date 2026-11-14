@@ -620,6 +620,21 @@ function statusMatches(expect: string, status: number): boolean {
 export const isSecretName = (name: string) =>
   name.startsWith('secret.') || /token|secret|passw|pwd|api[_-]?key|session|cookie|credential/iu.test(name);
 
+/**
+ * What a run record may keep (#1103): no capture named like a secret, and none
+ * whose value holds one of the run's secret values, whatever it is called.
+ */
+export function storableRunResults(
+  results: Readonly<Record<string, TestRunResult>>,
+  secretValues: readonly string[],
+): Record<string, TestRunResult> {
+  const secrets = secretValues.filter(Boolean);
+  const keep = ([name, value]: [string, string]) => !isSecretName(name) && !secrets.some((s) => value.includes(s));
+  return Object.fromEntries(
+    Object.entries(results).map(([key, r]) => [key, { ...r, captures: Object.fromEntries(Object.entries(r.captures).filter(keep)) }]),
+  );
+}
+
 export type TestRunOutcome = 'pass' | 'fail' | 'error' | 'skipped' | 'not-run' | 'manual';
 
 export interface TestRunResult {
@@ -704,6 +719,11 @@ export async function runTestPlan(
 ): Promise<Map<string, TestRunResult>> {
   const results = new Map<string, TestRunResult>();
   const vars: Record<string, string> = { ...values };
+  // Captures of a request a guarded value filled (#1103): a response can echo
+  // the secret back under any name, so the capture is guarded by where it came
+  // from, not by what it is called. It goes only where the secret may go and
+  // never into a result row.
+  const held: Record<string, string> = {};
   const settle = (key: string, r: TestRunResult) => {
     results.set(key, r);
     onResult(key, r);
@@ -712,13 +732,15 @@ export async function runTestPlan(
 
   const sendOne = async (key: string, target: TestRunTarget, req: TestRunRequest, expect: string, capture: Record<string, string>, teardown: boolean) => {
     let scope: Readonly<Record<string, string>> = vars;
+    let filledFromGuarded = false;
     if (guarded) {
+      const secrets = { ...guarded.values, ...held };
       const url = fillRunRequest({ method: req.method, url: req.url, headers: [], body: null }, vars).request.url;
-      if (guarded.allow(target, url)) scope = { ...guarded.values, ...vars };
-      else {
-        const held = placeholderNames(req).filter((name) => name in guarded.values && !(name in vars));
-        if (held.length) return settle(key, outcomeOf(teardown ? 'skipped' : 'error', `withheld:${held.join(',')}`));
-      }
+      const used = placeholderNames(req).filter((name) => name in secrets && !(name in vars));
+      if (guarded.allow(target, url)) {
+        scope = { ...secrets, ...vars };
+        filledFromGuarded = used.length > 0;
+      } else if (used.length) return settle(key, outcomeOf(teardown ? 'skipped' : 'error', `withheld:${used.join(',')}`));
     }
     const { request, missing } = fillRunRequest(req, scope);
     if (missing.length) return settle(key, outcomeOf(teardown ? 'skipped' : 'error', `missing:${missing.join(',')}`));
@@ -744,8 +766,16 @@ export async function runTestPlan(
       if (v === undefined || v === null) return settle(key, { ...outcomeOf('fail', `capture:${name}`), status: res.status, durationMs, captures });
       captures[name] = typeof v === 'string' ? v : JSON.stringify(v);
     }
-    Object.assign(vars, captures);
-    return settle(key, { outcome: 'pass', status: res.status, durationMs, captures, reason: null });
+    if (!filledFromGuarded) {
+      for (const name of Object.keys(captures)) delete held[name];
+      Object.assign(vars, captures);
+      return settle(key, { outcome: 'pass', status: res.status, durationMs, captures, reason: null });
+    }
+    for (const [name, v] of Object.entries(captures)) {
+      delete vars[name];
+      held[name] = v;
+    }
+    return settle(key, { outcome: 'pass', status: res.status, durationMs, captures: {}, reason: null });
   };
 
   /** Steps in order; false once one fails, after which the rest are `not-run`. */
@@ -774,6 +804,7 @@ export async function runTestPlan(
       continue;
     }
     const saved = Object.fromEntries(c.captures.map((k) => [k, vars[k]]));
+    const savedHeld = Object.fromEntries(c.captures.map((k) => [k, held[k]]));
     if (await runSteps(c.setup, (s) => testRunKey.caseSetup(c, s))) {
       await sendOne(testRunKey.case(c), c.target, c.request, c.expect, {}, false);
     } else {
@@ -784,12 +815,16 @@ export async function runTestPlan(
       if (v === undefined) delete vars[k];
       else vars[k] = v;
     }
+    for (const [k, v] of Object.entries(savedHeld)) {
+      if (v === undefined) delete held[k];
+      else held[k] = v;
+    }
   }
   await tearDown(plan.teardown, testRunKey.teardown);
   return results;
 }
 
-/** One server run (#483, phase 5): the plan it walked and each row's result. Captures named like secrets are never stored. */
+/** One server run (#483, phase 5): the plan it walked and each row's result. Captures named like secrets, or taken from a request a secret filled, are never stored. */
 export interface ApiTestRunDetail extends ApiTestRunSummary {
   plan: TestRunPlan;
   results: Record<string, TestRunResult>;

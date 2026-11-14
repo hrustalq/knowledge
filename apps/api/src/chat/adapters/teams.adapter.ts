@@ -14,6 +14,7 @@ import {
   type ChatView,
   type RawInbound,
 } from './chat-adapter.types.js';
+import { safeFetch } from '../../common/safe-fetch.js';
 import { defuseMentions, markdownForMattermost, parseJson, plainCommand, renderMarkdownAnswer } from './chat-markdown.js';
 
 /** Bot Framework's signing keys, and who signs a delivery to a bot. */
@@ -286,11 +287,13 @@ export class TeamsAdapter implements ChatAdapter {
     const base = (this.serviceUrls.get(chatId) ?? GLOBAL_SERVICE_URL).replace(/\/$/, '');
     let res: Response;
     try {
-      res = await fetch(`${base}${path}`, {
+      // The service URL comes from an inbound activity: host-checked there, guarded and never redirected here (#1110).
+      res = await safeFetch(`${base}${path}`, {
         method,
         headers: { authorization: `Bearer ${await this.token(cred)}`, 'content-type': 'application/json' },
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+        redirect: 'error',
       });
     } catch (err) {
       if (err instanceof ChatPlatformError) throw err;

@@ -204,6 +204,13 @@ export class AgentTriggerService {
         const seen = await tx.agentRun.count({ where: { triggerId: trigger.id, subjectKey: facts.subjectKey } });
         if (seen > 0) return skip('already-seen');
       }
+      // The same signed request under a new, unsigned delivery id is a replay (#1106).
+      if (facts.event.signed) {
+        const seen = await tx.agentRun.count({
+          where: { triggerId: trigger.id, input: { path: ['event', 'signed'], equals: facts.event.signed } },
+        });
+        if (seen > 0) return skip('already-seen');
+      }
       const inFlight = await tx.agentRun.count({
         where: {
           workspaceId: trigger.workspaceId,

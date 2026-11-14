@@ -114,10 +114,23 @@ describe('AgentWebhookController', () => {
       expect.objectContaining({
         workspaceId: WS,
         subjectKey: 'webhook:dlv-1',
-        event: { type: 'webhook', source: 'webhook', deliveryId: 'dlv-1' },
+        event: expect.objectContaining({ type: 'webhook', source: 'webhook', deliveryId: 'dlv-1' }),
         payload: '{"event":"deploy"}',
       }),
     );
+  });
+
+  // #1106: the replay key is what the signature covers, not the unsigned delivery id.
+  it('names the signed delivery, so a resend under a new delivery id is the same delivery', async () => {
+    const { c, fire } = controller();
+    const ts = Math.floor(Date.now() / 1000);
+    await deliver(c, '{"event":"deploy"}', { ts, delivery: 'dlv-1' });
+    await deliver(c, '{"event":"deploy"}', { ts, delivery: 'dlv-2' });
+    await deliver(c, '{"event":"other"}', { ts, delivery: 'dlv-3' });
+    const signed = fire.mock.calls.map((call) => (call as unknown as [unknown, { event: { signed?: string } }])[1].event.signed);
+    expect(signed[0]).toMatch(/^[0-9a-f]{64}$/);
+    expect(signed[1]).toBe(signed[0]);
+    expect(signed[2]).not.toBe(signed[0]);
   });
 
   it('a guard holding the run back is still a 202, with the reason', async () => {

@@ -28,6 +28,15 @@ const FACT_KEY = /^(?:id|cite|label|traceId|status|state|kind|layer|level|factCl
 /** What such a value may look like: no spaces, so no sentence; no `<`, so no tag. */
 const FACT_VALUE = /^[\w:.+\-/@#]{0,80}$/;
 
+/**
+ * A key the facts line may carry: an identifier, as every key we write is.
+ * A key a page wrote — frontmatter, a spec's property names — can be a
+ * sentence, and its value a bare `true`; it goes to the text side whole.
+ */
+const FACT_KEY_SHAPE = /^[A-Za-z_$][\w$]{0,39}$/;
+/** Maps whose keys the page's authors chose, whatever they look like. */
+const PAGE_KEYED = new Set(['frontmatter']);
+
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 const EMPTY = Symbol('empty');
 
@@ -66,6 +75,11 @@ export function splitPageText(value: unknown): { facts: unknown; text: unknown }
     const facts: Record<string, Json> = {};
     const text: Record<string, Json> = {};
     for (const [k, x] of Object.entries(v)) {
+      if ((key !== null && PAGE_KEYED.has(key)) || !FACT_KEY_SHAPE.test(k)) {
+        const whole = JSON.stringify(x);
+        if (whole !== undefined) text[k] = JSON.parse(whole) as Json;
+        continue;
+      }
       const part = walk(x, k);
       if (part.facts !== EMPTY) facts[k] = part.facts;
       if (part.text !== EMPTY) text[k] = part.text;

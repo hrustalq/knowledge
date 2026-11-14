@@ -12,7 +12,11 @@ overrides:
 onlyBuiltDependencies:
   - '@prisma/client'
   - '@prisma/engines'
-  - '@scarf/scarf'
   - msgpackr-extract
   - prisma
   - vue-demi
+
+# @scarf/scarf's install script is download telemetry, run from CI and image
+# builds (#1111). Named here so pnpm skips it without warning.
+ignoredBuiltDependencies:
+  - '@scarf/scarf'

@@ -1006,6 +1006,64 @@ describe('page permissions (e2e, #76)', () => {
     });
   });
 
+  describe('imports (#1086)', () => {
+    const reserve = (p: Person, extra: Record<string, unknown> = {}) =>
+      http()
+        .post('/v1/imports')
+        .set(as(p))
+        .send({ workspaceId: WORKSPACE, projectId, filename: 'parsed.md', contentType: 'text/markdown', sizeBytes: 64, ...extra });
+    /** Where the parser would leave it; nothing in this app consumes the import queue. */
+    const parsed = (id: string) => prisma.importJob.update({ where: { id }, data: { status: 'parsed', title: `Staged ${word}` } });
+
+    it('answers 404 to anyone but the uploader on every import route', async () => {
+      const id = (await reserve(people.alice).expect(ok(201))).body.import.importId as string;
+      await parsed(id);
+      expect(await status(people.alice, `/v1/imports/${id}`)).toBe(200);
+      for (const suffix of ['', '/content', '/images/0']) {
+        const res = await http().get(`/v1/imports/${id}${suffix}`).set(as(people.bob));
+        expect([suffix, res.status]).toEqual([suffix, 404]);
+        expect(JSON.stringify(res.body)).not.toContain(word);
+      }
+      await http().post(`/v1/imports/${id}/start`).set(as(people.bob)).send({}).expect(ok(404));
+      await http().post(`/v1/imports/${id}/submit`).set(as(people.bob)).send({ title: 'x', markdown: 'x' }).expect(ok(404));
+      await http().delete(`/v1/imports/${id}`).set(as(people.bob)).expect(ok(404));
+      expect(await prisma.importJob.count({ where: { id } })).toBe(1);
+      // A workspace admin may tidy up, as with exports.
+      expect(await status(people.admin, `/v1/imports/${id}`)).toBe(200);
+      await http().delete(`/v1/imports/${id}`).set(as(people.alice)).expect(ok(200));
+    });
+
+    it('stores the upload under a fixed name, so a file called parsed.md is not its own parse', async () => {
+      const res = await reserve(people.alice).expect(ok(201));
+      const row = await prisma.importJob.findUniqueOrThrow({ where: { id: res.body.import.importId } });
+      expect(row.s3Key.endsWith('/parsed.md')).toBe(false);
+      await http().delete(`/v1/imports/${row.id}`).set(as(people.alice)).expect(ok(200));
+    });
+
+    it('refuses a destination the caller may not create under, exactly as POST /v1/documents does', async () => {
+      const direct = await http()
+        .post('/v1/documents')
+        .set(as(people.bob))
+        .send({ workspaceId: WORKSPACE, projectId, parentId: ids.P, title: 'x' });
+      expect(direct.status).toBe(403);
+      const reserved = await reserve(people.bob, { parentId: ids.P });
+      expect(reserved.status).toBe(403);
+      expect(reserved.body.details).toEqual(direct.body.details);
+
+      const id = (await reserve(people.bob).expect(ok(201))).body.import.importId as string;
+      await parsed(id);
+      const before = await prisma.document.count({ where: { parentId: ids.P } });
+      const submitted = await http()
+        .post(`/v1/imports/${id}/submit`)
+        .set(as(people.bob))
+        .send({ title: `Planted ${word}`, markdown: 'planted', parentId: ids.P });
+      expect(submitted.status).toBe(403);
+      expect(JSON.stringify(submitted.body)).not.toContain(word);
+      expect(await prisma.document.count({ where: { parentId: ids.P } })).toBe(before);
+      await http().delete(`/v1/imports/${id}`).set(as(people.bob)).expect(ok(200));
+    });
+  });
+
   describe('access requests', () => {
     it('request → duplicate 409 → approve opens the subtree to the requester', async () => {
       const body = { workspaceId: WORKSPACE, resourceType: 'document', resourceId: ids.C, level: 'view' };

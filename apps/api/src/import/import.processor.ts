@@ -16,6 +16,7 @@ import { stripLeadingTitle } from './parsers/parser.types.js';
 import type { ParsedImage, ParseResult } from './parsers/parser.types.js';
 import { asLocale } from '../i18n/locale.js';
 import { t, withLocale } from '../i18n/t.js';
+import { AUTHOR_ID_STUB } from '../activity/actor.js';
 
 interface ImportJobData {
   importJobId: string;
@@ -150,6 +151,9 @@ export class ImportProcessor extends WorkerHost {
 
       await this.events.publish({
         workspaceId: row.workspaceId,
+        // The uploader's alone, like export.* and memo.* (#1086); a row from
+        // before uploaders were recorded goes to nobody, never to everyone.
+        userId: row.createdBy ?? AUTHOR_ID_STUB,
         type: 'import.parsed',
         subjectId: row.id,
         title: row.sourceFilename,
@@ -170,6 +174,9 @@ export class ImportProcessor extends WorkerHost {
       if (failed.count === 0) return;
       await this.events.publish({
         workspaceId: row.workspaceId,
+        // The uploader's alone, like export.* and memo.* (#1086); a row from
+        // before uploaders were recorded goes to nobody, never to everyone.
+        userId: row.createdBy ?? AUTHOR_ID_STUB,
         type: 'import.failed',
         subjectId: row.id,
         title: row.sourceFilename,

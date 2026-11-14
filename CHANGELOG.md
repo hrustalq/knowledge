@@ -19,6 +19,10 @@ in the pull request that introduces them — see
 
 - A workflow run follows its source page's permissions. Starting one needs edit on the page, and a run on a page you
   cannot open no longer shows in the run list, opens, or takes review actions, in the app or over MCP. (#1085)
+- An import in progress belongs to whoever uploaded it. Other members can no longer open its staged text, submit it or
+  discard it (a workspace admin still can), and the "parsed" and "failed" notices go only to the uploader. Importing
+  into a project or under a page you could not create a page in is now refused, as creating the page directly is.
+  A file named `parsed.md` no longer has its upload overwritten by its own parse. (#1086)
 
 ## [0.53.2] — 2026-11-13
 

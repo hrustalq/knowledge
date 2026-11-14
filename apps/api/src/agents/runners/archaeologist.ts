@@ -89,7 +89,7 @@ async function excavate(
         call,
         [
           { role: 'system', content: DIGEST_CONTRACT },
-          { role: 'user', content: digestInput(docs, pages, MAX_DIGEST_INPUT_CHARS) },
+          { role: 'user', content: wrapUntrusted(digestInput(docs, pages, MAX_DIGEST_INPUT_CHARS), 'declared_digest', 'document') },
         ],
         { json: true },
       );
@@ -163,10 +163,10 @@ async function excavate(
           runBrief(input) +
           `Repository: ${snapshot.name} (${snapshot.host.owner}/${snapshot.host.repo} @ ${snapshot.branch}). ` +
           `Every code tool call reads this repository; connectorId is ${connectorId}.\n\n` +
-          `What the repository's documents and the workspace's pages already declare:\n${digest || '(nothing)'}\n\n` +
+          `What the repository's documents and the workspace's pages already declare:\n${digest ? wrapUntrusted(digest, 'declared_digest', 'document') : '(nothing)'}\n\n` +
           `The file nothing declares: ${candidate.path} (${candidate.lines} lines).${declares}\n\n` +
           `The first part of the file (use code_read for the rest, and code_search / code_outline for what it ` +
-          `imports):\n<file path=${JSON.stringify(candidate.path)}>\n${text.slice(0, MAX_PREVIEW_CHARS)}\n</file>`,
+          `imports):\n${wrapUntrusted(`${candidate.path}\n\n${text.slice(0, MAX_PREVIEW_CHARS)}`, 'code_read', 'repo')}`,
       },
     ];
 
@@ -268,7 +268,7 @@ async function draftComponent(
   ]);
   const notes = template.parsed.meta.aiInstructions?.trim();
   const files = componentPreviews(snapshot, component.paths)
-    .map((f) => `<file path=${JSON.stringify(f.path)} lines=${f.lines}>\n${f.text}\n</file>`)
+    .map((f) => `===== ${f.path} (${f.lines} lines) =====\n${f.text}`)
     .join('\n');
   const messages: ChatCompletionMessageParam[] = [
     { role: 'system', content: `${agent.instructions}\n\n${COMPONENT_DRAFT_CONTRACT}${skills}` },

@@ -1068,6 +1068,7 @@ export type I18nTranslations = {
             "agentWebhookDeliveryId": string;
             "skillNoUpstream": string;
             "findingComponentDraft": string;
+            "findingMemoDraft": string;
             "findingNoTerm": string;
             "findingTermAdded": string;
         };

@@ -555,8 +555,9 @@ export class AiController {
     @Query('agentKey') agentKey?: string,
     @Query('status') status?: string,
     @Query('cursor') cursor?: string,
+    @CurrentPrincipal() principal?: Principal,
   ): Promise<ListAgentRunsResponse> {
-    return this.runs.list(workspaceId, { agentKey, status, cursor });
+    return this.runs.list(workspaceId, { agentKey, status, cursor }, principal!);
   }
 
   @Get('agents/runs/:id')
@@ -567,8 +568,9 @@ export class AiController {
   getAgentRun(
     @Param('id', ParseUUIDPipe) id: string,
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @CurrentPrincipal() principal: Principal,
   ): Promise<AgentRunSummary> {
-    return this.runs.get(workspaceId, id);
+    return this.runs.get(workspaceId, id, principal);
   }
 
   // Triggers (#70). Declared before ':key' so "triggers" is not read as an

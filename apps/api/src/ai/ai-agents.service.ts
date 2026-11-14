@@ -17,6 +17,7 @@ import {
   type ListAgentRunsResponse,
   RUNNABLE_AGENTS,
 } from '@knowledge/contracts';
+import { mayReadRun, privateRunWhere } from './run-privacy.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AgentRegistryService, type ResolvedAgent } from '../agents/agent-registry.service.js';
@@ -464,14 +465,17 @@ export class AgentRunsService {
     );
   }
 
+  /** `principal`: a memo's analysis is listed for its uploader only (#1089, `privateRunWhere`). */
   async list(
     workspaceId: string,
     opts: { agentKey?: string; status?: string; cursor?: string },
+    principal: Principal,
   ): Promise<ListAgentRunsResponse> {
     const where = {
       workspaceId,
       ...(opts.agentKey ? { agentKey: opts.agentKey } : {}),
       ...(opts.status ? { status: opts.status } : {}),
+      ...privateRunWhere(principal),
     };
     const rows = await this.prisma.agentRun.findMany({
       where,
@@ -506,9 +510,11 @@ export class AgentRunsService {
     };
   }
 
-  async get(workspaceId: string, id: string): Promise<AgentRunSummary> {
+  async get(workspaceId: string, id: string, principal: Principal): Promise<AgentRunSummary> {
     const run = await this.prisma.agentRun.findUnique({ where: { id } });
-    if (!run || run.workspaceId !== workspaceId) throw new NotFoundException(t('error.ai.agentRunNotFound', { id }));
+    if (!run || run.workspaceId !== workspaceId || !mayReadRun(run, principal)) {
+      throw new NotFoundException(t('error.ai.agentRunNotFound', { id }));
+    }
     const agent = await this.registry.resolve(workspaceId, run.agentKey).catch(() => null);
     return toRunSummary(run, agent?.name ?? run.agentKey);
   }

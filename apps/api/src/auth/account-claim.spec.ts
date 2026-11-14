@@ -22,6 +22,7 @@ function fakePrisma(opts: { claimed: boolean; boundCredentialIds?: string[] }) {
     passwordResetToken: model('passwordResetToken'),
     emailVerificationToken: model('emailVerificationToken'),
     chatIdentity: model('chatIdentity'),
+    chatLinkCode: model('chatLinkCode'),
     plaudLink: model('plaudLink'),
     credential: model('credential'),
     connection: model('connection', {
@@ -36,6 +37,7 @@ describe('claimUnverifiedAccount (#1094 leftover)', () => {
     const { prisma, calls } = fakePrisma({ claimed: true, boundCredentialIds: ['cred-bound'] });
     expect(await claimUnverifiedAccount(prisma, 'u1')).toBe(true);
     expect(calls).toContainEqual(['plaudLink', 'deleteMany', { where: { userId: 'u1' } }]);
+    expect(calls).toContainEqual(['chatLinkCode', 'updateMany', { where: { confirmedBy: 'u1', usedAt: null }, data: { usedAt: expect.any(Date) } }]);
     expect(calls).toContainEqual(['credential', 'deleteMany', { where: { userId: 'u1', id: { notIn: ['cred-bound'] } } }]);
     expect(calls).toContainEqual(['credential', 'updateMany', { where: { userId: 'u1' }, data: { userId: null } }]);
   });

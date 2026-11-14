@@ -26,6 +26,8 @@ export async function claimUnverifiedAccount(prisma: PrismaService, userId: stri
     await prisma.passwordResetToken.updateMany({ where: { userId, usedAt: null }, data: { usedAt: now } });
     await prisma.emailVerificationToken.updateMany({ where: { userId, usedAt: null }, data: { usedAt: now } });
     await prisma.chatIdentity.deleteMany({ where: { userId } });
+    // A code they confirmed and have not proven yet would still link as this person.
+    await prisma.chatLinkCode.updateMany({ where: { confirmedBy: userId, usedAt: null }, data: { usedAt: now } });
     // Personal sign-ins answer as whoever set them up: a Plaud link would keep
     // importing their recordings as this person, a credential is theirs to bind.
     // One a workspace connection already dials keeps working there, unowned.

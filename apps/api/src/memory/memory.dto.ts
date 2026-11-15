@@ -1,5 +1,5 @@
 import { Transform, Type } from 'class-transformer';
-import { IsArray, IsBoolean, IsDefined, IsIn, IsInt, IsISO8601, IsNumber, IsObject, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsDefined, IsIn, IsInt, IsISO8601, IsNumber, IsObject, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
 import { FACT_TYPES, MEMORY_TIME_FIELDS, TAGS_MATCH, type MemoryTimeField, type TagsMatch } from './memory-facts.js';
 
 /**
@@ -136,11 +136,35 @@ export class ListOperationsQueryDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) offset?: number;
 }
 
+class DirectiveFieldsDto {
+  @IsOptional() @IsInt() @Min(-1_000_000) @Max(1_000_000) priority?: number | null;
+  @IsOptional() @IsBoolean() is_active?: boolean | null;
+  @IsOptional() @IsArray() @ArrayMaxSize(50) @IsString({ each: true }) @MinLength(1, { each: true }) @MaxLength(100, { each: true }) tags?: string[] | null;
+}
+
+export class CreateDirectiveDto extends DirectiveFieldsDto {
+  @IsString() @Matches(/\S/) @MaxLength(200) name!: string;
+  @IsString() @Matches(/\S/) @MaxLength(20_000) @Matches(/^([^\n]*\n){0,99}[^\n]*$/) content!: string;
+}
+
+export class UpdateDirectiveDto extends DirectiveFieldsDto {
+  @IsOptional() @IsString() @Matches(/\S/) @MaxLength(200) name?: string | null;
+  @IsOptional() @IsString() @Matches(/\S/) @MaxLength(20_000) @Matches(/^([^\n]*\n){0,99}[^\n]*$/) content?: string | null;
+}
+
+export class ListDirectivesQueryDto {
+  @IsOptional() @Transform(asList) @IsArray() @ArrayMaxSize(50) @IsString({ each: true }) @MaxLength(100, { each: true }) tags?: string[];
+  @IsOptional() @IsIn(['any', 'all', 'exact']) tags_match?: 'any' | 'all' | 'exact';
+  @IsOptional() @Transform(({ value }) => value === true || value === 'true') @IsBoolean() active_only?: boolean;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(1000) limit?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) offset?: number;
+}
+
 export class ReflectIncludeDto {
   @IsOptional() @IsObject() facts?: Record<string, unknown> | null;
 }
 
-/** `ReflectRequest`. Mental models, directives and `tag_groups` are Hindsight's and are left undeclared. */
+/** `ReflectRequest`. Mental models and `tag_groups` are Hindsight's and are left undeclared. */
 export class ReflectDto {
   @IsString() @MinLength(1) @MaxLength(4000) query!: string;
   /** Deprecated by Hindsight: appended to the query. */
@@ -149,6 +173,7 @@ export class ReflectDto {
   @IsOptional() @IsInt() @Min(1) @Max(200_000) max_tokens?: number | null;
   @IsOptional() @IsArray() @IsString({ each: true }) tags?: string[] | null;
   @IsOptional() @IsIn(TAGS_MATCH) tags_match?: TagsMatch | null;
+  @IsOptional() @IsBoolean() apply_all_directives?: boolean | null;
   @IsOptional() @IsArray() @IsIn([...FACT_TYPES, 'observation'], { each: true }) fact_types?: string[] | null;
   @IsOptional() @IsObject() response_schema?: Record<string, unknown> | null;
   @IsOptional() @ValidateNested() @Type(() => ReflectIncludeDto) include?: ReflectIncludeDto | null;

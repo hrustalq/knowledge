@@ -15,6 +15,7 @@ import { CurrentPrincipal, ReadKeyOk } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { CachePolicy } from '../common/http-cache.js';
 import { MemoryAccessService } from './memory-access.service.js';
+import { MemoryDirectivesService } from './memory-directives.service.js';
 import {
   MemoryFilesService,
   type MemoryToolResult,
@@ -29,12 +30,15 @@ import { MemoryUnitsService } from './memory-units.service.js';
 import {
   ClearMemoriesQueryDto,
   ConsolidateDto,
+  CreateDirectiveDto,
+  ListDirectivesQueryDto,
   ListMemoriesQueryDto,
   ListObservationScopesQueryDto,
   ListOperationsQueryDto,
   RecallDto,
   ReflectDto,
   RetainDto,
+  UpdateDirectiveDto,
   UpdateDocumentDto,
 } from './memory.dto.js';
 import type {
@@ -42,6 +46,8 @@ import type {
   CancelOperationResponse,
   ConsolidationResponse,
   DeleteResponse,
+  DirectiveListResponse,
+  DirectiveResponse,
   ListMemoryUnitsResponse,
   OperationStatusResponse,
   OperationsListResponse,
@@ -67,6 +73,7 @@ export class MemoryUnitsController {
     private readonly recaller: MemoryRecallService,
     private readonly operations: MemoryOperationsService,
     private readonly reflector: MemoryReflectService,
+    private readonly directives: MemoryDirectivesService,
     private readonly rate: MemoryRateService,
     private readonly files: MemoryFilesService,
   ) {}
@@ -143,6 +150,73 @@ export class MemoryUnitsController {
     const bank = await this.access.bank(caller, bankId);
     await this.rate.check('reflect', principal);
     return this.reflector.reflect(bank, reflectQuery(dto, principal));
+  }
+
+  @Get('directives')
+  async listDirectives(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Query() query: ListDirectivesQueryDto,
+  ): Promise<DirectiveListResponse> {
+    const caller = await this.access.caller(principal, ws, 'viewer');
+    return this.directives.list(await this.access.bank(caller, bankId), query);
+  }
+
+  @Post('directives')
+  @HttpCode(200)
+  async createDirective(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Body() dto: CreateDirectiveDto,
+  ): Promise<DirectiveResponse> {
+    const caller = await this.access.caller(principal, ws, 'editor');
+    return this.directives.create(await this.access.bank(caller, bankId), dto);
+  }
+
+  @Get('directives/:directiveId')
+  async getDirective(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Param('directiveId') directiveId: string,
+  ): Promise<DirectiveResponse> {
+    const caller = await this.access.caller(principal, ws, 'viewer');
+    return this.directives.get(
+      await this.access.bank(caller, bankId),
+      directiveId,
+    );
+  }
+
+  @Patch('directives/:directiveId')
+  async updateDirective(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Param('directiveId') directiveId: string,
+    @Body() dto: UpdateDirectiveDto,
+  ): Promise<DirectiveResponse> {
+    const caller = await this.access.caller(principal, ws, 'editor');
+    return this.directives.update(
+      await this.access.bank(caller, bankId),
+      directiveId,
+      dto,
+    );
+  }
+
+  @Delete('directives/:directiveId')
+  async deleteDirective(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Param('directiveId') directiveId: string,
+  ): Promise<DeleteResponse> {
+    const caller = await this.access.caller(principal, ws, 'editor');
+    return this.directives.delete(
+      await this.access.bank(caller, bankId),
+      directiveId,
+    );
   }
 
   /** One consolidation pass, optionally only for memories matching a requested tag scope. */

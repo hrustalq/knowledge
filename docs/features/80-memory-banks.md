@@ -177,7 +177,9 @@ an `X-Workspace-Id` header.
 | `GET`, `PUT …/profile` | viewer, editor | name, mission, disposition |
 | `POST …/memories` | editor, `capture` key | retain; `async: true` returns an `operation_id` |
 | `POST …/memories/recall` | viewer | recall |
-| `POST …/reflect` | viewer | one answer over a recall |
+| `POST …/reflect` | viewer | one answer over a recall; active matching directives constrain it |
+| `GET`, `POST …/directives` | viewer, editor | list/filter directives; create a named rule set |
+| `GET`, `PATCH`, `DELETE …/directives/{directive_id}` | viewer, editor, editor | read, update/activate/deactivate, delete |
 | `GET …/memories/list`, `GET …/memories/{id}`, `GET …/stats` | viewer | |
 | `GET …/observations/scopes` | viewer | exact observation scopes and their counts |
 | `PATCH …/documents/{document_id}` | editor | change observation scopes without re-extraction |
@@ -210,7 +212,7 @@ workspace and a bank; every route and every MCP tool asks it, on execution:
 ## Storage
 
 Postgres holds the truth: `memory_banks`, `memory_units`, `memory_unit_entities`,
-`memory_operations`, for observations `memory_observation_scopes`, `memory_observation_scope_members`,
+`memory_operations`, reflect rules in `memory_directives`, for observations `memory_observation_scopes`, `memory_observation_scope_members`,
 `memory_observation_evidence` and `memory_observation_history`, for the graph wire `memory_entities` and
 `memory_relations`, and for the files wire `memory_files` — all cascading from the bank and filed in the
 workspace teardown inventory. ArcadeDB holds only the vector, as a third vector type (`MemoryUnit`)
@@ -274,6 +276,15 @@ stable across rounds (`[M1]`, `[M2]`, …), `based_on.memories` lists exactly wh
 shown, and `trace` is present when it recalled again. `usage` aggregates every model round. The
 bank's mission and disposition are trusted system lines; memories from every round reach the model
 only inside `wrapUntrusted`. With no model configured reflect answers 409 and bills nothing.
+
+**Scoped directives** (#1159) are named, prioritized sets of hard rules managed through
+`/directives` with the official client. Untagged directives are global; tagged ones match the reflect
+scope with the recall tag semantics, and `apply_all_directives: true` selects every active directive in
+the already ACL-resolved bank. Inactive directives never apply. The selected content is a trusted system
+instruction, separate from and taking precedence over untrusted memory text, but is never evidence:
+an empty bank still has no factual answer merely because a directive exists. `include.facts` returns
+exactly the applied `{id, name, content}` rows in `based_on.directives`. Directives do not affect retain,
+consolidation or ordinary assistant/agent turns.
 
 ## Observations
 
@@ -527,7 +538,7 @@ reaches `apps/api/src/captures/`.
 
 ## Not built
 
-Hindsight's mental models, knowledge-base pages, directives, webhooks, transfer and clone,
+Hindsight's mental models, knowledge-base pages, webhooks, transfer and clone,
 bank templates, file retain, aliases, audit and LLM-request logs; `tag_groups`; Hindsight's
 observation scopes and consolidation strategies (`observation_scopes` on `POST …/consolidate` is not
 read: every pass keeps each exact tag set to itself) and its bank config keys beyond the five above;

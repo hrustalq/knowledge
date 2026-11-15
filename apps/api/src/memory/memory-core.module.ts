@@ -12,6 +12,7 @@ import { PrismaModule } from '../prisma/prisma.module.js';
 import { MemoryAccessService } from './memory-access.service.js';
 import { MemoryBanksService } from './memory-banks.service.js';
 import { MemoryConsolidationService } from './memory-consolidation.service.js';
+import { MemoryDirectivesService } from './memory-directives.service.js';
 import { MemoryOperationsService } from './memory-operations.service.js';
 import { MemoryQueueModule } from './memory-queue.module.js';
 import { MEMORY_RERANKER_PROVIDER, createMemoryReranker } from './memory-reranker.js';
@@ -44,6 +45,7 @@ import { MemoryUnitsService } from './memory-units.service.js';
     MemoryAccessService,
     MemoryBanksService,
     MemoryConsolidationService,
+    MemoryDirectivesService,
     MemoryOperationsService,
     MemoryRecallService,
     MemoryReflectService,
@@ -55,6 +57,7 @@ import { MemoryUnitsService } from './memory-units.service.js';
     MemoryAccessService,
     MemoryBanksService,
     MemoryConsolidationService,
+    MemoryDirectivesService,
     MemoryOperationsService,
     MemoryRecallService,
     MemoryReflectService,

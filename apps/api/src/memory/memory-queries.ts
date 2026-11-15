@@ -50,6 +50,7 @@ export function reflectQuery(dto: ReflectDto, principal: Pick<Principal, 'userId
     budget: dto.budget ?? undefined,
     maxTokens: dto.max_tokens ?? undefined,
     facts: dto.include?.facts != null,
+    applyAllDirectives: dto.apply_all_directives === true,
     responseSchema: dto.response_schema ?? undefined,
     userId: principal.userId,
     locale: principal.locale,

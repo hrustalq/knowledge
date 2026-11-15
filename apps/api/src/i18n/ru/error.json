@@ -231,6 +231,7 @@
     "timestampInvalid": "`timestamp` должен быть датой ISO 8601 или «unset»",
     "storeNotReady": "Векторного индекса памяти ещё нет: он создаётся при запуске воркера. Запустите воркер один раз и повторите",
     "memoryNotFound": "Запись памяти {id} не найдена",
+    "directiveNotFound": "Директива {id} не найдена",
     "noReranker": "Для `min_scores.reranker` нужен реранкер, а здесь его нет: используйте `semantic`, `keyword` или `final`",
     "windowInvalid": "В `temporal_window` нужны `start` и `end`, причём начало раньше конца",
     "operationIdTaken": "Этот operation_id уже принадлежит другой операции",

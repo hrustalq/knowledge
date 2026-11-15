@@ -171,6 +171,7 @@ export function buildMemoryMcpServer(services: MemoryMcpServices, request: Memor
         response_schema: z.record(z.string(), z.unknown()).optional().describe('JSON Schema for structured output, returned as structured_output'),
         tags: z.array(z.string()).optional().describe('Only memories filed under these tags'),
         tags_match: z.enum(TAGS_MATCH).optional().describe('any (default, includes untagged), all, any_strict, all_strict or exact'),
+        apply_all_directives: z.boolean().optional().describe('Apply every active directive in this bank regardless of tags'),
       }),
       annotations: { readOnlyHint: true, openWorldHint: false },
     },

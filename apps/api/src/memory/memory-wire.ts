@@ -49,6 +49,25 @@ export interface DeleteResponse {
   deleted_count: number | null;
 }
 
+export interface DirectiveResponse {
+  id: string;
+  bank_id: string;
+  name: string;
+  content: string;
+  priority: number;
+  is_active: boolean;
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DirectiveListResponse {
+  items: DirectiveResponse[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 /** The Hindsight API version these shapes follow. */
 export const HINDSIGHT_API_VERSION = '1.2.1';
 
@@ -233,7 +252,7 @@ export interface ReflectResponse {
       Omit<RecallResult, 'entities' | 'source_fact_ids' | 'scores'>
     >;
     mental_models: never[];
-    directives: never[];
+    directives: Array<Pick<DirectiveResponse, 'id' | 'name' | 'content'>>;
   };
   structured_output?: Record<string, unknown> | null;
   structured_output_error?: string | null;

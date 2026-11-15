@@ -4850,10 +4850,31 @@ model MemoryBank {
   relations  MemoryRelation[]
   files      MemoryFile[]
   observationScopes MemoryObservationScope[]
+  directives MemoryDirective[]
 
   @@unique([workspaceId, bankId])
   @@index([workspaceId, agentKey, ownerId])
   @@map("memory_banks")
+}
+
+/// One named set of hard rules for reflect (#1159). Empty tags apply globally;
+/// tagged rows apply only to a matching reflect scope. Never recalled as memory.
+model MemoryDirective {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  bankId      String   @map("bank_id") @db.Uuid
+  bank        MemoryBank @relation(fields: [bankId], references: [id], onDelete: Cascade)
+  name        String
+  content     String
+  priority    Int      @default(0)
+  isActive    Boolean  @default(true) @map("is_active")
+  tags        String[] @default([])
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([workspaceId])
+  @@index([bankId, isActive])
+  @@map("memory_directives")
 }
 
 /// An entity of a bank's graph (#1008), as the MCP reference memory server

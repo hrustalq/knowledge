@@ -23,6 +23,9 @@ in the pull request that introduces them — see
   scope updates, and ordered per-scope consolidation strategies through the unmodified Hindsight client. (#1157)
 - Memory recall can now rerank fused candidates with an optional cross-encoder, return normalized reranker/final scores,
   and filter them inclusively with `min_scores`; deployments without a reranker keep the existing RRF behavior. (#1158)
+- Memory banks now support named global or tag-scoped reflect directives through the unmodified Hindsight client. Editors
+  can manage and activate them; reflections report exactly which rules were applied without exposing personal or restricted
+  project banks. (#1159)
 
 ### Operations
 

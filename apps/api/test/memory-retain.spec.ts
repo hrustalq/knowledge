@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { BadRequestException, ServiceUnavailableException } from '@nestjs/common';
-import { extractionBatches, extractionPrompt, readFacts, readRetainItems, tagsWhere, type RetainItem } from '../src/memory/memory-facts.js';
+import { extractionBatches, extractionPrompt, readFacts, readRetainItems, resolveObservationScopes, tagsWhere, type RetainItem } from '../src/memory/memory-facts.js';
 import { MemoryIntakeService } from '../src/memory/memory-intake.service.js';
 import { MemoryRetainService } from '../src/memory/memory-retain.service.js';
 
@@ -45,6 +45,26 @@ describe('retain items (#986)', () => {
       expect(() => readRetainItems([{ content: 'mine now', document_id }], null, LIMITS)).toThrow(BadRequestException);
     }
     expect(readRetainItems([{ content: 'a', document_id: 'graphs-of-q3' }], null, LIMITS)[0]!.documentId).toBe('graphs-of-q3');
+  });
+});
+
+describe('observation scopes (#1157)', () => {
+  it('resolves combined, shared, per-tag, all combinations and custom glob scopes canonically', () => {
+    const tags = ['session:2', 'user:a', 'team:eng'];
+    expect(resolveObservationScopes(tags)).toEqual([['session:2', 'team:eng', 'user:a']]);
+    expect(resolveObservationScopes(tags, 'shared')).toEqual([[]]);
+    expect(resolveObservationScopes(tags, 'per_tag')).toEqual([['session:2'], ['team:eng'], ['user:a']]);
+    expect(resolveObservationScopes(['b', 'a'], 'all_combinations')).toEqual([['a'], ['b'], ['a', 'b']]);
+    expect(resolveObservationScopes(tags, [['user:*', 'team:*'], ['session:2'], ['user:a']])).toEqual([['team:eng', 'user:a'], ['session:2'], ['user:a']]);
+    expect(resolveObservationScopes(tags, [['missing:*']])).toEqual([]);
+  });
+
+  it('keeps the retain-time value and rejects a malformed one before extraction', () => {
+    expect(readRetainItems([{ content: 'a', observation_scopes: 'shared' }], null, LIMITS)[0]!.observationScopes).toBe('shared');
+    expect(readRetainItems([{ content: 'a', observation_scopes: [['b', 'a', 'a']] }], null, LIMITS)[0]!.observationScopes).toEqual([['a', 'b']]);
+    for (const observation_scopes of ['everywhere', [true], [['a', 2]]]) {
+      expect(() => readRetainItems([{ content: 'a', observation_scopes }], null, LIMITS)).toThrow(BadRequestException);
+    }
   });
 });
 
@@ -113,7 +133,7 @@ describe('MemoryRetainService (#986)', () => {
         return { content: opts.answer ?? '{}', tokens: { promptTokens: 10, completionTokens: 5, totalTokens: 15, estimated: false } };
       }),
     };
-    const units = { deleteBareObservations: vi.fn(async () => [] as string[]) };
+    const units = { deleteBareObservations: vi.fn(async () => [] as string[]), invalidateFacts: vi.fn(async () => [] as string[]), addScopeMemberships: vi.fn(async () => undefined) };
     const svc = new MemoryRetainService(prisma as never, graph as never, aliases as never, embeddings as never, agents as never, usage as never, client as never, units as never);
     const retain = (items: RetainItem[], extra: { verbatim?: boolean; durableOnly?: boolean; consolidated?: boolean; guard?: () => Promise<boolean> } = {}) => svc.retain({ workspaceId: WS, bank: { id: 'bank-1', mission: '' }, userId: 'u1', locale: 'en', items, ...extra });
     return { svc, retain, created, prisma, graph, client, embeddings };

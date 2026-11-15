@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, type MemoryBank, type MemoryOperation } from '@prisma/client';
 import { UUID_RE, type Locale } from '@knowledge/contracts';
@@ -10,7 +10,7 @@ import { asLocale } from '../i18n/locale.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { MemoryConsolidationService } from './memory-consolidation.service.js';
-import type { RetainItem } from './memory-facts.js';
+import { readObservationScopes, type RetainItem } from './memory-facts.js';
 import { maskItems, MemoryRetainService } from './memory-retain.service.js';
 import { MemoryProducer } from './memory.producer.js';
 import type { CancelOperationResponse, ConsolidationResponse, OperationResponse, OperationStatusResponse, OperationsListResponse } from './memory-wire.js';
@@ -107,15 +107,19 @@ export class MemoryOperationsService {
    * the bank, so a client is told why instead of polling an operation that
    * does nothing. A pass already waiting is returned, not doubled.
    */
-  async consolidate(bank: MemoryBank, input: { userId: string; locale: Locale }): Promise<ConsolidationResponse> {
+  async consolidate(bank: MemoryBank, input: { userId: string; locale: Locale; observationScopes?: unknown }): Promise<ConsolidationResponse> {
+    const parsed = readObservationScopes(input.observationScopes);
+    if (parsed != null && !Array.isArray(parsed)) throw new BadRequestException(t('error.memory.configValueInvalid', { key: 'observation_scopes', type: 'a list of string tag lists or null' }));
+    const observationScopes = parsed as string[][] | undefined;
     const blocked = await this.consolidation.blocker(bank);
     if (blocked) throw new ConflictException(t(blocked === 'disabled' ? 'error.memory.observationsOff' : 'error.memory.noConsolidationModel'));
-    const pending = await this.consolidation.pending(bank.id);
+    const pending = await this.consolidation.pending(bank.id, observationScopes);
+    const payload = { observation_scopes: observationScopes ?? null };
     const { id, deduplicated } = await withSubjectLock(this.prisma, `memory-consolidate:${bank.id}`, async () => {
-      const waiting = await this.prisma.memoryOperation.findFirst({ where: { bankId: bank.id, type: 'consolidation', status: 'queued' }, select: { id: true } });
+      const waiting = await this.prisma.memoryOperation.findFirst({ where: { bankId: bank.id, type: 'consolidation', status: 'queued', payload: { equals: payload } }, select: { id: true } });
       if (waiting) return { id: waiting.id, deduplicated: true };
       const row = await this.prisma.memoryOperation.create({
-        data: { workspaceId: bank.workspaceId, bankId: bank.id, type: 'consolidation', payload: [], itemsCount: pending, createdBy: input.userId, locale: input.locale },
+        data: { workspaceId: bank.workspaceId, bankId: bank.id, type: 'consolidation', payload, itemsCount: pending, createdBy: input.userId, locale: input.locale },
       });
       return { id: row.id, deduplicated: false };
     });
@@ -153,7 +157,8 @@ export class MemoryOperationsService {
   /** A pass that read nothing because something stopped it failed, and says what; one that read facts completed. */
   private async runConsolidation(row: MemoryOperation & { bank: MemoryBank }): Promise<void> {
     try {
-      const done = await this.consolidation.pass(row.bank, { maxBatches: CONSOLIDATE_BATCHES });
+      const payload = row.payload as { observation_scopes?: string[][] | null };
+      const done = await this.consolidation.pass(row.bank, { maxBatches: CONSOLIDATE_BATCHES, observationScopes: Array.isArray(row.payload) ? undefined : payload.observation_scopes });
       if (done.facts === 0 && done.stopped) await this.settle(row.id, { status: 'failed', error: t(`error.memory.consolidationStopped.${done.stopped === 'no-model' ? 'noModel' : done.stopped}`), payload: [] });
       else await this.settle(row.id, { status: 'completed', payload: [] });
     } catch (e) {

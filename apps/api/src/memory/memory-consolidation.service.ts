@@ -4,7 +4,7 @@ import { Prisma, type MemoryBank, type MemoryUnit } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { AUTHOR_ID_STUB } from '../activity/actor.js';
 import { AgentRegistryService, type ResolvedAgent } from '../agents/agent-registry.service.js';
-import { AiUsageService } from '../ai/ai-usage.service.js';
+import { AiUsageService, estimateTokens } from '../ai/ai-usage.service.js';
 import { AssistantClient } from '../assistant/assistant.client.js';
 import { DecisionClient, type DecisionRoute } from '../assistant/decision.client.js';
 import { askEach } from '../common/ask-each.js';
@@ -15,7 +15,7 @@ import type { Env } from '../config/env.js';
 import { EMBEDDING_PROVIDER, type EmbeddingProvider } from '../embedding/embedding.provider.js';
 import { GraphService } from '../graph/graph.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { consolidationDay, consolidationPrompt, readConsolidation, refinement, type ConsolidationEntry } from './memory-observations.js';
+import { consolidationDay, consolidationPrompt, observationSettings, readConsolidation, refinement, type ConsolidationEntry } from './memory-observations.js';
 
 /** New facts one consolidation call reads, at most. */
 const BATCH_FACTS = 10;
@@ -45,10 +45,11 @@ export interface PassResult {
 }
 
 type Fact = MemoryUnit & { entities: Array<{ entityKey: string; name: string }> };
+type Claimed = { scopeId: string; tags: string[]; facts: Fact[] };
 
-const pendingFact = (alias: string, stale: Date) =>
-  Prisma.sql`${Prisma.raw(alias)}.fact_type <> 'observation' AND ${Prisma.raw(alias)}.consolidated_at IS NULL
-    AND (${Prisma.raw(alias)}.consolidation_claimed_at IS NULL OR ${Prisma.raw(alias)}.consolidation_claimed_at < ${stale})`;
+const pendingMember = (alias: string, stale: Date) =>
+  Prisma.sql`${Prisma.raw(alias)}.consolidated_at IS NULL
+    AND (${Prisma.raw(alias)}.claimed_at IS NULL OR ${Prisma.raw(alias)}.claimed_at < ${stale})`;
 
 /**
  * Observations (#993): a bank's new facts folded into durable statements that
@@ -95,28 +96,46 @@ export class MemoryConsolidationService {
     return (await this.agentFor(bank.workspaceId)) ? null : 'no-model';
   }
 
-  /** Facts of the bank waiting for consolidation. */
-  pending(bankId: string): Promise<number> {
-    return this.prisma.memoryUnit.count({ where: { bankId, factType: { not: 'observation' }, consolidatedAt: null } });
+  /** Distinct source facts waiting in at least one selected scope. */
+  async pending(bankId: string, observationScopes?: string[][] | null): Promise<number> {
+    if (observationScopes?.length === 0) return 0;
+    return this.prisma.memoryUnit.count({
+      where: {
+        bankId, factType: { not: 'observation' }, scopeMembers: { some: { consolidatedAt: null } },
+        ...(observationScopes ? { OR: observationScopes.map((tags) => ({ tags: { hasEvery: tags } })) } : {}),
+      },
+    });
   }
 
-  /** Up to `maxBatches` calls' worth of the bank's backlog. Never throws for a model, a budget or the cap: it stops and says which. */
-  async pass(bank: MemoryBank, opts: { maxBatches: number; now?: number }): Promise<PassResult> {
+  /** Up to `maxBatches` calls' worth of the selected backlog. */
+  async pass(bank: MemoryBank, opts: { maxBatches: number; now?: number; observationScopes?: string[][] | null }): Promise<PassResult> {
     const now = opts.now ?? Date.now();
     const result: PassResult = { facts: 0, created: 0, refined: 0, stopped: null };
     if (bank.enableObservations === false || this.dailyCalls === 0) return { ...result, stopped: 'disabled' };
     const agent = await this.agentFor(bank.workspaceId);
     if (!agent) return { ...result, stopped: 'no-model' };
+    if (opts.observationScopes?.length === 0) return result;
     const route = await this.decision.routeFor(bank.workspaceId);
     for (let i = 0; i < opts.maxBatches; i++) {
-      const facts = await this.claim(bank.id, now);
-      if (!facts.length) return result;
-      const done = await this.batch(bank, facts, agent, route, now).catch(async (e: Error) => {
+      const claimed = await this.claim(bank.id, now, opts.observationScopes);
+      if (!claimed) return result;
+      const settings = observationSettings(bank, claimed.tags);
+      let facts = claimed.facts;
+      if (settings.sourceFactsMaxTokens >= 0) {
+        let used = 0;
+        facts = facts.filter((fact, i) => {
+          used += estimateTokens(fact.text);
+          return i === 0 || used <= settings.sourceFactsMaxTokens;
+        });
+        const kept = new Set(facts.map((f) => f.id));
+        await this.release(claimed.scopeId, claimed.facts.filter((f) => !kept.has(f.id)).map((f) => f.id));
+      }
+      const done = await this.batch(bank, claimed.scopeId, claimed.tags, facts, agent, route, now, settings).catch(async (e: Error) => {
         this.logger.warn({ msg: 'memory consolidation batch failed', bankId: bank.id, error: e.message });
         return 'failed' as const;
       });
       if (typeof done === 'string') {
-        await this.release(facts.map((f) => f.id));
+        await this.release(claimed.scopeId, facts.map((f) => f.id));
         return { ...result, stopped: done };
       }
       result.facts += facts.length;
@@ -132,34 +151,40 @@ export class MemoryConsolidationService {
     return agent.enabled && agent.config.enabled && agent.config.modelId ? agent : null;
   }
 
-  /** The oldest pending fact's tag scope, up to a batch of it, claimed in one statement. */
-  private async claim(bankId: string, now: number): Promise<Fact[]> {
+  /** The oldest pending membership's scope, up to a batch of it, claimed with SKIP LOCKED. Targets match the source fact's full tags. */
+  private async claim(bankId: string, now: number, observationScopes?: string[][] | null): Promise<Claimed | null> {
     const stale = new Date(now - CLAIM_STALE_MS);
-    const ids = await this.prisma.$queryRaw<Array<{ id: string }>>`
+    const selected = observationScopes ? Prisma.sql`AND (${Prisma.join(observationScopes.map((tags) => Prisma.sql`u.tags @> ${tags}::text[]`), ' OR ')})` : Prisma.empty;
+    const rows = await this.prisma.$queryRaw<Array<{ scope_id: string; unit_id: string }>>`
       WITH scope AS (
-        SELECT f.tags FROM memory_units f
-         WHERE f.bank_id = ${bankId}::uuid AND ${pendingFact('f', stale)}
-         ORDER BY f.created_at, f.id LIMIT 1
+        SELECT m.scope_id FROM memory_observation_scope_members m
+        JOIN memory_units u ON u.id = m.unit_id
+         WHERE m.bank_id = ${bankId}::uuid AND ${pendingMember('m', stale)} ${selected}
+         ORDER BY u.created_at, u.id LIMIT 1
+      ), picked AS (
+        SELECT m.scope_id, m.unit_id FROM memory_observation_scope_members m
+        JOIN memory_units u ON u.id = m.unit_id, scope
+         WHERE m.bank_id = ${bankId}::uuid AND ${pendingMember('m', stale)} AND m.scope_id = scope.scope_id ${selected}
+         ORDER BY u.created_at, u.id
+         LIMIT ${BATCH_FACTS}
+         FOR UPDATE OF m SKIP LOCKED
       )
-      UPDATE memory_units u SET consolidation_claimed_at = ${new Date(now)}
-       WHERE u.id IN (
-         SELECT m.id FROM memory_units m, scope
-          WHERE m.bank_id = ${bankId}::uuid AND ${pendingFact('m', stale)} AND m.tags IS NOT DISTINCT FROM scope.tags
-          ORDER BY m.created_at, m.id
-          LIMIT ${BATCH_FACTS}
-          FOR UPDATE OF m SKIP LOCKED
-       )
-      RETURNING u.id`;
-    if (!ids.length) return [];
-    return this.prisma.memoryUnit.findMany({
-      where: { id: { in: ids.map((r) => r.id) } },
+      UPDATE memory_observation_scope_members m SET claimed_at = ${new Date(now)}
+       FROM picked WHERE m.scope_id = picked.scope_id AND m.unit_id = picked.unit_id
+      RETURNING m.scope_id, m.unit_id`;
+    if (!rows.length) return null;
+    const scope = await this.prisma.memoryObservationScope.findUnique({ where: { id: rows[0]!.scope_id } });
+    if (!scope) return null;
+    const facts = await this.prisma.memoryUnit.findMany({
+      where: { id: { in: rows.map((r) => r.unit_id) }, bankId },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       include: { entities: { select: { entityKey: true, name: true } } },
     });
+    return { scopeId: scope.id, tags: scope.tags, facts };
   }
 
-  private async release(ids: string[]): Promise<void> {
-    await this.prisma.memoryUnit.updateMany({ where: { id: { in: ids }, consolidatedAt: null }, data: { consolidationClaimedAt: null } });
+  private async release(scopeId: string, ids: string[]): Promise<void> {
+    if (ids.length) await this.prisma.memoryObservationScopeMember.updateMany({ where: { scopeId, unitId: { in: ids }, consolidatedAt: null }, data: { claimedAt: null } });
   }
 
   /** One call of the bank's daily cap, taken in one guarded statement: true when there was one left. */
@@ -173,8 +198,8 @@ export class MemoryConsolidationService {
     return taken > 0;
   }
 
-  private async batch(bank: MemoryBank, facts: Fact[], agent: ResolvedAgent, route: DecisionRoute | null, now: number): Promise<{ created: number; refined: number } | ConsolidationStop> {
-    let candidates = await this.candidates(bank, facts);
+  private async batch(bank: MemoryBank, scopeId: string, tags: string[], facts: Fact[], agent: ResolvedAgent, route: DecisionRoute | null, now: number, settings: ReturnType<typeof observationSettings>): Promise<{ created: number; refined: number } | ConsolidationStop> {
+    let candidates = await this.candidates(bank, scopeId, facts);
     if (route && candidates.length) candidates = await this.screen(route, facts, candidates);
     try {
       await this.usage.assertWithinBudget(bank.workspaceId, AUTHOR_ID_STUB);
@@ -183,20 +208,19 @@ export class MemoryConsolidationService {
     }
     if (!(await this.takeCall(bank.id, now))) return 'cap';
     const { content } = await this.client.chatWithUsage(
-      // Billed to no person: nobody asked for this pass, as the learner's coach.
       { config: agent.config, userId: AUTHOR_ID_STUB, operation: 'memory-consolidate', locale: 'source' },
       [
         { role: 'system', content: agent.instructions },
-        { role: 'user', content: consolidationPrompt(facts, candidates, bank.mission) },
+        { role: 'user', content: consolidationPrompt(facts, candidates, settings.mission) },
       ],
       { json: true },
     );
-    return this.write(bank, facts, candidates, readConsolidation(parseModelJson(content), facts, candidates), now);
+    return this.write(bank, scopeId, tags, facts, candidates, readConsolidation(parseModelJson(content), facts, candidates), now, settings);
   }
 
   /** The scope's observations nearest to any of the facts, best first. PG has the final say on scope and type. */
-  private async candidates(bank: MemoryBank, facts: Fact[]): Promise<MemoryUnit[]> {
-    const scope: Prisma.MemoryUnitWhereInput = { bankId: bank.id, factType: 'observation', tags: { equals: facts[0]!.tags } };
+  private async candidates(bank: MemoryBank, scopeId: string, facts: Fact[]): Promise<MemoryUnit[]> {
+    const scope: Prisma.MemoryUnitWhereInput = { bankId: bank.id, factType: 'observation', observationScopeId: scopeId };
     const ids = await this.prisma.memoryUnit.findMany({ where: scope, select: { id: true }, take: SCOPE_ID_CAP + 1 });
     if (!ids.length) return [];
     const allowed = ids.length <= SCOPE_ID_CAP ? ids.map((r) => r.id) : null;
@@ -237,7 +261,7 @@ export class MemoryConsolidationService {
    * transaction. A new observation's vector goes first (an orphan is reaped);
    * a refined one's after the commit.
    */
-  private async write(bank: MemoryBank, facts: Fact[], candidates: MemoryUnit[], entries: ConsolidationEntry[], now: number): Promise<{ created: number; refined: number }> {
+  private async write(bank: MemoryBank, scopeId: string, tags: string[], facts: Fact[], candidates: MemoryUnit[], entries: ConsolidationEntry[], now: number, settings: ReturnType<typeof observationSettings>): Promise<{ created: number; refined: number }> {
     const creates = entries.filter((e) => e.target === null).map((e) => ({ id: randomUUID(), entry: e }));
     const refines = entries.filter((e) => e.target !== null).map((e) => ({ id: candidates[e.target!]!.id, entry: e }));
     const reworded = refines.filter((r) => r.entry.text !== null);
@@ -247,17 +271,29 @@ export class MemoryConsolidationService {
     let written: { created: number; refined: number; reworded: Set<string> };
     try {
       written = await withSubjectLock(this.prisma, `memory-bank:${bank.id}`, async () => {
-        // A fact deleted while the model was thinking cannot be evidence; an observation deleted cannot be refined.
-        const alive = new Set((await this.prisma.memoryUnit.findMany({ where: { id: { in: facts.map((f) => f.id) } }, select: { id: true } })).map((r) => r.id));
-        const evidenceOf = (e: ConsolidationEntry) => e.evidence.filter((ev) => alive.has(facts[ev.fact]!.id));
+        // A scope change while the model was thinking removes the membership, so the old scope cannot gain evidence.
+        const alive = new Set((await this.prisma.memoryObservationScopeMember.findMany({ where: { scopeId, unitId: { in: facts.map((f) => f.id) } }, select: { unitId: true } })).map((r) => r.unitId));
+        const evidenceOf = (e: ConsolidationEntry) => {
+          const kept: ConsolidationEntry['evidence'] = [];
+          let used = 0;
+          for (const ev of e.evidence) {
+            if (!alive.has(facts[ev.fact]!.id)) continue;
+            used += estimateTokens(facts[ev.fact]!.text);
+            if (kept.length && settings.sourceFactsMaxTokensPerObservation >= 0 && used > settings.sourceFactsMaxTokensPerObservation) break;
+            kept.push(ev);
+          }
+          return kept;
+        };
         const rows = (observationId: string, e: ConsolidationEntry) =>
           evidenceOf(e).map((ev) => ({ workspaceId: bank.workspaceId, bankId: bank.id, observationId, factId: facts[ev.fact]!.id, quote: ev.quote }));
         const entityRows = (unitId: string, e: ConsolidationEntry) =>
           evidenceOf(e).flatMap((ev) => facts[ev.fact]!.entities.map((x) => ({ workspaceId: bank.workspaceId, bankId: bank.id, unitId, entityKey: x.entityKey, name: x.name })));
+        const existing = await this.prisma.memoryUnit.count({ where: { bankId: bank.id, observationScopeId: scopeId, factType: 'observation' } });
+        const remaining = settings.maxObservations < 0 ? creates.length : Math.max(0, settings.maxObservations - existing);
         let created = 0;
         for (const { id, entry } of creates) {
           const evidence = rows(id, entry);
-          if (!evidence.length) continue;
+          if (!evidence.length || created >= remaining) continue;
           const sources = evidenceOf(entry).map((ev) => facts[ev.fact]!);
           const at = (f: Fact) => f.occurredStart ?? f.mentionedAt;
           const starts = sources.map(at).filter((d): d is Date => d !== null);
@@ -270,7 +306,8 @@ export class MemoryConsolidationService {
               bankId: bank.id,
               text: entry.text!,
               factType: 'observation',
-              tags: facts[0]!.tags,
+              tags,
+              observationScopeId: scopeId,
               documentId: `observation:${id}`,
               sourceText: '',
               occurredStart: starts.length ? new Date(Math.min(...starts.map(Number))) : null,
@@ -284,7 +321,7 @@ export class MemoryConsolidationService {
           created++;
         }
         const current = new Map(
-          (await this.prisma.memoryUnit.findMany({ where: { id: { in: refines.map((r) => r.id) }, bankId: bank.id }, select: { id: true, text: true } })).map((r) => [r.id, r.text]),
+          (await this.prisma.memoryUnit.findMany({ where: { id: { in: refines.map((r) => r.id) }, bankId: bank.id, observationScopeId: scopeId }, select: { id: true, text: true } })).map((r) => [r.id, r.text]),
         );
         const changed = new Set<string>();
         let refined = 0;
@@ -302,14 +339,19 @@ export class MemoryConsolidationService {
           await this.prisma.memoryUnitEntity.createMany({ data: entityRows(id, entry), skipDuplicates: true });
           refined++;
         }
-        await this.prisma.memoryUnit.updateMany({ where: { id: { in: [...alive] } }, data: { consolidatedAt: new Date(now), consolidationClaimedAt: null } });
+        if (alive.size) {
+          await this.prisma.memoryObservationScopeMember.updateMany({ where: { scopeId, unitId: { in: [...alive] } }, data: { consolidatedAt: new Date(now), claimedAt: null } });
+          await this.prisma.$executeRaw`
+            UPDATE memory_units u SET consolidated_at = ${new Date(now)}, consolidation_claimed_at = NULL
+            WHERE u.id IN (${Prisma.join([...alive].map((id) => Prisma.sql`${id}::uuid`))})
+              AND NOT EXISTS (SELECT 1 FROM memory_observation_scope_members m WHERE m.unit_id = u.id AND m.consolidated_at IS NULL)`;
+        }
         return { created, refined, reworded: changed };
       });
     } catch (e) {
       await this.graph.deleteMemoryUnits(bank.workspaceId, creates.map((c) => c.id)).catch(() => undefined);
       throw e;
     }
-    // A create left with no living evidence wrote no row; its vector is an orphan the reap removes.
     const refreshed = reworded.flatMap((r, i) => (written.reworded.has(r.id) ? [{ unitId: r.id, embedding: vectors[creates.length + i]! }] : []));
     if (refreshed.length) {
       await this.graph.upsertMemoryUnits(bank.workspaceId, bank.id, refreshed, now).catch((e: Error) => this.logger.warn(`Refined observation vectors not rewritten: ${e.message}`));

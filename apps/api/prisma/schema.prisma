@@ -4827,6 +4827,13 @@ model MemoryBank {
   /// #993 — Hindsight's `enable_observations`. Null inherits the code default
   /// (on): consolidation still runs only while a model is routed to it.
   enableObservations Boolean? @map("enable_observations")
+  /// #1157 — observation-specific defaults. Null inherits the bank mission or
+  /// the code default; a matching consolidation strategy overrides these as a whole.
+  observationsMission String? @map("observations_mission")
+  maxObservationsPerScope Int? @map("max_observations_per_scope")
+  consolidationSourceFactsMaxTokens Int? @map("consolidation_source_facts_max_tokens")
+  consolidationSourceFactsMaxTokensPerObservation Int? @map("consolidation_source_facts_max_tokens_per_observation")
+  consolidationStrategies Json? @map("consolidation_strategies")
   /// #993 — the per-bank daily cap on consolidation calls: the UTC day the
   /// counter belongs to and the calls made on it, both moved by one guarded
   /// UPDATE (`MemoryConsolidationService.takeCall`), so two workers never pass it.
@@ -4842,6 +4849,7 @@ model MemoryBank {
   entities   MemoryEntity[]
   relations  MemoryRelation[]
   files      MemoryFile[]
+  observationScopes MemoryObservationScope[]
 
   @@unique([workspaceId, bankId])
   @@index([workspaceId, agentKey, ownerId])
@@ -4945,6 +4953,8 @@ model MemoryUnit {
   documentId  String     @map("document_id")
   /// The masked item this unit was extracted from.
   sourceText  String     @map("source_text")
+  /// The retain-time observation_scopes value; null means combined.
+  observationScopes Json? @map("observation_scopes")
   occurredStart DateTime? @map("occurred_start") @db.Timestamptz
   occurredEnd   DateTime? @map("occurred_end") @db.Timestamptz
   mentionedAt   DateTime? @map("mentioned_at") @db.Timestamptz
@@ -4955,15 +4965,18 @@ model MemoryUnit {
   /// The async retain that wrote it. A re-run of that operation replaces its
   /// own units, so a worker killed mid-job never leaves a second set.
   operationId String?    @map("operation_id") @db.Uuid
-  /// #993 — when consolidation read this fact. Null = not yet; never set on an observation.
+  /// Rollback-compatible aggregate: set when every scope membership is consolidated.
   consolidatedAt         DateTime? @map("consolidated_at") @db.Timestamptz
-  /// #993 — a worker's claim on the fact while it consolidates it; a stale one is taken over.
   consolidationClaimedAt DateTime? @map("consolidation_claimed_at") @db.Timestamptz
+  /// Set on an observation; its evidence can only come from members of this scope.
+  observationScopeId String? @map("observation_scope_id") @db.Uuid
+  observationScope MemoryObservationScope? @relation(fields: [observationScopeId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   entities MemoryUnitEntity[]
+  scopeMembers MemoryObservationScopeMember[]
   /// On an observation: the facts that support it.
   evidence MemoryObservationEvidence[] @relation("ObservationEvidence")
   /// On a fact: the observations it supports.
@@ -4972,10 +4985,46 @@ model MemoryUnit {
 
   @@index([operationId])
   @@index([bankId, consolidatedAt])
-
+  @@index([observationScopeId])
   @@index([bankId, documentId])
   @@index([bankId, createdAt])
   @@map("memory_units")
+}
+
+/// A canonical exact tag set in which facts are consolidated (#1157).
+model MemoryObservationScope {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  bankId      String   @map("bank_id") @db.Uuid
+  bank        MemoryBank @relation(fields: [bankId], references: [id], onDelete: Cascade)
+  tags        String[] @default([])
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  members      MemoryObservationScopeMember[]
+  observations MemoryUnit[]
+
+  @@unique([bankId, tags])
+  @@index([workspaceId])
+  @@map("memory_observation_scopes")
+}
+
+/// One fact's independent consolidation state in one observation scope.
+model MemoryObservationScopeMember {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  bankId      String   @map("bank_id") @db.Uuid
+  scopeId     String   @map("scope_id") @db.Uuid
+  scope       MemoryObservationScope @relation(fields: [scopeId], references: [id], onDelete: Cascade)
+  unitId      String   @map("unit_id") @db.Uuid
+  unit        MemoryUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  consolidatedAt DateTime? @map("consolidated_at") @db.Timestamptz
+  claimedAt      DateTime? @map("claimed_at") @db.Timestamptz
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([scopeId, unitId])
+  @@index([unitId])
+  @@index([bankId, scopeId, consolidatedAt, claimedAt])
+  @@map("memory_observation_scope_members")
 }
 
 /// An entity a memory names (#986), under the canonical key format and

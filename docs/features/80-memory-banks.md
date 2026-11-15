@@ -179,9 +179,11 @@ an `X-Workspace-Id` header.
 | `POST …/memories/recall` | viewer | recall |
 | `POST …/reflect` | viewer | one answer over a recall |
 | `GET …/memories/list`, `GET …/memories/{id}`, `GET …/stats` | viewer | |
+| `GET …/observations/scopes` | viewer | exact observation scopes and their counts |
+| `PATCH …/documents/{document_id}` | editor | change observation scopes without re-extraction |
 | `DELETE …/memories` | editor | every memory, or one fact type; the memory tool's file chunks stay (#1018) |
-| `GET`, `PATCH …/config` | viewer, editor | `enable_observations`, `reflect_mission`, the three disposition traits; any other key is a 400 that names the ones kept |
-| `POST …/consolidate` | editor | one consolidation pass as an operation; 409 with the reason while consolidation cannot run |
+| `GET`, `PATCH …/config` | viewer, editor | observation scopes/strategies, `enable_observations`, missions and disposition traits; unsupported keys are a 400 |
+| `POST …/consolidate` | editor | one full or targeted consolidation pass as an operation; 409 with the reason while it cannot run |
 | `GET …/operations`, `GET …/operations/{id}` | viewer | an id the bank does not hold reads `not_found` |
 | `DELETE …/operations/{id}` | editor | cancel a pending one |
 | `POST /mcp/{bank_id}/`, `POST /mcp` | per tool | `retain`, `sync_retain`, `recall`, `reflect` (+ `list_banks`); `/mcp/{bank_id}/hindsight` is the same server |
@@ -208,9 +210,10 @@ workspace and a bank; every route and every MCP tool asks it, on execution:
 ## Storage
 
 Postgres holds the truth: `memory_banks`, `memory_units`, `memory_unit_entities`,
-`memory_operations`, for observations `memory_observation_evidence` and
-`memory_observation_history`, for the graph wire `memory_entities` and `memory_relations`, and for the
-files wire `memory_files` — all cascading from the bank and filed in the workspace teardown inventory. ArcadeDB holds only the vector, as a third vector type (`MemoryUnit`)
+`memory_operations`, for observations `memory_observation_scopes`, `memory_observation_scope_members`,
+`memory_observation_evidence` and `memory_observation_history`, for the graph wire `memory_entities` and
+`memory_relations`, and for the files wire `memory_files` — all cascading from the bank and filed in the
+workspace teardown inventory. ArcadeDB holds only the vector, as a third vector type (`MemoryUnit`)
 beside `Chunk` and `ChatChunk`. A vector is written before its row; recall loads the final
 rows from Postgres by id, workspace and bank, so an orphan vector is never served, and the
 worker's `MemoryReapSweeper` removes it. Deleting a bank or a workspace removes its rows and
@@ -267,59 +270,70 @@ only inside `wrapUntrusted`. With no model configured reflect answers 409 and bi
 
 ## Observations
 
-A bank's facts are folded, in the background, into **observations**: one durable statement, the
-facts that support it and a quote from each (`memory_observation_evidence`). An observation is a
-`memory_units` row of type `observation`, with its own vector, so recall ranks it like any memory.
-Its proof count is its evidence rows, derived on read and never stored.
+A bank's facts are folded, in the background, into **observations**: durable statements with verbatim
+evidence quotes (`memory_observation_evidence`). An observation is a `memory_units` row of type
+`observation`, with its own vector, so recall ranks it like any memory. Its proof count is derived from
+its evidence rows.
 
-- **Who does it.** The `consolidator` agent (purpose `extraction`), one JSON call per batch of up to
-  ten facts, from `MemoryConsolidationService`. The worker runs it: `MemoryConsolidationSweeper`
-  makes one call per bank per minute for every bank with facts waiting, and `POST …/consolidate`
-  queues a pass of up to ten calls as an operation row (`type: consolidation`, the same queue,
-  processor and stale-row sweeper as an async retain).
-- **When it runs.** Only while a model is routed to the consolidator — the extraction route or a pin
-  on the agent, never the inline or env model — the bank has not set `enable_observations: false`
-  (null inherits on), the workspace budget has room (`assertWithinBudget`, billed to no person as the
-  learner's coach is), and the bank is under its daily cap. Each is checked before the call it would
-  pay for; a pass that stops says which (`disabled`, `no-model`, `cap`, `budget`, `failed`). With no
-  model routed nothing is claimed and nothing is called: recall behaves as it did before observations.
-- **Language.** An observation is written in the language of the facts it rests on (#1022): the
-  pass sends no reply-language directive, as extraction does not. Reflect is a reply to a person and
-  answers in the caller's locale.
-- **The daily cap** is `MEMORY_CONSOLIDATION_DAILY_CALLS` per bank per UTC day, taken by one guarded
-  `UPDATE` of `memory_banks.consolidation_day` / `consolidation_calls` before each call, so two workers
-  never pass it. The backlog waits for the next day. Decision-model screens do not count against it.
-- **Claimed once.** Facts are claimed with one `UPDATE … WHERE id IN (… FOR UPDATE SKIP LOCKED)` on
-  `consolidation_claimed_at`, one tag scope at a time (the oldest pending fact's exact tag set), so two
-  workers never read the same facts and an observation never mixes facts filed under different tags.
-  A claim older than ten minutes is a dead worker's and is taken over; a stopped or failed batch
-  releases its claim. A fact the consolidator has read gets `consolidated_at`, whether or not it
-  became evidence.
-- **Candidates.** For each fact, the nearest observations of the same scope by vector (five each,
-  twenty in all). When a decision model is routed, each fact–observation pair is screened first
-  (site `memory` in `DECISION_SITES`, operation `memory-consolidate-screen`): an observation stays
-  when any pair clears the threshold, or a question fails. A pre-filter, never a verdict.
-- **The answer is a claim.** `readConsolidation` (pure, `memory-observations.ts`) keeps evidence only
-  under a fact label it handed out and only with a quote **verbatim** in that fact; an entry left with
-  no evidence is dropped, as is a label never handed out or a second refine of one observation.
-- **Refine, never overwrite.** New wording for an existing observation writes its old text to
-  `memory_observation_history` first (`refinement`); evidence is only ever added. Writes happen under
-  the bank's lock, against the observation's text as it is then, not as the model saw it.
-- **Deleting a fact** removes it from every observation's evidence (FK cascade); an observation left
-  with none is deleted in the same transaction (`MemoryUnitsService.deleteBareObservations`), on every
-  path that deletes facts: a re-retained `document_id`, `DELETE …/memories`, the web delete. A retain's
-  `document_id` replacement never touches an observation.
-- **Untrusted both ways.** The facts and the candidate observations reach the model only inside
-  `wrapUntrusted`; the bank's mission is the one trusted line.
+**Observation scopes** (#1157) decide which facts may consolidate together. Retain's per-item
+`observation_scopes` accepts:
+
+- `combined` (the default): one scope containing all of the memory's tags;
+- `shared`: the global, untagged scope, while source facts keep volatile tags such as session ids;
+- `per_tag`: one independent scope per tag;
+- `all_combinations`: every non-empty subset;
+- explicit tag lists, with `*` globs matched against the memory's own tags. A custom scope that matches
+  nothing is skipped. Resolution is canonical, deduplicated and capped at 100 scopes per memory.
+
+`memory_observation_scopes` holds each canonical exact tag set and
+`memory_observation_scope_members` holds one fact's independent `consolidated_at` / `claimed_at` in each
+scope. Extraction still runs once: every extracted fact joins all of its scopes without another model
+call. An observation names its scope through `observation_scope_id`; candidate reads and evidence writes
+are restricted to it. The migration backfills legacy exact-tag memberships and observation associations,
+preserving evidence, history and pending/claim state. `memory_units.consolidated_at` remains an aggregate
+of all memberships for rollback compatibility.
+
+`GET …/observations/scopes` lists scopes that have observations, most populous first, with exact tags,
+counts and pagination. `POST …/consolidate` accepts optional `observation_scopes`: a source fact is
+selected when its full tags contain every tag in at least one requested scope. A queued targeted pass
+deduplicates only against the same selection.
+
+`PATCH …/documents/{document_id}` with `observation_scopes` moves existing facts without re-extraction.
+A change that resolves to the same memberships is a no-op. Otherwise, observations supported by the moved
+facts are deleted, their surviving co-sources are reset in those scopes, and the changed memberships are
+rebuilt as pending. Re-retaining or deleting a fact uses the same invalidation: an observation it
+supported is removed and its other sources are queued again, rather than retaining a partially rebuilt
+claim. The next worker pass restores both streams independently.
+
+Bank config adds `observations_mission`, `max_observations_per_scope`,
+`consolidation_source_facts_max_tokens`, `consolidation_source_facts_max_tokens_per_observation` and
+`consolidation_strategies`. A strategy has alternative `scopes` rules (`tags` globs plus `all` or `exact`)
+and any of those four overrides. The first matching non-empty strategy wins **whole**; unset fields inherit
+bank defaults, never a later strategy. No rule claims the untagged global scope. Source-fact budgets use
+the same ~4-characters-per-token estimate as recall; the observation cap limits new observations in the
+scope while still allowing refinements.
+
+- **Who and when.** The routed `consolidator` agent (purpose `extraction`, never inline/env) makes one JSON
+  call per scope batch of at most ten facts. The worker sweeps each bank once a minute and an on-demand
+  operation runs up to ten calls. Consolidation requires `enable_observations`, budget room and room under
+  `MEMORY_CONSOLIDATION_DAILY_CALLS`, checked before the paid call. The daily counter uses one guarded
+  `UPDATE`; a stop reports `disabled`, `no-model`, `cap`, `budget` or `failed`.
+- **Claimed once per scope.** One guarded `UPDATE` claims membership rows with `FOR UPDATE SKIP LOCKED`.
+  A claim older than ten minutes is recoverable; stopped/failed batches release it. A scope update that
+  lands while the model is running removes the membership, so its answer cannot write into the old scope.
+- **Candidates and evidence.** The nearest five same-scope observations per fact (twenty overall) are
+  offered. The optional decision model only screens pairs. `readConsolidation` drops unverifiable quotes,
+  unknown labels and evidence-less entries. Refinements keep old wording in `memory_observation_history`
+  and add evidence under the bank lock.
+- **Language and trust.** Facts and observations reach the model inside `wrapUntrusted`; bank and strategy
+  missions are trusted configuration. Observation text stays in the source facts' language (`source`
+  locale), while reflect answers in the caller's locale.
 
 Recall returns observations when `types` includes `observation` (no `types` = all), each with
-`source_fact_ids`. `prefer_observations` drops a raw fact that a returned observation stands on and
-backfills the freed room (`preferObservations`); `include.source_facts` returns those facts, loaded
-from the bank, within `max_tokens` (default 4096) and `max_tokens_per_observation`, with
-`source_facts_truncated` when the budget cut the map. The entity map lists the returned observations
-that name each entity. `GET …/memories/list` reports an observation's `proof_count` and
-`source_memory_ids`; `…/stats` its `pending_consolidation` (facts not yet read, whether or not a model
-is routed). `/version` reports `observations` and `bank_config_api` true.
+`source_fact_ids`. `prefer_observations` drops covered raw facts and backfills the freed room;
+`include.source_facts` applies its token budgets and reports truncation. List/get expose `proof_count` and
+`source_memory_ids`; stats count distinct facts with any pending membership. `/version` reports
+`observations` and `bank_config_api` true.
 
 ## The knowledge graph wire
 

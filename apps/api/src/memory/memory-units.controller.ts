@@ -6,6 +6,7 @@ import {
   Headers,
   HttpCode,
   Param,
+  Patch,
   Post,
   Query,
 } from '@nestjs/common';
@@ -27,11 +28,14 @@ import { MemoryReflectService } from './memory-reflect.service.js';
 import { MemoryUnitsService } from './memory-units.service.js';
 import {
   ClearMemoriesQueryDto,
+  ConsolidateDto,
   ListMemoriesQueryDto,
+  ListObservationScopesQueryDto,
   ListOperationsQueryDto,
   RecallDto,
   ReflectDto,
   RetainDto,
+  UpdateDocumentDto,
 } from './memory.dto.js';
 import type {
   BankStatsResponse,
@@ -141,24 +145,44 @@ export class MemoryUnitsController {
     return this.reflector.reflect(bank, reflectQuery(dto, principal));
   }
 
-  /**
-   * One consolidation pass on demand (#993), run by the worker as an
-   * operation. An editor's call; refused with the reason while consolidation
-   * cannot run for the bank. `observation_scopes` is Hindsight's and is not read:
-   * every pass consolidates each tag scope on its own.
-   */
+  /** One consolidation pass, optionally only for memories matching a requested tag scope. */
   @Post('consolidate')
   @HttpCode(200)
   async consolidate(
     @CurrentPrincipal() principal: Principal,
     @Headers('x-workspace-id') ws: string | undefined,
     @Param('bankId') bankId: string,
+    @Body() dto: ConsolidateDto = {},
   ): Promise<ConsolidationResponse> {
     const caller = await this.access.caller(principal, ws, 'editor');
     return this.operations.consolidate(await this.access.bank(caller, bankId), {
       userId: principal.userId,
       locale: principal.locale,
+      observationScopes: dto.observation_scopes,
     });
+  }
+
+  @Get('observations/scopes')
+  async observationScopes(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Query() query: ListObservationScopesQueryDto,
+  ) {
+    const caller = await this.access.caller(principal, ws, 'viewer');
+    return this.units.observationScopes(await this.access.bank(caller, bankId), query);
+  }
+
+  @Patch('documents/:documentId')
+  async updateDocument(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Param('documentId') documentId: string,
+    @Body() dto: UpdateDocumentDto,
+  ): Promise<{ success: true }> {
+    const caller = await this.access.caller(principal, ws, 'editor');
+    return this.units.updateDocumentScopes(await this.access.bank(caller, bankId), documentId, dto.observation_scopes);
   }
 
   @Get('memories/list')

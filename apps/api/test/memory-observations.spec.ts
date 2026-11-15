@@ -1,4 +1,4 @@
-import { consolidationDay, consolidationPrompt, readConsolidation, refinement } from '../src/memory/memory-observations.js';
+import { consolidationDay, consolidationPrompt, observationSettings, readConsolidation, refinement, scopeMatches } from '../src/memory/memory-observations.js';
 import { preferObservations } from '../src/memory/memory-recall.service.js';
 import { MemoryConsolidationService } from '../src/memory/memory-consolidation.service.js';
 import { withLocaleDirective } from '../src/assistant/assistant.client.js';
@@ -108,6 +108,31 @@ describe('preferObservations', () => {
   });
 });
 
+describe('consolidation strategies (#1157)', () => {
+  const bank = {
+    mission: 'Bank mission', observationsMission: 'Observe decisions', maxObservationsPerScope: 50,
+    consolidationSourceFactsMaxTokens: 1000, consolidationSourceFactsMaxTokensPerObservation: 100,
+    consolidationStrategies: [
+      { scopes: [{ tags: ['company:acme'] }], max_observations_per_scope: 5 },
+      { scopes: [{ tags: ['company:*'] }], observations_mission: 'General trends only', consolidation_source_facts_max_tokens: 20 },
+      { scopes: [{ tags: ['*'] }] },
+    ],
+  };
+
+  it('uses the first matching non-empty strategy whole, inheriting only its unset fields', () => {
+    expect(observationSettings(bank, ['company:acme'])).toEqual({ mission: 'Observe decisions', maxObservations: 5, sourceFactsMaxTokens: 1000, sourceFactsMaxTokensPerObservation: 100 });
+    expect(observationSettings(bank, ['company:other'])).toEqual({ mission: 'General trends only', maxObservations: 50, sourceFactsMaxTokens: 20, sourceFactsMaxTokensPerObservation: 100 });
+    expect(observationSettings(bank, [])).toMatchObject({ mission: 'Observe decisions', maxObservations: 50 });
+  });
+
+  it('matches all and exact alternatives without claiming the global scope', () => {
+    expect(scopeMatches(['company:a', 'team:b'], { tags: ['company:*'] })).toBe(true);
+    expect(scopeMatches(['company:a', 'team:b'], { tags: ['company:*'], tags_match: 'exact' })).toBe(false);
+    expect(scopeMatches(['company:a'], { tags: ['company:*'], tags_match: 'exact' })).toBe(true);
+    expect(scopeMatches([], { tags: ['*'] })).toBe(false);
+  });
+});
+
 describe('memory content keeps its own language (#1022)', () => {
   it('a consolidation pass sends no reply-language directive', async () => {
     const chatWithUsage = vi.fn(async () => ({ content: '{"observations": []}', tokens: { promptTokens: 1, completionTokens: 1, totalTokens: 2, estimated: false } }));
@@ -119,7 +144,7 @@ describe('memory content keeps its own language (#1022)', () => {
       write: vi.fn(async () => ({ created: 0, refined: 0 })),
     };
     const batch = (MemoryConsolidationService.prototype as unknown as { batch: (...a: unknown[]) => Promise<unknown> }).batch;
-    await batch.call(self, { id: 'b', workspaceId: 'ws', mission: '' }, [{ text: 'Алиса руководит биллингом.', tags: [] }], { config: {}, instructions: 'tidy' }, null, Date.now());
+    await batch.call(self, { id: 'b', workspaceId: 'ws', mission: '' }, 'scope-1', [], [{ text: 'Алиса руководит биллингом.', tags: [] }], { config: {}, instructions: 'tidy' }, null, Date.now(), { mission: '', maxObservations: -1, sourceFactsMaxTokens: -1, sourceFactsMaxTokensPerObservation: -1 });
     const [[ctx]] = chatWithUsage.mock.calls as unknown as [[{ locale: string; operation: string }]];
     expect(ctx).toMatchObject({ operation: 'memory-consolidate', locale: 'source' });
   });

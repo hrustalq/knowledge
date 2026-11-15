@@ -19,6 +19,8 @@ in the pull request that introduces them — see
 
 - Agents can now retain all successful outcomes, only durable knowledge, or nothing, with independent personal and
   project memory policies. Recall remains available when retention is off. (#1156)
+- Memory banks now support shared, per-tag, combined and custom observation scopes, targeted consolidation, document
+  scope updates, and ordered per-scope consolidation strategies through the unmodified Hindsight client. (#1157)
 
 ## [0.54.1] — 2026-11-14
 

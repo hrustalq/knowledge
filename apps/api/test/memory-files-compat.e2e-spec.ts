@@ -295,10 +295,10 @@ describe('Anthropic memory tool compatibility (e2e, #1009)', () => {
       await hindsight(people.alice.key).retain(bank, 'Gwen moved to the data team in October.');
       const row = (await bankRow(WS_A, bank))!;
       const { MemoryConsolidationService } = await import('../src/memory/memory-consolidation.service.js');
-      const consolidation = app.get(MemoryConsolidationService) as unknown as { claim(bankId: string, now: number): Promise<Array<{ documentId: string; text: string }>> };
+      const consolidation = app.get(MemoryConsolidationService) as unknown as { claim(bankId: string, now: number): Promise<{ facts: Array<{ documentId: string; text: string }> } | null> };
       const claimed = await consolidation.claim(row.id, Date.now());
-      expect(claimed.map((f) => f.text)).toEqual(['Gwen moved to the data team in October.']);
-      expect(claimed.some((f) => f.documentId.startsWith('file:'))).toBe(false);
+      expect(claimed!.facts.map((f) => f.text)).toEqual(['Gwen moved to the data team in October.']);
+      expect(claimed!.facts.some((f) => f.documentId.startsWith('file:'))).toBe(false);
       expect(await prisma.memoryUnit.count({ where: { bankId: row.id, documentId: { startsWith: 'file:' }, consolidatedAt: null } })).toBe(0);
 
       await call({ command: 'rename', old_path: '/memories/deploys.md', new_path: '/memories/ops/deploys.md' });

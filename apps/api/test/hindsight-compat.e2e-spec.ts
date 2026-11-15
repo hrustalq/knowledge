@@ -1,6 +1,7 @@
 import type { INestApplication } from '@nestjs/common';
 import type { AddressInfo } from 'node:net';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { HindsightClient, sdk } from '@vectorize-io/hindsight-client';
 import { Client as McpClient } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -2001,6 +2002,7 @@ describe('Hindsight compatibility (e2e, #986)', () => {
       ctx: { operation: string; userId: string };
       facts: string[];
       observations: string[];
+      prompt: string;
     }> = [];
     let restore: Array<{ mockRestore(): void }> = [];
     let consolidation: import('../src/memory/memory-consolidation.service.js').MemoryConsolidationService;
@@ -2063,7 +2065,7 @@ describe('Hindsight compatibility (e2e, #986)', () => {
             const user = (messages as Message[])[1]!.content;
             const facts = shown(user, 'F');
             const obs = shown(user, 'O');
-            calls.push({ ctx, facts, observations: obs });
+            calls.push({ ctx, facts, observations: obs, prompt: user });
             return {
               content: JSON.stringify(reply(facts, obs)),
               tokens: {
@@ -2224,9 +2226,9 @@ describe('Hindsight compatibility (e2e, #986)', () => {
       expect(tight.source_facts_truncated).toBe(true);
     });
 
-    it('drops a deleted fact from the evidence, and deletes the observation with its last one', async () => {
+    it('deletes an observation when any source fact is replaced and resets its surviving co-sources', async () => {
       const hs = client(people.alice.key);
-      // Re-retaining a document replaces its facts, which deletes them.
+      const [obs] = await observations();
       await hs.retainBatch(
         mem,
         ['t1', 't2', 't3'].map((d) => ({
@@ -2234,17 +2236,15 @@ describe('Hindsight compatibility (e2e, #986)', () => {
           document_id: d,
         })),
       );
-      const [obs] = await observations();
-      expect(obs!.evidence.map((e) => e.fact.documentId)).toEqual(['t4']);
-      expect(
-        (await hs.listMemories(mem, { type: 'observation' })).items[0]!
-          .proof_count,
-      ).toBe(1);
-      await hs.retain(mem, 'Another unrelated note', { documentId: 't4' });
       expect(await observations()).toEqual([]);
       expect(
         (await graph.memoryUnitIds(WS_A)).some((v) => v.unitId === obs!.id),
       ).toBe(false);
+      const survivor = await prisma.memoryUnit.findFirstOrThrow({ where: { bankId: (await bankRow()).id, documentId: 't4' } });
+      expect(survivor.consolidatedAt).toBeNull();
+      expect(await consolidation.pending((await bankRow()).id)).toBe(4);
+      await hs.retain(mem, 'Another unrelated note', { documentId: 't4' });
+      expect(await observations()).toEqual([]);
     });
 
     it('stops at the bank’s daily cap without calling, and resumes the next day', async () => {
@@ -2379,6 +2379,166 @@ describe('Hindsight compatibility (e2e, #986)', () => {
         (await call(people.carol.key, 'GET', `/v1/default/banks/${mem}/config`))
           .status,
       ).toBe(404);
+    });
+
+    it('runs one source memory through three independent scopes and lists them through the official client', async () => {
+      const hs = client(people.alice.key);
+      const scoped = `scopes-${nonce}`;
+      for (const session of [1, 2]) {
+        await hs.retain(scoped, `Dana recorded decision ${session}`, {
+          documentId: `scope-${session}`,
+          tags: ['user:dana', 'team:exec', `session:${session}`],
+          observationScopes: [['user:dana'], ['team:exec'], ['company:acme']],
+        });
+      }
+      reply = (facts) => ({ observations: [{ observation: null, text: facts.join(' + '), evidence: facts.map((fact, i) => ({ fact: `F${i + 1}`, quote: fact })) }] });
+      expect(await pass(scoped)).toMatchObject({ facts: 6, created: 3, stopped: null });
+      expect(calls).toHaveLength(3);
+      const rows = await observations(scoped);
+      expect(rows.map((row) => row.tags)).toEqual(expect.arrayContaining([['company:acme'], ['team:exec'], ['user:dana']]));
+      expect(rows.every((row) => row.evidence.length === 2)).toBe(true);
+      expect(await prisma.memoryObservationScopeMember.count({ where: { bankId: (await bankRow(scoped)).id } })).toBe(6);
+      const listed = await sdk.listObservationScopes({ client: raw(people.alice.key), path: { bank_id: scoped } });
+      expect(listed.data).toMatchObject({ total: 3, limit: 100, offset: 0 });
+      expect(listed.data!.scopes.map((scope) => scope.tags)).toEqual(expect.arrayContaining([['company:acme'], ['team:exec'], ['user:dana']]));
+      const readOnly = await mintKey(people.alice.id, { workspaceId: WS_A, scope: 'read' });
+      expect((await sdk.listObservationScopes({ client: raw(readOnly), path: { bank_id: scoped } })).response.status).toBe(200);
+      expect((await sdk.listObservationScopes({ client: raw(people.carol.key), path: { bank_id: scoped } })).response.status).toBe(404);
+    });
+
+    it('consolidates shared observations across volatile session tags without changing the source tags', async () => {
+      const hs = client(people.alice.key);
+      const shared = `shared-${nonce}`;
+      for (const session of [1, 2]) {
+        await hs.retain(shared, `Shared preference ${session}`, {
+          documentId: `shared-${session}`, tags: [`session:${session}`], observationScopes: 'shared',
+        });
+      }
+      reply = (facts) => ({ observations: [{ observation: null, text: 'One global observation', evidence: facts.map((fact, i) => ({ fact: `F${i + 1}`, quote: fact })) }] });
+      expect(await pass(shared)).toMatchObject({ facts: 2, created: 1 });
+      expect(calls).toHaveLength(1);
+      const [obs] = await observations(shared);
+      expect(obs!.tags).toEqual([]);
+      expect(obs!.evidence.map((e) => e.fact.tags)).toEqual(expect.arrayContaining([[['session:1']], [['session:2']]].map((x) => x[0])));
+      const listed = await sdk.listObservationScopes({ client: raw(people.alice.key), path: { bank_id: shared } });
+      expect(listed.data!.scopes).toEqual([{ tags: [], count: 1 }]);
+    });
+
+    it('targets consolidation by source-memory tags through the official operation API', async () => {
+      const hs = client(people.alice.key);
+      const targeted = `targeted-${nonce}`;
+      await hs.retain(targeted, 'Dana has a pending fact', { documentId: 'dana', tags: ['user:dana', 'team:exec'], observationScopes: [['user:dana']] });
+      await hs.retain(targeted, 'Other has a pending fact', { documentId: 'other', tags: ['user:other'], observationScopes: [['user:other']] });
+      // Same membership scope as Dana, but the source tags do not match the target.
+      await hs.retain(targeted, 'Other custom shares Dana scope', { documentId: 'other-custom', tags: ['user:other'], observationScopes: [['user:dana']] });
+      reply = (facts) => ({ observations: [{ observation: null, text: facts[0], evidence: [{ fact: 'F1', quote: facts[0]! }] }] });
+      const res = await sdk.triggerConsolidation({
+        client: raw(people.alice.key), path: { bank_id: targeted }, body: { observation_scopes: [['user:dana']] },
+      });
+      let status = '';
+      for (let i = 0; i < 100 && !['completed', 'failed'].includes(status); i++) {
+        status = (await sdk.getOperationStatus({ client: raw(people.alice.key), path: { bank_id: targeted, operation_id: res.data!.operation_id } })).data!.status;
+        if (status !== 'completed') await new Promise((r) => setTimeout(r, 100));
+      }
+      expect(status).toBe('completed');
+      expect(calls.flatMap((call) => call.facts)).toEqual(['Dana has a pending fact']);
+      expect(await consolidation.pending((await bankRow(targeted)).id)).toBe(2);
+      expect(await pass(targeted, undefined)).toMatchObject({ facts: 2, stopped: null });
+    });
+
+    it('applies the first matching strategy whole, with observation and source-fact budgets', async () => {
+      const hs = client(people.alice.key);
+      const strategies = `strategies-${nonce}`;
+      await hs.retainBatch(strategies, [
+        { content: 'Acme first fact', document_id: 'acme-1', tags: ['company:acme'], observation_scopes: [['company:acme']] },
+        { content: 'Acme second fact', document_id: 'acme-2', tags: ['company:acme'], observation_scopes: [['company:acme']] },
+      ]);
+      const configuredBank = await hs.updateBankConfig(strategies, {
+        observationsMission: 'Default observation mission', maxObservationsPerScope: 10,
+        consolidationSourceFactsMaxTokens: 1000, consolidationSourceFactsMaxTokensPerObservation: 1000,
+        consolidationStrategies: [
+          { scopes: [{ tags: ['company:acme'] }], max_observations_per_scope: 1, consolidation_source_facts_max_tokens: 1, consolidation_source_facts_max_tokens_per_observation: 1 },
+          { scopes: [{ tags: ['company:*'] }], observations_mission: 'Later strategy mission' },
+        ],
+      });
+      expect(configuredBank.config).toMatchObject({ observations_mission: 'Default observation mission', max_observations_per_scope: 10 });
+      reply = (facts) => ({ observations: [1, 2].map((n) => ({ observation: null, text: `Acme observation ${n}`, evidence: facts.map((fact, i) => ({ fact: `F${i + 1}`, quote: fact })) })) });
+      expect(await pass(strategies)).toMatchObject({ facts: 2, created: 1 });
+      expect(calls).toHaveLength(2);
+      expect(calls.every((call) => call.facts.length === 1 && call.prompt.includes('Default observation mission') && !call.prompt.includes('Later strategy mission'))).toBe(true);
+      expect((await observations(strategies))[0]!.evidence).toHaveLength(1);
+      await hs.retain(strategies, 'Other company fact', { documentId: 'other-company', tags: ['company:other'], observationScopes: [['company:other']] });
+      reply = (facts) => ({ observations: [{ observation: null, text: facts[0], evidence: [{ fact: 'F1', quote: facts[0]! }] }] });
+      await pass(strategies);
+      expect(calls.at(-1)!.prompt).toContain('Later strategy mission');
+    });
+
+    it('rebuilds only changed document scopes and resets co-sources without re-extracting', async () => {
+      const hs = client(people.alice.key);
+      const moved = `moved-${nonce}`;
+      await hs.retainBatch(moved, [
+        { content: 'First scoped fact', document_id: 'move-1', tags: ['team:eng'] },
+        { content: 'Second scoped fact', document_id: 'move-2', tags: ['team:eng'] },
+      ]);
+      reply = (facts) => ({ observations: [{ observation: null, text: facts.join(' + '), evidence: facts.map((fact, i) => ({ fact: `F${i + 1}`, quote: fact })) }] });
+      await pass(moved);
+      const [combined] = await observations(moved);
+      expect(combined!.evidence).toHaveLength(2);
+      expect((await hs.updateDocument(moved, 'move-1', { observationScopes: [['team:eng']] })).success).toBe(true);
+      expect((await observations(moved)).map((row) => row.id)).toEqual([combined!.id]);
+      expect(await consolidation.pending((await bankRow(moved)).id)).toBe(0);
+      expect((await hs.updateDocument(moved, 'move-1', { observationScopes: 'shared' })).success).toBe(true);
+      expect(await observations(moved)).toEqual([]);
+      expect(await consolidation.pending((await bankRow(moved)).id)).toBe(2);
+      await pass(moved);
+      const rebuilt = await observations(moved);
+      expect(rebuilt).toHaveLength(2);
+      const global = rebuilt.find((row) => row.tags.length === 0)!;
+      const team = rebuilt.find((row) => row.tags[0] === 'team:eng')!;
+      expect(global.evidence.map((e) => e.fact.documentId)).toEqual(['move-1']);
+      expect(team.evidence.map((e) => e.fact.documentId)).toEqual(['move-2']);
+      expect((await hs.updateDocument(moved, 'move-1', { observationScopes: 'shared' })).success).toBe(true);
+      expect((await observations(moved)).map((row) => row.id).sort()).toEqual(rebuilt.map((row) => row.id).sort());
+      const readOnly = await mintKey(people.alice.id, { workspaceId: WS_A, scope: 'read' });
+      await expect(client(readOnly).updateDocument(moved, 'move-1', { observationScopes: 'combined' })).rejects.toMatchObject({ statusCode: 403 });
+      await expect(client(people.carol.key).updateDocument(moved, 'move-1', { observationScopes: 'combined' })).rejects.toMatchObject({ statusCode: 404 });
+    });
+
+    it('backfills legacy exact-tag rows without losing observations, evidence, history or pending state', async () => {
+      const hs = client(people.alice.key);
+      const legacy = `legacy-${nonce}`;
+      await hs.retainBatch(legacy, [
+        { content: 'Legacy done', document_id: 'legacy-1', tags: ['legacy'] },
+        { content: 'Legacy pending', document_id: 'legacy-2', tags: ['legacy'] },
+      ]);
+      const bank = await bankRow(legacy);
+      const facts = await prisma.memoryUnit.findMany({ where: { bankId: bank.id }, orderBy: { documentId: 'asc' } });
+      const claimedAt = new Date();
+      await prisma.memoryUnit.update({ where: { id: facts[0]!.id }, data: { consolidatedAt: claimedAt } });
+      await prisma.memoryUnit.update({ where: { id: facts[1]!.id }, data: { consolidationClaimedAt: claimedAt } });
+      const observation = await prisma.memoryUnit.create({
+        data: {
+          workspaceId: WS_A, bankId: bank.id, text: 'Legacy observation', factType: 'observation', tags: ['legacy'],
+          documentId: `observation:${randomUUID()}`, sourceText: '', createdBy: people.alice.id,
+          evidence: { create: facts.map((fact) => ({ workspaceId: WS_A, bankId: bank.id, factId: fact.id, quote: fact.text })) },
+          history: { create: { workspaceId: WS_A, bankId: bank.id, text: 'Earlier legacy observation' } },
+        },
+      });
+      await prisma.memoryObservationScopeMember.deleteMany({ where: { bankId: bank.id } });
+      await prisma.memoryUnit.update({ where: { id: observation.id }, data: { observationScopeId: null } });
+      await prisma.memoryObservationScope.deleteMany({ where: { bankId: bank.id } });
+      const migration = await readFile(new URL('../prisma/migrations/20270126100000_memory_observation_scopes/migration.sql', import.meta.url), 'utf8');
+      const backfill = migration.slice(migration.indexOf('INSERT INTO "memory_observation_scopes"'), migration.indexOf('ALTER TABLE "memory_observation_scopes" ADD CONSTRAINT'));
+      for (const statement of backfill.split(';').map((s) => s.trim()).filter(Boolean)) await prisma.$executeRawUnsafe(statement);
+      const members = await prisma.memoryObservationScopeMember.findMany({ where: { bankId: bank.id } });
+      expect(members).toHaveLength(2);
+      expect(members.find((m) => m.unitId === facts[0]!.id)!.consolidatedAt?.toISOString()).toBe(claimedAt.toISOString());
+      expect(members.find((m) => m.unitId === facts[1]!.id)).toMatchObject({ consolidatedAt: null, claimedAt });
+      const restored = await prisma.memoryUnit.findUniqueOrThrow({ where: { id: observation.id }, include: { evidence: true, history: true, observationScope: true } });
+      expect(restored.observationScope!.tags).toEqual(['legacy']);
+      expect(restored.evidence.map((e) => e.factId).sort()).toEqual(facts.map((f) => f.id).sort());
+      expect(restored.history.map((h) => h.text)).toEqual(['Earlier legacy observation']);
+      expect(await consolidation.pending(bank.id)).toBe(1);
     });
   });
 

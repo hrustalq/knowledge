@@ -23,6 +23,47 @@ export interface ConsolidationEntry {
 const MAX_OBSERVATION_CHARS = 2000;
 const MAX_QUOTE_CHARS = 1000;
 
+export interface ConsolidationStrategy {
+  scopes?: Array<{ tags?: string[]; tags_match?: string | null }>;
+  observations_mission?: string | null;
+  max_observations_per_scope?: number | null;
+  consolidation_source_facts_max_tokens?: number | null;
+  consolidation_source_facts_max_tokens_per_observation?: number | null;
+}
+
+export interface ObservationBankDefaults {
+  mission: string;
+  observationsMission: string | null;
+  maxObservationsPerScope: number | null;
+  consolidationSourceFactsMaxTokens: number | null;
+  consolidationSourceFactsMaxTokensPerObservation: number | null;
+  consolidationStrategies: unknown;
+}
+
+const globMatch = (pattern: string, tag: string): boolean =>
+  new RegExp(`^${pattern.split('*').map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`).test(tag);
+
+export function scopeMatches(tags: string[], rule: { tags?: string[]; tags_match?: string | null }): boolean {
+  const patterns = rule.tags ?? [];
+  if (!tags.length || !patterns.length || (rule.tags_match === 'exact' && patterns.length !== tags.length)) return false;
+  return patterns.every((pattern) => tags.some((tag) => globMatch(pattern, tag)));
+}
+
+/** First matching, non-empty strategy wins whole; each unset field inherits the bank default. */
+export function observationSettings(bank: ObservationBankDefaults, tags: string[]) {
+  const strategies = Array.isArray(bank.consolidationStrategies) ? (bank.consolidationStrategies as ConsolidationStrategy[]) : [];
+  const strategy = strategies.find((s) =>
+    ['observations_mission', 'max_observations_per_scope', 'consolidation_source_facts_max_tokens', 'consolidation_source_facts_max_tokens_per_observation'].some((key) => s[key as keyof ConsolidationStrategy] != null) &&
+    (s.scopes ?? []).some((rule) => scopeMatches(tags, rule)),
+  );
+  return {
+    mission: strategy?.observations_mission ?? bank.observationsMission ?? bank.mission,
+    maxObservations: strategy?.max_observations_per_scope ?? bank.maxObservationsPerScope ?? -1,
+    sourceFactsMaxTokens: strategy?.consolidation_source_facts_max_tokens ?? bank.consolidationSourceFactsMaxTokens ?? -1,
+    sourceFactsMaxTokensPerObservation: strategy?.consolidation_source_facts_max_tokens_per_observation ?? bank.consolidationSourceFactsMaxTokensPerObservation ?? -1,
+  };
+}
+
 /** The user message of one consolidation call: the facts and the observations, each under its label, wrapped untrusted. */
 export function consolidationPrompt(facts: Shown[], observations: Shown[], mission: string): string {
   const list = (items: Shown[], prefix: string) => items.map((x, i) => `${prefix}${i + 1}: ${x.text}`).join('\n');

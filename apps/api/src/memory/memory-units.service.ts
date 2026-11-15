@@ -1,11 +1,12 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { MemoryBank, MemoryUnit, Prisma } from '@prisma/client';
 import { UUID_RE } from '@knowledge/contracts';
+import { randomUUID } from 'node:crypto';
 import { withSubjectLock } from '../common/subject-lock.js';
 import { GraphService } from '../graph/graph.service.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { MEMORY_TIME_FIELDS, tagsWhere, type MemoryTimeField, type TagsMatch } from './memory-facts.js';
+import { MEMORY_TIME_FIELDS, readObservationScopes, resolveObservationScopes, tagsWhere, type MemoryTimeField, type ObservationScopes, type TagsMatch } from './memory-facts.js';
 import { FILE_DOCUMENT_PREFIX } from './memory-files.js';
 import type { BankStatsResponse, DeleteResponse, ListMemoryUnitsResponse, MemoryUnitItem } from './memory-wire.js';
 
@@ -96,8 +97,8 @@ export class MemoryUnitsService {
 
   /**
    * `DELETE …/memories`: every memory of the bank, or those of one fact type.
-   * Rows at once, vectors right after. Clearing facts leaves the observations
-   * they supported with less evidence, and deletes those left with none.
+   * Rows at once, vectors right after. Clearing facts deletes the observations
+   * they supported and resets any surviving co-sources for a rebuild.
    * The memory tool's file chunks stay (#1009): they mirror files the clear
    * does not touch, and recall must find what `view` shows. A file goes
    * through the files wire or the bank page, chunks with it.
@@ -107,24 +108,100 @@ export class MemoryUnitsService {
     return { success: true, message: null, deleted_count: ids.length };
   }
 
-  /** One memory of the bank, deleted (#994): a fact also leaves the observations it supported, which go too once they have no evidence. False when the bank holds no such memory. */
+  /** One memory of the bank, deleted (#994): a fact also deletes its observations and resets their other sources. False when the bank holds no such memory. */
   async deleteOne(bank: MemoryBank, memoryId: string): Promise<boolean> {
     return (await this.deleteWhere(bank, { id: memoryId })).matched > 0;
   }
 
-  /**
-   * The bank's memories `where` picks, deleted under the bank's lock, with
-   * whatever `alongside` deletes in the same transaction (#1008: the graph's
-   * entity rows). The observations left with no evidence follow; every
-   * vector is dropped once it commits. `matched` counts what `where` picked,
-   * `ids` everything deleted.
-   */
+  /** Add a newly retained fact to each resolved scope, without repeating extraction. */
+  async addScopeMemberships(bank: Pick<MemoryBank, 'id' | 'workspaceId'>, units: Array<{ id: string; tags: string[]; observationScopes?: ObservationScopes }>, consolidated: boolean): Promise<void> {
+    const resolved = units.map((unit) => ({ unit, scopes: resolveObservationScopes(unit.tags, unit.observationScopes) }));
+    const tagSets = [...new Map(resolved.flatMap((r) => r.scopes).map((tags) => [JSON.stringify(tags), tags])).values()];
+    if (!tagSets.length) return;
+    await this.prisma.memoryObservationScope.createMany({
+      data: tagSets.map((tags) => ({ id: randomUUID(), workspaceId: bank.workspaceId, bankId: bank.id, tags })),
+      skipDuplicates: true,
+    });
+    const scopes = await this.prisma.memoryObservationScope.findMany({ where: { bankId: bank.id, OR: tagSets.map((tags) => ({ tags: { equals: tags } })) } });
+    const idOf = new Map(scopes.map((scope) => [JSON.stringify(scope.tags), scope.id]));
+    const at = consolidated ? new Date() : null;
+    await this.prisma.memoryObservationScopeMember.createMany({
+      data: resolved.flatMap(({ unit, scopes: memberships }) => memberships.map((tags) => ({
+        id: randomUUID(), workspaceId: bank.workspaceId, bankId: bank.id, scopeId: idOf.get(JSON.stringify(tags))!, unitId: unit.id, consolidatedAt: at,
+      }))),
+      skipDuplicates: true,
+    });
+  }
+
+  /** Delete observations supported by these facts and reset their co-sources only in the affected scopes. Caller holds the bank lock. */
+  async invalidateFacts(bankId: string, factIds: string[]): Promise<string[]> {
+    if (!factIds.length) return [];
+    const affected = await this.prisma.memoryUnit.findMany({
+      where: { bankId, factType: 'observation', evidence: { some: { factId: { in: factIds } } } },
+      select: { id: true, observationScopeId: true, evidence: { select: { factId: true } } },
+    });
+    if (!affected.length) return [];
+    const observationIds = affected.map((o) => o.id);
+    const scopeIds = [...new Set(affected.flatMap((o) => o.observationScopeId ?? []))];
+    const sourceIds = [...new Set(affected.flatMap((o) => o.evidence.map((e) => e.factId)))];
+    await this.prisma.memoryUnit.deleteMany({ where: { id: { in: observationIds } } });
+    await this.prisma.memoryObservationScopeMember.updateMany({
+      where: { unitId: { in: sourceIds }, ...(scopeIds.length ? { scopeId: { in: scopeIds } } : {}) },
+      data: { consolidatedAt: null, claimedAt: null },
+    });
+    await this.prisma.memoryUnit.updateMany({ where: { id: { in: sourceIds } }, data: { consolidatedAt: null, consolidationClaimedAt: null } });
+    return observationIds;
+  }
+
+  /** Move a document's existing facts to new observation scopes, rebuilding only memberships that changed. */
+  async updateDocumentScopes(bank: MemoryBank, documentId: string, raw: unknown): Promise<{ success: true }> {
+    const observationScopes = readObservationScopes(raw) ?? 'combined';
+    const invalidated = await withSubjectLock(this.prisma, `memory-bank:${bank.id}`, async () => {
+      const units = await this.prisma.memoryUnit.findMany({
+        where: { bankId: bank.id, documentId, factType: { not: 'observation' } },
+        include: { scopeMembers: { include: { scope: { select: { tags: true } } } } },
+      });
+      if (!units.length) throw new NotFoundException(t('error.memory.memoryNotFound', { id: documentId }));
+      const changed = units.filter((unit) => {
+        const before = unit.scopeMembers.map((m) => JSON.stringify(m.scope.tags)).sort();
+        const after = resolveObservationScopes(unit.tags, observationScopes).map((s) => JSON.stringify(s)).sort();
+        return JSON.stringify(before) !== JSON.stringify(after);
+      });
+      const removed = await this.invalidateFacts(bank.id, changed.map((u) => u.id));
+      if (changed.length) {
+        await this.prisma.memoryObservationScopeMember.deleteMany({ where: { unitId: { in: changed.map((u) => u.id) } } });
+        await this.addScopeMemberships(bank, changed.map((unit) => ({ id: unit.id, tags: unit.tags, observationScopes })), false);
+        await this.prisma.memoryUnit.updateMany({
+          where: { id: { in: changed.map((u) => u.id) } },
+          data: { consolidatedAt: null, consolidationClaimedAt: null },
+        });
+      }
+      await this.prisma.memoryUnit.updateMany({ where: { id: { in: units.map((u) => u.id) } }, data: { observationScopes } });
+      return removed;
+    });
+    await this.dropVectors(bank.workspaceId, invalidated);
+    return { success: true };
+  }
+
+  async observationScopes(bank: MemoryBank, query: { limit?: number; offset?: number }) {
+    const where = { bankId: bank.id, observations: { some: {} } } satisfies Prisma.MemoryObservationScopeWhereInput;
+    const limit = query.limit ?? 100;
+    const offset = query.offset ?? 0;
+    const [rows, total] = await Promise.all([
+      this.prisma.memoryObservationScope.findMany({ where, include: { _count: { select: { observations: true } } }, orderBy: [{ observations: { _count: 'desc' } }, { id: 'asc' }], skip: offset, take: limit }),
+      this.prisma.memoryObservationScope.count({ where }),
+    ]);
+    return { scopes: rows.map((row) => ({ tags: row.tags, count: row._count.observations })), total, limit, offset };
+  }
+
+  /** Delete selected rows and every observation they supported; reset surviving co-sources for a rebuild. */
   async deleteWhere(bank: MemoryBank, where: Prisma.MemoryUnitWhereInput, alongside?: () => Promise<unknown>): Promise<{ matched: number; ids: string[] }> {
     const done = await withSubjectLock(this.prisma, `memory-bank:${bank.id}`, async () => {
       const ids = (await this.prisma.memoryUnit.findMany({ where: { AND: [where, { bankId: bank.id }] }, select: { id: true } })).map((r) => r.id);
+      const observations = await this.invalidateFacts(bank.id, ids);
       if (ids.length) await this.prisma.memoryUnit.deleteMany({ where: { id: { in: ids } } });
       await alongside?.();
-      return { matched: ids.length, ids: ids.length ? [...ids, ...(await this.deleteBareObservations(bank.id))] : [] };
+      return { matched: ids.length, ids: ids.length ? [...ids, ...observations, ...(await this.deleteBareObservations(bank.id))] : observations };
     });
     await this.dropVectors(bank.workspaceId, done.ids);
     return done;
@@ -154,7 +231,7 @@ export class MemoryUnitsService {
       this.prisma.memoryUnit.groupBy({ by: ['factType'], where: { bankId: bank.id }, _count: { _all: true } }),
       this.prisma.memoryUnit.findMany({ where: { bankId: bank.id }, distinct: ['documentId'], select: { documentId: true } }),
       this.prisma.memoryUnit.findFirst({ where: { bankId: bank.id }, orderBy: { updatedAt: 'desc' }, select: { updatedAt: true } }),
-      this.prisma.memoryUnit.count({ where: { bankId: bank.id, factType: { not: 'observation' }, consolidatedAt: null } }),
+      this.prisma.memoryUnit.count({ where: { bankId: bank.id, factType: { not: 'observation' }, scopeMembers: { some: { consolidatedAt: null } } } }),
     ]);
     const counts = Object.fromEntries(byType.map((r) => [r.factType, r._count._all]));
     return {

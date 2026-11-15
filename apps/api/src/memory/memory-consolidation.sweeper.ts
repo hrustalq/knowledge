@@ -40,7 +40,7 @@ export class MemoryConsolidationSweeper implements OnModuleInit, OnModuleDestroy
         SELECT b.id FROM memory_banks b
           JOIN workspaces w ON w.id = b.workspace_id AND w.deleted_at IS NULL
          WHERE b.enable_observations IS DISTINCT FROM false
-           AND EXISTS (SELECT 1 FROM memory_units u WHERE u.bank_id = b.id AND u.fact_type <> 'observation' AND u.consolidated_at IS NULL)`;
+           AND EXISTS (SELECT 1 FROM memory_observation_scope_members m WHERE m.bank_id = b.id AND m.consolidated_at IS NULL)`;
       let facts = 0;
       for (const { id } of banks) {
         const bank = await this.prisma.memoryBank.findUnique({ where: { id } });

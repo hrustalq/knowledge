@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
-import type { MemoryBank, Prisma } from '@prisma/client';
+import { Prisma, type MemoryBank } from '@prisma/client';
 import type { Locale } from '@knowledge/contracts';
 import { randomUUID } from 'node:crypto';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
@@ -13,7 +13,7 @@ import { EntityAliasService } from '../graph/entity-alias.service.js';
 import { GraphService } from '../graph/graph.service.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { extractionBatches, extractionPrompt, readFacts, type Fact, type RetainItem } from './memory-facts.js';
+import { extractionBatches, extractionPrompt, readFacts, resolveObservationScopes, type Fact, type RetainItem } from './memory-facts.js';
 import { MemoryUnitsService } from './memory-units.service.js';
 import type { TokenUsage } from './memory-wire.js';
 
@@ -131,14 +131,15 @@ export class MemoryRetainService {
       replaced = await withSubjectLock(this.prisma, `memory-bank:${input.bank.id}`, async () => {
         if (input.guard && !(await input.guard())) return null;
         const old = await this.prisma.memoryUnit.findMany({
-          // Facts only: an observation is consolidation's, and a client's document_id never names one.
           where: { bankId: input.bank.id, factType: { not: 'observation' }, OR: [{ documentId: { in: replaces } }, ...(input.operationId ? [{ operationId: input.operationId }] : [])] },
           select: { id: true },
         });
+        const invalidated = await this.units.invalidateFacts(input.bank.id, old.map((o) => o.id));
         await this.prisma.memoryUnit.deleteMany({ where: { id: { in: old.map((o) => o.id) } } });
         await this.prisma.memoryUnit.createMany({ data: units.map((u) => this.row(input, u)) });
         await this.prisma.memoryUnitEntity.createMany({ data: entities });
-        return [...old.map((o) => o.id), ...(old.length ? await this.units.deleteBareObservations(input.bank.id) : [])];
+        await this.units.addScopeMemberships({ id: input.bank.id, workspaceId: input.workspaceId }, units.map((u) => ({ id: u.id, tags: u.item.tags, observationScopes: u.item.observationScopes })), input.consolidated === true);
+        return [...old.map((o) => o.id), ...invalidated, ...(old.length ? await this.units.deleteBareObservations(input.bank.id) : [])];
       });
     } catch (e) {
       await this.graph.deleteMemoryUnits(input.workspaceId, units.map((u) => u.id)).catch(() => undefined);
@@ -165,13 +166,14 @@ export class MemoryRetainService {
       tags: u.item.tags,
       metadata: u.item.metadata,
       documentId: u.item.documentId,
+      observationScopes: u.item.observationScopes ?? Prisma.DbNull,
       sourceText: u.sourceText,
       occurredStart: u.fact?.occurredStart ?? at,
       occurredEnd: u.fact?.occurredEnd ?? null,
       mentionedAt: at,
       createdBy: input.userId,
       operationId: input.operationId ?? null,
-      consolidatedAt: input.consolidated ? new Date() : null,
+      consolidatedAt: input.consolidated || !resolveObservationScopes(u.item.tags, u.item.observationScopes).length ? new Date() : null,
     };
   }
 

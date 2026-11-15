@@ -55,6 +55,19 @@ export class RetainDto {
   @IsOptional() @IsUUID() operation_id?: string | null;
 }
 
+export class ConsolidateDto {
+  @IsOptional() @IsArray({ each: true }) observation_scopes?: string[][] | null;
+}
+
+export class UpdateDocumentDto {
+  @IsDefined() observation_scopes!: unknown;
+}
+
+export class ListObservationScopesQueryDto {
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(1000) limit?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) offset?: number;
+}
+
 /** A query parameter sent once arrives as a string, sent twice as a list. */
 const asList = ({ value }: { value: unknown }) => (value == null ? undefined : Array.isArray(value) ? value : [value]);
 

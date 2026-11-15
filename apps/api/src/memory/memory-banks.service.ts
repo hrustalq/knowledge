@@ -33,10 +33,15 @@ export function bankProfile(row: MemoryBank): BankProfileResponse {
   };
 }
 
-/** The Hindsight bank config keys this server keeps per bank (#993); any other is a 400 that names these. */
+/** The Hindsight bank config keys this server keeps per bank (#993, #1157); any other is a 400 that names these. */
 export const BANK_CONFIG_KEYS = [
   'enable_observations',
   'reflect_mission',
+  'observations_mission',
+  'max_observations_per_scope',
+  'consolidation_source_facts_max_tokens',
+  'consolidation_source_facts_max_tokens_per_observation',
+  'consolidation_strategies',
   'disposition_skepticism',
   'disposition_literalism',
   'disposition_empathy',
@@ -47,94 +52,85 @@ const TRAIT_OF = {
   disposition_literalism: 'literalism',
   disposition_empathy: 'empathy',
 } as const;
+const BUDGET_OF = {
+  max_observations_per_scope: 'maxObservationsPerScope',
+  consolidation_source_facts_max_tokens: 'consolidationSourceFactsMaxTokens',
+  consolidation_source_facts_max_tokens_per_observation: 'consolidationSourceFactsMaxTokensPerObservation',
+} as const;
 
 export function bankConfig(row: MemoryBank): BankConfigResponse {
   const d = dispositionOf(row);
-  const traits = Object.fromEntries(
-    Object.entries(TRAIT_OF).map(([key, trait]) => [key, d[trait]]),
-  );
+  const traits = Object.fromEntries(Object.entries(TRAIT_OF).map(([key, trait]) => [key, d[trait]]));
+  const observationConfig = {
+    observations_mission: row.observationsMission ?? row.mission,
+    max_observations_per_scope: row.maxObservationsPerScope ?? -1,
+    consolidation_source_facts_max_tokens: row.consolidationSourceFactsMaxTokens ?? -1,
+    consolidation_source_facts_max_tokens_per_observation: row.consolidationSourceFactsMaxTokensPerObservation ?? -1,
+    consolidation_strategies: row.consolidationStrategies ?? [],
+  };
   return {
     bank_id: row.bankId,
-    config: {
-      enable_observations: row.enableObservations ?? true,
-      reflect_mission: row.mission,
-      ...traits,
-    },
+    config: { enable_observations: row.enableObservations ?? true, reflect_mission: row.mission, ...observationConfig, ...traits },
     overrides: {
-      ...(row.enableObservations !== null
-        ? { enable_observations: row.enableObservations }
-        : {}),
+      ...(row.enableObservations !== null ? { enable_observations: row.enableObservations } : {}),
       ...(row.mission ? { reflect_mission: row.mission } : {}),
-      ...Object.fromEntries(
-        Object.entries(traits).filter(
-          ([key, v]) =>
-            v !== DEFAULT_DISPOSITION[TRAIT_OF[key as keyof typeof TRAIT_OF]],
-        ),
-      ),
+      ...Object.fromEntries(Object.entries(observationConfig).filter(([key]) => {
+        const field = { observations_mission: 'observationsMission', ...BUDGET_OF, consolidation_strategies: 'consolidationStrategies' }[key] as keyof MemoryBank;
+        return row[field] !== null;
+      })),
+      ...Object.fromEntries(Object.entries(traits).filter(([key, v]) => v !== DEFAULT_DISPOSITION[TRAIT_OF[key as keyof typeof TRAIT_OF]])),
     },
   };
 }
 
-/**
- * A config PATCH's `updates`, read: keys in Hindsight's field form or its env
- * form (`HINDSIGHT_API_ENABLE_OBSERVATIONS`), each checked. `null` on
- * `enable_observations` returns it to the default. A key this server does not
- * keep is refused by name, rather than accepted and ignored.
- */
-export function readConfigUpdates(
-  updates: Record<string, unknown>,
-  current: MemoryBank,
-): Prisma.MemoryBankUpdateInput {
-  const named = Object.entries(updates).map(
-    ([k, v]) => [k.replace(/^HINDSIGHT_API_/i, '').toLowerCase(), v] as const,
-  );
-  const unknown = named
-    .filter(([k]) => !(BANK_CONFIG_KEYS as readonly string[]).includes(k))
-    .map(([k]) => k);
-  if (unknown.length)
-    throw new BadRequestException(
-      t('error.memory.configKeyUnknown', {
-        keys: unknown.join(', '),
-        allowed: BANK_CONFIG_KEYS.join(', '),
-      }),
-    );
+function readStrategies(value: unknown): Prisma.InputJsonValue {
+  const invalid = () => new BadRequestException(t('error.memory.configValueInvalid', { key: 'consolidation_strategies', type: 'an array of valid strategy objects or null' }));
+  if (!Array.isArray(value)) throw invalid();
+  const strategyKeys = new Set(['scopes', 'observations_mission', ...Object.keys(BUDGET_OF)]);
+  const ruleKeys = new Set(['tags', 'tags_match']);
+  for (const strategy of value) {
+    if (!strategy || typeof strategy !== 'object' || Array.isArray(strategy) || Object.keys(strategy).some((key) => !strategyKeys.has(key))) throw invalid();
+    const row = strategy as Record<string, unknown>;
+    if (row.observations_mission != null && (typeof row.observations_mission !== 'string' || row.observations_mission.length > 4000)) throw invalid();
+    for (const key of Object.keys(BUDGET_OF)) if (row[key] != null && (typeof row[key] !== 'number' || !Number.isInteger(row[key]) || (row[key] as number) < -1 || row[key] === 0)) throw invalid();
+    if (row.scopes != null && (!Array.isArray(row.scopes) || row.scopes.some((rule) => {
+      if (!rule || typeof rule !== 'object' || Array.isArray(rule) || Object.keys(rule).some((key) => !ruleKeys.has(key))) return true;
+      const r = rule as Record<string, unknown>;
+      return (r.tags != null && (!Array.isArray(r.tags) || r.tags.some((tag) => typeof tag !== 'string'))) || (r.tags_match != null && r.tags_match !== 'all' && r.tags_match !== 'exact');
+    }))) throw invalid();
+  }
+  return value as Prisma.InputJsonValue;
+}
+
+/** A config PATCH's updates, accepting both Hindsight's field and HINDSIGHT_API_* spellings. */
+export function readConfigUpdates(updates: Record<string, unknown>, current: MemoryBank): Prisma.MemoryBankUpdateInput {
+  const named = Object.entries(updates).map(([k, v]) => [k.replace(/^HINDSIGHT_API_/i, '').toLowerCase(), v] as const);
+  const unknown = named.filter(([k]) => !(BANK_CONFIG_KEYS as readonly string[]).includes(k)).map(([k]) => k);
+  if (unknown.length) throw new BadRequestException(t('error.memory.configKeyUnknown', { keys: unknown.join(', '), allowed: BANK_CONFIG_KEYS.join(', ') }));
   const data: Prisma.MemoryBankUpdateInput = {};
   const disposition = dispositionOf(current);
-  for (const [key, value] of named as Array<
-    readonly [BankConfigKey, unknown]
-  >) {
+  for (const [key, value] of named as Array<readonly [BankConfigKey, unknown]>) {
     if (key === 'enable_observations') {
-      if (value !== null && typeof value !== 'boolean')
-        throw new BadRequestException(
-          t('error.memory.configValueInvalid', {
-            key,
-            type: 'true, false or null',
-          }),
-        );
+      if (value !== null && typeof value !== 'boolean') throw new BadRequestException(t('error.memory.configValueInvalid', { key, type: 'true, false or null' }));
       data.enableObservations = value;
-    } else if (key === 'reflect_mission') {
-      if (typeof value !== 'string' || value.length > 4000)
-        throw new BadRequestException(
-          t('error.memory.configValueInvalid', {
-            key,
-            type: 'a string of at most 4000 characters',
-          }),
-        );
-      data.mission = value;
+    } else if (key === 'reflect_mission' || key === 'observations_mission') {
+      if ((key === 'reflect_mission' && typeof value !== 'string') || (value !== null && (typeof value !== 'string' || value.length > 4000))) {
+        throw new BadRequestException(t('error.memory.configValueInvalid', { key, type: 'a string of at most 4000 characters' }));
+      }
+      if (key === 'reflect_mission') data.mission = value as string;
+      else data.observationsMission = value;
+    } else if (key === 'consolidation_strategies') {
+      data.consolidationStrategies = value === null ? Prisma.DbNull : readStrategies(value);
+    } else if (key in BUDGET_OF) {
+      if (value !== null && (typeof value !== 'number' || !Number.isInteger(value) || value < -1 || value === 0)) {
+        throw new BadRequestException(t('error.memory.configValueInvalid', { key, type: 'a positive integer, -1 or null' }));
+      }
+      data[BUDGET_OF[key as keyof typeof BUDGET_OF]] = value;
     } else {
-      if (
-        typeof value !== 'number' ||
-        !Number.isInteger(value) ||
-        value < 1 ||
-        value > 5
-      )
-        throw new BadRequestException(
-          t('error.memory.configValueInvalid', {
-            key,
-            type: 'an integer from 1 to 5',
-          }),
-        );
-      disposition[TRAIT_OF[key]] = value;
+      if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 5) {
+        throw new BadRequestException(t('error.memory.configValueInvalid', { key, type: 'an integer from 1 to 5' }));
+      }
+      disposition[TRAIT_OF[key as keyof typeof TRAIT_OF]] = value;
       data.disposition = disposition as unknown as Prisma.InputJsonObject;
     }
   }

@@ -10,6 +10,7 @@ import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { fuseHits } from '../search/ranking.js';
 import { tagsWhere, type TagsMatch } from './memory-facts.js';
+import { MEMORY_RERANKER_PROVIDER, type MemoryRerankerProvider } from './memory-reranker.js';
 import type { RecallResponse, RecallResult } from './memory-wire.js';
 
 export interface RecallQuery {
@@ -99,11 +100,12 @@ export class MemoryRecallService {
     private readonly graph: GraphService,
     @Inject(EMBEDDING_PROVIDER) private readonly embeddings: EmbeddingProvider,
     private readonly decision: DecisionClient,
+    @Inject(MEMORY_RERANKER_PROVIDER) private readonly reranker: MemoryRerankerProvider | null,
   ) {}
 
   async recall(bank: MemoryBank, q: RecallQuery): Promise<RecallResponse> {
-    // No reranker runs here, so a floor on its score can keep nothing meaningful: refused, as Hindsight does.
-    if (q.minScores?.reranker != null) throw new BadRequestException(t('error.memory.noReranker'));
+    // Rank-only providers cannot apply a meaningful relevance floor, as Hindsight documents.
+    if (q.minScores?.reranker != null && !this.reranker) throw new BadRequestException(t('error.memory.noReranker'));
     const rows = await this.ranked(bank, q);
     const kept = q.preferObservations && mixesRaw(q.types) ? preferObservations(rows, q.maxTokens ?? DEFAULT_MAX_TOKENS) : cutToTokens(rows, q.maxTokens ?? DEFAULT_MAX_TOKENS);
     return {
@@ -207,7 +209,7 @@ export class MemoryRecallService {
            LIMIT ${fetchK}`
       : [];
 
-    const fused = fuseLegs(semantic, keyword, entity, temporal, fetchK).filter((h) => q.minScores?.final == null || h.score >= q.minScores.final);
+    const fused = fuseLegs(semantic, keyword, entity, temporal, fetchK);
     if (fused.length === 0) return [];
     // The final say: rows that exist, in this bank of this workspace, and pass the filter.
     const rows = await this.prisma.memoryUnit.findMany({
@@ -222,7 +224,31 @@ export class MemoryRecallService {
       // `scores` carries what was computed for this result and leaves out what was not.
       return row ? [{ row, text: row.text, scores: { final: h.score, ...(semanticOf.has(row.id) ? { semantic: semanticOf.get(row.id) } : {}), ...(keywordOf.has(row.id) ? { keyword: keywordOf.get(row.id) } : {}) } }] : [];
     });
-    return q.prune ? this.prune(bank, q, query, ranked) : ranked;
+    const rescored = await this.rescore(query, q, ranked);
+    return q.prune ? this.prune(bank, q, query, rescored) : rescored;
+  }
+
+  private async rescore(query: string, q: RecallQuery, ranked: Array<{ row: Row; text: string; scores: RecallResult['scores'] }>): Promise<Array<{ row: Row; text: string; scores: RecallResult['scores'] }>> {
+    const rrf = () => ranked.filter((r) => q.minScores?.final == null || r.scores!.final >= q.minScores.final);
+    const reranker = this.reranker;
+    if (!reranker) return rrf();
+
+    let scores: number[];
+    try {
+      const candidates = ranked.slice(0, reranker.candidateCap);
+      scores = await reranker.rerank(query, candidates.map((r) => r.text));
+      if (scores.length !== candidates.length) throw new Error('Memory reranker returned the wrong candidate count');
+      const rescored = candidates
+        .map((r, i) => ({ ...r, scores: { ...r.scores, reranker: scores[i]!, final: scores[i]! } }))
+        .filter((r) => (q.minScores?.reranker == null || r.scores.reranker >= q.minScores.reranker) && (q.minScores?.final == null || r.scores.final >= q.minScores.final))
+        .sort((a, b) => b.scores.final - a.scores.final);
+      const overflow = ranked.slice(reranker.candidateCap).filter((r) => q.minScores?.reranker == null && (q.minScores?.final == null || r.scores!.final >= q.minScores.final));
+      return [...rescored, ...overflow];
+    } catch (error) {
+      this.logger.warn({ msg: 'memory reranker skipped', error: String(error) });
+      // Never present an unscored row as having passed an explicit reranker floor.
+      return q.minScores?.reranker == null ? rrf() : [];
+    }
   }
 
   /**

@@ -145,7 +145,7 @@ export function buildMemoryMcpServer(services: MemoryMcpServices, request: Memor
         tags: z.array(z.string()).optional().describe('Only memories filed under these tags'),
         tags_match: z.enum(TAGS_MATCH).optional().describe('any (default, includes untagged), all, any_strict, all_strict or exact'),
         temporal_window: z.object({ start: z.string(), end: z.string() }).optional().describe('An explicit {"start": ISO, "end": ISO} period: memories dated inside it are added'),
-        min_scores: z.object({ semantic: z.number().optional(), keyword: z.number().optional(), final: z.number().optional() }).optional().describe('Score floors per stage'),
+        min_scores: z.object({ semantic: z.number().optional(), keyword: z.number().optional(), reranker: z.number().optional(), final: z.number().optional() }).optional().describe('Score floors per stage'),
       }),
       annotations: { readOnlyHint: true, openWorldHint: false },
     },

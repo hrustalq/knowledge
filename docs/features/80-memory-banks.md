@@ -256,9 +256,16 @@ files wire's chunks are the one exception: they are an index of text already adm
 Recall fuses four legs with `fuseHits` (`search/ranking.ts`): nearest vectors, `tsvector`
 rank over any of the query's words, memories sharing an entity with the best hits, and the
 occurred span when the request gives a `temporal_window`. A tag or type filter is decided in
-Postgres first and handed to every leg. Results are cut to `max_tokens` by an estimate
-(~4 characters a token), best first. `rerank.prune` asks the decision model only when one is
-routed. There is no cross-encoder reranker: `min_scores.reranker` is a 400.
+Postgres first and handed to every leg. With `MEMORY_RERANKER_PROVIDER=openai-compatible`, the
+fused rows (after the same workspace, bank, type and tag checks) are scored against the original
+query through the operator's `/rerank` endpoint. Raw logits are sigmoid-normalized to `0`–`1`;
+that value is both `scores.reranker` and the scored row's `scores.final`. The candidate cap is
+bounded, overflow stays in RRF order, and query/document payload sizes and provider latency are
+capped. `min_scores.reranker` and `min_scores.final` are inclusive and run before token cutting.
+A provider failure falls back to RRF; an explicit reranker floor instead returns no unverifiable
+rows. With no provider, response shapes and RRF behavior are unchanged and a reranker floor is a
+400. Results are cut to `max_tokens` by an estimate (~4 characters a token), best first.
+`rerank.prune` remains a separate decision-model pre-filter, asked only when one is routed.
 
 Reflect starts with one mandatory recall, then the `reflector` agent (purpose `chat`) runs in the
 bounded tool harness with only this bank's `recall` tool. It can gather more evidence in up to ten
@@ -506,6 +513,12 @@ reaches `apps/api/src/captures/`.
 | `MEMORY_RETAIN_MAX_CHARS` | `50000` | characters one item may hold |
 | `MEMORY_RETAIN_RATE_PER_MIN` | `120` | retain requests a key may send a minute |
 | `MEMORY_RECALL_RATE_PER_MIN` | `300` | recall requests a key may send a minute |
+| `MEMORY_RERANKER_PROVIDER` | `none` | `openai-compatible` enables cross-encoder recall; `none` preserves RRF-only behavior |
+| `MEMORY_RERANKER_BASE_URL` | empty | operator endpoint, including `/v1`; required when enabled |
+| `MEMORY_RERANKER_MODEL` | empty | cross-encoder model name; required when enabled |
+| `MEMORY_RERANKER_API_KEY` | empty | optional bearer credential |
+| `MEMORY_RERANKER_TIMEOUT_MS` | `5000` | provider latency ceiling |
+| `MEMORY_RERANKER_CANDIDATE_CAP` | `50` | fused candidates sent for scoring, maximum `100` |
 | `MEMORY_REFLECT_RATE_PER_MIN` | `30` | reflect requests a key may send a minute; refused when the limiter is unreachable |
 | `MEMORY_OPERATION_TIMEOUT_MS` | `600000` | when a claimed async retain counts as lost |
 | `MEMORY_OPERATION_RETENTION_DAYS` | `7` | how long a finished operation's row is kept |

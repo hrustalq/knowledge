@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AgentCoreModule } from '../agents/agent-core.module.js';
 import { AiCoreModule } from '../ai/ai-core.module.js';
 import { AssistantClientModule } from '../assistant/assistant-client.module.js';
@@ -13,6 +14,7 @@ import { MemoryBanksService } from './memory-banks.service.js';
 import { MemoryConsolidationService } from './memory-consolidation.service.js';
 import { MemoryOperationsService } from './memory-operations.service.js';
 import { MemoryQueueModule } from './memory-queue.module.js';
+import { MEMORY_RERANKER_PROVIDER, createMemoryReranker } from './memory-reranker.js';
 import { MemoryRecallService } from './memory-recall.service.js';
 import { MemoryReflectService } from './memory-reflect.service.js';
 import { MemoryRuntimeService } from './memory-runtime.service.js';
@@ -38,6 +40,7 @@ import { MemoryUnitsService } from './memory-units.service.js';
     MemoryQueueModule,
   ],
   providers: [
+    { provide: MEMORY_RERANKER_PROVIDER, inject: [ConfigService], useFactory: createMemoryReranker },
     MemoryAccessService,
     MemoryBanksService,
     MemoryConsolidationService,

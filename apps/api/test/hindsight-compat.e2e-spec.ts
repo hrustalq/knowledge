@@ -1,5 +1,6 @@
 import type { INestApplication } from '@nestjs/common';
 import type { AddressInfo } from 'node:net';
+import { createServer, type Server } from 'node:http';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { HindsightClient, sdk } from '@vectorize-io/hindsight-client';
@@ -42,6 +43,7 @@ describe('Hindsight compatibility (e2e, #986)', () => {
   let prisma: PrismaService;
   let graph: GraphService;
   let baseUrl: string;
+  let reranker: Server;
   const nonce = randomUUID().slice(0, 8);
   const bank = `agent-${nonce}`;
   const keyIds: string[] = [];
@@ -117,6 +119,24 @@ describe('Hindsight compatibility (e2e, #986)', () => {
     process.env.AUTH_MODE = 'api-key';
     process.env.MEMORY_ENABLED = 'true';
     process.env.EMBEDDINGS_PROVIDER = 'stub';
+    reranker = createServer(async (req, res) => {
+      if (req.url !== '/v1/rerank' || req.headers.authorization !== 'Bearer reranker-fixture') {
+        res.writeHead(401).end();
+        return;
+      }
+      let body = '';
+      for await (const chunk of req) body += chunk;
+      const input = JSON.parse(body) as { documents: string[] };
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        results: input.documents.map((text, index) => ({ index, relevance_score: text.includes('Alice') ? 10 : 0 })),
+      }));
+    });
+    await new Promise<void>((resolve) => reranker.listen(0, '127.0.0.1', resolve));
+    process.env.MEMORY_RERANKER_PROVIDER = 'openai-compatible';
+    process.env.MEMORY_RERANKER_BASE_URL = `http://127.0.0.1:${(reranker.address() as AddressInfo).port}/v1`;
+    process.env.MEMORY_RERANKER_MODEL = 'reranker-fixture';
+    process.env.MEMORY_RERANKER_API_KEY = 'reranker-fixture';
     const [
       { createE2eApp },
       { PrismaService },
@@ -170,17 +190,19 @@ describe('Hindsight compatibility (e2e, #986)', () => {
   });
 
   afterAll(async () => {
-    if (!app) return;
-    await prisma.memoryBank.deleteMany({
-      where: { workspaceId: { in: WORKSPACES } },
-    });
-    for (const ws of WORKSPACES)
-      await graph.deleteMemoryUnits(
-        ws,
-        (await graph.memoryUnitIds(ws)).map((v) => v.unitId),
-      );
-    await prisma.apiKey.deleteMany({ where: { id: { in: keyIds } } });
-    await app.close();
+    if (app) {
+      await prisma.memoryBank.deleteMany({
+        where: { workspaceId: { in: WORKSPACES } },
+      });
+      for (const ws of WORKSPACES)
+        await graph.deleteMemoryUnits(
+          ws,
+          (await graph.memoryUnitIds(ws)).map((v) => v.unitId),
+        );
+      await prisma.apiKey.deleteMany({ where: { id: { in: keyIds } } });
+      await app.close();
+    }
+    if (reranker) await new Promise<void>((resolve) => reranker.close(() => resolve()));
   });
 
   describe('phase 0: banks', () => {
@@ -921,8 +943,8 @@ describe('Hindsight compatibility (e2e, #986)', () => {
         },
       });
       expect(texts(january)).toEqual(['Bob prefers tea over coffee']);
-      // Surfaced by the temporal leg alone: neither retrieval leg scored it.
-      expect(january.results[0]!.scores).toEqual({ final: expect.any(Number) });
+      // Surfaced by the temporal leg alone: neither retrieval leg scored it; the cross-encoder did.
+      expect(january.results[0]!.scores).toEqual({ final: 0.5, reranker: 0.5 });
     });
 
     it('adds memories that share an entity with the best hits', async () => {
@@ -1001,7 +1023,7 @@ describe('Hindsight compatibility (e2e, #986)', () => {
       }
     });
 
-    it('refuses a floor on a reranker that does not run, and a window that ends before it starts', async () => {
+    it('applies reranker floors through the official client, and refuses a window that ends before it starts', async () => {
       const post = (body: unknown) =>
         call(
           people.alice.key,
@@ -1009,12 +1031,9 @@ describe('Hindsight compatibility (e2e, #986)', () => {
           `/v1/default/banks/${mem}/memories/recall`,
           body,
         );
-      const reranker = await post({
-        query: 'Alice',
-        min_scores: { reranker: 0.5 },
-      });
-      expect(reranker.status).toBe(400);
-      expect((await reranker.json()).detail).toMatch(/reranker/);
+      const reranked = await client(people.alice.key).recall(mem, 'Alice', { minScores: { reranker: 0.9 } });
+      expect(texts(reranked)).toEqual(['Alice works at Google as a software engineer']);
+      expect(reranked.results.every((r) => (r.scores?.reranker ?? 0) >= 0.9 && (r.scores?.final ?? 0) >= 0.9)).toBe(true);
       expect(
         (
           await post({

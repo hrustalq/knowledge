@@ -21,6 +21,14 @@ in the pull request that introduces them — see
   project memory policies. Recall remains available when retention is off. (#1156)
 - Memory banks now support shared, per-tag, combined and custom observation scopes, targeted consolidation, document
   scope updates, and ordered per-scope consolidation strategies through the unmodified Hindsight client. (#1157)
+- Memory recall can now rerank fused candidates with an optional cross-encoder, return normalized reranker/final scores,
+  and filter them inclusively with `min_scores`; deployments without a reranker keep the existing RRF behavior. (#1158)
+
+### Operations
+
+- Optional memory reranking is configured with `MEMORY_RERANKER_PROVIDER=openai-compatible`, `MEMORY_RERANKER_BASE_URL`,
+  `MEMORY_RERANKER_MODEL` and optionally `MEMORY_RERANKER_API_KEY`; timeout and candidate caps default to 5000 ms and 50.
+  The base URL includes `/v1`, and the API appends `/rerank`. No reranker is required by default. (#1158)
 
 ## [0.54.1] — 2026-11-14
 

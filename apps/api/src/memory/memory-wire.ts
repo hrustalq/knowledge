@@ -147,7 +147,7 @@ export interface RecallResult {
   tags: string[];
   source_fact_ids: string[];
   /** What was computed for this result; a leg that did not surface it is left out. Absent on a source fact. */
-  scores?: { final: number; semantic?: number; keyword?: number };
+  scores?: { final: number; reranker?: number; semantic?: number; keyword?: number };
 }
 
 export interface RecallResponse {

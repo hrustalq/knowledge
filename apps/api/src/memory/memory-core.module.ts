@@ -15,6 +15,7 @@ import { MemoryOperationsService } from './memory-operations.service.js';
 import { MemoryQueueModule } from './memory-queue.module.js';
 import { MemoryRecallService } from './memory-recall.service.js';
 import { MemoryReflectService } from './memory-reflect.service.js';
+import { MemoryRuntimeService } from './memory-runtime.service.js';
 import { MemoryRetainService } from './memory-retain.service.js';
 import { MemoryUnitsService } from './memory-units.service.js';
 
@@ -24,8 +25,39 @@ import { MemoryUnitsService } from './memory-units.service.js';
  * the worker retains through the same `MemoryRetainService` the API does.
  */
 @Module({
-  imports: [PrismaModule, AuthCoreModule, PermissionsCoreModule, GraphModule, EmbeddingModule, AgentCoreModule, AiCoreModule, AssistantClientModule, DecisionClientModule, MemoryQueueModule],
-  providers: [MemoryAccessService, MemoryBanksService, MemoryConsolidationService, MemoryOperationsService, MemoryRecallService, MemoryReflectService, MemoryRetainService, MemoryUnitsService],
-  exports: [MemoryAccessService, MemoryBanksService, MemoryConsolidationService, MemoryOperationsService, MemoryRecallService, MemoryReflectService, MemoryRetainService, MemoryUnitsService],
+  imports: [
+    PrismaModule,
+    AuthCoreModule,
+    PermissionsCoreModule,
+    GraphModule,
+    EmbeddingModule,
+    AgentCoreModule,
+    AiCoreModule,
+    AssistantClientModule,
+    DecisionClientModule,
+    MemoryQueueModule,
+  ],
+  providers: [
+    MemoryAccessService,
+    MemoryBanksService,
+    MemoryConsolidationService,
+    MemoryOperationsService,
+    MemoryRecallService,
+    MemoryReflectService,
+    MemoryRuntimeService,
+    MemoryRetainService,
+    MemoryUnitsService,
+  ],
+  exports: [
+    MemoryAccessService,
+    MemoryBanksService,
+    MemoryConsolidationService,
+    MemoryOperationsService,
+    MemoryRecallService,
+    MemoryReflectService,
+    MemoryRuntimeService,
+    MemoryRetainService,
+    MemoryUnitsService,
+  ],
 })
 export class MemoryCoreModule {}

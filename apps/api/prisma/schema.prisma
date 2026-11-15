@@ -4814,6 +4814,10 @@ model MemoryBank {
   bankId      String  @map("bank_id")
   /// A bank bound to a project follows that project's restriction. Null = the whole workspace.
   projectId   String? @map("project_id") @db.Uuid
+  /// Runtime-owned personal bank: this agent and this user. Both null on an ordinary or project bank.
+  agentKey    String? @map("agent_key")
+  /// Personal memory is visible only to this user, including to workspace admins.
+  ownerId     String? @map("owner_id") @db.Uuid
   name        String
   mission     String  @default("")
   /// `{ skepticism, literalism, empathy }`, each 1–5.
@@ -4838,6 +4842,7 @@ model MemoryBank {
   files      MemoryFile[]
 
   @@unique([workspaceId, bankId])
+  @@index([workspaceId, agentKey, ownerId])
   @@map("memory_banks")
 }
 

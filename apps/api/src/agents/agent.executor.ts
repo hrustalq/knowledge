@@ -5,7 +5,12 @@ import { withAgentRun } from '../ai/agent-run-context.js';
 import { projectOfRun } from '../ai/run-project.js';
 import type { Principal } from '../auth/principal.js';
 import type { ResolvedAgent } from './agent-registry.service.js';
-import { AgentServices, type AgentReporter, type AgentRunResult } from './agent-services.js';
+import {
+  AgentServices,
+  runBrief,
+  type AgentReporter,
+  type AgentRunResult,
+} from './agent-services.js';
 import { AGENT_RUNNERS } from './agent-runners.js';
 
 /**
@@ -31,17 +36,56 @@ export class AgentExecutor extends AgentServices {
    * calls an API-shaped service (the glossarist calls the same `suggest` the
    * settings page calls) bills and authorises as that same person.
    */
-  async run(run: AgentRun, agent: ResolvedAgent, principal: Principal, report: AgentReporter): Promise<AgentRunResult> {
+  async run(
+    run: AgentRun,
+    agent: ResolvedAgent,
+    principal: Principal,
+    report: AgentReporter,
+  ): Promise<AgentRunResult> {
     // Every model call below is billed to this run (#305), and the run is
     // stamped with what produced it whether it succeeds or fails.
     const projectId = await this.attribute(run);
-    return withAgentRun({ agentKey: agent.key, agentRunId: run.id, projectId }, async () => {
-      try {
-        return await this.dispatch(run, agent, principal, report);
-      } finally {
-        await this.stamp(run, agent);
-      }
-    });
+    return withAgentRun(
+      { agentKey: agent.key, agentRunId: run.id, projectId },
+      async () => {
+        try {
+          const question =
+            runBrief(run.input) ||
+            run.subjectKey ||
+            agent.description ||
+            agent.name;
+          const grounding = await this.memory?.ground({
+            principal,
+            workspaceId: run.workspaceId,
+            agentKey: agent.key,
+            projectId,
+            userId: principal.userId,
+            query: question,
+          });
+          this.setMemoryGrounding(run.id, grounding ?? '');
+          const result = await this.dispatch(run, agent, principal, report);
+          await this.memory?.remember({
+            principal,
+            workspaceId: run.workspaceId,
+            agentKey: agent.key,
+            projectId,
+            userId: principal.userId,
+            locale: principal.locale,
+            sourceId: run.id,
+            sourceKind: 'agent-run',
+            question,
+            answer: [
+              result.summary,
+              ...result.findings.map((finding) => JSON.stringify(finding)),
+            ].join('\n\n'),
+          });
+          return result;
+        } finally {
+          this.clearMemoryGrounding(run.id);
+          await this.stamp(run, agent);
+        }
+      },
+    );
   }
 
   /**
@@ -53,20 +97,32 @@ export class AgentExecutor extends AgentServices {
     if (run.projectId) return run.projectId;
     try {
       const projectId = await projectOfRun(this.prisma, run);
-      if (projectId) await this.prisma.agentRun.updateMany({ where: { id: run.id, projectId: null }, data: { projectId } });
+      if (projectId)
+        await this.prisma.agentRun.updateMany({
+          where: { id: run.id, projectId: null },
+          data: { projectId },
+        });
       return projectId;
     } catch (error) {
-      this.logger.warn(`Agent run ${run.id} could not be attributed to a project: ${String(error)}`);
+      this.logger.warn(
+        `Agent run ${run.id} could not be attributed to a project: ${String(error)}`,
+      );
       return null;
     }
   }
 
-  private async dispatch(run: AgentRun, agent: ResolvedAgent, principal: Principal, report: AgentReporter): Promise<AgentRunResult> {
+  private async dispatch(
+    run: AgentRun,
+    agent: ResolvedAgent,
+    principal: Principal,
+    report: AgentReporter,
+  ): Promise<AgentRunResult> {
     const runner = AGENT_RUNNERS.get(agent.key);
     // The API refuses an agent with no runner before queueing it (RUNNABLE_AGENTS);
     // anything reaching here got past that, so failing loudly beats running an
     // agent as if it had done something.
-    if (!runner) throw new Error(t('error.ai.agentNoExecutor', { key: agent.key }));
+    if (!runner)
+      throw new Error(t('error.ai.agentNoExecutor', { key: agent.key }));
     return runner.run(this, run, agent, principal, report);
   }
 }

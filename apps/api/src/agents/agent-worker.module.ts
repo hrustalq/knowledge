@@ -27,6 +27,7 @@ import { AgentProcessor } from './agent.processor.js';
 import { AgentScheduleSweeper } from './agent-schedule.sweeper.js';
 import { AgentTriggerCoreModule } from './agent-trigger-core.module.js';
 import { AgentTriggerListener } from './agent-trigger.listener.js';
+import { MemoryCoreModule } from '../memory/memory-core.module.js';
 
 /**
  * Worker-only half of the agents layer (docs/features/20) — imported by
@@ -104,7 +105,13 @@ import { AgentTriggerListener } from './agent-trigger.listener.js';
     // through is in the core module so the API can fire it too.
     EventsSubscriberModule,
     AgentTriggerCoreModule,
+    MemoryCoreModule,
   ],
-  providers: [AgentExecutor, AgentProcessor, AgentScheduleSweeper, AgentTriggerListener],
+  providers: [
+    AgentExecutor,
+    AgentProcessor,
+    AgentScheduleSweeper,
+    AgentTriggerListener,
+  ],
 })
 export class AgentWorkerModule {}

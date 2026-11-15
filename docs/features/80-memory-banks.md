@@ -21,6 +21,28 @@ The rule: **a memory is a row an agent wrote for itself: live at once, readable 
 its bank, never a page and never in page search. A bank belongs to one workspace. Anything
 that should become shared knowledge leaves through the capture → merge request path.**
 
+## Agent runtime memory
+
+With `MEMORY_ENABLED` and the workspace `memory` section on, the assistant and background agents
+use memory automatically, not only through the external API. Before a turn or run, recall grounds
+the model in two separate contexts; after a successful one, its request and outcome are retained
+under an idempotent `assistant-turn:<message id>` or `agent-run:<run id>` document id. Recall and
+retain failures leave the turn or run itself untouched.
+
+- **Personal:** `agent:<agent key>:user:<user id>` holds that agent's working context for that
+  user. `agent_key` + `owner_id` describe it, and only the owner can read it — an admin bypass
+  does not open somebody else's personal bank.
+- **Project:** `project:<project id>` holds requirements, constraints, decisions and lessons for
+  everyone who may open the project. It follows the existing project ACL and is shared across agents.
+
+The two are recalled and retained independently: personal preferences never become project
+requirements merely because both grounded one run. Every recalled block reaches the model through
+`wrapUntrusted`, and ordinary retain still masks, extracts, embeds and consolidates the outcome.
+A viewer recalls but does not retain, matching the public memory API; an editor's turn writes both
+banks. A chat answer visible to a whole group does not recall or retain either scope, since its
+readers may include people outside the owner or project audience. The worker and API use the same
+`MemoryRuntimeService`; no Hindsight sidecar is involved.
+
 **A bank is one store with several wires.** Each wire keeps its interface exactly — tool names,
 schemas, answer strings, error strings — and underneath is the same bank, resolved by the same
 `MemoryAccessService`. What any wire writes, Hindsight `recall` on that bank finds.
@@ -227,10 +249,13 @@ Postgres first and handed to every leg. Results are cut to `max_tokens` by an es
 (~4 characters a token), best first. `rerank.prune` asks the decision model only when one is
 routed. There is no cross-encoder reranker: `min_scores.reranker` is a 400.
 
-Reflect is one recall and one model call by the `reflector` agent (purpose `chat`). The
-bank's mission and disposition are trusted lines of the system prompt; the recalled memories
-reach the model only inside `wrapUntrusted`, as they do in the MCP `recall` tool's result.
-With no model configured reflect answers 409 and bills nothing.
+Reflect starts with one mandatory recall, then the `reflector` agent (purpose `chat`) runs in the
+bounded tool harness with only this bank's `recall` tool. It can gather more evidence in up to ten
+additional recalls before the final, toolless answer. Repeated memories are dropped, labels stay
+stable across rounds (`[M1]`, `[M2]`, …), `based_on.memories` lists exactly what the model was
+shown, and `trace` is present when it recalled again. `usage` aggregates every model round. The
+bank's mission and disposition are trusted system lines; memories from every round reach the model
+only inside `wrapUntrusted`. With no model configured reflect answers 409 and bills nothing.
 
 ## Observations
 
@@ -468,8 +493,7 @@ reaches `apps/api/src/captures/`.
 ## Not built
 
 Hindsight's mental models, knowledge-base pages, directives, webhooks, transfer and clone,
-bank templates, file retain, aliases, audit and LLM-request logs; its reflect tool loop and
-`trace`; `tag_groups`; a recall tool for this platform's own assistant and agents; Hindsight's
+bank templates, file retain, aliases, audit and LLM-request logs; `tag_groups`; Hindsight's
 observation scopes and consolidation strategies (`observation_scopes` on `POST …/consolidate` is not
 read: every pass keeps each exact tag set to itself) and its bank config keys beyond the five above;
 consolidating across banks; editing a memory's text, a file or an entity in the UI, a graph view of

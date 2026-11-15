@@ -1,3 +1,5 @@
+import type { AssistantToolCall } from '@knowledge/contracts';
+
 /**
  * Response bodies in Hindsight's wire shape (OpenAPI v1.2.1), written by hand
  * for the routes this server answers (#986). Not in `@knowledge/contracts`:
@@ -10,7 +12,11 @@ export interface Disposition {
   empathy: number;
 }
 
-export const DEFAULT_DISPOSITION: Disposition = { skepticism: 3, literalism: 3, empathy: 3 };
+export const DEFAULT_DISPOSITION: Disposition = {
+  skepticism: 3,
+  literalism: 3,
+  empathy: 3,
+};
 
 export interface BankProfileResponse {
   bank_id: string;
@@ -146,7 +152,14 @@ export interface RecallResult {
 
 export interface RecallResponse {
   results: RecallResult[];
-  entities?: Record<string, { entity_id: string; canonical_name: string; observations: Array<{ text: string; mentioned_at?: string | null }> }>;
+  entities?: Record<
+    string,
+    {
+      entity_id: string;
+      canonical_name: string;
+      observations: Array<{ text: string; mentioned_at?: string | null }>;
+    }
+  >;
   chunks?: Record<string, never>;
   /** `include.source_facts`: the facts the returned observations stand on, by id, within their token budget. */
   source_facts?: Record<string, RecallResult>;
@@ -168,7 +181,8 @@ export interface BankConfigResponse {
   overrides: Record<string, unknown>;
 }
 
-export type OperationWireStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'not_found';
+export type OperationWireStatus =
+  'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'not_found';
 
 export interface OperationResponse {
   id: string;
@@ -214,8 +228,16 @@ export interface CancelOperationResponse {
 export interface ReflectResponse {
   /** The answer, as markdown. */
   text: string;
-  based_on?: { memories: Array<Omit<RecallResult, 'entities' | 'source_fact_ids' | 'scores'>>; mental_models: never[]; directives: never[] };
+  based_on?: {
+    memories: Array<
+      Omit<RecallResult, 'entities' | 'source_fact_ids' | 'scores'>
+    >;
+    mental_models: never[];
+    directives: never[];
+  };
   structured_output?: Record<string, unknown> | null;
   structured_output_error?: string | null;
   usage?: TokenUsage;
+  /** Additional recall calls the reflector made after the mandatory initial retrieval. */
+  trace?: AssistantToolCall[];
 }

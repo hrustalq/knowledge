@@ -1,11 +1,18 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { MemoryBank } from '@prisma/client';
 import { UUID_RE } from '@knowledge/contracts';
 import { AccessService } from '../auth/access.service.js';
 import { FeaturesService } from '../auth/features.service.js';
 import type { Principal } from '../auth/principal.js';
 import { t } from '../i18n/t.js';
-import { canSeeProject, type AccessScope } from '../permissions/access-scope.js';
+import {
+  canSeeProject,
+  type AccessScope,
+} from '../permissions/access-scope.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
@@ -51,7 +58,8 @@ export class MemoryAccessService {
 
   /** 404 while the server has memory off — for the routes that resolve no workspace. */
   requireEnabled(): void {
-    if (this.features.unavailable().includes('memory')) throw new NotFoundException(t('error.memory.disabled'));
+    if (this.features.unavailable().includes('memory'))
+      throw new NotFoundException(t('error.memory.disabled'));
   }
 
   /** The database answers: what a Hindsight client's `/health` probe asks. */
@@ -59,48 +67,90 @@ export class MemoryAccessService {
     await this.prisma.$queryRaw`SELECT 1`;
   }
 
-  async caller(principal: Principal, workspaceHeader: string | undefined, role: MemoryRole, opts: { capture?: boolean } = {}): Promise<MemoryCaller> {
+  async caller(
+    principal: Principal,
+    workspaceHeader: string | undefined,
+    role: MemoryRole,
+    opts: { capture?: boolean } = {},
+  ): Promise<MemoryCaller> {
     this.requireEnabled();
     const workspaceId = this.workspaceOf(principal, workspaceHeader);
-    await this.access.requireRole(principal, workspaceId, role, false, { capture: opts.capture === true });
+    await this.access.requireRole(principal, workspaceId, role, false, {
+      capture: opts.capture === true,
+    });
     await this.features.require(workspaceId, 'memory');
-    return { principal, workspaceId, scope: await this.permissions.scopeFor(principal, workspaceId) };
+    return {
+      principal,
+      workspaceId,
+      scope: await this.permissions.scopeFor(principal, workspaceId),
+    };
   }
 
   /** The bank `bankId` names in the caller's workspace; 404 when there is none, or its project is hidden from them. */
   async bank(caller: MemoryCaller, bankId: string): Promise<MemoryBank> {
     const row = await this.find(caller, bankId);
-    if (!row) throw new NotFoundException(t('error.memory.bankNotFound', { bankId }));
+    if (!row)
+      throw new NotFoundException(t('error.memory.bankNotFound', { bankId }));
     return row;
   }
 
   /** As `bank`, or null where a caller may go on to create it. A hidden bank still throws: it exists. */
   async find(caller: MemoryCaller, bankId: string): Promise<MemoryBank | null> {
-    if (!BANK_ID_RE.test(bankId)) throw new BadRequestException(t('error.memory.bankIdInvalid'));
-    const row = await this.prisma.memoryBank.findUnique({ where: { workspaceId_bankId: { workspaceId: caller.workspaceId, bankId } } });
+    if (!BANK_ID_RE.test(bankId))
+      throw new BadRequestException(t('error.memory.bankIdInvalid'));
+    const row = await this.prisma.memoryBank.findUnique({
+      where: {
+        workspaceId_bankId: { workspaceId: caller.workspaceId, bankId },
+      },
+    });
     if (!row) return null;
-    if (!(await this.visible(caller.scope, [row])).length) throw new NotFoundException(t('error.memory.bankNotFound', { bankId }));
+    if (!(await this.visible(caller.scope, [row])).length)
+      throw new NotFoundException(t('error.memory.bankNotFound', { bankId }));
     return row;
   }
 
-  /** The banks among `rows` this scope may read: `canSeeProject` on each bound project, as chat search asks of a binding. */
-  async visible<B extends { projectId: string | null }>(scope: AccessScope, rows: B[]): Promise<B[]> {
-    const projectIds = [...new Set(rows.flatMap((b) => (b.projectId ? [b.projectId] : [])))];
+  /** Personal banks are owner-only; project banks follow `canSeeProject`. An admin bypass never opens somebody else's personal memory. */
+  async visible<
+    B extends { projectId: string | null; ownerId?: string | null },
+  >(scope: AccessScope, rows: B[]): Promise<B[]> {
+    const projectIds = [
+      ...new Set(rows.flatMap((b) => (b.projectId ? [b.projectId] : []))),
+    ];
     const restricted = new Set(
       projectIds.length
-        ? (await this.prisma.project.findMany({ where: { id: { in: projectIds }, restricted: true }, select: { id: true } })).map((p) => p.id)
+        ? (
+            await this.prisma.project.findMany({
+              where: { id: { in: projectIds }, restricted: true },
+              select: { id: true },
+            })
+          ).map((p) => p.id)
         : [],
     );
-    return rows.filter((b) => b.projectId === null || canSeeProject(scope, { id: b.projectId, restricted: restricted.has(b.projectId) }));
+    return rows.filter(
+      (b) =>
+        (!b.ownerId || b.ownerId === scope.userId) &&
+        (b.projectId === null ||
+          canSeeProject(scope, {
+            id: b.projectId,
+            restricted: restricted.has(b.projectId),
+          })),
+    );
   }
 
-  private workspaceOf(principal: Principal, header: string | undefined): string {
+  private workspaceOf(
+    principal: Principal,
+    header: string | undefined,
+  ): string {
     if (principal.mode === 'dev') {
-      if (!header || !UUID_RE.test(header)) throw new BadRequestException(t('error.memory.workspaceHeaderRequired'));
+      if (!header || !UUID_RE.test(header))
+        throw new BadRequestException(
+          t('error.memory.workspaceHeaderRequired'),
+        );
       return header;
     }
     const pinned = principal.apiKey?.workspaceId;
-    if (!pinned) throw new BadRequestException(t('error.memory.workspaceRequired'));
+    if (!pinned)
+      throw new BadRequestException(t('error.memory.workspaceRequired'));
     return pinned;
   }
 }

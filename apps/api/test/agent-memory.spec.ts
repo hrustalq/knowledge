@@ -107,4 +107,55 @@ describe('background agent memory', () => {
       }),
     );
   });
+
+  it('does not retain a failed run', async () => {
+    const memory = {
+      ground: vi.fn(async () => ''),
+      remember: vi.fn(async () => undefined),
+    };
+    const prisma = {
+      agentRun: { updateMany: vi.fn(async () => ({ count: 1 })) },
+    };
+    const args = Array.from({ length: 28 }, () => ({}) as never);
+    args[0] = prisma as never;
+    args[27] = memory as never;
+    const executor = new AgentExecutor(...(args as []));
+    const key = 'failed-memory-test' as BuiltInAgentKey;
+    const previous = AGENT_RUNNERS.get(key);
+    AGENT_RUNNERS.set(key, {
+      key,
+      run: async () => {
+        throw new Error('runner failed');
+      },
+    });
+    const run = {
+      id: 'run-failed',
+      workspaceId: WS,
+      projectId: PROJECT,
+      input: {},
+      status: 'running',
+    } as unknown as AgentRun;
+    const agent = {
+      key,
+      name: 'Failed memory test',
+      description: '',
+      instructions: '',
+      config: { enabled: true },
+      missing: [],
+    } as never;
+    try {
+      await expect(
+        executor.run(
+          run,
+          agent,
+          { ...DEV_PRINCIPAL, userId: USER, locale: 'en' },
+          vi.fn(),
+        ),
+      ).rejects.toThrow('runner failed');
+    } finally {
+      if (previous) AGENT_RUNNERS.set(key, previous);
+      else AGENT_RUNNERS.delete(key);
+    }
+    expect(memory.remember).not.toHaveBeenCalled();
+  });
 });

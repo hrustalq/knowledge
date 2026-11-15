@@ -44684,7 +44684,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.53.2",
+    "version": "0.54.1",
     "contact": {}
   },
   "tags": [],
@@ -48718,6 +48718,36 @@
           "workspaceId"
         ]
       },
+      "AgentMemoryPolicyDto": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "all",
+              "durable",
+              "off"
+            ],
+            "description": "Default retention mode; personal and project override it."
+          },
+          "personal": {
+            "type": "string",
+            "enum": [
+              "all",
+              "durable",
+              "off"
+            ]
+          },
+          "project": {
+            "type": "string",
+            "enum": [
+              "all",
+              "durable",
+              "off"
+            ]
+          }
+        }
+      },
       "CreateAiAgentDto": {
         "type": "object",
         "properties": {
@@ -48753,6 +48783,9 @@
             "items": {
               "type": "string"
             }
+          },
+          "memoryPolicy": {
+            "$ref": "#/components/schemas/AgentMemoryPolicyDto"
           },
           "modelId": {
             "type": "string",
@@ -48804,6 +48837,16 @@
             "items": {
               "type": "string"
             }
+          },
+          "memoryPolicy": {
+            "nullable": true,
+            "description": "Retention policy. Null restores all.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentMemoryPolicyDto"
+              }
+            ]
           },
           "modelId": {
             "type": "string",
@@ -53873,6 +53916,33 @@
           "updatedAt"
         ]
       },
+      "AgentMemoryMode": {
+        "type": "string",
+        "enum": [
+          "all",
+          "durable",
+          "off"
+        ]
+      },
+      "AgentMemoryPolicy": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/AgentMemoryMode"
+          },
+          "personal": {
+            "$ref": "#/components/schemas/AgentMemoryMode"
+          },
+          "project": {
+            "$ref": "#/components/schemas/AgentMemoryMode"
+          }
+        },
+        "required": [
+          "mode",
+          "personal",
+          "project"
+        ]
+      },
       "AgentOutcomeGroup": {
         "type": "object",
         "properties": {
@@ -54631,6 +54701,9 @@
               "type": "string"
             }
           },
+          "memoryPolicy": {
+            "$ref": "#/components/schemas/AgentMemoryPolicy"
+          },
           "modelId": {
             "type": "string",
             "nullable": true
@@ -54743,6 +54816,7 @@
           "instructions",
           "tools",
           "skillIds",
+          "memoryPolicy",
           "modelId",
           "model",
           "providerName",

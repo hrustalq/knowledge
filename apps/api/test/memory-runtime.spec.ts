@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
+import {
+  resolveAgentMemoryPolicy,
+  type AgentMemoryPolicy,
+} from '@knowledge/contracts';
 import { DEV_PRINCIPAL } from '../src/auth/principal.js';
+import { UpdateAiAgentDto } from '../src/ai/ai.dto.js';
 import {
   MemoryRuntimeService,
   memoryTargets,
@@ -19,7 +26,14 @@ const input = {
   userId: USER,
 };
 
-function service(opts: { editor?: boolean; recallError?: boolean } = {}) {
+function service(
+  opts: {
+    editor?: boolean;
+    recallError?: boolean;
+    memoryPolicy?: Partial<AgentMemoryPolicy>;
+    policyError?: boolean;
+  } = {},
+) {
   const auth = {
     requireRole: vi.fn(
       async (_principal: unknown, _ws: unknown, role: string) => {
@@ -40,6 +54,12 @@ function service(opts: { editor?: boolean; recallError?: boolean } = {}) {
       bankId,
       mission: '',
     })),
+  };
+  const agents = {
+    resolve: vi.fn(async () => {
+      if (opts.policyError) throw new Error('registry unavailable');
+      return { memoryPolicy: resolveAgentMemoryPolicy(opts.memoryPolicy) };
+    }),
   };
   const banks = {
     ensure: vi.fn(
@@ -65,11 +85,12 @@ function service(opts: { editor?: boolean; recallError?: boolean } = {}) {
     features as never,
     permissions as never,
     access as never,
+    agents as never,
     banks as never,
     recall as never,
     retain as never,
   );
-  return { svc, auth, access, banks, recall, retain };
+  return { svc, auth, access, agents, banks, recall, retain };
 }
 
 describe('memory runtime targets', () => {
@@ -93,6 +114,37 @@ describe('memory runtime targets', () => {
   });
 });
 
+describe('agent memory policy', () => {
+  it('defaults to all and resolves independent scope overrides', () => {
+    expect(resolveAgentMemoryPolicy(undefined)).toEqual({
+      mode: 'all',
+      personal: 'all',
+      project: 'all',
+    });
+    expect(
+      resolveAgentMemoryPolicy({ mode: 'durable', project: 'off' }),
+    ).toEqual({ mode: 'durable', personal: 'durable', project: 'off' });
+    expect(resolveAgentMemoryPolicy({ mode: 'invalid' })).toEqual({
+      mode: 'all',
+      personal: 'all',
+      project: 'all',
+    });
+  });
+
+  it('validates the policy DTO, including nested values', async () => {
+    const valid = plainToInstance(UpdateAiAgentDto, {
+      workspaceId: WS,
+      memoryPolicy: { mode: 'durable', personal: 'all' },
+    });
+    expect(await validate(valid)).toEqual([]);
+    const invalid = plainToInstance(UpdateAiAgentDto, {
+      workspaceId: WS,
+      memoryPolicy: { mode: 'everything' },
+    });
+    expect((await validate(invalid))[0]?.property).toBe('memoryPolicy');
+  });
+});
+
 describe('MemoryRuntimeService', () => {
   it('recalls personal and project banks independently as untrusted grounding', async () => {
     const { svc, recall } = service();
@@ -110,15 +162,17 @@ describe('MemoryRuntimeService', () => {
 
   it('retains one idempotent source in each bank with the right ownership and scope', async () => {
     const { svc, banks, retain } = service();
-    await svc.remember({
+    const turn = {
       ...input,
-      locale: 'en',
+      locale: 'en' as const,
       sourceId: 'turn-1',
-      sourceKind: 'assistant-turn',
+      sourceKind: 'assistant-turn' as const,
       question: 'Use pnpm',
       answer: 'I will use pnpm.',
-    });
-    expect(banks.ensure).toHaveBeenCalledTimes(2);
+    };
+    await svc.remember(turn);
+    await svc.remember(turn);
+    expect(banks.ensure).toHaveBeenCalledTimes(4);
     expect(banks.ensure.mock.calls[0]![2]).toMatchObject({
       agentKey: 'researcher',
       ownerId: USER,
@@ -135,16 +189,90 @@ describe('MemoryRuntimeService', () => {
         documentId: 'assistant-turn:turn-1',
         append: false,
       });
+      expect(call.durableOnly).toBe(false);
     }
     expect(
       retain.retain.mock.calls.map(
         ([call]) => call.items[0].metadata.memory_scope,
       ),
-    ).toEqual(['personal', 'project']);
+    ).toEqual(['personal', 'project', 'personal', 'project']);
+  });
+
+  it('durable asks extraction to drop chatter in both scopes', async () => {
+    const { svc, retain } = service({ memoryPolicy: { mode: 'durable' } });
+    await svc.remember({
+      ...input,
+      locale: 'en',
+      sourceId: 'turn-2',
+      sourceKind: 'assistant-turn',
+      question: 'Thanks',
+      answer: 'You are welcome.',
+    });
+    expect(retain.retain.mock.calls.map(([call]) => call.durableOnly)).toEqual([
+      true,
+      true,
+    ]);
+  });
+
+  it('off writes no bank but leaves recall functional', async () => {
+    const { svc, banks, retain, recall } = service({
+      memoryPolicy: { mode: 'off' },
+    });
+    await svc.remember({
+      ...input,
+      locale: 'en',
+      sourceId: 'turn-3',
+      sourceKind: 'assistant-turn',
+      question: 'Remember this',
+      answer: 'Done.',
+    });
+    expect(banks.ensure).not.toHaveBeenCalled();
+    expect(retain.retain).not.toHaveBeenCalled();
+    await svc.ground({ ...input, query: 'What do you remember?' });
+    expect(recall.recallForModel).toHaveBeenCalledTimes(2);
+  });
+
+  it('applies scope overrides without moving content between banks', async () => {
+    const personal = service({
+      memoryPolicy: { mode: 'off', personal: 'durable' },
+    });
+    await personal.svc.remember({
+      ...input,
+      locale: 'en',
+      sourceId: 'turn-4',
+      sourceKind: 'assistant-turn',
+      question: 'I prefer pnpm',
+      answer: 'I will use pnpm.',
+    });
+    expect(personal.retain.retain).toHaveBeenCalledOnce();
+    expect(personal.retain.retain.mock.calls[0]![0]).toMatchObject({
+      durableOnly: true,
+      items: [{ metadata: { memory_scope: 'personal' } }],
+    });
+
+    const project = service({
+      memoryPolicy: { mode: 'off', project: 'all' },
+    });
+    await project.svc.remember({
+      ...input,
+      locale: 'en',
+      sourceId: 'run-4',
+      sourceKind: 'agent-run',
+      question: 'Check requirements',
+      answer: 'Deployments require review.',
+    });
+    expect(project.retain.retain).toHaveBeenCalledOnce();
+    expect(project.retain.retain.mock.calls[0]![0]).toMatchObject({
+      durableOnly: false,
+      items: [{ metadata: { memory_scope: 'project' } }],
+    });
   });
 
   it('recalls for a viewer but does not retain, and a recall failure never fails the turn', async () => {
-    const viewer = service({ editor: false });
+    const viewer = service({
+      editor: false,
+      memoryPolicy: { mode: 'durable' },
+    });
     await viewer.svc.remember({
       ...input,
       locale: 'en',
@@ -158,5 +286,21 @@ describe('MemoryRuntimeService', () => {
     await expect(
       service({ recallError: true }).svc.ground({ ...input, query: 'q' }),
     ).resolves.toBe('');
+  });
+
+  it('a policy lookup failure skips retention without failing the run', async () => {
+    const { svc, banks, retain } = service({ policyError: true });
+    await expect(
+      svc.remember({
+        ...input,
+        locale: 'en',
+        sourceId: 'run-5',
+        sourceKind: 'agent-run',
+        question: 'q',
+        answer: 'a',
+      }),
+    ).resolves.toBeUndefined();
+    expect(banks.ensure).not.toHaveBeenCalled();
+    expect(retain.retain).not.toHaveBeenCalled();
   });
 });

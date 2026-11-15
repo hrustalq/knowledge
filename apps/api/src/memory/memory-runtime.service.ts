@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { Locale } from '@knowledge/contracts';
+import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { AccessService } from '../auth/access.service.js';
 import { FeaturesService } from '../auth/features.service.js';
 import type { Principal } from '../auth/principal.js';
@@ -80,6 +81,7 @@ export class MemoryRuntimeService {
     private readonly features: FeaturesService,
     private readonly permissions: PermissionService,
     private readonly access: MemoryAccessService,
+    private readonly agents: AgentRegistryService,
     private readonly banks: MemoryBanksService,
     private readonly recall: MemoryRecallService,
     private readonly retain: MemoryRetainService,
@@ -156,10 +158,19 @@ export class MemoryRuntimeService {
     const question = input.question.trim().slice(0, INPUT_CHARS);
     const answer = input.answer.trim().slice(0, INPUT_CHARS);
     if (!question || !answer) return;
-    const targets = await this.access.visible(
-      caller.scope,
-      memoryTargets(input),
-    );
+    const agent = await this.agents.resolve(input.workspaceId, input.agentKey).catch((error: unknown) => {
+      this.logger.warn({
+        msg: 'agent memory policy unavailable',
+        workspaceId: input.workspaceId,
+        agentKey: input.agentKey,
+        error: String(error),
+      });
+      return null;
+    });
+    if (!agent) return;
+    const eligible = memoryTargets(input).filter((target) => agent.memoryPolicy[target.kind] !== 'off');
+    if (!eligible.length) return;
+    const targets = await this.access.visible(caller.scope, eligible);
     for (const target of targets) {
       try {
         const bank = await this.banks.ensure(caller, target.bankId, target);
@@ -190,6 +201,7 @@ export class MemoryRuntimeService {
           userId: input.userId,
           locale: input.locale,
           items: [item],
+          durableOnly: agent.memoryPolicy[target.kind] === 'durable',
         });
       } catch (error) {
         this.logger.warn({

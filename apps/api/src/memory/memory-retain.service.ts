@@ -35,6 +35,8 @@ export interface RetainInput {
   operationId?: string;
   /** Store each item exactly as given, one unit per item: no extraction call (#1007). For a wire whose text must stay exact. */
   verbatim?: boolean;
+  /** A successful extraction's explicitly empty facts mean store nothing. Failures and missing models still retain verbatim. */
+  durableOnly?: boolean;
   /** Write the units already consolidated, so the consolidation pass never claims them (#1007). */
   consolidated?: boolean;
   /**
@@ -74,7 +76,8 @@ interface Unit {
  * - **Never fails for want of a model.** Facts are extracted only when a model
  *   is routed at `extraction` and the budget allows; a missing route, a spent
  *   budget, a failed call or an unreadable answer all store the masked text
- *   verbatim, one unit per item.
+ *   verbatim, one unit per item. Under `durableOnly`, a successful answer that
+ *   explicitly gives an item an empty fact list stores nothing instead.
  * - **Vector first, row second**, as chat search packs a window: a crash leaves
  *   vectors with no row, which no recall returns and the reap removes.
  * - **A `document_id` retained before is replaced**, in the transaction that
@@ -105,8 +108,10 @@ export class MemoryRetainService {
     const items = input.operationId ? input.items : maskItems(input.items);
     const { facts, usage } = input.verbatim ? { facts: new Map<number, Fact[]>(), usage: null } : await this.extract(input, items);
 
-    const units: Unit[] = items.flatMap((item, i) =>
-      (facts.get(i) ?? [null]).map((fact) => ({
+    const units: Unit[] = items.flatMap((item, i) => {
+      const extracted = facts.get(i);
+      if (input.durableOnly && extracted?.length === 0) return [];
+      return (extracted?.length ? extracted : [null]).map((fact) => ({
         id: randomUUID(),
         item,
         text: fact?.text ?? item.content,
@@ -114,10 +119,10 @@ export class MemoryRetainService {
         context: item.context,
         fact,
         entities: [...item.entities, ...(fact?.entities ?? []).map((name) => ({ name, key: name }))],
-      })),
-    );
-    const vectors = await this.embeddings.embedBatch(units.map((u) => (u.context ? `${u.context}\n${u.text}` : u.text)));
-    const entities = await this.entityRows(input, units);
+      }));
+    });
+    const vectors = units.length ? await this.embeddings.embedBatch(units.map((u) => (u.context ? `${u.context}\n${u.text}` : u.text))) : [];
+    const entities = units.length ? await this.entityRows(input, units) : [];
 
     await this.graph.upsertMemoryUnits(input.workspaceId, input.bank.id, units.map((u, i) => ({ unitId: u.id, embedding: vectors[i]! })), Date.now());
     const replaces = [...new Set(items.filter((i) => !i.append).map((i) => i.documentId))];

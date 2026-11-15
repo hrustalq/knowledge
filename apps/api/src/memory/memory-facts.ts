@@ -143,7 +143,8 @@ export function extractionPrompt(items: ReadonlyArray<{ content: string; context
 /**
  * The model's answer, reduced to what it may say: facts under a label that was
  * handed out, each a non-empty sentence of a known type. Anything else is
- * dropped, and an item left with no fact is the caller's to store verbatim.
+ * dropped. An explicit empty list means intentional no-facts; an item absent
+ * from the map is an extraction failure the caller stores verbatim.
  */
 export function readFacts(raw: unknown, count: number): Map<number, Fact[]> {
   const out = new Map<number, Fact[]>();
@@ -165,7 +166,7 @@ export function readFacts(raw: unknown, count: number): Map<number, Fact[]> {
         occurredEnd: dateOf(f?.occurred_end),
       });
     }
-    if (facts.length) out.set(index, facts);
+    if (facts.length || entry.facts.length === 0) out.set(index, facts);
   }
   return out;
 }

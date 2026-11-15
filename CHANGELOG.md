@@ -13,6 +13,13 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Added
+
+- Agents can now retain all successful outcomes, only durable knowledge, or nothing, with independent personal and
+  project memory policies. Recall remains available when retention is off. (#1156)
+
 ## [0.54.1] — 2026-11-14
 
 ### Fixed

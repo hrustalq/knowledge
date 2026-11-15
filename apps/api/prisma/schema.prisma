@@ -1583,6 +1583,8 @@ model AiAgent {
   tools        Json?
   /// string[] of ai_skills ids always attached to this agent's turns.
   skillIds     Json?   @map("skill_ids")
+  /// Retention mode plus optional personal/project overrides. Null = all, the pre-policy behavior.
+  memoryPolicy Json?   @map("memory_policy")
 
   /// ai_models row pinned to this agent. Null falls through to the purpose route,
   /// then the inline config, then env (feature 12's chain). No FK, matching the

@@ -25,9 +25,9 @@ that should become shared knowledge leaves through the capture → merge request
 
 With `MEMORY_ENABLED` and the workspace `memory` section on, the assistant and background agents
 use memory automatically, not only through the external API. Before a turn or run, recall grounds
-the model in two separate contexts; after a successful one, its request and outcome are retained
-under an idempotent `assistant-turn:<message id>` or `agent-run:<run id>` document id. Recall and
-retain failures leave the turn or run itself untouched.
+the model in two separate contexts; after a successful one, its request and outcome are eligible for
+retention under an idempotent `assistant-turn:<message id>` or `agent-run:<run id>` document id.
+Recall and retain failures leave the turn or run itself untouched.
 
 - **Personal:** `agent:<agent key>:user:<user id>` holds that agent's working context for that
   user. `agent_key` + `owner_id` describe it, and only the owner can read it — an admin bypass
@@ -38,10 +38,18 @@ retain failures leave the turn or run itself untouched.
 The two are recalled and retained independently: personal preferences never become project
 requirements merely because both grounded one run. Every recalled block reaches the model through
 `wrapUntrusted`, and ordinary retain still masks, extracts, embeds and consolidates the outcome.
-A viewer recalls but does not retain, matching the public memory API; an editor's turn writes both
-banks. A chat answer visible to a whole group does not recall or retain either scope, since its
-readers may include people outside the owner or project audience. The worker and API use the same
-`MemoryRuntimeService`; no Hindsight sidecar is involved.
+A viewer recalls but does not retain, matching the public memory API; an editor's turn writes each
+scope the policy enables. A chat answer visible to a whole group does not recall or retain either
+scope, since its readers may include people outside the owner or project audience. The worker and
+API use the same `MemoryRuntimeService`; no Hindsight sidecar is involved.
+
+Each agent's `memoryPolicy` controls retention only, with `mode: all | durable | off` and optional
+`personal` and `project` overrides. Missing policy is `all`, exactly the previous behavior; `off`
+skips bank creation and writes without disabling recall. In `durable`, the memorist retains only
+durable preferences, requirements, decisions and lessons: an explicitly empty fact list stores
+nothing. A missing extraction route, spent budget, failed call or unreadable answer still stores
+the masked request/outcome verbatim, so durable filtering is not claimed when extraction could not
+run. The same source id replaces earlier facts on retry, including replacing them with none.
 
 **A bank is one store with several wires.** Each wire keeps its interface exactly — tool names,
 schemas, answer strings, error strings — and underneath is the same bank, resolved by the same

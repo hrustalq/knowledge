@@ -916,6 +916,33 @@
       "updatedAt"
     ]
   },
+  "AgentMemoryMode": {
+    "type": "string",
+    "enum": [
+      "all",
+      "durable",
+      "off"
+    ]
+  },
+  "AgentMemoryPolicy": {
+    "type": "object",
+    "properties": {
+      "mode": {
+        "$ref": "#/components/schemas/AgentMemoryMode"
+      },
+      "personal": {
+        "$ref": "#/components/schemas/AgentMemoryMode"
+      },
+      "project": {
+        "$ref": "#/components/schemas/AgentMemoryMode"
+      }
+    },
+    "required": [
+      "mode",
+      "personal",
+      "project"
+    ]
+  },
   "AgentOutcomeGroup": {
     "type": "object",
     "properties": {
@@ -1674,6 +1701,9 @@
           "type": "string"
         }
       },
+      "memoryPolicy": {
+        "$ref": "#/components/schemas/AgentMemoryPolicy"
+      },
       "modelId": {
         "type": "string",
         "nullable": true
@@ -1786,6 +1816,7 @@
       "instructions",
       "tools",
       "skillIds",
+      "memoryPolicy",
       "modelId",
       "model",
       "providerName",

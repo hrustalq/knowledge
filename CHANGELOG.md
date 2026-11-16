@@ -49,6 +49,8 @@ in the pull request that introduces them — see
   Profile. (#1045)
 - Notifications: the header buttons wrap on a phone instead of scrolling the page sideways (most visible in
   Russian). (#1050)
+- On a phone, "Open in a larger view" on a page's rail widget opens full screen, rail widgets no longer squeeze
+  their content into a short inner scroll, and the revision list hides its hash, message and parents columns. (#1054)
 
 ## [0.56.0] — 2026-11-16
 

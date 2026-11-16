@@ -935,6 +935,9 @@ export type I18nTranslations = {
             "timestampInvalid": string;
             "storeNotReady": string;
             "memoryNotFound": string;
+            "directiveNotFound": string;
+            "mentalModelNotFound": string;
+            "mentalModelIdTaken": string;
             "noReranker": string;
             "windowInvalid": string;
             "operationIdTaken": string;
@@ -959,6 +962,17 @@ export type I18nTranslations = {
             "relationNotFound": string;
             "fileNotFound": string;
             "fileChunk": string;
+            "aliasTaken": string;
+            "aliasNotFound": string;
+            "auditLogNotFound": string;
+            "operationNotTerminal": string;
+            "fileUploadInvalid": string;
+            "fileUploadRequestInvalid": string;
+            "fileTypeUnsupported": string;
+            "fileEmpty": string;
+            "archiveNotFound": string;
+            "archiveTooLarge": string;
+            "transferInvalid": string;
         };
         "memo": {
             "notFound": string;

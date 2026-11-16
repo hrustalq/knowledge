@@ -392,8 +392,10 @@ export class MemoryManagementService {
     }
     for (const model of transfer.mental_models) {
       const id = typeof model.id === 'string' ? model.id : randomUUID();
-      const current = await this.prisma.memoryMentalModel.findUnique({ where: { id } });
-      const modelId = current && current.bankId !== bank.id ? randomUUID() : id;
+      // The archive is the caller's bytes: an id another bank holds gets a fresh id, never that bank's row.
+      const held = await this.prisma.memoryMentalModel.findUnique({ where: { id }, select: { id: true, bankId: true } });
+      const current = held?.bankId === bank.id ? held : null;
+      const modelId = held && !current ? randomUUID() : id;
       const data = {
         workspaceId: bank.workspaceId,
         bankId: bank.id,
@@ -431,10 +433,12 @@ export class MemoryManagementService {
   }
 
   private auditWhere(bank: MemoryBank, query: { action?: string; start_date?: string; end_date?: string }): Prisma.AuditLogWhereInput {
-    return { workspaceId: bank.workspaceId, target: bank.bankId, action: { startsWith: 'memory.', ...(query.action ? { equals: query.action } : {}) }, ...(query.start_date || query.end_date ? { createdAt: { ...(query.start_date ? { gte: new Date(query.start_date) } : {}), ...(query.end_date ? { lt: new Date(query.end_date) } : {}) } } : {}) };
+    // `target` is the bank's text id, which a deleted bank frees for reuse: only rows from this bank's lifetime.
+    const since = query.start_date && new Date(query.start_date) > bank.createdAt ? new Date(query.start_date) : bank.createdAt;
+    return { workspaceId: bank.workspaceId, target: bank.bankId, action: { startsWith: 'memory.', ...(query.action ? { equals: query.action } : {}) }, createdAt: { gte: since, ...(query.end_date ? { lt: new Date(query.end_date) } : {}) } };
   }
 
   private auditResponse(bank: MemoryBank, row: Prisma.AuditLogGetPayload<object>) {
-    return { id: row.id, action: row.action, transport: 'http', bank_id: bank.bankId, started_at: row.createdAt.toISOString(), ended_at: row.createdAt.toISOString(), duration_ms: row.durationMs, metadata: { actor: row.actor, params: row.params, ok: row.ok, error: row.error, ip: row.ip, target: row.target } };
+    return { id: row.id, action: row.action, transport: 'http', bank_id: bank.bankId, started_at: row.createdAt.toISOString(), ended_at: row.createdAt.toISOString(), duration_ms: row.durationMs, metadata: { actor: row.actor, params: row.params, ok: row.ok, error: row.error, target: row.target } }; // no ip: that stays on the admin-only workspace trail
   }
 }

@@ -191,7 +191,7 @@ an `X-Workspace-Id` header.
 | `POST …/files/retain` | editor | asynchronous file parsing and retain |
 | `POST …/document-transfer…`, `POST …/transfer/…`, `POST …/clone` | editor | asynchronous export, import, restore and clone |
 | `GET /v1/default/files/download/{key}` | viewer | a bank-owned transfer archive |
-| `GET …/audit-logs…` | viewer | the bank's platform audit events and daily counts |
+| `GET …/audit-logs…` | viewer | the bank's platform audit events and daily counts, from this bank's lifetime only (a deleted bank frees its id) and without the request IP, which stays on the admin-only workspace trail |
 | `DELETE …/memories` | editor | every memory, or one fact type; the memory tool's file chunks stay (#1018) |
 | `GET`, `PATCH …/config` | viewer, editor | observation scopes/strategies, `enable_observations`, missions and disposition traits; unsupported keys are a 400 |
 | `POST …/consolidate` | editor | one full or targeted consolidation pass as an operation; 409 with the reason while it cannot run |
@@ -646,7 +646,7 @@ This matrix is generated from the routes in `@vectorize-io/hindsight-client` **1
 | `GET …/audit-logs`, `GET …/audit-logs/stats`, `GET …/audit-logs/{id}` | Compatible | phase-6 audit list/read/stats test over `audit_logs` |
 | `GET …/llm-requests`, `GET …/llm-requests/stats` | Non-goal | `ai_usage` has no reliable bank identity; returning it as bank traces would leak or misattribute calls |
 
-Documents and chunks are projections of `memory_units`: document text is the masked `source_text`, and a chunk is one distinct retained source item. Updates replace or increment tags on every source fact and invalidate only memberships whose resolved scopes moved. Transfers zip a versioned `transfer.json` carrying source facts, entity names and optional bank configuration; imports re-embed through the normal retain store without an extraction model. Derived observations are rebuilt, so `include_observations=true` is a 400 rather than a false claim. Audit and LLM history are likewise not transferable. Archives are bank-owned byte rows and disappear with their operation, bank or workspace.
+Documents and chunks are projections of `memory_units`: document text is the masked `source_text`, and a chunk is one distinct retained source item. Updates replace or increment tags on every source fact and invalidate only memberships whose resolved scopes moved. Transfers zip a versioned `transfer.json` carrying source facts, entity names and optional bank configuration; imports re-embed through the normal retain store without an extraction model. A mental-model id in an archive that another bank already holds is imported under a fresh id; an import never updates a row outside its target bank. Derived observations are rebuilt, so `include_observations=true` is a 400 rather than a false claim. Audit and LLM history are likewise not transferable. Archives are bank-owned byte rows and disappear with their operation, bank or workspace.
 
 File retain uses the existing parser registry (plain text/Markdown, PDF, DOCX, PPTX, HTML, tabular formats and configured OCR), always asynchronously. The multipart ceiling is 100 files of at most 16 MiB each; transfer archives are at most 64 MiB compressed or inflated. Personal-bank ownership and project visibility apply to source, target and download alike; restore and clone inherit the source bank's owner/project binding rather than trusting archive metadata.
 

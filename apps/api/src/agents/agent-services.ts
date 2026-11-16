@@ -1,16 +1,40 @@
 import { createHash } from 'node:crypto';
-import { HttpException, HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
+import {
+  HttpException,
+  HttpStatus,
+  Inject,
+  Injectable,
+  Logger,
+  Optional,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AgentRun } from '@prisma/client';
-import type { ChatCompletionFunctionTool, ChatCompletionMessageParam } from 'openai/resources/chat/completions';
-import { AGENT_RUN_MAX_DOCUMENTS, type AgentFinding, type AgentRunDetails, type AgentRunInput, type BuiltInAgentKey } from '@knowledge/contracts';
+import type {
+  ChatCompletionFunctionTool,
+  ChatCompletionMessageParam,
+} from 'openai/resources/chat/completions';
+import {
+  AGENT_RUN_MAX_DOCUMENTS,
+  type AgentFinding,
+  type AgentRunDetails,
+  type AgentRunInput,
+  type BuiltInAgentKey,
+} from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
-import { EMBEDDING_PROVIDER, type EmbeddingProvider } from '../embedding/embedding.provider.js';
+import {
+  EMBEDDING_PROVIDER,
+  type EmbeddingProvider,
+} from '../embedding/embedding.provider.js';
 import { t } from '../i18n/t.js';
 import { wrapUntrusted } from '../common/untrusted.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { GraphService } from '../graph/graph.service.js';
-import { AssistantClient, ProviderAccountError, type AiCallContext, type ToolExecutor } from '../assistant/assistant.client.js';
+import {
+  AssistantClient,
+  ProviderAccountError,
+  type AiCallContext,
+  type ToolExecutor,
+} from '../assistant/assistant.client.js';
 import { DecisionClient } from '../assistant/decision.client.js';
 import { ConflictsService } from '../conflicts/conflicts.service.js';
 import { AssistantReadToolsService } from '../assistant/assistant-read-tools.service.js';
@@ -20,13 +44,19 @@ import { PullRequestService } from '../connectors/code-research/pull-request.ser
 import { ApiDriftService } from '../connectors/code-research/api-drift.service.js';
 import { ComponentUsagesService } from '../components/component-usages.service.js';
 import { SearchService } from '../search/search.service.js';
-import { WORKSPACE_AUDIENCE, type AccessScope } from '../permissions/access-scope.js';
+import {
+  WORKSPACE_AUDIENCE,
+  type AccessScope,
+} from '../permissions/access-scope.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { AccessService } from '../auth/access.service.js';
 import { ApiFixturesService } from '../api-specs/api-fixtures.service.js';
 import { ApiTestSuitesService } from '../api-specs/api-test-suites.service.js';
 import { ApiSpecDiffService } from '../api-specs/api-spec-diff.service.js';
-import { AgentRegistryService, type ResolvedAgent } from './agent-registry.service.js';
+import {
+  AgentRegistryService,
+  type ResolvedAgent,
+} from './agent-registry.service.js';
 import { AiSkillsService } from '../ai/ai-skills.service.js';
 import { AgentLearningsService } from '../ai/agent-learnings.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
@@ -35,6 +65,10 @@ import { TemplatesService } from '../templates/templates.service.js';
 import { CompareService } from '../documents/compare.service.js';
 import { TrackerRegistry } from '../connectors/tracker-registry.service.js';
 import type { Principal } from '../auth/principal.js';
+import { currentAgentRun } from '../ai/agent-run-context.js';
+// A value import, not `import type`: DI reads the constructor's emitted type, and a type-only
+// import emits `Object`, which `@Optional()` silently resolves to undefined (#1167).
+import { MemoryRuntimeService } from '../memory/memory-runtime.service.js';
 
 export interface AgentRunResult {
   summary: string;
@@ -72,9 +106,14 @@ export type AgentReporter = (update: {
  */
 export interface AgentRunner {
   key: BuiltInAgentKey;
-  run(svc: AgentServices, run: AgentRun, agent: ResolvedAgent, principal: Principal, report: AgentReporter): Promise<AgentRunResult>;
+  run(
+    svc: AgentServices,
+    run: AgentRun,
+    agent: ResolvedAgent,
+    principal: Principal,
+    report: AgentReporter,
+  ): Promise<AgentRunResult>;
 }
-
 
 /** Findings kept from one run. A wall of findings is not a review, it is noise. */
 export const MAX_FINDINGS = 20;
@@ -98,9 +137,14 @@ interface RunLedger {
  * executor asked for guidance. Untrusted content never reaches it — that is
  * what makes two runs over different pages comparable as one prompt.
  */
-export function promptHashOf(instructions: string, trusted: Iterable<string>): string {
+export function promptHashOf(
+  instructions: string,
+  trusted: Iterable<string>,
+): string {
   const parts = [...new Set(trusted)].filter((p) => p.trim() !== '').sort();
-  return createHash('sha256').update(JSON.stringify([instructions, ...parts])).digest('hex');
+  return createHash('sha256')
+    .update(JSON.stringify([instructions, ...parts]))
+    .digest('hex');
 }
 
 /**
@@ -115,12 +159,21 @@ export class AgentServices {
   readonly logger = new Logger('AgentExecutor');
   /** In-flight runs' ledgers, by run id. A run's entry lives from its first prompt to its stamp. */
   private readonly ledgers = new Map<string, RunLedger>();
+  /** In-flight runs' memory recall, by run id: asked on a run's first model call, so a runner that never calls one never recalls. */
+  private readonly memoryGroundings = new Map<string, () => Promise<string>>();
+  /**
+   * The model client every runner calls (#1167): inside a run, each call's last user turn
+   * carries the run's memory recall. One wrapper, so a runner — or a helper it hands this
+   * client to — cannot skip it. Services with their own client (`GlossaryService.suggest`,
+   * memory's own extraction) are not wrapped.
+   */
+  readonly client: Pick<AssistantClient, 'chat' | 'runWithTools'>;
 
   constructor(
     readonly prisma: PrismaService,
     readonly graph: GraphService,
     readonly registry: AgentRegistryService,
-    readonly client: AssistantClient,
+    assistant: AssistantClient,
     readonly readTools: AssistantReadToolsService,
     readonly skills: AiSkillsService,
     readonly documents: DocumentsService,
@@ -144,7 +197,21 @@ export class AgentServices {
     readonly fixtures: ApiFixturesService,
     readonly decision: DecisionClient,
     readonly specDiff: ApiSpecDiffService,
-  ) {}
+    @Optional() readonly memory?: MemoryRuntimeService,
+  ) {
+    this.client = {
+      chat: async (call, messages, opts) =>
+        assistant.chat(call, await this.withMemoryGrounding(messages), opts),
+      runWithTools: async (call, messages, tools, execute, opts) =>
+        assistant.runWithTools(
+          call,
+          await this.withMemoryGrounding(messages),
+          tools,
+          execute,
+          opts,
+        ),
+    };
+  }
 
   /**
    * What a background agent is told beyond its instructions: the skills it
@@ -164,13 +231,21 @@ export class AgentServices {
     return ledger.guidance;
   }
 
-  private async renderGuidance(run: AgentRun, agent: ResolvedAgent, ledger: RunLedger): Promise<string> {
+  private async renderGuidance(
+    run: AgentRun,
+    agent: ResolvedAgent,
+    ledger: RunLedger,
+  ): Promise<string> {
     const [skills, projectIds] = await Promise.all([
       this.skills.forTurn(run.workspaceId, '', agent.skillIds),
       this.runProjects(run),
     ]);
     const [learnings, dismissed] = await Promise.all([
-      this.learnings.promptFor({ workspaceId: run.workspaceId, agentKey: agent.key, projectIds }),
+      this.learnings.promptFor({
+        workspaceId: run.workspaceId,
+        agentKey: agent.key,
+        projectIds,
+      }),
       this.learnings.dismissedPrompt(run.workspaceId, agent.key),
     ]);
     const skillText = this.skills.renderPrompt(skills);
@@ -205,7 +280,11 @@ export class AgentServices {
    * it must not fail a run that did its work.
    */
   protected async stamp(run: AgentRun, agent: ResolvedAgent): Promise<void> {
-    const ledger = this.ledgers.get(run.id) ?? { guidance: null, trusted: new Set<string>(), learningIds: [] };
+    const ledger = this.ledgers.get(run.id) ?? {
+      guidance: null,
+      trusted: new Set<string>(),
+      learningIds: [],
+    };
     this.ledgers.delete(run.id);
     try {
       await this.prisma.agentRun.updateMany({
@@ -218,7 +297,9 @@ export class AgentServices {
         },
       });
     } catch (error) {
-      this.logger.warn(`Agent run ${run.id} could not record its attribution: ${String(error)}`);
+      this.logger.warn(
+        `Agent run ${run.id} could not record its attribution: ${String(error)}`,
+      );
     }
   }
 
@@ -251,12 +332,47 @@ export class AgentServices {
    * again on every call through `ctx.audience`.
    */
   async runScope(run: AgentRun, principal: Principal): Promise<AccessScope> {
-    return this.permissions.audienceScope(await this.permissions.scopeFor(principal, run.workspaceId), WORKSPACE_AUDIENCE);
+    return this.permissions.audienceScope(
+      await this.permissions.scopeFor(principal, run.workspaceId),
+      WORKSPACE_AUDIENCE,
+    );
   }
 
   /** The tool context every agent loop runs with: the owner, clamped like {@link runScope}. */
   toolCtx(run: AgentRun, principal: Principal) {
-    return { principal, workspaceId: run.workspaceId, audience: WORKSPACE_AUDIENCE, channel: 'agent' as const };
+    return {
+      principal,
+      workspaceId: run.workspaceId,
+      audience: WORKSPACE_AUDIENCE,
+      channel: 'agent' as const,
+    };
+  }
+
+  /** `recall` runs at most once per run, on its first model call; a failure grounds nothing. */
+  setMemoryGrounding(runId: string, recall: () => Promise<string>): void {
+    let once: Promise<string> | undefined;
+    this.memoryGroundings.set(runId, () => (once ??= recall().catch(() => '')));
+  }
+
+  clearMemoryGrounding(runId: string): void {
+    this.memoryGroundings.delete(runId);
+  }
+
+  private async withMemoryGrounding(
+    messages: ChatCompletionMessageParam[],
+  ): Promise<ChatCompletionMessageParam[]> {
+    const runId = currentAgentRun()?.agentRunId;
+    const recall = runId ? this.memoryGroundings.get(runId) : undefined;
+    const memory = recall ? await recall() : '';
+    if (!memory) return messages;
+    const last = messages.at(-1);
+    if (last?.role === 'user' && typeof last.content === 'string') {
+      return [
+        ...messages.slice(0, -1),
+        { role: 'user', content: `${memory}\n\n${last.content}` },
+      ];
+    }
+    return [...messages, { role: 'user', content: memory }];
   }
 
   /**
@@ -272,13 +388,23 @@ export class AgentServices {
     execute: ToolExecutor,
     tools?: ChatCompletionFunctionTool[],
   ): Promise<string> {
-    if (agent.missing.includes('tools')) return this.client.chat(call, messages, { json: true });
-    return (await this.client.runWithTools(call, messages, tools ?? this.readTools.definitions(), execute, { jsonFinalRound: true })).content;
+    if (agent.missing.includes('tools'))
+      return this.client.chat(call, messages, { json: true });
+    return (
+      await this.client.runWithTools(
+        call,
+        messages,
+        tools ?? this.readTools.definitions(),
+        execute,
+        { jsonFinalRound: true },
+      )
+    ).content;
   }
 
   /** The read tools as the run's owner, clamped like {@link runScope}. */
   readTool(run: AgentRun, principal: Principal) {
-    return (name: string, args: Record<string, unknown>) => this.readTools.execute(name, args, this.toolCtx(run, principal));
+    return (name: string, args: Record<string, unknown>) =>
+      this.readTools.execute(name, args, this.toolCtx(run, principal));
   }
 
   /**
@@ -287,13 +413,23 @@ export class AgentServices {
    * `budgetSpent` — when the workspace's budget is spent (429). Says so on the
    * run; anything else costs the caller one item, not the rest.
    */
-  async stopsPass(error: unknown, report: AgentReporter, budgetSpent?: () => string): Promise<boolean> {
-    if (budgetSpent && error instanceof HttpException && error.getStatus() === HttpStatus.TOO_MANY_REQUESTS) {
+  async stopsPass(
+    error: unknown,
+    report: AgentReporter,
+    budgetSpent?: () => string,
+  ): Promise<boolean> {
+    if (
+      budgetSpent &&
+      error instanceof HttpException &&
+      error.getStatus() === HttpStatus.TOO_MANY_REQUESTS
+    ) {
       await report({ warning: budgetSpent() });
       return true;
     }
     if (error instanceof ProviderAccountError) {
-      await report({ warning: t('agent.warning.stopped', { error: error.message }) });
+      await report({
+        warning: t('agent.warning.stopped', { error: error.message }),
+      });
       return true;
     }
     return false;
@@ -313,7 +449,9 @@ export function reasonOf(error: unknown): string {
  */
 export function pageScope(run: AgentRun): { id?: { in: string[] } } {
   const ids = ((run.input ?? {}) as AgentRunInput).documentIds;
-  return Array.isArray(ids) && ids.length > 0 ? { id: { in: ids.slice(0, AGENT_RUN_MAX_DOCUMENTS) } } : {};
+  return Array.isArray(ids) && ids.length > 0
+    ? { id: { in: ids.slice(0, AGENT_RUN_MAX_DOCUMENTS) } }
+    : {};
 }
 
 /**
@@ -324,9 +462,14 @@ export function pageScope(run: AgentRun): { id?: { in: string[] } } {
  * executor can render the payload any other way.
  */
 export function runBrief(input: unknown): string {
-  const { note, payload } = (input ?? {}) as { note?: unknown; payload?: unknown };
+  const { note, payload } = (input ?? {}) as {
+    note?: unknown;
+    payload?: unknown;
+  };
   return (
-    (typeof note === 'string' && note ? `Extra instructions: ${note}\n\n` : '') +
+    (typeof note === 'string' && note
+      ? `Extra instructions: ${note}\n\n`
+      : '') +
     (typeof payload === 'string' && payload
       ? `What started this run:\n${wrapUntrusted(payload, 'webhook', 'webhook')}\n\n`
       : '')

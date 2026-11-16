@@ -832,12 +832,23 @@ export const envSchema = z.object({
   MEMORY_RETAIN_RATE_PER_MIN: z.coerce.number().int().min(1).default(120),
   /** Recall requests one API key (or person) may send a minute. */
   MEMORY_RECALL_RATE_PER_MIN: z.coerce.number().int().min(1).default(300),
+  /** Optional cross-encoder after recall's RRF fusion. The base URL includes `/v1`; the provider appends `/rerank`. */
+  MEMORY_RERANKER_PROVIDER: z.enum(['none', 'openai-compatible']).default('none'),
+  MEMORY_RERANKER_BASE_URL: z.union([z.literal(''), z.string().url()]).optional().default(''),
+  MEMORY_RERANKER_MODEL: z.string().optional().default(''),
+  MEMORY_RERANKER_API_KEY: z.string().optional().default(''),
+  MEMORY_RERANKER_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  MEMORY_RERANKER_CANDIDATE_CAP: z.coerce.number().int().min(1).max(100).default(50),
+  /** How the endpoint's `relevance_score` reads: `logit` (raw cross-encoder output, sigmoid-normalized) or `normalized` (already 0–1: Cohere, Jina, LiteLLM, Infinity). */
+  MEMORY_RERANKER_SCORE: z.enum(['logit', 'normalized']).default('logit'),
   /** Reflect requests one API key (or person) may send a minute. Each is a model call. */
   MEMORY_REFLECT_RATE_PER_MIN: z.coerce.number().int().min(1).default(30),
   /** How long an async retain may stay claimed before the sweeper takes it for a dead worker's. */
   MEMORY_OPERATION_TIMEOUT_MS: z.coerce.number().int().min(1000).default(600_000),
   /** Days a finished operation's row is kept before it is purged. */
   MEMORY_OPERATION_RETENTION_DAYS: z.coerce.number().int().min(1).default(7),
+  /** Default minimum seconds between automatic refreshes of one mental model; a model may override it. */
+  MEMORY_MENTAL_MODEL_MIN_REFRESH_INTERVAL_SECONDS: z.coerce.number().int().min(0).max(31_536_000).default(300),
   /**
    * Consolidation (#993): model calls one bank may make a UTC day to fold its
    * facts into observations. Low on purpose: each is a paid call, and the

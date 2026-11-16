@@ -1389,6 +1389,8 @@ export type AiUsageOperation =
   | 'memory-recall'
   /** Answering a question over a memory bank's recalled memories (#986): one row per reflect. */
   | 'memory-reflect'
+  /** Generating a saved mental model, or structured output from its merged delta document (#1160). */
+  | 'memory-mental-model'
   /** The `consolidator` folding a bank's new facts into observations (#993). One row per batch, billed to no person (the zeros stub). */
   | 'memory-consolidate'
   /** Asking the decision model whether a new fact bears on an existing observation (#993), before consolidation. One row per pair. */
@@ -2016,6 +2018,27 @@ export const ASSISTANT_WRITE_TOOL_NAMES = [
   'task_comment',
 ] as const;
 
+export const AGENT_MEMORY_MODES = ['all', 'durable', 'off'] as const;
+export type AgentMemoryMode = (typeof AGENT_MEMORY_MODES)[number];
+
+/** Retention only: recall is controlled by the workspace's memory switch. Scope values override `mode`. */
+export interface AgentMemoryPolicy {
+  mode: AgentMemoryMode;
+  personal: AgentMemoryMode;
+  project: AgentMemoryMode;
+}
+
+/** A missing or malformed stored value retains the pre-policy behavior rather than disabling memory. */
+export function resolveAgentMemoryPolicy(value: unknown): AgentMemoryPolicy {
+  const input = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  const mode = (AGENT_MEMORY_MODES as readonly unknown[]).includes(input.mode) ? input.mode as AgentMemoryMode : 'all';
+  return {
+    mode,
+    personal: (AGENT_MEMORY_MODES as readonly unknown[]).includes(input.personal) ? input.personal as AgentMemoryMode : mode,
+    project: (AGENT_MEMORY_MODES as readonly unknown[]).includes(input.project) ? input.project as AgentMemoryMode : mode,
+  };
+}
+
 /** Effective configuration of one agent: the code default ⊕ this workspace's override row. */
 export interface AiAgentSummary {
   /** Null until the workspace has actually overridden something. */
@@ -2027,6 +2050,7 @@ export interface AiAgentSummary {
   instructions: string;
   tools: string[];
   skillIds: string[];
+  memoryPolicy: AgentMemoryPolicy;
   /** The model pinned to this agent; null falls through to the purpose route. */
   modelId: string | null;
   /** What it runs on now, pinned or not: the code, and the named provider serving it. */

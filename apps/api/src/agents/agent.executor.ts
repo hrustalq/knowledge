@@ -1,11 +1,19 @@
 import { Injectable } from '@nestjs/common';
 import type { AgentRun } from '@prisma/client';
+import { AGENT_RUN_MAX_DOCUMENTS } from '@knowledge/contracts';
 import { t } from '../i18n/t.js';
 import { withAgentRun } from '../ai/agent-run-context.js';
-import { projectOfRun } from '../ai/run-project.js';
+import { projectOfRun, subjectPagesOfRun } from '../ai/run-project.js';
+import { isPrivateRun } from '../ai/run-privacy.js';
 import type { Principal } from '../auth/principal.js';
+import { WORKSPACE_AUDIENCE, visibilityWhere } from '../permissions/access-scope.js';
 import type { ResolvedAgent } from './agent-registry.service.js';
-import { AgentServices, type AgentReporter, type AgentRunResult } from './agent-services.js';
+import {
+  AgentServices,
+  runBrief,
+  type AgentReporter,
+  type AgentRunResult,
+} from './agent-services.js';
 import { AGENT_RUNNERS } from './agent-runners.js';
 
 /**
@@ -31,17 +39,77 @@ export class AgentExecutor extends AgentServices {
    * calls an API-shaped service (the glossarist calls the same `suggest` the
    * settings page calls) bills and authorises as that same person.
    */
-  async run(run: AgentRun, agent: ResolvedAgent, principal: Principal, report: AgentReporter): Promise<AgentRunResult> {
+  async run(
+    run: AgentRun,
+    agent: ResolvedAgent,
+    principal: Principal,
+    report: AgentReporter,
+  ): Promise<AgentRunResult> {
     // Every model call below is billed to this run (#305), and the run is
     // stamped with what produced it whether it succeeds or fails.
     const projectId = await this.attribute(run);
-    return withAgentRun({ agentKey: agent.key, agentRunId: run.id, projectId }, async () => {
-      try {
-        return await this.dispatch(run, agent, principal, report);
-      } finally {
-        await this.stamp(run, agent);
-      }
-    });
+    return withAgentRun(
+      { agentKey: agent.key, agentRunId: run.id, projectId },
+      async () => {
+        try {
+          const brief = runBrief(run.input);
+          const memory = this.memory;
+          if (memory)
+            this.setMemoryGrounding(run.id, async () => {
+              // Recall needs a real request to search on (#1167): the brief, else the
+              // titles of the pages the run is about. Neither = no recall; the
+              // agent's description would be the same query every run.
+              const query = brief || (await this.subjectTitles(run, principal));
+              if (!query) return '';
+              // A run's summary and findings are listed to the workspace, so it
+              // recalls only project banks every member could read — never the
+              // owner's personal bank, never a restricted project's.
+              const grounding = await memory.ground({
+                principal,
+                workspaceId: run.workspaceId,
+                agentKey: agent.key,
+                projectId,
+                userId: principal.userId,
+                query,
+                audience: WORKSPACE_AUDIENCE,
+              });
+              return grounding.text;
+            });
+          const result = await this.dispatch(run, agent, principal, report);
+          // Fire-and-forget, like an assistant turn: retention never fails or
+          // delays a run that finished. Same audience as the recall; a private
+          // run (a memo's, a restricted project's drift check) is its owner's
+          // alone, so it is not copied into a shared bank.
+          void memory
+            ?.remember({
+              principal,
+              workspaceId: run.workspaceId,
+              agentKey: agent.key,
+              projectId,
+              userId: principal.userId,
+              sourceId: run.id,
+              sourceKind: 'agent-run',
+              question:
+                brief || run.subjectKey || agent.description || agent.name,
+              answer: [
+                result.summary,
+                ...result.findings.map((finding) => JSON.stringify(finding)),
+              ].join('\n\n'),
+              audience: WORKSPACE_AUDIENCE,
+              shareWithProject: !isPrivateRun(run),
+            })
+            .catch((error: unknown) =>
+              this.logger.warn(
+                `Agent run ${run.id} memory retention failed: ${String(error)}`,
+              ),
+            );
+          return result;
+        } finally {
+          this.clearMemoryGrounding(run.id);
+          await this.stamp(run, agent);
+        }
+      },
+    );
   }
 
   /**
@@ -53,20 +121,47 @@ export class AgentExecutor extends AgentServices {
     if (run.projectId) return run.projectId;
     try {
       const projectId = await projectOfRun(this.prisma, run);
-      if (projectId) await this.prisma.agentRun.updateMany({ where: { id: run.id, projectId: null }, data: { projectId } });
+      if (projectId)
+        await this.prisma.agentRun.updateMany({
+          where: { id: run.id, projectId: null },
+          data: { projectId },
+        });
       return projectId;
     } catch (error) {
-      this.logger.warn(`Agent run ${run.id} could not be attributed to a project: ${String(error)}`);
+      this.logger.warn(
+        `Agent run ${run.id} could not be attributed to a project: ${String(error)}`,
+      );
       return null;
     }
   }
 
-  private async dispatch(run: AgentRun, agent: ResolvedAgent, principal: Principal, report: AgentReporter): Promise<AgentRunResult> {
+  /** The titles of the run's subject pages the whole workspace may open — what a brief-less run recalls on. */
+  private async subjectTitles(run: AgentRun, principal: Principal): Promise<string> {
+    const ids = await subjectPagesOfRun(this.prisma, run);
+    if (!ids.length) return '';
+    const pages = await this.prisma.document.findMany({
+      where: {
+        id: { in: ids.slice(0, AGENT_RUN_MAX_DOCUMENTS) },
+        workspaceId: run.workspaceId,
+        ...visibilityWhere(await this.runScope(run, principal)),
+      },
+      select: { title: true },
+    });
+    return pages.map((page) => page.title).join('\n');
+  }
+
+  private async dispatch(
+    run: AgentRun,
+    agent: ResolvedAgent,
+    principal: Principal,
+    report: AgentReporter,
+  ): Promise<AgentRunResult> {
     const runner = AGENT_RUNNERS.get(agent.key);
     // The API refuses an agent with no runner before queueing it (RUNNABLE_AGENTS);
     // anything reaching here got past that, so failing loudly beats running an
     // agent as if it had done something.
-    if (!runner) throw new Error(t('error.ai.agentNoExecutor', { key: agent.key }));
+    if (!runner)
+      throw new Error(t('error.ai.agentNoExecutor', { key: agent.key }));
     return runner.run(this, run, agent, principal, report);
   }
 }

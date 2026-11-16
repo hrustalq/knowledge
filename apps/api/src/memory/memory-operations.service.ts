@@ -1,16 +1,17 @@
-import { ConflictException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, type MemoryBank, type MemoryOperation } from '@prisma/client';
-import { UUID_RE, type Locale } from '@knowledge/contracts';
+import { UUID_RE } from '@knowledge/contracts';
 import { randomUUID } from 'node:crypto';
 import { requeueStale, staleFailure } from '../common/requeue-stale.js';
 import { withSubjectLock } from '../common/subject-lock.js';
 import type { Env } from '../config/env.js';
-import { asLocale } from '../i18n/locale.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { MemoryConsolidationService } from './memory-consolidation.service.js';
-import type { RetainItem } from './memory-facts.js';
+import { readObservationScopes, type RetainItem } from './memory-facts.js';
+import { MemoryMentalModelsService } from './memory-mental-models.service.js';
+import { MemoryManagementService } from './memory-management.service.js';
 import { maskItems, MemoryRetainService } from './memory-retain.service.js';
 import { MemoryProducer } from './memory.producer.js';
 import type { CancelOperationResponse, ConsolidationResponse, OperationResponse, OperationStatusResponse, OperationsListResponse } from './memory-wire.js';
@@ -27,8 +28,10 @@ const MAX_ATTEMPTS = 3;
 const SWEEP_PAGE = 50;
 /** Calls one `POST …/consolidate` may spend, at most; the daily cap still applies. */
 const CONSOLIDATE_BATCHES = 10;
+/** A row as every read but the worker's sees it: the payload can hold a whole upload, and no answer shows it. */
+const NO_PAYLOAD = { payload: true } as const;
 
-function operation(row: MemoryOperation): OperationResponse {
+function operation(row: Omit<MemoryOperation, 'payload'>): OperationResponse {
   return {
     id: row.id,
     task_type: row.type,
@@ -41,6 +44,7 @@ function operation(row: MemoryOperation): OperationResponse {
     status: wireStatus(row),
     error_message: row.error,
     retry_count: Math.max(0, row.attempts - 1),
+    next_retry_at: row.notBefore?.toISOString() ?? null,
   };
 }
 
@@ -63,6 +67,8 @@ export class MemoryOperationsService {
     private readonly prisma: PrismaService,
     private readonly retainer: MemoryRetainService,
     private readonly consolidation: MemoryConsolidationService,
+    private readonly mentalModels: MemoryMentalModelsService,
+    private readonly management: MemoryManagementService,
     private readonly producer: MemoryProducer,
     config: ConfigService<Env, true>,
   ) {
@@ -76,7 +82,7 @@ export class MemoryOperationsService {
    * it already made and creates no work; an id another operation holds is a 409.
    * The items are masked here, before the row exists.
    */
-  async submit(bank: MemoryBank, input: { items: RetainItem[]; userId: string; locale: Locale; operationId?: string | null }): Promise<string> {
+  async submit(bank: MemoryBank, input: { items: RetainItem[]; userId: string; operationId?: string | null }): Promise<string> {
     const id = input.operationId ?? randomUUID();
     try {
       await this.prisma.memoryOperation.create({
@@ -87,7 +93,6 @@ export class MemoryOperationsService {
           payload: maskItems(input.items) as unknown as Prisma.InputJsonArray,
           itemsCount: input.items.length,
           createdBy: input.userId,
-          locale: input.locale,
         },
       });
     } catch (e) {
@@ -107,15 +112,19 @@ export class MemoryOperationsService {
    * the bank, so a client is told why instead of polling an operation that
    * does nothing. A pass already waiting is returned, not doubled.
    */
-  async consolidate(bank: MemoryBank, input: { userId: string; locale: Locale }): Promise<ConsolidationResponse> {
+  async consolidate(bank: MemoryBank, input: { userId: string; observationScopes?: unknown }): Promise<ConsolidationResponse> {
+    const parsed = readObservationScopes(input.observationScopes);
+    if (parsed != null && !Array.isArray(parsed)) throw new BadRequestException(t('error.memory.configValueInvalid', { key: 'observation_scopes', type: 'a list of string tag lists or null' }));
+    const observationScopes = parsed as string[][] | undefined;
     const blocked = await this.consolidation.blocker(bank);
     if (blocked) throw new ConflictException(t(blocked === 'disabled' ? 'error.memory.observationsOff' : 'error.memory.noConsolidationModel'));
-    const pending = await this.consolidation.pending(bank.id);
+    const pending = await this.consolidation.pending(bank.id, observationScopes);
+    const payload = { observation_scopes: observationScopes ?? null };
     const { id, deduplicated } = await withSubjectLock(this.prisma, `memory-consolidate:${bank.id}`, async () => {
-      const waiting = await this.prisma.memoryOperation.findFirst({ where: { bankId: bank.id, type: 'consolidation', status: 'queued' }, select: { id: true } });
+      const waiting = await this.prisma.memoryOperation.findFirst({ where: { bankId: bank.id, type: 'consolidation', status: 'queued', payload: { equals: payload } }, select: { id: true } });
       if (waiting) return { id: waiting.id, deduplicated: true };
       const row = await this.prisma.memoryOperation.create({
-        data: { workspaceId: bank.workspaceId, bankId: bank.id, type: 'consolidation', payload: [], itemsCount: pending, createdBy: input.userId, locale: input.locale },
+        data: { workspaceId: bank.workspaceId, bankId: bank.id, type: 'consolidation', payload, itemsCount: pending, createdBy: input.userId },
       });
       return { id: row.id, deduplicated: false };
     });
@@ -123,8 +132,11 @@ export class MemoryOperationsService {
     return { operation_id: id, deduplicated };
   }
 
-  /** The worker's half: claim, retain, settle. A row another worker claimed, or that is no longer queued, is left alone. */
+  /** The worker's half: claim, retain, settle. Mental-model operations serialize themselves per model. */
   async run(operationId: string): Promise<void> {
+    const waiting = await this.prisma.memoryOperation.findUnique({ where: { id: operationId }, select: { status: true, type: true } });
+    if (!waiting || waiting.status !== 'queued') return;
+    if (waiting.type === 'create_mental_model' || waiting.type === 'refresh_mental_model') return this.mentalModels.execute(operationId);
     const claimed = await this.prisma.memoryOperation.updateMany({
       where: { id: operationId, status: 'queued' },
       data: { status: 'running', startedAt: new Date(), attempts: { increment: 1 } },
@@ -132,13 +144,36 @@ export class MemoryOperationsService {
     if (claimed.count === 0) return;
     const row = await this.prisma.memoryOperation.findUnique({ where: { id: operationId }, include: { bank: true } });
     if (!row) return;
+    // A heartbeat while it runs (#1165): the sweeper re-queues a running row only once it has gone quiet for the timeout,
+    // so an import that outlasts the timeout is not run twice. A lost worker stops beating, and the row is re-queued.
+    const beat = setInterval(() => {
+      void this.prisma.memoryOperation.updateMany({ where: { id: row.id, status: 'running' }, data: { updatedAt: new Date() } }).catch(() => undefined);
+    }, Math.max(1_000, Math.floor(this.timeoutMs / 3)));
+    try {
+      await this.execute(row);
+    } finally {
+      clearInterval(beat);
+    }
+  }
+
+  private async execute(row: MemoryOperation & { bank: MemoryBank }): Promise<void> {
     if (row.type === 'consolidation') return this.runConsolidation(row);
+    if (row.type !== 'retain') {
+      try {
+        const result = await this.management.execute(row);
+        await this.settle(row.id, { status: 'completed', payload: [], result: result ?? Prisma.DbNull });
+      } catch (e) {
+        this.logger.warn(`Memory operation ${row.id} failed: ${(e as Error).message}`);
+        await this.settle(row.id, { status: 'failed', error: (e as Error).message.slice(0, 1000), payload: [] });
+      }
+      await this.management.discardUpload(row);
+      return;
+    }
     try {
       await this.retainer.retain({
         workspaceId: row.workspaceId,
         bank: row.bank,
         userId: row.createdBy,
-        locale: asLocale(row.locale),
         items: row.payload as unknown as RetainItem[],
         operationId: row.id,
       });
@@ -153,7 +188,8 @@ export class MemoryOperationsService {
   /** A pass that read nothing because something stopped it failed, and says what; one that read facts completed. */
   private async runConsolidation(row: MemoryOperation & { bank: MemoryBank }): Promise<void> {
     try {
-      const done = await this.consolidation.pass(row.bank, { maxBatches: CONSOLIDATE_BATCHES });
+      const payload = row.payload as { observation_scopes?: string[][] | null };
+      const done = await this.consolidation.pass(row.bank, { maxBatches: CONSOLIDATE_BATCHES, observationScopes: Array.isArray(row.payload) ? undefined : payload.observation_scopes });
       if (done.facts === 0 && done.stopped) await this.settle(row.id, { status: 'failed', error: t(`error.memory.consolidationStopped.${done.stopped === 'no-model' ? 'noModel' : done.stopped}`), payload: [] });
       else await this.settle(row.id, { status: 'completed', payload: [] });
     } catch (e) {
@@ -162,7 +198,7 @@ export class MemoryOperationsService {
     }
   }
 
-  private async settle(id: string, data: { status: Status; error?: string; payload: [] }): Promise<void> {
+  private async settle(id: string, data: { status: Status; error?: string; payload: []; result?: Prisma.InputJsonObject | typeof Prisma.DbNull }): Promise<void> {
     await this.prisma.memoryOperation.updateMany({ where: { id, status: 'running' }, data: { ...data, completedAt: new Date() } });
   }
 
@@ -176,7 +212,7 @@ export class MemoryOperationsService {
     const limit = query.limit ?? 20;
     const offset = query.offset ?? 0;
     const [rows, total] = await Promise.all([
-      this.prisma.memoryOperation.findMany({ where, orderBy: { createdAt: 'desc' }, skip: offset, take: limit }),
+      this.prisma.memoryOperation.findMany({ where, omit: NO_PAYLOAD, orderBy: { createdAt: 'desc' }, skip: offset, take: limit }),
       this.prisma.memoryOperation.count({ where }),
     ]);
     return { bank_id: bank.bankId, total, limit, offset, operations: rows.map(operation) };
@@ -184,10 +220,19 @@ export class MemoryOperationsService {
 
   /** One operation of this bank. An id it does not hold — never made, or purged since — reads `not_found`, as Hindsight's does. */
   async status(bank: MemoryBank, operationId: string): Promise<OperationStatusResponse> {
-    const row = UUID_RE.test(operationId) ? await this.prisma.memoryOperation.findFirst({ where: { id: operationId, bankId: bank.id } }) : null;
+    const row = UUID_RE.test(operationId) ? await this.prisma.memoryOperation.findFirst({ where: { id: operationId, bankId: bank.id }, omit: NO_PAYLOAD }) : null;
     if (!row) return { operation_id: operationId, status: 'not_found' };
     const { id, task_type, operation_type, created_at, updated_at, error_message, retry_count } = operation(row);
-    return { operation_id: id, id, status: wireStatus(row), operation_type, task_type, created_at, updated_at, completed_at: row.completedAt?.toISOString() ?? null, error_message, retry_count };
+    return { operation_id: id, id, status: wireStatus(row), operation_type, task_type, created_at, updated_at, completed_at: row.completedAt?.toISOString() ?? null, error_message, retry_count, result_metadata: row.result as Record<string, unknown> | null };
+  }
+
+  async delete(bank: MemoryBank, operationId: string) {
+    const row = UUID_RE.test(operationId) ? await this.prisma.memoryOperation.findFirst({ where: { id: operationId, bankId: bank.id }, select: { id: true, status: true, workspaceId: true, bankId: true } }) : null;
+    if (!row) throw new NotFoundException(t('error.memory.operationNotFound', { id: operationId }));
+    if (!['completed', 'failed', 'cancelled'].includes(row.status)) throw new ConflictException(t('error.memory.operationNotTerminal', { id: operationId }));
+    await this.prisma.memoryOperation.delete({ where: { id: row.id } });
+    await this.management.purgeOperations([row]);
+    return { success: true, message: `Operation ${operationId} deleted`, operation_id: operationId };
   }
 
   /** Cancels an operation no worker has claimed. One guarded statement: a claim that got there first wins. */
@@ -196,6 +241,7 @@ export class MemoryOperationsService {
       ? await this.prisma.memoryOperation.updateMany({ where: { id: operationId, bankId: bank.id, status: 'queued' }, data: { status: 'cancelled', completedAt: new Date(), payload: [] } })
       : { count: 0 };
     if (cancelled.count === 0) throw new ConflictException(t('error.memory.operationNotPending', { id: operationId }));
+    await this.management.discardUpload({ id: operationId, workspaceId: bank.workspaceId, bankId: bank.id });
     return { success: true, message: `Operation ${operationId} cancelled`, operation_id: operationId };
   }
 
@@ -218,7 +264,7 @@ export class MemoryOperationsService {
    */
   async sweep(now = Date.now()): Promise<{ enqueued: number; requeued: number; failed: number; purged: number }> {
     const lost = await this.prisma.memoryOperation.findMany({
-      where: { status: 'queued', updatedAt: { lt: new Date(now - LOST_JOB_MS) } },
+      where: { status: 'queued', updatedAt: { lt: new Date(now - LOST_JOB_MS) }, OR: [{ notBefore: null }, { notBefore: { lte: new Date(now) } }] },
       select: { id: true, attempts: true },
       take: SWEEP_PAGE,
     });
@@ -227,15 +273,21 @@ export class MemoryOperationsService {
       staleField: 'updatedAt',
       staleMs: this.timeoutMs,
       maxAttempts: MAX_ATTEMPTS,
-      find: (where) => this.prisma.memoryOperation.findMany({ where, select: { id: true, attempts: true }, take: SWEEP_PAGE }),
+      find: (where) => this.prisma.memoryOperation.findMany({ where, select: { id: true, attempts: true, type: true, bankId: true }, take: SWEEP_PAGE }),
       attemptOf: (row) => row.attempts,
       requeue: (where) => this.prisma.memoryOperation.updateMany({ where, data: { status: 'queued' } }),
-      fail: (where, row) => this.prisma.memoryOperation.updateMany({ where, data: { status: 'failed', completedAt: new Date(), error: staleFailure(row.attempts), payload: [] } }),
+      // Only a mental-model row's payload is read, and it is a model id: an upload's bytes are never loaded here.
+      fail: async (where, row) => row.type === 'create_mental_model' || row.type === 'refresh_mental_model'
+        ? this.mentalModels.failStale(where, { bankId: row.bankId, payload: (await this.prisma.memoryOperation.findUnique({ where: { id: row.id }, select: { payload: true } }))?.payload ?? {} }, staleFailure(row.attempts))
+        : this.prisma.memoryOperation.updateMany({ where, data: { status: 'failed', completedAt: new Date(), error: staleFailure(row.attempts), payload: [] } }),
       enqueue: (row) => this.producer.enqueue(row.id, row.attempts),
     });
-    const purged = await this.prisma.memoryOperation.deleteMany({
+    const expired = await this.prisma.memoryOperation.findMany({
       where: { status: { in: ['completed', 'failed', 'cancelled'] }, completedAt: { lt: new Date(now - this.retentionMs) } },
+      select: { id: true, workspaceId: true, bankId: true },
     });
+    const purged = await this.prisma.memoryOperation.deleteMany({ where: { id: { in: expired.map((row) => row.id) } } });
+    await this.management.purgeOperations(expired);
     return { enqueued: lost.length, requeued: requeued.length, failed: failed.length, purged: purged.count };
   }
 }

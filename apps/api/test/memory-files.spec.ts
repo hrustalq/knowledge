@@ -208,14 +208,24 @@ describe('a capture key creates, it never overwrites (#1108)', () => {
       },
     };
     const config = { get: (key: string) => (key === 'MEMORY_RETAIN_MAX_CHARS' ? 10_000 : 20) };
-    const svc = new MemoryFilesService(prisma as never, {} as never, { ensure: async () => bank } as never, {} as never, {} as never, { check: async () => undefined } as never, config as never);
-    return { svc, prisma };
+    const banks = { ensure: async () => bank, recordWrite: vi.fn() };
+    const svc = new MemoryFilesService(prisma as never, { named: async () => bank } as never, banks as never, {} as never, {} as never, { check: async () => undefined } as never, config as never);
+    return { svc, prisma, banks };
   }
 
   it('refuses to empty or replace a file that exists, and writes nothing', async () => {
     const { svc, prisma } = service(true);
     await expect(svc.execute(captureKey, 'notes', { command: 'create', path: '/memories/team.md', file_text: '' })).rejects.toThrow(ForbiddenException);
     expect(prisma.memoryFile.upsert).not.toHaveBeenCalled();
+  });
+
+  it('audits a write it made, for the REST route and the MCP tool alike, with the command and no path (#1168)', async () => {
+    const { svc, banks } = service(false);
+    await svc.execute(captureKey, 'notes', { command: 'create', path: '/memories/new.md', file_text: 'hello' });
+    expect(banks.recordWrite).toHaveBeenCalledWith(caller.workspaceId, caller.principal.userId, bank.bankId, { action: 'memory.file_changed', params: { command: 'create' } });
+    const refused = service(true);
+    await expect(refused.svc.execute(captureKey, 'notes', { command: 'create', path: '/memories/team.md', file_text: '' })).rejects.toThrow(ForbiddenException);
+    expect(refused.banks.recordWrite).not.toHaveBeenCalled();
   });
 
   it('still creates a file at a free path', async () => {

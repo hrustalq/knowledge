@@ -5,6 +5,7 @@ import { AiCoreModule } from '../ai/ai-core.module.js';
 import { AssistantClientModule } from '../assistant/assistant-client.module.js';
 import { AuthCoreModule } from '../auth/auth-core.module.js';
 import { EventsModule } from '../events/events.module.js';
+import { MemoryCoreModule } from '../memory/memory-core.module.js';
 import { NotificationsCoreModule } from '../notifications/notifications-core.module.js';
 import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { DocumentsCoreModule } from './documents-core.module.js';
@@ -28,6 +29,7 @@ import { MergeRequestThreadsService } from './merge-request-threads.service.js';
     AiCoreModule,
     AssistantClientModule,
     EventsModule,
+    MemoryCoreModule,
     NotificationsCoreModule,
     PermissionsCoreModule,
   ],

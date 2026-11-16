@@ -1,10 +1,13 @@
-import { Body, Controller, Delete, Get, Headers, HttpCode, Param, Patch, Put, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, HttpCode, Param, Patch, Put, Query, Res, UseInterceptors } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { CurrentPrincipal, Public, ReadKeyOk } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { CachePolicy } from '../common/http-cache.js';
 import { MemoryAccessService } from './memory-access.service.js';
+import { MemoryAudit, MemoryAuditInterceptor } from './memory-audit.js';
 import { MemoryBanksService } from './memory-banks.service.js';
+import { BANK_TEMPLATE_JSON_SCHEMA, MemoryManagementService } from './memory-management.service.js';
 import { BankBodyDto, BankConfigUpdateDto, ListBanksQueryDto, UpdateDispositionDto } from './memory.dto.js';
 import { HINDSIGHT_API_VERSION, type BankConfigResponse, type BankListResponse, type BankProfileResponse, type DeleteResponse, type VersionResponse } from './memory-wire.js';
 
@@ -21,6 +24,7 @@ import { HINDSIGHT_API_VERSION, type BankConfigResponse, type BankListResponse, 
 @ApiExcludeController()
 @CachePolicy('no-store')
 @ReadKeyOk()
+@UseInterceptors(MemoryAuditInterceptor)
 @Controller('v1/default/banks')
 export class MemoryBanksController {
   constructor(
@@ -39,6 +43,7 @@ export class MemoryBanksController {
     return this.banks.put(await this.access.caller(principal, ws, 'editor'), bankId, dto);
   }
 
+  @MemoryAudit({ action: 'memory.bank_updated', op: 'patch' })
   @Patch(':bankId')
   async patch(@CurrentPrincipal() principal: Principal, @Headers('x-workspace-id') ws: string | undefined, @Param('bankId') bankId: string, @Body() dto: BankBodyDto): Promise<BankProfileResponse> {
     return this.banks.patch(await this.access.caller(principal, ws, 'editor'), bankId, dto);
@@ -55,9 +60,16 @@ export class MemoryBanksController {
     return this.banks.config(await this.access.caller(principal, ws, 'viewer'), bankId);
   }
 
+  @MemoryAudit({ action: 'memory.bank_updated', op: 'config' })
   @Patch(':bankId/config')
   async updateConfig(@CurrentPrincipal() principal: Principal, @Headers('x-workspace-id') ws: string | undefined, @Param('bankId') bankId: string, @Body() dto: BankConfigUpdateDto): Promise<BankConfigResponse> {
     return this.banks.updateConfig(await this.access.caller(principal, ws, 'editor'), bankId, dto.updates);
+  }
+
+  @MemoryAudit({ action: 'memory.bank_updated', op: 'config_reset' })
+  @Delete(':bankId/config')
+  async resetConfig(@CurrentPrincipal() principal: Principal, @Headers('x-workspace-id') ws: string | undefined, @Param('bankId') bankId: string): Promise<BankConfigResponse> {
+    return this.banks.resetConfig(await this.access.caller(principal, ws, 'editor'), bankId);
   }
 
   @Get(':bankId/profile')
@@ -65,6 +77,7 @@ export class MemoryBanksController {
     return this.banks.profile(await this.access.caller(principal, ws, 'viewer'), bankId);
   }
 
+  @MemoryAudit({ action: 'memory.bank_updated', op: 'disposition' })
   @Put(':bankId/profile')
   @HttpCode(200)
   async setDisposition(@CurrentPrincipal() principal: Principal, @Headers('x-workspace-id') ws: string | undefined, @Param('bankId') bankId: string, @Body() dto: UpdateDispositionDto): Promise<BankProfileResponse> {
@@ -95,10 +108,11 @@ export class MemoryProbeController {
         worker: true,
         bank_config_api: true,
         bank_llm_health: false,
-        file_upload_api: false,
-        document_export_api: false,
-        document_import_api: false,
-        audit_log: false,
+        file_upload_api: true,
+        document_export_api: true,
+        document_import_api: true,
+        // Every write route records an audit row (#1168); recall, reflect and per-turn runtime retention do not.
+        audit_log: true,
         llm_trace: false,
         store_document_text: true,
       },
@@ -110,5 +124,44 @@ export class MemoryProbeController {
     this.access.requireEnabled();
     await this.access.ping();
     return { status: 'healthy', database: 'connected' };
+  }
+}
+
+@ApiExcludeController()
+@CachePolicy('no-store')
+@ReadKeyOk()
+@Controller()
+export class MemoryManagementController {
+  constructor(
+    private readonly access: MemoryAccessService,
+    private readonly management: MemoryManagementService,
+  ) {}
+
+  @Public()
+  @Get('v1/bank-template-schema')
+  templateSchema() {
+    this.access.requireEnabled();
+    return BANK_TEMPLATE_JSON_SCHEMA;
+  }
+
+  @Get('v1/default/chunks/:key')
+  async chunk(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('key') key: string,
+  ) {
+    return this.management.chunk(await this.access.caller(principal, ws, 'viewer'), key);
+  }
+
+  @Get('v1/default/files/download/:key')
+  async download(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('key') key: string,
+    @Res() response: Response,
+  ): Promise<void> {
+    const caller = await this.access.caller(principal, ws, 'viewer');
+    // Authorized here, served by the bucket: the client follows the redirect, and its bearer token stays on this origin.
+    response.redirect(302, await this.management.archiveUrl(caller, key));
   }
 }

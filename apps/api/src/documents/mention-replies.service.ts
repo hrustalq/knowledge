@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AgentTrigger } from '@prisma/client';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
@@ -24,6 +24,8 @@ import { parseAgentMentions } from './mentions.js';
 import { t, withLocale } from '../i18n/t.js';
 import { parseModelJson } from '../common/model-json.js';
 import { wrapUntrusted } from '../common/untrusted.js';
+import { MemoryRuntimeService } from '../memory/memory-runtime.service.js';
+import type { Audience } from '../permissions/access-scope.js';
 
 /**
  * Which discussion an agent was mentioned in. The two thread tables are
@@ -116,6 +118,7 @@ export class MentionRepliesService {
     private readonly access: AccessService,
     config: ConfigService<Env, true>,
     private readonly learnings: AgentLearningsService,
+    @Optional() private readonly memory?: MemoryRuntimeService,
   ) {
     this.triggersEnabled = config.get('AGENT_TRIGGERS_ENABLED', { infer: true }) === true;
   }
@@ -347,6 +350,7 @@ export class MentionRepliesService {
     actorId: string;
     locale: Locale;
     agentKey: string;
+    commentId: string;
   }): Promise<string> {
     const agent = await this.agents.resolve(input.workspaceId, input.agentKey).catch(() => null);
     if (!agent) return t('mention.unknownAgent', { agent: input.agentKey });
@@ -380,9 +384,18 @@ export class MentionRepliesService {
       projectIds: page ? [page.projectId] : [],
     });
 
+    // Project memory (#1167), under the page's audience: everyone who reads the thread
+    // reads the page, so neither the commenter's personal bank nor a project bank the
+    // page's readers cannot open is recalled — and the reply reaches the project bank
+    // only when the page is restricted by nothing but its project (`withinProjectAudience`).
+    const principal = this.memory ? await this.access.principalFor(input.actorId, input.locale).catch(() => null) : null;
+    const audience: Audience = { kind: 'document', documentId: input.subject.documentId };
+    const memory = { workspaceId: input.workspaceId, agentKey: agent.key, projectId: page?.projectId ?? null, userId: input.actorId, audience };
+    const recalled = principal ? (await this.memory?.ground({ ...memory, principal, query: grounding.question }))?.text : '';
+
     const messages: ChatCompletionMessageParam[] = [
       { role: 'system', content: `${agent.instructions}\n\n${REPLY_RULES}${skills ? `\n\n${skills}` : ''}${learnings}` },
-      { role: 'user', content: grounding.prompt },
+      { role: 'user', content: recalled ? `${recalled}\n\n${grounding.prompt}` : grounding.prompt },
     ];
 
     const answer = await this.client.chat(
@@ -394,7 +407,18 @@ export class MentionRepliesService {
       },
       messages,
     );
-    return renderAnswer(answer);
+    const reply = renderAnswer(answer);
+    if (principal)
+      void this.memory?.remember({
+        ...memory,
+        principal,
+        sourceId: input.commentId,
+        sourceKind: 'mention-reply',
+        question: grounding.question,
+        answer: reply,
+        shareWithProject: true,
+      });
+    return reply;
   }
 
   /**

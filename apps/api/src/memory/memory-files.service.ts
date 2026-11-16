@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { MemoryBank } from '@prisma/client';
-import type { Locale } from '@knowledge/contracts';
 import { createMasker } from '../common/mask.js';
 import { lockSubject, withSubjectLock } from '../common/subject-lock.js';
 import type { Env } from '../config/env.js';
@@ -112,20 +111,27 @@ export class MemoryFilesService {
         case 'view':
           return ok(await this.view(caller, bankId, command.path, command.view_range));
         case 'create':
-          return ok(await this.create(caller, bankId, command.path, command.file_text, callerFor));
+          return this.wrote(caller, bankId, command.command, await this.create(caller, bankId, command.path, command.file_text, callerFor));
         case 'str_replace':
-          return ok(await this.edit(caller, bankId, command.path, (content) => replaceOnce(command.path, content, command.old_str, command.new_str), editedSnippet));
+          return this.wrote(caller, bankId, command.command, await this.edit(caller, bankId, command.path, (content) => replaceOnce(command.path, content, command.old_str, command.new_str), editedSnippet));
         case 'insert':
-          return ok(await this.edit(caller, bankId, command.path, (content) => ({ content: insertAt(content, command.insert_line, command.insert_text), line: 0 }), () => `The file ${command.path} has been edited.`));
+          return this.wrote(caller, bankId, command.command, await this.edit(caller, bankId, command.path, (content) => ({ content: insertAt(content, command.insert_line, command.insert_text), line: 0 }), () => `The file ${command.path} has been edited.`));
         case 'delete':
-          return ok(await this.delete(caller, bankId, command.path));
+          return this.wrote(caller, bankId, command.command, await this.delete(caller, bankId, command.path));
         case 'rename':
-          return ok(await this.rename(caller, bankId, command.old_path, command.new_path));
+          return this.wrote(caller, bankId, command.command, await this.rename(caller, bankId, command.old_path, command.new_path));
       }
     } catch (e) {
       if (e instanceof MemoryToolError) return { content: `Error: ${e.message}`, is_error: true };
       throw e;
     }
+  }
+
+  /** A write that succeeded, audited for the REST route and the MCP tool alike (#1168): the command, never a path or text. */
+  private async wrote(caller: MemoryCaller, bankId: string, command: string, text: string): Promise<MemoryToolResult> {
+    const bank = await this.access.named(caller.workspaceId, bankId);
+    if (bank) this.banks.recordWrite(caller.workspaceId, caller.principal.userId, bank.bankId, { action: 'memory.file_changed', params: { command } });
+    return ok(text);
   }
 
   // --- commands ----------------------------------------------------------
@@ -167,7 +173,7 @@ export class MemoryFilesService {
         select: { id: true },
       });
     });
-    await this.reindex(bank, file.id, caller.principal.locale);
+    await this.reindex(bank, file.id);
     return `File created successfully at: ${shown}`;
   }
 
@@ -196,7 +202,7 @@ export class MemoryFilesService {
       await this.prisma.memoryFile.update({ where: { id: file.id }, data: { content, updatedBy: caller.principal.userId } });
       return { id: file.id, content, line: changed.line };
     });
-    await this.reindex(bank, done.id, caller.principal.locale);
+    await this.reindex(bank, done.id);
     return answer(done.content, done.line);
   }
 
@@ -308,7 +314,7 @@ export class MemoryFilesService {
    * (or the file is gone: its delete took the chunks). False leaves it stale
    * for the sweeper; a failure is logged, never answered.
    */
-  async reindex(bank: MemoryBank, fileId: string, locale: Locale = 'en'): Promise<boolean> {
+  async reindex(bank: MemoryBank, fileId: string): Promise<boolean> {
     try {
       for (let attempt = 0; attempt < INDEX_ATTEMPTS; attempt++) {
         const file = await this.prisma.memoryFile.findFirst({ where: { id: fileId, bankId: bank.id }, select: { path: true, content: true, updatedAt: true, updatedBy: true } });
@@ -323,7 +329,7 @@ export class MemoryFilesService {
         if (chunks.length) {
           const timestamp = file.updatedAt.toISOString();
           const items: RetainItem[] = chunks.map((chunk) => ({ content: chunk, context: file.path, timestamp, metadata: { file: file.path }, documentId, entities: [], tags: [], append: false }));
-          const done = await this.retainer.retain({ workspaceId: bank.workspaceId, bank, userId: file.updatedBy, locale, items, verbatim: true, consolidated: true, guard: settle });
+          const done = await this.retainer.retain({ workspaceId: bank.workspaceId, bank, userId: file.updatedBy, items, verbatim: true, consolidated: true, guard: settle });
           if (!done.superseded) return true;
           continue;
         }

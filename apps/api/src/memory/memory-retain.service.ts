@@ -1,6 +1,5 @@
 import { Inject, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
-import type { MemoryBank, Prisma } from '@prisma/client';
-import type { Locale } from '@knowledge/contracts';
+import { Prisma, type MemoryBank } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { AiUsageService } from '../ai/ai-usage.service.js';
@@ -13,7 +12,7 @@ import { EntityAliasService } from '../graph/entity-alias.service.js';
 import { GraphService } from '../graph/graph.service.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { extractionBatches, extractionPrompt, readFacts, type Fact, type RetainItem } from './memory-facts.js';
+import { extractionBatches, extractionPrompt, readFacts, resolveObservationScopes, type Fact, type RetainItem } from './memory-facts.js';
 import { MemoryUnitsService } from './memory-units.service.js';
 import type { TokenUsage } from './memory-wire.js';
 
@@ -25,7 +24,6 @@ export interface RetainInput {
   bank: Pick<MemoryBank, 'id' | 'mission'>;
   /** Who retains: the row's author, and whose budget an extraction call spends. */
   userId: string;
-  locale: Locale;
   items: RetainItem[];
   /**
    * The async retain this run belongs to. Its items were masked before its row
@@ -35,6 +33,11 @@ export interface RetainInput {
   operationId?: string;
   /** Store each item exactly as given, one unit per item: no extraction call (#1007). For a wire whose text must stay exact. */
   verbatim?: boolean;
+  /**
+   * Asks the memorist for durable facts only (`DURABLE_ONLY_RULE`), and a successful extraction's explicitly empty facts
+   * mean store nothing. Failures and missing models still retain verbatim.
+   */
+  durableOnly?: boolean;
   /** Write the units already consolidated, so the consolidation pass never claims them (#1007). */
   consolidated?: boolean;
   /**
@@ -74,7 +77,8 @@ interface Unit {
  * - **Never fails for want of a model.** Facts are extracted only when a model
  *   is routed at `extraction` and the budget allows; a missing route, a spent
  *   budget, a failed call or an unreadable answer all store the masked text
- *   verbatim, one unit per item.
+ *   verbatim, one unit per item. Under `durableOnly` the model is told to keep
+ *   durable facts only, and an item it gives an empty fact list stores nothing.
  * - **Vector first, row second**, as chat search packs a window: a crash leaves
  *   vectors with no row, which no recall returns and the reap removes.
  * - **A `document_id` retained before is replaced**, in the transaction that
@@ -105,8 +109,10 @@ export class MemoryRetainService {
     const items = input.operationId ? input.items : maskItems(input.items);
     const { facts, usage } = input.verbatim ? { facts: new Map<number, Fact[]>(), usage: null } : await this.extract(input, items);
 
-    const units: Unit[] = items.flatMap((item, i) =>
-      (facts.get(i) ?? [null]).map((fact) => ({
+    const units: Unit[] = items.flatMap((item, i) => {
+      const extracted = facts.get(i);
+      if (input.durableOnly && extracted?.length === 0) return [];
+      return (extracted?.length ? extracted : [null]).map((fact) => ({
         id: randomUUID(),
         item,
         text: fact?.text ?? item.content,
@@ -114,10 +120,10 @@ export class MemoryRetainService {
         context: item.context,
         fact,
         entities: [...item.entities, ...(fact?.entities ?? []).map((name) => ({ name, key: name }))],
-      })),
-    );
-    const vectors = await this.embeddings.embedBatch(units.map((u) => (u.context ? `${u.context}\n${u.text}` : u.text)));
-    const entities = await this.entityRows(input, units);
+      }));
+    });
+    const vectors = units.length ? await this.embeddings.embedBatch(units.map((u) => (u.context ? `${u.context}\n${u.text}` : u.text))) : [];
+    const entities = units.length ? await this.entityRows(input, units) : [];
 
     await this.graph.upsertMemoryUnits(input.workspaceId, input.bank.id, units.map((u, i) => ({ unitId: u.id, embedding: vectors[i]! })), Date.now());
     const replaces = [...new Set(items.filter((i) => !i.append).map((i) => i.documentId))];
@@ -126,14 +132,15 @@ export class MemoryRetainService {
       replaced = await withSubjectLock(this.prisma, `memory-bank:${input.bank.id}`, async () => {
         if (input.guard && !(await input.guard())) return null;
         const old = await this.prisma.memoryUnit.findMany({
-          // Facts only: an observation is consolidation's, and a client's document_id never names one.
           where: { bankId: input.bank.id, factType: { not: 'observation' }, OR: [{ documentId: { in: replaces } }, ...(input.operationId ? [{ operationId: input.operationId }] : [])] },
           select: { id: true },
         });
+        const invalidated = await this.units.invalidateFacts(input.bank.id, old.map((o) => o.id));
         await this.prisma.memoryUnit.deleteMany({ where: { id: { in: old.map((o) => o.id) } } });
         await this.prisma.memoryUnit.createMany({ data: units.map((u) => this.row(input, u)) });
         await this.prisma.memoryUnitEntity.createMany({ data: entities });
-        return [...old.map((o) => o.id), ...(old.length ? await this.units.deleteBareObservations(input.bank.id) : [])];
+        await this.units.addScopeMemberships({ id: input.bank.id, workspaceId: input.workspaceId }, units.map((u) => ({ id: u.id, tags: u.item.tags, observationScopes: u.item.observationScopes })), input.consolidated === true);
+        return [...old.map((o) => o.id), ...invalidated, ...(old.length ? await this.units.deleteBareObservations(input.bank.id) : [])];
       });
     } catch (e) {
       await this.graph.deleteMemoryUnits(input.workspaceId, units.map((u) => u.id)).catch(() => undefined);
@@ -160,13 +167,14 @@ export class MemoryRetainService {
       tags: u.item.tags,
       metadata: u.item.metadata,
       documentId: u.item.documentId,
+      observationScopes: u.item.observationScopes ?? Prisma.DbNull,
       sourceText: u.sourceText,
       occurredStart: u.fact?.occurredStart ?? at,
       occurredEnd: u.fact?.occurredEnd ?? null,
       mentionedAt: at,
       createdBy: input.userId,
       operationId: input.operationId ?? null,
-      consolidatedAt: input.consolidated ? new Date() : null,
+      consolidatedAt: input.consolidated || !resolveObservationScopes(u.item.tags, u.item.observationScopes).length ? new Date() : null,
     };
   }
 
@@ -203,7 +211,7 @@ export class MemoryRetainService {
           { config: agent.config, userId: input.userId, operation: 'memory-extract', locale: 'source' },
           [
             { role: 'system', content: agent.instructions },
-            { role: 'user', content: extractionPrompt(batch, input.bank.mission) },
+            { role: 'user', content: extractionPrompt(batch, input.bank.mission, input.durableOnly) },
           ],
           { json: true },
         );

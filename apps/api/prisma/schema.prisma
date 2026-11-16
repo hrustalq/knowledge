@@ -1107,6 +1107,10 @@ model AssistantThread {
   /// ai_models row pinned to this thread by whoever is chatting. Null = whatever
   /// the workspace routes 'chat' at. No FK, like the routing columns.
   modelId     String?  @map("model_id") @db.Uuid
+  /// The first turn that carried private input: the asker's personal memory, a
+  /// draft or an attachment (#1169). Later answers can repeat it, so from then
+  /// on no turn in the thread is copied to a project memory bank.
+  privateContextAt DateTime? @map("private_context_at") @db.Timestamptz
   // users.id in api-key mode; synthetic actor ("dev") otherwise.
   createdBy   String   @map("created_by") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
@@ -1583,6 +1587,8 @@ model AiAgent {
   tools        Json?
   /// string[] of ai_skills ids always attached to this agent's turns.
   skillIds     Json?   @map("skill_ids")
+  /// Retention mode plus optional personal/project overrides. Null = all, the pre-policy behavior.
+  memoryPolicy Json?   @map("memory_policy")
 
   /// ai_models row pinned to this agent. Null falls through to the purpose route,
   /// then the inline config, then env (feature 12's chain). No FK, matching the
@@ -4814,6 +4820,10 @@ model MemoryBank {
   bankId      String  @map("bank_id")
   /// A bank bound to a project follows that project's restriction. Null = the whole workspace.
   projectId   String? @map("project_id") @db.Uuid
+  /// Runtime-owned personal bank: this agent and this user. Both null on an ordinary or project bank.
+  agentKey    String? @map("agent_key")
+  /// Personal memory is visible only to this user, including to workspace admins.
+  ownerId     String? @map("owner_id") @db.Uuid
   name        String
   mission     String  @default("")
   /// `{ skepticism, literalism, empathy }`, each 1–5.
@@ -4821,11 +4831,21 @@ model MemoryBank {
   /// #993 — Hindsight's `enable_observations`. Null inherits the code default
   /// (on): consolidation still runs only while a model is routed to it.
   enableObservations Boolean? @map("enable_observations")
+  /// #1157 — observation-specific defaults. Null inherits the bank mission or
+  /// the code default; a matching consolidation strategy overrides these as a whole.
+  observationsMission String? @map("observations_mission")
+  maxObservationsPerScope Int? @map("max_observations_per_scope")
+  consolidationSourceFactsMaxTokens Int? @map("consolidation_source_facts_max_tokens")
+  consolidationSourceFactsMaxTokensPerObservation Int? @map("consolidation_source_facts_max_tokens_per_observation")
+  consolidationStrategies Json? @map("consolidation_strategies")
   /// #993 — the per-bank daily cap on consolidation calls: the UTC day the
   /// counter belongs to and the calls made on it, both moved by one guarded
   /// UPDATE (`MemoryConsolidationService.takeCall`), so two workers never pass it.
   consolidationDay   DateTime? @map("consolidation_day") @db.Date
   consolidationCalls Int       @default(0) @map("consolidation_calls")
+  /// #1166 — the last time a memory was deleted from the bank: a deletion leaves no
+  /// newer row behind, so a mental model built before it reads as stale.
+  memoriesDeletedAt  DateTime? @map("memories_deleted_at") @db.Timestamptz
   createdBy   String  @map("created_by") @db.Uuid
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
@@ -4836,9 +4856,125 @@ model MemoryBank {
   entities   MemoryEntity[]
   relations  MemoryRelation[]
   files      MemoryFile[]
+  observationScopes MemoryObservationScope[]
+  directives MemoryDirective[]
+  mentalModels MemoryMentalModel[]
+  aliases MemoryBankAlias[]
+  transferArchives MemoryTransferArchive[]
 
   @@unique([workspaceId, bankId])
+  @@index([workspaceId, agentKey, ownerId])
   @@map("memory_banks")
+}
+
+/// An extra client-facing id for a bank (#1161). Resolution still returns the
+/// bank row, so every existing ACL and bank-scoped query applies unchanged.
+model MemoryBankAlias {
+  id          String     @id @default(uuid()) @db.Uuid
+  workspaceId String     @map("workspace_id") @db.Uuid
+  bankId      String     @map("bank_id") @db.Uuid
+  bank        MemoryBank @relation(fields: [bankId], references: [id], onDelete: Cascade)
+  alias       String
+  primary     Boolean    @default(false)
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([workspaceId, alias])
+  @@unique([bankId, alias])
+  @@index([workspaceId])
+  @@map("memory_bank_aliases")
+}
+
+/// A finished transfer archive (#1161), downloadable only through its bank's
+/// resolved ACL. Bytes are never embedded in an operation's JSON response.
+model MemoryTransferArchive {
+  id          String     @id @default(uuid()) @db.Uuid
+  workspaceId String     @map("workspace_id") @db.Uuid
+  bankId      String     @map("bank_id") @db.Uuid
+  bank        MemoryBank @relation(fields: [bankId], references: [id], onDelete: Cascade)
+  operationId String     @map("operation_id") @db.Uuid
+  filename    String
+  /// The zip in the bucket (#1165), under the bank's prefix; a download redirects to a presigned URL.
+  objectKey   String     @map("object_key")
+  byteSize    Int        @map("byte_size")
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([operationId])
+  @@index([workspaceId])
+  @@map("memory_transfer_archives")
+}
+
+/// One named set of hard rules for reflect (#1159). Empty tags apply globally;
+/// tagged rows apply only to a matching reflect scope. Never recalled as memory.
+model MemoryDirective {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  bankId      String   @map("bank_id") @db.Uuid
+  bank        MemoryBank @relation(fields: [bankId], references: [id], onDelete: Cascade)
+  name        String
+  content     String
+  priority    Int      @default(0)
+  isActive    Boolean  @default(true) @map("is_active")
+  tags        String[] @default([])
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([workspaceId])
+  @@index([bankId, isActive])
+  @@map("memory_directives")
+}
+
+/// A bank-local saved reflect response (#1160). It is never a Knowledge page or
+/// a memory unit. The trigger holds Hindsight's refresh and scope settings;
+/// structured_doc gives delta refreshes stable section and block identities.
+model MemoryMentalModel {
+  /// Client-chosen, unique per bank only: every lookup carries the bank.
+  id                   String
+  workspaceId          String    @map("workspace_id") @db.Uuid
+  bankId               String    @map("bank_id") @db.Uuid
+  bank                 MemoryBank @relation(fields: [bankId], references: [id], onDelete: Cascade)
+  name                 String
+  sourceQuery          String    @map("source_query")
+  content              String    @default("")
+  tags                 String[]  @default([])
+  maxTokens            Int       @default(4096) @map("max_tokens")
+  trigger              Json      @default("{}")
+  reflectResponse      Json?     @map("reflect_response")
+  structuredDoc        Json?     @map("structured_doc")
+  refreshedSourceQuery String?   @map("refreshed_source_query")
+  /// Fingerprint of tags / tags_match / fact_types the content was built from; a mismatch is stale and refreshes full.
+  refreshedScope       String?   @map("refreshed_scope")
+  lastRefreshedAt      DateTime? @map("last_refreshed_at") @db.Timestamptz
+  lastMemorySeenAt     DateTime? @map("last_memory_seen_at") @db.Timestamptz
+  lastRefreshFailedAt  DateTime? @map("last_refresh_failed_at") @db.Timestamptz
+  lastFullRefreshedAt  DateTime? @map("last_full_refreshed_at") @db.Timestamptz
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  history MemoryMentalModelHistory[]
+
+  @@id([bankId, id])
+  @@index([workspaceId])
+  @@index([bankId, createdAt])
+  @@map("memory_mental_models")
+}
+
+/// Previous content and refused refreshes of a mental model (#1160).
+model MemoryMentalModelHistory {
+  id              String           @id @default(uuid()) @db.Uuid
+  workspaceId     String           @map("workspace_id") @db.Uuid
+  bankId          String           @map("bank_id") @db.Uuid
+  modelId         String           @map("model_id")
+  model           MemoryMentalModel @relation(fields: [bankId, modelId], references: [bankId, id], onDelete: Cascade)
+  previousContent String?          @map("previous_content")
+  kind            String?
+  outcome         String?
+  failureReason   String?          @map("failure_reason")
+  errorMessage    String?          @map("error_message")
+  changedAt       DateTime         @default(now()) @map("changed_at") @db.Timestamptz
+
+  @@index([workspaceId])
+  @@index([bankId, modelId, changedAt])
+  @@map("memory_mental_model_history")
 }
 
 /// An entity of a bank's graph (#1008), as the MCP reference memory server
@@ -4938,6 +5074,8 @@ model MemoryUnit {
   documentId  String     @map("document_id")
   /// The masked item this unit was extracted from.
   sourceText  String     @map("source_text")
+  /// The retain-time observation_scopes value; null means combined.
+  observationScopes Json? @map("observation_scopes")
   occurredStart DateTime? @map("occurred_start") @db.Timestamptz
   occurredEnd   DateTime? @map("occurred_end") @db.Timestamptz
   mentionedAt   DateTime? @map("mentioned_at") @db.Timestamptz
@@ -4948,15 +5086,20 @@ model MemoryUnit {
   /// The async retain that wrote it. A re-run of that operation replaces its
   /// own units, so a worker killed mid-job never leaves a second set.
   operationId String?    @map("operation_id") @db.Uuid
-  /// #993 — when consolidation read this fact. Null = not yet; never set on an observation.
+  /// Rollback-compatible aggregate: set when every scope membership is consolidated.
   consolidatedAt         DateTime? @map("consolidated_at") @db.Timestamptz
-  /// #993 — a worker's claim on the fact while it consolidates it; a stale one is taken over.
   consolidationClaimedAt DateTime? @map("consolidation_claimed_at") @db.Timestamptz
+  /// Set on an observation; its evidence can only come from members of this scope.
+  observationScopeId String? @map("observation_scope_id") @db.Uuid
+  observationScope MemoryObservationScope? @relation(fields: [observationScopeId], references: [id], onDelete: Cascade)
 
+  /// Insertion order within a retained document; random UUIDs cannot provide it.
+  position  Int      @default(autoincrement())
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   entities MemoryUnitEntity[]
+  scopeMembers MemoryObservationScopeMember[]
   /// On an observation: the facts that support it.
   evidence MemoryObservationEvidence[] @relation("ObservationEvidence")
   /// On a fact: the observations it supports.
@@ -4965,10 +5108,47 @@ model MemoryUnit {
 
   @@index([operationId])
   @@index([bankId, consolidatedAt])
-
-  @@index([bankId, documentId])
+  @@index([observationScopeId])
+  @@index([bankId, documentId, position])
   @@index([bankId, createdAt])
   @@map("memory_units")
+}
+
+/// A canonical exact tag set in which facts are consolidated (#1157).
+model MemoryObservationScope {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  bankId      String   @map("bank_id") @db.Uuid
+  bank        MemoryBank @relation(fields: [bankId], references: [id], onDelete: Cascade)
+  tags        String[] @default([])
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  members      MemoryObservationScopeMember[]
+  observations MemoryUnit[]
+
+  // Unique per (bank, hash of the canonical tag set) in SQL only (#1166): an index on the array itself
+  // exceeds the btree row limit for a large set. Inserts rely on ON CONFLICT DO NOTHING, which it serves.
+  @@index([workspaceId])
+  @@map("memory_observation_scopes")
+}
+
+/// One fact's independent consolidation state in one observation scope.
+model MemoryObservationScopeMember {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  bankId      String   @map("bank_id") @db.Uuid
+  scopeId     String   @map("scope_id") @db.Uuid
+  scope       MemoryObservationScope @relation(fields: [scopeId], references: [id], onDelete: Cascade)
+  unitId      String   @map("unit_id") @db.Uuid
+  unit        MemoryUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  consolidatedAt DateTime? @map("consolidated_at") @db.Timestamptz
+  claimedAt      DateTime? @map("claimed_at") @db.Timestamptz
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([scopeId, unitId])
+  @@index([unitId])
+  @@index([bankId, scopeId, consolidatedAt, claimedAt])
+  @@map("memory_observation_scope_members")
 }
 
 /// An entity a memory names (#986), under the canonical key format and
@@ -5034,17 +5214,23 @@ model MemoryOperation {
   workspaceId String     @map("workspace_id") @db.Uuid
   bankId      String     @map("bank_id") @db.Uuid
   bank        MemoryBank @relation(fields: [bankId], references: [id], onDelete: Cascade)
-  /// `retain` | `consolidation` (#993: one pass asked for by `POST …/consolidate`, no payload).
+  /// `retain` | `consolidation` | `create_mental_model` | `refresh_mental_model`.
   type        String     @default("retain")
   /// queued → running → completed | failed, or cancelled while queued.
   status      String     @default("queued")
-  /// The request's items as `RetainItem[]`, masked before this row is written. Emptied once the operation settles.
+  /// Retain items, a consolidation scope, a transfer, or a file to parse.
   payload     Json
+  /// Transfer counts and download metadata; null for operations with no result body.
+  result      Json?
   itemsCount  Int        @map("items_count")
   createdBy   String     @map("created_by") @db.Uuid
+  /// Written only by mental-model operations: their refresh runs reflect, which answers a person in this language.
+  /// Retain, consolidation and transfer rows keep the default; their extraction is source-language (#1027).
   locale      String     @default("en")
   attempts    Int        @default(0)
   error       String?
+  /// An automatic mental-model refresh parked until its minimum interval ends.
+  notBefore   DateTime?  @map("not_before") @db.Timestamptz
   startedAt   DateTime?  @map("started_at") @db.Timestamptz
   completedAt DateTime?  @map("completed_at") @db.Timestamptz
 
@@ -5053,5 +5239,6 @@ model MemoryOperation {
 
   @@index([bankId, createdAt])
   @@index([status, updatedAt])
+  @@index([status, notBefore])
   @@map("memory_operations")
 }

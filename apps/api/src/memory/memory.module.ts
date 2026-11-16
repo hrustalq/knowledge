@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { MemoryBanksController, MemoryProbeController } from './memory-banks.controller.js';
+import { MemoryBanksController, MemoryManagementController, MemoryProbeController } from './memory-banks.controller.js';
 import { CapturesCoreModule } from '../captures/captures-core.module.js';
 import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { MemoryCoreModule } from './memory-core.module.js';
@@ -21,7 +21,7 @@ import { MemoryWebService } from './memory-web.service.js';
  */
 @Module({
   imports: [MemoryCoreModule, PermissionsCoreModule, CapturesCoreModule],
-  controllers: [MemoryBanksController, MemoryUnitsController, MemoryMcpController, MemoryProbeController, MemoryWebController],
+  controllers: [MemoryBanksController, MemoryManagementController, MemoryUnitsController, MemoryMcpController, MemoryProbeController, MemoryWebController],
   // API-only: it re-enqueues, and a sweeper that also ran in the worker would do it twice.
   providers: [MemoryIntakeService, MemoryGraphService, MemoryFilesService, MemoryFilesIndexSweeper, MemoryRateService, MemoryOperationsSweeper, MemoryWebService],
   exports: [MemoryCoreModule],

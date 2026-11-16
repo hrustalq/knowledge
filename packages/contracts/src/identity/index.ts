@@ -152,6 +152,30 @@ export const AUDIT_ACTIONS = [
   /** A memory bank was created or deleted (#986): `target` is its `bank_id`, `params` what a delete removed. */
   'memory.bank_created',
   'memory.bank_deleted',
+  /**
+   * Every other write to a memory bank (#1168), by REST, MCP or the bank page: `target` is the bank's `bank_id`,
+   * `params` the ids the request named and the operation, never memory text. Recall, reflect and the runtime's
+   * per-turn retention are not audited.
+   */
+  'memory.bank_updated',
+  'memory.retained',
+  'memory.files_uploaded',
+  'memory.file_changed',
+  'memory.graph_changed',
+  'memory.memories_deleted',
+  'memory.document_updated',
+  'memory.document_deleted',
+  'memory.observations_cleared',
+  'memory.consolidation_requested',
+  'memory.alias_changed',
+  'memory.template_imported',
+  'memory.exported',
+  'memory.imported',
+  'memory.cloned',
+  'memory.mental_model_changed',
+  'memory.directive_changed',
+  'memory.operation_cancelled',
+  'memory.promoted',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

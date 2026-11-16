@@ -1,4 +1,8 @@
-import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import OpenAI from 'openai';
 import type {
   ChatCompletionFunctionTool,
@@ -7,7 +11,12 @@ import type {
 } from 'openai/resources/chat/completions';
 import type { AssistantToolCall, AiUsageOperation } from '@knowledge/contracts';
 import type { ResolvedAiConfig } from '../ai/ai-config.service.js';
-import { AiUsageService, estimateTokens, type AiUsageRecordInput, type AiUsageTokens } from '../ai/ai-usage.service.js';
+import {
+  AiUsageService,
+  estimateTokens,
+  type AiUsageRecordInput,
+  type AiUsageTokens,
+} from '../ai/ai-usage.service.js';
 import { FREE_TOOLS, PARALLEL_SAFE_TOOLS } from './assistant-tool-types.js';
 import type { Locale } from '@knowledge/contracts';
 import { t } from '../i18n/t.js';
@@ -54,7 +63,9 @@ export function withLocaleDirective(
   const system = messages[at];
   if (typeof system.content !== 'string') return messages;
   return messages.map((m, i) =>
-    i === at ? { ...m, content: `${system.content as string}\n\n${directive}` } : m,
+    i === at
+      ? { ...m, content: `${system.content as string}\n\n${directive}` }
+      : m,
   );
 }
 
@@ -113,23 +124,34 @@ const LAST_ROUND_NUDGE: ChatCompletionMessageParam = {
  * block, never rewrites the model's actual words.
  */
 function stripToolMarkup(content: string): string {
-  if (!content.includes('DSML') && !content.includes('tool_calls')) return content;
+  if (!content.includes('DSML') && !content.includes('tool_calls'))
+    return content;
   return content
-    .replace(/<[|｜\s]*DSML[\s\S]*?(?:<\/[|｜\s]*DSML[|｜\s]*tool_calls>|$)/g, '')
+    .replace(
+      /<[|｜\s]*DSML[\s\S]*?(?:<\/[|｜\s]*DSML[|｜\s]*tool_calls>|$)/g,
+      '',
+    )
     .replace(/<\/?\s*tool_calls\s*>/g, '')
     .trim();
 }
 
 /** Provider-reported usage → our shape. */
-export function fromUsage(usage: OpenAI.Completions.CompletionUsage): AiUsageTokens {
+export function fromUsage(
+  usage: OpenAI.Completions.CompletionUsage,
+): AiUsageTokens {
   // DeepSeek reports cache hits at the top level, OpenAI and gen-api under the details; gen-api adds its charge.
   const extra = usage as { prompt_cache_hit_tokens?: number; cost?: unknown };
   return {
     promptTokens: usage.prompt_tokens ?? 0,
     completionTokens: usage.completion_tokens ?? 0,
-    totalTokens: usage.total_tokens ?? (usage.prompt_tokens ?? 0) + (usage.completion_tokens ?? 0),
+    totalTokens:
+      usage.total_tokens ??
+      (usage.prompt_tokens ?? 0) + (usage.completion_tokens ?? 0),
     estimated: false,
-    cachedPromptTokens: extra.prompt_cache_hit_tokens ?? usage.prompt_tokens_details?.cached_tokens ?? 0,
+    cachedPromptTokens:
+      extra.prompt_cache_hit_tokens ??
+      usage.prompt_tokens_details?.cached_tokens ??
+      0,
     ...(typeof extra.cost === 'number' ? { reportedCost: extra.cost } : {}),
   };
 }
@@ -139,14 +161,26 @@ export function fromUsage(usage: OpenAI.Completions.CompletionUsage): AiUsageTok
  * servers ignore `stream_options`, and an errored call never reports at all.
  * Flagged `estimated` so the UI can say so rather than implying billing truth.
  */
-function estimateFor(messages: ChatCompletionMessageParam[], completion: string): AiUsageTokens {
+function estimateFor(
+  messages: ChatCompletionMessageParam[],
+  completion: string,
+): AiUsageTokens {
   const promptChars = messages.reduce(
-    (n, m) => n + (typeof m.content === 'string' ? m.content.length : JSON.stringify(m.content ?? '').length),
+    (n, m) =>
+      n +
+      (typeof m.content === 'string'
+        ? m.content.length
+        : JSON.stringify(m.content ?? '').length),
     0,
   );
   const promptTokens = estimateTokens('x'.repeat(promptChars));
   const completionTokens = estimateTokens(completion);
-  return { promptTokens, completionTokens, totalTokens: promptTokens + completionTokens, estimated: true };
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens: promptTokens + completionTokens,
+    estimated: true,
+  };
 }
 
 export interface ToolExecutionResult {
@@ -180,7 +214,10 @@ export class ProviderAccountError extends ServiceUnavailableException {}
  * change can be compared against the run before it without a SQL join per
  * experiment.
  */
-export function recordAiCall(usage: AiUsageService, input: AiUsageRecordInput): void {
+export function recordAiCall(
+  usage: AiUsageService,
+  input: AiUsageRecordInput,
+): void {
   void usage.record(input);
   emitBacktest({
     ...(currentTrace() ?? { traceId: 'unscoped', source: 'cli' as const }),
@@ -212,16 +249,25 @@ export function upstreamException(
   http: { status?: number; message: string } | null,
 ): ServiceUnavailableException {
   if (http) {
-    logger.warn(`${label} upstream ${http.status}: ${String(http.message).slice(0, 300)}`);
-    if (http.status === 402) return new ProviderAccountError(t('error.assistant.upstreamNoCredit'));
+    logger.warn(
+      `${label} upstream ${http.status}: ${String(http.message).slice(0, 300)}`,
+    );
+    if (http.status === 402)
+      return new ProviderAccountError(t('error.assistant.upstreamNoCredit'));
     if (http.status === 401 || http.status === 403) {
-      return new ProviderAccountError(t('error.assistant.upstreamAuth', { status: http.status }));
+      return new ProviderAccountError(
+        t('error.assistant.upstreamAuth', { status: http.status }),
+      );
     }
     return new ServiceUnavailableException(
-      http.status ? t('error.assistant.upstreamStatus', { status: http.status }) : t('error.assistant.upstreamError'),
+      http.status
+        ? t('error.assistant.upstreamStatus', { status: http.status })
+        : t('error.assistant.upstreamError'),
     );
   }
-  logger.warn(`${label} request failed: ${err instanceof Error ? err.message : String(err)}`);
+  logger.warn(
+    `${label} request failed: ${err instanceof Error ? err.message : String(err)}`,
+  );
   return new ServiceUnavailableException(t('error.assistant.unreachable'));
 }
 
@@ -251,7 +297,9 @@ export class AssistantClient {
    */
   private clientFor(config: ResolvedAiConfig): OpenAI {
     if (!config.enabled) {
-      throw new ServiceUnavailableException(t('error.assistant.providerDisabled'));
+      throw new ServiceUnavailableException(
+        t('error.assistant.providerDisabled'),
+      );
     }
     const key = `${config.baseUrl}|${config.apiKey}|${config.timeoutMs}|${config.privateOk}`;
     const hit = this.clients.get(key);
@@ -276,27 +324,46 @@ export class AssistantClient {
   /** What the endpoint says it serves, sorted. Throws with the upstream message when it has no list. */
   async listModels(config: ResolvedAiConfig): Promise<string[]> {
     const page = await this.clientFor(config).models.list();
-    const codes = (page.data ?? []).map((model) => model.id).filter((id) => typeof id === 'string' && id.length <= 200);
+    const codes = (page.data ?? [])
+      .map((model) => model.id)
+      .filter((id) => typeof id === 'string' && id.length <= 200);
     return [...new Set(codes)].sort().slice(0, MODEL_LIST_MAX);
   }
 
   /** Single-shot completion (review / suggest). `json` asks for a JSON object response. */
-  async chat(ctx: AiCallContext, messages: ChatCompletionMessageParam[], opts?: { json?: boolean }): Promise<string> {
+  async chat(
+    ctx: AiCallContext,
+    messages: ChatCompletionMessageParam[],
+    opts?: { json?: boolean },
+  ): Promise<string> {
     const completion = await this.create(ctx, {
       messages,
-      ...(opts?.json ? { response_format: { type: 'json_object' as const } } : {}),
+      ...(opts?.json
+        ? { response_format: { type: 'json_object' as const } }
+        : {}),
     });
     return completion.choices[0]?.message?.content ?? '';
   }
 
   /** `chat`, with the tokens the call was billed for — for a caller whose own response reports them (#986). */
-  async chatWithUsage(ctx: AiCallContext, messages: ChatCompletionMessageParam[], opts?: { json?: boolean }): Promise<{ content: string; tokens: AiUsageTokens }> {
+  async chatWithUsage(
+    ctx: AiCallContext,
+    messages: ChatCompletionMessageParam[],
+    opts?: { json?: boolean },
+  ): Promise<{ content: string; tokens: AiUsageTokens }> {
     const completion = await this.create(ctx, {
       messages,
-      ...(opts?.json ? { response_format: { type: 'json_object' as const } } : {}),
+      ...(opts?.json
+        ? { response_format: { type: 'json_object' as const } }
+        : {}),
     });
     const content = completion.choices[0]?.message?.content ?? '';
-    return { content, tokens: completion.usage ? fromUsage(completion.usage) : estimateFor(messages, content) };
+    return {
+      content,
+      tokens: completion.usage
+        ? fromUsage(completion.usage)
+        : estimateFor(messages, content),
+    };
   }
 
   /**
@@ -317,21 +384,66 @@ export class AssistantClient {
      * where no tools are offered.
      */
     opts?: { jsonFinalRound?: boolean },
-  ): Promise<{ content: string; trace: AssistantToolCall[] }> {
-    const { content, trace } = await this.toolLoop(ctx, messages, tools, execute, {
-      jsonFinalRound: opts?.jsonFinalRound,
-      complete: async (params) => {
-        const message = (await this.create(ctx, params)).choices[0]?.message;
-        // No choices at all is an upstream failure, not an empty answer.
-        if (!message) throw this.upstreamError(new Error('Provider returned no completion choices'));
-        const toolCalls = (message.tool_calls ?? [])
-          .filter((c): c is ChatCompletionMessageFunctionToolCall => c.type === 'function')
-          .map((c) => ({ id: c.id, name: c.function.name, arguments: c.function.arguments }));
-        // The provider's own message goes back into the transcript, whatever else it carries.
-        return { content: message.content ?? '', toolCalls, cancelled: false, assistant: message };
+  ): Promise<{
+    content: string;
+    trace: AssistantToolCall[];
+    usage: AiUsageTokens;
+  }> {
+    const usage: AiUsageTokens = {
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      estimated: false,
+      cachedPromptTokens: 0,
+    };
+    const { content, trace } = await this.toolLoop(
+      ctx,
+      messages,
+      tools,
+      execute,
+      {
+        jsonFinalRound: opts?.jsonFinalRound,
+        complete: async (params) => {
+          const completion = await this.create(ctx, params);
+          const message = completion.choices[0]?.message;
+          // No choices at all is an upstream failure, not an empty answer.
+          if (!message)
+            throw this.upstreamError(
+              new Error('Provider returned no completion choices'),
+            );
+          const tokens = completion.usage
+            ? fromUsage(completion.usage)
+            : estimateFor(params.messages, message.content ?? '');
+          usage.promptTokens += tokens.promptTokens;
+          usage.completionTokens += tokens.completionTokens;
+          usage.totalTokens += tokens.totalTokens;
+          usage.estimated ||= tokens.estimated;
+          usage.cachedPromptTokens =
+            (usage.cachedPromptTokens ?? 0) + (tokens.cachedPromptTokens ?? 0);
+          if (tokens.reportedCost !== undefined)
+            usage.reportedCost =
+              (usage.reportedCost ?? 0) + tokens.reportedCost;
+          const toolCalls = (message.tool_calls ?? [])
+            .filter(
+              (c): c is ChatCompletionMessageFunctionToolCall =>
+                c.type === 'function',
+            )
+            .map((c) => ({
+              id: c.id,
+              name: c.function.name,
+              arguments: c.function.arguments,
+            }));
+          // The provider's own message goes back into the transcript, whatever else it carries.
+          return {
+            content: message.content ?? '',
+            toolCalls,
+            cancelled: false,
+            assistant: message,
+          };
+        },
       },
-    });
-    return { content, trace };
+    );
+    return { content, trace, usage };
   }
 
   /**
@@ -361,15 +473,24 @@ export class AssistantClient {
        * (`edit_draft` streams its text into the editor). Optional; nothing
        * else in the harness reads arguments before they are complete.
        */
-      toolArgs?: (call: { id: string; name: string; arguments: string }) => void;
+      toolArgs?: (call: {
+        id: string;
+        name: string;
+        arguments: string;
+      }) => void;
     },
     /** Aborted when the client hangs up — see the controller's Stop handling. */
     signal?: AbortSignal,
-  ): Promise<{ content: string; trace: AssistantToolCall[]; cancelled: boolean }> {
+  ): Promise<{
+    content: string;
+    trace: AssistantToolCall[];
+    cancelled: boolean;
+  }> {
     return this.toolLoop(ctx, messages, tools, execute, {
       ...on,
       signal,
-      complete: (params) => this.createStream(ctx, params, on.delta, signal, on.toolArgs),
+      complete: (params) =>
+        this.createStream(ctx, params, on.delta, signal, on.toolArgs),
     });
   }
 
@@ -401,7 +522,11 @@ export class AssistantClient {
       toolEnd?: (tool: string, ok: boolean) => Promise<void> | void;
       roundEnd?: (text: string) => void;
     },
-  ): Promise<{ content: string; trace: AssistantToolCall[]; cancelled: boolean }> {
+  ): Promise<{
+    content: string;
+    trace: AssistantToolCall[];
+    cancelled: boolean;
+  }> {
     const { signal } = loop;
     const trace: AssistantToolCall[] = [];
     const convo: ChatCompletionMessageParam[] = [...messages];
@@ -417,7 +542,12 @@ export class AssistantClient {
       // the loop normally exits through the no-tools-requested return with real
       // prose. This used to return '' — a blank bubble shown to the reader as
       // the answer, which is worse than saying plainly that nothing came back.
-      if (round$ >= maxRounds) return { content: t('error.assistant.roundsExhausted'), trace, cancelled: false };
+      if (round$ >= maxRounds)
+        return {
+          content: t('error.assistant.roundsExhausted'),
+          trace,
+          cancelled: false,
+        };
 
       const budgetLeft = this.budgetLeft(ctx, trace);
       // Spending the budget is no longer the only way to reach the end: the
@@ -426,13 +556,26 @@ export class AssistantClient {
       const finalRound = round$ >= maxRounds - 1;
       const offered = finalRound ? [] : budgetLeft > 0 ? tools : free;
       const round = await loop.complete({
-        messages: finalRound || budgetLeft <= 0 ? [...convo, LAST_ROUND_NUDGE] : convo,
+        messages:
+          finalRound || budgetLeft <= 0 ? [...convo, LAST_ROUND_NUDGE] : convo,
         ...(offered.length > 0 ? { tools: offered } : {}),
-        ...(loop.jsonFinalRound && offered.length === 0 ? { response_format: { type: 'json_object' as const } } : {}),
+        ...(loop.jsonFinalRound && offered.length === 0
+          ? { response_format: { type: 'json_object' as const } }
+          : {}),
       });
 
-      if (round.cancelled) return { content: stripToolMarkup(round.content), trace, cancelled: true };
-      if (round.toolCalls.length === 0) return { content: stripToolMarkup(round.content), trace, cancelled: false };
+      if (round.cancelled)
+        return {
+          content: stripToolMarkup(round.content),
+          trace,
+          cancelled: true,
+        };
+      if (round.toolCalls.length === 0)
+        return {
+          content: stripToolMarkup(round.content),
+          trace,
+          cancelled: false,
+        };
 
       loop.roundEnd?.(round.content);
       convo.push(
@@ -465,11 +608,21 @@ export class AssistantClient {
       let spent = 0;
       const planned = round.toolCalls.map((call) => {
         const isOffered = offeredNames.has(call.name);
-        return { call, isOffered, allowed: isOffered && (FREE_TOOLS.has(call.name) || spent++ < budgetLeft) };
+        return {
+          call,
+          isOffered,
+          allowed:
+            isOffered && (FREE_TOOLS.has(call.name) || spent++ < budgetLeft),
+        };
       });
-      const results = new Array<ToolExecutionResult | undefined>(planned.length);
+      const results = new Array<ToolExecutionResult | undefined>(
+        planned.length,
+      );
 
-      const runOne = async (call: { id: string; name: string; arguments: string }, at: number): Promise<void> => {
+      const runOne = async (
+        call: { id: string; name: string; arguments: string },
+        at: number,
+      ): Promise<void> => {
         await loop.toolStart?.(call.name, call.arguments.slice(0, 500));
         let args: Record<string, unknown> = {};
         try {
@@ -482,8 +635,13 @@ export class AssistantClient {
         try {
           result = await execute(call.name, args, call.id);
         } catch (err) {
-          this.logger.warn(`Tool ${call.name} failed: ${err instanceof Error ? err.message : err}`);
-          result = { content: JSON.stringify({ error: 'Tool execution failed' }), ok: false };
+          this.logger.warn(
+            `Tool ${call.name} failed: ${err instanceof Error ? err.message : err}`,
+          );
+          result = {
+            content: JSON.stringify({ error: 'Tool execution failed' }),
+            ok: false,
+          };
         }
         results[at] = result;
         await loop.toolEnd?.(call.name, result.ok ?? true);
@@ -502,12 +660,20 @@ export class AssistantClient {
       // flight cannot be interrupted between its members, which is why only
       // reads are batched: the abort check stays exactly where the side effects
       // are — before each serial call.
-      if (signal?.aborted) return { content: round.content, trace, cancelled: true };
-      const live = planned.map((p, at) => ({ ...p, at })).filter((p) => p.allowed);
-      await Promise.all(live.filter((p) => PARALLEL_SAFE_TOOLS.has(p.call.name)).map((p) => runOne(p.call, p.at)));
+      if (signal?.aborted)
+        return { content: round.content, trace, cancelled: true };
+      const live = planned
+        .map((p, at) => ({ ...p, at }))
+        .filter((p) => p.allowed);
+      await Promise.all(
+        live
+          .filter((p) => PARALLEL_SAFE_TOOLS.has(p.call.name))
+          .map((p) => runOne(p.call, p.at)),
+      );
       for (const p of live) {
         if (PARALLEL_SAFE_TOOLS.has(p.call.name)) continue;
-        if (signal?.aborted) return { content: round.content, trace, cancelled: true };
+        if (signal?.aborted)
+          return { content: round.content, trace, cancelled: true };
         await runOne(p.call, p.at);
       }
 
@@ -517,11 +683,17 @@ export class AssistantClient {
       for (const [at, { call, allowed, isOffered }] of planned.entries()) {
         if (!isOffered) {
           this.logger.warn(`Refused tool ${call.name}: not offered this round`);
-          trace.push({ tool: call.name, arguments: call.arguments.slice(0, 500), ok: false });
+          trace.push({
+            tool: call.name,
+            arguments: call.arguments.slice(0, 500),
+            ok: false,
+          });
           convo.push({
             role: 'tool',
             tool_call_id: call.id,
-            content: JSON.stringify({ error: `Tool ${call.name} is not available here; use only the tools you were given.` }),
+            content: JSON.stringify({
+              error: `Tool ${call.name} is not available here; use only the tools you were given.`,
+            }),
           });
           continue;
         }
@@ -530,12 +702,23 @@ export class AssistantClient {
           convo.push({
             role: 'tool',
             tool_call_id: call.id,
-            content: JSON.stringify({ error: 'Tool budget for this turn is exhausted; answer with what you have.' }),
+            content: JSON.stringify({
+              error:
+                'Tool budget for this turn is exhausted; answer with what you have.',
+            }),
           });
           continue;
         }
-        trace.push({ tool: call.name, arguments: call.arguments.slice(0, 500), ok: result.ok ?? true });
-        convo.push({ role: 'tool', tool_call_id: call.id, content: result.content.slice(0, MAX_TOOL_RESULT_CHARS) });
+        trace.push({
+          tool: call.name,
+          arguments: call.arguments.slice(0, 500),
+          ok: result.ok ?? true,
+        });
+        convo.push({
+          role: 'tool',
+          tool_call_id: call.id,
+          content: result.content.slice(0, MAX_TOOL_RESULT_CHARS),
+        });
       }
     }
   }
@@ -547,10 +730,17 @@ export class AssistantClient {
    */
   private async createStream(
     ctx: AiCallContext,
-    params: Omit<OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming, 'model' | 'temperature' | 'stream'>,
+    params: Omit<
+      OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming,
+      'model' | 'temperature' | 'stream'
+    >,
     onDelta: (text: string) => void,
     signal?: AbortSignal,
-    onToolArgs?: (call: { id: string; name: string; arguments: string }) => void,
+    onToolArgs?: (call: {
+      id: string;
+      name: string;
+      arguments: string;
+    }) => void,
   ): Promise<{
     content: string;
     toolCalls: Array<{ id: string; name: string; arguments: string }>;
@@ -560,7 +750,10 @@ export class AssistantClient {
     const startedAt = Date.now();
     let content = '';
     let reported: AiUsageTokens | null = null;
-    const partial = new Map<number, { id: string; name: string; arguments: string }>();
+    const partial = new Map<
+      number,
+      { id: string; name: string; arguments: string }
+    >();
     try {
       const stream = await client.chat.completions.create(
         {
@@ -585,10 +778,15 @@ export class AssistantClient {
           onDelta(delta.content);
         }
         for (const call of delta.tool_calls ?? []) {
-          const slot = partial.get(call.index) ?? { id: '', name: '', arguments: '' };
+          const slot = partial.get(call.index) ?? {
+            id: '',
+            name: '',
+            arguments: '',
+          };
           if (call.id) slot.id = call.id;
           if (call.function?.name) slot.name = call.function.name;
-          if (call.function?.arguments) slot.arguments += call.function.arguments;
+          if (call.function?.arguments)
+            slot.arguments += call.function.arguments;
           partial.set(call.index, slot);
           // Some providers send the id only on the first fragment and some not
           // at all; the index is stable within a round either way.
@@ -602,11 +800,20 @@ export class AssistantClient {
       // that point is still real, and the caller decides what to keep. Either
       // way the tokens were spent upstream, so the call is still recorded.
       const cancelled = signal?.aborted === true;
-      this.bill(ctx, reported ?? estimateFor(params.messages, content), startedAt, {
-        ok: cancelled,
-        error: cancelled ? 'cancelled by client' : err instanceof Error ? err.message : String(err),
-        toolCallCount: partial.size,
-      });
+      this.bill(
+        ctx,
+        reported ?? estimateFor(params.messages, content),
+        startedAt,
+        {
+          ok: cancelled,
+          error: cancelled
+            ? 'cancelled by client'
+            : err instanceof Error
+              ? err.message
+              : String(err),
+          toolCallCount: partial.size,
+        },
+      );
       if (cancelled) return { content, toolCalls: [], cancelled: true };
       throw this.upstreamError(err);
     }
@@ -614,16 +821,24 @@ export class AssistantClient {
     const toolCalls = [...partial.entries()]
       .map(([index, c]) => ({ ...c, id: c.id || `call-${index}` }))
       .filter((c) => c.name);
-    this.bill(ctx, reported ?? estimateFor(params.messages, content), startedAt, {
-      ok: true,
-      toolCallCount: toolCalls.length,
-    });
+    this.bill(
+      ctx,
+      reported ?? estimateFor(params.messages, content),
+      startedAt,
+      {
+        ok: true,
+        toolCallCount: toolCalls.length,
+      },
+    );
     return { content, toolCalls, cancelled: false };
   }
 
   private async create(
     ctx: AiCallContext,
-    params: Omit<OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming, 'model' | 'temperature'>,
+    params: Omit<
+      OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming,
+      'model' | 'temperature'
+    >,
   ) {
     const client = this.clientFor(ctx.config);
     const startedAt = Date.now();
@@ -638,9 +853,16 @@ export class AssistantClient {
         ctx,
         completion.usage
           ? fromUsage(completion.usage)
-          : estimateFor(params.messages, completion.choices[0]?.message?.content ?? ''),
+          : estimateFor(
+              params.messages,
+              completion.choices[0]?.message?.content ?? '',
+            ),
         startedAt,
-        { ok: true, toolCallCount: completion.choices[0]?.message?.tool_calls?.length ?? 0 },
+        {
+          ok: true,
+          toolCallCount:
+            completion.choices[0]?.message?.tool_calls?.length ?? 0,
+        },
       );
       return completion;
     } catch (err) {
@@ -675,10 +897,20 @@ export class AssistantClient {
 
   /** Billable calls only — asking the user something is free, see FREE_TOOLS. */
   private budgetLeft(ctx: AiCallContext, trace: AssistantToolCall[]): number {
-    return ctx.config.maxToolCalls - trace.filter((c) => !FREE_TOOLS.has(c.tool)).length;
+    return (
+      ctx.config.maxToolCalls -
+      trace.filter((c) => !FREE_TOOLS.has(c.tool)).length
+    );
   }
 
   private upstreamError(err: unknown): ServiceUnavailableException {
-    return upstreamException(this.logger, 'Assistant', err, err instanceof OpenAI.APIError ? { status: err.status, message: String(err.message) } : null);
+    return upstreamException(
+      this.logger,
+      'Assistant',
+      err,
+      err instanceof OpenAI.APIError
+        ? { status: err.status, message: String(err.message) }
+        : null,
+    );
   }
 }

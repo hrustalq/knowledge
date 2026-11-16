@@ -21,13 +21,94 @@ The rule: **a memory is a row an agent wrote for itself: live at once, readable 
 its bank, never a page and never in page search. A bank belongs to one workspace. Anything
 that should become shared knowledge leaves through the capture → merge request path.**
 
+## Agent runtime memory
+
+With `MEMORY_ENABLED` and the workspace `memory` section on, the assistant and background agents
+use memory automatically, not only through the external API. Before a turn or run, recall grounds
+the model in two separate contexts; after a successful one, its request and outcome are eligible for
+retention under an idempotent `assistant-turn:<message id>` or `agent-run:<run id>` document id.
+Retention is fire-and-forget and never throws: a finished turn or run is never failed or delayed by
+its memory, and a recall failure leaves it ungrounded.
+
+- **Personal:** `agent:<agent key>:user:<user id>` holds that agent's working context for that
+  user. `agent_key` + `owner_id` describe it, and only the owner can read it — an admin bypass
+  does not open somebody else's personal bank.
+- **Project:** `project:<project id>` holds requirements, constraints, decisions and lessons for
+  everyone who may open the project. It follows the existing project ACL and is shared across agents.
+
+The two are recalled and retained independently: personal preferences never become project
+requirements merely because both grounded one run. Every recalled block reaches the model through
+`wrapUntrusted`, and ordinary retain still masks, extracts, embeds and consolidates the outcome.
+A viewer recalls but does not retain, matching the public memory API; an editor's turn writes each
+scope the policy enables. A chat answer visible to a whole group does not recall or retain either
+scope, since its readers may include people outside the owner or project audience. The worker and
+API use the same `MemoryRuntimeService`; no Hindsight sidecar is involved.
+
+Where the two scopes meet a wider audience, the narrower one wins, and the rule is enforced where
+the bank is read or written, never in a prompt:
+
+- **Runtime bank ids are reserved.** No wire creates a bank, an alias or a transfer target named
+  `agent:<key>:user:<id>` or `project:<id>` (400); only `MemoryBanksService.runtimeBank` does. The
+  runtime reads its banks by direct id, never through an alias, and uses a row only while its owner,
+  agent and project equal the ones the runtime would give it (`holdsRuntimeIdentity`). A row that
+  fails the check is skipped with a warning, so that scope has no runtime memory until the row is
+  deleted.
+- **A background run never touches a personal bank.** Its summary and findings are listed to every
+  member, so it recalls and retains only project banks visible under `WORKSPACE_AUDIENCE`. A private
+  run (a memo's, a restricted project's check) retains nothing.
+- **A background run recalls at most once**, on its first model call, and every later call of the
+  run carries the same block. Grounding is applied by the model client `AgentServices` hands every
+  runner (`svc.client`, and `callModel` over it), so a runner — or a helper it passes that client
+  to, like the code-reading loop — cannot skip it. The query is the run's brief (a note or a webhook
+  body), else the titles of its subject pages (`subjectPagesOfRun`: `doc:`/`mr:`/`issue:` subjects
+  and the pages in its input) that the whole workspace may open. A run with neither does not recall:
+  the agent's description would be the same query on every run, and a workspace-wide run has no
+  project bank to read anyway.
+- **The glossarist does not recall** (a deliberate non-goal): it calls `GlossaryService.suggest`,
+  the same call the settings page makes, with that service's own client. It extracts terms from the
+  page in front of it, where earlier project work adds nothing to check against. It still retains
+  its outcome like every run. Memory's own extraction and consolidation calls are never grounded.
+- **An agent mention reply** (feature 21) recalls and retains under the page's audience
+  (`{ kind: 'document' }`): never the commenter's personal bank, and the project bank only when the
+  page's readers may open it. The reply is copied to the project bank (`mention-reply:<comment id>`)
+  only when the page is restricted by nothing but its project — `withinProjectAudience` on the scope
+  clamped to the page's readers — since the reply quotes the page and thread. A mention answered by
+  a run (`comment.mention` trigger) is an ordinary background run.
+- **An assistant turn reaches the project bank only when its readers could have seen all of it:**
+  neither it nor an earlier turn in its thread recalled the asker's personal bank or carried a draft
+  or attachment, and the asker's scope reads nothing the project's readers cannot
+  (`withinProjectAudience`). Otherwise it is retained to the personal bank only. The thread keeps
+  the first such turn in `assistant_threads.private_context_at` (#1169), because a later answer can
+  repeat what an earlier one was told; the migration marks every thread that existed before it,
+  since whether those turns carried a draft or an attachment was never stored. A re-sent question is
+  a new turn with its own message id, so it is retained as one, not as a retry.
+- **Workflows use neither** (a deliberate non-goal): a step's items and drafts become pages and
+  merge requests, and rerunning a step on the same page should give the same result rather than one
+  that drifts with whatever the bank learned since. Neither do the one-shot review / suggest / ask
+  calls, public Ask or the Knowledge MCP tools.
+- `test/agent-memory-runtime.e2e-spec.ts` proves the loop against live infra on a stub model: an
+  assistant turn retains to both banks, the next turn recalls both, and a reviewer run (a direct
+  client call, no note) recalls the project bank on its subject title, never the personal one, and
+  retains its outcome there. It also asserts every caller is actually injected with the runtime —
+  until #1167, a type-only import left every background run with none.
+
+Each agent's `memoryPolicy` controls retention only, with `mode: all | durable | off` and optional
+`personal` and `project` overrides. Missing policy is `all`, exactly the previous behavior; `off`
+skips bank creation and writes without disabling recall. In `durable`, the extraction prompt tells
+the memorist to keep durable facts only (`DURABLE_ONLY_RULE` in `memory-facts.ts`: preferences,
+decisions, requirements, constraints, conventions, lessons), so status and chatter are dropped within
+an item, not only whole items of it (#1169); an item it answers with an explicitly empty fact list
+stores nothing. `all` sends the prompt unchanged. A missing extraction route, spent budget, failed call or unreadable answer still stores
+the masked request/outcome verbatim, so durable filtering is not claimed when extraction could not
+run. The same source id replaces earlier facts on retry, including replacing them with none.
+
 **A bank is one store with several wires.** Each wire keeps its interface exactly — tool names,
 schemas, answer strings, error strings — and underneath is the same bank, resolved by the same
 `MemoryAccessService`. What any wire writes, Hindsight `recall` on that bank finds.
 
 | Wire | Where | Reference it matches |
 | --- | --- | --- |
-| Hindsight | `/v1/default/banks/{bank_id}/…`, `/mcp/{bank_id}/` | [Hindsight](https://github.com/vectorize-io/hindsight) OpenAPI v1.2.1, core routes only |
+| Hindsight | `/v1/default/banks/{bank_id}/…`, `/mcp/{bank_id}/` | [Hindsight](https://github.com/vectorize-io/hindsight) OpenAPI v1.2.1, with the selected management surface below |
 | Knowledge graph | `/mcp/{bank_id}/graph` | the MCP reference memory server, `@modelcontextprotocol/server-memory` 2.1.1 |
 | Memory files | `POST /v1/default/banks/{bank_id}/memory-tool`, `/mcp/{bank_id}/files` | Anthropic's memory tool (`memory_20250818`) and the SDK's `BetaLocalFilesystemMemoryTool` (`@anthropic-ai/sdk` 1.8.0) |
 
@@ -35,8 +116,8 @@ schemas, answer strings, error strings — and underneath is the same bank, reso
 `apps/api/test/hindsight-compat.e2e-spec.ts` (the official `@vectorize-io/hindsight-client`),
 `memory-graph-compat.e2e-spec.ts` (the reference server over stdio on a temporary file) and
 `memory-files-compat.e2e-spec.ts` (the SDK's filesystem handler on a temporary directory). No model
-is called by any of them. Every other Hindsight route answers 404. Where this server differs from a
-reference, the difference is listed under that wire below.
+is called by any of them. Hindsight routes outside the selected surface answer 404. Where this server differs from a
+reference, the difference is listed under that wire below and in the management matrix.
 
 ## Switching it on
 
@@ -147,11 +228,24 @@ an `X-Workspace-Id` header.
 | `GET`, `PUT …/profile` | viewer, editor | name, mission, disposition |
 | `POST …/memories` | editor, `capture` key | retain; `async: true` returns an `operation_id` |
 | `POST …/memories/recall` | viewer | recall |
-| `POST …/reflect` | viewer | one answer over a recall |
+| `POST …/reflect` | viewer | one answer over a recall; active matching directives constrain it |
+| `GET`, `POST …/directives` | viewer, editor | list/filter directives; create a named rule set |
+| `GET`, `PATCH`, `DELETE …/directives/{directive_id}` | viewer, editor, editor | read, update/activate/deactivate, delete |
 | `GET …/memories/list`, `GET …/memories/{id}`, `GET …/stats` | viewer | |
+| `GET …/observations/scopes` | viewer | exact observation scopes and their counts |
+| `GET …/documents`, `GET`, `PATCH`, `DELETE …/documents/{id}` | viewer, editor | document projection, tag/scope update, delete |
+| `GET …/documents/{id}/chunks`, `GET /v1/default/chunks/{id}` | viewer | retained source chunks |
+| `GET …/tags` | viewer | memory or mental-model tags with counts |
+| `DELETE …/observations`, `DELETE …/memories/{id}/observations` | editor | clear all or one fact's observations and queue rebuild |
+| `GET`, `POST`, `PATCH`, `DELETE …/aliases…` | viewer, editor | additional ids for the same ACL-resolved bank |
+| `GET …/export`, `POST …/import` | viewer, editor | bank template export/import, with dry run |
+| `POST …/files/retain` | editor | asynchronous file parsing and retain |
+| `POST …/document-transfer…`, `POST …/transfer/…`, `POST …/clone` | editor | asynchronous export, import, restore and clone |
+| `GET /v1/default/files/download/{key}` | viewer | a bank-owned transfer archive: authorized here, then a 302 to a presigned bucket URL (#1165); the official client follows it |
+| `GET …/audit-logs…` | viewer | the bank's platform audit events and daily counts, from this bank's lifetime only (a deleted bank frees its id) and without the request IP, which stays on the admin-only workspace trail |
 | `DELETE …/memories` | editor | every memory, or one fact type; the memory tool's file chunks stay (#1018) |
-| `GET`, `PATCH …/config` | viewer, editor | `enable_observations`, `reflect_mission`, the three disposition traits; any other key is a 400 that names the ones kept |
-| `POST …/consolidate` | editor | one consolidation pass as an operation; 409 with the reason while consolidation cannot run |
+| `GET`, `PATCH …/config` | viewer, editor | observation scopes/strategies, `enable_observations`, missions and disposition traits; unsupported keys are a 400 |
+| `POST …/consolidate` | editor | one full or targeted consolidation pass as an operation; 409 with the reason while it cannot run |
 | `GET …/operations`, `GET …/operations/{id}` | viewer | an id the bank does not hold reads `not_found` |
 | `DELETE …/operations/{id}` | editor | cancel a pending one |
 | `POST /mcp/{bank_id}/`, `POST /mcp` | per tool | `retain`, `sync_retain`, `recall`, `reflect` (+ `list_banks`); `/mcp/{bank_id}/hindsight` is the same server |
@@ -161,6 +255,20 @@ an `X-Workspace-Id` header.
 Errors under these paths leave as `{"detail": …}`, FastAPI's shape, including an unmatched
 route and a body-parser error; a failed validation is a 422 with one entry per violation.
 None of these routes is in `openapi.json`, the generated web client or the docs reference.
+
+**Every write is audited** (#1168), so `/version` reports `audit_log: true`. Each successful write
+records one `audit_logs` row: `target` is the bank's own `bank_id` (a request through an alias
+files under the bank it names), `actor` the caller, `params` the ids the request named and the
+operation, never memory text, a path, a query or tags. The action is one of the `memory.*` values
+of `AUDIT_ACTIONS`. A write reachable by REST only records through `@MemoryAudit` on its route
+(`MemoryAuditInterceptor`, after the handler resolved, so a refused or failed write records
+nothing). A write MCP reaches too records at its shared door: retain in `MemoryIntakeService.retain`,
+the memory tool's five write commands in `MemoryFilesService.execute`, the graph's six writes in
+`MemoryGraphService`. A bank the worker makes (restore, clone) is `memory.bank_created` under the
+operation's author, and a `PUT` that creates a bank is its creation alone. **Not audited:** recall
+and reflect (reads, and the busiest calls), and the runtime's own per-turn retention, which follows
+every assistant turn and agent run and is visible in the bank instead. The rows sit on the
+workspace's audit trail too, which is admin-only; the bank route serves them without the IP.
 
 ## How a request is resolved
 
@@ -178,9 +286,10 @@ workspace and a bank; every route and every MCP tool asks it, on execution:
 ## Storage
 
 Postgres holds the truth: `memory_banks`, `memory_units`, `memory_unit_entities`,
-`memory_operations`, for observations `memory_observation_evidence` and
-`memory_observation_history`, for the graph wire `memory_entities` and `memory_relations`, and for the
-files wire `memory_files` — all cascading from the bank and filed in the workspace teardown inventory. ArcadeDB holds only the vector, as a third vector type (`MemoryUnit`)
+`memory_operations`, reflect rules in `memory_directives`, for observations `memory_observation_scopes`, `memory_observation_scope_members`,
+`memory_observation_evidence` and `memory_observation_history`, for the graph wire `memory_entities` and
+`memory_relations`, and for the files wire `memory_files` — all cascading from the bank and filed in the
+workspace teardown inventory. ArcadeDB holds only the vector, as a third vector type (`MemoryUnit`)
 beside `Chunk` and `ChatChunk`. A vector is written before its row; recall loads the final
 rows from Postgres by id, workspace and bank, so an orphan vector is never served, and the
 worker's `MemoryReapSweeper` removes it. Deleting a bank or a workspace removes its rows and
@@ -208,7 +317,9 @@ an async one.
 - **Async**: the items are stored, masked, in a `memory_operations` row whose id is the
   client's `operation_id` when it sent one; the job carries only the id. An API-side sweeper
   re-enqueues a job the queue lost, re-queues or fails a row a dead worker left claimed, and
-  purges finished rows after `MEMORY_OPERATION_RETENTION_DAYS`.
+  purges finished rows after `MEMORY_OPERATION_RETENTION_DAYS`. A running row beats (`updated_at`)
+  every third of `MEMORY_OPERATION_TIMEOUT_MS` (#1165), so only a row that went quiet — its worker
+  gone — is re-queued; an import that outlasts the timeout runs once.
 
 **Verbatim retain** (#1007): a wire whose interface stores exactly what it was given sets
 `RetainInput.verbatim`, which skips the `memorist` and stores one unit per item, still masked and
@@ -223,70 +334,100 @@ files wire's chunks are the one exception: they are an index of text already adm
 Recall fuses four legs with `fuseHits` (`search/ranking.ts`): nearest vectors, `tsvector`
 rank over any of the query's words, memories sharing an entity with the best hits, and the
 occurred span when the request gives a `temporal_window`. A tag or type filter is decided in
-Postgres first and handed to every leg. Results are cut to `max_tokens` by an estimate
-(~4 characters a token), best first. `rerank.prune` asks the decision model only when one is
-routed. There is no cross-encoder reranker: `min_scores.reranker` is a 400.
+Postgres first and handed to every leg. With `MEMORY_RERANKER_PROVIDER=openai-compatible`, the
+fused rows (after the same workspace, bank, type and tag checks) are scored against the original
+query through the operator's `/rerank` endpoint. Raw logits are sigmoid-normalized to `0`–`1`;
+that value is both `scores.reranker` and the scored row's `scores.final`. The candidate cap is
+bounded, overflow stays in RRF order (and is left out under any score floor, since its `final` is still an RRF score, #1166), and query/document payload sizes and provider latency are
+capped. `min_scores.reranker` and `min_scores.final` are inclusive and run before token cutting.
+A provider failure falls back to RRF; an explicit reranker floor instead returns no unverifiable
+rows. With no provider, response shapes and RRF behavior are unchanged and a reranker floor is a
+400. Results are cut to `max_tokens` by an estimate (~4 characters a token), best first.
+`rerank.prune` remains a separate decision-model pre-filter, asked only when one is routed.
 
-Reflect is one recall and one model call by the `reflector` agent (purpose `chat`). The
-bank's mission and disposition are trusted lines of the system prompt; the recalled memories
-reach the model only inside `wrapUntrusted`, as they do in the MCP `recall` tool's result.
-With no model configured reflect answers 409 and bills nothing.
+Reflect starts with one mandatory recall, then the `reflector` agent (purpose `chat`) runs in the
+bounded tool harness with only this bank's `recall` tool. It can gather more evidence in up to ten
+additional recalls before the final, toolless answer. Repeated memories are dropped, labels stay
+stable across rounds (`[M1]`, `[M2]`, …), `based_on.memories` lists exactly what the model was
+shown, and `trace` is present when it recalled again. `usage` aggregates every model round. The
+bank's mission and disposition are trusted system lines; memories from every round reach the model
+only inside `wrapUntrusted`. With no model configured reflect answers 409 and bills nothing.
+
+**Scoped directives** (#1159) are named, prioritized sets of hard rules managed through
+`/directives` with the official client. Untagged directives are global; tagged ones match the reflect
+scope by tags exactly as the reference server's `list_directives` filters them (#1166): the request's tags filter the directive's as recall filters a memory's — `all` needs the directive to carry every requested tag, `any` one of them, `exact` the same set — and with no request tags only untagged directives apply, at most 24,000 characters of name plus content per reflect, highest priority first, and `apply_all_directives: true` selects every active directive in
+the already ACL-resolved bank. Inactive directives never apply. The selected content is a trusted system
+instruction, separate from and taking precedence over untrusted memory text, but is never evidence:
+an empty bank still has no factual answer merely because a directive exists. `include.facts` returns
+exactly the applied `{id, name, content}` rows in `based_on.directives`. Directives do not affect retain,
+consolidation or ordinary assistant/agent turns.
 
 ## Observations
 
-A bank's facts are folded, in the background, into **observations**: one durable statement, the
-facts that support it and a quote from each (`memory_observation_evidence`). An observation is a
-`memory_units` row of type `observation`, with its own vector, so recall ranks it like any memory.
-Its proof count is its evidence rows, derived on read and never stored.
+A bank's facts are folded, in the background, into **observations**: durable statements with verbatim
+evidence quotes (`memory_observation_evidence`). An observation is a `memory_units` row of type
+`observation`, with its own vector, so recall ranks it like any memory. Its proof count is derived from
+its evidence rows.
 
-- **Who does it.** The `consolidator` agent (purpose `extraction`), one JSON call per batch of up to
-  ten facts, from `MemoryConsolidationService`. The worker runs it: `MemoryConsolidationSweeper`
-  makes one call per bank per minute for every bank with facts waiting, and `POST …/consolidate`
-  queues a pass of up to ten calls as an operation row (`type: consolidation`, the same queue,
-  processor and stale-row sweeper as an async retain).
-- **When it runs.** Only while a model is routed to the consolidator — the extraction route or a pin
-  on the agent, never the inline or env model — the bank has not set `enable_observations: false`
-  (null inherits on), the workspace budget has room (`assertWithinBudget`, billed to no person as the
-  learner's coach is), and the bank is under its daily cap. Each is checked before the call it would
-  pay for; a pass that stops says which (`disabled`, `no-model`, `cap`, `budget`, `failed`). With no
-  model routed nothing is claimed and nothing is called: recall behaves as it did before observations.
-- **Language.** An observation is written in the language of the facts it rests on (#1022): the
-  pass sends no reply-language directive, as extraction does not. Reflect is a reply to a person and
-  answers in the caller's locale.
-- **The daily cap** is `MEMORY_CONSOLIDATION_DAILY_CALLS` per bank per UTC day, taken by one guarded
-  `UPDATE` of `memory_banks.consolidation_day` / `consolidation_calls` before each call, so two workers
-  never pass it. The backlog waits for the next day. Decision-model screens do not count against it.
-- **Claimed once.** Facts are claimed with one `UPDATE … WHERE id IN (… FOR UPDATE SKIP LOCKED)` on
-  `consolidation_claimed_at`, one tag scope at a time (the oldest pending fact's exact tag set), so two
-  workers never read the same facts and an observation never mixes facts filed under different tags.
-  A claim older than ten minutes is a dead worker's and is taken over; a stopped or failed batch
-  releases its claim. A fact the consolidator has read gets `consolidated_at`, whether or not it
-  became evidence.
-- **Candidates.** For each fact, the nearest observations of the same scope by vector (five each,
-  twenty in all). When a decision model is routed, each fact–observation pair is screened first
-  (site `memory` in `DECISION_SITES`, operation `memory-consolidate-screen`): an observation stays
-  when any pair clears the threshold, or a question fails. A pre-filter, never a verdict.
-- **The answer is a claim.** `readConsolidation` (pure, `memory-observations.ts`) keeps evidence only
-  under a fact label it handed out and only with a quote **verbatim** in that fact; an entry left with
-  no evidence is dropped, as is a label never handed out or a second refine of one observation.
-- **Refine, never overwrite.** New wording for an existing observation writes its old text to
-  `memory_observation_history` first (`refinement`); evidence is only ever added. Writes happen under
-  the bank's lock, against the observation's text as it is then, not as the model saw it.
-- **Deleting a fact** removes it from every observation's evidence (FK cascade); an observation left
-  with none is deleted in the same transaction (`MemoryUnitsService.deleteBareObservations`), on every
-  path that deletes facts: a re-retained `document_id`, `DELETE …/memories`, the web delete. A retain's
-  `document_id` replacement never touches an observation.
-- **Untrusted both ways.** The facts and the candidate observations reach the model only inside
-  `wrapUntrusted`; the bank's mission is the one trusted line.
+**Observation scopes** (#1157) decide which facts may consolidate together. Retain's per-item
+`observation_scopes` accepts:
+
+- `combined` (the default): one scope containing all of the memory's tags;
+- `shared`: the global, untagged scope, while source facts keep volatile tags such as session ids;
+- `per_tag`: one independent scope per tag;
+- `all_combinations`: every non-empty subset;
+- explicit tag lists, with `*` globs matched against the memory's own tags. A custom scope that matches
+  nothing is skipped. Resolution is canonical, deduplicated and capped at 100 scopes per memory.
+
+`memory_observation_scopes` holds each canonical exact tag set and
+`memory_observation_scope_members` holds one fact's independent `consolidated_at` / `claimed_at` in each
+scope. Extraction still runs once: every extracted fact joins all of its scopes without another model
+call. An observation names its scope through `observation_scope_id`; candidate reads and evidence writes
+are restricted to it. The migration backfills legacy exact-tag memberships and observation associations,
+preserving evidence, history and pending/claim state. `memory_units.consolidated_at` remains an aggregate
+of all memberships for rollback compatibility.
+
+`GET …/observations/scopes` lists scopes that have observations, most populous first, with exact tags,
+counts and pagination. `POST …/consolidate` accepts optional `observation_scopes`: a source fact is
+selected when its full tags contain every tag in at least one requested scope. A queued targeted pass
+deduplicates only against the same selection.
+
+`PATCH …/documents/{document_id}` with `observation_scopes` moves existing facts without re-extraction.
+A change that resolves to the same memberships is a no-op. Otherwise, observations supported by the moved
+facts are deleted, their surviving co-sources are reset in those scopes, and the changed memberships are
+rebuilt as pending. Re-retaining or deleting a fact uses the same invalidation: an observation it
+supported is removed and its other sources are queued again, rather than retaining a partially rebuilt
+claim. The next worker pass restores both streams independently.
+
+Bank config adds `observations_mission`, `max_observations_per_scope`,
+`consolidation_source_facts_max_tokens`, `consolidation_source_facts_max_tokens_per_observation` and
+`consolidation_strategies`. A strategy has alternative `scopes` rules (`tags` globs plus `all` or `exact`)
+and any of those four overrides. The first matching non-empty strategy wins **whole**; unset fields inherit
+bank defaults, never a later strategy. No rule claims the untagged global scope. Source-fact budgets use
+the same ~4-characters-per-token estimate as recall; the observation cap limits new observations in the
+scope while still allowing refinements.
+
+- **Who and when.** The routed `consolidator` agent (purpose `extraction`, never inline/env) makes one JSON
+  call per scope batch of at most ten facts. The worker sweeps each bank once a minute and an on-demand
+  operation runs up to ten calls. Consolidation requires `enable_observations`, budget room and room under
+  `MEMORY_CONSOLIDATION_DAILY_CALLS`, checked before the paid call. The daily counter uses one guarded
+  `UPDATE`; a stop reports `disabled`, `no-model`, `cap`, `budget` or `failed`.
+- **Claimed once per scope.** One guarded `UPDATE` claims membership rows with `FOR UPDATE SKIP LOCKED`.
+  A claim older than ten minutes is recoverable; stopped/failed batches release it. A scope update that
+  lands while the model is running removes the membership, so its answer cannot write into the old scope.
+- **Candidates and evidence.** The nearest five same-scope observations per fact (twenty overall) are
+  offered. The optional decision model only screens pairs. `readConsolidation` drops unverifiable quotes,
+  unknown labels and evidence-less entries. Refinements keep old wording in `memory_observation_history`
+  and add evidence under the bank lock.
+- **Language and trust.** Facts and observations reach the model inside `wrapUntrusted`; bank and strategy
+  missions are trusted configuration. Observation text stays in the source facts' language (`source`
+  locale), while reflect answers in the caller's locale.
 
 Recall returns observations when `types` includes `observation` (no `types` = all), each with
-`source_fact_ids`. `prefer_observations` drops a raw fact that a returned observation stands on and
-backfills the freed room (`preferObservations`); `include.source_facts` returns those facts, loaded
-from the bank, within `max_tokens` (default 4096) and `max_tokens_per_observation`, with
-`source_facts_truncated` when the budget cut the map. The entity map lists the returned observations
-that name each entity. `GET …/memories/list` reports an observation's `proof_count` and
-`source_memory_ids`; `…/stats` its `pending_consolidation` (facts not yet read, whether or not a model
-is routed). `/version` reports `observations` and `bank_config_api` true.
+`source_fact_ids`. `prefer_observations` drops covered raw facts and backfills the freed room;
+`include.source_facts` applies its token budgets and reports truncation. List/get expose `proof_count` and
+`source_memory_ids`; stats count distinct facts with any pending membership. `/version` reports
+`observations` and `bank_config_api` true.
 
 ## The knowledge graph wire
 
@@ -394,6 +535,38 @@ A chunk is never deleted on its own (#1018): the web route refuses it, the Memor
 the file" instead of delete, and the Hindsight wire has no single-memory delete. Known gap: a file's
 recall lags its text by up to a sweep (about 90 s) after a failed index or a rename.
 
+## Mental models
+
+`POST /v1/default/banks/:bank/mental-models` creates a named, bank-local saved reflect response and returns
+`mental_model_id` + an operation id. `create_mental_model` and `refresh_mental_model` operations run on the memory
+worker. The rest of the Hindsight surface is `GET` list/get (metadata, content or full detail), `PATCH`, `DELETE`,
+`POST …/:id/clear`, `POST …/:id/refresh` (optional `{ "mode": "full" }`) and `GET …/:id/history`. Viewers read,
+editors mutate; every route resolves through `MemoryAccessService`, so personal and project-bank rules are unchanged.
+A model never creates a Knowledge document, revision or merge request.
+
+A refresh resolves the model's tags (tagged models default to `all_strict`), fact types and a database-time snapshot,
+then reflects over only that window. `last_memory_seen_at` is the newest in-scope memory actually read;
+`last_refreshed_at` records a completed run. The two make `is_stale` scope-aware: unrelated writes do not refresh a
+model, and untagged writes do not stale a tagged model under the widening `any`/`all` modes. An empty retrieval window
+completes without a model call and leaves content alone. A failed retrieval, generation, structured-output extraction
+or delta application preserves content, evidence and watermarks, appends a failure history entry and pauses automatic
+triggers until an explicit refresh succeeds. `paused_mental_models` on bank stats counts these.
+
+`trigger.refresh_after_consolidation`, `refresh_cron` and `full_refresh_cron` are due checks on the existing fixed
+operation tick, never a second timer. The first two are mutually exclusive; setting one through a trigger patch clears
+the other. Scheduled refreshes require scoped staleness, and a scheduled full refresh of a delta model requires a later
+delta. `min_refresh_interval_seconds` (or `MEMORY_MENTAL_MODEL_MIN_REFRESH_INTERVAL_SECONDS`) parks an automatic
+operation until the floor expires; further triggers coalesce into it and an explicit refresh releases it. One model has
+at most one queued refresh and never two running writes. A full request joining a queued delta upgrades it to full.
+
+Full mode rebuilds from scratch. Delta mode sends operations against stable section/block ids in `structured_doc`;
+unknown ids are skipped, an unreadable or wholly unapplied edit fails, and untouched blocks render byte-identically.
+A populated document is never replaced by an empty delta. `based_on.memories` accumulates evidence across delta runs.
+`trigger.response_schema` additionally stores validated `structured_output`; delta extraction reads the merged document.
+`keep_trace` retains the reflect trace. Reflection searches matching models before observations/raw facts, offers
+`search_mental_models` and `read_mental_models` tools, honours `exclude_mental_models` / ids, and reports exactly the
+models shown in `based_on.mental_models`. Compound `tag_groups` are refused at model configuration rather than ignored.
+
 ## The web section
 
 **Settings → Memory banks** (`apps/web/src/modules/memory/`), on this platform's own routes:
@@ -450,6 +623,29 @@ with `provenance: 'captured'`. The origin is server-set, never a request field:
 request and the Captures inbox name the bank. The memory stays in the bank. API-only: the worker never
 reaches `apps/api/src/captures/`.
 
+## Generated pages stay outside authoritative knowledge (#1162)
+
+A memory bank is the agent's own notebook; a Knowledge page is what the team stands behind. The two
+never meet by side effect.
+
+- **No memory path writes a page.** Retain, consolidation, reflect, mental-model refresh, transfers
+  and the runtime's per-turn retention write `memory_*` rows and vectors only — never a `Document`, a
+  revision or a merge request. Promote (above) is the one road out: a person's act on the bank page,
+  through capture, landing as a merge request someone reviews. `test/memory-boundary.spec.ts` pins
+  it by source (a memory file that writes a page, imports the documents or merge-request modules, or
+  reaches capture anywhere but the bank page's service fails), and the last case of
+  `hindsight-compat.e2e-spec.ts` pins it live: every page the whole suite left behind is a promotion
+  waiting on its merge request.
+- **Hindsight's generated pages are not built.** Its `…/knowledge-base/*` and `…/pages/*` routes are
+  living markdown documents backed by mental models; here they answer 404 (the matrix below) rather
+  than being aliased to Knowledge documents, which would let memory output skip merge review.
+- **If page-wire compatibility is ever proposed**, it is a separate design and a separate product
+  decision, and it must hold all of this: the pages are a bank-local tree of artifacts built from that
+  bank's observations and mental models only (never from sibling generated pages); they are never
+  `Document` rows, never in page search, `llms.txt` or the relation graph, and follow the bank's own
+  access rule (owner-only or project), not page permissions; and export to Knowledge is an explicit
+  person's act through capture → merge request, never a background write.
+
 ## Environment
 
 | Variable | Default | |
@@ -459,21 +655,98 @@ reaches `apps/api/src/captures/`.
 | `MEMORY_RETAIN_MAX_CHARS` | `50000` | characters one item may hold |
 | `MEMORY_RETAIN_RATE_PER_MIN` | `120` | retain requests a key may send a minute |
 | `MEMORY_RECALL_RATE_PER_MIN` | `300` | recall requests a key may send a minute |
+| `MEMORY_RERANKER_PROVIDER` | `none` | `openai-compatible` enables cross-encoder recall; `none` preserves RRF-only behavior |
+| `MEMORY_RERANKER_BASE_URL` | empty | operator endpoint, including `/v1`; required when enabled |
+| `MEMORY_RERANKER_MODEL` | empty | cross-encoder model name; required when enabled |
+| `MEMORY_RERANKER_API_KEY` | empty | optional bearer credential |
+| `MEMORY_RERANKER_TIMEOUT_MS` | `5000` | provider latency ceiling |
+| `MEMORY_RERANKER_CANDIDATE_CAP` | `50` | fused candidates sent for scoring, maximum `100` |
 | `MEMORY_REFLECT_RATE_PER_MIN` | `30` | reflect requests a key may send a minute; refused when the limiter is unreachable |
-| `MEMORY_OPERATION_TIMEOUT_MS` | `600000` | when a claimed async retain counts as lost |
+| `MEMORY_OPERATION_TIMEOUT_MS` | `600000` | how long a claimed operation may go without a heartbeat (every third of this) before it counts as lost |
 | `MEMORY_OPERATION_RETENTION_DAYS` | `7` | how long a finished operation's row is kept |
+| `MEMORY_MENTAL_MODEL_MIN_REFRESH_INTERVAL_SECONDS` | `300` | default floor between automatic refreshes of one model; a model may override it. Automatic refreshes spend the bank creator's budget (#1166) |
 | `MEMORY_CONSOLIDATION_DAILY_CALLS` | `20` | consolidation calls one bank may make a UTC day; `0` turns observations off for the server |
 | `MEMORY_GRAPH_READ_MAX_ENTITIES` | `500` | entities one `read_graph` or `search_nodes` returns before it says it cut |
 
+## Hindsight management compatibility matrix
+
+This matrix is generated from the routes in `@vectorize-io/hindsight-client` **1.2.1** (`generated/sdk.gen.ts`), the pinned OpenAPI client used by `hindsight-compat.e2e-spec.ts`. **Compatible** means the official client exercises the route without request or response patches. **Non-goal** routes deliberately answer 404; they never return an empty success. The phase-6 test `keeps intentional non-goals explicit as 404s` covers every non-goal family below.
+
+| Hindsight route | Status | Compatibility proof or decision |
+| --- | --- | --- |
+| `GET /health` | Compatible | phase-0 probe test |
+| `GET /health/ready`, `GET /health/live`, `GET /metrics` | Non-goal | Knowledge has its own process health and metrics contracts |
+| `GET /version` | Compatible | phase-0 probe and feature-flag test |
+| `GET …/graph` | Non-goal | the MCP knowledge-graph wire is supported instead; no Hindsight memory-link graph exists |
+| `GET …/memories/list`, `GET …/memories/{id}` | Compatible | phase-1 list/get tests |
+| `POST …/memories/dry-run-extract`, `POST …/prompts/preview` | Non-goal | no dry-run extraction or prompt-preview product surface |
+| `PATCH …/memories/{id}` | Non-goal | memory curation/editing is not selected; file chunks remain managed by their file |
+| `GET …/memories/{id}/history` | Compatible | phase-6 observation-history test |
+| `POST …/memories/recall`, `POST …/reflect` | Compatible | recall and reflect suites |
+| `GET /v1/default/banks` | Compatible | phase-0 list and ACL tests |
+| `GET …/stats` | Compatible | phase-1 stats test |
+| `POST …/health/llm` | Non-goal | no per-bank provider configuration or connectivity probe |
+| `GET …/stats/memories-timeseries` | Non-goal | usage charts per bank are not selected |
+| `GET …/entities`, `GET …/entities/graph`, `GET …/entities/{id}` | Non-goal | the graph wire is MCP; no Hindsight entity-management projection |
+| `POST …/entities/{id}/regenerate` | Non-goal | deprecated upstream; mental models replace entity observations |
+| `GET`, `POST …/mental-models` | Compatible | phase-5 list/create tests |
+| `GET`, `PATCH`, `DELETE …/mental-models/{id}` | Compatible | phase-5 lifecycle tests |
+| `GET …/mental-models/{id}/history`, `POST …/refresh`, `POST …/clear` | Compatible | phase-5 refresh/history/clear tests |
+| `POST …/mental-models/{id}/dry-run-refresh` | Non-goal | no refresh-preview surface |
+| `GET …/knowledge-base/tree`, `GET …/pages/tree` | Non-goal | bank-local generated pages are not built; never aliased to Knowledge documents ([#1162](#generated-pages-stay-outside-authoritative-knowledge-1162)) |
+| `POST …/knowledge-base/folders`, `POST …/pages/folders` | Non-goal | see the row above (#1162) |
+| `POST …/knowledge-base/pages`, `POST …/pages` | Non-goal | see the row above (#1162) |
+| `GET …/knowledge-base/export`, `GET …/pages/export` | Non-goal | see the row above (#1162) |
+| `GET …/knowledge-base/search`, `GET …/pages/search` | Non-goal | see the row above (#1162) |
+| `GET …/knowledge-base/pages/{id}`, `GET …/pages/{id}` | Non-goal | see the row above (#1162) |
+| `DELETE`, `PATCH …/knowledge-base/nodes/{id}` | Non-goal | see the row above (#1162) |
+| `DELETE`, `PATCH …/pages/nodes/{id}` | Non-goal | see the row above (#1162) |
+| `GET`, `POST …/directives` | Compatible | phase-4 list/create tests |
+| `GET`, `PATCH`, `DELETE …/directives/{id}` | Compatible | phase-4 lifecycle tests |
+| `GET …/documents` | Compatible | phase-6 document list test |
+| `GET …/documents/{id}/chunks` | Compatible | phase-6 chunk list test |
+| `GET …/documents/{id}/history` | Non-goal | operation history does not retain a complete per-document event ledger |
+| `POST …/documents/{id}/reprocess` | Non-goal | retain the same `document_id` to replace/re-extract instead |
+| `DELETE`, `GET`, `PATCH …/documents/{id}` | Compatible | phase-6 document read/update/delete coverage |
+| `GET …/tags` | Compatible | phase-6 memory and mental-model tag projection |
+| `GET /v1/default/chunks/{id}` | Compatible | phase-6 chunk read test |
+| `GET …/operations`, `GET …/operations/{id}`, `DELETE …/operations/{id}` | Compatible | phase-3 operation tests |
+| `POST …/operations/{id}/retry` | Non-goal | settled operations deliberately discard retained payloads; submit a new retain instead |
+| `DELETE …/operations/{id}/delete` | Compatible | phase-6 terminal-operation deletion test |
+| `GET`, `PUT …/profile` | Compatible | deprecated upstream routes retained for existing clients |
+| `POST …/background` | Non-goal | removed upstream; use `PATCH …/config` with `reflect_mission` |
+| `GET`, `POST …/aliases` | Compatible | phase-6 alias creation/list/read test |
+| `DELETE`, `PATCH …/aliases/{alias}` | Compatible | phase-6 alias delete/primary test |
+| `DELETE`, `PATCH`, `PUT …/banks/{id}` (under `/v1/default`) | Compatible | phase-0 bank lifecycle tests |
+| `POST …/import`, `GET …/export` | Compatible | phase-6 template dry-run/import/export test |
+| `GET …/document-transfer` | Non-goal | removed synchronous export; use `POST …/document-transfer/export` |
+| `POST …/document-transfer` | Compatible | phase-6 document import test |
+| `POST …/document-transfer/export` | Compatible | phase-6 archive export/download test |
+| `POST …/transfer/export`, `POST …/transfer/import`, `POST …/clone` | Compatible | phase-6 restore/clone tests |
+| `GET …/attachments/{id}` | Non-goal | inline multimodal attachments are not stored |
+| `GET /v1/default/files/download/{key}` | Compatible | the official export helper downloads through it in phase 6 |
+| `GET /v1/bank-template-schema` | Compatible | phase-6 schema test |
+| `DELETE …/observations`, `DELETE …/memories/{id}/observations` | Compatible | phase-6 clear/rebuild tests |
+| `GET …/observations/scopes`, `POST …/consolidate` | Compatible | phase-2 scope and consolidation tests |
+| `POST …/consolidation-strategies/preview`, `POST …/consolidation/recover` | Non-goal | no strategy-preview or permanent-failure recovery surface |
+| `DELETE`, `GET`, `PATCH …/config` | Compatible | config tests plus reset |
+| `GET`, `POST`, `PATCH`, `DELETE …/webhooks…` | Non-goal | outbound per-bank webhooks are not selected |
+| `DELETE …/memories`, `POST …/memories` | Compatible | phase-1 retain/clear tests |
+| `POST …/files/retain` | Compatible | phase-6 official multipart upload and worker parse test |
+| `GET …/audit-logs`, `GET …/audit-logs/stats`, `GET …/audit-logs/{id}` | Compatible | phase-6 audit list/read/stats test over `audit_logs`, and a test that retain, alias, document delete, export and clone each record their row (#1168); `request`/`response` bodies are null, and `transport` is always `http` |
+| `GET …/llm-requests`, `GET …/llm-requests/stats` | Non-goal | `ai_usage` has no reliable bank identity; returning it as bank traces would leak or misattribute calls |
+
+Documents and chunks are projections of `memory_units`: document text is the masked `source_text`, and a chunk is one distinct retained source item. Updates replace or increment tags on every source fact and invalidate only memberships whose resolved scopes moved. Transfers zip a versioned `transfer.json` carrying source facts, entity names and optional bank configuration; imports re-embed through the normal retain store without an extraction model. Transfers leave out `file:*` and `graph:*` documents, which belong to their own wires (`documents_skipped_reserved` in the result), and the document routes refuse those ids (400). An archive is validated whole before anything is written, and a failed restore or clone removes the bank it created. A restore or clone target's row id is its operation's id, so a re-run after a lost worker replaces the target its own earlier run half-built, and an export upserts its one archive row and object; under `on_conflict: new-id` the new id is derived from the operation, so a re-run rewrites it instead of adding one (#1165). A merge import re-run after a lost worker re-imports the documents the lost run finished: harmless under `skip` and `replace`, a second copy under `new-id`. Only a mental model's definition is imported (empty content until a refresh; archive-supplied content and evidence are ignored), into the target bank only. A null item timestamp imports as timeless. Derived observations are rebuilt, so `include_observations=true` is a 400 rather than a false claim. Audit and LLM history are likewise not transferable. Archives are zips in the bucket under `workspaces/{ws}/memory-banks/{bank}/operations/{op}/`, with a bank-owned row holding the key, and disappear with their operation, bank or workspace.
+
+A multipart upload is checked for the editor role before any byte is read, must send `Content-Length` and is at most 65 MiB in all (413 otherwise). Parsed file text is masked like any retain, and a file longer than `MEMORY_RETAIN_MAX_CHARS` is split on paragraph boundaries into several items under one `document_id`. Upload bytes go to the bucket (`…/operations/{op}/input`) before the operation row is written, and the row carries only the key (#1165); the object is purged, every version, when the operation settles or is cancelled, and with the operation's purge, the bank and the workspace. File retain uses the existing parser registry (plain text/Markdown, PDF, DOCX, PPTX, HTML, tabular formats and configured OCR), always asynchronously. The multipart ceiling is 100 files of at most 16 MiB each; transfer archives are at most 64 MiB compressed or inflated. Personal-bank ownership and project visibility apply to source, target and download alike; restore and clone inherit the source bank's owner/project binding rather than trusting archive metadata.
+
+## Hardening after review (#1155)
+
+- **Mental models.** Ids are unique per bank (`(bank_id, id)`), so two banks can each hold `user-profile`. Changing a model's tags, `trigger.tags_match` or `trigger.fact_types` marks it stale and makes the next refresh full. A full refresh that finds nothing left in scope empties the model (history keeps the old content); `based_on.memories` lists only memories that still exist, newest 200. A cron trigger is due once the schedule has fired since the last refresh, not only on the exact minute. Deleting a model cancels its queued and running refreshes, and a running one never writes into a model deleted or re-created meanwhile. Every refresh is billed as `memory-mental-model`; an automatic one (cron or after consolidation) spends the bank creator's budget. Any memory deleted from the bank after a model's last refresh marks it stale (`memory_banks.memories_deleted_at`, stamped by `MemoryUnitsService.deleteWhere`, #1166), whatever its scope.
+- **Observation scopes.** Glob patterns match in linear time (`*` = any run of characters, case-sensitive, anchored); `exact` pairs each pattern with its own tag. `consolidation_strategies` is capped at 20 strategies × 20 scopes × 20 tags, each pattern at most 100 characters. An untagged memory retained with `per_tag` or `all_combinations` joins the untagged scope. Consolidation writes only while it still holds its claim on every fact of the batch; a batch retaken, reset or moved mid-flight writes nothing and is read again. The worker files rows written by a pre-scope image (rolling deploy, rollback) into their exact-tag scope on its first tick and hourly.
+- **Reranker.** `MEMORY_RERANKER_SCORE` (`logit` default | `normalized`) says whether the endpoint returns raw logits or 0–1 scores (Cohere, Jina, LiteLLM, Infinity), so `min_scores.reranker` keeps its meaning. After a failure recall skips the reranker for 30 s and uses RRF.
+- **Operations.** Deleting an unknown operation is 404; a non-terminal one is 409. An archive download is confined to the caller's workspace.
+
 ## Not built
 
-Hindsight's mental models, knowledge-base pages, directives, webhooks, transfer and clone,
-bank templates, file retain, aliases, audit and LLM-request logs; its reflect tool loop and
-`trace`; `tag_groups`; a recall tool for this platform's own assistant and agents; Hindsight's
-observation scopes and consolidation strategies (`observation_scopes` on `POST …/consolidate` is not
-read: every pass keeps each exact tag set to itself) and its bank config keys beyond the five above;
-consolidating across banks; editing a memory's text, a file or an entity in the UI, a graph view of
-memory entities, usage charts per bank. For the other wires: a stdio entrypoint or a published package;
-importing an existing `memory.jsonl` or a local `/memories` folder; the reference server's
-subscribable `memory://knowledge-graph` resource; Managed Agents memory stores, mem0, Zep, Letta;
-file conventions such as Cline's `memory-bank/` or `CLAUDE.md`.
+Hindsight's generated knowledge-base pages (#1162), webhooks, raw LLM-request logs, `tag_groups`, memory text curation and the other non-goals named in the matrix; consolidating across banks; editing a file or an entity in the UI; a graph view of memory entities; usage charts per bank. For the other wires: a stdio entrypoint or a published package; importing an existing `memory.jsonl` or a local `/memories` folder; the reference server's subscribable `memory://knowledge-graph` resource; Managed Agents memory stores, mem0, Zep, Letta; file conventions such as Cline's `memory-bank/` or `CLAUDE.md`.

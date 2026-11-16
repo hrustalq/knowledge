@@ -197,8 +197,10 @@ Everything it may use is handed to it in one prompt:
   300-character snippet), wrapped untrusted. The model sees labels, never ids.
 
 Its instructions forbid stating anything the thread does not say, allow an
-empty list as a good answer, and say placeholders stay as they are. The
-caller appends the cap (eight), which it owns as `MAX_PROPOSALS`.
+empty list as a good answer, and say placeholders stay as they are. Glossary
+terms and aliases keep the thread's exact spelling and language; every prose
+field, including decisions and answers, follows the asker's locale. The caller
+appends the cap (eight), which it owns as `MAX_PROPOSALS`.
 
 **Jev first, with a Decisions route** (#530,
 [67](67-decision-model-evaluation.md)). Before the page search and the

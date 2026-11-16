@@ -13,6 +13,88 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.55.0] — 2026-11-16
+
+### Added
+
+- Agents can now retain all successful outcomes, only durable knowledge, or nothing, with independent personal and
+  project memory policies. Recall remains available when retention is off. (#1156)
+- Memory banks now support shared, per-tag, combined and custom observation scopes, targeted consolidation, document
+  scope updates, and ordered per-scope consolidation strategies through the unmodified Hindsight client. (#1157)
+- Memory recall can now rerank fused candidates with an optional cross-encoder, return normalized reranker/final scores,
+  and filter them inclusively with `min_scores`; deployments without a reranker keep the existing RRF behavior. (#1158)
+- Memory banks now support named global or tag-scoped reflect directives through the unmodified Hindsight client. Editors
+  can manage and activate them; reflections report exactly which rules were applied without exposing personal or restricted
+  project banks. (#1159)
+- Memory banks now store refreshable mental models: curated, evidence-backed answers with official-client CRUD, history,
+  structured output, full/delta refresh, scoped schedules, and reflection provenance. Failed refreshes preserve the last
+  good answer, and models never become Knowledge pages automatically. (#1160)
+- The official Hindsight client can now manage documents, chunks, tags, observation lifecycle, aliases, bank templates,
+  asynchronous file retain, transfer archives and bank audit logs. Unsupported routes have explicit documented 404
+  behavior, and all new paths retain personal-owner, project-ACL and workspace isolation. (#1161)
+- Agent memory keeps to its audience: background runs no longer recall or retain personal memory, an assistant answer
+  is copied to a project's memory only when every reader of that project could have seen what it drew on, and the bank
+  ids the runtime uses (`agent:…:user:…`, `project:…`) can no longer be created or aliased through the memory API.
+  Uploaded files are masked before they are stored, and memory uploads are refused before the body is read unless the
+  caller may write. (#1155)
+- Every write to a memory bank is now on the audit trail — retain, settings, aliases, documents, observations,
+  mental models, directives, templates, transfers, file uploads, memory-tool and graph edits, and the bank page's
+  deletes and promotions — by REST and MCP alike, so the Hindsight `/version` reports `audit_log: true`. Each row names
+  the bank, the actor and the ids involved, never memory text. Recall, reflect and the agents' own per-turn retention are
+  not audited. (#1168)
+- Mental-model ids are unique per bank instead of across the whole installation. (#1155)
+- Every background agent now draws on project memory, including the ones that call the model directly (linter,
+  atlas, auditor, arbiter, reviewer, archaeologist, tester and the sentinel's code reading). A run with no note recalls
+  on the titles of the pages it is about instead of not recalling. Agent replies to an @mention in a discussion recall
+  the page's project memory, and are remembered there when the page is restricted by nothing but its project.
+  Workflows and the glossarist deliberately stay without memory. (#1167)
+
+### Fixed
+
+- Memory review findings (#1166): tag-scoped reflect directives now match as the Hindsight server matches them (for
+  `all`, a directive must carry every requested tag; an untagged reflect gets only untagged directives); deleting a
+  memory marks the bank's mental models stale; a retain with a very large tag set no longer fails on the scope index;
+  a document update that changes nothing writes nothing; a filtered document listing reports whole documents, as the
+  document read does; a `min_scores.final` floor no longer lets unreranked rows through; and restoring or cloning a
+  project bank needs manage rights on that project, as binding one does.
+- Memory file uploads and transfer archives no longer pass through the database: the bytes go to object storage, the
+  operation keeps only their key, and an upload is deleted as soon as its operation settles or is cancelled. Archive
+  downloads redirect to a short-lived storage URL. A transfer that runs longer than `MEMORY_OPERATION_TIMEOUT_MS` is
+  no longer started a second time while it is still running, and a restore or clone retried after a lost worker
+  replaces its own half-built bank instead of failing. (#1165)
+- Once an assistant turn draws on the asker's personal memory, a draft or an attachment, later turns in the same thread
+  are no longer copied to the project's memory: an answer can repeat what an earlier one was told. Agents on the
+  `durable` memory policy now keep only the durable facts of an outcome, dropping status updates and chatter that came
+  with them. (#1169)
+- Background agent runs recalled and retained no memory at all: the memory service was never injected into the
+  agent worker, with no error. Runs now use it as documented. (#1167)
+- Chat harvests now keep glossary terms in the thread’s spelling when decisions and answers are written in the
+  asker’s language, instead of dropping the terms as ungrounded. (#1163)
+
+### Operations
+
+- The memory review migration adds a nullable column, swaps the observation-scope unique constraint for an index on a
+  hash of the tag set (one immutable SQL function, `memory_tag_set_key`) and drops an unused index; it is safe for a
+  code rollback. (#1166)
+- The memory archive migration moves export archives to object storage: it drops existing archive rows (exports a client
+  can run again) and fails any queued file or import operation whose bytes were still inline. Restoring the previous
+  image needs no database step. (#1165)
+- The assistant-thread migration adds one nullable column and marks every existing thread as carrying private input,
+  so continuing a thread started before this release retains to personal memory only. It is expand-only and safe for
+  a code rollback. (#1169)
+- `MEMORY_RERANKER_SCORE` (`logit` default, or `normalized` for endpoints that already return 0–1 scores) is new and
+  optional. The mental-model key migration is a primary-key swap on a small table; a code rollback past it needs the
+  previous key restored by hand. A bank created through the memory API under a reserved runtime id before this release
+  is ignored by the runtime until it is deleted. (#1155)
+- The management-API migration adds alias/archive tables and nullable operation results only; it is expand-only and safe
+  for a code rollback. Transfer downloads use the existing memory worker and database, with no new service or env var. (#1161)
+- The mental-model migration is expand-only and safe for a code rollback. Automatic refreshes of one model are at least
+  `MEMORY_MENTAL_MODEL_MIN_REFRESH_INTERVAL_SECONDS` apart (300 by default; a model's `min_refresh_interval_seconds`
+  overrides it) and spend the bank creator's AI budget. (#1160, #1166)
+- Optional memory reranking is configured with `MEMORY_RERANKER_PROVIDER=openai-compatible`, `MEMORY_RERANKER_BASE_URL`,
+  `MEMORY_RERANKER_MODEL` and optionally `MEMORY_RERANKER_API_KEY`; timeout and candidate caps default to 5000 ms and 50.
+  The base URL includes `/v1`, and the API appends `/rerank`. No reranker is required by default. (#1158)
+
 ## [0.54.1] — 2026-11-14
 
 ### Fixed
@@ -7309,7 +7391,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.54.1...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.55.0...HEAD
+[0.55.0]: https://github.com/hrustalq/knowledge/compare/v0.54.1...v0.55.0
 [0.54.1]: https://github.com/hrustalq/knowledge/compare/v0.54.0...v0.54.1
 [0.54.0]: https://github.com/hrustalq/knowledge/compare/v0.53.2...v0.54.0
 [0.53.2]: https://github.com/hrustalq/knowledge/compare/v0.53.1...v0.53.2

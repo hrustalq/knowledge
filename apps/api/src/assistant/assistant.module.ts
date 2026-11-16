@@ -21,6 +21,7 @@ import { AiModule } from '../ai/ai.module.js';
 import { FeedbackCoreModule } from '../feedback/feedback-core.module.js';
 import { TemplatesCoreModule } from '../templates/templates-core.module.js';
 import { FlowsCoreModule } from '../flows/flows-core.module.js';
+import { MemoryCoreModule } from '../memory/memory-core.module.js';
 
 // AiModule is a forwardRef because the dependency genuinely runs both ways:
 // a turn needs the workspace's AI config, and the settings page's "Test
@@ -67,6 +68,7 @@ import { FlowsCoreModule } from '../flows/flows-core.module.js';
     StyleLintModule,
     // capture_decision / mark_outdated and the questions before them (#425).
     FlowsCoreModule,
+    MemoryCoreModule,
     forwardRef(() => AiModule),
   ],
   controllers: [AssistantController],

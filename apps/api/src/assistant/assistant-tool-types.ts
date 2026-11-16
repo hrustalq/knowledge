@@ -155,6 +155,14 @@ export const FREE_TOOLS = new Set([
 ]);
 
 /**
+ * Tools that put a question in front of the user and end the turn. The prose a
+ * model writes in the same round as one of these is its answer, not reasoning:
+ * it may answer what it can and then offer the form or the Agent-mode switch,
+ * and the closing round after the call often only describes the button (#1186).
+ */
+export const PROMPT_TOOLS = new Set(['ask_user', 'request_agent_mode']);
+
+/**
  * The two tools that leave the workspace (docs/features/25).
  *
  * Offered only when the caller opts in — `definitions(mode, { web: true })` —

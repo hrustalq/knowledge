@@ -11,6 +11,7 @@ import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { MemoryConsolidationService } from './memory-consolidation.service.js';
 import { readObservationScopes, type RetainItem } from './memory-facts.js';
+import { MemoryMentalModelsService } from './memory-mental-models.service.js';
 import { maskItems, MemoryRetainService } from './memory-retain.service.js';
 import { MemoryProducer } from './memory.producer.js';
 import type { CancelOperationResponse, ConsolidationResponse, OperationResponse, OperationStatusResponse, OperationsListResponse } from './memory-wire.js';
@@ -41,6 +42,7 @@ function operation(row: MemoryOperation): OperationResponse {
     status: wireStatus(row),
     error_message: row.error,
     retry_count: Math.max(0, row.attempts - 1),
+    next_retry_at: row.notBefore?.toISOString() ?? null,
   };
 }
 
@@ -63,6 +65,7 @@ export class MemoryOperationsService {
     private readonly prisma: PrismaService,
     private readonly retainer: MemoryRetainService,
     private readonly consolidation: MemoryConsolidationService,
+    private readonly mentalModels: MemoryMentalModelsService,
     private readonly producer: MemoryProducer,
     config: ConfigService<Env, true>,
   ) {
@@ -127,8 +130,11 @@ export class MemoryOperationsService {
     return { operation_id: id, deduplicated };
   }
 
-  /** The worker's half: claim, retain, settle. A row another worker claimed, or that is no longer queued, is left alone. */
+  /** The worker's half: claim, retain, settle. Mental-model operations serialize themselves per model. */
   async run(operationId: string): Promise<void> {
+    const waiting = await this.prisma.memoryOperation.findUnique({ where: { id: operationId }, include: { bank: true } });
+    if (!waiting || waiting.status !== 'queued') return;
+    if (waiting.type === 'create_mental_model' || waiting.type === 'refresh_mental_model') return this.mentalModels.execute(operationId);
     const claimed = await this.prisma.memoryOperation.updateMany({
       where: { id: operationId, status: 'queued' },
       data: { status: 'running', startedAt: new Date(), attempts: { increment: 1 } },
@@ -223,7 +229,7 @@ export class MemoryOperationsService {
    */
   async sweep(now = Date.now()): Promise<{ enqueued: number; requeued: number; failed: number; purged: number }> {
     const lost = await this.prisma.memoryOperation.findMany({
-      where: { status: 'queued', updatedAt: { lt: new Date(now - LOST_JOB_MS) } },
+      where: { status: 'queued', updatedAt: { lt: new Date(now - LOST_JOB_MS) }, OR: [{ notBefore: null }, { notBefore: { lte: new Date(now) } }] },
       select: { id: true, attempts: true },
       take: SWEEP_PAGE,
     });
@@ -232,10 +238,12 @@ export class MemoryOperationsService {
       staleField: 'updatedAt',
       staleMs: this.timeoutMs,
       maxAttempts: MAX_ATTEMPTS,
-      find: (where) => this.prisma.memoryOperation.findMany({ where, select: { id: true, attempts: true }, take: SWEEP_PAGE }),
+      find: (where) => this.prisma.memoryOperation.findMany({ where, select: { id: true, attempts: true, type: true, bankId: true, payload: true }, take: SWEEP_PAGE }),
       attemptOf: (row) => row.attempts,
       requeue: (where) => this.prisma.memoryOperation.updateMany({ where, data: { status: 'queued' } }),
-      fail: (where, row) => this.prisma.memoryOperation.updateMany({ where, data: { status: 'failed', completedAt: new Date(), error: staleFailure(row.attempts), payload: [] } }),
+      fail: (where, row) => row.type === 'create_mental_model' || row.type === 'refresh_mental_model'
+        ? this.mentalModels.failStale(where, row, staleFailure(row.attempts))
+        : this.prisma.memoryOperation.updateMany({ where, data: { status: 'failed', completedAt: new Date(), error: staleFailure(row.attempts), payload: [] } }),
       enqueue: (row) => this.producer.enqueue(row.id, row.attempts),
     });
     const purged = await this.prisma.memoryOperation.deleteMany({

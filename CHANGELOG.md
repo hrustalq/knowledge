@@ -26,9 +26,14 @@ in the pull request that introduces them — see
 - Memory banks now support named global or tag-scoped reflect directives through the unmodified Hindsight client. Editors
   can manage and activate them; reflections report exactly which rules were applied without exposing personal or restricted
   project banks. (#1159)
+- Memory banks now store refreshable mental models: curated, evidence-backed answers with official-client CRUD, history,
+  structured output, full/delta refresh, scoped schedules, and reflection provenance. Failed refreshes preserve the last
+  good answer, and models never become Knowledge pages automatically. (#1160)
 
 ### Operations
 
+- The mental-model migration is expand-only and safe for a code rollback. Automatic refresh spacing defaults to no floor;
+  set `MEMORY_MENTAL_MODEL_MIN_REFRESH_INTERVAL_SECONDS` or a model's `min_refresh_interval_seconds` to limit it. (#1160)
 - Optional memory reranking is configured with `MEMORY_RERANKER_PROVIDER=openai-compatible`, `MEMORY_RERANKER_BASE_URL`,
   `MEMORY_RERANKER_MODEL` and optionally `MEMORY_RERANKER_API_KEY`; timeout and candidate caps default to 5000 ms and 50.
   The base URL includes `/v1`, and the API appends `/rerank`. No reranker is required by default. (#1158)

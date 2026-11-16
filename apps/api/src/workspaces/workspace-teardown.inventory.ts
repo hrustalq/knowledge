@@ -113,6 +113,8 @@ export const WORKSPACE_TEARDOWN = {
   Memo: 'workspace',
   // Memory banks (#986), leaves to root.
   MemoryOperation: 'workspace',
+  MemoryMentalModelHistory: 'workspace',
+  MemoryMentalModel: 'workspace',
   MemoryDirective: 'workspace',
   MemoryObservationEvidence: 'workspace',
   MemoryObservationHistory: 'workspace',

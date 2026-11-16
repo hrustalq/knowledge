@@ -845,6 +845,8 @@ export const envSchema = z.object({
   MEMORY_OPERATION_TIMEOUT_MS: z.coerce.number().int().min(1000).default(600_000),
   /** Days a finished operation's row is kept before it is purged. */
   MEMORY_OPERATION_RETENTION_DAYS: z.coerce.number().int().min(1).default(7),
+  /** Default minimum seconds between automatic refreshes of one mental model; a model may override it. */
+  MEMORY_MENTAL_MODEL_MIN_REFRESH_INTERVAL_SECONDS: z.coerce.number().int().min(0).max(31_536_000).default(0),
   /**
    * Consolidation (#993): model calls one bank may make a UTC day to fold its
    * facts into observations. Low on purpose: each is a paid call, and the

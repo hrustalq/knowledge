@@ -273,7 +273,7 @@ describe('Hindsight compatibility (e2e, #986)', () => {
       const unmatched = await call(
         people.alice.key,
         'GET',
-        `/v1/default/banks/${bank}/mental-models`,
+        `/v1/default/banks/${bank}/pages/tree`,
       );
       expect(unmatched.status).toBe(404);
       expect(await unmatched.json()).toEqual({ detail: expect.any(String) });
@@ -1913,6 +1913,184 @@ describe('Hindsight compatibility (e2e, #986)', () => {
       await expect(
         client(people.bob.key).reflect(projectBank, 'x', { applyAllDirectives: true }),
       ).rejects.toMatchObject({ statusCode: 404 });
+    });
+    describe('mental models (#1160)', () => {
+      const models = `models-${nonce}`;
+      const settle = async (bankId: string, operationId: string) => {
+        for (let i = 0; i < 100; i++) {
+          const status = (await sdk.getOperationStatus({
+            client: raw(people.alice.key),
+            path: { bank_id: bankId, operation_id: operationId },
+          })).data!;
+          if (status.status === 'failed') throw new Error(status.error_message ?? 'mental model refresh failed');
+          if (status.status !== 'pending' && status.status !== 'processing') return status;
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+        throw new Error(`operation ${operationId} did not settle`);
+      };
+      const model = (id: string) => client(people.alice.key).getMentalModel(models, id);
+
+      it('creates, reads, updates, clears, lists and cites a structured model through the official client', async () => {
+        const hs = client(people.alice.key);
+        await hs.createBank(models);
+        await hs.retain(models, 'Alice owns the billing runbook.', { tags: ['team'] });
+        const counts = () => Promise.all([
+          prisma.document.count({ where: { workspaceId: WS_A } }),
+          prisma.documentRevision.count({ where: { document: { workspaceId: WS_A } } }),
+          prisma.mergeRequest.count({ where: { document: { workspaceId: WS_A } } }),
+        ]);
+        const pagesBefore = await counts();
+        reply = JSON.stringify({
+          text: 'Alice owns billing.',
+          structured_output: { owner: 'Alice' },
+        });
+        const created = await hs.createMentalModel(models, 'Billing owner', 'Who owns billing?', {
+          id: `billing-${nonce}`,
+          tags: ['team'],
+          trigger: {
+            responseSchema: { type: 'object', properties: { owner: { type: 'string' } }, required: ['owner'] },
+            keepTrace: true,
+          },
+        });
+        expect(created).toEqual({ mental_model_id: `billing-${nonce}`, operation_id: expect.any(String) });
+        expect(await settle(models, created.operation_id)).toMatchObject({ operation_type: 'create_mental_model', status: 'completed' });
+        const generated = await model(created.mental_model_id!);
+        expect(generated).toMatchObject({
+          id: created.mental_model_id,
+          bank_id: models,
+          content: 'Alice owns billing.',
+          is_page: false,
+          is_stale: false,
+          last_refresh_failed_at: null,
+          reflect_response: { structured_output: { owner: 'Alice' } },
+        });
+        expect((await hs.listMentalModels(models)).items[0]).toMatchObject({ content: null, source_query: null, is_stale: false });
+        expect((await hs.listMentalModels(models, { detail: 'content' })).items[0]).toMatchObject({ content: 'Alice owns billing.', trigger: { mode: 'full' } });
+
+        reply = 'A curated answer.';
+        const reflected = await hs.reflect(models, 'Who owns billing?', { includeFacts: true });
+        expect(reflected.based_on?.mental_models?.map((item) => item.id)).toContain(created.mental_model_id);
+        const updated = await hs.updateMentalModel(models, created.mental_model_id!, { name: 'Billing ownership' });
+        expect(updated.name).toBe('Billing ownership');
+        expect((await hs.clearMentalModel(models, created.mental_model_id!)).content).toBe('');
+        expect(await hs.getMentalModelHistory(models, created.mental_model_id!)).toEqual(expect.arrayContaining([
+          expect.objectContaining({ previous_content: 'Alice owns billing.' }),
+        ]));
+        expect(await counts()).toEqual(pagesBefore);
+      });
+
+      it('applies delta edits by id, preserves the last good document on failure, and resumes after a full refresh', async () => {
+        const hs = client(people.alice.key);
+        const id = `delta-${nonce}`;
+        reply = '# Ownership\n\nAlice owns billing.\n';
+        const created = await hs.createMentalModel(models, 'Delta ownership', 'Who owns billing?', { id, trigger: { mode: 'delta' } });
+        expect((await settle(models, created.operation_id)).status).toBe('completed');
+        const original = await model(id);
+        expect(original.content).toBe('# Ownership\n\nAlice owns billing.\n');
+
+        await hs.retain(models, 'Bob owns the billing review.', { tags: ['team'] });
+        reply = JSON.stringify({ operations: [{ op: 'append_block', section_id: 's1', content: 'Bob owns the billing review.' }] });
+        const refreshed = await hs.refreshMentalModel(models, id);
+        expect((await settle(models, refreshed.operation_id)).status).toBe('completed');
+        const merged = await model(id);
+        expect(merged.content).toBe('# Ownership\n\nAlice owns billing.\n\nBob owns the billing review.\n\n');
+        expect(merged.reflect_response?.based_on).toBeDefined();
+        const watermark = merged.last_memory_seen_at;
+
+        await hs.retain(models, 'Carol owns the billing audit.', { tags: ['team'] });
+        reply = JSON.stringify({ operations: [{ op: 'replace_block', section_id: 'missing', block_id: 'none', content: 'Destroy everything.' }] });
+        const failed = await hs.refreshMentalModel(models, id);
+        await expect(settle(models, failed.operation_id)).rejects.toThrow(/delta operations|rejected/i);
+        const preserved = await model(id);
+        expect(preserved.content).toBe(merged.content);
+        expect(preserved.last_memory_seen_at).toBe(watermark);
+        expect(preserved.last_refresh_failed_at).not.toBeNull();
+        expect(await hs.getMentalModelHistory(models, id)).toEqual(expect.arrayContaining([
+          expect.objectContaining({ kind: 'refresh_failed', failure_reason: 'delta_ops_all_skipped', previous_content: null }),
+        ]));
+        expect((await sdk.getAgentStats({ client: raw(people.alice.key), path: { bank_id: models } })).data?.paused_mental_models).toBe(1);
+
+        reply = '# Ownership\n\nAlice writes; Bob reviews; Carol audits.\n';
+        const full = await hs.refreshMentalModel(models, id, { mode: 'full' });
+        expect((await settle(models, full.operation_id)).status).toBe('completed');
+        expect(await model(id)).toMatchObject({ content: reply, last_refresh_failed_at: null });
+        await hs.deleteMentalModel(models, id);
+        await expect(model(id)).rejects.toMatchObject({ statusCode: 404 });
+      });
+
+      it('coalesces queued refreshes and enforces read, workspace and owner boundaries', async () => {
+        const hs = client(people.alice.key);
+        const coalesced = `coalesce-${nonce}`;
+        await hs.createBank(coalesced);
+        const created = await hs.createMentalModel(coalesced, 'Empty', 'What is known?', { id: `empty-${nonce}` });
+        expect((await settle(coalesced, created.operation_id)).status).toBe('completed');
+        const { MemoryProducer } = await import('../src/memory/memory.producer.js');
+        const enqueue = vi.spyOn(app.get(MemoryProducer), 'enqueue').mockRejectedValue(new Error('queue held'));
+        let first: Awaited<ReturnType<typeof hs.refreshMentalModel>>;
+        try {
+          first = await hs.refreshMentalModel(coalesced, created.mental_model_id!);
+          const second = await hs.refreshMentalModel(coalesced, created.mental_model_id!);
+          expect(second.operation_id).toBe(first.operation_id);
+          expect(await prisma.memoryOperation.count({ where: { id: first.operation_id, status: 'queued' } })).toBe(1);
+        } finally {
+          enqueue.mockRestore();
+        }
+        await app.get(MemoryProducer).enqueue(first!.operation_id);
+        expect((await settle(coalesced, first!.operation_id)).status).toBe('completed');
+
+        const readOnly = await mintKey(people.alice.id, { workspaceId: WS_A, scope: 'read' });
+        expect((await client(readOnly).listMentalModels(coalesced)).total).toBe(1);
+        await expect(client(readOnly).createMentalModel(coalesced, 'Nope', 'Nope')).rejects.toMatchObject({ statusCode: 403 });
+        await expect(client(people.carol.key).listMentalModels(coalesced)).rejects.toMatchObject({ statusCode: 404 });
+        await prisma.memoryBank.update({ where: { workspaceId_bankId: { workspaceId: WS_A, bankId: coalesced } }, data: { ownerId: people.alice.id, agentKey: 'assistant' } });
+        await expect(client(people.admin.key).getMentalModel(coalesced, created.mental_model_id!)).rejects.toMatchObject({ statusCode: 404 });
+        await expect(client(people.admin.key).refreshMentalModel(coalesced, created.mental_model_id!)).rejects.toMatchObject({ statusCode: 404 });
+      });
+
+      it('gates automatic refreshes by scoped writes, parks them for the interval, and runs consolidation triggers', async () => {
+        const hs = client(people.alice.key);
+        const automatic = `automatic-${nonce}`;
+        await hs.createBank(automatic);
+        await hs.retain(automatic, 'Scoped fact one.', { tags: ['scope:a'] });
+        reply = 'Version one.';
+        const created = await hs.createMentalModel(automatic, 'Scoped', 'What is scoped fact one?', {
+          id: `scheduled-${nonce}`,
+          tags: ['scope:a'],
+          trigger: { refreshCron: '* * * * *', minRefreshIntervalSeconds: 3600 },
+        });
+        expect((await settle(automatic, created.operation_id)).status).toBe('completed');
+        await hs.retain(automatic, 'Unrelated fact.', { tags: ['scope:b'] });
+        expect((await hs.getMentalModel(automatic, created.mental_model_id!, { detail: 'metadata' })).is_stale).toBe(false);
+        await hs.retain(automatic, 'Scoped fact two.', { tags: ['scope:a'] });
+        expect((await hs.getMentalModel(automatic, created.mental_model_id!)).is_stale).toBe(true);
+
+        const { MemoryMentalModelsService } = await import('../src/memory/memory-mental-models.service.js');
+        const service = app.get(MemoryMentalModelsService);
+        const callsBefore = calls.length;
+        await service.sweep(Date.now() + 60_000);
+        const parked = await sdk.listOperations({ client: raw(people.alice.key), path: { bank_id: automatic }, query: { type: 'refresh_mental_model', status: 'pending' } });
+        expect(parked.data?.operations).toHaveLength(1);
+        expect(parked.data?.operations[0]?.next_retry_at).toEqual(expect.any(String));
+        expect(calls).toHaveLength(callsBefore);
+
+        reply = 'Version two.';
+        const manual = await hs.refreshMentalModel(automatic, created.mental_model_id!);
+        expect(manual.operation_id).toBe(parked.data!.operations[0]!.id);
+        expect((await settle(automatic, manual.operation_id)).status).toBe('completed');
+        expect((await hs.getMentalModel(automatic, created.mental_model_id!)).content).toBe('Version two.');
+
+        await hs.updateMentalModel(automatic, created.mental_model_id!, {
+          trigger: { refreshCron: null, refreshAfterConsolidation: true, minRefreshIntervalSeconds: 0 },
+        });
+        await hs.retain(automatic, 'Scoped fact three.', { tags: ['scope:a'] });
+        reply = 'Version three.';
+        const bankRow = await prisma.memoryBank.findUniqueOrThrow({ where: { workspaceId_bankId: { workspaceId: WS_A, bankId: automatic } } });
+        await service.afterConsolidation(bankRow);
+        const queued = await sdk.listOperations({ client: raw(people.alice.key), path: { bank_id: automatic }, query: { type: 'refresh_mental_model' } });
+        expect(queued.data?.operations.length).toBeGreaterThan(0);
+        expect((await settle(automatic, queued.data!.operations[0]!.id)).status).toBe('completed');
+        expect((await hs.getMentalModel(automatic, created.mental_model_id!)).content).toBe('Version three.');
+      });
     });
   });
 

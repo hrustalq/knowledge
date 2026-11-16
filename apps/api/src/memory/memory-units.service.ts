@@ -227,11 +227,12 @@ export class MemoryUnitsService {
   }
 
   async stats(bank: MemoryBank): Promise<BankStatsResponse> {
-    const [byType, documents, last, pending] = await Promise.all([
+    const [byType, documents, last, pending, paused] = await Promise.all([
       this.prisma.memoryUnit.groupBy({ by: ['factType'], where: { bankId: bank.id }, _count: { _all: true } }),
       this.prisma.memoryUnit.findMany({ where: { bankId: bank.id }, distinct: ['documentId'], select: { documentId: true } }),
       this.prisma.memoryUnit.findFirst({ where: { bankId: bank.id }, orderBy: { updatedAt: 'desc' }, select: { updatedAt: true } }),
       this.prisma.memoryUnit.count({ where: { bankId: bank.id, factType: { not: 'observation' }, scopeMembers: { some: { consolidatedAt: null } } } }),
+      this.prisma.memoryMentalModel.count({ where: { bankId: bank.id, lastRefreshFailedAt: { not: null } } }),
     ]);
     const counts = Object.fromEntries(byType.map((r) => [r.factType, r._count._all]));
     return {
@@ -249,6 +250,7 @@ export class MemoryUnitsService {
       pending_consolidation: pending,
       failed_consolidation: 0,
       total_observations: counts.observation ?? 0,
+      paused_mental_models: paused,
     };
   }
 

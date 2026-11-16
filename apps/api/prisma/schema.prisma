@@ -4851,6 +4851,7 @@ model MemoryBank {
   files      MemoryFile[]
   observationScopes MemoryObservationScope[]
   directives MemoryDirective[]
+  mentalModels MemoryMentalModel[]
 
   @@unique([workspaceId, bankId])
   @@index([workspaceId, agentKey, ownerId])
@@ -4875,6 +4876,56 @@ model MemoryDirective {
   @@index([workspaceId])
   @@index([bankId, isActive])
   @@map("memory_directives")
+}
+
+/// A bank-local saved reflect response (#1160). It is never a Knowledge page or
+/// a memory unit. The trigger holds Hindsight's refresh and scope settings;
+/// structured_doc gives delta refreshes stable section and block identities.
+model MemoryMentalModel {
+  id                   String    @id
+  workspaceId          String    @map("workspace_id") @db.Uuid
+  bankId               String    @map("bank_id") @db.Uuid
+  bank                 MemoryBank @relation(fields: [bankId], references: [id], onDelete: Cascade)
+  name                 String
+  sourceQuery          String    @map("source_query")
+  content              String    @default("")
+  tags                 String[]  @default([])
+  maxTokens            Int       @default(4096) @map("max_tokens")
+  trigger              Json      @default("{}")
+  reflectResponse      Json?     @map("reflect_response")
+  structuredDoc        Json?     @map("structured_doc")
+  refreshedSourceQuery String?   @map("refreshed_source_query")
+  lastRefreshedAt      DateTime? @map("last_refreshed_at") @db.Timestamptz
+  lastMemorySeenAt     DateTime? @map("last_memory_seen_at") @db.Timestamptz
+  lastRefreshFailedAt  DateTime? @map("last_refresh_failed_at") @db.Timestamptz
+  lastFullRefreshedAt  DateTime? @map("last_full_refreshed_at") @db.Timestamptz
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  history MemoryMentalModelHistory[]
+
+  @@index([workspaceId])
+  @@index([bankId, createdAt])
+  @@map("memory_mental_models")
+}
+
+/// Previous content and refused refreshes of a mental model (#1160).
+model MemoryMentalModelHistory {
+  id              String           @id @default(uuid()) @db.Uuid
+  workspaceId     String           @map("workspace_id") @db.Uuid
+  bankId          String           @map("bank_id") @db.Uuid
+  modelId         String           @map("model_id")
+  model           MemoryMentalModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  previousContent String?          @map("previous_content")
+  kind            String?
+  outcome         String?
+  failureReason   String?          @map("failure_reason")
+  errorMessage    String?          @map("error_message")
+  changedAt       DateTime         @default(now()) @map("changed_at") @db.Timestamptz
+
+  @@index([workspaceId])
+  @@index([modelId, changedAt])
+  @@map("memory_mental_model_history")
 }
 
 /// An entity of a bank's graph (#1008), as the MCP reference memory server
@@ -5111,17 +5162,19 @@ model MemoryOperation {
   workspaceId String     @map("workspace_id") @db.Uuid
   bankId      String     @map("bank_id") @db.Uuid
   bank        MemoryBank @relation(fields: [bankId], references: [id], onDelete: Cascade)
-  /// `retain` | `consolidation` (#993: one pass asked for by `POST …/consolidate`, no payload).
+  /// `retain` | `consolidation` | `create_mental_model` | `refresh_mental_model`.
   type        String     @default("retain")
   /// queued → running → completed | failed, or cancelled while queued.
   status      String     @default("queued")
-  /// The request's items as `RetainItem[]`, masked before this row is written. Emptied once the operation settles.
+  /// Retain items, a consolidation scope, or a mental-model id and refresh mode.
   payload     Json
   itemsCount  Int        @map("items_count")
   createdBy   String     @map("created_by") @db.Uuid
   locale      String     @default("en")
   attempts    Int        @default(0)
   error       String?
+  /// An automatic mental-model refresh parked until its minimum interval ends.
+  notBefore   DateTime?  @map("not_before") @db.Timestamptz
   startedAt   DateTime?  @map("started_at") @db.Timestamptz
   completedAt DateTime?  @map("completed_at") @db.Timestamptz
 
@@ -5130,5 +5183,6 @@ model MemoryOperation {
 
   @@index([bankId, createdAt])
   @@index([status, updatedAt])
+  @@index([status, notBefore])
   @@map("memory_operations")
 }

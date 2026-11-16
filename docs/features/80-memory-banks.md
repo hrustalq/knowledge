@@ -459,6 +459,38 @@ A chunk is never deleted on its own (#1018): the web route refuses it, the Memor
 the file" instead of delete, and the Hindsight wire has no single-memory delete. Known gap: a file's
 recall lags its text by up to a sweep (about 90 s) after a failed index or a rename.
 
+## Mental models
+
+`POST /v1/default/banks/:bank/mental-models` creates a named, bank-local saved reflect response and returns
+`mental_model_id` + an operation id. `create_mental_model` and `refresh_mental_model` operations run on the memory
+worker. The rest of the Hindsight surface is `GET` list/get (metadata, content or full detail), `PATCH`, `DELETE`,
+`POST …/:id/clear`, `POST …/:id/refresh` (optional `{ "mode": "full" }`) and `GET …/:id/history`. Viewers read,
+editors mutate; every route resolves through `MemoryAccessService`, so personal and project-bank rules are unchanged.
+A model never creates a Knowledge document, revision or merge request.
+
+A refresh resolves the model's tags (tagged models default to `all_strict`), fact types and a database-time snapshot,
+then reflects over only that window. `last_memory_seen_at` is the newest in-scope memory actually read;
+`last_refreshed_at` records a completed run. The two make `is_stale` scope-aware: unrelated writes do not refresh a
+model, and untagged writes do not stale a tagged model under the widening `any`/`all` modes. An empty retrieval window
+completes without a model call and leaves content alone. A failed retrieval, generation, structured-output extraction
+or delta application preserves content, evidence and watermarks, appends a failure history entry and pauses automatic
+triggers until an explicit refresh succeeds. `paused_mental_models` on bank stats counts these.
+
+`trigger.refresh_after_consolidation`, `refresh_cron` and `full_refresh_cron` are due checks on the existing fixed
+operation tick, never a second timer. The first two are mutually exclusive; setting one through a trigger patch clears
+the other. Scheduled refreshes require scoped staleness, and a scheduled full refresh of a delta model requires a later
+delta. `min_refresh_interval_seconds` (or `MEMORY_MENTAL_MODEL_MIN_REFRESH_INTERVAL_SECONDS`) parks an automatic
+operation until the floor expires; further triggers coalesce into it and an explicit refresh releases it. One model has
+at most one queued refresh and never two running writes. A full request joining a queued delta upgrades it to full.
+
+Full mode rebuilds from scratch. Delta mode sends operations against stable section/block ids in `structured_doc`;
+unknown ids are skipped, an unreadable or wholly unapplied edit fails, and untouched blocks render byte-identically.
+A populated document is never replaced by an empty delta. `based_on.memories` accumulates evidence across delta runs.
+`trigger.response_schema` additionally stores validated `structured_output`; delta extraction reads the merged document.
+`keep_trace` retains the reflect trace. Reflection searches matching models before observations/raw facts, offers
+`search_mental_models` and `read_mental_models` tools, honours `exclude_mental_models` / ids, and reports exactly the
+models shown in `based_on.mental_models`. Compound `tag_groups` are refused at model configuration rather than ignored.
+
 ## The web section
 
 **Settings → Memory banks** (`apps/web/src/modules/memory/`), on this platform's own routes:
@@ -533,15 +565,14 @@ reaches `apps/api/src/captures/`.
 | `MEMORY_REFLECT_RATE_PER_MIN` | `30` | reflect requests a key may send a minute; refused when the limiter is unreachable |
 | `MEMORY_OPERATION_TIMEOUT_MS` | `600000` | when a claimed async retain counts as lost |
 | `MEMORY_OPERATION_RETENTION_DAYS` | `7` | how long a finished operation's row is kept |
+| `MEMORY_MENTAL_MODEL_MIN_REFRESH_INTERVAL_SECONDS` | `0` | default floor between automatic refreshes of one model; a model may override it |
 | `MEMORY_CONSOLIDATION_DAILY_CALLS` | `20` | consolidation calls one bank may make a UTC day; `0` turns observations off for the server |
 | `MEMORY_GRAPH_READ_MAX_ENTITIES` | `500` | entities one `read_graph` or `search_nodes` returns before it says it cut |
 
 ## Not built
 
-Hindsight's mental models, knowledge-base pages, webhooks, transfer and clone,
-bank templates, file retain, aliases, audit and LLM-request logs; `tag_groups`; Hindsight's
-observation scopes and consolidation strategies (`observation_scopes` on `POST …/consolidate` is not
-read: every pass keeps each exact tag set to itself) and its bank config keys beyond the five above;
+Hindsight's knowledge-base pages, webhooks, transfer and clone,
+bank templates, file retain, aliases, audit and LLM-request logs; `tag_groups`;
 consolidating across banks; editing a memory's text, a file or an entity in the UI, a graph view of
 memory entities, usage charts per bank. For the other wires: a stdio entrypoint or a published package;
 importing an existing `memory.jsonl` or a local `/memories` folder; the reference server's

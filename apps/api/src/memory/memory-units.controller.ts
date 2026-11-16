@@ -21,6 +21,7 @@ import {
   type MemoryToolResult,
 } from './memory-files.service.js';
 import { MemoryIntakeService } from './memory-intake.service.js';
+import { MemoryMentalModelsService } from './memory-mental-models.service.js';
 import { MemoryOperationsService } from './memory-operations.service.js';
 import { MemoryRateService } from './memory-rate.service.js';
 import { recallQuery, reflectQuery } from './memory-queries.js';
@@ -31,24 +32,33 @@ import {
   ClearMemoriesQueryDto,
   ConsolidateDto,
   CreateDirectiveDto,
+  CreateMentalModelDto,
+  GetMentalModelQueryDto,
   ListDirectivesQueryDto,
   ListMemoriesQueryDto,
+  ListMentalModelsQueryDto,
   ListObservationScopesQueryDto,
   ListOperationsQueryDto,
   RecallDto,
   ReflectDto,
+  RefreshMentalModelDto,
   RetainDto,
   UpdateDirectiveDto,
   UpdateDocumentDto,
+  UpdateMentalModelDto,
 } from './memory.dto.js';
 import type {
   BankStatsResponse,
   CancelOperationResponse,
   ConsolidationResponse,
+  CreateMentalModelResponse,
   DeleteResponse,
   DirectiveListResponse,
   DirectiveResponse,
   ListMemoryUnitsResponse,
+  MentalModelHistoryResponse,
+  MentalModelListResponse,
+  MentalModelResponse,
   OperationStatusResponse,
   OperationsListResponse,
   RecallResponse,
@@ -74,6 +84,7 @@ export class MemoryUnitsController {
     private readonly operations: MemoryOperationsService,
     private readonly reflector: MemoryReflectService,
     private readonly directives: MemoryDirectivesService,
+    private readonly mentalModels: MemoryMentalModelsService,
     private readonly rate: MemoryRateService,
     private readonly files: MemoryFilesService,
   ) {}
@@ -150,6 +161,100 @@ export class MemoryUnitsController {
     const bank = await this.access.bank(caller, bankId);
     await this.rate.check('reflect', principal);
     return this.reflector.reflect(bank, reflectQuery(dto, principal));
+  }
+
+  @Get('mental-models')
+  async listMentalModels(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Query() query: ListMentalModelsQueryDto,
+  ): Promise<MentalModelListResponse> {
+    const caller = await this.access.caller(principal, ws, 'viewer');
+    return this.mentalModels.list(await this.access.bank(caller, bankId), query);
+  }
+
+  @Post('mental-models')
+  @HttpCode(200)
+  async createMentalModel(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Body() dto: CreateMentalModelDto,
+  ): Promise<CreateMentalModelResponse> {
+    const caller = await this.access.caller(principal, ws, 'editor');
+    return this.mentalModels.create(await this.access.bank(caller, bankId), dto, principal.userId, principal.locale);
+  }
+
+  @Get('mental-models/:mentalModelId/history')
+  async mentalModelHistory(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Param('mentalModelId') id: string,
+  ): Promise<MentalModelHistoryResponse[]> {
+    const caller = await this.access.caller(principal, ws, 'viewer');
+    return this.mentalModels.historyList(await this.access.bank(caller, bankId), id);
+  }
+
+  @Post('mental-models/:mentalModelId/refresh')
+  @HttpCode(200)
+  async refreshMentalModel(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Param('mentalModelId') id: string,
+    @Body() dto: RefreshMentalModelDto = {},
+  ): Promise<{ operation_id: string; status: string }> {
+    const caller = await this.access.caller(principal, ws, 'editor');
+    return this.mentalModels.refresh(await this.access.bank(caller, bankId), id, dto, principal.userId, principal.locale);
+  }
+
+  @Post('mental-models/:mentalModelId/clear')
+  @HttpCode(200)
+  async clearMentalModel(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Param('mentalModelId') id: string,
+  ): Promise<MentalModelResponse> {
+    const caller = await this.access.caller(principal, ws, 'editor');
+    return this.mentalModels.clear(await this.access.bank(caller, bankId), id);
+  }
+
+  @Get('mental-models/:mentalModelId')
+  async getMentalModel(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Param('mentalModelId') id: string,
+    @Query() query: GetMentalModelQueryDto,
+  ): Promise<MentalModelResponse> {
+    const caller = await this.access.caller(principal, ws, 'viewer');
+    return this.mentalModels.get(await this.access.bank(caller, bankId), id, query.detail);
+  }
+
+  @Patch('mental-models/:mentalModelId')
+  async updateMentalModel(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Param('mentalModelId') id: string,
+    @Body() dto: UpdateMentalModelDto,
+  ): Promise<MentalModelResponse> {
+    const caller = await this.access.caller(principal, ws, 'editor');
+    return this.mentalModels.update(await this.access.bank(caller, bankId), id, dto);
+  }
+
+  @Delete('mental-models/:mentalModelId')
+  async deleteMentalModel(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Param('mentalModelId') id: string,
+  ): Promise<void> {
+    const caller = await this.access.caller(principal, ws, 'editor');
+    return this.mentalModels.delete(await this.access.bank(caller, bankId), id);
   }
 
   @Get('directives')

@@ -164,7 +164,7 @@ export class ReflectIncludeDto {
   @IsOptional() @IsObject() facts?: Record<string, unknown> | null;
 }
 
-/** `ReflectRequest`. Mental models and `tag_groups` are Hindsight's and are left undeclared. */
+/** `ReflectRequest`. `tag_groups` is Hindsight's and is left undeclared. */
 export class ReflectDto {
   @IsString() @MinLength(1) @MaxLength(4000) query!: string;
   /** Deprecated by Hindsight: appended to the query. */
@@ -175,6 +175,64 @@ export class ReflectDto {
   @IsOptional() @IsIn(TAGS_MATCH) tags_match?: TagsMatch | null;
   @IsOptional() @IsBoolean() apply_all_directives?: boolean | null;
   @IsOptional() @IsArray() @IsIn([...FACT_TYPES, 'observation'], { each: true }) fact_types?: string[] | null;
+  @IsOptional() @IsBoolean() exclude_mental_models?: boolean | null;
+  @IsOptional() @IsArray() @IsString({ each: true }) exclude_mental_model_ids?: string[] | null;
   @IsOptional() @IsObject() response_schema?: Record<string, unknown> | null;
   @IsOptional() @ValidateNested() @Type(() => ReflectIncludeDto) include?: ReflectIncludeDto | null;
+}
+
+export class MentalModelTriggerDto {
+  @IsOptional() @IsIn(['low', 'mid', 'high']) budget?: 'low' | 'mid' | 'high' | null;
+  @IsOptional() @IsIn(['full', 'delta']) mode?: 'full' | 'delta';
+  @IsOptional() @IsBoolean() refresh_after_consolidation?: boolean;
+  @IsOptional() @IsString() @MaxLength(100) refresh_cron?: string | null;
+  @IsOptional() @IsString() @MaxLength(100) full_refresh_cron?: string | null;
+  @IsOptional() @IsInt() @Min(0) @Max(31_536_000) min_refresh_interval_seconds?: number | null;
+  @IsOptional() @IsArray() @IsIn([...FACT_TYPES, 'observation'], { each: true }) fact_types?: Array<'world' | 'experience' | 'observation'> | null;
+  @IsOptional() @IsBoolean() exclude_mental_models?: boolean;
+  @IsOptional() @IsArray() @IsString({ each: true }) exclude_mental_model_ids?: string[] | null;
+  @IsOptional() @IsIn(TAGS_MATCH) tags_match?: TagsMatch | null;
+  @IsOptional() @IsArray() tag_groups?: unknown[] | null;
+  @IsOptional() @IsBoolean() include_chunks?: boolean | null;
+  @IsOptional() @IsInt() @Min(1) @Max(200_000) recall_max_tokens?: number | null;
+  @IsOptional() @IsInt() @Min(1) @Max(200_000) recall_chunks_max_tokens?: number | null;
+  @IsOptional() @IsInt() @Min(1) @Max(200_000) reflect_search_observations_max_tokens?: number | null;
+  @IsOptional() @IsBoolean() reflect_search_observations_include_entities?: boolean | null;
+  @IsOptional() @IsObject() response_schema?: Record<string, unknown> | null;
+  @IsOptional() @IsBoolean() keep_trace?: boolean;
+}
+
+export class CreateMentalModelDto {
+  @IsOptional() @Matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/) @MaxLength(192) id?: string | null;
+  @IsString() @Matches(/\S/) @MaxLength(200) name!: string;
+  @IsString() @Matches(/\S/) @MaxLength(4000) source_query!: string;
+  @IsOptional() @IsArray() @ArrayMaxSize(50) @IsString({ each: true }) @MaxLength(100, { each: true }) tags?: string[];
+  @IsOptional() @IsInt() @Min(1) @Max(200_000) max_tokens?: number;
+  @IsOptional() @ValidateNested() @Type(() => MentalModelTriggerDto) trigger?: MentalModelTriggerDto;
+}
+
+export class UpdateMentalModelDto {
+  @IsOptional() @IsString() @Matches(/\S/) @MaxLength(200) name?: string | null;
+  @IsOptional() @IsString() @Matches(/\S/) @MaxLength(4000) source_query?: string | null;
+  @IsOptional() @IsArray() @ArrayMaxSize(50) @IsString({ each: true }) @MaxLength(100, { each: true }) tags?: string[] | null;
+  @IsOptional() @IsInt() @Min(1) @Max(200_000) max_tokens?: number | null;
+  @IsOptional() @ValidateNested() @Type(() => MentalModelTriggerDto) trigger?: MentalModelTriggerDto | null;
+}
+
+export class ListMentalModelsQueryDto {
+  @IsOptional() @Transform(asList) @IsArray() @IsString({ each: true }) tags?: string[];
+  @IsOptional() @IsIn(['any', 'all', 'exact']) tags_match?: 'any' | 'all' | 'exact';
+  @IsOptional() @IsIn(['metadata', 'content', 'full']) detail?: 'metadata' | 'content' | 'full';
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(1000) limit?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) offset?: number;
+  @IsOptional() @Transform(({ value }) => value === true || value === 'true') @IsBoolean() exclude_pages?: boolean;
+  @IsOptional() @Transform(({ value }) => value === true || value === 'true') @IsBoolean() exclude_knowledge_pages?: boolean;
+}
+
+export class GetMentalModelQueryDto {
+  @IsOptional() @IsIn(['metadata', 'content', 'full']) detail?: 'metadata' | 'content' | 'full';
+}
+
+export class RefreshMentalModelDto {
+  @IsOptional() @IsIn(['full']) mode?: 'full' | null;
 }

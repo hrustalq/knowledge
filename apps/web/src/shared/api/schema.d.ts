@@ -12205,7 +12205,7 @@ export interface components {
             createdAt: string;
         };
         /** @enum {string} */
-        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "memory-extract" | "memory-recall" | "memory-reflect" | "memory-consolidate" | "memory-consolidate-screen" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "memo-triage" | "source-recipe" | "source-judge" | "blueprint-derive" | "blueprint-generate" | "blueprint-interview" | "purpose-interview";
+        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "memory-extract" | "memory-recall" | "memory-reflect" | "memory-mental-model" | "memory-consolidate" | "memory-consolidate-screen" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "memo-triage" | "source-recipe" | "source-judge" | "blueprint-derive" | "blueprint-generate" | "blueprint-interview" | "purpose-interview";
         AiUsageResponse: {
             from: string;
             to: string;

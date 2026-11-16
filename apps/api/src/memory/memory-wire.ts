@@ -1,4 +1,5 @@
 import type { AssistantToolCall } from '@knowledge/contracts';
+import type { MentalModelTrigger } from './memory-mental-models.js';
 
 /**
  * Response bodies in Hindsight's wire shape (OpenAPI v1.2.1), written by hand
@@ -149,6 +150,7 @@ export interface BankStatsResponse {
   pending_consolidation: number;
   failed_consolidation: number;
   total_observations: number;
+  paused_mental_models: number;
 }
 
 export interface RecallResult {
@@ -215,6 +217,7 @@ export interface OperationResponse {
   status: OperationWireStatus;
   error_message: string | null;
   retry_count: number;
+  next_retry_at?: string | null;
 }
 
 export interface OperationsListResponse {
@@ -244,6 +247,53 @@ export interface CancelOperationResponse {
   operation_id: string;
 }
 
+export interface CreateMentalModelResponse {
+  mental_model_id: string;
+  operation_id: string;
+}
+
+export interface MentalModelResponse {
+  id: string;
+  bank_id: string;
+  name: string;
+  source_query?: string | null;
+  content?: string | null;
+  tags: string[];
+  max_tokens?: number | null;
+  trigger?: Required<MentalModelTrigger> | null;
+  last_refreshed_at: string | null;
+  last_memory_seen_at: string | null;
+  last_refresh_failed_at: string | null;
+  last_full_refreshed_at: string | null;
+  created_at: string;
+  is_page: false;
+  is_knowledge_page: false;
+  reflect_response?: Record<string, unknown> | null;
+  is_stale: boolean;
+}
+
+export interface MentalModelListResponse {
+  items: MentalModelResponse[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface MentalModelHistoryResponse {
+  previous_content: string | null;
+  changed_at: string;
+  kind?: string;
+  outcome?: string;
+  failure_reason?: string;
+  error_message?: string;
+}
+
+export interface ReflectMentalModel {
+  id: string;
+  text: string;
+  context?: string | null;
+}
+
 export interface ReflectResponse {
   /** The answer, as markdown. */
   text: string;
@@ -251,7 +301,7 @@ export interface ReflectResponse {
     memories: Array<
       Omit<RecallResult, 'entities' | 'source_fact_ids' | 'scores'>
     >;
-    mental_models: never[];
+    mental_models: ReflectMentalModel[];
     directives: Array<Pick<DirectiveResponse, 'id' | 'name' | 'content'>>;
   };
   structured_output?: Record<string, unknown> | null;
@@ -259,4 +309,6 @@ export interface ReflectResponse {
   usage?: TokenUsage;
   /** Additional recall calls the reflector made after the mandatory initial retrieval. */
   trace?: AssistantToolCall[];
+  /** Internal refresh channel: parsed operations against deltaDocument. */
+  delta_operations?: unknown[];
 }

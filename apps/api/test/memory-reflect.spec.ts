@@ -49,6 +49,7 @@ function service(
     reply?: string | Error;
     useTool?: boolean;
     directives?: Array<{ id: string; name: string; content: string }>;
+    models?: Array<Record<string, unknown>>;
   } = {},
 ) {
   const recall = {
@@ -112,6 +113,9 @@ function service(
   const directives = {
     forReflect: vi.fn(async () => opts.directives ?? []),
   };
+  const prisma = {
+    memoryMentalModel: { findMany: vi.fn(async () => opts.models ?? []) },
+  };
   return {
     svc: new MemoryReflectService(
       recall as never,
@@ -119,11 +123,13 @@ function service(
       usage as never,
       client as never,
       directives as never,
+      prisma as never,
     ),
     recall,
     client,
     usage,
     directives,
+    prisma,
   };
 }
 const q = { query: 'Who owns billing?', userId: 'u1', locale: 'en' as const };
@@ -195,6 +201,7 @@ describe('MemoryReflectService (#986)', () => {
       budget: 'high',
       maxTokens: 500,
       userId: 'u1',
+      preferObservations: true,
     });
     const [[ctx, messages, tools, , opts]] = client.runWithTools.mock
       .calls as unknown as [
@@ -212,7 +219,7 @@ describe('MemoryReflectService (#986)', () => {
       config: { maxToolCalls: 10 },
     });
     expect(opts.jsonFinalRound).toBe(false);
-    expect(tools.map((tool) => tool.function.name)).toEqual(['recall']);
+    expect(tools.map((tool) => tool.function.name)).toEqual(['search_mental_models', 'read_mental_models', 'recall']);
     expect(messages[0]).toMatchObject({ role: 'system' });
     expect(messages[0]!.content).toContain('RULES');
     expect(messages[0]!.content).toContain('Remember ops decisions.');
@@ -269,6 +276,31 @@ describe('MemoryReflectService (#986)', () => {
     expect(res.based_on!.memories.map((item) => item.id)).toEqual(['m1', 'm2']);
     expect(res.based_on!.memories[0]).not.toHaveProperty('scores');
     expect((await service().svc.reflect(bank, q)).based_on).toBeUndefined();
+  });
+
+  it('searches curated models first and returns exactly the models shown as provenance', async () => {
+    const { svc, client, prisma } = service({
+      models: [{
+        id: 'billing-model',
+        name: 'Billing ownership',
+        sourceQuery: 'Who owns billing?',
+        content: 'Alice owns billing.',
+        tags: [],
+      }],
+    });
+    const res = await svc.reflect(bank, { ...q, facts: true });
+    expect(prisma.memoryMentalModel.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ bankId: 'bank-1', workspaceId: 'ws-1', content: { not: '' } }),
+    }));
+    const messages = client.runWithTools.mock.calls[0]![1] as Array<{ content: string }>;
+    expect(messages[1]!.content.indexOf('[MM:billing-model]')).toBeLessThan(messages[1]!.content.indexOf('[M1]'));
+    expect(res.based_on?.mental_models).toEqual([{ id: 'billing-model', text: 'Alice owns billing.', context: 'Who owns billing?' }]);
+
+    const excluded = service({ models: [{ id: 'billing-model', content: 'Alice owns billing.' }] });
+    await excluded.svc.reflect(bank, { ...q, excludeMentalModels: true });
+    expect(excluded.prisma.memoryMentalModel.findMany).not.toHaveBeenCalled();
+    const tools = excluded.client.runWithTools.mock.calls[0]![2] as Array<{ function: { name: string } }>;
+    expect(tools.map((tool) => tool.function.name)).toEqual(['recall']);
   });
 
   it('asks for JSON on the final round, and still answers when the reply does not parse', async () => {

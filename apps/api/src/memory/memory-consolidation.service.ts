@@ -16,6 +16,7 @@ import { EMBEDDING_PROVIDER, type EmbeddingProvider } from '../embedding/embeddi
 import { GraphService } from '../graph/graph.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { consolidationDay, consolidationPrompt, observationSettings, readConsolidation, refinement, type ConsolidationEntry } from './memory-observations.js';
+import { MemoryMentalModelsService } from './memory-mental-models.service.js';
 
 /** New facts one consolidation call reads, at most. */
 const BATCH_FACTS = 10;
@@ -85,6 +86,7 @@ export class MemoryConsolidationService {
     private readonly usage: AiUsageService,
     private readonly client: AssistantClient,
     private readonly decision: DecisionClient,
+    private readonly mentalModels: MemoryMentalModelsService,
     config: ConfigService<Env, true>,
   ) {
     this.dailyCalls = config.get('MEMORY_CONSOLIDATION_DAILY_CALLS', { infer: true });
@@ -142,6 +144,7 @@ export class MemoryConsolidationService {
       result.created += done.created;
       result.refined += done.refined;
     }
+    if (result.facts) await this.mentalModels.afterConsolidation(bank).catch((error: Error) => this.logger.warn(`Mental models not queued after consolidation: ${error.message}`));
     return result;
   }
 

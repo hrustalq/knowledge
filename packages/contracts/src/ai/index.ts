@@ -1389,6 +1389,8 @@ export type AiUsageOperation =
   | 'memory-recall'
   /** Answering a question over a memory bank's recalled memories (#986): one row per reflect. */
   | 'memory-reflect'
+  /** Generating a saved mental model, or structured output from its merged delta document (#1160). */
+  | 'memory-mental-model'
   /** The `consolidator` folding a bank's new facts into observations (#993). One row per batch, billed to no person (the zeros stub). */
   | 'memory-consolidate'
   /** Asking the decision model whether a new fact bears on an existing observation (#993), before consolidation. One row per pair. */

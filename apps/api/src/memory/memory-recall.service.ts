@@ -30,6 +30,8 @@ export interface RecallQuery {
   sourceFacts?: { maxTokens: number; perObservation: number } | null;
   /** `prefer_observations`: drop a raw fact a returned observation stands on, and backfill. */
   preferObservations?: boolean;
+  /** Internal refresh snapshot: only memories written in this window are read. */
+  written?: { before: Date; after?: Date };
   /** Who asks: the person a prune's decision calls are billed to. */
   userId: string;
 }
@@ -158,8 +160,14 @@ export class MemoryRecallService {
   private async ranked(bank: MemoryBank, q: RecallQuery): Promise<Array<{ row: Row; text: string; scores: RecallResult['scores'] }>> {
     const query = q.query.trim();
     if (!query) return [];
-    const filter: Prisma.MemoryUnitWhereInput = { ...(q.types?.length ? { factType: { in: q.types } } : {}), AND: [tagsWhere(q.tags, q.tagsMatch)] };
-    const filtered = Boolean(q.types?.length || q.tags?.length);
+    const filter: Prisma.MemoryUnitWhereInput = {
+      ...(q.types?.length ? { factType: { in: q.types } } : {}),
+      AND: [
+        tagsWhere(q.tags, q.tagsMatch),
+        ...(q.written ? [{ updatedAt: { lte: q.written.before, ...(q.written.after ? { gt: q.written.after } : {}) } }] : []),
+      ],
+    };
+    const filtered = Boolean(q.types?.length || q.tags?.length || q.written);
     let allowed: string[] | null = null;
     if (filtered) {
       const ids = await this.prisma.memoryUnit.findMany({ where: { bankId: bank.id, ...filter }, select: { id: true }, take: FILTER_ID_CAP + 1 });

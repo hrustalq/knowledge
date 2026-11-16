@@ -7,7 +7,6 @@ import {
   GLOSSARY_BOUNDARY_AFTER,
   GLOSSARY_BOUNDARY_BEFORE,
   effectiveGlossary,
-  type ContextMemory,
   type ContextPage,
   type ContextRequest,
   type ContextResponse,
@@ -230,9 +229,9 @@ export function packContext(
       if (size() > budget) into.pop();
     }
   };
-  fill<ContextPage>(out.pages, candidates.pages);
-  fill<ContextMemory>(out.memories, candidates.memories);
-  fill<ContextTerm>(out.terms, candidates.terms);
+  fill(out.pages, candidates.pages);
+  fill(out.memories, candidates.memories);
+  fill(out.terms, candidates.terms);
   if (!out.pages.length && !out.memories.length && !out.terms.length) Object.assign(out, { empty: true, reason: 'nothing-relevant' });
   out.tokens = size();
   return out;

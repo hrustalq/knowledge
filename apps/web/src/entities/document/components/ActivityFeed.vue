@@ -273,7 +273,11 @@ watch(() => events.revision, () => void refreshHead())
                 class="max-w-[9rem] shrink-0 font-medium"
               />
               <span v-else class="shrink-0 font-medium">{{ actor(e) }}</span>
-              <span class="min-w-0 truncate text-muted-foreground sm:shrink-0 sm:overflow-visible">{{ label(e) }}</span>
+              <!-- Basis 0 below `sm`: a wrapping flex row wraps an item before it
+                   shrinks it, so a long verb (ru) took a line of its own and the
+                   row grew past its fixed height (#1033). From zero it always
+                   fits beside the actor and the time, and truncates there. -->
+              <span class="min-w-0 flex-1 truncate text-muted-foreground sm:flex-none sm:overflow-visible">{{ label(e) }}</span>
               <RouterLink
                 v-if="e.documentId"
                 :to="`/documents/${e.documentId}`"

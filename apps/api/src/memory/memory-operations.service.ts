@@ -12,6 +12,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { MemoryConsolidationService } from './memory-consolidation.service.js';
 import { readObservationScopes, type RetainItem } from './memory-facts.js';
 import { MemoryMentalModelsService } from './memory-mental-models.service.js';
+import { MemoryManagementService } from './memory-management.service.js';
 import { maskItems, MemoryRetainService } from './memory-retain.service.js';
 import { MemoryProducer } from './memory.producer.js';
 import type { CancelOperationResponse, ConsolidationResponse, OperationResponse, OperationStatusResponse, OperationsListResponse } from './memory-wire.js';
@@ -66,6 +67,7 @@ export class MemoryOperationsService {
     private readonly retainer: MemoryRetainService,
     private readonly consolidation: MemoryConsolidationService,
     private readonly mentalModels: MemoryMentalModelsService,
+    private readonly management: MemoryManagementService,
     private readonly producer: MemoryProducer,
     config: ConfigService<Env, true>,
   ) {
@@ -143,6 +145,16 @@ export class MemoryOperationsService {
     const row = await this.prisma.memoryOperation.findUnique({ where: { id: operationId }, include: { bank: true } });
     if (!row) return;
     if (row.type === 'consolidation') return this.runConsolidation(row);
+    if (row.type !== 'retain') {
+      try {
+        const result = await this.management.execute(row);
+        await this.settle(row.id, { status: 'completed', payload: [], result: result ?? Prisma.DbNull });
+      } catch (e) {
+        this.logger.warn(`Memory operation ${row.id} failed: ${(e as Error).message}`);
+        await this.settle(row.id, { status: 'failed', error: (e as Error).message.slice(0, 1000), payload: [] });
+      }
+      return;
+    }
     try {
       await this.retainer.retain({
         workspaceId: row.workspaceId,
@@ -173,7 +185,7 @@ export class MemoryOperationsService {
     }
   }
 
-  private async settle(id: string, data: { status: Status; error?: string; payload: [] }): Promise<void> {
+  private async settle(id: string, data: { status: Status; error?: string; payload: []; result?: Prisma.InputJsonObject | typeof Prisma.DbNull }): Promise<void> {
     await this.prisma.memoryOperation.updateMany({ where: { id, status: 'running' }, data: { ...data, completedAt: new Date() } });
   }
 
@@ -198,7 +210,15 @@ export class MemoryOperationsService {
     const row = UUID_RE.test(operationId) ? await this.prisma.memoryOperation.findFirst({ where: { id: operationId, bankId: bank.id } }) : null;
     if (!row) return { operation_id: operationId, status: 'not_found' };
     const { id, task_type, operation_type, created_at, updated_at, error_message, retry_count } = operation(row);
-    return { operation_id: id, id, status: wireStatus(row), operation_type, task_type, created_at, updated_at, completed_at: row.completedAt?.toISOString() ?? null, error_message, retry_count };
+    return { operation_id: id, id, status: wireStatus(row), operation_type, task_type, created_at, updated_at, completed_at: row.completedAt?.toISOString() ?? null, error_message, retry_count, result_metadata: row.result as Record<string, unknown> | null };
+  }
+
+  async delete(bank: MemoryBank, operationId: string) {
+    const row = UUID_RE.test(operationId) ? await this.prisma.memoryOperation.findFirst({ where: { id: operationId, bankId: bank.id } }) : null;
+    if (!row || !['completed', 'failed', 'cancelled'].includes(row.status)) throw new ConflictException(t('error.memory.operationNotTerminal', { id: operationId }));
+    await this.prisma.memoryOperation.delete({ where: { id: row.id } });
+    await this.management.deleteArchives([row.id]);
+    return { success: true, message: `Operation ${operationId} deleted`, operation_id: operationId };
   }
 
   /** Cancels an operation no worker has claimed. One guarded statement: a claim that got there first wins. */
@@ -246,9 +266,12 @@ export class MemoryOperationsService {
         : this.prisma.memoryOperation.updateMany({ where, data: { status: 'failed', completedAt: new Date(), error: staleFailure(row.attempts), payload: [] } }),
       enqueue: (row) => this.producer.enqueue(row.id, row.attempts),
     });
-    const purged = await this.prisma.memoryOperation.deleteMany({
+    const expired = await this.prisma.memoryOperation.findMany({
       where: { status: { in: ['completed', 'failed', 'cancelled'] }, completedAt: { lt: new Date(now - this.retentionMs) } },
+      select: { id: true },
     });
+    const purged = await this.prisma.memoryOperation.deleteMany({ where: { id: { in: expired.map((row) => row.id) } } });
+    await this.management.deleteArchives(expired.map((row) => row.id));
     return { enqueued: lost.length, requeued: requeued.length, failed: failed.length, purged: purged.count };
   }
 }

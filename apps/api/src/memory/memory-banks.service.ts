@@ -185,10 +185,12 @@ export class MemoryBanksService {
               OR: [
                 { bankId: { contains: q, mode: 'insensitive' } },
                 { name: { contains: q, mode: 'insensitive' } },
+                { aliases: { some: { alias: { contains: q, mode: 'insensitive' } } } },
               ],
             }
           : {}),
       },
+      include: { aliases: true },
       orderBy: { createdAt: 'asc' },
     });
     // ponytail: filtered and paged in memory, a workspace holds a handful of banks; page in SQL if one holds thousands.
@@ -206,6 +208,8 @@ export class MemoryBanksService {
         created_at: b.createdAt.toISOString(),
         updated_at: b.updatedAt.toISOString(),
         fact_count: counts.get(b.id) ?? 0,
+        display_alias: b.aliases.find((alias) => alias.primary)?.alias ?? null,
+        matched_aliases: q ? b.aliases.filter((alias) => alias.alias.toLowerCase().includes(q.toLowerCase())).map((alias) => alias.alias) : [],
       })),
       total: visible.length,
       limit,
@@ -307,6 +311,23 @@ export class MemoryBanksService {
         data: readConfigUpdates(updates, bank),
       }),
     );
+  }
+
+  async resetConfig(caller: MemoryCaller, bankId: string): Promise<BankConfigResponse> {
+    const bank = await this.access.bank(caller, bankId);
+    return bankConfig(await this.prisma.memoryBank.update({
+      where: { id: bank.id },
+      data: {
+        mission: '',
+        disposition: DEFAULT_DISPOSITION as unknown as Prisma.InputJsonObject,
+        enableObservations: null,
+        observationsMission: null,
+        maxObservationsPerScope: null,
+        consolidationSourceFactsMaxTokens: null,
+        consolidationSourceFactsMaxTokensPerObservation: null,
+        consolidationStrategies: Prisma.DbNull,
+      },
+    }));
   }
 
   async delete(caller: MemoryCaller, bankId: string): Promise<DeleteResponse> {

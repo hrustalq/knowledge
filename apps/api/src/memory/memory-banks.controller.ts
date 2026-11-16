@@ -1,10 +1,12 @@
-import { Body, Controller, Delete, Get, Headers, HttpCode, Param, Patch, Put, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, HttpCode, Param, Patch, Put, Query, Res } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { CurrentPrincipal, Public, ReadKeyOk } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { CachePolicy } from '../common/http-cache.js';
 import { MemoryAccessService } from './memory-access.service.js';
 import { MemoryBanksService } from './memory-banks.service.js';
+import { BANK_TEMPLATE_JSON_SCHEMA, MemoryManagementService } from './memory-management.service.js';
 import { BankBodyDto, BankConfigUpdateDto, ListBanksQueryDto, UpdateDispositionDto } from './memory.dto.js';
 import { HINDSIGHT_API_VERSION, type BankConfigResponse, type BankListResponse, type BankProfileResponse, type DeleteResponse, type VersionResponse } from './memory-wire.js';
 
@@ -60,6 +62,11 @@ export class MemoryBanksController {
     return this.banks.updateConfig(await this.access.caller(principal, ws, 'editor'), bankId, dto.updates);
   }
 
+  @Delete(':bankId/config')
+  async resetConfig(@CurrentPrincipal() principal: Principal, @Headers('x-workspace-id') ws: string | undefined, @Param('bankId') bankId: string): Promise<BankConfigResponse> {
+    return this.banks.resetConfig(await this.access.caller(principal, ws, 'editor'), bankId);
+  }
+
   @Get(':bankId/profile')
   async profile(@CurrentPrincipal() principal: Principal, @Headers('x-workspace-id') ws: string | undefined, @Param('bankId') bankId: string): Promise<BankProfileResponse> {
     return this.banks.profile(await this.access.caller(principal, ws, 'viewer'), bankId);
@@ -95,10 +102,10 @@ export class MemoryProbeController {
         worker: true,
         bank_config_api: true,
         bank_llm_health: false,
-        file_upload_api: false,
-        document_export_api: false,
-        document_import_api: false,
-        audit_log: false,
+        file_upload_api: true,
+        document_export_api: true,
+        document_import_api: true,
+        audit_log: true,
         llm_trace: false,
         store_document_text: true,
       },
@@ -110,5 +117,45 @@ export class MemoryProbeController {
     this.access.requireEnabled();
     await this.access.ping();
     return { status: 'healthy', database: 'connected' };
+  }
+}
+
+@ApiExcludeController()
+@CachePolicy('no-store')
+@ReadKeyOk()
+@Controller()
+export class MemoryManagementController {
+  constructor(
+    private readonly access: MemoryAccessService,
+    private readonly management: MemoryManagementService,
+  ) {}
+
+  @Public()
+  @Get('v1/bank-template-schema')
+  templateSchema() {
+    this.access.requireEnabled();
+    return BANK_TEMPLATE_JSON_SCHEMA;
+  }
+
+  @Get('v1/default/chunks/:key')
+  async chunk(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('key') key: string,
+  ) {
+    return this.management.chunk(await this.access.caller(principal, ws, 'viewer'), key);
+  }
+
+  @Get('v1/default/files/download/:key')
+  async download(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('key') key: string,
+    @Res() response: Response,
+  ): Promise<void> {
+    const caller = await this.access.caller(principal, ws, 'viewer');
+    const archive = await this.management.archive(caller, key);
+    response.attachment(archive.filename);
+    response.type('application/zip').send(archive.data);
   }
 }

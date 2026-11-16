@@ -112,6 +112,7 @@ export const WORKSPACE_TEARDOWN = {
   ImportJob: 'workspace',
   Memo: 'workspace',
   // Memory banks (#986), leaves to root.
+  MemoryTransferArchive: 'workspace',
   MemoryOperation: 'workspace',
   MemoryMentalModelHistory: 'workspace',
   MemoryMentalModel: 'workspace',
@@ -125,6 +126,7 @@ export const WORKSPACE_TEARDOWN = {
   MemoryRelation: 'workspace',
   MemoryEntity: 'workspace',
   MemoryFile: 'workspace',
+  MemoryBankAlias: 'workspace',
   MemoryBank: 'workspace',
   MemoType: 'workspace',
   // Imports cascade from their link; listed first for the ones a link outlived.

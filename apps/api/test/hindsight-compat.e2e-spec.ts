@@ -210,7 +210,11 @@ describe('Hindsight compatibility (e2e, #986)', () => {
       const version = await client(people.alice.key).getVersion();
       expect(version.api_version).toBe('1.2.1');
       expect(version.features).toMatchObject({
-        file_upload_api: false,
+        file_upload_api: true,
+        document_export_api: true,
+        document_import_api: true,
+        audit_log: true,
+        llm_trace: false,
         bank_config_api: true,
         observations: true,
       });
@@ -3258,6 +3262,195 @@ describe('Hindsight compatibility (e2e, #986)', () => {
         (await web(people.erin.key, 'GET', `/banks?workspaceId=${WS_OFF}`))
           .status,
       ).toBe(404);
+    });
+  });
+
+  describe('phase 6: management API (#1161)', () => {
+    const management = `management-${nonce}`;
+    const settle = async (bankId: string, operationId: string, key = people.alice.key) => {
+      for (let i = 0; i < 100; i++) {
+        const response = await sdk.getOperationStatus({ client: raw(key), path: { bank_id: bankId, operation_id: operationId } });
+        if (!['pending', 'processing'].includes(response.data!.status)) return response.data!;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      throw new Error(`operation ${operationId} did not settle`);
+    };
+
+    it('lists and reads documents, chunks and tags, and updates tags through the official client', async () => {
+      const hs = client(people.alice.key);
+      await hs.retainBatch(management, [
+        { content: 'Erin owns the management runbook.', document_id: 'management-doc', tags: ['team:ops'], context: 'phase 6' },
+        { content: 'Alice reviews it.', document_id: 'management-doc', tags: ['team:ops'] },
+      ]);
+      const documents = await hs.listDocuments(management, { q: 'management' });
+      expect(documents.items).toEqual([expect.objectContaining({ id: 'management-doc', bank_id: management, memory_unit_count: 2, tags: ['team:ops'] })]);
+      expect(await hs.getDocument(management, 'management-doc')).toMatchObject({ original_text: 'Erin owns the management runbook.\n\nAlice reviews it.', observation_scopes: null });
+      const chunks = await sdk.listDocumentChunks({ client: raw(people.alice.key), path: { bank_id: management, document_id: 'management-doc' } });
+      expect(chunks.data).toMatchObject({ total: 2, items: [{ chunk_index: 0, chunk_text: 'Erin owns the management runbook.' }, { chunk_index: 1, chunk_text: 'Alice reviews it.' }] });
+      const chunk = await sdk.getChunk({ client: raw(people.alice.key), path: { chunk_id: chunks.data!.items[0]!.chunk_id } });
+      expect(chunk.data).toMatchObject({ document_id: 'management-doc', bank_id: management });
+      expect(await hs.updateDocument(management, 'management-doc', { addTags: ['topic:runbooks'], removeTags: ['team:ops'] })).toEqual({ success: true });
+      expect((await hs.getDocument(management, 'management-doc'))!.tags).toEqual(['topic:runbooks']);
+      const tags = await sdk.listTags({ client: raw(people.alice.key), path: { bank_id: management }, query: { q: 'topic:*' } });
+      expect(tags.data).toMatchObject({ total: 1, items: [{ tag: 'topic:runbooks', count: 2 }] });
+      expect(await client(people.carol.key).getDocument(management, 'management-doc')).toBeNull();
+    });
+
+    it('resolves aliases through the same bank ACL and carries their display metadata', async () => {
+      const hs = client(people.alice.key);
+      const alias = `management-alias-${nonce}`;
+      const created = await sdk.createBankAlias({ client: raw(people.alice.key), path: { bank_id: management }, body: { alias, primary: true } });
+      expect(created.data).toEqual({ bank_id: management, aliases: [{ alias, primary: true }] });
+      expect(await hs.getBankProfile(alias)).toMatchObject({ bank_id: management });
+      const listed = await sdk.listBanks({ client: raw(people.alice.key), query: { q: alias } });
+      expect(listed.data!.banks.find((row) => row.bank_id === management)).toMatchObject({ display_alias: alias, matched_aliases: [alias] });
+      await expect(client(people.carol.key).getBankProfile(alias)).rejects.toMatchObject({ statusCode: 404 });
+      const readOnly = await mintKey(people.alice.id, { workspaceId: WS_A, scope: 'read' });
+      expect((await call(readOnly, 'POST', `/v1/default/banks/${management}/aliases`, { alias: `no-${nonce}` })).status).toBe(403);
+      expect((await sdk.setBankAliasPrimary({ client: raw(people.alice.key), path: { bank_id: management, alias }, body: { primary: false } })).data!.aliases[0]).toEqual({ alias, primary: false });
+      expect((await sdk.deleteBankAlias({ client: raw(people.alice.key), path: { bank_id: management, alias } })).data!.aliases).toEqual([]);
+    });
+
+    it('exports and imports a bank template, including a non-mutating dry run', async () => {
+      const hs = client(people.alice.key);
+      await hs.createDirective(management, 'Management tone', 'Be precise.', { tags: ['topic:runbooks'] });
+      const exported = await sdk.exportBankTemplate({ client: raw(people.alice.key), path: { bank_id: management } });
+      expect(exported.data).toMatchObject({ version: '1', directives: [{ name: 'Management tone', content: 'Be precise.' }] });
+      const target = `template-${nonce}`;
+      const dry = await sdk.importBankTemplate({ client: raw(people.alice.key), path: { bank_id: target }, query: { dry_run: true }, body: exported.data! });
+      expect(dry.data).toMatchObject({ dry_run: true, bank_id: target });
+      expect(await sdk.listBanks({ client: raw(people.alice.key), query: { q: target } })).toMatchObject({ data: { total: 0 } });
+      expect((await call(people.alice.key, 'POST', `/v1/default/banks/${target}/import?dry_run=true`, { version: '1', mental_models: [{ id: 'invalid-schedule', name: 'Invalid', source_query: 'Test', trigger: { refresh_cron: 'not cron' } }] })).status).toBe(400);
+      const imported = await sdk.importBankTemplate({ client: raw(people.alice.key), path: { bank_id: target }, body: exported.data! });
+      expect(imported.data).toMatchObject({ dry_run: false, directives_created: ['Management tone'] });
+      expect((await client(people.alice.key).listDirectives(target)).items[0]).toMatchObject({ name: 'Management tone', content: 'Be precise.' });
+      expect((await sdk.getBankTemplateSchema({ client: raw(people.alice.key) })).data).toMatchObject({ type: 'object', properties: { version: { const: '1' } } });
+    });
+
+    it('retains an uploaded text file asynchronously without client patches', async () => {
+      const hs = client(people.alice.key);
+      const fileBank = `file-upload-${nonce}`;
+      const submitted = await hs.retainFiles(fileBank, [new File(['Alice maintains uploaded runbooks.'], 'runbook.txt', { type: 'text/plain' })], { filesMetadata: [{ document_id: 'uploaded-runbook', tags: ['upload'] }] });
+      expect(submitted.operation_ids).toHaveLength(1);
+      expect(await settle(fileBank, submitted.operation_ids[0]!)).toMatchObject({ status: 'completed', result_metadata: { documents_imported: 1, facts_imported: 1 } });
+      expect((await hs.getDocument(fileBank, 'uploaded-runbook'))!.original_text).toBe('Alice maintains uploaded runbooks.');
+    });
+
+    it('exports, imports, clones and deletes transfer operations with real archives', async () => {
+      const hs = client(people.alice.key);
+      const archive = await hs.exportDocuments(management, { pollIntervalMs: 50, timeoutMs: 10_000 });
+      expect(archive.length).toBeGreaterThan(100);
+      const target = `transfer-${nonce}`;
+      const imported = await sdk.importDocuments({ client: raw(people.alice.key), path: { bank_id: management }, query: { on_conflict: 'new-id' }, body: { file: new Blob([archive.buffer as ArrayBuffer]) } });
+      expect(imported.data).toMatchObject({ status: 'pending' });
+      expect(await settle(management, imported.data!.operation_id)).toMatchObject({ status: 'completed', result_metadata: { documents_imported: 1, facts_imported: 2 } });
+      const operationId = await hs.importBank(management, new Blob([archive.buffer as ArrayBuffer]), { targetBankId: target });
+      expect(await settle(management, operationId)).toMatchObject({ status: 'completed', result_metadata: { documents_imported: 1 } });
+      expect((await hs.getDocument(target, 'management-doc'))!.original_text).toBe('Erin owns the management runbook.\n\nAlice reviews it.');
+      const clone = `clone-${nonce}`;
+      const cloned = await hs.cloneBank(management, clone);
+      expect(await settle(management, cloned)).toMatchObject({ status: 'completed', result_metadata: { target_bank_id: clone, documents_imported: 2 } });
+      expect((await hs.listDocuments(clone)).total).toBe(2);
+      expect(await client(people.carol.key).getDocument(target, 'management-doc')).toBeNull();
+      const exports = await sdk.listOperations({ client: raw(people.alice.key), path: { bank_id: management }, query: { type: 'document_export' } });
+      const exportId = exports.data!.operations[0]!.operation_id!;
+      expect((await sdk.deleteOperation({ client: raw(people.alice.key), path: { bank_id: management, operation_id: exportId } })).data).toMatchObject({ success: true });
+      expect((await sdk.getOperationStatus({ client: raw(people.alice.key), path: { bank_id: management, operation_id: exportId } })).data!.status).toBe('not_found');
+    });
+
+    it('reads bank audit entries and daily counts', async () => {
+      const hs = client(people.alice.key);
+      const audited = `audit-${nonce}`;
+      await hs.createBank(audited);
+      const listed = await sdk.listAuditLogs({ client: raw(people.alice.key), path: { bank_id: audited } });
+      expect(listed.data).toMatchObject({ bank_id: audited, total: 1, items: [{ action: 'memory.bank_created', transport: 'http' }] });
+      const id = listed.data!.items[0]!.id;
+      expect((await sdk.getAuditLog({ client: raw(people.alice.key), path: { bank_id: audited, log_id: id } })).data).toMatchObject({ id, request: null, response: null });
+      expect((await sdk.auditLogStats({ client: raw(people.alice.key), path: { bank_id: audited }, query: { period: '1d' } })).data!.buckets[0]).toMatchObject({ actions: { 'memory.bank_created': 1 }, total: 1 });
+    });
+
+    it('clears observations globally or for one source fact and reads their history', async () => {
+      const hs = client(people.alice.key);
+      const observations = `observation-management-${nonce}`;
+      await hs.retain(observations, 'A source fact with an observation.', { documentId: 'observed-doc' });
+      const bankRow = await prisma.memoryBank.findUniqueOrThrow({ where: { workspaceId_bankId: { workspaceId: WS_A, bankId: observations } } });
+      const fact = await prisma.memoryUnit.findFirstOrThrow({ where: { bankId: bankRow.id, documentId: 'observed-doc' } });
+      const observation = await prisma.memoryUnit.create({ data: { workspaceId: WS_A, bankId: bankRow.id, text: 'Consolidated observation.', sourceText: 'Consolidated observation.', documentId: 'observed-doc', factType: 'observation', createdBy: people.alice.id } });
+      await prisma.memoryObservationEvidence.create({ data: { workspaceId: WS_A, bankId: bankRow.id, observationId: observation.id, factId: fact.id, quote: 'source fact' } });
+      await prisma.memoryObservationHistory.create({ data: { workspaceId: WS_A, bankId: bankRow.id, observationId: observation.id, text: 'Earlier observation.' } });
+      const history = await sdk.getObservationHistory({ client: raw(people.alice.key), path: { bank_id: observations, memory_id: observation.id } });
+      expect(history.data).toMatchObject([{ text: 'Consolidated observation.', source_facts: [{ id: fact.id }] }, { text: 'Earlier observation.' }]);
+      expect((await sdk.clearMemoryObservations({ client: raw(people.alice.key), path: { bank_id: observations, memory_id: fact.id } })).data).toEqual({ deleted_count: 1 });
+      expect((await sdk.clearObservations({ client: raw(people.alice.key), path: { bank_id: observations } })).data).toEqual({ deleted_count: 0 });
+    });
+
+    it('keeps every management family owner-only and under project ACL, including chunks and archives', async () => {
+      const personal = `personal-management-${nonce}`;
+      const restricted = `restricted-management-${nonce}`;
+      const project = await prisma.project.create({ data: { workspaceId: WS_A, name: `Management restricted ${nonce}`, restricted: true } });
+      const rows = await Promise.all([
+        prisma.memoryBank.create({ data: { workspaceId: WS_A, bankId: personal, name: personal, createdBy: people.admin.id, ownerId: people.admin.id } }),
+        prisma.memoryBank.create({ data: { workspaceId: WS_A, bankId: restricted, name: restricted, createdBy: people.admin.id, projectId: project.id } }),
+      ]);
+      const cases = [] as Array<{ bankId: string; key: string; chunkId: string; archiveId: string }>;
+      for (const [bank, key] of [[rows[0]!, people.alice.key], [rows[1]!, people.bob.key]] as const) {
+        const unit = await prisma.memoryUnit.create({ data: { workspaceId: WS_A, bankId: bank.id, text: 'Hidden management fact.', sourceText: 'Hidden management fact.', documentId: 'hidden-doc', createdBy: people.admin.id } });
+        const archiveId = randomUUID();
+        await prisma.memoryTransferArchive.create({ data: { id: archiveId, workspaceId: WS_A, bankId: bank.id, operationId: randomUUID(), filename: 'hidden.zip', data: Buffer.from('hidden') } });
+        cases.push({ bankId: bank.bankId, key, chunkId: unit.id, archiveId });
+      }
+      for (const { bankId, key, chunkId, archiveId } of cases) {
+        const paths = [
+          ['GET', `/v1/default/banks/${bankId}/documents`],
+          ['GET', `/v1/default/banks/${bankId}/documents/hidden-doc`],
+          ['PATCH', `/v1/default/banks/${bankId}/documents/hidden-doc`],
+          ['DELETE', `/v1/default/banks/${bankId}/documents/hidden-doc`],
+          ['GET', `/v1/default/banks/${bankId}/documents/hidden-doc/chunks`],
+          ['GET', `/v1/default/banks/${bankId}/tags`],
+          ['GET', `/v1/default/banks/${bankId}/aliases`],
+          ['POST', `/v1/default/banks/${bankId}/aliases`],
+          ['GET', `/v1/default/banks/${bankId}/export`],
+          ['POST', `/v1/default/banks/${bankId}/import`],
+          ['POST', `/v1/default/banks/${bankId}/document-transfer/export`],
+          ['POST', `/v1/default/banks/${bankId}/transfer/export`],
+          ['POST', `/v1/default/banks/${bankId}/clone?target_bank_id=never-${nonce}`],
+          ['GET', `/v1/default/banks/${bankId}/audit-logs`],
+          ['GET', `/v1/default/banks/${bankId}/audit-logs/stats`],
+          ['DELETE', `/v1/default/banks/${bankId}/observations`],
+          ['DELETE', `/v1/default/banks/${bankId}/memories/${chunkId}/observations`],
+          ['GET', `/v1/default/banks/${bankId}/memories/${chunkId}/history`],
+          ['GET', `/v1/default/chunks/${chunkId}`],
+          ['GET', `/v1/default/files/download/${archiveId}`],
+        ] as const;
+        for (const [method, path] of paths) expect((await call(key, method, path, method === 'GET' || method === 'DELETE' ? undefined : { alias: `blocked-${nonce}`, version: '1' })).status, `${method} ${path}`).toBe(404);
+        await expect(client(key).retainFiles(bankId, [new File(['not admitted'], 'hidden.txt', { type: 'text/plain' })])).rejects.toMatchObject({ statusCode: 404 });
+      }
+    });
+
+    it('keeps intentional non-goals explicit as 404s', async () => {
+      const unsupported = [
+        ['GET', `/v1/default/banks/${management}/graph`],
+        ['POST', `/v1/default/banks/${management}/memories/dry-run-extract`],
+        ['POST', `/v1/default/banks/${management}/prompts/preview`],
+        ['PATCH', `/v1/default/banks/${management}/memories/${randomUUID()}`],
+        ['POST', `/v1/default/banks/${management}/health/llm`],
+        ['GET', `/v1/default/banks/${management}/stats/memories-timeseries`],
+        ['GET', `/v1/default/banks/${management}/entities`],
+        ['GET', `/v1/default/banks/${management}/pages/tree`],
+        ['GET', `/v1/default/banks/${management}/knowledge-base/tree`],
+        ['GET', `/v1/default/banks/${management}/documents/management-doc/history`],
+        ['POST', `/v1/default/banks/${management}/documents/management-doc/reprocess`],
+        ['POST', `/v1/default/banks/${management}/operations/${randomUUID()}/retry`],
+        ['POST', `/v1/default/banks/${management}/background`],
+        ['GET', `/v1/default/banks/${management}/document-transfer`],
+        ['GET', `/v1/default/banks/${management}/attachments/attachment`],
+        ['POST', `/v1/default/banks/${management}/consolidation-strategies/preview`],
+        ['POST', `/v1/default/banks/${management}/consolidation/recover`],
+        ['GET', `/v1/default/banks/${management}/webhooks`],
+        ['GET', `/v1/default/banks/${management}/llm-requests`],
+        ['GET', `/v1/default/banks/${management}/llm-requests/stats`],
+      ] as const;
+      for (const [method, path] of unsupported) expect((await call(people.alice.key, method, path)).status, `${method} ${path}`).toBe(404);
     });
   });
 });

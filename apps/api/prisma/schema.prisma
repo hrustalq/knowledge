@@ -4852,10 +4852,46 @@ model MemoryBank {
   observationScopes MemoryObservationScope[]
   directives MemoryDirective[]
   mentalModels MemoryMentalModel[]
+  aliases MemoryBankAlias[]
+  transferArchives MemoryTransferArchive[]
 
   @@unique([workspaceId, bankId])
   @@index([workspaceId, agentKey, ownerId])
   @@map("memory_banks")
+}
+
+/// An extra client-facing id for a bank (#1161). Resolution still returns the
+/// bank row, so every existing ACL and bank-scoped query applies unchanged.
+model MemoryBankAlias {
+  id          String     @id @default(uuid()) @db.Uuid
+  workspaceId String     @map("workspace_id") @db.Uuid
+  bankId      String     @map("bank_id") @db.Uuid
+  bank        MemoryBank @relation(fields: [bankId], references: [id], onDelete: Cascade)
+  alias       String
+  primary     Boolean    @default(false)
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([workspaceId, alias])
+  @@unique([bankId, alias])
+  @@index([workspaceId])
+  @@map("memory_bank_aliases")
+}
+
+/// A finished transfer archive (#1161), downloadable only through its bank's
+/// resolved ACL. Bytes are never embedded in an operation's JSON response.
+model MemoryTransferArchive {
+  id          String     @id @default(uuid()) @db.Uuid
+  workspaceId String     @map("workspace_id") @db.Uuid
+  bankId      String     @map("bank_id") @db.Uuid
+  bank        MemoryBank @relation(fields: [bankId], references: [id], onDelete: Cascade)
+  operationId String     @map("operation_id") @db.Uuid
+  filename    String
+  data        Bytes
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([operationId])
+  @@index([workspaceId])
+  @@map("memory_transfer_archives")
 }
 
 /// One named set of hard rules for reflect (#1159). Empty tags apply globally;
@@ -5044,6 +5080,8 @@ model MemoryUnit {
   observationScopeId String? @map("observation_scope_id") @db.Uuid
   observationScope MemoryObservationScope? @relation(fields: [observationScopeId], references: [id], onDelete: Cascade)
 
+  /// Insertion order within a retained document; random UUIDs cannot provide it.
+  position  Int      @default(autoincrement())
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -5058,7 +5096,7 @@ model MemoryUnit {
   @@index([operationId])
   @@index([bankId, consolidatedAt])
   @@index([observationScopeId])
-  @@index([bankId, documentId])
+  @@index([bankId, documentId, position])
   @@index([bankId, createdAt])
   @@map("memory_units")
 }
@@ -5166,8 +5204,10 @@ model MemoryOperation {
   type        String     @default("retain")
   /// queued → running → completed | failed, or cancelled while queued.
   status      String     @default("queued")
-  /// Retain items, a consolidation scope, or a mental-model id and refresh mode.
+  /// Retain items, a consolidation scope, a transfer, or a file to parse.
   payload     Json
+  /// Transfer counts and download metadata; null for operations with no result body.
+  result      Json?
   itemsCount  Int        @map("items_count")
   createdBy   String     @map("created_by") @db.Uuid
   locale      String     @default("en")

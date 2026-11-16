@@ -257,7 +257,18 @@
     "entityNotFound": "Сущность {id} не найдена",
     "relationNotFound": "Связь {id} не найдена",
     "fileNotFound": "Файл памяти {id} не найден",
-    "fileChunk": "Эта запись — часть файла {path}: удалите файл"
+    "fileChunk": "Эта запись — часть файла {path}: удалите файл",
+    "aliasTaken": "Идентификатор или псевдоним банка {alias} уже занят",
+    "aliasNotFound": "Псевдоним банка {alias} не найден",
+    "auditLogNotFound": "Запись аудита {id} не найдена",
+    "operationNotTerminal": "Операция {id} ещё не завершена",
+    "fileUploadInvalid": "Загрузите от 1 до {maxItems} файлов, каждый не больше {maxBytes} байт",
+    "fileUploadRequestInvalid": "Запрос на сохранение файлов должен быть JSON с массивом files_metadata",
+    "fileTypeUnsupported": "Ни один обработчик файлов памяти не поддерживает этот тип",
+    "fileEmpty": "В файле нет текста для сохранения",
+    "archiveNotFound": "Архив переноса не найден",
+    "archiveTooLarge": "Архив переноса превышает {maxBytes} байт",
+    "transferInvalid": "Архив не является переносом Knowledge Hindsight с корректным transfer.json"
   },
   "memo": {
     "notFound": "Запись не найдена",

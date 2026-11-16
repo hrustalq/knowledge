@@ -57,7 +57,7 @@ schemas, answer strings, error strings — and underneath is the same bank, reso
 
 | Wire | Where | Reference it matches |
 | --- | --- | --- |
-| Hindsight | `/v1/default/banks/{bank_id}/…`, `/mcp/{bank_id}/` | [Hindsight](https://github.com/vectorize-io/hindsight) OpenAPI v1.2.1, core routes only |
+| Hindsight | `/v1/default/banks/{bank_id}/…`, `/mcp/{bank_id}/` | [Hindsight](https://github.com/vectorize-io/hindsight) OpenAPI v1.2.1, with the selected management surface below |
 | Knowledge graph | `/mcp/{bank_id}/graph` | the MCP reference memory server, `@modelcontextprotocol/server-memory` 2.1.1 |
 | Memory files | `POST /v1/default/banks/{bank_id}/memory-tool`, `/mcp/{bank_id}/files` | Anthropic's memory tool (`memory_20250818`) and the SDK's `BetaLocalFilesystemMemoryTool` (`@anthropic-ai/sdk` 1.8.0) |
 
@@ -65,8 +65,8 @@ schemas, answer strings, error strings — and underneath is the same bank, reso
 `apps/api/test/hindsight-compat.e2e-spec.ts` (the official `@vectorize-io/hindsight-client`),
 `memory-graph-compat.e2e-spec.ts` (the reference server over stdio on a temporary file) and
 `memory-files-compat.e2e-spec.ts` (the SDK's filesystem handler on a temporary directory). No model
-is called by any of them. Every other Hindsight route answers 404. Where this server differs from a
-reference, the difference is listed under that wire below.
+is called by any of them. Hindsight routes outside the selected surface answer 404. Where this server differs from a
+reference, the difference is listed under that wire below and in the management matrix.
 
 ## Switching it on
 
@@ -182,7 +182,16 @@ an `X-Workspace-Id` header.
 | `GET`, `PATCH`, `DELETE …/directives/{directive_id}` | viewer, editor, editor | read, update/activate/deactivate, delete |
 | `GET …/memories/list`, `GET …/memories/{id}`, `GET …/stats` | viewer | |
 | `GET …/observations/scopes` | viewer | exact observation scopes and their counts |
-| `PATCH …/documents/{document_id}` | editor | change observation scopes without re-extraction |
+| `GET …/documents`, `GET`, `PATCH`, `DELETE …/documents/{id}` | viewer, editor | document projection, tag/scope update, delete |
+| `GET …/documents/{id}/chunks`, `GET /v1/default/chunks/{id}` | viewer | retained source chunks |
+| `GET …/tags` | viewer | memory or mental-model tags with counts |
+| `DELETE …/observations`, `DELETE …/memories/{id}/observations` | editor | clear all or one fact's observations and queue rebuild |
+| `GET`, `POST`, `PATCH`, `DELETE …/aliases…` | viewer, editor | additional ids for the same ACL-resolved bank |
+| `GET …/export`, `POST …/import` | viewer, editor | bank template export/import, with dry run |
+| `POST …/files/retain` | editor | asynchronous file parsing and retain |
+| `POST …/document-transfer…`, `POST …/transfer/…`, `POST …/clone` | editor | asynchronous export, import, restore and clone |
+| `GET /v1/default/files/download/{key}` | viewer | a bank-owned transfer archive |
+| `GET …/audit-logs…` | viewer | the bank's platform audit events and daily counts |
 | `DELETE …/memories` | editor | every memory, or one fact type; the memory tool's file chunks stay (#1018) |
 | `GET`, `PATCH …/config` | viewer, editor | observation scopes/strategies, `enable_observations`, missions and disposition traits; unsupported keys are a 400 |
 | `POST …/consolidate` | editor | one full or targeted consolidation pass as an operation; 409 with the reason while it cannot run |
@@ -569,12 +578,78 @@ reaches `apps/api/src/captures/`.
 | `MEMORY_CONSOLIDATION_DAILY_CALLS` | `20` | consolidation calls one bank may make a UTC day; `0` turns observations off for the server |
 | `MEMORY_GRAPH_READ_MAX_ENTITIES` | `500` | entities one `read_graph` or `search_nodes` returns before it says it cut |
 
+## Hindsight management compatibility matrix
+
+This matrix is generated from the routes in `@vectorize-io/hindsight-client` **1.2.1** (`generated/sdk.gen.ts`), the pinned OpenAPI client used by `hindsight-compat.e2e-spec.ts`. **Compatible** means the official client exercises the route without request or response patches. **Non-goal** routes deliberately answer 404; they never return an empty success. The phase-6 test `keeps intentional non-goals explicit as 404s` covers every non-goal family below.
+
+| Hindsight route | Status | Compatibility proof or decision |
+| --- | --- | --- |
+| `GET /health` | Compatible | phase-0 probe test |
+| `GET /health/ready`, `GET /health/live`, `GET /metrics` | Non-goal | Knowledge has its own process health and metrics contracts |
+| `GET /version` | Compatible | phase-0 probe and feature-flag test |
+| `GET …/graph` | Non-goal | the MCP knowledge-graph wire is supported instead; no Hindsight memory-link graph exists |
+| `GET …/memories/list`, `GET …/memories/{id}` | Compatible | phase-1 list/get tests |
+| `POST …/memories/dry-run-extract`, `POST …/prompts/preview` | Non-goal | no dry-run extraction or prompt-preview product surface |
+| `PATCH …/memories/{id}` | Non-goal | memory curation/editing is not selected; file chunks remain managed by their file |
+| `GET …/memories/{id}/history` | Compatible | phase-6 observation-history test |
+| `POST …/memories/recall`, `POST …/reflect` | Compatible | recall and reflect suites |
+| `GET /v1/default/banks` | Compatible | phase-0 list and ACL tests |
+| `GET …/stats` | Compatible | phase-1 stats test |
+| `POST …/health/llm` | Non-goal | no per-bank provider configuration or connectivity probe |
+| `GET …/stats/memories-timeseries` | Non-goal | usage charts per bank are not selected |
+| `GET …/entities`, `GET …/entities/graph`, `GET …/entities/{id}` | Non-goal | the graph wire is MCP; no Hindsight entity-management projection |
+| `POST …/entities/{id}/regenerate` | Non-goal | deprecated upstream; mental models replace entity observations |
+| `GET`, `POST …/mental-models` | Compatible | phase-5 list/create tests |
+| `GET`, `PATCH`, `DELETE …/mental-models/{id}` | Compatible | phase-5 lifecycle tests |
+| `GET …/mental-models/{id}/history`, `POST …/refresh`, `POST …/clear` | Compatible | phase-5 refresh/history/clear tests |
+| `POST …/mental-models/{id}/dry-run-refresh` | Non-goal | no refresh-preview surface |
+| `GET …/knowledge-base/tree`, `GET …/pages/tree` | Non-goal | generated pages are phase 7, #1162 |
+| `POST …/knowledge-base/folders`, `POST …/pages/folders` | Non-goal | phase 7, #1162 |
+| `POST …/knowledge-base/pages`, `POST …/pages` | Non-goal | phase 7, #1162 |
+| `GET …/knowledge-base/export`, `GET …/pages/export` | Non-goal | phase 7, #1162 |
+| `GET …/knowledge-base/search`, `GET …/pages/search` | Non-goal | phase 7, #1162 |
+| `GET …/knowledge-base/pages/{id}`, `GET …/pages/{id}` | Non-goal | phase 7, #1162 |
+| `DELETE`, `PATCH …/knowledge-base/nodes/{id}` | Non-goal | phase 7, #1162 |
+| `DELETE`, `PATCH …/pages/nodes/{id}` | Non-goal | phase 7, #1162 |
+| `GET`, `POST …/directives` | Compatible | phase-4 list/create tests |
+| `GET`, `PATCH`, `DELETE …/directives/{id}` | Compatible | phase-4 lifecycle tests |
+| `GET …/documents` | Compatible | phase-6 document list test |
+| `GET …/documents/{id}/chunks` | Compatible | phase-6 chunk list test |
+| `GET …/documents/{id}/history` | Non-goal | operation history does not retain a complete per-document event ledger |
+| `POST …/documents/{id}/reprocess` | Non-goal | retain the same `document_id` to replace/re-extract instead |
+| `DELETE`, `GET`, `PATCH …/documents/{id}` | Compatible | phase-6 document read/update/delete coverage |
+| `GET …/tags` | Compatible | phase-6 memory and mental-model tag projection |
+| `GET /v1/default/chunks/{id}` | Compatible | phase-6 chunk read test |
+| `GET …/operations`, `GET …/operations/{id}`, `DELETE …/operations/{id}` | Compatible | phase-3 operation tests |
+| `POST …/operations/{id}/retry` | Non-goal | settled operations deliberately discard retained payloads; submit a new retain instead |
+| `DELETE …/operations/{id}/delete` | Compatible | phase-6 terminal-operation deletion test |
+| `GET`, `PUT …/profile` | Compatible | deprecated upstream routes retained for existing clients |
+| `POST …/background` | Non-goal | removed upstream; use `PATCH …/config` with `reflect_mission` |
+| `GET`, `POST …/aliases` | Compatible | phase-6 alias creation/list/read test |
+| `DELETE`, `PATCH …/aliases/{alias}` | Compatible | phase-6 alias delete/primary test |
+| `DELETE`, `PATCH`, `PUT …/banks/{id}` (under `/v1/default`) | Compatible | phase-0 bank lifecycle tests |
+| `POST …/import`, `GET …/export` | Compatible | phase-6 template dry-run/import/export test |
+| `GET …/document-transfer` | Non-goal | removed synchronous export; use `POST …/document-transfer/export` |
+| `POST …/document-transfer` | Compatible | phase-6 document import test |
+| `POST …/document-transfer/export` | Compatible | phase-6 archive export/download test |
+| `POST …/transfer/export`, `POST …/transfer/import`, `POST …/clone` | Compatible | phase-6 restore/clone tests |
+| `GET …/attachments/{id}` | Non-goal | inline multimodal attachments are not stored |
+| `GET /v1/default/files/download/{key}` | Compatible | the official export helper downloads through it in phase 6 |
+| `GET /v1/bank-template-schema` | Compatible | phase-6 schema test |
+| `DELETE …/observations`, `DELETE …/memories/{id}/observations` | Compatible | phase-6 clear/rebuild tests |
+| `GET …/observations/scopes`, `POST …/consolidate` | Compatible | phase-2 scope and consolidation tests |
+| `POST …/consolidation-strategies/preview`, `POST …/consolidation/recover` | Non-goal | no strategy-preview or permanent-failure recovery surface |
+| `DELETE`, `GET`, `PATCH …/config` | Compatible | config tests plus reset |
+| `GET`, `POST`, `PATCH`, `DELETE …/webhooks…` | Non-goal | outbound per-bank webhooks are not selected |
+| `DELETE …/memories`, `POST …/memories` | Compatible | phase-1 retain/clear tests |
+| `POST …/files/retain` | Compatible | phase-6 official multipart upload and worker parse test |
+| `GET …/audit-logs`, `GET …/audit-logs/stats`, `GET …/audit-logs/{id}` | Compatible | phase-6 audit list/read/stats test over `audit_logs` |
+| `GET …/llm-requests`, `GET …/llm-requests/stats` | Non-goal | `ai_usage` has no reliable bank identity; returning it as bank traces would leak or misattribute calls |
+
+Documents and chunks are projections of `memory_units`: document text is the masked `source_text`, and a chunk is one distinct retained source item. Updates replace or increment tags on every source fact and invalidate only memberships whose resolved scopes moved. Transfers zip a versioned `transfer.json` carrying source facts, entity names and optional bank configuration; imports re-embed through the normal retain store without an extraction model. Derived observations are rebuilt, so `include_observations=true` is a 400 rather than a false claim. Audit and LLM history are likewise not transferable. Archives are bank-owned byte rows and disappear with their operation, bank or workspace.
+
+File retain uses the existing parser registry (plain text/Markdown, PDF, DOCX, PPTX, HTML, tabular formats and configured OCR), always asynchronously. The multipart ceiling is 100 files of at most 16 MiB each; transfer archives are at most 64 MiB compressed or inflated. Personal-bank ownership and project visibility apply to source, target and download alike; restore and clone inherit the source bank's owner/project binding rather than trusting archive metadata.
+
 ## Not built
 
-Hindsight's knowledge-base pages, webhooks, transfer and clone,
-bank templates, file retain, aliases, audit and LLM-request logs; `tag_groups`;
-consolidating across banks; editing a memory's text, a file or an entity in the UI, a graph view of
-memory entities, usage charts per bank. For the other wires: a stdio entrypoint or a published package;
-importing an existing `memory.jsonl` or a local `/memories` folder; the reference server's
-subscribable `memory://knowledge-graph` resource; Managed Agents memory stores, mem0, Zep, Letta;
-file conventions such as Cline's `memory-bank/` or `CLAUDE.md`.
+Hindsight's generated knowledge-base pages (#1162), webhooks, raw LLM-request logs, `tag_groups`, memory text curation and the other non-goals named in the matrix; consolidating across banks; editing a file or an entity in the UI; a graph view of memory entities; usage charts per bank. For the other wires: a stdio entrypoint or a published package; importing an existing `memory.jsonl` or a local `/memories` folder; the reference server's subscribable `memory://knowledge-graph` resource; Managed Agents memory stores, mem0, Zep, Letta; file conventions such as Cline's `memory-bank/` or `CLAUDE.md`.

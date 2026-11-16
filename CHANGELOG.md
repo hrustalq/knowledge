@@ -29,9 +29,14 @@ in the pull request that introduces them — see
 - Memory banks now store refreshable mental models: curated, evidence-backed answers with official-client CRUD, history,
   structured output, full/delta refresh, scoped schedules, and reflection provenance. Failed refreshes preserve the last
   good answer, and models never become Knowledge pages automatically. (#1160)
+- The official Hindsight client can now manage documents, chunks, tags, observation lifecycle, aliases, bank templates,
+  asynchronous file retain, transfer archives and bank audit logs. Unsupported routes have explicit documented 404
+  behavior, and all new paths retain personal-owner, project-ACL and workspace isolation. (#1161)
 
 ### Operations
 
+- The management-API migration adds alias/archive tables and nullable operation results only; it is expand-only and safe
+  for a code rollback. Transfer downloads use the existing memory worker and database, with no new service or env var. (#1161)
 - The mental-model migration is expand-only and safe for a code rollback. Automatic refresh spacing defaults to no floor;
   set `MEMORY_MENTAL_MODEL_MIN_REFRESH_INTERVAL_SECONDS` or a model's `min_refresh_interval_seconds` to limit it. (#1160)
 - Optional memory reranking is configured with `MEMORY_RERANKER_PROVIDER=openai-compatible`, `MEMORY_RERANKER_BASE_URL`,

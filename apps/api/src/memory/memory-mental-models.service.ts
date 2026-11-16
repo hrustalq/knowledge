@@ -67,10 +67,14 @@ export class MemoryMentalModelsService {
     this.defaultInterval = config.get('MEMORY_MENTAL_MODEL_MIN_REFRESH_INTERVAL_SECONDS', { infer: true });
   }
 
+  validateDefinition(dto: CreateMentalModelDto): MentalModelTrigger {
+    if (dto.id && !validMentalModelId(dto.id)) throw new BadRequestException(t('error.memory.configValueInvalid', { key: 'id', type: 'lowercase letters, numbers and hyphens, at most 192 UTF-8 bytes' }));
+    return this.validatedTrigger(dto.trigger ?? {}, {});
+  }
+
   async create(bank: MemoryBank, dto: CreateMentalModelDto, userId: string, locale: Locale): Promise<CreateMentalModelResponse> {
     const id = dto.id ?? randomUUID();
-    if (!validMentalModelId(id)) throw new BadRequestException(t('error.memory.configValueInvalid', { key: 'id', type: 'lowercase letters, numbers and hyphens, at most 192 UTF-8 bytes' }));
-    const trigger = this.validatedTrigger(dto.trigger ?? {}, {});
+    const trigger = this.validateDefinition({ ...dto, id });
     const operationId = randomUUID();
     try {
       await withSubjectLock(this.prisma, modelLock(id), async () => {

@@ -98,11 +98,15 @@ export class MemoryAccessService {
   async find(caller: MemoryCaller, bankId: string): Promise<MemoryBank | null> {
     if (!BANK_ID_RE.test(bankId))
       throw new BadRequestException(t('error.memory.bankIdInvalid'));
-    const row = await this.prisma.memoryBank.findUnique({
+    const direct = await this.prisma.memoryBank.findUnique({
       where: {
         workspaceId_bankId: { workspaceId: caller.workspaceId, bankId },
       },
     });
+    const row = direct ?? (await this.prisma.memoryBankAlias.findUnique({
+      where: { workspaceId_alias: { workspaceId: caller.workspaceId, alias: bankId } },
+      include: { bank: true },
+    }))?.bank ?? null;
     if (!row) return null;
     if (!(await this.visible(caller.scope, [row])).length)
       throw new NotFoundException(t('error.memory.bankNotFound', { bankId }));

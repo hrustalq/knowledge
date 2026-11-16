@@ -9,7 +9,11 @@ import {
   Patch,
   Post,
   Query,
+  UploadedFile,
+  UploadedFiles,
+  UseInterceptors,
 } from '@nestjs/common';
+import { AnyFilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { ApiExcludeController } from '@nestjs/swagger';
 import { CurrentPrincipal, ReadKeyOk } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
@@ -21,6 +25,7 @@ import {
   type MemoryToolResult,
 } from './memory-files.service.js';
 import { MemoryIntakeService } from './memory-intake.service.js';
+import { MemoryManagementService } from './memory-management.service.js';
 import { MemoryMentalModelsService } from './memory-mental-models.service.js';
 import { MemoryOperationsService } from './memory-operations.service.js';
 import { MemoryRateService } from './memory-rate.service.js';
@@ -29,20 +34,28 @@ import { MemoryRecallService } from './memory-recall.service.js';
 import { MemoryReflectService } from './memory-reflect.service.js';
 import { MemoryUnitsService } from './memory-units.service.js';
 import {
+  AuditLogStatsQueryDto,
   ClearMemoriesQueryDto,
   ConsolidateDto,
+  CreateBankAliasDto,
   CreateDirectiveDto,
   CreateMentalModelDto,
   GetMentalModelQueryDto,
+  ImportBankTemplateDto,
+  ListAuditLogsQueryDto,
   ListDirectivesQueryDto,
+  ListDocumentsQueryDto,
   ListMemoriesQueryDto,
   ListMentalModelsQueryDto,
   ListObservationScopesQueryDto,
   ListOperationsQueryDto,
+  ListTagsQueryDto,
   RecallDto,
   ReflectDto,
   RefreshMentalModelDto,
   RetainDto,
+  SetBankAliasPrimaryDto,
+  TransferQueryDto,
   UpdateDirectiveDto,
   UpdateDocumentDto,
   UpdateMentalModelDto,
@@ -67,9 +80,9 @@ import type {
 } from './memory-wire.js';
 
 /**
- * What a bank holds, in Hindsight's wire shape (#986 phases 1–4): retain
- * (sync and async), recall, reflect, list, get, clear, stats, operations. Resolved per handler by `MemoryAccessService`, as the
- * bank routes are.
+ * What a bank holds, in Hindsight's wire shape: retain/recall/reflect,
+ * documents, observations, operations and the phase-6 management routes. Every
+ * handler resolves through `MemoryAccessService`, as the bank routes do.
  */
 @ApiExcludeController()
 @CachePolicy('no-store')
@@ -87,6 +100,7 @@ export class MemoryUnitsController {
     private readonly mentalModels: MemoryMentalModelsService,
     private readonly rate: MemoryRateService,
     private readonly files: MemoryFilesService,
+    private readonly management: MemoryManagementService,
   ) {}
 
   /**
@@ -352,6 +366,40 @@ export class MemoryUnitsController {
     return this.units.observationScopes(await this.access.bank(caller, bankId), query);
   }
 
+  @Get('documents')
+  async documents(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Query() query: ListDocumentsQueryDto,
+  ) {
+    const caller = await this.access.caller(principal, ws, 'viewer');
+    return this.units.documents(await this.access.bank(caller, bankId), query);
+  }
+
+  @Get('documents/:documentId/chunks')
+  async documentChunks(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Param('documentId') documentId: string,
+    @Query() query: ListObservationScopesQueryDto,
+  ) {
+    const caller = await this.access.caller(principal, ws, 'viewer');
+    return this.units.chunks(await this.access.bank(caller, bankId), documentId, query);
+  }
+
+  @Get('documents/:documentId')
+  async document(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Param('documentId') documentId: string,
+  ) {
+    const caller = await this.access.caller(principal, ws, 'viewer');
+    return this.units.document(await this.access.bank(caller, bankId), documentId);
+  }
+
   @Patch('documents/:documentId')
   async updateDocument(
     @CurrentPrincipal() principal: Principal,
@@ -361,7 +409,231 @@ export class MemoryUnitsController {
     @Body() dto: UpdateDocumentDto,
   ): Promise<{ success: true }> {
     const caller = await this.access.caller(principal, ws, 'editor');
-    return this.units.updateDocumentScopes(await this.access.bank(caller, bankId), documentId, dto.observation_scopes);
+    return this.units.updateDocument(await this.access.bank(caller, bankId), documentId, dto);
+  }
+
+  @Delete('documents/:documentId')
+  async deleteDocument(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Param('documentId') documentId: string,
+  ) {
+    const caller = await this.access.caller(principal, ws, 'editor');
+    return this.units.deleteDocument(await this.access.bank(caller, bankId), documentId);
+  }
+
+  @Get('tags')
+  async tags(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Query() query: ListTagsQueryDto,
+  ) {
+    const caller = await this.access.caller(principal, ws, 'viewer');
+    return this.units.tags(await this.access.bank(caller, bankId), query);
+  }
+
+  @Delete('observations')
+  async clearObservations(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+  ) {
+    const caller = await this.access.caller(principal, ws, 'editor');
+    return this.units.clearObservations(await this.access.bank(caller, bankId));
+  }
+
+  @Delete('memories/:memoryId/observations')
+  async clearMemoryObservations(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Param('memoryId') memoryId: string,
+  ) {
+    const caller = await this.access.caller(principal, ws, 'editor');
+    return this.units.clearObservations(await this.access.bank(caller, bankId), memoryId);
+  }
+
+  @Get('memories/:memoryId/history')
+  async observationHistory(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Param('memoryId') memoryId: string,
+  ) {
+    const caller = await this.access.caller(principal, ws, 'viewer');
+    return this.units.observationHistory(await this.access.bank(caller, bankId), memoryId);
+  }
+
+  @Get('aliases')
+  async aliases(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+  ) {
+    const caller = await this.access.caller(principal, ws, 'viewer');
+    return this.management.aliases(await this.access.bank(caller, bankId));
+  }
+
+  @Post('aliases')
+  async createAlias(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Body() dto: CreateBankAliasDto,
+  ) {
+    return this.management.createAlias(await this.access.caller(principal, ws, 'editor'), bankId, dto);
+  }
+
+  @Delete('aliases/:alias')
+  async deleteAlias(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Param('alias') alias: string,
+  ) {
+    const caller = await this.access.caller(principal, ws, 'editor');
+    return this.management.deleteAlias(await this.access.bank(caller, bankId), alias);
+  }
+
+  @Patch('aliases/:alias')
+  async setAliasPrimary(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Param('alias') alias: string,
+    @Body() dto: SetBankAliasPrimaryDto,
+  ) {
+    const caller = await this.access.caller(principal, ws, 'editor');
+    return this.management.setAliasPrimary(await this.access.bank(caller, bankId), alias, dto);
+  }
+
+  @Get('export')
+  async exportTemplate(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+  ) {
+    const caller = await this.access.caller(principal, ws, 'viewer');
+    return this.management.exportTemplate(await this.access.bank(caller, bankId));
+  }
+
+  @Post('import')
+  @HttpCode(200)
+  async importTemplate(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Body() dto: ImportBankTemplateDto,
+    @Query('dry_run') dryRun: string | undefined,
+  ) {
+    return this.management.importTemplate(await this.access.caller(principal, ws, 'editor'), bankId, dto, dryRun === 'true');
+  }
+
+  @Post('files/retain')
+  @HttpCode(200)
+  @UseInterceptors(AnyFilesInterceptor({ limits: { files: 100, fileSize: 16 * 1024 * 1024 } }))
+  async retainFiles(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @UploadedFiles() files: Array<{ originalname: string; mimetype: string; buffer: Buffer; size: number }>,
+    @Body('request') request: string,
+  ) {
+    return this.management.submitFiles(await this.access.caller(principal, ws, 'editor'), bankId, files ?? [], request);
+  }
+
+  @Post('document-transfer/export')
+  @HttpCode(202)
+  async exportDocuments(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Query() query: TransferQueryDto,
+  ) {
+    const caller = await this.access.caller(principal, ws, 'editor');
+    return this.management.submitExport(await this.access.bank(caller, bankId), query, false, principal.userId, principal.locale);
+  }
+
+  @Post('transfer/export')
+  @HttpCode(202)
+  async exportBank(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Query() query: TransferQueryDto,
+  ) {
+    const caller = await this.access.caller(principal, ws, 'editor');
+    return this.management.submitExport(await this.access.bank(caller, bankId), query, true, principal.userId, principal.locale);
+  }
+
+  @Post('document-transfer')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 64 * 1024 * 1024 } }))
+  async importDocuments(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @UploadedFile() file: { buffer: Buffer; size: number } | undefined,
+    @Query() query: TransferQueryDto,
+  ) {
+    return this.management.submitImport(await this.access.caller(principal, ws, 'editor'), bankId, file, query, true);
+  }
+
+  @Post('transfer/import')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 64 * 1024 * 1024 } }))
+  async importBank(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @UploadedFile() file: { buffer: Buffer; size: number } | undefined,
+    @Query() query: TransferQueryDto,
+  ) {
+    return this.management.submitImport(await this.access.caller(principal, ws, 'editor'), bankId, file, query, false);
+  }
+
+  @Post('clone')
+  @HttpCode(200)
+  async cloneBank(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Query() query: TransferQueryDto,
+  ) {
+    return this.management.submitClone(await this.access.caller(principal, ws, 'editor'), bankId, query);
+  }
+
+  @Get('audit-logs/stats')
+  async auditStats(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Query() query: AuditLogStatsQueryDto,
+  ) {
+    const caller = await this.access.caller(principal, ws, 'viewer');
+    return this.management.auditStats(await this.access.bank(caller, bankId), query);
+  }
+
+  @Get('audit-logs/:logId')
+  async auditLog(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Param('logId') logId: string,
+  ) {
+    const caller = await this.access.caller(principal, ws, 'viewer');
+    return this.management.auditLog(await this.access.bank(caller, bankId), logId);
+  }
+
+  @Get('audit-logs')
+  async auditLogs(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Query() query: ListAuditLogsQueryDto,
+  ) {
+    const caller = await this.access.caller(principal, ws, 'viewer');
+    return this.management.auditLogs(await this.access.bank(caller, bankId), query);
   }
 
   @Get('memories/list')
@@ -454,5 +726,16 @@ export class MemoryUnitsController {
       await this.access.bank(caller, bankId),
       operationId,
     );
+  }
+
+  @Delete('operations/:operationId/delete')
+  async deleteOperation(
+    @CurrentPrincipal() principal: Principal,
+    @Headers('x-workspace-id') ws: string | undefined,
+    @Param('bankId') bankId: string,
+    @Param('operationId') operationId: string,
+  ) {
+    const caller = await this.access.caller(principal, ws, 'editor');
+    return this.operations.delete(await this.access.bank(caller, bankId), operationId);
   }
 }

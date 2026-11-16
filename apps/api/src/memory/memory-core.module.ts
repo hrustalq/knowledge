@@ -7,15 +7,18 @@ import { DecisionClientModule } from '../assistant/decision-client.module.js';
 import { AuthCoreModule } from '../auth/auth-core.module.js';
 import { EmbeddingModule } from '../embedding/embedding.module.js';
 import { GraphModule } from '../graph/graph.module.js';
+import { ParsersModule } from '../import/parsers/parsers.module.js';
 import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { MemoryAccessService } from './memory-access.service.js';
 import { MemoryBanksService } from './memory-banks.service.js';
 import { MemoryConsolidationService } from './memory-consolidation.service.js';
 import { MemoryDirectivesService } from './memory-directives.service.js';
+import { MemoryManagementService } from './memory-management.service.js';
 import { MemoryMentalModelsService } from './memory-mental-models.service.js';
 import { MemoryOperationsService } from './memory-operations.service.js';
 import { MemoryQueueModule } from './memory-queue.module.js';
+import { MemoryRateService } from './memory-rate.service.js';
 import { MEMORY_RERANKER_PROVIDER, createMemoryReranker } from './memory-reranker.js';
 import { MemoryRecallService } from './memory-recall.service.js';
 import { MemoryReflectService } from './memory-reflect.service.js';
@@ -40,6 +43,7 @@ import { MemoryUnitsService } from './memory-units.service.js';
     AssistantClientModule,
     DecisionClientModule,
     MemoryQueueModule,
+    ParsersModule,
   ],
   providers: [
     { provide: MEMORY_RERANKER_PROVIDER, inject: [ConfigService], useFactory: createMemoryReranker },
@@ -47,8 +51,10 @@ import { MemoryUnitsService } from './memory-units.service.js';
     MemoryBanksService,
     MemoryConsolidationService,
     MemoryDirectivesService,
+    MemoryManagementService,
     MemoryMentalModelsService,
     MemoryOperationsService,
+    MemoryRateService,
     MemoryRecallService,
     MemoryReflectService,
     MemoryRuntimeService,
@@ -60,8 +66,10 @@ import { MemoryUnitsService } from './memory-units.service.js';
     MemoryBanksService,
     MemoryConsolidationService,
     MemoryDirectivesService,
+    MemoryManagementService,
     MemoryMentalModelsService,
     MemoryOperationsService,
+    MemoryRateService,
     MemoryRecallService,
     MemoryReflectService,
     MemoryRuntimeService,

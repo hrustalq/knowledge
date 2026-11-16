@@ -60,7 +60,73 @@ export class ConsolidateDto {
 }
 
 export class UpdateDocumentDto {
-  @IsDefined() observation_scopes!: unknown;
+  @IsOptional() @IsArray() @IsString({ each: true }) tags?: string[] | null;
+  @IsOptional() @IsArray() @IsString({ each: true }) add_tags?: string[] | null;
+  @IsOptional() @IsArray() @IsString({ each: true }) remove_tags?: string[] | null;
+  @IsOptional() observation_scopes?: unknown;
+}
+
+export class ListDocumentsQueryDto {
+  @IsOptional() @IsString() @MaxLength(500) q?: string;
+  @IsOptional() @Transform(asList) @IsArray() @IsString({ each: true }) tags?: string[];
+  @IsOptional() @IsIn(TAGS_MATCH) tags_match?: TagsMatch;
+  @IsOptional() @IsIn(['created_at', 'updated_at']) time_field?: 'created_at' | 'updated_at';
+  @IsOptional() @IsISO8601() start_date?: string;
+  @IsOptional() @IsISO8601() end_date?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(1000) limit?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) offset?: number;
+}
+
+export class ListTagsQueryDto {
+  @IsOptional() @IsString() @MaxLength(200) q?: string;
+  @IsOptional() @IsIn(['memories', 'mental_models']) source?: 'memories' | 'mental_models';
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(1000) limit?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) offset?: number;
+}
+
+export class CreateBankAliasDto {
+  // eslint-disable-next-line no-control-regex
+  @IsString() @Matches(/^(?!_)[^\u0000-\u001f\u007f/]{1,192}$/) alias!: string;
+  @IsOptional() @IsBoolean() primary?: boolean;
+}
+
+export class SetBankAliasPrimaryDto {
+  @IsBoolean() primary!: boolean;
+}
+
+export class ImportBankTemplateDto {
+  @IsString() version!: string;
+  @IsOptional() @IsObject() bank?: Record<string, unknown> | null;
+  @IsOptional() @IsArray() mental_models?: Array<Record<string, unknown>> | null;
+  @IsOptional() @IsArray() directives?: Array<Record<string, unknown>> | null;
+}
+
+const asBoolean = ({ value }: { value: unknown }) => value == null ? undefined : value === true || value === 'true';
+
+export class TransferQueryDto {
+  @IsOptional() @Transform(asList) @IsArray() @IsString({ each: true }) document_id?: string[];
+  @IsOptional() @Transform(asBoolean) @IsBoolean() include_observations?: boolean;
+  @IsOptional() @Transform(asBoolean) @IsBoolean() include_knowledge_base?: boolean;
+  @IsOptional() @Transform(asBoolean) @IsBoolean() include_data?: boolean;
+  @IsOptional() @Transform(asBoolean) @IsBoolean() include_bank_config?: boolean;
+  @IsOptional() @Transform(asBoolean) @IsBoolean() include_history?: boolean;
+  @IsOptional() @IsString() @MaxLength(200) target_bank_id?: string;
+  @IsOptional() @IsIn(['skip', 'replace', 'new-id']) on_conflict?: 'skip' | 'replace' | 'new-id';
+  @IsOptional() @IsIn(['skip', 'replace', 'new-id']) document_conflict?: 'skip' | 'replace' | 'new-id';
+}
+
+export class ListAuditLogsQueryDto {
+  @IsOptional() @IsString() @MaxLength(100) action?: string;
+  @IsOptional() @IsString() @MaxLength(40) transport?: string;
+  @IsOptional() @IsISO8601() start_date?: string;
+  @IsOptional() @IsISO8601() end_date?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(1000) limit?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) offset?: number;
+}
+
+export class AuditLogStatsQueryDto {
+  @IsOptional() @IsString() @MaxLength(100) action?: string;
+  @IsOptional() @IsIn(['1d', '7d', '30d']) period?: '1d' | '7d' | '30d';
 }
 
 export class ListObservationScopesQueryDto {
@@ -69,7 +135,9 @@ export class ListObservationScopesQueryDto {
 }
 
 /** A query parameter sent once arrives as a string, sent twice as a list. */
-const asList = ({ value }: { value: unknown }) => (value == null ? undefined : Array.isArray(value) ? value : [value]);
+function asList({ value }: { value: unknown }) {
+  return value == null ? undefined : Array.isArray(value) ? value : [value];
+}
 
 export class ListMemoriesQueryDto {
   @IsOptional() @IsIn([...FACT_TYPES, 'observation']) type?: string;

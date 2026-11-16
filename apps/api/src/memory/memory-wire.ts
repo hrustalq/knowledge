@@ -35,6 +35,8 @@ export interface BankListItem {
   created_at: string | null;
   updated_at: string | null;
   fact_count: number;
+  display_alias?: string | null;
+  matched_aliases?: string[];
 }
 
 export interface BankListResponse {
@@ -239,6 +241,7 @@ export interface OperationStatusResponse {
   completed_at?: string | null;
   error_message?: string | null;
   retry_count?: number;
+  result_metadata?: Record<string, unknown> | null;
 }
 
 export interface CancelOperationResponse {

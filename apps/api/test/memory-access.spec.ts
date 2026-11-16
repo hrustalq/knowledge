@@ -61,6 +61,7 @@ function service(
         opts.bank ? { id: 'b1', bankId: 'agent', ...opts.bank } : null,
       ),
     },
+    memoryBankAlias: { findUnique: vi.fn(async () => null) },
     project: {
       findMany: vi.fn(async () => (opts.restricted ? [{ id: PROJECT }] : [])),
     },
@@ -214,6 +215,7 @@ describe('memory error body (#986)', () => {
       '/mcp?x=1',
       '/version',
       '/health?x=1',
+      '/v1/bank-template-schema',
     ])
       expect(isMemoryPath(url)).toBe(true);
     for (const url of [

@@ -257,7 +257,18 @@
     "entityNotFound": "Entity {id} not found",
     "relationNotFound": "Relation {id} not found",
     "fileNotFound": "Memory file {id} not found",
-    "fileChunk": "This memory is part of the file {path}: delete the file instead"
+    "fileChunk": "This memory is part of the file {path}: delete the file instead",
+    "aliasTaken": "The bank id or alias {alias} is already in use",
+    "aliasNotFound": "Bank alias {alias} not found",
+    "auditLogNotFound": "Audit log {id} not found",
+    "operationNotTerminal": "Operation {id} has not reached a terminal state",
+    "fileUploadInvalid": "Upload 1 to {maxItems} files, each no larger than {maxBytes} bytes",
+    "fileUploadRequestInvalid": "The file retain request must be JSON with a files_metadata array",
+    "fileTypeUnsupported": "No memory file parser accepts this file type",
+    "fileEmpty": "The file contains no text to retain",
+    "archiveNotFound": "Transfer archive not found",
+    "archiveTooLarge": "The transfer archive exceeds {maxBytes} bytes",
+    "transferInvalid": "The transfer archive is not a Knowledge Hindsight transfer with a valid transfer.json"
   },
   "memo": {
     "notFound": "Memo not found",

@@ -146,6 +146,19 @@ export class MemoryOperationsService {
     if (claimed.count === 0) return;
     const row = await this.prisma.memoryOperation.findUnique({ where: { id: operationId }, include: { bank: true } });
     if (!row) return;
+    // A heartbeat while it runs (#1165): the sweeper re-queues a running row only once it has gone quiet for the timeout,
+    // so an import that outlasts the timeout is not run twice. A lost worker stops beating, and the row is re-queued.
+    const beat = setInterval(() => {
+      void this.prisma.memoryOperation.updateMany({ where: { id: row.id, status: 'running' }, data: { updatedAt: new Date() } }).catch(() => undefined);
+    }, Math.max(1_000, Math.floor(this.timeoutMs / 3)));
+    try {
+      await this.execute(row);
+    } finally {
+      clearInterval(beat);
+    }
+  }
+
+  private async execute(row: MemoryOperation & { bank: MemoryBank }): Promise<void> {
     if (row.type === 'consolidation') return this.runConsolidation(row);
     if (row.type !== 'retain') {
       try {
@@ -155,6 +168,7 @@ export class MemoryOperationsService {
         this.logger.warn(`Memory operation ${row.id} failed: ${(e as Error).message}`);
         await this.settle(row.id, { status: 'failed', error: (e as Error).message.slice(0, 1000), payload: [] });
       }
+      await this.management.discardUpload(row);
       return;
     }
     try {
@@ -216,11 +230,11 @@ export class MemoryOperationsService {
   }
 
   async delete(bank: MemoryBank, operationId: string) {
-    const row = UUID_RE.test(operationId) ? await this.prisma.memoryOperation.findFirst({ where: { id: operationId, bankId: bank.id }, select: { id: true, status: true } }) : null;
+    const row = UUID_RE.test(operationId) ? await this.prisma.memoryOperation.findFirst({ where: { id: operationId, bankId: bank.id }, select: { id: true, status: true, workspaceId: true, bankId: true } }) : null;
     if (!row) throw new NotFoundException(t('error.memory.operationNotFound', { id: operationId }));
     if (!['completed', 'failed', 'cancelled'].includes(row.status)) throw new ConflictException(t('error.memory.operationNotTerminal', { id: operationId }));
     await this.prisma.memoryOperation.delete({ where: { id: row.id } });
-    await this.management.deleteArchives([row.id]);
+    await this.management.purgeOperations([row]);
     return { success: true, message: `Operation ${operationId} deleted`, operation_id: operationId };
   }
 
@@ -230,6 +244,7 @@ export class MemoryOperationsService {
       ? await this.prisma.memoryOperation.updateMany({ where: { id: operationId, bankId: bank.id, status: 'queued' }, data: { status: 'cancelled', completedAt: new Date(), payload: [] } })
       : { count: 0 };
     if (cancelled.count === 0) throw new ConflictException(t('error.memory.operationNotPending', { id: operationId }));
+    await this.management.discardUpload({ id: operationId, workspaceId: bank.workspaceId, bankId: bank.id });
     return { success: true, message: `Operation ${operationId} cancelled`, operation_id: operationId };
   }
 
@@ -272,10 +287,10 @@ export class MemoryOperationsService {
     });
     const expired = await this.prisma.memoryOperation.findMany({
       where: { status: { in: ['completed', 'failed', 'cancelled'] }, completedAt: { lt: new Date(now - this.retentionMs) } },
-      select: { id: true },
+      select: { id: true, workspaceId: true, bankId: true },
     });
     const purged = await this.prisma.memoryOperation.deleteMany({ where: { id: { in: expired.map((row) => row.id) } } });
-    await this.management.deleteArchives(expired.map((row) => row.id));
+    await this.management.purgeOperations(expired);
     return { enqueued: lost.length, requeued: requeued.length, failed: failed.length, purged: purged.count };
   }
 }

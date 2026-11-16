@@ -161,8 +161,7 @@ export class MemoryManagementController {
     @Res() response: Response,
   ): Promise<void> {
     const caller = await this.access.caller(principal, ws, 'viewer');
-    const archive = await this.management.archive(caller, key);
-    response.attachment(archive.filename);
-    response.type('application/zip').send(archive.data);
+    // Authorized here, served by the bucket: the client follows the redirect, and its bearer token stays on this origin.
+    response.redirect(302, await this.management.archiveUrl(caller, key));
   }
 }

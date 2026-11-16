@@ -91,6 +91,19 @@ export class StorageService {
     return `workspaces/${workspaceId}/imports/${importId}/${safeSegment(filename)}`;
   }
 
+  /**
+   * A memory bank's objects (#1165): an operation's upload (`input`) and its
+   * export archive. Under the bank, so deleting the bank purges its prefix, and
+   * under the workspace, so teardown's `purgePrefix` takes it.
+   */
+  memoryBankPrefix(workspaceId: string, bankRowId: string): string {
+    return `workspaces/${workspaceId}/memory-banks/${bankRowId}/`;
+  }
+
+  memoryOperationPrefix(workspaceId: string, bankRowId: string, operationId: string): string {
+    return `${this.memoryBankPrefix(workspaceId, bankRowId)}operations/${operationId}/`;
+  }
+
   /** A memo's audio (#551). Under the workspace prefix, so teardown's `purgePrefix` takes it. */
   memoObjectKey(workspaceId: string, memoId: string, name: string): string {
     return `workspaces/${workspaceId}/memos/${memoId}/${safeSegment(name)}`;

@@ -4890,7 +4890,9 @@ model MemoryTransferArchive {
   bank        MemoryBank @relation(fields: [bankId], references: [id], onDelete: Cascade)
   operationId String     @map("operation_id") @db.Uuid
   filename    String
-  data        Bytes
+  /// The zip in the bucket (#1165), under the bank's prefix; a download redirects to a presigned URL.
+  objectKey   String     @map("object_key")
+  byteSize    Int        @map("byte_size")
   createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz
 
   @@unique([operationId])

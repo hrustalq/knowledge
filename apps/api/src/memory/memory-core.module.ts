@@ -10,6 +10,7 @@ import { GraphModule } from '../graph/graph.module.js';
 import { ParsersModule } from '../import/parsers/parsers.module.js';
 import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
+import { StorageModule } from '../storage/storage.module.js';
 import { MemoryAccessService } from './memory-access.service.js';
 import { MemoryBanksService } from './memory-banks.service.js';
 import { MemoryConsolidationService } from './memory-consolidation.service.js';
@@ -43,6 +44,7 @@ import { MemoryUnitsService } from './memory-units.service.js';
     DecisionClientModule,
     MemoryQueueModule,
     ParsersModule,
+    StorageModule,
   ],
   providers: [
     { provide: MEMORY_RERANKER_PROVIDER, inject: [ConfigService], useFactory: createMemoryReranker },

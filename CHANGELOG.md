@@ -35,6 +35,8 @@ in the pull request that introduces them — see
 - Import → Review: on a phone the action row no longer cuts Discard off the right edge; the buttons wrap. (#1036)
 - Side sheets (page preview in Knowledge health, search, connector runs and others) can be closed by touch: the
   close button has a 44px touch target. Desktop is unchanged. (#1037)
+- A long URL or unbroken token in a comment wraps inside its thread card instead of being cut off at the edge.
+  (#1038)
 
 ## [0.56.0] — 2026-11-16
 

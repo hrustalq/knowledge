@@ -2474,6 +2474,8 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
 .kn-comment-surface .markdown-body {
   font-size: 0.875rem;
   line-height: 1.6;
+  /* A long URL or token wraps inside the card; the thread body is clipped, not scrolled (#1038). */
+  overflow-wrap: anywhere;
 }
 .kn-comment-surface .markdown-body > :first-child {
   margin-top: 0;

@@ -38,9 +38,16 @@ in the pull request that introduces them — see
   Uploaded files are masked before they are stored, and memory uploads are refused before the body is read unless the
   caller may write. (#1155)
 - Mental-model ids are unique per bank instead of across the whole installation. (#1155)
+- Every background agent now draws on project memory, including the ones that call the model directly (linter,
+  atlas, auditor, arbiter, reviewer, archaeologist, tester and the sentinel's code reading). A run with no note recalls
+  on the titles of the pages it is about instead of not recalling. Agent replies to an @mention in a discussion recall
+  the page's project memory, and are remembered there when the page is restricted by nothing but its project.
+  Workflows and the glossarist deliberately stay without memory. (#1167)
 
 ### Fixed
 
+- Background agent runs recalled and retained no memory at all: the memory service was never injected into the
+  agent worker, with no error. Runs now use it as documented. (#1167)
 - Chat harvests now keep glossary terms in the thread’s spelling when decisions and answers are written in the
   asker’s language, instead of dropping the terms as ungrounded. (#1163)
 

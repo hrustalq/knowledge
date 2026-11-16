@@ -170,7 +170,7 @@ export class MemoryRuntimeService {
       userId: string;
       locale: Locale;
       sourceId: string;
-      sourceKind: 'assistant-turn' | 'agent-run';
+      sourceKind: 'assistant-turn' | 'agent-run' | 'mention-reply';
       question: string;
       answer: string;
       shareWithProject: boolean;

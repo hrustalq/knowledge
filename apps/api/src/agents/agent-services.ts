@@ -66,7 +66,9 @@ import { CompareService } from '../documents/compare.service.js';
 import { TrackerRegistry } from '../connectors/tracker-registry.service.js';
 import type { Principal } from '../auth/principal.js';
 import { currentAgentRun } from '../ai/agent-run-context.js';
-import type { MemoryRuntimeService } from '../memory/memory-runtime.service.js';
+// A value import, not `import type`: DI reads the constructor's emitted type, and a type-only
+// import emits `Object`, which `@Optional()` silently resolves to undefined (#1167).
+import { MemoryRuntimeService } from '../memory/memory-runtime.service.js';
 
 export interface AgentRunResult {
   summary: string;
@@ -157,14 +159,21 @@ export class AgentServices {
   readonly logger = new Logger('AgentExecutor');
   /** In-flight runs' ledgers, by run id. A run's entry lives from its first prompt to its stamp. */
   private readonly ledgers = new Map<string, RunLedger>();
-  /** In-flight runs' memory recall, by run id: asked on a run's first `callModel`, so a runner that never calls it never recalls. */
+  /** In-flight runs' memory recall, by run id: asked on a run's first model call, so a runner that never calls one never recalls. */
   private readonly memoryGroundings = new Map<string, () => Promise<string>>();
+  /**
+   * The model client every runner calls (#1167): inside a run, each call's last user turn
+   * carries the run's memory recall. One wrapper, so a runner — or a helper it hands this
+   * client to — cannot skip it. Services with their own client (`GlossaryService.suggest`,
+   * memory's own extraction) are not wrapped.
+   */
+  readonly client: Pick<AssistantClient, 'chat' | 'runWithTools'>;
 
   constructor(
     readonly prisma: PrismaService,
     readonly graph: GraphService,
     readonly registry: AgentRegistryService,
-    readonly client: AssistantClient,
+    assistant: AssistantClient,
     readonly readTools: AssistantReadToolsService,
     readonly skills: AiSkillsService,
     readonly documents: DocumentsService,
@@ -189,7 +198,20 @@ export class AgentServices {
     readonly decision: DecisionClient,
     readonly specDiff: ApiSpecDiffService,
     @Optional() readonly memory?: MemoryRuntimeService,
-  ) {}
+  ) {
+    this.client = {
+      chat: async (call, messages, opts) =>
+        assistant.chat(call, await this.withMemoryGrounding(messages), opts),
+      runWithTools: async (call, messages, tools, execute, opts) =>
+        assistant.runWithTools(
+          call,
+          await this.withMemoryGrounding(messages),
+          tools,
+          execute,
+          opts,
+        ),
+    };
+  }
 
   /**
    * What a background agent is told beyond its instructions: the skills it
@@ -326,13 +348,7 @@ export class AgentServices {
     };
   }
 
-  /**
-   * The one model call of a JSON-answering agent: a single JSON call for a
-   * model that cannot call tools, else the tool loop with the contract on its
-   * last round — `json: true` sets response_format, which suppresses tool
-   * calls. `tools` defaults to the read tools, read only on the tool path.
-   */
-  /** `recall` runs at most once per run, on the first `callModel`; a failure grounds nothing. */
+  /** `recall` runs at most once per run, on its first model call; a failure grounds nothing. */
   setMemoryGrounding(runId: string, recall: () => Promise<string>): void {
     let once: Promise<string> | undefined;
     this.memoryGroundings.set(runId, () => (once ??= recall().catch(() => '')));
@@ -359,6 +375,12 @@ export class AgentServices {
     return [...messages, { role: 'user', content: memory }];
   }
 
+  /**
+   * The one model call of a JSON-answering agent: a single JSON call for a
+   * model that cannot call tools, else the tool loop with the contract on its
+   * last round — `json: true` sets response_format, which suppresses tool
+   * calls. `tools` defaults to the read tools, read only on the tool path.
+   */
   async callModel(
     call: AiCallContext,
     agent: ResolvedAgent,
@@ -366,13 +388,12 @@ export class AgentServices {
     execute: ToolExecutor,
     tools?: ChatCompletionFunctionTool[],
   ): Promise<string> {
-    const grounded = await this.withMemoryGrounding(messages);
     if (agent.missing.includes('tools'))
-      return this.client.chat(call, grounded, { json: true });
+      return this.client.chat(call, messages, { json: true });
     return (
       await this.client.runWithTools(
         call,
-        grounded,
+        messages,
         tools ?? this.readTools.definitions(),
         execute,
         { jsonFinalRound: true },

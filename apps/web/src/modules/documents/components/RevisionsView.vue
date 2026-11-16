@@ -140,17 +140,19 @@ watch(branchFilter, () => void load())
     </div>
 
     <div v-else class="overflow-x-auto rounded-lg border">
+      <!-- Hash, message and parents give way on a phone (#1054): the row keeps
+           what picks a revision — number, branch, status, date, View. -->
       <table class="w-full text-sm">
         <thead>
           <tr class="border-b text-left text-xs text-muted-foreground">
             <th class="px-2 py-2">{{ t('revisions.from') }}</th>
             <th class="px-2 py-2">{{ t('revisions.to') }}</th>
             <th class="px-3 py-2">#</th>
-            <th class="px-3 py-2">{{ t('revisions.revision') }}</th>
+            <th class="px-3 py-2 max-sm:hidden">{{ t('revisions.revision') }}</th>
             <th class="px-3 py-2">{{ t('revisions.branch') }}</th>
             <th class="px-3 py-2">{{ t('revisions.status') }}</th>
-            <th class="px-3 py-2">{{ t('revisions.message') }}</th>
-            <th class="px-3 py-2">{{ t('revisions.parents') }}</th>
+            <th class="px-3 py-2 max-sm:hidden">{{ t('revisions.message') }}</th>
+            <th class="px-3 py-2 max-sm:hidden">{{ t('revisions.parents') }}</th>
             <th class="px-3 py-2">{{ t('revisions.created') }}</th>
             <th class="px-3 py-2"></th>
           </tr>
@@ -174,10 +176,10 @@ watch(branchFilter, () => void load())
               </RadioGroup>
             </td>
             <td class="px-3 py-2">{{ r.revisionNumber }}</td>
-            <td class="px-3 py-2 font-mono text-xs">{{ r.revisionId.slice(0, 8) }}</td>
+            <td class="px-3 py-2 font-mono text-xs max-sm:hidden">{{ r.revisionId.slice(0, 8) }}</td>
             <td class="px-3 py-2">{{ r.branch ?? '—' }}</td>
             <td class="px-3 py-2"><Badge :variant="statusVariant(r.status)">{{ labelFor(t, 'revisionStatus', r.status) }}</Badge></td>
-            <td class="max-w-48 px-3 py-2 text-muted-foreground">
+            <td class="max-w-48 px-3 py-2 text-muted-foreground max-sm:hidden">
               <span class="block truncate">{{ r.message ?? '—' }}</span>
               <!-- Published from a shared draft (#80): who wrote in it since the publish before. -->
               <span
@@ -189,7 +191,7 @@ watch(branchFilter, () => void load())
                 <UserChip v-for="id in r.coAuthorIds" :key="id" :user-id="id" size="sm" avatar-only />
               </span>
             </td>
-            <td class="px-3 py-2 font-mono text-xs text-muted-foreground">
+            <td class="px-3 py-2 font-mono text-xs text-muted-foreground max-sm:hidden">
               {{ r.parentRevisionIds.map((p) => p.slice(0, 8)).join(', ') || '—' }}
             </td>
             <td class="px-3 py-2 text-xs text-muted-foreground">{{ formatDateTime(r.createdAt) }}</td>

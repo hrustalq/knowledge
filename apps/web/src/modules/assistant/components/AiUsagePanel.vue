@@ -97,7 +97,8 @@ function labelFor(userId: string): string {
   <div class="space-y-6">
     <!-- range + grouping -->
     <div class="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
-      <div class="flex gap-1">
+      <!-- Wraps on its own: unwrapped, a row of three long labels is wider than a phone (#1069). -->
+      <div class="flex flex-wrap gap-1">
         <Button
           v-for="r in RANGES"
           :key="r.days"
@@ -108,7 +109,7 @@ function labelFor(userId: string): string {
           {{ t(r.label) }}
         </Button>
       </div>
-      <div class="flex gap-1">
+      <div class="flex flex-wrap gap-1">
         <Button
           v-for="g in (['user', 'model', 'project'] as const)"
           :key="g"

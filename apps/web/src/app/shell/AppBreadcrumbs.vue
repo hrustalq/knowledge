@@ -78,11 +78,12 @@ watch(
         <RouterLink
           v-else-if="c.to && i < crumbs.length - 1"
           :to="c.to"
-          class="max-w-32 shrink-0 truncate leading-6 transition-colors hover:text-foreground sm:max-w-56"
+          class="max-w-32 shrink-0 truncate leading-6 transition-colors hover:text-foreground lg:max-w-56"
         >
           {{ c.label }}
         </RouterLink>
-        <span v-else class="max-w-56 truncate leading-6 font-medium text-foreground" aria-current="page">{{ c.label }}</span>
+        <!-- The current crumb keeps a readable floor; ancestors give way first (#1075). -->
+        <span v-else class="min-w-16 max-w-56 truncate leading-6 font-medium text-foreground" aria-current="page">{{ c.label }}</span>
       </template>
     </div>
   </nav>

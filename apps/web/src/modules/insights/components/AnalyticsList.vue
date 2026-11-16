@@ -80,12 +80,18 @@ async function exportCsv() {
       {{ props.empty }}
     </p>
     <ol v-else class="divide-y rounded-lg border bg-card">
-      <li v-for="r in props.rows" :key="r.key" class="flex items-baseline gap-3 px-3 py-2 text-sm">
-        <RouterLink v-if="r.to" :to="r.to" class="min-w-0 flex-1 truncate hover:underline">{{ r.label }}</RouterLink>
-        <span v-else class="min-w-0 flex-1 truncate" :class="r.muted ? 'text-muted-foreground italic' : ''" :title="r.label">
+      <!-- Below sm the meta moves under a two-line title (#1077); from sm it is one line, truncated. -->
+      <li v-for="r in props.rows" :key="r.key" class="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-3 py-2 text-sm sm:flex-nowrap">
+        <RouterLink v-if="r.to" :to="r.to" class="min-w-0 flex-1 max-sm:line-clamp-2 hover:underline sm:truncate">{{ r.label }}</RouterLink>
+        <span
+          v-else
+          class="min-w-0 flex-1 max-sm:line-clamp-2 sm:truncate"
+          :class="r.muted ? 'text-muted-foreground italic' : ''"
+          :title="r.label"
+        >
           {{ r.label }}
         </span>
-        <span class="shrink-0 text-xs text-muted-foreground tabular-nums">{{ r.meta }}</span>
+        <span class="shrink-0 text-xs text-muted-foreground tabular-nums max-sm:basis-full">{{ r.meta }}</span>
       </li>
     </ol>
   </section>

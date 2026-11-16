@@ -399,16 +399,22 @@ function toggleResponse(r: ResponseView) {
 .kn-op-intro:empty {
   display: none;
 }
+/* min-width: 0 on the list, its rows and the code (#1055): a grid item and a flex
+   item both default to min-width: auto, so a long key would hold the row at its
+   full width and clip it instead of truncating it. */
 .kn-op-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem 1.5rem;
+  min-width: 0;
   font-size: var(--kn-text-ui);
 }
 .kn-op-meta > div {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  min-width: 0;
+  max-width: 100%;
 }
 .kn-op-meta dt {
   color: var(--muted-foreground);
@@ -420,6 +426,7 @@ function toggleResponse(r: ResponseView) {
   gap: 0.25rem;
 }
 .kn-op-meta code {
+  min-width: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: var(--kn-text-ui);
   color: var(--foreground);

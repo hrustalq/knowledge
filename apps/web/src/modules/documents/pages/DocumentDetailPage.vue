@@ -1416,11 +1416,13 @@ watch(
       :open="expanded !== null && expanded !== 'graph'"
       @update:open="(v: boolean) => !v && (expanded = null)"
     >
-      <DialogContent class="max-w-5xl">
+      <!-- On a phone the widget is a full-screen sheet; the body takes the
+           rest of it and scrolls (#1054). From sm up nothing changes. -->
+      <DialogContent class="max-w-5xl max-sm:inset-0 max-sm:top-0 max-sm:left-0 max-sm:h-dvh max-sm:w-screen max-sm:max-h-dvh max-sm:translate-none max-sm:grid-rows-[auto_minmax(0,1fr)] max-sm:rounded-none max-sm:p-4">
         <DialogHeader>
           <DialogTitle>{{ expandedWidget?.label }} — {{ detail.document.title }}</DialogTitle>
         </DialogHeader>
-        <div class="max-h-[70vh] overflow-auto pr-1">
+        <div class="max-h-[70vh] max-sm:max-h-none max-sm:min-h-0 overflow-auto pr-1">
           <RevisionsView v-if="expanded === 'revisions'" :document-id="documentId" :source-backed="sourceBacked && auth.canEdit && !archived" @restored="load()" />
           <MergeRequestList v-else-if="expanded === 'merge-requests'" :document-id="documentId" />
           <!-- Sized under the dialog's own 70vh so the feed keeps the scroll,

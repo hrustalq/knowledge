@@ -49,6 +49,31 @@ in the pull request that introduces them — see
   Profile. (#1045)
 - Notifications: the header buttons wrap on a phone instead of scrolling the page sideways (most visible in
   Russian). (#1050)
+- On a phone, "Open in a larger view" on a page's rail widget opens full screen, rail widgets no longer squeeze
+  their content into a short inner scroll, and the revision list hides its hash, message and parents columns. (#1054)
+- API reference on a phone: an operation's entity key truncates inside its card instead of overflowing it and hiding
+  the copy button. (#1055)
+- Editor on a phone: the formatting bubble over a selection fits the screen; its status colours move to the
+  toolbar's More menu below 416px. (#1056)
+- A long URL or token inside a panel wraps instead of pushing the whole page sideways (editor and read view).
+  (#1057)
+- Editor on a phone: the toolbar fades at the edge that has more buttons, so More and Insert can be found by
+  scrolling the row. (#1059)
+- New page from template on a phone: the dialog no longer bleeds past its edge, and a chosen template's form gets
+  the whole pane, with Back to the list. (#1060)
+- Knowledge health below 1280px: the bulk action bar stays at the top of the screen while rows further down are
+  selected. (#1064)
+- AI → Web access on a phone: the "Try a URL" field takes a full row at a readable size, like the Add domain field
+  (#1081). (#1068)
+- AI → Usage on a phone: the range and group-by buttons wrap instead of pushing the page sideways (Russian). (#1069)
+- A long project name wraps on the project page on a phone instead of being cut to one line. (#1072)
+- The import stepper and the new-project Structure step fit a phone screen instead of being a few pixels wider than
+  it. (#1073)
+- The navigation drawer on a phone uses most of the screen width instead of the desktop rail's 256px, so deep page
+  titles have room. (#1074)
+- At tablet widths the breadcrumb keeps the current page's name visible instead of collapsing it to nothing. (#1075)
+- Analytics lists and merge request cards show titles on up to two lines on a phone instead of cutting them to a few
+  words. (#1077)
 
 ## [0.56.0] — 2026-11-16
 

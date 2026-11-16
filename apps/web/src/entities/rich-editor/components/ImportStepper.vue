@@ -65,7 +65,9 @@ const state = computed(() =>
           <Check v-if="step.done" class="size-3" aria-hidden="true" />
           <template v-else>{{ i + 1 }}</template>
         </span>
-        {{ step.label }}
+        <!-- Only the current step's name shows on a phone; the others stay in the
+             accessible name as sr-only text rather than vanishing (#1073). -->
+        <span :class="step.active ? '' : 'sr-only sm:not-sr-only'">{{ step.label }}</span>
       </span>
 
       <!-- The rule fills as you advance: the only place the flow shows length,

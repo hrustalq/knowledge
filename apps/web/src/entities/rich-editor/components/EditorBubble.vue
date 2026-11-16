@@ -96,7 +96,7 @@ useSubscription(
     <button type="button" :aria-pressed="format.link" :title="t('toolbar.bubble.link')" @mousedown.prevent="emit('link')">
       <Link2 class="size-4" />
     </button>
-    <span class="kn-bubble-sep" />
+    <span class="kn-bubble-sep kn-bubble-sep-status" />
     <button
       v-for="color in STATUS_COLORS"
       :key="color"

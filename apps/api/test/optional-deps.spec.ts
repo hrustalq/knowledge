@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 /**
  * An `@Optional()` constructor dependency Nest cannot resolve is injected as
@@ -17,7 +17,7 @@ import { describe, expect, it } from 'vitest';
 type Wrapper = { metatype: unknown; getCtorMetadata?: () => unknown[] | undefined };
 type Container = { getModules(): Map<string, { providers: Map<unknown, Wrapper> }> };
 
-async function unresolved(root: unknown, process: string): Promise<string[]> {
+async function unresolved(root: unknown, name: string): Promise<string[]> {
   const app = await NestFactory.createApplicationContext(root as never, { preview: true, logger: false, abortOnError: false });
   try {
     const missing = new Set<string>();
@@ -33,7 +33,7 @@ async function unresolved(root: unknown, process: string): Promise<string[]> {
         for (const index of optional) {
           const token = tokens.find((t) => t.index === index)?.param ?? params[index];
           if (typeof token === 'function' && !resolved[index])
-            missing.add(`${process}: ${type.name} parameter ${index} (${token.name})`);
+            missing.add(`${name}: ${type.name} parameter ${index} (${token.name})`);
         }
       }
     }
@@ -44,13 +44,17 @@ async function unresolved(root: unknown, process: string): Promise<string[]> {
 }
 
 describe('optional dependencies (#1171)', () => {
+  // The modules validate the environment on import, and CI's `check` job has no env file:
+  // fill the gaps from the example (a variable already set wins), as the e2e job does.
+  beforeAll(() => process.loadEnvFile(new URL('../../../.env.example', import.meta.url)));
+
   it.each([
     ['api', async () => (await import('../src/app.module.js')).AppModule],
     ['worker', async () => (await import('../src/worker.module.js')).WorkerModule],
     ['mcp', async () => (await import('../src/mcp/mcp.module.js')).McpModule],
     ['learner', async () => (await import('../src/learner/learner.module.js')).LearnerModule],
     ['git', async () => (await import('../src/git/git.module.js')).GitModule],
-  ])('every class-typed @Optional() dependency resolves in the %s process', async (process, root) => {
-    expect(await unresolved(await root(), process)).toEqual([]);
+  ])('every class-typed @Optional() dependency resolves in the %s process', async (name, root) => {
+    expect(await unresolved(await root(), name)).toEqual([]);
   }, 60_000);
 });

@@ -3,6 +3,7 @@ import { Reflector } from '@nestjs/core';
 import { SESSION_COOKIE } from '@knowledge/contracts';
 import { MCP_KEY_OK_META, PUBLIC_META, QUERY_TOKEN_OK_META, UNVERIFIED_OK_META } from './access.decorator.js';
 import { readCookie } from '../common/cookies.js';
+import { requestedLocale } from '../i18n/locale.js';
 import { t } from '../i18n/t.js';
 import { TokenAuthService } from './token-auth.service.js';
 import { cookieCsrfOk } from './session-cookie.js';
@@ -57,6 +58,11 @@ export class AuthGuard implements CanActivate {
         : cookieToken
           ? await this.tokenAuth.resolveSessionCookie(cookieToken)
           : await this.tokenAuth.resolve(undefined);
+    // A request that names a language is answered in it, models included (#1185).
+    // A copy: the dev principal is one shared object.
+    const asked = requestedLocale(req);
+    if (asked && asked !== req.principal.locale)
+      req.principal = { ...req.principal, locale: asked, savedLocale: req.principal.savedLocale ?? req.principal.locale };
     // Every record emitted downstream carries the caller, without a single
     // service having to accept a userId argument purely to log it.
     bindTrace({ userId: req.principal.userId });

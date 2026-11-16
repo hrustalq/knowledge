@@ -25,12 +25,20 @@ export interface Principal {
   /** Platform admin (users.is_admin): user management + implicit admin in every workspace. */
   isAdmin: boolean;
   /**
-   * Stored UI + API language (users.locale, docs/features/18). Not what a given
-   * request is answered in — nestjs-i18n resolves that from ?lang=/cookie/header
-   * in middleware, before this principal exists. This is the durable preference
-   * the web mirrors into kn_lang at sign-in.
+   * The language this caller is answered in by everything that reads the
+   * principal — model replies, flow forms, deferred work started now (#1185).
+   * Resolved from users.locale (docs/features/18); on an HTTP request `AuthGuard`
+   * replaces it with the language the request names (?lang= -> kn_lang ->
+   * Accept-Language), the same order errors are answered in, so a client never
+   * gets errors in one language and answers in another.
    */
   locale: Locale;
+  /**
+   * users.locale when `AuthGuard` replaced `locale` with the request's language:
+   * the durable preference `GET /v1/me` reports and the web mirrors into kn_lang
+   * at sign-in. Absent means `locale` is still the stored value.
+   */
+  savedLocale?: Locale;
   /**
    * users.email_verified_at is set (docs/features/41). Absent means not
    * applicable — the dev principal and an agent's run owner — and reads as

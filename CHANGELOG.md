@@ -59,6 +59,8 @@ in the pull request that introduces them — see
   (#1057)
 - Editor on a phone: the toolbar fades at the edge that has more buttons, so More and Insert can be found by
   scrolling the row. (#1059)
+- New page from template on a phone: the dialog no longer bleeds past its edge, and a chosen template's form gets
+  the whole pane, with Back to the list. (#1060)
 
 ## [0.56.0] — 2026-11-16
 

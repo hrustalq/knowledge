@@ -72,7 +72,8 @@ watch(tab, () => {
         <h1 class="font-display text-2xl font-bold tracking-tight">{{ t('notifications.title') }}</h1>
         <p class="mt-0.5 text-sm text-muted-foreground">{{ t('notifications.pageSubtitle') }}</p>
       </div>
-      <div class="ml-auto flex items-center gap-1.5">
+      <!-- The pair wraps on a phone: 'Настройки уведомлений' alone is wider than a 360px column (#1050). -->
+      <div class="ml-auto flex flex-wrap items-center gap-1.5">
         <Button v-if="store.hasUnread" variant="outline" size="sm" class="gap-1.5" @click="store.markAllRead()">
           <CheckCheck class="size-4" />
           {{ t('notifications.markAllRead') }}

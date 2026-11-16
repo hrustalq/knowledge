@@ -47,6 +47,8 @@ in the pull request that introduces them — see
   sideways. (#1044)
 - Settings on a phone: the section strip scrolls the current section into view instead of always starting at
   Profile. (#1045)
+- Notifications: the header buttons wrap on a phone instead of scrolling the page sideways (most visible in
+  Russian). (#1050)
 
 ## [0.56.0] — 2026-11-16
 

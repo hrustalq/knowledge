@@ -17,7 +17,7 @@ import {
   type AiUsageRecordInput,
   type AiUsageTokens,
 } from '../ai/ai-usage.service.js';
-import { FREE_TOOLS, PARALLEL_SAFE_TOOLS } from './assistant-tool-types.js';
+import { FREE_TOOLS, PARALLEL_SAFE_TOOLS, PROMPT_TOOLS } from './assistant-tool-types.js';
 import type { Locale } from '@knowledge/contracts';
 import { t } from '../i18n/t.js';
 import { currentTrace, emitBacktest } from '@knowledge/observability';
@@ -534,6 +534,10 @@ export class AssistantClient {
 
     const free = tools.filter((t) => FREE_TOOLS.has(t.function.name));
     const maxRounds = roundsFor(ctx.config.maxToolCalls);
+    // Prose from the round that asked the user something (#1186): kept as part of
+    // the answer, ahead of whatever the closing round says about the form.
+    let asked = '';
+    const answer = (text: string) => stripToolMarkup([asked, text.trim()].filter(Boolean).join('\n\n'));
 
     for (let round$ = 0; ; round$++) {
       if (signal?.aborted) return { content: '', trace, cancelled: true };
@@ -573,11 +577,13 @@ export class AssistantClient {
         };
       if (round.toolCalls.length === 0)
         return {
-          content: stripToolMarkup(round.content),
+          content: answer(round.content),
           trace,
           cancelled: false,
         };
 
+      if (round.toolCalls.some((c) => PROMPT_TOOLS.has(c.name)) && round.content.trim())
+        asked = round.content.trim();
       loop.roundEnd?.(round.content);
       convo.push(
         round.assistant ?? {

@@ -189,10 +189,16 @@ export function extractionBatches<T extends { content: string }>(items: T[], max
   return batches;
 }
 
+/** Under `durable` (#1169): the memorist drops non-durable facts within an item, not only whole items of chatter. */
+export const DURABLE_ONLY_RULE =
+  'Keep only durable facts: preferences, decisions, requirements, constraints, conventions and lessons that will still ' +
+  'hold next time. Drop transient status, progress reports, one-off results and pleasantries, even when the same item ' +
+  'also states a durable fact. An item with no durable fact gets an empty facts array.';
+
 /** The user message of one extraction call: each item under its label, wrapped untrusted. */
-export function extractionPrompt(items: ReadonlyArray<{ content: string; context: string | null }>, mission: string): string {
+export function extractionPrompt(items: ReadonlyArray<{ content: string; context: string | null }>, mission: string, durableOnly = false): string {
   const body = items.map((item, i) => `I${i + 1}${item.context ? ` (context: ${item.context})` : ''}:\n${item.content}`).join('\n\n');
-  return `${mission ? `What this memory bank is for: ${mission}\n\n` : ''}Items:\n${wrapUntrusted(body, 'retain', 'memory')}`;
+  return `${mission ? `What this memory bank is for: ${mission}\n\n` : ''}${durableOnly ? `${DURABLE_ONLY_RULE}\n\n` : ''}Items:\n${wrapUntrusted(body, 'retain', 'memory')}`;
 }
 
 /**

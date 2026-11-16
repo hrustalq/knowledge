@@ -35,7 +35,10 @@ export interface RetainInput {
   operationId?: string;
   /** Store each item exactly as given, one unit per item: no extraction call (#1007). For a wire whose text must stay exact. */
   verbatim?: boolean;
-  /** A successful extraction's explicitly empty facts mean store nothing. Failures and missing models still retain verbatim. */
+  /**
+   * Asks the memorist for durable facts only (`DURABLE_ONLY_RULE`), and a successful extraction's explicitly empty facts
+   * mean store nothing. Failures and missing models still retain verbatim.
+   */
   durableOnly?: boolean;
   /** Write the units already consolidated, so the consolidation pass never claims them (#1007). */
   consolidated?: boolean;
@@ -76,8 +79,8 @@ interface Unit {
  * - **Never fails for want of a model.** Facts are extracted only when a model
  *   is routed at `extraction` and the budget allows; a missing route, a spent
  *   budget, a failed call or an unreadable answer all store the masked text
- *   verbatim, one unit per item. Under `durableOnly`, a successful answer that
- *   explicitly gives an item an empty fact list stores nothing instead.
+ *   verbatim, one unit per item. Under `durableOnly` the model is told to keep
+ *   durable facts only, and an item it gives an empty fact list stores nothing.
  * - **Vector first, row second**, as chat search packs a window: a crash leaves
  *   vectors with no row, which no recall returns and the reap removes.
  * - **A `document_id` retained before is replaced**, in the transaction that
@@ -210,7 +213,7 @@ export class MemoryRetainService {
           { config: agent.config, userId: input.userId, operation: 'memory-extract', locale: 'source' },
           [
             { role: 'system', content: agent.instructions },
-            { role: 'user', content: extractionPrompt(batch, input.bank.mission) },
+            { role: 'user', content: extractionPrompt(batch, input.bank.mission, input.durableOnly) },
           ],
           { json: true },
         );

@@ -75,10 +75,13 @@ the bank is read or written, never in a prompt:
   clamped to the page's readers — since the reply quotes the page and thread. A mention answered by
   a run (`comment.mention` trigger) is an ordinary background run.
 - **An assistant turn reaches the project bank only when its readers could have seen all of it:**
-  the turn recalled nothing from the asker's personal bank, carried no draft or attachment, and the
-  asker's scope reads nothing the project's readers cannot (`withinProjectAudience`). Otherwise it
-  is retained to the personal bank only. Known gap: an earlier answer in the same thread that
-  repeated personal memory is part of a later turn's prompt and is not tracked.
+  neither it nor an earlier turn in its thread recalled the asker's personal bank or carried a draft
+  or attachment, and the asker's scope reads nothing the project's readers cannot
+  (`withinProjectAudience`). Otherwise it is retained to the personal bank only. The thread keeps
+  the first such turn in `assistant_threads.private_context_at` (#1169), because a later answer can
+  repeat what an earlier one was told; the migration marks every thread that existed before it,
+  since whether those turns carried a draft or an attachment was never stored. A re-sent question is
+  a new turn with its own message id, so it is retained as one, not as a retry.
 - **Workflows use neither** (a deliberate non-goal): a step's items and drafts become pages and
   merge requests, and rerunning a step on the same page should give the same result rather than one
   that drifts with whatever the bank learned since. Neither do the one-shot review / suggest / ask
@@ -91,9 +94,11 @@ the bank is read or written, never in a prompt:
 
 Each agent's `memoryPolicy` controls retention only, with `mode: all | durable | off` and optional
 `personal` and `project` overrides. Missing policy is `all`, exactly the previous behavior; `off`
-skips bank creation and writes without disabling recall. In `durable`, an item for which the memorist returns an explicitly empty fact list stores
-nothing. The filter is per item, not per fact: an item the memorist keeps is stored with every fact
-it extracted. A missing extraction route, spent budget, failed call or unreadable answer still stores
+skips bank creation and writes without disabling recall. In `durable`, the extraction prompt tells
+the memorist to keep durable facts only (`DURABLE_ONLY_RULE` in `memory-facts.ts`: preferences,
+decisions, requirements, constraints, conventions, lessons), so status and chatter are dropped within
+an item, not only whole items of it (#1169); an item it answers with an explicitly empty fact list
+stores nothing. `all` sends the prompt unchanged. A missing extraction route, spent budget, failed call or unreadable answer still stores
 the masked request/outcome verbatim, so durable filtering is not claimed when extraction could not
 run. The same source id replaces earlier facts on retry, including replacing them with none.
 

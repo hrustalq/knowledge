@@ -347,8 +347,9 @@ interface PreparedTurn {
   /** False when the answer is visible to a whole chat, whose audience personal and project memories must not enter. */
   memoryEnabled: boolean;
   /**
-   * Whether this turn may be copied into the project's shared bank: it recalled nothing from the
-   * asker's personal bank and carried no draft or attachment. The runtime adds the audience test.
+   * Whether this turn may be copied into the project's shared bank: neither it nor an earlier turn
+   * in its thread recalled the asker's personal bank or carried a draft or attachment
+   * (`assistant_threads.private_context_at`). The runtime adds the audience test.
    */
   shareWithProject: boolean;
 }
@@ -1751,6 +1752,16 @@ export class AssistantService {
         })
       : undefined;
     if (agentMemory?.text) grounding.push(agentMemory.text);
+    // Private input taints the thread, not only the turn (#1169): a later
+    // answer can repeat what this one was told, from the history it is sent.
+    const privateInput =
+      !!agentMemory?.personal || !!draft || attachments.length > 0;
+    if (privateInput && !thread.privateContextAt) {
+      await this.prisma.assistantThread.updateMany({
+        where: { id: threadId, privateContextAt: null },
+        data: { privateContextAt: new Date() },
+      });
+    }
 
     // Which repositories the model may read (docs/features/31): those in
     // projects the asker can open, the grounding page's project first (#553).
@@ -1889,8 +1900,7 @@ export class AssistantService {
       question: dto.content,
       projectId,
       memoryEnabled,
-      shareWithProject:
-        !agentMemory?.personal && !draft && attachments.length === 0,
+      shareWithProject: !privateInput && !thread.privateContextAt,
     };
   }
 

@@ -13,6 +13,37 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Added
+
+- `knowledge_context` (MCP, core toolset) and `POST /v1/context`: what the workspace already knows about a ticket, as
+  pointers inside a token budget (600 by default, `budget` held to 200–2000). Up to four pages (title, trust status,
+  one excerpt of at most 200 characters; outdated and expired pages flagged and ranked below verified ones), up to
+  three glossary terms the query names, and up to three memories from the project banks of the projects the repo's git
+  remote (`repo`) resolves to through codebase / markdown-git connectors, each marked unverified. Items that do not fit
+  are dropped whole; when nothing clears a relevance floor the answer is one line, `empty: true`. `exclude` skips ids an
+  earlier call showed. No model call. (#1194)
+- Usage analytics → Agents shows ticket context: injections per day, median answer size in tokens, how often nothing
+  relevant was found, and the share of handed-over pages the same key opened within two hours. (#1195)
+- The capture kit (v3) also nudges the agent to call `knowledge_context` once per ticket: in Claude Code when it reads a
+  ticket (`gh|glab|jira issue view`, a Jira/Linear/GitHub issue MCP tool) or is given a ticket key or URL in a prompt,
+  and in Cursor when it reads one through a tool. The hook still holds no key and makes no network call. Re-run the
+  installer to update an installed kit; it keeps your own hook entries. (#1196)
+- The generated skill has a "Starting a ticket" step, so Codex, Kimi and any other MCP client call `knowledge_context`
+  first on a ticket; Connect AI shows it beside the capture kit. A credential not offered the tool gets the skill
+  unchanged. Feature doc [81](docs/features/81-ticket-context.md). (#1197)
+
+### Changed
+
+- The Search tab of usage analytics, and `knowledge_list_search_gaps`, no longer count ticket-context calls as
+  searches; they have their own numbers under Agents. (#1195)
+
+### Operations
+
+- Migration `20270202100000_search_query_result_tokens` adds a nullable `search_queries.result_tokens` column. Additive:
+  the previous release runs against it, and a rollback needs nothing. (#1195)
+
 ## [0.55.2] — 2026-11-16
 
 ### Fixed

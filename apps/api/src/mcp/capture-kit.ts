@@ -12,16 +12,38 @@ import type { CaptureKitClient, CaptureKitFile, CaptureKitResponse } from '@know
  * what it learned. It holds no key and calls nothing: the model does the
  * capturing, through the MCP tools it is already connected with.
  *
+ * The same script also nudges (#1196): when the session reads a ticket — a
+ * tracker MCP tool, `gh|glab|jira issue view`, or (Claude Code) a prompt naming
+ * a ticket key or URL — it asks the model, once per ticket per session, to call
+ * `knowledge_context`. Still no key and no network call.
+ *
  * Pure, like skill.ts: the service supplies who is asking, this renders text.
- * The hook contracts are the vendors' as of October 2026 — Claude Code's
- * `Stop` + `hookSpecificOutput.additionalContext`, Cursor's `stop` +
- * `followup_message`. When one changes, bump CAPTURE_KIT_VERSION: an installed
- * kit names its version, and re-fetching is how it updates.
+ * The hook contracts are the vendors' as of November 2026 — Claude Code's
+ * `Stop` / `PostToolUse` / `UserPromptSubmit` + `hookSpecificOutput.additionalContext`,
+ * Cursor's `stop` + `followup_message` and `postToolUse` + `additional_context`
+ * (Cursor's `beforeSubmitPrompt` cannot add context, so a ticket pasted into a
+ * Cursor prompt is left to the skill). When one changes, bump
+ * CAPTURE_KIT_VERSION: an installed kit names its version, and re-fetching is
+ * how it updates.
  */
-export const CAPTURE_KIT_VERSION = 2;
+export const CAPTURE_KIT_VERSION = 3;
 
 /** The marker the installer looks for when it merges hook entries — and the script's file name. */
 const HOOK_FILE = 'knowledge-capture.sh';
+
+/** Claude Code tools that can read a ticket: the shell, and tracker MCP servers by name. The script checks again. */
+export const TICKET_TOOL_MATCHER = 'Bash|mcp__.*([Jj]ira|[Ll]inear|[Aa]tlassian|[Ii]ssue|[Tt]icket).*';
+
+/**
+ * Where a ticket key is read from, in order; the first hit names the ticket.
+ * A tracker URL (GitHub/GitLab `/issues/N`, Jira `/browse/KEY`, Linear
+ * `/issue/KEY`), `owner/repo#N`, then a bare `KEY-123` that is not a version
+ * or standard (`UTF-8`, `ISO-8601`). Extended regexes for `grep -oE`.
+ */
+const TICKET_URL = 'https?://[^" ]+/(issues|browse|issue)/[A-Za-z0-9_-]+';
+const TICKET_REPO_REF = '[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[0-9]+';
+const TICKET_KEY = '(^|[^A-Za-z0-9_-])[A-Z][A-Z0-9]{1,9}-[0-9]{1,7}';
+const NOT_A_TICKET = '(UTF|ISO|SHA|GPT|RFC|TLS|SSL|HTTP|IPV|ES|MD)-';
 
 export interface CaptureKitInput {
   client: CaptureKitClient;
@@ -138,7 +160,7 @@ echo "Installing the knowledge capture kit into $root"
 
 ${body.join('\n\n')}
 
-echo "Done. Start a new ${CLIENT_NAME[kit.client]} session to load it."
+${kit.client === 'cursor' ? 'echo "Note: Cursor hooks cannot add context to a prompt, so a ticket pasted as a message gets no nudge; the knowledge skill asks for knowledge_context there."\n' : ''}echo "Done. Start a new ${CLIENT_NAME[kit.client]} session to load it."
 `;
 }
 
@@ -170,7 +192,11 @@ ${kitSkillBody(input)}`,
       path: '.claude/settings.json',
       content: json({
         hooks: {
-          PostToolUse: [{ matcher: 'Edit|Write|MultiEdit|NotebookEdit', hooks: [run('edited')] }],
+          PostToolUse: [
+            { matcher: 'Edit|Write|MultiEdit|NotebookEdit', hooks: [run('edited')] },
+            { matcher: TICKET_TOOL_MATCHER, hooks: [run('ticket')] },
+          ],
+          UserPromptSubmit: [{ hooks: [run('ticket-prompt')] }],
           Stop: [{ hooks: [run('stop')] }],
         },
       }),
@@ -205,7 +231,8 @@ ${kitSkillBody(input)}`,
     },
     {
       path: '.cursor/hooks.json',
-      content: json({ version: 1, hooks: { afterFileEdit: [run('edited')], stop: [run('stop')] } }),
+      // postToolUse has no tool-name regex here, so the script itself skips every tool that is not a ticket read.
+      content: json({ version: 1, hooks: { afterFileEdit: [run('edited')], postToolUse: [run('ticket')], stop: [run('stop')] } }),
       mode: 'merge',
       executable: false,
     },
@@ -257,6 +284,14 @@ ${renderCapturePlaybook()}`;
  */
 function hookScript(input: CaptureKitInput, client: CaptureKitClient): string {
   const claude = client === 'claude-code';
+  // About 40 tokens, no double quotes: printed into a JSON string as is.
+  const nudge =
+    'Ticket %s: before you start, call knowledge_context once with query = the ticket title and key terms, ' +
+    'repo = git remote get-url origin, exclude = ids already shown. Open a page only if the task needs it.';
+  const emitNudge = (event: string) =>
+    claude
+      ? `printf '{"hookSpecificOutput":{"hookEventName":"${event}","additionalContext":"%s"}}\\n' "$msg"`
+      : `printf '{"additional_context":"%s"}\\n' "$msg"`;
   const idField = claude ? 'session_id' : 'conversation_id';
   // No double quotes in the reminder: it is printed into a JSON string as is.
   const reminder =
@@ -276,12 +311,24 @@ function hookScript(input: CaptureKitInput, client: CaptureKitClient): string {
     ? ''
     : `    case "$in" in *'"status":"completed"'* | *'"status": "completed"'*) ;; *) exit 0 ;; esac\n`;
 
+  // Claude Code only: Cursor's beforeSubmitPrompt cannot add context.
+  const promptCase = `  ticket-prompt)
+    # From the prompt on: the paths and ids before it are not the person's words.
+    case "$in" in *'"prompt"'*) ;; *) exit 0 ;; esac
+    nudge "$(ticket "\${in#*'"prompt"'}")"
+    ${emitNudge('UserPromptSubmit')}
+    ;;
+`;
+
   return `#!/bin/sh
 # Knowledge capture kit v${CAPTURE_KIT_VERSION} for ${CLIENT_NAME[client]}: generated by ${input.url}/capture-kit.
 # Re-fetch it to update — local edits are overwritten.
 #
-#   ${HOOK_FILE} edited   ${claude ? 'PostToolUse on Edit|Write' : 'afterFileEdit'}: the session changed a file
-#   ${HOOK_FILE} stop     ${claude ? 'Stop' : 'stop'}: remind the model to capture, once per session, only after an edit
+#   ${HOOK_FILE} edited         ${claude ? 'PostToolUse on Edit|Write' : 'afterFileEdit'}: the session changed a file
+#   ${HOOK_FILE} stop           ${claude ? 'Stop' : 'stop'}: remind the model to capture, once per session, only after an edit
+#   ${HOOK_FILE} ticket         ${claude ? 'PostToolUse on Bash and tracker MCP tools' : 'postToolUse'}: a ticket was read — nudge knowledge_context, once per ticket${
+    claude ? `\n#   ${HOOK_FILE} ticket-prompt  UserPromptSubmit: the prompt names a ticket — the same nudge` : ''
+  }
 #
 # It holds no key and calls nothing; it only prints a reminder. Hook JSON is on stdin.
 in=$(tr -d '\\n\\r')
@@ -289,8 +336,46 @@ id=$(printf '%s' "$in" | sed -n 's/.*"${idField}"[[:space:]]*:[[:space:]]*"\\([A
 [ -n "$id" ] || exit 0
 dir="\${TMPDIR:-/tmp}/knowledge-capture"
 mkdir -p "$dir" 2>/dev/null || exit 0
+
+# The ticket $1 names, as a closed-alphabet key, or nothing: a URL, owner/repo#N, then KEY-123.
+ticket() {
+  k=$(printf '%s' "$1" | grep -oE '${TICKET_URL}' | head -n 1 | sed 's#.*/##')
+  [ -n "$k" ] || k=$(printf '%s' "$1" | grep -oE '${TICKET_REPO_REF}' | head -n 1 | sed 's/.*#//')
+  [ -n "$k" ] || k=$(printf '%s' "$1" | grep -oE '${TICKET_KEY}' | sed 's/^[^A-Z]*//' | grep -vE '^${NOT_A_TICKET}' | head -n 1)
+  printf '%s' "$k" | tr -cd 'A-Za-z0-9_-' | cut -c 1-64
+}
+# Once per ticket per session: mkdir is atomic, so a second read of the same ticket is silent.
+nudge() {
+  [ -n "$1" ] || exit 0
+  mkdir "$dir/$id.ticket.$1" 2>/dev/null || exit 0
+  msg=$(printf '${nudge}' "$1")
+}
+
 case "\${1:-}" in
-  edited)
+  ticket)
+    tool=$(printf '%s' "$in" | sed -n 's/.*"tool_name"[[:space:]]*:[[:space:]]*"\\([^"]*\\)".*/\\1/p')
+    # The tool's input only: its output can name any number of other tickets.
+    case "$in" in *'"tool_input"'*) ;; *) exit 0 ;; esac
+    args=\${in#*'"tool_input"'}
+    args=\${args%%'"tool_response"'*}
+    args=\${args%%'"tool_output"'*}
+    case "$tool" in
+      Bash | Shell)
+        cmd=$(printf '%s' "$args" | grep -oE '(gh|glab|jira) issue view [^"]*' | head -n 1)
+        [ -n "$cmd" ] || exit 0
+        k=$(ticket "$cmd")
+        [ -n "$k" ] || k=$(printf '%s' "$cmd" | sed -n 's/^[a-z]* issue view \\([0-9][0-9]*\\).*/\\1/p')
+        ;;
+      *)
+        printf '%s' "$tool" | grep -qiE 'jira|linear|atlassian|issue|ticket' || exit 0
+        k=$(ticket "$args")
+        [ -n "$k" ] || k=$(printf '%s' "$args" | grep -oE '"(issue_number|issueNumber|issue_id|issueId|iid|number)"[[:space:]]*:[[:space:]]*"?[0-9]+' | head -n 1 | grep -oE '[0-9]+$')
+        ;;
+    esac
+    nudge "$k"
+    ${emitNudge('PostToolUse')}
+    ;;
+${claude ? promptCase : ''}  edited)
     : >"$dir/$id.edited"
     ;;
   stop)

@@ -16,6 +16,7 @@ import { MemoryBanksService } from './memory-banks.service.js';
 import type { RetainItem } from './memory-facts.js';
 import { MemoryRecallService } from './memory-recall.service.js';
 import { MemoryRetainService } from './memory-retain.service.js';
+import type { RecallResult } from './memory-wire.js';
 
 export const personalMemoryBankId = (
   agentKey: string,
@@ -71,19 +72,26 @@ export function memoryTargets(
     mission:
       'Remember this user’s durable preferences, decisions and working context for this agent. These are not shared project requirements.',
   };
-  const project: MemoryTarget | null = input.projectId
-    ? {
-        kind: 'project',
-        bankId: projectMemoryBankId(input.projectId),
-        projectId: input.projectId,
-        agentKey: null,
-        ownerId: null,
-        name: 'Project memory',
-        mission:
-          'Remember durable requirements, constraints, decisions and lessons learned by agents working in this project. Keep personal preferences out.',
-      }
-    : null;
-  return project ? [personal, project] : [personal];
+  return input.projectId ? [personal, projectTarget(input.projectId)] : [personal];
+}
+
+function projectTarget(projectId: string): MemoryTarget {
+  return {
+    kind: 'project',
+    bankId: projectMemoryBankId(projectId),
+    projectId,
+    agentKey: null,
+    ownerId: null,
+    name: 'Project memory',
+    mission:
+      'Remember durable requirements, constraints, decisions and lessons learned by agents working in this project. Keep personal preferences out.',
+  };
+}
+
+/** One memory a project bank handed back for ticket context (#1194), with the bank it came from. */
+export interface ProjectRecall {
+  bankId: string;
+  result: RecallResult;
 }
 
 @Injectable()
@@ -168,6 +176,42 @@ export class MemoryRuntimeService {
         error: String(error),
       });
       return none;
+    }
+  }
+
+  /**
+   * Ticket context (#1194): the project banks of `projectIds` the caller may read, never a personal one — a CLI caller
+   * has no runtime personal bank. Only memories that passed the semantic floor: the keyword leg ORs the query's words,
+   * so on a ticket-length query it matches nearly anything, and "nothing relevant" must stay a possible answer.
+   * Best first across banks. Empty when memory is off or the caller may not read; never throws.
+   */
+  async recallProjects(input: { principal: Principal; workspaceId: string; projectIds: string[]; query: string; limit: number }): Promise<ProjectRecall[]> {
+    try {
+      const caller = await this.caller(input, 'viewer');
+      if (!caller || !input.projectIds.length || !input.query.trim()) return [];
+      const visible = await this.access.visible(caller.scope, input.projectIds.map(projectTarget));
+      const perBank = await Promise.all(
+        visible.map(async (target) => {
+          const bank = await this.banks.runtimeBank(caller, target, { create: false });
+          if (!bank) return [];
+          const { results } = await this.recall.recall(bank, {
+            query: input.query,
+            maxTokens: PROJECT_RECALL_TOKENS,
+            preferObservations: true,
+            entities: false,
+            userId: input.principal.userId,
+            minScores: { semantic: this.minSemantic },
+          });
+          return results.filter((r) => r.scores?.semantic != null).map((result) => ({ bankId: target.bankId, result }));
+        }),
+      );
+      return perBank
+        .flat()
+        .sort((a, b) => (b.result.scores?.semantic ?? 0) - (a.result.scores?.semantic ?? 0))
+        .slice(0, input.limit);
+    } catch (error) {
+      this.logger.warn({ msg: 'ticket context memory skipped', workspaceId: input.workspaceId, error: String(error) });
+      return [];
     }
   }
 
@@ -273,7 +317,7 @@ export class MemoryRuntimeService {
 
   /** Runtime memory is best-effort. In particular a viewer recalls but does not retain, matching the public memory API. */
   private async caller(
-    input: AgentMemoryInput,
+    input: Pick<AgentMemoryInput, 'principal' | 'workspaceId' | 'audience'>,
     role: MemoryRole,
   ): Promise<MemoryCaller | null> {
     try {

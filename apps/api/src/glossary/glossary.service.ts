@@ -524,7 +524,7 @@ export class GlossaryService {
 const nameLock = (workspaceId: string, projectId: string | null) => `glossary-names:${projectId ?? workspaceId}`;
 
 /** `aliases` is Json (the schema uses no Postgres arrays) — read it defensively. */
-function readAliases(raw: unknown): string[] {
+export function readAliases(raw: unknown): string[] {
   return Array.isArray(raw) ? raw.filter((a): a is string => typeof a === 'string') : [];
 }
 

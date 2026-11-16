@@ -27,6 +27,10 @@ export interface RecordedSearch {
   projectIds: string[];
   /** Result document ids in rank order; the first 10 are kept. */
   resultDocIds: string[];
+  /** A ticket-context answer's size (#1195). */
+  resultTokens?: number;
+  /** Results beyond the pages, when there are any (a context answer's terms and memories): 0 still means nothing found. */
+  resultCount?: number;
   durationMs: number;
 }
 
@@ -162,8 +166,9 @@ export class AnalyticsRecorder {
           queryText: text,
           queryHash: queryHashOf(text),
           mode: s.mode,
-          resultCount: s.resultDocIds.length,
+          resultCount: s.resultCount ?? s.resultDocIds.length,
           resultDocIds: s.resultDocIds.slice(0, 10),
+          resultTokens: s.resultTokens ?? null,
           channel: channelFor(caller),
           readerKey: this.readerKey(caller, s.workspaceId),
           apiKeyId: caller.principal.apiKey?.id ?? null,

@@ -19,6 +19,7 @@ import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import {
   ANALYTICS_TRAFFIC_FILTERS,
+  CONTEXT_FOLLOW_UP_HOURS,
   TRAFFIC_CLASSES,
   type AnalyticsAgentsResponse,
   type AnalyticsOverviewResponse,
@@ -177,6 +178,24 @@ const operationRows = computed<AnalyticsListRow[]>(() =>
   })),
 )
 const questionPoints = computed(() => (agents.value?.questionSeries ?? []).map((p) => ({ date: p.date, values: [p.count] })))
+
+/** Ticket context (#1195): the window's numbers, and injections per day across channels. */
+const contextStats = computed(() => {
+  const c = agents.value?.context
+  if (!c) return []
+  const pct = (v: number | null) => (v === null ? '—' : formatPercent(v))
+  return [
+    { key: 'injections', value: formatNumber(c.injections) },
+    { key: 'medianTokens', value: c.medianTokens === null ? '—' : t('analytics.agents.tokensValue', { n: formatNumber(c.medianTokens) }) },
+    { key: 'emptyRate', value: pct(c.emptyRate) },
+    { key: 'followUpRate', value: pct(c.followUpRate) },
+  ]
+})
+const contextPoints = computed(() => {
+  const byDay = new Map<string, number>()
+  for (const d of agents.value?.context.days ?? []) byDay.set(d.date, (byDay.get(d.date) ?? 0) + d.injections)
+  return [...byDay].map(([date, n]) => ({ date, values: [n] }))
+})
 </script>
 
 <template>
@@ -366,6 +385,37 @@ const questionPoints = computed(() => (agents.value?.questionSeries ?? []).map((
               :point-title="(date, [n]) => t('analytics.agents.questionsPoint', { date, n })"
             />
             <p v-else class="text-sm text-muted-foreground">{{ t('analytics.agents.noQuestions') }}</p>
+          </section>
+
+          <section class="space-y-4 rounded-xl border bg-card p-5" :aria-label="t('analytics.agents.context')">
+            <div class="space-y-0.5">
+              <h3 class="text-sm font-medium">{{ t('analytics.agents.context') }}</h3>
+              <p class="text-xs text-muted-foreground">{{ t('analytics.agents.contextHint') }}</p>
+            </div>
+            <template v-if="agents.context.injections > 0">
+              <dl class="grid grid-cols-2 gap-x-8 gap-y-4 sm:grid-cols-4">
+                <div v-for="s in contextStats" :key="s.key" class="min-w-0">
+                  <dt
+                    class="truncate text-xs text-muted-foreground"
+                    :title="t(`analytics.agents.contextMetrics.${s.key}.hint`, { hours: CONTEXT_FOLLOW_UP_HOURS })"
+                  >
+                    {{ t(`analytics.agents.contextMetrics.${s.key}.label`) }}
+                  </dt>
+                  <dd class="text-xl font-semibold tabular-nums">{{ s.value }}</dd>
+                </div>
+              </dl>
+              <DailyBars
+                :from="agents.from"
+                :to="agents.to"
+                :points="contextPoints"
+                :segments="[{ class: TRAFFIC_BAR.agent }]"
+                :height="64"
+                :day-label="formatDayMonth"
+                :label="t('analytics.agents.contextChartLabel', { n: days })"
+                :point-title="(date, [n]) => t('analytics.agents.contextPoint', { date, n })"
+              />
+            </template>
+            <p v-else class="text-sm text-muted-foreground">{{ t('analytics.agents.noContext') }}</p>
           </section>
 
           <AnalyticsList

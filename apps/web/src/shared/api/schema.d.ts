@@ -2680,6 +2680,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** What the workspace already knows about a ticket: pages, glossary terms and project memory as pointers, within a token budget */
+        post: operations["ContextController_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/graph/query": {
         parameters: {
             query?: never;
@@ -9322,6 +9339,20 @@ export interface components {
             expandGraph?: components["schemas"]["ExpandGraphDto"];
             filters?: components["schemas"]["SearchFiltersDto"];
         };
+        ContextDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /** @description A condensed query: the ticket's title and key terms, not the raw ticket */
+            query: string;
+            /** @description The repo's git remote (git@host:org/repo.git, https://host/org/repo); memory comes from the projects whose code or docs connector reads it */
+            repo?: string;
+            /** @description Projects to read memory from, beside what repo resolves to */
+            projectIds?: string[];
+            /** @description Page, term or memory ids an earlier call already showed */
+            exclude?: string[];
+            /** @description Tokens for the answer; 600 when omitted, clamped to 200–2000 */
+            budget?: number;
+        };
         GraphQueryDto: {
             /** Format: uuid */
             workspaceId: string;
@@ -12240,6 +12271,21 @@ export interface components {
                 count: number;
             }[];
             operations: components["schemas"]["AnalyticsOperationRow"][];
+            context: components["schemas"]["AnalyticsContextResponse"];
+        };
+        AnalyticsContextResponse: {
+            injections: number;
+            medianTokens: number | null;
+            emptyRate: number | null;
+            followUpRate: number | null;
+            days: {
+                date: string;
+                channel: string;
+                injections: number;
+                medianTokens: number | null;
+                emptyRate: number | null;
+                followUpRate: number | null;
+            }[];
         };
         AnalyticsDayPoint: {
             date: string;
@@ -13740,6 +13786,37 @@ export interface components {
         };
         /** @enum {string} */
         ConnectorWorkItemState: "open" | "closed" | "merged" | "draft";
+        ContextMemory: {
+            id: string;
+            /** @enum {string} */
+            status: "unverified";
+            bankId: string;
+            occurredAt: string | null;
+            text: string;
+        };
+        ContextPage: {
+            documentId: string;
+            title: string;
+            status: components["schemas"]["SourceVerificationState"];
+            match?: string;
+            excerpt: string;
+        };
+        ContextResponse: {
+            pages: components["schemas"]["ContextPage"][];
+            memories: components["schemas"]["ContextMemory"][];
+            terms: components["schemas"]["ContextTerm"][];
+            projectIds: string[];
+            tokens: number;
+            empty: boolean;
+            /** @enum {string} */
+            reason?: "nothing-relevant";
+        };
+        ContextTerm: {
+            termId: string;
+            term: string;
+            definition: string;
+            documentId: string | null;
+        };
         CostAmount: {
             micros: number;
             currency: components["schemas"]["CostCurrency"];
@@ -26814,6 +26891,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SearchResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ContextController_run: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContextDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContextResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

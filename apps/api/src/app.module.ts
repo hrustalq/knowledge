@@ -19,6 +19,7 @@ import { EmbedsModule } from './embeds/embeds.module.js';
 import { AvatarsModule } from './avatars/avatars.module.js';
 import { ImageProxyModule } from './image-proxy/image-proxy.module.js';
 import { SearchModule } from './search/search.module.js';
+import { ContextModule } from './context/context.module.js';
 import { EntitiesModule } from './entities/entities.module.js';
 import { ActivityModule } from './activity/activity.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
@@ -77,6 +78,7 @@ import { MemoryModule } from './memory/memory.module.js';
     AvatarsModule,
     ImageProxyModule,
     SearchModule,
+    ContextModule,
     EntitiesModule,
     GraphQueryModule,
     IngestionAdminModule,

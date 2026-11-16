@@ -4,9 +4,11 @@ import { Prisma } from '@prisma/client';
 import {
   ANALYTICS_DEFAULT_DAYS,
   ANALYTICS_MAX_DAYS,
+  CONTEXT_FOLLOW_UP_HOURS,
   TRAFFIC_CLASSES,
   channelsForTrafficClass,
   type AnalyticsAgentsResponse,
+  type AnalyticsContextResponse,
   type AnalyticsDayPoint,
   type AnalyticsKeyRow,
   type AnalyticsOperationRow,
@@ -189,11 +191,12 @@ export class AnalyticsQueryService {
   async agents(workspaceId: string, days = ANALYTICS_DEFAULT_DAYS): Promise<AnalyticsAgentsResponse> {
     const to = new Date();
     const from = new Date(to.getTime() - clampDays(days) * DAY_MS);
-    const [tools, keys, questionSeries, operations] = await Promise.all([
+    const [tools, keys, questionSeries, operations, context] = await Promise.all([
       this.tools(workspaceId, from, DASHBOARD_LIMIT),
       this.keys(workspaceId, from, DASHBOARD_LIMIT),
       this.questionSeries(workspaceId, from),
       this.operations(workspaceId, from),
+      this.context(workspaceId, from),
     ]);
     return {
       workspaceId,
@@ -204,6 +207,7 @@ export class AnalyticsQueryService {
       assistantQuestions: questionSeries.reduce((n, d) => n + d.count, 0),
       questionSeries,
       operations,
+      context,
     };
   }
 
@@ -360,6 +364,57 @@ export class AnalyticsQueryService {
     return rows.map((r) => ({ apiKeyId: r.id, name: r.name, prefix: r.prefix, mcpCalls: r.mcp, views: r.views, searches: r.searches }));
   }
 
+  /**
+   * Ticket-context answers (#1195) per UTC day and channel, and over the window.
+   * A page counts as followed up when the key that was handed it — or, without
+   * a key, the same reader — opened it over the same channel within
+   * CONTEXT_FOLLOW_UP_HOURS. MCP over HTTP carries no session id, so key + time
+   * is the whole attribution.
+   */
+  async context(workspaceId: string, from: Date): Promise<AnalyticsContextResponse> {
+    const rows = await this.prisma.$queryRaw<
+      Array<{ date: string | null; channel: string | null; injections: number; median: number | null; empty: number; injected: number; followed: number }>
+    >`
+      WITH inj AS (
+        SELECT sq.id, sq.channel, sq.created_at, sq.result_tokens, sq.result_count, sq.result_doc_ids, sq.api_key_id, sq.reader_key
+          FROM search_queries sq
+         WHERE sq.workspace_id = ${workspaceId}::uuid AND sq.created_at >= ${from}::timestamptz AND sq.mode = 'context'
+      ),
+      per AS (
+        SELECT inj.id, count(p.doc)::int AS injected,
+               count(p.doc) FILTER (WHERE EXISTS (
+                 SELECT 1 FROM page_views pv
+                  WHERE pv.workspace_id = ${workspaceId}::uuid AND pv.document_id = p.doc::uuid AND pv.channel = inj.channel
+                    AND pv.created_at >= inj.created_at
+                    AND pv.created_at < inj.created_at + make_interval(hours => ${CONTEXT_FOLLOW_UP_HOURS}::int)
+                    AND ((inj.api_key_id IS NOT NULL AND pv.api_key_id = inj.api_key_id)
+                      OR (inj.api_key_id IS NULL AND inj.reader_key IS NOT NULL AND pv.reader_key = inj.reader_key))
+               ))::int AS followed
+          FROM inj LEFT JOIN LATERAL jsonb_array_elements_text(inj.result_doc_ids) AS p(doc) ON TRUE
+         GROUP BY inj.id
+      )
+      SELECT to_char(date_trunc('day', inj.created_at AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS date, inj.channel,
+             count(*)::int AS injections,
+             percentile_cont(0.5) WITHIN GROUP (ORDER BY inj.result_tokens) AS median,
+             count(*) FILTER (WHERE inj.result_count = 0)::int AS empty,
+             coalesce(sum(per.injected), 0)::int AS injected,
+             coalesce(sum(per.followed), 0)::int AS followed
+        FROM inj JOIN per ON per.id = inj.id
+       GROUP BY GROUPING SETS ((to_char(date_trunc('day', inj.created_at AT TIME ZONE 'UTC'), 'YYYY-MM-DD'), inj.channel), ())
+       ORDER BY 1 NULLS FIRST, 2`;
+    const row = (r: (typeof rows)[number] | undefined) => ({
+      injections: r?.injections ?? 0,
+      medianTokens: r?.median == null ? null : Math.round(r.median),
+      emptyRate: rate(r?.empty ?? 0, r?.injections ?? 0),
+      followUpRate: rate(r?.followed ?? 0, r?.injected ?? 0),
+    });
+    const total = rows.find((r) => r.date === null);
+    return {
+      ...row(total),
+      days: rows.filter((r) => r.date !== null).map((r) => ({ date: r.date!, channel: r.channel!, ...row(r) })),
+    };
+  }
+
   /** Model calls by AI usage operation — the closed `AiUsageOperation` set, so never long. */
   private operations(workspaceId: string, from: Date): Promise<AnalyticsOperationRow[]> {
     return this.prisma.$queryRaw`
@@ -482,6 +537,8 @@ function searchCtesSql(workspaceId: string, from: Date, traffic: AnalyticsTraffi
                OR sq.created_at - lag(sq.created_at) OVER w > make_interval(secs => ${REPEAT_SECONDS})) AS kept
         FROM search_queries sq
        WHERE sq.workspace_id = ${workspaceId}::uuid AND sq.created_at >= ${from}::timestamptz AND ${channel}
+         -- A ticket-context answer (#1195) is not a search a person ran: it has its own rollup.
+         AND sq.mode <> 'context'
       WINDOW w AS (PARTITION BY sq.reader_key, sq.query_hash ORDER BY sq.created_at)
     ),
     c AS (

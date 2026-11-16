@@ -4,7 +4,8 @@
  * a drag. It is also where a child page starts (issue #69): with a parent
  * already chosen, rather than picked afterwards in the editor's settings.
  *
- * It appears on hover and on focus-within, and it takes the status dot's slot
+ * It appears on hover and on focus-within (always, on a device with no hover:
+ * touch has no other way to reach Move to…, #1031), and it takes the status dot's slot
  * rather than a slot of its own — on a 256px rail, a second permanent
  * affordance is paid for out of the title, and a truncated title costs more
  * than a hidden control.
@@ -84,7 +85,7 @@ const documents = useDocumentsStore()
       <button
         v-bind="$attrs"
         type="button"
-        class="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground relative grid size-5 shrink-0 place-items-center rounded after:absolute after:-inset-0.5 disabled:opacity-40 data-[state=open]:grid data-[state=open]:opacity-100"
+        class="kn-hit text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground relative grid size-5 shrink-0 place-items-center rounded pointer-fine:after:absolute pointer-fine:after:-inset-0.5 disabled:opacity-40 data-[state=open]:grid data-[state=open]:opacity-100"
         :aria-label="t('tree.dnd.rowMenu', { title })"
       >
         <MoreHorizontal class="size-3.5" />

@@ -183,7 +183,7 @@ const dnd = useTreeDndRow({
         :title="node.title"
         :disabled="dnd.isLocked.value"
         :restricted="node.restricted"
-        class="opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100"
+        class="transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:hover)]:opacity-0"
       />
     </div>
 

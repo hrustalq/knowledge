@@ -53,6 +53,8 @@ in the pull request that introduces them — see
   their content into a short inner scroll, and the revision list hides its hash, message and parents columns. (#1054)
 - API reference on a phone: an operation's entity key truncates inside its card instead of overflowing it and hiding
   the copy button. (#1055)
+- Editor on a phone: the formatting bubble over a selection fits the screen; its status colours move to the
+  toolbar's More menu below 416px. (#1056)
 
 ## [0.56.0] — 2026-11-16
 

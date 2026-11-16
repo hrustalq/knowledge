@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { BadRequestException, ServiceUnavailableException } from '@nestjs/common';
-import { extractionBatches, extractionPrompt, readFacts, readRetainItems, resolveObservationScopes, tagsWhere, type RetainItem } from '../src/memory/memory-facts.js';
+import { DURABLE_ONLY_RULE, extractionBatches, extractionPrompt, readFacts, readRetainItems, resolveObservationScopes, tagsWhere, type RetainItem } from '../src/memory/memory-facts.js';
 import { MemoryIntakeService } from '../src/memory/memory-intake.service.js';
 import { MemoryRetainService } from '../src/memory/memory-retain.service.js';
 
@@ -121,7 +121,7 @@ describe('fact extraction, the pure half (#986)', () => {
 });
 
 describe('MemoryRetainService (#986)', () => {
-  function service(opts: { routed?: boolean; answer?: string | Error; budget?: Error; ready?: boolean } = {}) {
+  function service(opts: { routed?: boolean; answer?: string | Error | ((prompt: string) => string); budget?: Error; ready?: boolean } = {}) {
     const created: { units: Array<Record<string, unknown>>; entities: Array<Record<string, unknown>> } = { units: [], entities: [] };
     const prisma = {
       withTransaction: (fn: () => Promise<unknown>) => fn(),
@@ -139,9 +139,10 @@ describe('MemoryRetainService (#986)', () => {
     const agents = { resolve: vi.fn(async () => ({ enabled: true, instructions: 'split', config: { enabled: true, modelId: opts.routed ? 'm1' : null } })) };
     const usage = { assertWithinBudget: vi.fn(async () => { if (opts.budget) throw opts.budget; }) };
     const client = {
-      chatWithUsage: vi.fn(async () => {
+      chatWithUsage: vi.fn(async (_ctx: unknown, messages: Array<{ content: string }>) => {
         if (opts.answer instanceof Error) throw opts.answer;
-        return { content: opts.answer ?? '{}', tokens: { promptTokens: 10, completionTokens: 5, totalTokens: 15, estimated: false } };
+        const content = typeof opts.answer === 'function' ? opts.answer(messages[1]!.content) : opts.answer;
+        return { content: content ?? '{}', tokens: { promptTokens: 10, completionTokens: 5, totalTokens: 15, estimated: false } };
       }),
     };
     const units = { deleteBareObservations: vi.fn(async () => [] as string[]), invalidateFacts: vi.fn(async () => [] as string[]), addScopeMemberships: vi.fn(async () => undefined) };
@@ -222,6 +223,21 @@ describe('MemoryRetainService (#986)', () => {
     const ordinary = service({ routed: true, answer: empty });
     expect((await ordinary.retain([item({ content: 'Thanks.' })])).units).toBe(1);
     expect(ordinary.created.units[0]!.text).toBe('Thanks.');
+  });
+
+  it('durable is an instruction to the memorist: chatter beside a durable preference in one item is dropped (#1169)', async () => {
+    // The fixture memorist follows the prompt: told durable-only, it keeps the preference; otherwise both facts.
+    const memorist = (prompt: string) =>
+      JSON.stringify({
+        items: [{ item: 'I1', facts: [{ text: 'Alice prefers pnpm over npm.', type: 'world' }, ...(prompt.includes(DURABLE_ONLY_RULE) ? [] : [{ text: 'The build finished at 14:02.', type: 'experience' }])] }],
+      });
+    const content = 'Request:\nUse pnpm from now on, I prefer it over npm. Is the build done?\n\nOutcome:\nNoted. The build finished at 14:02.';
+    const durable = service({ routed: true, answer: memorist });
+    await durable.retain([item({ content })], { durableOnly: true });
+    expect(durable.created.units.map((u) => u.text)).toEqual(['Alice prefers pnpm over npm.']);
+    const all = service({ routed: true, answer: memorist });
+    await all.retain([item({ content })]);
+    expect(all.created.units.map((u) => u.text)).toEqual(['Alice prefers pnpm over npm.', 'The build finished at 14:02.']);
   });
 
   it('durable without an extraction model keeps the verbatim fallback', async () => {

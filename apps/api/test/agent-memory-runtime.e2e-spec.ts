@@ -76,11 +76,11 @@ describe('agent memory runtime (e2e, #1167)', () => {
     }
   }
 
-  async function ask(content: string): Promise<string> {
-    const thread = await as(http().post('/v1/assistant/threads'))
-      .send({ workspaceId: WS, documentId })
-      .expect(201);
-    const reply = await as(http().post(`/v1/assistant/threads/${thread.body.thread.id}/messages`))
+  async function ask(content: string, threadId?: string): Promise<string> {
+    const thread =
+      threadId ??
+      ((await as(http().post('/v1/assistant/threads')).send({ workspaceId: WS, documentId }).expect(201)).body.thread.id as string);
+    const reply = await as(http().post(`/v1/assistant/threads/${thread}/messages`))
       .send({ content, mode: 'ask' })
       .expect(201);
     expect(reply.body.enabled).toBe(true);
@@ -241,6 +241,26 @@ describe('agent memory runtime (e2e, #1167)', () => {
     const text = lastUser(grounded!);
     expect(text).toContain('Your earlier work with this user:');
     expect(text).toContain(fact);
+  });
+
+  it('keeps a thread personal once a turn in it recalled personal memory, even when a later turn recalls none (#1169)', async () => {
+    const personalBank = `agent:researcher:user:${alice.id}`;
+    const thread = (await as(http().post('/v1/assistant/threads')).send({ workspaceId: WS, documentId }).expect(201)).body.thread.id as string;
+    const from = seen.length;
+    const first = await ask(`Again, the ${nonce} retry limit?`, thread);
+    expect(lastUser(requestWith(from, 'Your earlier work with this user:')!)).toContain(fact);
+    await waitForUnits(personalBank, `assistant-turn:${first}`);
+    expect((await prisma.assistantThread.findUniqueOrThrow({ where: { id: thread } })).privateContextAt).not.toBeNull();
+
+    // Nothing personal left to recall: turn 2 alone would qualify for the project bank.
+    await prisma.memoryBank.deleteMany({ where: { workspaceId: WS, bankId: personalBank } });
+    const before = seen.length;
+    const second = await ask(`And the ${nonce} timeout?`, thread);
+    expect(seen.slice(before).some((req) => lastUser(req).includes('Your earlier work with this user:'))).toBe(false);
+    await waitForUnits(personalBank, `assistant-turn:${second}`);
+    // Personal is retained first, project after it in the same pass: give the project copy time to (wrongly) land.
+    await new Promise((r) => setTimeout(r, 2_000));
+    expect(await units(`project:${projectId}`, `assistant-turn:${second}`)).toEqual([]);
   });
 
   it('grounds a direct-call background run on its subject title, and retains its outcome to the project bank only', async () => {

@@ -46,6 +46,10 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- Once an assistant turn draws on the asker's personal memory, a draft or an attachment, later turns in the same thread
+  are no longer copied to the project's memory: an answer can repeat what an earlier one was told. Agents on the
+  `durable` memory policy now keep only the durable facts of an outcome, dropping status updates and chatter that came
+  with them. (#1169)
 - Background agent runs recalled and retained no memory at all: the memory service was never injected into the
   agent worker, with no error. Runs now use it as documented. (#1167)
 - Chat harvests now keep glossary terms in the thread’s spelling when decisions and answers are written in the
@@ -53,6 +57,9 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- The assistant-thread migration adds one nullable column and marks every existing thread as carrying private input,
+  so continuing a thread started before this release retains to personal memory only. It is expand-only and safe for
+  a code rollback. (#1169)
 - `MEMORY_RERANKER_SCORE` (`logit` default, or `normalized` for endpoints that already return 0–1 scores) is new and
   optional. The mental-model key migration is a primary-key swap on a small table; a code rollback past it needs the
   previous key restored by hand. A bank created through the memory API under a reserved runtime id before this release

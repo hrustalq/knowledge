@@ -168,7 +168,6 @@ describe('MemoryRuntimeService', () => {
     const { svc, banks, retain } = service();
     const turn = {
       ...input,
-      locale: 'en' as const,
       sourceId: 'turn-1',
       sourceKind: 'assistant-turn' as const,
       shareWithProject: true,
@@ -208,7 +207,6 @@ describe('MemoryRuntimeService', () => {
     const { svc, retain } = service({ memoryPolicy: { mode: 'durable' } });
     await svc.remember({
       ...input,
-      locale: 'en',
       sourceId: 'turn-2',
       sourceKind: 'assistant-turn',
       shareWithProject: true,
@@ -227,7 +225,6 @@ describe('MemoryRuntimeService', () => {
     });
     await svc.remember({
       ...input,
-      locale: 'en',
       sourceId: 'turn-3',
       sourceKind: 'assistant-turn',
       shareWithProject: true,
@@ -246,7 +243,6 @@ describe('MemoryRuntimeService', () => {
     });
     await personal.svc.remember({
       ...input,
-      locale: 'en',
       sourceId: 'turn-4',
       sourceKind: 'assistant-turn',
       shareWithProject: true,
@@ -264,7 +260,6 @@ describe('MemoryRuntimeService', () => {
     });
     await project.svc.remember({
       ...input,
-      locale: 'en',
       sourceId: 'run-4',
       sourceKind: 'agent-run',
       shareWithProject: true,
@@ -285,7 +280,6 @@ describe('MemoryRuntimeService', () => {
     });
     await viewer.svc.remember({
       ...input,
-      locale: 'en',
       sourceId: 'turn-1',
       sourceKind: 'assistant-turn',
       shareWithProject: true,
@@ -304,7 +298,6 @@ describe('MemoryRuntimeService', () => {
     await expect(
       svc.remember({
         ...input,
-        locale: 'en',
         sourceId: 'run-5',
         sourceKind: 'agent-run',
         shareWithProject: true,
@@ -318,7 +311,6 @@ describe('MemoryRuntimeService', () => {
 
   const turn = {
     ...input,
-    locale: 'en' as const,
     sourceId: 'turn-9',
     sourceKind: 'assistant-turn' as const,
     shareWithProject: true,

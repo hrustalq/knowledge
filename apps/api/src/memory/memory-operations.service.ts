@@ -1,12 +1,11 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, type MemoryBank, type MemoryOperation } from '@prisma/client';
-import { UUID_RE, type Locale } from '@knowledge/contracts';
+import { UUID_RE } from '@knowledge/contracts';
 import { randomUUID } from 'node:crypto';
 import { requeueStale, staleFailure } from '../common/requeue-stale.js';
 import { withSubjectLock } from '../common/subject-lock.js';
 import type { Env } from '../config/env.js';
-import { asLocale } from '../i18n/locale.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { MemoryConsolidationService } from './memory-consolidation.service.js';
@@ -83,7 +82,7 @@ export class MemoryOperationsService {
    * it already made and creates no work; an id another operation holds is a 409.
    * The items are masked here, before the row exists.
    */
-  async submit(bank: MemoryBank, input: { items: RetainItem[]; userId: string; locale: Locale; operationId?: string | null }): Promise<string> {
+  async submit(bank: MemoryBank, input: { items: RetainItem[]; userId: string; operationId?: string | null }): Promise<string> {
     const id = input.operationId ?? randomUUID();
     try {
       await this.prisma.memoryOperation.create({
@@ -94,7 +93,6 @@ export class MemoryOperationsService {
           payload: maskItems(input.items) as unknown as Prisma.InputJsonArray,
           itemsCount: input.items.length,
           createdBy: input.userId,
-          locale: input.locale,
         },
       });
     } catch (e) {
@@ -114,7 +112,7 @@ export class MemoryOperationsService {
    * the bank, so a client is told why instead of polling an operation that
    * does nothing. A pass already waiting is returned, not doubled.
    */
-  async consolidate(bank: MemoryBank, input: { userId: string; locale: Locale; observationScopes?: unknown }): Promise<ConsolidationResponse> {
+  async consolidate(bank: MemoryBank, input: { userId: string; observationScopes?: unknown }): Promise<ConsolidationResponse> {
     const parsed = readObservationScopes(input.observationScopes);
     if (parsed != null && !Array.isArray(parsed)) throw new BadRequestException(t('error.memory.configValueInvalid', { key: 'observation_scopes', type: 'a list of string tag lists or null' }));
     const observationScopes = parsed as string[][] | undefined;
@@ -126,7 +124,7 @@ export class MemoryOperationsService {
       const waiting = await this.prisma.memoryOperation.findFirst({ where: { bankId: bank.id, type: 'consolidation', status: 'queued', payload: { equals: payload } }, select: { id: true } });
       if (waiting) return { id: waiting.id, deduplicated: true };
       const row = await this.prisma.memoryOperation.create({
-        data: { workspaceId: bank.workspaceId, bankId: bank.id, type: 'consolidation', payload, itemsCount: pending, createdBy: input.userId, locale: input.locale },
+        data: { workspaceId: bank.workspaceId, bankId: bank.id, type: 'consolidation', payload, itemsCount: pending, createdBy: input.userId },
       });
       return { id: row.id, deduplicated: false };
     });
@@ -176,7 +174,6 @@ export class MemoryOperationsService {
         workspaceId: row.workspaceId,
         bank: row.bank,
         userId: row.createdBy,
-        locale: asLocale(row.locale),
         items: row.payload as unknown as RetainItem[],
         operationId: row.id,
       });

@@ -147,7 +147,7 @@ describe('MemoryRetainService (#986)', () => {
     };
     const units = { deleteBareObservations: vi.fn(async () => [] as string[]), invalidateFacts: vi.fn(async () => [] as string[]), addScopeMemberships: vi.fn(async () => undefined) };
     const svc = new MemoryRetainService(prisma as never, graph as never, aliases as never, embeddings as never, agents as never, usage as never, client as never, units as never);
-    const retain = (items: RetainItem[], extra: { verbatim?: boolean; durableOnly?: boolean; consolidated?: boolean; guard?: () => Promise<boolean> } = {}) => svc.retain({ workspaceId: WS, bank: { id: 'bank-1', mission: '' }, userId: 'u1', locale: 'en', items, ...extra });
+    const retain = (items: RetainItem[], extra: { verbatim?: boolean; durableOnly?: boolean; consolidated?: boolean; guard?: () => Promise<boolean> } = {}) => svc.retain({ workspaceId: WS, bank: { id: 'bank-1', mission: '' }, userId: 'u1', items, ...extra });
     return { svc, retain, created, prisma, graph, client, embeddings };
   }
 
@@ -187,7 +187,7 @@ describe('MemoryRetainService (#986)', () => {
   it('asks the model to keep the item’s language, not the caller’s: no reply-language directive (#1022)', async () => {
     const answer = JSON.stringify({ items: [{ item: 'I1', facts: [{ text: 'Alice leads billing.', type: 'world' }] }] });
     const { svc, client } = service({ routed: true, answer });
-    await svc.retain({ workspaceId: WS, bank: { id: 'bank-1', mission: '' }, userId: 'u1', locale: 'ru', items: [item({ content: 'Alice leads billing.' })] });
+    await svc.retain({ workspaceId: WS, bank: { id: 'bank-1', mission: '' }, userId: 'u1', items: [item({ content: 'Alice leads billing.' })] });
     const [[ctx]] = client.chatWithUsage.mock.calls as unknown as [[{ locale: string }]];
     expect(ctx.locale).toBe('source');
   });
@@ -295,7 +295,7 @@ describe('MemoryRetainService (#986)', () => {
 
   it('an async retain’s run does not mask twice, and replaces what an interrupted run of it wrote', async () => {
     const { svc, prisma, created } = service();
-    await svc.retain({ workspaceId: WS, bank: { id: 'bank-1', mission: '' }, userId: 'u1', locale: 'en', operationId: 'op-1', items: [item({ content: 'пароль [SECRET_2] и [SECRET_1]', append: true })] });
+    await svc.retain({ workspaceId: WS, bank: { id: 'bank-1', mission: '' }, userId: 'u1', operationId: 'op-1', items: [item({ content: 'пароль [SECRET_2] и [SECRET_1]', append: true })] });
     // Masked when its row was written: a second pass would renumber the placeholders.
     expect(created.units[0]).toMatchObject({ text: 'пароль [SECRET_2] и [SECRET_1]', operationId: 'op-1' });
     expect(prisma.memoryUnit.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { bankId: 'bank-1', factType: { not: 'observation' }, OR: [{ documentId: { in: [] } }, { operationId: 'op-1' }] } }));
@@ -319,7 +319,7 @@ describe('MemoryIntakeService.retainItems, the door for prebuilt items (#1007)',
     const { svc, caller, calls, retainer, bank } = intake();
     expect(await svc.retainItems(caller as never, 'agent', [item()], { verbatim: true, consolidated: true })).toEqual({ bank, units: 1 });
     expect(calls).toEqual(['rate', 'ensure', 'retain']);
-    expect(retainer.retain).toHaveBeenCalledWith({ workspaceId: WS, bank, userId: 'u1', locale: 'en', items: [item()], verbatim: true, consolidated: true });
+    expect(retainer.retain).toHaveBeenCalledWith({ workspaceId: WS, bank, userId: 'u1', items: [item()], verbatim: true, consolidated: true });
   });
 
   it('splits into admit and store for a wire that writes rows between them (#1008): an empty admit may pass, an empty store calls nothing', async () => {

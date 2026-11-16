@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, UnsupportedMediaTypeException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, type MemoryBank, type MemoryOperation } from '@prisma/client';
-import { UUID_RE, type Locale } from '@knowledge/contracts';
+import { UUID_RE } from '@knowledge/contracts';
 import { randomUUID } from 'node:crypto';
 import { strToU8, zipSync } from 'fflate';
 import { z } from 'zod';
@@ -290,14 +290,14 @@ export class MemoryManagementService {
     for (const [index, file] of files.entries()) {
       const metadata = request.files_metadata?.[index] ?? {};
       const upload = await this.upload(bank, file.buffer, file.mimetype);
-      ids.push(await this.submit(bank, 'file_convert_retain', { filename: file.originalname, content_type: file.mimetype, object_key: upload.key, metadata }, caller.principal.userId, caller.principal.locale, upload.id));
+      ids.push(await this.submit(bank, 'file_convert_retain', { filename: file.originalname, content_type: file.mimetype, object_key: upload.key, metadata }, caller.principal.userId, upload.id));
     }
     return { operation_ids: ids };
   }
 
-  async submitExport(bank: MemoryBank, query: TransferQueryDto, wholeBank: boolean, userId: string, locale: Locale) {
+  async submitExport(bank: MemoryBank, query: TransferQueryDto, wholeBank: boolean, userId: string) {
     this.checkTransferFlags(query);
-    return this.submitResult(bank, wholeBank ? 'bank_export' : 'document_export', { document_ids: query.document_id ?? null, include_data: query.include_data ?? true, include_bank_config: wholeBank && (query.include_bank_config ?? true), include_knowledge_base: query.include_knowledge_base ?? false }, userId, locale);
+    return this.submitResult(bank, wholeBank ? 'bank_export' : 'document_export', { document_ids: query.document_id ?? null, include_data: query.include_data ?? true, include_bank_config: wholeBank && (query.include_bank_config ?? true), include_knowledge_base: query.include_knowledge_base ?? false }, userId);
   }
 
   async submitImport(caller: MemoryCaller, bankId: string, file: { buffer: Buffer; size: number } | undefined, query: TransferQueryDto, documentsOnly: boolean) {
@@ -310,7 +310,7 @@ export class MemoryManagementService {
       await this.access.requireBindable(caller, bank.projectId);
     }
     const upload = await this.upload(bank, file.buffer, 'application/zip');
-    return this.submitResult(bank, documentsOnly ? 'document_import' : 'bank_import', { object_key: upload.key, target_bank_id: targetBankId, mode: documentsOnly ? 'merge' : 'restore', conflict: query.on_conflict ?? query.document_conflict ?? 'skip', include_data: query.include_data ?? true, include_bank_config: query.include_bank_config ?? true }, caller.principal.userId, caller.principal.locale, upload.id);
+    return this.submitResult(bank, documentsOnly ? 'document_import' : 'bank_import', { object_key: upload.key, target_bank_id: targetBankId, mode: documentsOnly ? 'merge' : 'restore', conflict: query.on_conflict ?? query.document_conflict ?? 'skip', include_data: query.include_data ?? true, include_bank_config: query.include_bank_config ?? true }, caller.principal.userId, upload.id);
   }
 
   async submitClone(caller: MemoryCaller, bankId: string, query: TransferQueryDto) {
@@ -319,7 +319,7 @@ export class MemoryManagementService {
     if (!query.target_bank_id || query.target_bank_id === bank.bankId) throw new BadRequestException(t('error.memory.configValueInvalid', { key: 'target_bank_id', type: 'a new bank id' }));
     await this.requireFreshTarget(caller, query.target_bank_id);
     await this.access.requireBindable(caller, bank.projectId);
-    return this.submitResult(bank, 'bank_clone', { target_bank_id: query.target_bank_id, include_data: query.include_data ?? true, include_bank_config: query.include_bank_config ?? true }, caller.principal.userId, caller.principal.locale);
+    return this.submitResult(bank, 'bank_clone', { target_bank_id: query.target_bank_id, include_data: query.include_data ?? true, include_bank_config: query.include_bank_config ?? true }, caller.principal.userId);
   }
 
   async execute(row: ManagementOperation): Promise<ResultMetadata | null> {
@@ -379,7 +379,7 @@ export class MemoryManagementService {
       const items = masked.slice(offset, offset + batch.length);
       offset += batch.length;
       // The first batch replaces the document and anything an interrupted run of this operation wrote; the rest append to it.
-      const retained = await this.retainer.retain({ workspaceId: row.workspaceId, bank: row.bank, userId: row.createdBy, locale: row.locale as Locale, items, ...(i === 0 ? { operationId: row.id } : {}) });
+      const retained = await this.retainer.retain({ workspaceId: row.workspaceId, bank: row.bank, userId: row.createdBy, items, ...(i === 0 ? { operationId: row.id } : {}) });
       units += retained.units;
     }
     return { documents_imported: units ? 1 : 0, facts_imported: units, warnings: parsed.warnings };
@@ -465,7 +465,7 @@ export class MemoryManagementService {
         // ponytail: a re-run after a lost worker re-imports what the lost run finished; under `new-id` that is a second copy. Track finished documents in the operation if that ever bites.
         const documentId = exists && payload.conflict === 'new-id' ? `${document.id}-${row.id.slice(0, 8)}` : document.id;
         for (const batch of document.batches) {
-          const retained = await this.retainer.retain({ workspaceId: target.workspaceId, bank: target, userId: row.createdBy, locale: row.locale as Locale, items: batch.map((item): RetainItem => ({ ...item, documentId })), verbatim: true });
+          const retained = await this.retainer.retain({ workspaceId: target.workspaceId, bank: target, userId: row.createdBy, items: batch.map((item): RetainItem => ({ ...item, documentId })), verbatim: true });
           factsImported += retained.units;
         }
         documentsImported++;
@@ -549,15 +549,15 @@ export class MemoryManagementService {
     return { id, key };
   }
 
-  private async submit(bank: MemoryBank, type: string, payload: Prisma.InputJsonObject, userId: string, locale: Locale, id: string = randomUUID()): Promise<string> {
-    await this.prisma.memoryOperation.create({ data: { id, workspaceId: bank.workspaceId, bankId: bank.id, type, payload, itemsCount: 0, createdBy: userId, locale } });
+  private async submit(bank: MemoryBank, type: string, payload: Prisma.InputJsonObject, userId: string, id: string = randomUUID()): Promise<string> {
+    await this.prisma.memoryOperation.create({ data: { id, workspaceId: bank.workspaceId, bankId: bank.id, type, payload, itemsCount: 0, createdBy: userId } });
     // A failed enqueue leaves the row queued, and the sweeper enqueues it again.
     await this.producer.enqueue(id).catch((e: Error) => this.logger.warn(`Memory operation ${id} not enqueued, the sweeper will: ${e.message}`));
     return id;
   }
 
-  private async submitResult(bank: MemoryBank, type: string, payload: Prisma.InputJsonObject, userId: string, locale: Locale, id?: string) {
-    return { operation_id: await this.submit(bank, type, payload, userId, locale, id), status: 'pending' };
+  private async submitResult(bank: MemoryBank, type: string, payload: Prisma.InputJsonObject, userId: string, id?: string) {
+    return { operation_id: await this.submit(bank, type, payload, userId, id), status: 'pending' };
   }
 
   private async requireFreshTarget(caller: MemoryCaller, bankId: string): Promise<void> {

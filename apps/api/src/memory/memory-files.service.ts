@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { MemoryBank } from '@prisma/client';
-import type { Locale } from '@knowledge/contracts';
 import { createMasker } from '../common/mask.js';
 import { lockSubject, withSubjectLock } from '../common/subject-lock.js';
 import type { Env } from '../config/env.js';
@@ -174,7 +173,7 @@ export class MemoryFilesService {
         select: { id: true },
       });
     });
-    await this.reindex(bank, file.id, caller.principal.locale);
+    await this.reindex(bank, file.id);
     return `File created successfully at: ${shown}`;
   }
 
@@ -203,7 +202,7 @@ export class MemoryFilesService {
       await this.prisma.memoryFile.update({ where: { id: file.id }, data: { content, updatedBy: caller.principal.userId } });
       return { id: file.id, content, line: changed.line };
     });
-    await this.reindex(bank, done.id, caller.principal.locale);
+    await this.reindex(bank, done.id);
     return answer(done.content, done.line);
   }
 
@@ -315,7 +314,7 @@ export class MemoryFilesService {
    * (or the file is gone: its delete took the chunks). False leaves it stale
    * for the sweeper; a failure is logged, never answered.
    */
-  async reindex(bank: MemoryBank, fileId: string, locale: Locale = 'en'): Promise<boolean> {
+  async reindex(bank: MemoryBank, fileId: string): Promise<boolean> {
     try {
       for (let attempt = 0; attempt < INDEX_ATTEMPTS; attempt++) {
         const file = await this.prisma.memoryFile.findFirst({ where: { id: fileId, bankId: bank.id }, select: { path: true, content: true, updatedAt: true, updatedBy: true } });
@@ -330,7 +329,7 @@ export class MemoryFilesService {
         if (chunks.length) {
           const timestamp = file.updatedAt.toISOString();
           const items: RetainItem[] = chunks.map((chunk) => ({ content: chunk, context: file.path, timestamp, metadata: { file: file.path }, documentId, entities: [], tags: [], append: false }));
-          const done = await this.retainer.retain({ workspaceId: bank.workspaceId, bank, userId: file.updatedBy, locale, items, verbatim: true, consolidated: true, guard: settle });
+          const done = await this.retainer.retain({ workspaceId: bank.workspaceId, bank, userId: file.updatedBy, items, verbatim: true, consolidated: true, guard: settle });
           if (!done.superseded) return true;
           continue;
         }

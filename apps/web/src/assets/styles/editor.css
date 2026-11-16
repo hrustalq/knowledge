@@ -882,6 +882,16 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
   white-space: nowrap;
   line-height: 1.5;
 }
+/* A long page title wraps inside the message column instead of pushing the whole
+   transcript sideways (#1044). Narrow only: desktop keeps the pill on one line. */
+@media (max-width: 48rem) {
+  .kn-mention,
+  .markdown-body a[data-kn-mention] {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
 .markdown-body a[data-kn-mention]::before {
   content: '';
   width: 0.85em;

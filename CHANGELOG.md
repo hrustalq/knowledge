@@ -43,6 +43,8 @@ in the pull request that introduces them — see
   the time and the page title under it. (#1042)
 - Knowledge health on a phone: the page title column stays pinned while the table scrolls sideways, so each state
   can be matched to its page. (#1043)
+- A page mention with a long title in an assistant answer wraps on a phone instead of pushing the conversation
+  sideways. (#1044)
 
 ## [0.56.0] — 2026-11-16
 

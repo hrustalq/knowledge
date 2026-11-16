@@ -270,7 +270,8 @@
   --kn-accent: var(--kn-panel-note);
   position: relative;
   display: grid;
-  grid-template-columns: auto 1fr;
+  /* minmax(0, 1fr), not 1fr: a bare 1fr is minmax(auto, 1fr), so a long token grew the track instead of wrapping (#1057). */
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 0.7rem;
   margin-block: var(--kn-block-gap);
   padding: 0.85rem 1rem 0.85rem 0.9rem;
@@ -285,6 +286,7 @@
 [data-kn-panel='caution'] { --kn-accent: var(--kn-panel-caution); }
 
 .kn-panel-icon { color: var(--kn-accent); padding-top: 0.2rem; }
+.kn-panel-body { min-width: 0; } /* (#1057) */
 .kn-panel-body > :first-child { margin-top: 0; }
 .kn-panel-body > :last-child { margin-bottom: 0; }
 

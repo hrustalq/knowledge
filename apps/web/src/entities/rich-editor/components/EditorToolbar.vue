@@ -139,6 +139,7 @@ const ALIGNMENTS = [
   <div
     ref="bar"
     class="kn-toolbar"
+    :class="{ 'kn-scroll-strip': tier === 2 }"
     :data-compact="compact ? 'true' : undefined"
     :data-tier="tier"
     role="toolbar"

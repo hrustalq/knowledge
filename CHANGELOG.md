@@ -57,6 +57,8 @@ in the pull request that introduces them — see
   toolbar's More menu below 416px. (#1056)
 - A long URL or token inside a panel wraps instead of pushing the whole page sideways (editor and read view).
   (#1057)
+- Editor on a phone: the toolbar fades at the edge that has more buttons, so More and Insert can be found by
+  scrolling the row. (#1059)
 
 ## [0.56.0] — 2026-11-16
 

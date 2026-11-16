@@ -210,19 +210,21 @@ const dnd = useTreeDndRow({
       <!-- The status dot yields its slot to the menu on hover rather than
            sitting beside it: at 256px a second permanent affordance is the
            difference between a readable title and an ellipsis. It stays
-           yielded while the menu is open, when the row has neither. -->
+           yielded while the menu is open, when the row has neither. Without
+           hover there is no reveal to wait for, so the menu always holds the
+           slot (#1031). -->
       <TreeRowMenu
         v-if="auth.canEdit"
         :document-id="node.documentId"
         :title="node.title"
         :disabled="dnd.isLocked.value"
         :restricted="node.restricted"
-        class="hidden group-focus-within:grid group-hover:grid"
+        class="hidden group-focus-within:grid group-hover:grid [@media(hover:none)]:grid"
       />
       <span
         v-if="hasChildren"
         class="size-1.5 shrink-0 rounded-full"
-        :class="[statusDot(node.headRevisionStatus), auth.canEdit ? 'group-focus-within:hidden group-hover:hidden group-has-[[data-state=open]]:hidden' : '']"
+        :class="[statusDot(node.headRevisionStatus), auth.canEdit ? 'group-focus-within:hidden group-hover:hidden group-has-[[data-state=open]]:hidden [@media(hover:none)]:hidden' : '']"
         role="img"
         :aria-label="statusLabel"
         :title="statusLabel"

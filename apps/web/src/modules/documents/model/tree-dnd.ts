@@ -318,6 +318,10 @@ export function provideTreeDnd(
 
   function beginPointer(row: TreeRowHandle, ev: PointerEvent): void {
     if (ev.button !== 0 || state.value || isLocked(row.id)) return
+    // A finger on a row is a scroll: the row has `touch-action: auto`, so the
+    // browser claims the gesture and cancels the drag a few pixels in (#1031).
+    // Touch moves a page through the row menu's Move to… instead.
+    if (ev.pointerType === 'touch') return
     pending = { row, x: ev.clientX, y: ev.clientY }
     window.addEventListener('pointermove', onPointerMove, { passive: false })
     window.addEventListener('pointerup', onPointerUp)

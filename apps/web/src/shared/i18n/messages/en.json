@@ -4809,7 +4809,13 @@
       "footnote": "Kit v{version}. Run the command again to update it, or after you join a workspace.",
       "review": "Review captures",
       "refused": "This key is offered no capture tools, so there is no kit to install with it. Create a “Read and propose” or read-write key in step 1.",
-      "loadFailed": "Could not load the capture kit."
+      "loadFailed": "Could not load the capture kit.",
+      "ticket": {
+        "title": "Context when a ticket starts",
+        "hint": "With the kit installed, {client} is nudged once per ticket it reads to call knowledge_context: a few pages, glossary terms and project memory as pointers inside a small token budget. The hook still holds no key. Clients without hooks, Codex and Kimi among them, follow the same step from the skill.",
+        "cursor": " Cursor hooks cannot add context to a prompt, so a ticket pasted as a message is left to the skill too.",
+        "label": "The skill’s step"
+      }
     },
     "llms": {
       "title": "llms.txt and markdown",

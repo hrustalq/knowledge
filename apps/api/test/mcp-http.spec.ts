@@ -1556,6 +1556,15 @@ describe('renderSkill', () => {
     expect(renderSkill(skillInputFor(scope))).toMatchSnapshot();
   });
 
+  // #1197: a caller not offered knowledge_context reads the skill as it was before the tool existed.
+  it.each(['write', 'read', 'capture'] as const)('renders no ticket step without knowledge_context (%s key)', (scope) => {
+    const full = skillInputFor(scope);
+    const without = renderSkill({ ...full, tools: full.tools.filter((t) => t.name !== 'knowledge_context') });
+    expect(without).not.toMatch(/knowledge_context|Starting a ticket/);
+    expect(without).toMatchSnapshot();
+    expect(renderSkill(full)).toContain('### Starting a ticket');
+  });
+
   it('renders a toolset section only when its tools are offered (#945)', () => {
     const full = skillInputFor('write');
     const without = (...toolsets: string[]) => renderSkill({ ...full, tools: full.tools.filter((t) => !toolsets.includes(t.toolset)) });

@@ -132,6 +132,10 @@ export function skillSections(c: SkillSectionContext): SkillSection[] {
 `
     : '';
 
+  // Ticket context (#1197): the step for every client, hook or not. Absent unless offered, so the skill is otherwise unchanged.
+  if (c.has('knowledge_context'))
+    out.push({ toolset: 'core', text: renderTicketStep(c) });
+
   out.push({
     toolset: 'core',
     text: `### Answer a question from the knowledge base
@@ -509,4 +513,24 @@ export function joinSections(sections: readonly SkillSection[]): string {
 /** Keep a table cell on one line and its pipes literal. */
 export function cell(text: string): string {
   return text.replace(/\s+/g, ' ').replace(/\|/g, '\\|').trim();
+}
+
+/**
+ * "Starting a ticket" (#1197): the skill's step, and the text the Connect AI
+ * page shows beside the capture kit. Push a map, pull the territory.
+ */
+export function renderTicketStep(c: Pick<SkillSectionContext, 'ref'>): string {
+  return `### Starting a ticket
+
+When you pick up a ticket, an issue or a task, call ${c.ref('knowledge_context')} once before anything else, with \`query\` set
+to the ticket's title and its key terms (names, components, error text) in the ticket's language — not the whole ticket
+— and \`repo\` set to \`git remote get-url origin\`.
+
+1. The answer is a map, not the territory: a few pages with their trust status and one short excerpt, glossary terms the
+   ticket names, and memory agents left in this repo's projects, all inside a small token budget. \`empty: true\` means
+   the knowledge base knows nothing about it; carry on without it.
+2. Open a page with ${c.ref('knowledge_get_document_content')} only when the task needs it. Memory is always unverified:
+   a lead to check, never a fact to cite.
+3. Call again only when the task turns to something new, with \`exclude\` set to the ids you were already shown.
+`;
 }

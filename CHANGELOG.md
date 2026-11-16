@@ -30,6 +30,9 @@ in the pull request that introduces them — see
   ticket (`gh|glab|jira issue view`, a Jira/Linear/GitHub issue MCP tool) or is given a ticket key or URL in a prompt,
   and in Cursor when it reads one through a tool. The hook still holds no key and makes no network call. Re-run the
   installer to update an installed kit; it keeps your own hook entries. (#1196)
+- The generated skill has a "Starting a ticket" step, so Codex, Kimi and any other MCP client call `knowledge_context`
+  first on a ticket; Connect AI shows it beside the capture kit. A credential not offered the tool gets the skill
+  unchanged. Feature doc [81](docs/features/81-ticket-context.md). (#1197)
 
 ### Changed
 

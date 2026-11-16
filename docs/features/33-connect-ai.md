@@ -158,6 +158,11 @@ capture tool gets 403 `capture-not-offered`. The installer never overwrites
 `jq`, or prints them when `jq` is missing. The exact hook behaviour is in
 [50 §The capture kit](50-agent-memory.md#the-capture-kit).
 
+**Ticket context** ([81](81-ticket-context.md)). Since kit v3 the same hook
+also nudges the model to call `knowledge_context` once per ticket it reads,
+and the skill carries a "Starting a ticket" step for every other client. Step
+4 shows that step, cut from the SKILL.md the page fetched, under the kit.
+
 **Per-client snippets, not one JSON blob.** `apps/web/src/entities/access/model/mcp-clients.ts`
 has a generator per client because the differences break connections, silently:
 the env-var syntax differs in every client (`${VAR}`, `${env:VAR}`,

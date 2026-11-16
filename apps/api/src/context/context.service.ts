@@ -114,6 +114,8 @@ export class ContextService {
       mode: 'context',
       projectIds,
       resultDocIds: res.pages.map((p) => p.documentId),
+      resultTokens: res.tokens,
+      resultCount: res.pages.length + res.memories.length + res.terms.length,
       durationMs: Date.now() - startedAt,
     });
     return res;

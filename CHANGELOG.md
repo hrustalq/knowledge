@@ -24,6 +24,18 @@ in the pull request that introduces them — see
   remote (`repo`) resolves to through codebase / markdown-git connectors, each marked unverified. Items that do not fit
   are dropped whole; when nothing clears a relevance floor the answer is one line, `empty: true`. `exclude` skips ids an
   earlier call showed. No model call. (#1194)
+- Usage analytics → Agents shows ticket context: injections per day, median answer size in tokens, how often nothing
+  relevant was found, and the share of handed-over pages the same key opened within two hours. (#1195)
+
+### Changed
+
+- The Search tab of usage analytics, and `knowledge_list_search_gaps`, no longer count ticket-context calls as
+  searches; they have their own numbers under Agents. (#1195)
+
+### Operations
+
+- Migration `20270202100000_search_query_result_tokens` adds a nullable `search_queries.result_tokens` column. Additive:
+  the previous release runs against it, and a rollback needs nothing. (#1195)
 
 ## [0.55.1] — 2026-11-16
 

@@ -7388,7 +7388,31 @@
       "questionsPoint": "{date}: {n} questions",
       "noQuestions": "Nobody asked the assistant anything in this range.",
       "operations": "Model calls",
-      "operationsHint": "Every AI call in the workspace, by what it was for."
+      "operationsHint": "Every AI call in the workspace, by what it was for.",
+      "context": "Ticket context",
+      "contextHint": "What knowledge_context handed agents starting on a ticket, and whether they opened it.",
+      "contextChartLabel": "Ticket-context injections per day over {n} days",
+      "contextPoint": "{date}: {n} injections",
+      "noContext": "No agent asked for ticket context in this range.",
+      "contextMetrics": {
+        "injections": {
+          "label": "Injections",
+          "hint": "knowledge_context calls"
+        },
+        "medianTokens": {
+          "label": "Median size",
+          "hint": "Tokens per answer, half above and half below"
+        },
+        "emptyRate": {
+          "label": "Nothing relevant",
+          "hint": "Share of answers with nothing to hand over"
+        },
+        "followUpRate": {
+          "label": "Pages opened",
+          "hint": "Share of handed-over pages the same key opened within {hours} h"
+        }
+      },
+      "tokensValue": "{n} tokens"
     },
     "settings": {
       "title": "Recording and retention",

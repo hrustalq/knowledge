@@ -2962,6 +2962,9 @@
         "items": {
           "$ref": "#/components/schemas/AnalyticsOperationRow"
         }
+      },
+      "context": {
+        "$ref": "#/components/schemas/AnalyticsContextResponse"
       }
     },
     "required": [
@@ -2972,7 +2975,72 @@
       "keys",
       "assistantQuestions",
       "questionSeries",
-      "operations"
+      "operations",
+      "context"
+    ]
+  },
+  "AnalyticsContextResponse": {
+    "type": "object",
+    "properties": {
+      "injections": {
+        "type": "number"
+      },
+      "medianTokens": {
+        "type": "number",
+        "nullable": true
+      },
+      "emptyRate": {
+        "type": "number",
+        "nullable": true
+      },
+      "followUpRate": {
+        "type": "number",
+        "nullable": true
+      },
+      "days": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "date": {
+              "type": "string"
+            },
+            "channel": {
+              "type": "string"
+            },
+            "injections": {
+              "type": "number"
+            },
+            "medianTokens": {
+              "type": "number",
+              "nullable": true
+            },
+            "emptyRate": {
+              "type": "number",
+              "nullable": true
+            },
+            "followUpRate": {
+              "type": "number",
+              "nullable": true
+            }
+          },
+          "required": [
+            "channel",
+            "date",
+            "emptyRate",
+            "followUpRate",
+            "injections",
+            "medianTokens"
+          ]
+        }
+      }
+    },
+    "required": [
+      "days",
+      "emptyRate",
+      "followUpRate",
+      "injections",
+      "medianTokens"
     ]
   },
   "AnalyticsDayPoint": {

@@ -276,8 +276,10 @@ export class AssistantToolsService {
             'The user asked for something that would change the workspace (create a page, edit a page) but ' +
             'this chat is in Ask mode, where you have no write tools. Call this to offer them the switch as a ' +
             'button instead of telling them in prose to go and find a toggle. Say what you would do in ' +
-            '`intent`; if they accept, that text is re-sent as an Agent turn. END YOUR TURN right after ' +
-            'calling this.',
+            '`intent`; if they accept, that text is re-sent as an Agent turn. Call no more tools after ' +
+            'this: your next message is the final answer. If the user also asked something you can answer ' +
+            'from what you read, that message answers it in full, with citations — the button covers only ' +
+            'the change, never the question.',
           parameters: {
             type: 'object',
             properties: {

@@ -112,7 +112,8 @@ const LAST_ROUND_NUDGE: ChatCompletionMessageParam = {
     'Your tool budget for this turn is spent — no more searching, reading or writing. Answer now, using only ' +
     'what you already gathered, and say plainly if something could not be checked. Never write tool-call ' +
     'syntax into your answer. If your answer would end by asking the user something, you may still call ' +
-    'ask_user or request_agent_mode: ask with the form, not with a paragraph.',
+    'ask_user or request_agent_mode: ask with the form, not with a paragraph — and still answer here whatever ' +
+    'you can answer.',
 };
 
 /**

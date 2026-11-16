@@ -20,6 +20,8 @@ in the pull request that introduces them — see
 - Touch text selection now offers Comment and Copy link on page and merge-request review canvases, so phone and tablet readers can start anchored threads without mouse events. (#1030)
 - Tall dialogs and confirmation alerts now stay within a phone's dynamic viewport and scroll internally, keeping their titles, close controls and actions reachable. (#1181)
 - The new workflow wizard opens again instead of failing during page rendering. (#1182)
+- In Ask mode, a message that asks a question and also asks for a change now gets the answer as well as the Agent-mode
+  button; the reply used to describe only the button. (#1186)
 
 ## [0.55.0] — 2026-11-16
 

@@ -66,6 +66,7 @@ in the pull request that introduces them — see
 - AI → Web access on a phone: the "Try a URL" field takes a full row at a readable size, like the Add domain field
   (#1081). (#1068)
 - AI → Usage on a phone: the range and group-by buttons wrap instead of pushing the page sideways (Russian). (#1069)
+- A long project name wraps on the project page on a phone instead of being cut to one line. (#1072)
 
 ## [0.56.0] — 2026-11-16
 

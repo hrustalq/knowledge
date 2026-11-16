@@ -199,7 +199,8 @@ const isActive = computed(() => projectId.value === projects.activeId)
       />
       <div class="min-w-0 flex-1">
         <div class="flex flex-wrap items-center gap-2">
-          <h1 class="font-display truncate text-2xl font-bold tracking-tight">{{ project.name }}</h1>
+          <!-- Wraps on a phone so two projects named alike stay tellable apart (#1072). -->
+          <h1 class="font-display min-w-0 break-words text-2xl font-bold tracking-tight sm:truncate">{{ project.name }}</h1>
           <Badge v-if="isActive" variant="secondary">{{ t('project.active') }}</Badge>
         </div>
         <p class="mt-1 text-xs text-muted-foreground">

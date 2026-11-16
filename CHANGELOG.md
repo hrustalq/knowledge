@@ -41,6 +41,8 @@ in the pull request that introduces them — see
   the draft badge's word give up their room below 640px. (#1039)
 - A profile's activity list no longer pushes the page sideways on a phone: each row is two lines, the action beside
   the time and the page title under it. (#1042)
+- Knowledge health on a phone: the page title column stays pinned while the table scrolls sideways, so each state
+  can be matched to its page. (#1043)
 
 ## [0.56.0] — 2026-11-16
 

@@ -77,6 +77,14 @@ function onBoxChange(row: KnowledgeHealthRow) {
   emit('select', row.documentId, modifiers)
 }
 
+/**
+ * On a phone the title stays put while the table swipes sideways (#1043), so a
+ * state can be matched to its page. Scoped to `max-sm:` so desktop is untouched.
+ * The cap sits on the cell and the link truncates inside it: a cell's
+ * max-width is what stops the longest title reserving the whole column.
+ */
+const stickyTitle = 'max-sm:sticky max-sm:left-0 max-sm:z-10 max-sm:bg-background'
+
 function verifiedLine(row: KnowledgeHealthRow): string {
   if (!row.verifiedAt) return '—'
   return t('health.verifiedBy', { who: nameOf(row.verifiedBy), when: relativeTime(row.verifiedAt) })
@@ -111,7 +119,7 @@ function expiryLine(row: KnowledgeHealthRow): string | null {
               @update:model-value="emit('toggleAll')"
             />
           </TableHead>
-          <TableHead>{{ t('health.column.title') }}</TableHead>
+          <TableHead :class="stickyTitle">{{ t('health.column.title') }}</TableHead>
           <TableHead>{{ t('health.column.status') }}</TableHead>
           <TableHead>{{ t('health.column.owner') }}</TableHead>
           <TableHead>{{ t('health.column.verified') }}</TableHead>
@@ -127,6 +135,7 @@ function expiryLine(row: KnowledgeHealthRow): string | null {
           :data-state="selection.ids.has(row.documentId) ? 'selected' : undefined"
           :aria-selected="canSelect ? selection.ids.has(row.documentId) : undefined"
           :class="[
+            'group/row',
             canSelect ? 'cursor-default select-none' : '',
             row.archivedAt ? 'text-muted-foreground' : '',
           ]"
@@ -141,7 +150,10 @@ function expiryLine(row: KnowledgeHealthRow): string | null {
             />
           </TableCell>
 
-          <TableCell class="max-w-[22rem] align-top">
+          <TableCell
+            class="max-w-[22rem] max-sm:max-w-[45vw] align-top"
+            :class="[stickyTitle, 'max-sm:group-data-[state=selected]/row:bg-muted']"
+          >
             <RouterLink
               :to="`/documents/${row.documentId}`"
               class="block truncate text-sm font-medium hover:underline"

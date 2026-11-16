@@ -63,6 +63,8 @@ in the pull request that introduces them — see
   the whole pane, with Back to the list. (#1060)
 - Knowledge health below 1280px: the bulk action bar stays at the top of the screen while rows further down are
   selected. (#1064)
+- AI → Web access on a phone: the "Try a URL" field takes a full row at a readable size, like the Add domain field
+  (#1081). (#1068)
 
 ## [0.56.0] — 2026-11-16
 

@@ -325,7 +325,7 @@ async function check() {
           <form class="flex flex-wrap items-center gap-2" @submit.prevent="check">
             <Input
               v-model="probe"
-              class="h-8 min-w-0 flex-1 text-sm"
+              class="h-8 min-w-0 basis-full text-base sm:basis-0 sm:flex-1 md:text-sm"
               placeholder="https://docs.example.com/guide"
               :aria-label="t('ai.web.tryLabel')"
             />

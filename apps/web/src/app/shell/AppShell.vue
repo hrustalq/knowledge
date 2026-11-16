@@ -236,7 +236,7 @@ function skipToMain() {
             aria-modal="true"
             :aria-label="t('nav.navigation')"
             class="kn-drawer-panel absolute inset-y-0 left-0 h-full shadow-[0_16px_48px_-12px_rgb(0_0_0/0.45)]"
-            :style="{ width: 'min(var(--kn-rail-w), 88vw)' }"
+            :style="{ width: 'min(22rem, 88vw)' }"
           >
             <AppSidebar />
           </div>

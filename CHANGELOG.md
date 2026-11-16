@@ -69,6 +69,8 @@ in the pull request that introduces them — see
 - A long project name wraps on the project page on a phone instead of being cut to one line. (#1072)
 - The import stepper and the new-project Structure step fit a phone screen instead of being a few pixels wider than
   it. (#1073)
+- The navigation drawer on a phone uses most of the screen width instead of the desktop rail's 256px, so deep page
+  titles have room. (#1074)
 
 ## [0.56.0] — 2026-11-16
 

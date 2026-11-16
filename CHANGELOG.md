@@ -39,6 +39,11 @@ in the pull request that introduces them — see
   caller may write. (#1155)
 - Mental-model ids are unique per bank instead of across the whole installation. (#1155)
 
+### Fixed
+
+- Chat harvests now keep glossary terms in the thread’s spelling when decisions and answers are written in the
+  asker’s language, instead of dropping the terms as ungrounded. (#1163)
+
 ### Operations
 
 - `MEMORY_RERANKER_SCORE` (`logit` default, or `normalized` for endpoints that already return 0–1 scores) is new and

@@ -350,8 +350,10 @@ export const BUILT_IN_AGENT_DEFAULTS: Record<BuiltInAgentKey, BuiltInAgentDefaul
       '{"kind": "glossary", "term": string, "definition": string, "aliases"?: string[]}; ' +
       '{"kind": "answer", "question": string, "answer": string, "pages": string[]}. ' +
       'Write each title as a short statement of the fact, not a topic. A glossary term and its aliases must be ' +
-      'copied verbatim from the thread. An answer lists in "pages" the labels (P1, P2, …) of the knowledge-base ' +
-      'pages given with the thread that support it; propose no answer that none of them supports.',
+      "copied verbatim from the thread, in the thread's original language and spelling — never translated, " +
+      'transliterated or inflected, even when every prose field follows the reply language. An answer lists in ' +
+      '"pages" the labels (P1, P2, …) of the knowledge-base pages given with the thread that support it; propose ' +
+      'no answer that none of them supports.',
     tools: [],
     skillIds: [],
     purpose: 'review',

@@ -13,6 +13,13 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Fixed
+
+- Chat harvests now keep glossary terms in the thread’s spelling when decisions and answers are written in the
+  asker’s language, instead of dropping the terms as ungrounded. (#1163)
+
 ## [0.54.1] — 2026-11-14
 
 ### Fixed

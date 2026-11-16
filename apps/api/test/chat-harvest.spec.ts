@@ -6,6 +6,8 @@ import { HarvestRefused, HarvestService, maskedTranscript, planCaptures } from '
 import { harvestSummary } from '../src/chat/chat-answers.service.js';
 import type { ChatThread } from '../src/chat/adapters/chat-adapter.types.js';
 import { DEV_PRINCIPAL } from '../src/auth/principal.js';
+import { BUILT_IN_AGENT_DEFAULTS } from '../src/agents/built-in-agents.js';
+import { withLocaleDirective } from '../src/assistant/assistant.client.js';
 
 /**
  * Harvesting a chat thread into captures (#82, phase 2). What is pinned: no
@@ -167,6 +169,22 @@ describe('planCaptures — validation, not the prompt', () => {
     ]);
   });
 
+  it('keeps an English term with Russian prose, but drops its translated spelling (#1026)', () => {
+    const plan = planCaptures(
+      {
+        captures: [
+          { kind: 'glossary', term: 'Hermes', definition: 'Бот для деплоя.' },
+          { kind: 'glossary', term: 'Гермес', definition: 'Бот для деплоя.' },
+        ],
+      },
+      ctx,
+    );
+    expect(plan).toEqual({
+      requests: [expect.objectContaining({ kind: 'glossary', term: 'Hermes', definition: 'Бот для деплоя.' })],
+      dropped: 1,
+    });
+  });
+
   it('nothing at all, or not json, is an empty plan', () => {
     expect(planCaptures({ captures: [] }, ctx)).toEqual({ requests: [], dropped: 0 });
     expect(planCaptures(null, ctx)).toEqual({ requests: [], dropped: 0 });
@@ -179,6 +197,7 @@ function harness(
     captureResults?: Array<CaptureResult | Error>;
     agentEnabled?: boolean;
     searchFails?: boolean;
+    proposals?: unknown[];
     /** The decision model's p for the thread (#530); absent = no decision route. */
     settles?: number | Error;
   } = {},
@@ -189,13 +208,17 @@ function harness(
     project: { findFirst: vi.fn(async () => ({ id: 'p-first' })) },
   };
   const agents = {
-    resolve: vi.fn(async () => ({ enabled: opts.agentEnabled ?? true, instructions: 'Harvest.', config: { enabled: true } })),
+    resolve: vi.fn(async () => ({
+      enabled: opts.agentEnabled ?? true,
+      instructions: BUILT_IN_AGENT_DEFAULTS.harvester.instructions,
+      config: { enabled: true },
+    })),
   };
   const client = {
-    chat: vi.fn(async (_ctx: unknown, messages: Array<{ content: string }>) => {
-      prompts.push(messages.map((m) => m.content).join('\n'));
+    chat: vi.fn(async (ctx: { locale: 'en' | 'ru' | 'source' }, messages: Array<{ role: 'system' | 'user'; content: string }>) => {
+      prompts.push(withLocaleDirective(messages, ctx.locale).map((m) => m.content).join('\n'));
       return JSON.stringify({
-        captures: [
+        captures: opts.proposals ?? [
           { kind: 'decision', title: 'Deploys go out on Tuesdays', context: `From ${'[EMAIL_1]'}`, decision: 'Tuesdays only' },
           { kind: 'glossary', term: 'Hermes', definition: 'The deploy bot.' },
           { kind: 'answer', question: 'When?', answer: 'Tuesdays.', pages: ['P1'] },
@@ -276,6 +299,30 @@ describe('HarvestService.harvest', () => {
       expect(opts).toEqual({ origin });
       for (const raw of RAW) expect(JSON.stringify(req)).not.toContain(raw);
     }
+  });
+
+  it('asks a Russian asker’s harvester for Russian prose without translating an English term (#1026)', async () => {
+    const h = harness({
+      proposals: [
+        { kind: 'decision', title: 'Деплой по вторникам', context: 'Команда договорилась о графике.', decision: 'Деплоим только по вторникам.' },
+        { kind: 'glossary', term: 'Hermes', definition: 'Бот для деплоя.' },
+        { kind: 'answer', question: 'Когда мы деплоим?', answer: 'Только по вторникам.', pages: ['P1'] },
+      ],
+    });
+    const principal = { ...DEV_PRINCIPAL, locale: 'ru' as const };
+    expect(await h.svc.harvest(input, principal)).toEqual({ proposed: 3, duplicates: 0, dropped: 0 });
+
+    expect(h.client.chat).toHaveBeenCalledWith(expect.objectContaining({ locale: 'ru' }), expect.anything(), { json: true });
+    expect(h.prompts[0]).toContain('prompt.localeDirective');
+    expect(h.prompts[0]).toContain(
+      "copied verbatim from the thread, in the thread's original language and spelling — never translated, " +
+        'transliterated or inflected, even when every prose field follows the reply language.',
+    );
+    expect(h.captures.capture.mock.calls.map(([req]) => req)).toEqual([
+      expect.objectContaining({ kind: 'decision', context: 'Команда договорилась о графике.', decision: 'Деплоим только по вторникам.' }),
+      expect.objectContaining({ kind: 'glossary', term: 'Hermes', definition: 'Бот для деплоя.' }),
+      expect.objectContaining({ kind: 'answer', question: 'Когда мы деплоим?', answer: 'Только по вторникам.' }),
+    ]);
   });
 
   it('a capture the capture path refuses is dropped, not the harvest', async () => {

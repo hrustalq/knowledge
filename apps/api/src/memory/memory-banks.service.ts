@@ -4,6 +4,7 @@ import type { AuditAction } from '@knowledge/contracts';
 import { AuditService } from '../auth/audit.service.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { StorageService } from '../storage/storage.service.js';
 import {
   MemoryAccessService,
   type MemoryCaller,
@@ -186,6 +187,7 @@ export class MemoryBanksService {
     private readonly access: MemoryAccessService,
     private readonly audit: AuditService,
     private readonly units: MemoryUnitsService,
+    private readonly storage: StorageService,
   ) {}
 
   /**
@@ -403,6 +405,8 @@ export class MemoryBanksService {
     ).map((u) => u.id);
     await this.prisma.memoryBank.delete({ where: { id: bank.id } });
     await this.units.dropVectors(bank.workspaceId, unitIds);
+    // Uploads and export archives (#1165); a failure leaves them to workspace teardown's purge.
+    await this.storage.purgePrefix(this.storage.memoryBankPrefix(bank.workspaceId, bank.id)).catch(() => undefined);
     void this.audit.record({
       workspaceId: caller.workspaceId,
       actor: caller.principal.userId,

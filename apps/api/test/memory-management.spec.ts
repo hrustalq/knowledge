@@ -16,6 +16,7 @@ interface Deps {
   units?: Record<string, unknown>;
   parsers?: Record<string, unknown>;
   producer?: Record<string, unknown>;
+  storage?: Record<string, unknown>;
   limits?: { maxItems: number; maxChars: number };
 }
 
@@ -33,13 +34,30 @@ function service(deps: Deps = {}) {
     (deps.units ?? none) as never,
     (deps.parsers ?? none) as never,
     (deps.producer ?? none) as never,
+    (deps.storage ?? storage) as never,
     config as never,
   );
 }
 
-const archive = (transfer: Record<string, unknown>) => Buffer.from(zipSync({
-  'transfer.json': strToU8(JSON.stringify({ format: 'knowledge-hindsight-transfer', version: '1', bank: { name: 'mine', mission: '', config: {} }, documents: [], directives: [], mental_models: [], ...transfer })),
-})).toString('base64');
+/** The bucket, in memory: an upload or an archive is a key here, never bytes in a row (#1165). */
+const objects = new Map<string, Uint8Array>();
+const storage = {
+  memoryOperationPrefix: (ws: string, bankRow: string, op: string) => `workspaces/${ws}/memory-banks/${bankRow}/operations/${op}/`,
+  getObjectBytes: vi.fn(async (key: string) => objects.get(key) ?? new Uint8Array()),
+  putObjectBytes: vi.fn(async (key: string, bytes: Uint8Array) => void objects.set(key, bytes)),
+  presignGet: vi.fn(async (key: string) => `https://bucket.test/${key}?signed`),
+  purgeObjectVersions: vi.fn(async (key: string) => void objects.delete(key)),
+  purgePrefix: vi.fn(async () => undefined),
+};
+
+let uploads = 0;
+const archive = (transfer: Record<string, unknown>) => {
+  const key = `upload-${++uploads}`;
+  objects.set(key, zipSync({
+    'transfer.json': strToU8(JSON.stringify({ format: 'knowledge-hindsight-transfer', version: '1', bank: { name: 'mine', mission: '', config: {} }, documents: [], directives: [], mental_models: [], ...transfer })),
+  }));
+  return key;
+};
 
 const importRow = (payload: Record<string, unknown>) => ({
   id: OP, workspaceId: 'ws-1', bankId: bank.id, bank, type: 'bank_import', createdBy: 'u1', locale: 'en',
@@ -54,7 +72,7 @@ describe('MemoryManagementService (#1161)', () => {
     const prisma = { memoryMentalModel, memoryDirective: { findFirst: vi.fn() }, memoryBank: { update: vi.fn() } };
     await service({ prisma }).execute(importRow({
       mode: 'merge', include_data: false, target_bank_id: 'mine',
-      data_base64: archive({ mental_models: [{ id: 'victim-model', name: 'Stolen', source_query: 'q', content: 'planted', reflect_response: { text: 'planted' }, structured_doc: { x: 1 }, max_tokens: 10, trigger: { refresh_after_consolidation: false } }] }),
+      object_key: archive({ mental_models: [{ id: 'victim-model', name: 'Stolen', source_query: 'q', content: 'planted', reflect_response: { text: 'planted' }, structured_doc: { x: 1 }, max_tokens: 10, trigger: { refresh_after_consolidation: false } }] }),
     }));
     expect(memoryMentalModel.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { bankId: bank.id, id: 'victim-model' } }));
     const created = (memoryMentalModel.create.mock.calls[0] as unknown as [{ data: Record<string, unknown> }])[0].data;
@@ -69,7 +87,7 @@ describe('MemoryManagementService (#1161)', () => {
       create: vi.fn().mockRejectedValueOnce(new Prisma.PrismaClientKnownRequestError('dup', { code: 'P2002', clientVersion: 'x' })).mockResolvedValue({}),
     };
     const prisma = { memoryMentalModel, memoryDirective: { findFirst: vi.fn() }, memoryBank: { update: vi.fn() } };
-    await service({ prisma }).execute(importRow({ mode: 'merge', include_data: false, target_bank_id: 'mine', data_base64: archive({ mental_models: [{ id: 'victim-model', name: 'n', source_query: 'q' }] }) }));
+    await service({ prisma }).execute(importRow({ mode: 'merge', include_data: false, target_bank_id: 'mine', object_key: archive({ mental_models: [{ id: 'victim-model', name: 'n', source_query: 'q' }] }) }));
     const retried = (memoryMentalModel.create.mock.calls[1] as unknown as [{ data: { id: string; bankId: string } }])[0].data;
     expect(retried.id).not.toBe('victim-model');
     expect(retried.bankId).toBe(bank.id);
@@ -79,19 +97,31 @@ describe('MemoryManagementService (#1161)', () => {
     const memoryBank = { create: vi.fn(), update: vi.fn() };
     const mentalModels = { validateDefinition: vi.fn(() => { throw new BadRequestException('bad id'); }) };
     const prisma = { memoryBank, memoryBankAlias: { findUnique: vi.fn(async () => null) } };
-    await expect(service({ prisma, mentalModels }).execute(importRow({ data_base64: archive({ mental_models: [{ id: 'Bad Id', name: 'n', source_query: 'q' }] }) }))).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service({ prisma, mentalModels }).execute(importRow({ object_key: archive({ mental_models: [{ id: 'Bad Id', name: 'n', source_query: 'q' }] }) }))).rejects.toBeInstanceOf(BadRequestException);
     expect(memoryBank.create).not.toHaveBeenCalled();
   });
 
   it('removes a restore target it made when the import fails, so a retry finds the id free', async () => {
     const target = { ...bank, id: 'bank-new', bankId: 'restored' };
-    const memoryBank = { create: vi.fn(async () => target), update: vi.fn(), delete: vi.fn(async () => target) };
+    const memoryBank = { findUnique: vi.fn(async () => null), create: vi.fn(async () => target), update: vi.fn(), delete: vi.fn(async () => target) };
     const prisma = { memoryBank, memoryBankAlias: { findUnique: vi.fn(async () => null) }, memoryUnit: { findFirst: vi.fn(async () => null), findMany: vi.fn(async () => [{ id: 'u1' }]) } };
     const retainer = { retain: vi.fn(async () => { throw new Error('arcade down'); }) };
     const units = { dropVectors: vi.fn(async () => undefined) };
-    await expect(service({ prisma, retainer, units }).execute(importRow({ data_base64: archive({ documents: [{ id: 'd1', items: [item('a')] }] }) }))).rejects.toThrow('arcade down');
+    await expect(service({ prisma, retainer, units }).execute(importRow({ object_key: archive({ documents: [{ id: 'd1', items: [item('a')] }] }) }))).rejects.toThrow('arcade down');
     expect(memoryBank.delete).toHaveBeenCalledWith({ where: { id: 'bank-new' } });
     expect(units.dropVectors).toHaveBeenCalledWith('ws-1', ['u1']);
+  });
+
+  it('re-run after a lost worker, a restore replaces the target its own earlier run half-built: the row id is the operation (#1165)', async () => {
+    const leftover = { ...bank, id: OP, bankId: 'restored' };
+    const memoryBank = { findUnique: vi.fn(async () => leftover), create: vi.fn(async () => leftover), update: vi.fn(), delete: vi.fn(async () => leftover) };
+    const prisma = { memoryBank, memoryBankAlias: { findUnique: vi.fn(async () => null) }, memoryUnit: { findFirst: vi.fn(async () => null), findMany: vi.fn(async () => []) } };
+    const retainer = { retain: vi.fn(async () => ({ units: 1 })) };
+    const units = { dropVectors: vi.fn(async () => undefined) };
+    await service({ prisma, retainer, units }).execute(importRow({ object_key: archive({ documents: [{ id: 'd1', items: [item('a')] }] }) }));
+    expect(memoryBank.findUnique).toHaveBeenCalledWith({ where: { id: OP } });
+    expect(memoryBank.delete.mock.invocationCallOrder[0]!).toBeLessThan(memoryBank.create.mock.invocationCallOrder[0]!);
+    expect(memoryBank.create).toHaveBeenCalledWith({ data: expect.objectContaining({ id: OP, bankId: 'restored' }) });
   });
 
   it('skips wire documents in an archive, and retains a long document in runs that append', async () => {
@@ -100,7 +130,7 @@ describe('MemoryManagementService (#1161)', () => {
     const retainer = { retain: vi.fn(async (input: { items: unknown[] }) => ({ units: input.items.length })) };
     const result = await service({ prisma, retainer, limits: { maxItems: 2, maxChars: 1000 } }).execute(importRow({
       mode: 'merge', target_bank_id: 'mine', include_bank_config: false,
-      data_base64: archive({ documents: [{ id: 'file:/notes.md', items: [item('chunk')] }, { id: 'graph:e1:1', items: [item('obs')] }, { id: 'd1', items: [item('a'), item('b'), item('c')] }] }),
+      object_key: archive({ documents: [{ id: 'file:/notes.md', items: [item('chunk')] }, { id: 'graph:e1:1', items: [item('obs')] }, { id: 'd1', items: [item('a'), item('b'), item('c')] }] }),
     }));
     const calls = retainer.retain.mock.calls as unknown as Array<[{ items: Array<{ documentId: string; append: boolean; timestamp: string | null }> }]>;
     expect(calls.map(([c]) => c.items.map((i) => [i.documentId, i.append]))).toEqual([[['d1', false], ['d1', false]], [['d1', true]]]);
@@ -110,11 +140,14 @@ describe('MemoryManagementService (#1161)', () => {
 
   it('exports no wire documents, and says how many it left out', async () => {
     const unit = (documentId: string) => ({ documentId, text: documentId, context: null, mentionedAt: null, metadata: {}, tags: [], observationScopes: null, entities: [] });
-    const memoryTransferArchive = { create: vi.fn(async () => ({})) };
+    const memoryTransferArchive = { upsert: vi.fn(async () => ({ id: 'archive-1' })) };
     const prisma = { memoryUnit: { findMany: vi.fn(async () => [unit('d1'), unit('file:/a.md'), unit('file:/a.md'), unit('graph:e:1')]) }, memoryTransferArchive };
     const result = await service({ prisma }).execute({ ...(importRow({}) as object), type: 'document_export', payload: { document_ids: null, include_data: true, include_bank_config: false, include_knowledge_base: false } } as never);
     expect(result).toMatchObject({ documents_exported: 1, facts_exported: 1, documents_skipped_reserved: 2 });
-    const data = (memoryTransferArchive.create.mock.calls[0] as unknown as [{ data: { data: Buffer } }])[0].data.data;
+    // The zip goes to the bucket under the operation's prefix; the row holds its key, and a re-run overwrites both.
+    const key = `workspaces/ws-1/memory-banks/${bank.id}/operations/${OP}/archive.zip`;
+    expect(memoryTransferArchive.upsert).toHaveBeenCalledWith(expect.objectContaining({ where: { operationId: OP }, update: expect.objectContaining({ objectKey: key }) }));
+    const data = objects.get(key)!;
     const transfer = JSON.parse(Buffer.from(unzipSync(new Uint8Array(data))['transfer.json']!).toString('utf8')) as { documents: Array<{ id: string }> };
     expect(transfer.documents.map((d) => d.id)).toEqual(['d1']);
   });
@@ -123,7 +156,7 @@ describe('MemoryManagementService (#1161)', () => {
     const markdown = ['Deploy key sk-abcdefghijklmnopqrstuvwx', 'b'.repeat(30), 'c'.repeat(45)].join('\n\n');
     const parsers = { resolve: () => ({ parse: async () => ({ markdown, warnings: [] }) }) };
     const retainer = { retain: vi.fn(async (input: { items: unknown[] }) => ({ units: input.items.length })) };
-    const row = { ...(importRow({}) as object), type: 'file_convert_retain', payload: { filename: 'notes.md', content_type: 'text/markdown', data_base64: '', metadata: {} } } as never;
+    const row = { ...(importRow({}) as object), type: 'file_convert_retain', payload: { filename: 'notes.md', content_type: 'text/markdown', object_key: 'upload-empty', metadata: {} } } as never;
     const result = await service({ parsers, retainer, limits: { maxItems: 2, maxChars: 40 } }).execute(row);
     const calls = retainer.retain.mock.calls as unknown as Array<[{ items: Array<{ content: string; documentId: string; append: boolean }>; operationId?: string }]>;
     const items = calls.flatMap(([c]) => c.items);
@@ -144,7 +177,7 @@ describe('MemoryManagementService (#1161)', () => {
 
   it('finds an archive only in the caller workspace', async () => {
     const memoryTransferArchive = { findFirst: vi.fn(async () => null) };
-    await expect(service({ prisma: { memoryTransferArchive } }).archive({ workspaceId: 'ws-1', scope: {} } as never, OP)).rejects.toThrow();
+    await expect(service({ prisma: { memoryTransferArchive } }).archiveUrl({ workspaceId: 'ws-1', scope: {} } as never, OP)).rejects.toThrow();
     expect(memoryTransferArchive.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: OP, workspaceId: 'ws-1' } }));
   });
 
@@ -166,9 +199,9 @@ describe('MemoryManagementService (#1161)', () => {
   });
 
   it('refuses a restore into a bank id an alias holds, before writing', async () => {
-    const memoryBank = { create: vi.fn() };
+    const memoryBank = { findUnique: vi.fn(async () => null), create: vi.fn() };
     const prisma = { memoryBank, memoryBankAlias: { findUnique: vi.fn(async () => ({ id: 'a1' })) } };
-    await expect(service({ prisma }).execute(importRow({ data_base64: archive({}) }))).rejects.toBeInstanceOf(ConflictException);
+    await expect(service({ prisma }).execute(importRow({ object_key: archive({}) }))).rejects.toBeInstanceOf(ConflictException);
     expect(memoryBank.create).not.toHaveBeenCalled();
   });
 

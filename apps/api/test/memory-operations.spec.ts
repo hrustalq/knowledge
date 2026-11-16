@@ -8,7 +8,7 @@ const bank = { id: 'bank-1', workspaceId: 'ws-1', bankId: 'agent', mission: '' }
 const item: RetainItem = { content: 'Key sk-abcdefghijklmnopqrstuvwx for bob@example.com', context: null, timestamp: null, metadata: {}, documentId: 'd1', entities: [], tags: [], append: false };
 const OP = '7b0d1c5e-3f2a-4c6b-8d9e-0a1b2c3d4e5f';
 
-function service(opts: { held?: { bankId: string }; claim?: number; row?: Record<string, unknown> | null; retain?: Error } = {}) {
+function service(opts: { held?: { bankId: string }; claim?: number; row?: Record<string, unknown> | null; retain?: Error; management?: Record<string, unknown>; timeoutMs?: number } = {}) {
   const created: Array<Record<string, unknown>> = [];
   const updates: Array<{ where: Record<string, unknown>; data: Record<string, unknown> }> = [];
   const prisma = {
@@ -31,8 +31,9 @@ function service(opts: { held?: { bankId: string }; claim?: number; row?: Record
   };
   const retainer = { retain: vi.fn(async () => { if (opts.retain) throw opts.retain; return { units: 1, usage: null }; }) };
   const producer = { enqueue: vi.fn(async () => undefined) };
-  const config = { get: (key: string) => (key === 'MEMORY_OPERATION_TIMEOUT_MS' ? 600_000 : 7) };
-  return { svc: new MemoryOperationsService(prisma as never, retainer as never, {} as never, {} as never, { deleteArchives: vi.fn() } as never, producer as never, config as never), prisma, retainer, producer, created, updates };
+  const config = { get: (key: string) => (key === 'MEMORY_OPERATION_TIMEOUT_MS' ? (opts.timeoutMs ?? 600_000) : 7) };
+  const management = opts.management ?? { purgeOperations: vi.fn(), discardUpload: vi.fn() };
+  return { svc: new MemoryOperationsService(prisma as never, retainer as never, {} as never, {} as never, management as never, producer as never, config as never), prisma, retainer, producer, created, updates, management };
 }
 
 describe('MemoryOperationsService (#986)', () => {
@@ -74,6 +75,32 @@ describe('MemoryOperationsService (#986)', () => {
     const failing = service({ row, retain: new Error('arcade down') });
     await failing.svc.run(OP);
     expect(failing.updates[1]).toMatchObject({ where: { id: OP, status: 'running' }, data: { status: 'failed', error: 'arcade down' } });
+  });
+
+  it('beats while a long operation runs, so the sweeper never re-queues it mid-run, and discards its upload once settled (#1165)', async () => {
+    vi.useFakeTimers();
+    try {
+      let finish!: () => void;
+      const management = { execute: vi.fn(() => new Promise<null>((resolve) => (finish = () => resolve(null)))), discardUpload: vi.fn(async () => undefined), purgeOperations: vi.fn() };
+      const row = { id: OP, status: 'queued', type: 'bank_import', workspaceId: 'ws-1', bankId: 'bank-1', bank, createdBy: 'u1', locale: 'en', payload: {} };
+      const { svc, updates } = service({ row, management, timeoutMs: 3_000 });
+      const running = svc.run(OP);
+      await vi.advanceTimersByTimeAsync(10_000);
+      // A third of the timeout apart: the row never looks quiet for the full timeout while it runs.
+      const beats = updates.filter((u) => 'updatedAt' in u.data);
+      expect(beats.length).toBeGreaterThanOrEqual(9);
+      expect(beats[0]).toMatchObject({ where: { id: OP, status: 'running' } });
+      finish();
+      await running;
+      const after = updates.length;
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(updates.length).toBe(after);
+      expect(management.execute).toHaveBeenCalledOnce();
+      expect(updates.at(-1)).toMatchObject({ data: { status: 'completed', payload: [] } });
+      expect(management.discardUpload).toHaveBeenCalledWith(expect.objectContaining({ id: OP, workspaceId: 'ws-1', bankId: 'bank-1' }));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('cancels only what is still queued, in this bank', async () => {

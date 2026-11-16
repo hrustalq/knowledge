@@ -10,6 +10,7 @@ import type { Env } from '../config/env.js';
 import { t } from '../i18n/t.js';
 import { ParserRegistry } from '../import/parsers/parser.registry.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { StorageService } from '../storage/storage.service.js';
 import { MemoryAccessService, type MemoryCaller } from './memory-access.service.js';
 import { bankConfig, MemoryBanksService, readConfigUpdates } from './memory-banks.service.js';
 import { MemoryDirectivesService } from './memory-directives.service.js';
@@ -138,6 +139,7 @@ export class MemoryManagementService {
     private readonly units: MemoryUnitsService,
     private readonly parsers: ParserRegistry,
     private readonly producer: MemoryProducer,
+    private readonly storage: StorageService,
     config: ConfigService<Env, true>,
   ) {
     this.limits = { maxItems: config.get('MEMORY_RETAIN_MAX_ITEMS', { infer: true }), maxChars: config.get('MEMORY_RETAIN_MAX_CHARS', { infer: true }) };
@@ -287,7 +289,8 @@ export class MemoryManagementService {
     const ids: string[] = [];
     for (const [index, file] of files.entries()) {
       const metadata = request.files_metadata?.[index] ?? {};
-      ids.push(await this.submit(bank, 'file_convert_retain', { filename: file.originalname, content_type: file.mimetype, data_base64: file.buffer.toString('base64'), metadata }, caller.principal.userId, caller.principal.locale));
+      const upload = await this.upload(bank, file.buffer, file.mimetype);
+      ids.push(await this.submit(bank, 'file_convert_retain', { filename: file.originalname, content_type: file.mimetype, object_key: upload.key, metadata }, caller.principal.userId, caller.principal.locale, upload.id));
     }
     return { operation_ids: ids };
   }
@@ -303,7 +306,8 @@ export class MemoryManagementService {
     const bank = await this.access.bank(caller, bankId);
     const targetBankId = documentsOnly ? bank.bankId : query.target_bank_id ?? `${bank.bankId}-restored`;
     if (!documentsOnly) await this.requireFreshTarget(caller, targetBankId);
-    return this.submitResult(bank, documentsOnly ? 'document_import' : 'bank_import', { data_base64: file.buffer.toString('base64'), target_bank_id: targetBankId, mode: documentsOnly ? 'merge' : 'restore', conflict: query.on_conflict ?? query.document_conflict ?? 'skip', include_data: query.include_data ?? true, include_bank_config: query.include_bank_config ?? true }, caller.principal.userId, caller.principal.locale);
+    const upload = await this.upload(bank, file.buffer, 'application/zip');
+    return this.submitResult(bank, documentsOnly ? 'document_import' : 'bank_import', { object_key: upload.key, target_bank_id: targetBankId, mode: documentsOnly ? 'merge' : 'restore', conflict: query.on_conflict ?? query.document_conflict ?? 'skip', include_data: query.include_data ?? true, include_bank_config: query.include_bank_config ?? true }, caller.principal.userId, caller.principal.locale, upload.id);
   }
 
   async submitClone(caller: MemoryCaller, bankId: string, query: TransferQueryDto) {
@@ -328,19 +332,33 @@ export class MemoryManagementService {
     return this.units.chunk(row.bank, key);
   }
 
-  async archive(caller: MemoryCaller, key: string): Promise<{ filename: string; data: Buffer }> {
+  /** A presigned URL for an export's zip, once the caller may read its bank (#1165): the API never streams it. */
+  async archiveUrl(caller: MemoryCaller, key: string): Promise<string> {
     const row = UUID_RE.test(key) ? await this.prisma.memoryTransferArchive.findFirst({ where: { id: key, workspaceId: caller.workspaceId }, include: { bank: true } }) : null;
     if (!row || !(await this.access.visible(caller.scope, [row.bank])).length) throw new NotFoundException(t('error.memory.archiveNotFound'));
-    return { filename: row.filename, data: Buffer.from(row.data) };
+    return this.storage.presignGet(row.objectKey, { filename: row.filename, contentType: 'application/zip', disposition: 'attachment' });
   }
 
-  async deleteArchives(operationIds: string[]): Promise<void> {
-    if (operationIds.length) await this.prisma.memoryTransferArchive.deleteMany({ where: { operationId: { in: operationIds } } });
+  /** An operation's upload, every version of it, once the operation settled or was cancelled: its bytes were unmasked. */
+  async discardUpload(row: Pick<MemoryOperation, 'id' | 'workspaceId' | 'bankId'>): Promise<void> {
+    const key = this.uploadKey(row.workspaceId, row.bankId, row.id);
+    await this.storage.purgeObjectVersions(key).catch((e: Error) => this.logger.warn(`Memory upload ${key} not purged, the operation's purge will: ${e.message}`));
+  }
+
+  private uploadKey(workspaceId: string, bankRowId: string, operationId: string): string {
+    return `${this.storage.memoryOperationPrefix(workspaceId, bankRowId, operationId)}input`;
+  }
+
+  /** Operations past retention: their archive rows and every object under their prefix. */
+  async purgeOperations(rows: Array<Pick<MemoryOperation, 'id' | 'workspaceId' | 'bankId'>>): Promise<void> {
+    if (!rows.length) return;
+    await this.prisma.memoryTransferArchive.deleteMany({ where: { operationId: { in: rows.map((row) => row.id) } } });
+    for (const row of rows) await this.storage.purgePrefix(this.storage.memoryOperationPrefix(row.workspaceId, row.bankId, row.id));
   }
 
   private async executeFile(row: ManagementOperation): Promise<ResultMetadata> {
-    const payload = row.payload as unknown as { filename: string; content_type: string; data_base64: string; metadata: { context?: string; document_id?: string; tags?: string[]; metadata?: Record<string, string> } };
-    const bytes = Buffer.from(payload.data_base64, 'base64');
+    const payload = row.payload as unknown as { filename: string; content_type: string; object_key: string; metadata: { context?: string; document_id?: string; tags?: string[]; metadata?: Record<string, string> } };
+    const bytes = Buffer.from(await this.storage.getObjectBytes(payload.object_key));
     const parser = this.parsers.resolve(payload.filename, payload.content_type);
     if (!parser) throw new UnsupportedMediaTypeException(t('error.memory.fileTypeUnsupported'));
     const parsed = await parser.parse(bytes, { workspaceId: row.workspaceId, importId: row.id, userId: row.createdBy, filename: payload.filename, contentType: payload.content_type, onStage: async () => undefined });
@@ -386,15 +404,18 @@ export class MemoryManagementService {
     };
     const data = Buffer.from(zipSync({ 'transfer.json': strToU8(JSON.stringify(transfer)) }));
     if (data.byteLength > MAX_ARCHIVE_BYTES) throw new BadRequestException(t('error.memory.archiveTooLarge', { maxBytes: MAX_ARCHIVE_BYTES }));
-    const id = randomUUID();
     const filename = `${row.bank.bankId}-transfer.zip`;
-    await this.prisma.memoryTransferArchive.create({ data: { id, workspaceId: row.workspaceId, bankId: row.bankId, operationId: row.id, filename, data } });
+    // One key and one row per operation, so a re-run after a lost worker overwrites instead of adding.
+    const objectKey = `${this.storage.memoryOperationPrefix(row.workspaceId, row.bankId, row.id)}archive.zip`;
+    await this.storage.putObjectBytes(objectKey, data, 'application/zip');
+    const archive = { filename, objectKey, byteSize: data.byteLength };
+    const { id } = await this.prisma.memoryTransferArchive.upsert({ where: { operationId: row.id }, create: { workspaceId: row.workspaceId, bankId: row.bankId, operationId: row.id, ...archive }, update: archive, select: { id: true } });
     return { download_url: `/v1/default/files/download/${id}`, storage_key: id, byte_size: data.byteLength, filename, documents_exported: grouped.size, facts_exported: units.length, documents_skipped_reserved: skipped.size };
   }
 
   private async executeImport(row: ManagementOperation): Promise<ResultMetadata> {
-    const payload = row.payload as unknown as { data_base64: string; target_bank_id: string; mode: 'merge' | 'restore'; conflict: 'skip' | 'replace' | 'new-id'; include_data: boolean; include_bank_config: boolean };
-    const files = unzipBounded(Buffer.from(payload.data_base64, 'base64'), MAX_ARCHIVE_BYTES, (file) => file.name === 'transfer.json');
+    const payload = row.payload as unknown as { object_key: string; target_bank_id: string; mode: 'merge' | 'restore'; conflict: 'skip' | 'replace' | 'new-id'; include_data: boolean; include_bank_config: boolean };
+    const files = unzipBounded(await this.storage.getObjectBytes(payload.object_key), MAX_ARCHIVE_BYTES, (file) => file.name === 'transfer.json');
     if (!files['transfer.json']) throw new BadRequestException(t('error.memory.transferInvalid'));
     let transfer: Transfer;
     try {
@@ -417,7 +438,12 @@ export class MemoryManagementService {
       // A document longer than one retain request is retained in runs: the first replaces, the rest append.
       batches: batchesOf(document.items, this.limits.maxItems).map((batch, i) => readRetainItems(batch.map((item) => ({ ...item, timestamp: item.timestamp ?? 'unset', document_id: document.id, update_mode: i ? 'append' : undefined })), undefined, this.limits)),
     })) : [];
-    if (payload.mode === 'restore') await this.requireFreeTargetId(row.workspaceId, payload.target_bank_id);
+    if (payload.mode === 'restore') {
+      // The target's row id is the operation's: one an earlier, lost run of this operation half-built is its own to replace.
+      const leftover = await this.prisma.memoryBank.findUnique({ where: { id: row.id } });
+      if (leftover) await this.dropBank(leftover);
+      await this.requireFreeTargetId(row.workspaceId, payload.target_bank_id);
+    }
     const target = payload.mode === 'restore' ? await this.createTarget(row, payload.target_bank_id, transfer) : row.bank;
     try {
       if (configUpdates) await this.prisma.memoryBank.update({ where: { id: target.id }, data: configUpdates });
@@ -431,7 +457,9 @@ export class MemoryManagementService {
           documentsSkipped++;
           continue;
         }
-        const documentId = exists && payload.conflict === 'new-id' ? `${document.id}-${randomUUID().slice(0, 8)}` : document.id;
+        // From the operation, not random: a re-run writes the same id again, replacing instead of adding.
+        // ponytail: a re-run after a lost worker re-imports what the lost run finished; under `new-id` that is a second copy. Track finished documents in the operation if that ever bites.
+        const documentId = exists && payload.conflict === 'new-id' ? `${document.id}-${row.id.slice(0, 8)}` : document.id;
         for (const batch of document.batches) {
           const retained = await this.retainer.retain({ workspaceId: target.workspaceId, bank: target, userId: row.createdBy, locale: row.locale as Locale, items: batch.map((item): RetainItem => ({ ...item, documentId })), verbatim: true });
           factsImported += retained.units;
@@ -452,16 +480,17 @@ export class MemoryManagementService {
     const archive = await this.prisma.memoryTransferArchive.findUnique({ where: { operationId: row.id } });
     if (!archive) throw new NotFoundException(t('error.memory.archiveNotFound'));
     try {
-      const result = await this.executeImport({ ...row, payload: { data_base64: Buffer.from(archive.data).toString('base64'), target_bank_id: payload.target_bank_id, mode: 'restore', conflict: 'skip', include_data: payload.include_data, include_bank_config: payload.include_bank_config } });
+      const result = await this.executeImport({ ...row, payload: { object_key: archive.objectKey, target_bank_id: payload.target_bank_id, mode: 'restore', conflict: 'skip', include_data: payload.include_data, include_bank_config: payload.include_bank_config } });
       return { ...exported, ...result, target_bank_id: payload.target_bank_id, download_url: undefined, storage_key: undefined };
     } finally {
       await this.prisma.memoryTransferArchive.delete({ where: { id: archive.id } });
+      await this.storage.purgeObjectVersions(archive.objectKey).catch((e: Error) => this.logger.warn(`Clone archive ${archive.objectKey} not purged, the operation's purge will: ${e.message}`));
     }
   }
 
   private async createTarget(row: ManagementOperation, bankId: string, transfer: Transfer): Promise<MemoryBank> {
     try {
-      const bank = await this.prisma.memoryBank.create({ data: { workspaceId: row.workspaceId, bankId, name: transfer.bank.name || bankId, mission: transfer.bank.mission, projectId: row.bank.projectId, agentKey: row.bank.agentKey, ownerId: row.bank.ownerId, createdBy: row.createdBy } });
+      const bank = await this.prisma.memoryBank.create({ data: { id: row.id, workspaceId: row.workspaceId, bankId, name: transfer.bank.name || bankId, mission: transfer.bank.mission, projectId: row.bank.projectId, agentKey: row.bank.agentKey, ownerId: row.bank.ownerId, createdBy: row.createdBy } });
       // Made by the worker, so audited under whoever submitted the operation (#1168).
       this.banks.recordWrite(row.workspaceId, row.createdBy, bankId, { action: 'memory.bank_created', params: { from: row.bank.bankId, operation: row.type } });
       return bank;
@@ -504,16 +533,27 @@ export class MemoryManagementService {
     }
   }
 
-  private async submit(bank: MemoryBank, type: string, payload: Prisma.InputJsonObject, userId: string, locale: Locale): Promise<string> {
+  /**
+   * An upload's bytes go to the bucket before its operation row exists (#1165), so the row carries a key and
+   * never the bytes; the worker reads them from there. A row that is never written leaves the object to the
+   * bank's purge.
+   */
+  private async upload(bank: MemoryBank, bytes: Buffer, contentType: string): Promise<{ id: string; key: string }> {
     const id = randomUUID();
+    const key = this.uploadKey(bank.workspaceId, bank.id, id);
+    await this.storage.putObjectBytes(key, bytes, contentType);
+    return { id, key };
+  }
+
+  private async submit(bank: MemoryBank, type: string, payload: Prisma.InputJsonObject, userId: string, locale: Locale, id: string = randomUUID()): Promise<string> {
     await this.prisma.memoryOperation.create({ data: { id, workspaceId: bank.workspaceId, bankId: bank.id, type, payload, itemsCount: 0, createdBy: userId, locale } });
     // A failed enqueue leaves the row queued, and the sweeper enqueues it again.
     await this.producer.enqueue(id).catch((e: Error) => this.logger.warn(`Memory operation ${id} not enqueued, the sweeper will: ${e.message}`));
     return id;
   }
 
-  private async submitResult(bank: MemoryBank, type: string, payload: Prisma.InputJsonObject, userId: string, locale: Locale) {
-    return { operation_id: await this.submit(bank, type, payload, userId, locale), status: 'pending' };
+  private async submitResult(bank: MemoryBank, type: string, payload: Prisma.InputJsonObject, userId: string, locale: Locale, id?: string) {
+    return { operation_id: await this.submit(bank, type, payload, userId, locale, id), status: 'pending' };
   }
 
   private async requireFreshTarget(caller: MemoryCaller, bankId: string): Promise<void> {

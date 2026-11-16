@@ -3337,12 +3337,26 @@ describe('Hindsight compatibility (e2e, #986)', () => {
       expect(submitted.operation_ids).toHaveLength(1);
       expect(await settle(fileBank, submitted.operation_ids[0]!)).toMatchObject({ status: 'completed', result_metadata: { documents_imported: 1, facts_imported: 1 } });
       expect((await hs.getDocument(fileBank, 'uploaded-runbook'))!.original_text).toBe('Alice maintains uploaded runbooks.');
+      // #1165: the bytes went to the bucket, never into the row, and are purged once the operation settled.
+      const opId = submitted.operation_ids[0]!;
+      const op = await prisma.memoryOperation.findUniqueOrThrow({ where: { id: opId } });
+      expect(JSON.stringify(op.payload)).not.toContain('runbooks');
+      const { StorageService } = await import('../src/storage/storage.service.js');
+      const storage = app.get(StorageService);
+      await expect(storage.getObjectBytes(`${storage.memoryOperationPrefix(WS_A, op.bankId, opId)}input`)).rejects.toThrow();
+      const inline = await prisma.$queryRaw<Array<{ n: bigint }>>`SELECT count(*) AS n FROM memory_operations WHERE payload::text LIKE '%data_base64%'`;
+      expect(Number(inline[0]!.n)).toBe(0);
     });
 
     it('exports, imports, clones and deletes transfer operations with real archives', async () => {
       const hs = client(people.alice.key);
       const archive = await hs.exportDocuments(management, { pollIntervalMs: 50, timeoutMs: 10_000 });
       expect(archive.length).toBeGreaterThan(100);
+      // The download is authorized here and served by the bucket (#1165): a redirect, never the bytes through the API.
+      const [stored] = await prisma.memoryTransferArchive.findMany({ where: { bank: { workspaceId: WS_A, bankId: management } }, orderBy: { createdAt: 'desc' }, take: 1 });
+      const download = await fetch(`${baseUrl}/v1/default/files/download/${stored!.id}`, { headers: { Authorization: `Bearer ${people.alice.key}` }, redirect: 'manual' });
+      expect(download.status).toBe(302);
+      expect(download.headers.get('location')).toContain(stored!.objectKey);
       const target = `transfer-${nonce}`;
       const imported = await sdk.importDocuments({ client: raw(people.alice.key), path: { bank_id: management }, query: { on_conflict: 'new-id' }, body: { file: new Blob([archive.buffer as ArrayBuffer]) } });
       expect(imported.data).toMatchObject({ status: 'pending' });
@@ -3436,7 +3450,7 @@ describe('Hindsight compatibility (e2e, #986)', () => {
       for (const [bank, key] of [[rows[0]!, people.alice.key], [rows[1]!, people.bob.key]] as const) {
         const unit = await prisma.memoryUnit.create({ data: { workspaceId: WS_A, bankId: bank.id, text: 'Hidden management fact.', sourceText: 'Hidden management fact.', documentId: 'hidden-doc', createdBy: people.admin.id } });
         const archiveId = randomUUID();
-        await prisma.memoryTransferArchive.create({ data: { id: archiveId, workspaceId: WS_A, bankId: bank.id, operationId: randomUUID(), filename: 'hidden.zip', data: Buffer.from('hidden') } });
+        await prisma.memoryTransferArchive.create({ data: { id: archiveId, workspaceId: WS_A, bankId: bank.id, operationId: randomUUID(), filename: 'hidden.zip', objectKey: `workspaces/${WS_A}/hidden.zip`, byteSize: 6 } });
         cases.push({ bankId: bank.bankId, key, chunkId: unit.id, archiveId });
       }
       for (const { bankId, key, chunkId, archiveId } of cases) {
@@ -3516,8 +3530,9 @@ describe('Hindsight compatibility (e2e, #986)', () => {
       expect((await call(people.carol.key, 'GET', `/v1/default/chunks/${unit.id}`)).status).toBe(404);
 
       const archiveId = randomUUID();
-      await prisma.memoryTransferArchive.create({ data: { id: archiveId, workspaceId: WS_A, bankId: managementRow.id, operationId: randomUUID(), filename: 'isolated.zip', data: Buffer.from('isolated') } });
-      expect((await call(people.alice.key, 'GET', `/v1/default/files/download/${archiveId}`)).status).toBe(200);
+      await prisma.memoryTransferArchive.create({ data: { id: archiveId, workspaceId: WS_A, bankId: managementRow.id, operationId: randomUUID(), filename: 'isolated.zip', objectKey: `workspaces/${WS_A}/isolated.zip`, byteSize: 8 } });
+      // Authorized, then handed to the bucket (#1165): the API answers with the redirect, not the bytes.
+      expect((await fetch(`${baseUrl}/v1/default/files/download/${archiveId}`, { headers: { Authorization: `Bearer ${people.alice.key}` }, redirect: 'manual' })).status).toBe(302);
       expect((await call(people.carol.key, 'GET', `/v1/default/files/download/${archiveId}`)).status).toBe(404);
 
       // Carol holds a bank of the same name in her own workspace: her calls reach that one, never A's.

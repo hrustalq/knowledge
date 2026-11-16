@@ -51,6 +51,11 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- Memory file uploads and transfer archives no longer pass through the database: the bytes go to object storage, the
+  operation keeps only their key, and an upload is deleted as soon as its operation settles or is cancelled. Archive
+  downloads redirect to a short-lived storage URL. A transfer that runs longer than `MEMORY_OPERATION_TIMEOUT_MS` is
+  no longer started a second time while it is still running, and a restore or clone retried after a lost worker
+  replaces its own half-built bank instead of failing. (#1165)
 - Once an assistant turn draws on the asker's personal memory, a draft or an attachment, later turns in the same thread
   are no longer copied to the project's memory: an answer can repeat what an earlier one was told. Agents on the
   `durable` memory policy now keep only the durable facts of an outcome, dropping status updates and chatter that came
@@ -62,6 +67,9 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- The memory archive migration moves export archives to object storage: it drops existing archive rows (exports a client
+  can run again) and fails any queued file or import operation whose bytes were still inline. Restoring the previous
+  image needs no database step. (#1165)
 - The assistant-thread migration adds one nullable column and marks every existing thread as carrying private input,
   so continuing a thread started before this release retains to personal memory only. It is expand-only and safe for
   a code rollback. (#1169)

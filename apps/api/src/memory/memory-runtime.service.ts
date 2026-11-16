@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { Locale } from '@knowledge/contracts';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { AccessService } from '../auth/access.service.js';
 import { FeaturesService } from '../auth/features.service.js';
@@ -168,7 +167,6 @@ export class MemoryRuntimeService {
   async remember(
     input: AgentMemoryInput & {
       userId: string;
-      locale: Locale;
       sourceId: string;
       sourceKind: 'assistant-turn' | 'agent-run' | 'mention-reply';
       question: string;
@@ -233,7 +231,6 @@ export class MemoryRuntimeService {
             workspaceId: input.workspaceId,
             bank,
             userId: input.userId,
-            locale: input.locale,
             items: [item],
             durableOnly: agent.memoryPolicy[target.kind] === 'durable',
           });

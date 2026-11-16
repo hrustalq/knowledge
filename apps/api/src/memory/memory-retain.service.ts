@@ -1,6 +1,5 @@
 import { Inject, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { Prisma, type MemoryBank } from '@prisma/client';
-import type { Locale } from '@knowledge/contracts';
 import { randomUUID } from 'node:crypto';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { AiUsageService } from '../ai/ai-usage.service.js';
@@ -25,7 +24,6 @@ export interface RetainInput {
   bank: Pick<MemoryBank, 'id' | 'mission'>;
   /** Who retains: the row's author, and whose budget an extraction call spends. */
   userId: string;
-  locale: Locale;
   items: RetainItem[];
   /**
    * The async retain this run belongs to. Its items were masked before its row

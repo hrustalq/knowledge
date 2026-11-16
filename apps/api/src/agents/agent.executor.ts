@@ -87,7 +87,6 @@ export class AgentExecutor extends AgentServices {
               agentKey: agent.key,
               projectId,
               userId: principal.userId,
-              locale: principal.locale,
               sourceId: run.id,
               sourceKind: 'agent-run',
               question:

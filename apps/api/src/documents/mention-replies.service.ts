@@ -412,7 +412,6 @@ export class MentionRepliesService {
       void this.memory?.remember({
         ...memory,
         principal,
-        locale: input.locale,
         sourceId: input.commentId,
         sourceKind: 'mention-reply',
         question: grounding.question,

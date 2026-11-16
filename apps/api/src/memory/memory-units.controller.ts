@@ -363,7 +363,6 @@ export class MemoryUnitsController {
     const caller = await this.access.caller(principal, ws, 'editor');
     return this.operations.consolidate(await this.access.bank(caller, bankId), {
       userId: principal.userId,
-      locale: principal.locale,
       observationScopes: dto.observation_scopes,
     });
   }
@@ -580,7 +579,7 @@ export class MemoryUnitsController {
     @Query() query: TransferQueryDto,
   ) {
     const caller = await this.access.caller(principal, ws, 'editor');
-    return this.management.submitExport(await this.access.bank(caller, bankId), query, false, principal.userId, principal.locale);
+    return this.management.submitExport(await this.access.bank(caller, bankId), query, false, principal.userId);
   }
 
   @MemoryAudit({ action: 'memory.exported', op: 'bank' })
@@ -593,7 +592,7 @@ export class MemoryUnitsController {
     @Query() query: TransferQueryDto,
   ) {
     const caller = await this.access.caller(principal, ws, 'editor');
-    return this.management.submitExport(await this.access.bank(caller, bankId), query, true, principal.userId, principal.locale);
+    return this.management.submitExport(await this.access.bank(caller, bankId), query, true, principal.userId);
   }
 
   @MemoryAudit({ action: 'memory.imported', op: 'documents' })

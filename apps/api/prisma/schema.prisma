@@ -5224,6 +5224,8 @@ model MemoryOperation {
   result      Json?
   itemsCount  Int        @map("items_count")
   createdBy   String     @map("created_by") @db.Uuid
+  /// Written only by mental-model operations: their refresh runs reflect, which answers a person in this language.
+  /// Retain, consolidation and transfer rows keep the default; their extraction is source-language (#1027).
   locale      String     @default("en")
   attempts    Int        @default(0)
   error       String?

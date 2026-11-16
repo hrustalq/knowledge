@@ -39,7 +39,7 @@ function service(opts: { held?: { bankId: string }; claim?: number; row?: Record
 describe('MemoryOperationsService (#986)', () => {
   it('stores the items masked and enqueues a job that carries only the row id', async () => {
     const { svc, created, producer } = service();
-    const id = await svc.submit(bank, { items: [item], userId: 'u1', locale: 'en', operationId: OP });
+    const id = await svc.submit(bank, { items: [item], userId: 'u1', operationId: OP });
     expect(id).toBe(OP);
     expect(JSON.stringify(created[0]!.payload)).toBe(JSON.stringify([{ ...item, content: 'Key [SECRET_1] for [EMAIL_1]' }]));
     expect(created[0]).toMatchObject({ id: OP, bankId: 'bank-1', workspaceId: 'ws-1', itemsCount: 1, createdBy: 'u1' });
@@ -48,15 +48,15 @@ describe('MemoryOperationsService (#986)', () => {
 
   it('returns the operation an operation_id already made, enqueuing nothing, and refuses one another bank holds', async () => {
     const same = service({ held: { bankId: 'bank-1' } });
-    expect(await same.svc.submit(bank, { items: [item], userId: 'u1', locale: 'en', operationId: OP })).toBe(OP);
+    expect(await same.svc.submit(bank, { items: [item], userId: 'u1', operationId: OP })).toBe(OP);
     expect(same.producer.enqueue).not.toHaveBeenCalled();
-    await expect(service({ held: { bankId: 'bank-2' } }).svc.submit(bank, { items: [item], userId: 'u1', locale: 'en', operationId: OP })).rejects.toBeInstanceOf(ConflictException);
+    await expect(service({ held: { bankId: 'bank-2' } }).svc.submit(bank, { items: [item], userId: 'u1', operationId: OP })).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('keeps the row when the queue is down: the sweeper will enqueue it', async () => {
     const { svc, producer, created } = service();
     producer.enqueue.mockRejectedValueOnce(new Error('redis down'));
-    await expect(svc.submit(bank, { items: [item], userId: 'u1', locale: 'en' })).resolves.toEqual(expect.any(String));
+    await expect(svc.submit(bank, { items: [item], userId: 'u1' })).resolves.toEqual(expect.any(String));
     expect(created).toHaveLength(1);
   });
 
@@ -65,7 +65,7 @@ describe('MemoryOperationsService (#986)', () => {
     const { svc, retainer, updates } = service({ row });
     await svc.run(OP);
     expect(updates[0]).toMatchObject({ where: { id: OP, status: 'queued' }, data: { status: 'running', attempts: { increment: 1 } } });
-    expect(retainer.retain).toHaveBeenCalledWith({ workspaceId: 'ws-1', bank, userId: 'u1', locale: 'ru', items: [item], operationId: OP });
+    expect(retainer.retain).toHaveBeenCalledWith({ workspaceId: 'ws-1', bank, userId: 'u1', items: [item], operationId: OP });
     expect(updates[1]).toMatchObject({ where: { id: OP, status: 'running' }, data: { status: 'completed', payload: [] } });
 
     const lost = service({ row, claim: 0 });

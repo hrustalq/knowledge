@@ -1275,7 +1275,6 @@ describe('Hindsight compatibility (e2e, #986)', () => {
           workspaceId: WS_A,
           bank: bankRow,
           userId: people.alice.id,
-          locale: 'en',
           items,
           operationId: op.id,
         });

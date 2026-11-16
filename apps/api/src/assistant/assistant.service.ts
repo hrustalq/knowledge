@@ -1199,7 +1199,6 @@ export class AssistantService {
           agentKey: turn.agent.key,
           projectId: turn.projectId,
           userId: principal.userId,
-          locale: principal.locale,
           sourceId: assistantMessage.id,
           sourceKind: 'assistant-turn',
           question: turn.question,

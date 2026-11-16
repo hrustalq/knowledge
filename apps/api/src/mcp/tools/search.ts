@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ANSWER_FEEDBACK_REASONS, ANSWER_RATINGS, KNOWLEDGE_ISSUE_DETAIL_MAX_CHARS, KNOWLEDGE_ISSUE_EVIDENCE_ITEM_MAX_CHARS, KNOWLEDGE_ISSUE_EVIDENCE_MAX, KNOWLEDGE_ISSUE_KINDS, KNOWLEDGE_ISSUE_SUGGESTION_MAX_CHARS, ANALYTICS_MAX_DAYS } from '@knowledge/contracts';
+import { CONTEXT_BUDGET, ANSWER_FEEDBACK_REASONS, ANSWER_RATINGS, KNOWLEDGE_ISSUE_DETAIL_MAX_CHARS, KNOWLEDGE_ISSUE_EVIDENCE_ITEM_MAX_CHARS, KNOWLEDGE_ISSUE_EVIDENCE_MAX, KNOWLEDGE_ISSUE_KINDS, KNOWLEDGE_ISSUE_SUGGESTION_MAX_CHARS, ANALYTICS_MAX_DAYS } from '@knowledge/contracts';
 import { firstPerPage } from '../../search/ranking.js';
 import { currentTrace, newTraceId } from '@knowledge/observability';
 import { MCP_AS_OF, MCP_KNOWN_AT } from '../mcp-tools.js';
@@ -73,6 +73,41 @@ export function registerSearchTools(ctx: McpToolContext): void {
         results: await svc.provenance.decorateResults(workspaceId, firstPerPage(res.results)),
         traceId: currentTrace()?.traceId ?? newTraceId(),
       });
+    },
+  );
+
+  // Ticket context (#1194): the twin of POST /v1/context — viewer, no guests.
+  server.registerTool(
+    'knowledge_context',
+    {
+      description:
+        'Call first when you start on a ticket, an issue or a task: what this workspace already knows about it, as ' +
+        'pointers inside a small token budget. Pages (title, id, trust status, one short excerpt; outdated and ' +
+        'expired pages are flagged and ranked below verified ones), glossary terms the query names, and memory ' +
+        'agents left in the projects this repo belongs to (always unverified). Open a page with ' +
+        'knowledge_get_document_content only when the task needs it. empty: true means nothing relevant is known; ' +
+        'carry on without it. A second call passes the ids already shown in exclude.',
+      inputSchema: {
+        workspaceId: z.string().uuid(),
+        query: z
+          .string()
+          .min(1)
+          .max(2000)
+          .describe("The ticket's title and its key terms (names, components, error text), in the ticket's language; not the whole ticket"),
+        repo: z.string().max(500).optional().describe('The git remote of the repo you are working in (`git remote get-url origin`)'),
+        projectIds: z.array(z.string().uuid()).max(20).optional().describe('Projects to read memory from, beside what repo resolves to'),
+        exclude: z.array(z.string().max(64)).max(50).optional().describe('Page, term or memory ids an earlier call already showed'),
+        budget: z
+          .number()
+          .int()
+          .optional()
+          .describe(`Tokens for the answer: ${CONTEXT_BUDGET.default} by default, held to ${CONTEXT_BUDGET.min}–${CONTEXT_BUDGET.max}`),
+      },
+    },
+    async ({ workspaceId, query, repo, projectIds, exclude, budget }) => {
+      await guard.ws(workspaceId, 'viewer');
+      const res = await svc.context.context({ workspaceId, query, repo, projectIds, exclude, budget }, await guard.scope(workspaceId), caller);
+      return pageJson('knowledge_context', res);
     },
   );
 

@@ -13,6 +13,18 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Added
+
+- `knowledge_context` (MCP, core toolset) and `POST /v1/context`: what the workspace already knows about a ticket, as
+  pointers inside a token budget (600 by default, `budget` held to 200–2000). Up to four pages (title, trust status,
+  one excerpt of at most 200 characters; outdated and expired pages flagged and ranked below verified ones), up to
+  three glossary terms the query names, and up to three memories from the project banks of the projects the repo's git
+  remote (`repo`) resolves to through codebase / markdown-git connectors, each marked unverified. Items that do not fit
+  are dropped whole; when nothing clears a relevance floor the answer is one line, `empty: true`. `exclude` skips ids an
+  earlier call showed. No model call. (#1194)
+
 ## [0.55.1] — 2026-11-16
 
 ### Fixed

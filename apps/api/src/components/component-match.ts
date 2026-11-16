@@ -84,10 +84,11 @@ export function componentKeyFor(
 /**
  * A repository as lower-case segments, host first when there is one:
  * `https://github.com/Owner/Repo.git` and `github.com/owner/repo` both read
- * `github.com/owner/repo`, so either — or any tail of it — matches.
+ * `github.com/owner/repo`, so either — or any tail of it — matches. So does
+ * a git remote in scp form, `git@github.com:Owner/Repo.git` (#1194).
  */
 export function repositorySegments(value: string): string[] {
-  let path = value.trim();
+  let path = value.trim().replace(/^[\w.-]+@([^:/\s]+):(?!\/)/, '$1/');
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(path)) {
     try {
       const url = new URL(path);

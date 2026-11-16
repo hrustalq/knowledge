@@ -188,6 +188,7 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
     documents,
     compare: {},
     search,
+    context: {},
     mergeRequests: {},
     mergeRequestThreads: {},
     entities: {},

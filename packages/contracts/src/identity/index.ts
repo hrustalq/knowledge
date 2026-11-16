@@ -1791,6 +1791,7 @@ export const MCP_TOOLSETS = {
     tools: [
       'knowledge_whoami',
       'knowledge_search',
+      'knowledge_context',
       'knowledge_list_projects',
       'knowledge_list_documents',
       'knowledge_get_document',

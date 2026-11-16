@@ -143,6 +143,7 @@ This is the core of a skill stack. Each of these is its own skill, with its play
 
 | Tool | Kind | What it does |
 | --- | --- | --- |
+| \`knowledge_context\` | read | Call first when you start on a ticket, an issue or a task: what this workspace already knows about it, as pointers inside a small token budget. |
 | \`knowledge_feedback\` | write | Rate an answer you built from knowledge_search: up or down, with a reason on down. |
 | \`knowledge_find_similar\` | read | Before capturing, check whether the knowledge base already says it: the pages nearest the text, by cosine similarity (0–1), only pages you can open. |
 | \`knowledge_get_document\` | read | Get a document, its head (or a given) revision and indexed chunk summaries, plus \`backlinks\`: the pages you can open whose current text links to it, with the headings they link to. |
@@ -452,6 +453,7 @@ Over MCP the same text is the resources \`knowledge://documents/<documentId>.md\
 | \`knowledge_capture_note\` | write | Record something durable learned in this session: a gotcha (a non-obvious trap that cost time), a convention (how this team does a thing) or a how-to (steps that work). |
 | \`knowledge_code_usages\` | read | Where code is used, from a codebase connector's import index at its indexed head: every file importing the given path (a file, directory or glob) or the code a component page declares, what each imports, and the pages documenting each usage site — component pages covering it first, else its repo wiki module page. |
 | \`knowledge_compare_revisions\` | read | GitLab-style comparison of two revisions: "direct" (diff from..to) or "merge-base" (diff from...to against the nearest common ancestor). |
+| \`knowledge_context\` | read | Call first when you start on a ticket, an issue or a task: what this workspace already knows about it, as pointers inside a small token budget. |
 | \`knowledge_diff_api_spec\` | read | What changed in an API spec document between two revisions, classified: each change names its rule (operation-removed, operation-added, operation-deprecated, required-param-added, optional-param-added, param-removed, param-became-required, param-type-changed, request-body-required, request-property-required-added, property-type-changed, enum-value-removed, enum-value-added, response-status-removed, response-status-added, response-property-removed, response-property-added, security-requirement-added, security-requirement-removed, channel-removed, channel-added, message-payload-field-removed, message-payload-field-added), its severity (breaking / non-breaking / info), the operation's entityKey and what changed inside it (subject, before, after). |
 | \`knowledge_export\` | read | Export a page, a page and its subpages, or a whole project as a file a person can download (docs/features/45): zip (markdown sources with frontmatter, attachments and manifest.json), html (an offline site, zipped), pdf (only where the deployment has Gotenberg) or docx (one Word document). |
 | \`knowledge_find_embeds\` | read | Pages whose current version embeds a Figma file or frame, with the captions of each matching group. |
@@ -686,6 +688,7 @@ Over MCP the same text is the resources \`knowledge://documents/<documentId>.md\
 | --- | --- | --- |
 | \`knowledge_code_usages\` | read | Where code is used, from a codebase connector's import index at its indexed head: every file importing the given path (a file, directory or glob) or the code a component page declares, what each imports, and the pages documenting each usage site — component pages covering it first, else its repo wiki module page. |
 | \`knowledge_compare_revisions\` | read | GitLab-style comparison of two revisions: "direct" (diff from..to) or "merge-base" (diff from...to against the nearest common ancestor). |
+| \`knowledge_context\` | read | Call first when you start on a ticket, an issue or a task: what this workspace already knows about it, as pointers inside a small token budget. |
 | \`knowledge_diff_api_spec\` | read | What changed in an API spec document between two revisions, classified: each change names its rule (operation-removed, operation-added, operation-deprecated, required-param-added, optional-param-added, param-removed, param-became-required, param-type-changed, request-body-required, request-property-required-added, property-type-changed, enum-value-removed, enum-value-added, response-status-removed, response-status-added, response-property-removed, response-property-added, security-requirement-added, security-requirement-removed, channel-removed, channel-added, message-payload-field-removed, message-payload-field-added), its severity (breaking / non-breaking / info), the operation's entityKey and what changed inside it (subject, before, after). |
 | \`knowledge_export\` | read | Export a page, a page and its subpages, or a whole project as a file a person can download (docs/features/45): zip (markdown sources with frontmatter, attachments and manifest.json), html (an offline site, zipped), pdf (only where the deployment has Gotenberg) or docx (one Word document). |
 | \`knowledge_find_embeds\` | read | Pages whose current version embeds a Figma file or frame, with the captions of each matching group. |
@@ -1058,6 +1061,7 @@ Over MCP the same text is the resources \`knowledge://documents/<documentId>.md\
 | \`knowledge_code_usages\` | read | Where code is used, from a codebase connector's import index at its indexed head: every file importing the given path (a file, directory or glob) or the code a component page declares, what each imports, and the pages documenting each usage site — component pages covering it first, else its repo wiki module page. |
 | \`knowledge_comment_merge_request\` | write | Comment on an open merge request: replies into the given thread, or starts a new (unanchored) discussion thread when threadId is omitted. |
 | \`knowledge_compare_revisions\` | read | GitLab-style comparison of two revisions: "direct" (diff from..to) or "merge-base" (diff from...to against the nearest common ancestor). |
+| \`knowledge_context\` | read | Call first when you start on a ticket, an issue or a task: what this workspace already knows about it, as pointers inside a small token budget. |
 | \`knowledge_create_branch\` | write | Create a branch on a document, from a given revision or the default-branch head. |
 | \`knowledge_create_document\` | write | Create a new page from markdown in a project, optionally nested under another page. |
 | \`knowledge_create_merge_request\` | write | Open a GitLab-style merge request from a branch. |
@@ -1199,6 +1203,13 @@ exports[`the offered tool set (#822) > a capture key 1`] = `
       },
       "name": "knowledge_compare_revisions",
       "schema": "b44c80db198f6d37",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_context",
+      "schema": "28a2bc24dee344bd",
     },
     {
       "annotations": {
@@ -1645,6 +1656,13 @@ exports[`the offered tool set (#822) > a read key 1`] = `
       },
       "name": "knowledge_compare_revisions",
       "schema": "b44c80db198f6d37",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_context",
+      "schema": "28a2bc24dee344bd",
     },
     {
       "annotations": {
@@ -2109,6 +2127,13 @@ exports[`the offered tool set (#822) > a write key 1`] = `
       },
       "name": "knowledge_compare_revisions",
       "schema": "b44c80db198f6d37",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_context",
+      "schema": "28a2bc24dee344bd",
     },
     {
       "annotations": {
@@ -2790,6 +2815,13 @@ exports[`the offered tool set (#822) > the stdio principal 1`] = `
       },
       "name": "knowledge_compare_revisions",
       "schema": "b44c80db198f6d37",
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true,
+      },
+      "name": "knowledge_context",
+      "schema": "28a2bc24dee344bd",
     },
     {
       "annotations": {

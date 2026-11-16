@@ -9517,6 +9517,136 @@
       "draft"
     ]
   },
+  "ContextMemory": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "unverified"
+        ]
+      },
+      "bankId": {
+        "type": "string"
+      },
+      "occurredAt": {
+        "type": "string",
+        "nullable": true
+      },
+      "text": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "status",
+      "bankId",
+      "occurredAt",
+      "text"
+    ]
+  },
+  "ContextPage": {
+    "type": "object",
+    "properties": {
+      "documentId": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string"
+      },
+      "status": {
+        "$ref": "#/components/schemas/SourceVerificationState"
+      },
+      "match": {
+        "type": "string"
+      },
+      "excerpt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "documentId",
+      "title",
+      "status",
+      "excerpt"
+    ]
+  },
+  "ContextResponse": {
+    "type": "object",
+    "properties": {
+      "pages": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/ContextPage"
+        }
+      },
+      "memories": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/ContextMemory"
+        }
+      },
+      "terms": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/ContextTerm"
+        }
+      },
+      "projectIds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "tokens": {
+        "type": "number"
+      },
+      "empty": {
+        "type": "boolean"
+      },
+      "reason": {
+        "type": "string",
+        "enum": [
+          "nothing-relevant"
+        ]
+      }
+    },
+    "required": [
+      "pages",
+      "memories",
+      "terms",
+      "projectIds",
+      "tokens",
+      "empty"
+    ]
+  },
+  "ContextTerm": {
+    "type": "object",
+    "properties": {
+      "termId": {
+        "type": "string"
+      },
+      "term": {
+        "type": "string"
+      },
+      "definition": {
+        "type": "string"
+      },
+      "documentId": {
+        "type": "string",
+        "nullable": true
+      }
+    },
+    "required": [
+      "termId",
+      "term",
+      "definition",
+      "documentId"
+    ]
+  },
   "CostAmount": {
     "type": "object",
     "properties": {

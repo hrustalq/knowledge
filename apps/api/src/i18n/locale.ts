@@ -14,15 +14,15 @@ export function asLocale(value: string | null | undefined): Locale {
 }
 
 /**
- * Resolve a locale from a raw upgrade/HTTP request, mirroring the resolver
- * order nestjs-i18n uses for normal routes (?lang= -> kn_lang cookie ->
- * Accept-Language). The WebSocket gateway needs this because middleware never
- * runs on an upgrade, so there is no I18nContext to read.
+ * The language a raw upgrade/HTTP request names, or null when it names none,
+ * in the resolver order nestjs-i18n uses for normal routes (?lang= -> kn_lang
+ * cookie -> Accept-Language). A wildcard `*` names nothing: Node's fetch sends
+ * it by default, and it must not outrank a person's saved language (#1185).
  */
-export function localeFromRequest(req: {
+export function requestedLocale(req: {
   url?: string;
   headers: Record<string, string | string[] | undefined>;
-}): Locale {
+}): Locale | null {
   const url = new URL(req.url ?? '/', 'http://localhost');
   const query = url.searchParams.get('lang');
   if (isLocale(query)) return query;
@@ -32,6 +32,21 @@ export function localeFromRequest(req: {
   if (isLocale(cookie)) return cookie;
 
   const raw = req.headers['accept-language'];
-  return parseAcceptLanguage(Array.isArray(raw) ? raw[0] : raw) ?? DEFAULT_LOCALE;
+  const named = (Array.isArray(raw) ? raw[0] : raw)
+    ?.split(',')
+    .filter((part) => part.split(';')[0].trim() !== '*')
+    .join(',');
+  return parseAcceptLanguage(named);
 }
 
+/**
+ * Resolve a locale from a raw upgrade/HTTP request. The WebSocket gateway
+ * needs this because middleware never runs on an upgrade, so there is no
+ * I18nContext to read.
+ */
+export function localeFromRequest(req: {
+  url?: string;
+  headers: Record<string, string | string[] | undefined>;
+}): Locale {
+  return requestedLocale(req) ?? DEFAULT_LOCALE;
+}

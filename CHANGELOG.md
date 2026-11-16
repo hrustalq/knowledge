@@ -20,6 +20,10 @@ in the pull request that introduces them — see
 - Touch text selection now offers Comment and Copy link on page and merge-request review canvases, so phone and tablet readers can start anchored threads without mouse events. (#1030)
 - Tall dialogs and confirmation alerts now stay within a phone's dynamic viewport and scroll internally, keeping their titles, close controls and actions reachable. (#1181)
 - The new workflow wizard opens again instead of failing during page rendering. (#1182)
+- Model replies now come in the language the request names (`?lang=`, the `kn_lang` cookie or `Accept-Language`), the
+  same language as API errors. They used to follow only the account's saved language, so a client asking in English got
+  English errors but Russian answers from the assistant, agent runs, memory reflect and mental models. A request that
+  names no language still gets the saved one; the web app is unchanged. (#1185)
 - In Ask mode, a message that asks a question and also asks for a change now gets the answer as well as the Agent-mode
   button; the reply used to describe only the button. (#1186)
 - Assistant turns now write to project memory for people who already have personal agent memory. Any personal memory

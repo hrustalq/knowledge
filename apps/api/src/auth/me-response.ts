@@ -21,7 +21,7 @@ export function toMeResponse(
     avatarUrl: principal.avatarUrl,
     mode: principal.mode,
     isAdmin: principal.isAdmin,
-    locale: principal.locale,
+    locale: principal.savedLocale ?? principal.locale,
     authMethod: principal.mode === 'session' ? (principal.authMethod ?? 'password') : null,
     emailVerified: principal.emailVerified ?? true,
     emailVerificationRequired: verificationRequired,

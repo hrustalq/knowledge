@@ -615,7 +615,9 @@ function leave() {
             {{ t('scaffold.provenance.describedNote') }}
           </span>
         </p>
-      <div class="grid min-h-0 flex-1 grid-rows-[minmax(14rem,40%)_minmax(0,1fr)] lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] lg:grid-rows-1">
+      <!-- The base track is `minmax(0,1fr)` so the outline toolbar scrolls inside the column
+           instead of widening it below lg (#1073). -->
+      <div class="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(14rem,40%)_minmax(0,1fr)] lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] lg:grid-rows-1">
         <BlueprintOutline
           class="min-h-0 border-b lg:border-r lg:border-b-0"
           :tree="tree"

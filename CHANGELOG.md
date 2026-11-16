@@ -67,6 +67,8 @@ in the pull request that introduces them — see
   (#1081). (#1068)
 - AI → Usage on a phone: the range and group-by buttons wrap instead of pushing the page sideways (Russian). (#1069)
 - A long project name wraps on the project page on a phone instead of being cut to one line. (#1072)
+- The import stepper and the new-project Structure step fit a phone screen instead of being a few pixels wider than
+  it. (#1073)
 
 ## [0.56.0] — 2026-11-16
 

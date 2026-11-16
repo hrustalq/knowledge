@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import type { AgentRun } from '@prisma/client';
+import { AGENT_RUN_MAX_DOCUMENTS } from '@knowledge/contracts';
 import { t } from '../i18n/t.js';
 import { withAgentRun } from '../ai/agent-run-context.js';
-import { projectOfRun } from '../ai/run-project.js';
+import { projectOfRun, subjectPagesOfRun } from '../ai/run-project.js';
 import { isPrivateRun } from '../ai/run-privacy.js';
 import type { Principal } from '../auth/principal.js';
-import { WORKSPACE_AUDIENCE } from '../permissions/access-scope.js';
+import { WORKSPACE_AUDIENCE, visibilityWhere } from '../permissions/access-scope.js';
 import type { ResolvedAgent } from './agent-registry.service.js';
 import {
   AgentServices,
@@ -51,12 +52,15 @@ export class AgentExecutor extends AgentServices {
       { agentKey: agent.key, agentRunId: run.id, projectId },
       async () => {
         try {
-          // Memory recall needs a real request to search on: a run with no brief
-          // (no note, no webhook body) would only recall on its description.
           const brief = runBrief(run.input);
           const memory = this.memory;
-          if (brief && memory)
+          if (memory)
             this.setMemoryGrounding(run.id, async () => {
+              // Recall needs a real request to search on (#1167): the brief, else the
+              // titles of the pages the run is about. Neither = no recall; the
+              // agent's description would be the same query every run.
+              const query = brief || (await this.subjectTitles(run, principal));
+              if (!query) return '';
               // A run's summary and findings are listed to the workspace, so it
               // recalls only project banks every member could read — never the
               // owner's personal bank, never a restricted project's.
@@ -66,7 +70,7 @@ export class AgentExecutor extends AgentServices {
                 agentKey: agent.key,
                 projectId,
                 userId: principal.userId,
-                query: brief,
+                query,
                 audience: WORKSPACE_AUDIENCE,
               });
               return grounding.text;
@@ -130,6 +134,21 @@ export class AgentExecutor extends AgentServices {
       );
       return null;
     }
+  }
+
+  /** The titles of the run's subject pages the whole workspace may open — what a brief-less run recalls on. */
+  private async subjectTitles(run: AgentRun, principal: Principal): Promise<string> {
+    const ids = await subjectPagesOfRun(this.prisma, run);
+    if (!ids.length) return '';
+    const pages = await this.prisma.document.findMany({
+      where: {
+        id: { in: ids.slice(0, AGENT_RUN_MAX_DOCUMENTS) },
+        workspaceId: run.workspaceId,
+        ...visibilityWhere(await this.runScope(run, principal)),
+      },
+      select: { title: true },
+    });
+    return pages.map((page) => page.title).join('\n');
   }
 
   private async dispatch(

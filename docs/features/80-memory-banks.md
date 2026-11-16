@@ -56,17 +56,38 @@ the bank is read or written, never in a prompt:
 - **A background run never touches a personal bank.** Its summary and findings are listed to every
   member, so it recalls and retains only project banks visible under `WORKSPACE_AUDIENCE`. A private
   run (a memo's, a restricted project's check) retains nothing.
-- **A background run recalls at most once**, on its first `callModel`, and only when it has a brief
-  (a note or a webhook body). Runners that call the model client directly — linter, atlas, auditor,
-  arbiter, reviewer, archaeologist, tester, glossarist, the sentinel's code-reading loop — do not
-  recall; they still retain their outcome.
+- **A background run recalls at most once**, on its first model call, and every later call of the
+  run carries the same block. Grounding is applied by the model client `AgentServices` hands every
+  runner (`svc.client`, and `callModel` over it), so a runner — or a helper it passes that client
+  to, like the code-reading loop — cannot skip it. The query is the run's brief (a note or a webhook
+  body), else the titles of its subject pages (`subjectPagesOfRun`: `doc:`/`mr:`/`issue:` subjects
+  and the pages in its input) that the whole workspace may open. A run with neither does not recall:
+  the agent's description would be the same query on every run, and a workspace-wide run has no
+  project bank to read anyway.
+- **The glossarist does not recall** (a deliberate non-goal): it calls `GlossaryService.suggest`,
+  the same call the settings page makes, with that service's own client. It extracts terms from the
+  page in front of it, where earlier project work adds nothing to check against. It still retains
+  its outcome like every run. Memory's own extraction and consolidation calls are never grounded.
+- **An agent mention reply** (feature 21) recalls and retains under the page's audience
+  (`{ kind: 'document' }`): never the commenter's personal bank, and the project bank only when the
+  page's readers may open it. The reply is copied to the project bank (`mention-reply:<comment id>`)
+  only when the page is restricted by nothing but its project — `withinProjectAudience` on the scope
+  clamped to the page's readers — since the reply quotes the page and thread. A mention answered by
+  a run (`comment.mention` trigger) is an ordinary background run.
 - **An assistant turn reaches the project bank only when its readers could have seen all of it:**
   the turn recalled nothing from the asker's personal bank, carried no draft or attachment, and the
   asker's scope reads nothing the project's readers cannot (`withinProjectAudience`). Otherwise it
   is retained to the personal bank only. Known gap: an earlier answer in the same thread that
   repeated personal memory is part of a later turn's prompt and is not tracked.
-- Agent mention replies, workflows, the one-shot review / suggest / ask calls, public Ask and the
-  Knowledge MCP tools use neither recall nor retention.
+- **Workflows use neither** (a deliberate non-goal): a step's items and drafts become pages and
+  merge requests, and rerunning a step on the same page should give the same result rather than one
+  that drifts with whatever the bank learned since. Neither do the one-shot review / suggest / ask
+  calls, public Ask or the Knowledge MCP tools.
+- `test/agent-memory-runtime.e2e-spec.ts` proves the loop against live infra on a stub model: an
+  assistant turn retains to both banks, the next turn recalls both, and a reviewer run (a direct
+  client call, no note) recalls the project bank on its subject title, never the personal one, and
+  retains its outcome there. It also asserts every caller is actually injected with the runtime —
+  until #1167, a type-only import left every background run with none.
 
 Each agent's `memoryPolicy` controls retention only, with `mode: all | durable | off` and optional
 `personal` and `project` overrides. Missing policy is `all`, exactly the previous behavior; `off`

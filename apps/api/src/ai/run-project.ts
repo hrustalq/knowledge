@@ -1,6 +1,8 @@
 import { UUID_RE, type AgentRunInput } from '@knowledge/contracts';
 import type { PrismaService } from '../prisma/prisma.service.js';
 
+const uuid = (id: string | null | undefined): string | null => (id && UUID_RE.test(id) ? id : null);
+
 type Db = Pick<PrismaService, 'document' | 'mergeRequest' | 'knowledgeIssue' | 'memo' | 'connector'>;
 
 /**
@@ -19,11 +21,41 @@ export async function projectOfRun(
 ): Promise<string | null> {
   const { workspaceId } = run;
   const input = (run.input ?? {}) as AgentRunInput;
+  const [kind, ...rest] = (run.subjectKey ?? '').split(':');
+  const subject = rest.join(':') || null;
+
+  const pages = await subjectPagesOfRun(db, run);
+  if (pages.length) {
+    const rows = await db.document.findMany({ where: { id: { in: pages }, workspaceId }, select: { projectId: true } });
+    const projects = new Set(rows.map((r) => r.projectId));
+    return projects.size === 1 ? [...projects][0]! : null;
+  }
+
+  const memoId = uuid(input.memo?.memoId);
+  if (memoId) {
+    const memo = await db.memo.findFirst({ where: { id: memoId, workspaceId }, select: { projectId: true } });
+    if (memo) return memo.projectId;
+  }
+  const connectorId = uuid(input.connectorId ?? (kind === 'connector' ? subject : null));
+  if (connectorId) {
+    const connector = await db.connector.findFirst({ where: { id: connectorId, workspaceId }, select: { projectId: true } });
+    if (connector) return connector.projectId;
+  }
+  return null;
+}
+
+/**
+ * The pages a run is about (#927, #1167): by subject (`doc:`, `mr:`, `issue:`) or in its input.
+ * Ids only, unfiltered — a caller that shows or searches on them filters by its own scope.
+ */
+export async function subjectPagesOfRun(
+  db: Pick<PrismaService, 'mergeRequest' | 'knowledgeIssue'>,
+  run: { workspaceId: string; subjectKey: string | null; input: unknown },
+): Promise<string[]> {
+  const input = (run.input ?? {}) as AgentRunInput;
   // `doc:<id>` → 'doc' and the id; a webhook delivery or a component draft names no single row.
   const [kind, ...rest] = (run.subjectKey ?? '').split(':');
   const subject = rest.join(':') || null;
-  const uuid = (id: string | null | undefined): string | null => (id && UUID_RE.test(id) ? id : null);
-
   const pages = new Set<string>();
   for (const id of [
     kind === 'doc' ? subject : null,
@@ -41,24 +73,8 @@ export async function projectOfRun(
   }
   const issueId = uuid(input.issueId ?? (kind === 'issue' ? subject : null));
   if (issueId) {
-    const issue = await db.knowledgeIssue.findFirst({ where: { id: issueId, workspaceId }, select: { documentId: true } });
+    const issue = await db.knowledgeIssue.findFirst({ where: { id: issueId, workspaceId: run.workspaceId }, select: { documentId: true } });
     if (issue) pages.add(issue.documentId);
   }
-  if (pages.size) {
-    const rows = await db.document.findMany({ where: { id: { in: [...pages] }, workspaceId }, select: { projectId: true } });
-    const projects = new Set(rows.map((r) => r.projectId));
-    return projects.size === 1 ? [...projects][0]! : null;
-  }
-
-  const memoId = uuid(input.memo?.memoId);
-  if (memoId) {
-    const memo = await db.memo.findFirst({ where: { id: memoId, workspaceId }, select: { projectId: true } });
-    if (memo) return memo.projectId;
-  }
-  const connectorId = uuid(input.connectorId ?? (kind === 'connector' ? subject : null));
-  if (connectorId) {
-    const connector = await db.connector.findFirst({ where: { id: connectorId, workspaceId }, select: { projectId: true } });
-    if (connector) return connector.projectId;
-  }
-  return null;
+  return [...pages];
 }

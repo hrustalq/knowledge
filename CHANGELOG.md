@@ -71,6 +71,7 @@ in the pull request that introduces them — see
   it. (#1073)
 - The navigation drawer on a phone uses most of the screen width instead of the desktop rail's 256px, so deep page
   titles have room. (#1074)
+- At tablet widths the breadcrumb keeps the current page's name visible instead of collapsing it to nothing. (#1075)
 
 ## [0.56.0] — 2026-11-16
 

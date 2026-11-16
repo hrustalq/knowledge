@@ -13,6 +13,14 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.55.2] — 2026-11-16
+
+### Fixed
+
+- In Ask mode, an answer written alongside the Agent-mode switch or a form question is no longer dropped. v0.55.1's prompt
+  change was not enough: models (especially in Russian) wrote the answer in the same step as offering the switch, and only
+  the closing "the button is above" sentence reached the reply. (#1186)
+
 ## [0.55.1] — 2026-11-16
 
 ### Fixed
@@ -7414,7 +7422,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.55.1...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.55.2...HEAD
+[0.55.2]: https://github.com/hrustalq/knowledge/compare/v0.55.1...v0.55.2
 [0.55.1]: https://github.com/hrustalq/knowledge/compare/v0.55.0...v0.55.1
 [0.55.0]: https://github.com/hrustalq/knowledge/compare/v0.54.1...v0.55.0
 [0.54.1]: https://github.com/hrustalq/knowledge/compare/v0.54.0...v0.54.1

@@ -115,8 +115,10 @@ function archive() {
 </script>
 
 <template>
+  <!-- Sticky to the top of main while rows are selected further down (#1064); static from xl so the desktop page is unchanged. z-20: above the table's pinned title cells (z-10, #1043).
+       The tint is baked into an opaque colour: a translucent bar would show the rows scrolling beneath it. -->
   <div
-    class="flex flex-wrap items-center gap-1.5 rounded-md border border-primary/30 bg-primary/5 px-2 py-1.5 text-sm"
+    class="sticky top-0 z-20 flex flex-wrap items-center gap-1.5 rounded-md border border-primary/30 bg-[color-mix(in_oklab,var(--primary)_5%,var(--background))] px-2 py-1.5 text-sm xl:static"
     role="toolbar"
     :aria-label="t('health.bulk.toolbar')"
   >

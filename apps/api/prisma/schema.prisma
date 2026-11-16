@@ -4516,6 +4516,8 @@ model SearchQuery {
   resultCount  Int      @map("result_count")
   /// The top 10 document ids returned, in rank order.
   resultDocIds Json     @default("[]") @map("result_doc_ids")
+  /// A `context` search's answer size in tokens (#1195); null for every other mode.
+  resultTokens Int?     @map("result_tokens")
   channel      String
   readerKey    String?  @map("reader_key")
   apiKeyId     String?  @map("api_key_id") @db.Uuid

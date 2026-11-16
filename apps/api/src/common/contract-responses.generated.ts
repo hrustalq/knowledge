@@ -84,6 +84,7 @@ import type {
   ConnectorRunResponse,
   ConnectorTestResponse,
   ConnectorWorkItemResponse,
+  ContextResponse,
   CreateApiKeyResponse,
   CreateAssistantThreadResponse,
   CreateAttachmentResponse,
@@ -464,6 +465,7 @@ export interface ContractResponses {
   ConnectorRunResponse: ConnectorRunResponse;
   ConnectorTestResponse: ConnectorTestResponse;
   ConnectorWorkItemResponse: ConnectorWorkItemResponse;
+  ContextResponse: ContextResponse;
   CreateApiKeyResponse: CreateApiKeyResponse;
   CreateAssistantThreadResponse: CreateAssistantThreadResponse;
   CreateAttachmentResponse: CreateAttachmentResponse;

@@ -8,6 +8,7 @@ import { CompareService } from '../documents/compare.service.js';
 import { MergeRequestsService } from '../documents/merge-requests.service.js';
 import { MergeRequestThreadsService } from '../documents/merge-request-threads.service.js';
 import { SearchService } from '../search/search.service.js';
+import { ContextService } from '../context/context.service.js';
 import { EntitiesService } from '../entities/entities.service.js';
 import { GraphService } from '../graph/graph.service.js';
 import { GraphQueryService } from '../graph/graph-query.service.js';
@@ -74,6 +75,7 @@ export class McpServices {
     readonly documents: DocumentsService,
     readonly compare: CompareService,
     readonly search: SearchService,
+    readonly context: ContextService,
     readonly mergeRequests: MergeRequestsService,
     readonly mergeRequestThreads: MergeRequestThreadsService,
     readonly entities: EntitiesService,

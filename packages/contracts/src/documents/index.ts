@@ -217,6 +217,75 @@ export interface RelatedDocumentResult {
 }
 
 // ---------------------------------------------------------------------------
+// Ticket context (#1193): pointers, not documents
+// ---------------------------------------------------------------------------
+
+/** The answer's token budget: the default, and the clamp a caller's `budget` is held to. */
+export const CONTEXT_BUDGET = { default: 600, min: 200, max: 2000 } as const;
+/** At most this many of each section, whatever the budget leaves room for. */
+export const CONTEXT_LIMITS = { pages: 4, memories: 3, terms: 3 } as const;
+/** One excerpt per page (and per memory), never more of its text than this. */
+export const CONTEXT_EXCERPT_CHARS = 200;
+
+// POST /v1/context
+export interface ContextRequest {
+  workspaceId: string;
+  /** A condensed query: the ticket's title and key terms, not the raw ticket. */
+  query: string;
+  /** The repo's git remote, in any common form; resolves to the projects whose code or docs connector reads it. */
+  repo?: string;
+  /** Projects to read memory from, beside (or instead of) what `repo` resolves to. */
+  projectIds?: string[];
+  /** Page, term or memory ids an earlier call already showed: skipped. */
+  exclude?: string[];
+  /** Tokens, clamped to {@link CONTEXT_BUDGET}. */
+  budget?: number;
+}
+
+export interface ContextPage {
+  documentId: string;
+  title: string;
+  /** Outdated and expired pages are shown, flagged here, and rank below verified ones. */
+  status: SourceVerificationState;
+  /** The query word the best chunk matched; absent for a match on meaning alone. */
+  match?: string;
+  /** At most {@link CONTEXT_EXCERPT_CHARS} of the best chunk, as plain text. */
+  excerpt: string;
+}
+
+export interface ContextTerm {
+  termId: string;
+  term: string;
+  /** Its first line, shortened. */
+  definition: string;
+  /** The page that defines it in full, when one does. */
+  documentId: string | null;
+}
+
+export interface ContextMemory {
+  id: string;
+  /** Always `unverified`: an agent wrote it for itself, nobody reviewed it. */
+  status: 'unverified';
+  bankId: string;
+  /** When it happened or was said, ISO; null when the memory carries no date. */
+  occurredAt: string | null;
+  text: string;
+}
+
+export interface ContextResponse {
+  pages: ContextPage[];
+  memories: ContextMemory[];
+  terms: ContextTerm[];
+  /** The projects memory was read from: `repo` resolved plus `projectIds`, those the caller may see. */
+  projectIds: string[];
+  /** The answer's estimated size as the MCP tool renders it; never above the budget. */
+  tokens: number;
+  /** Nothing passed any section's relevance floor. */
+  empty: boolean;
+  reason?: 'nothing-relevant';
+}
+
+// ---------------------------------------------------------------------------
 // Phase 2 — revision DAG, branches, compare, deterministic relations
 // ---------------------------------------------------------------------------
 

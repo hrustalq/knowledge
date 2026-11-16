@@ -5552,6 +5552,16 @@
     },
     {
       "method": "POST",
+      "path": "/v1/context",
+      "tag": "search",
+      "summary": "What the workspace already knows about a ticket: pages, glossary terms and project memory as pointers, within a token budget",
+      "role": "viewer",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
       "path": "/v1/search",
       "tag": "search",
       "summary": "Search indexed chunks: semantic, keyword (BM25) or hybrid (RRF fusion + graph expansion)",
@@ -6454,6 +6464,36 @@
         },
         {
           "name": "includeSemanticDiff",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_context",
+      "description": "Call first when you start on a ticket, an issue or a task: what this workspace already knows about it, as pointers inside a small token budget. Pages (title, id, trust status, one short excerpt; outdated and expired pages are flagged and ranked below verified ones), glossary terms the query names, and memory agents left in the projects this repo belongs to (always unverified). Open a page with knowledge_get_document_content only when the task needs it. empty: true means nothing relevant is known; carry on without it. A second call passes the ids already shown in exclude.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "query",
+          "optional": false
+        },
+        {
+          "name": "repo",
+          "optional": true
+        },
+        {
+          "name": "projectIds",
+          "optional": true
+        },
+        {
+          "name": "exclude",
+          "optional": true
+        },
+        {
+          "name": "budget",
           "optional": true
         }
       ]

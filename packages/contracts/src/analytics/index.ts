@@ -209,6 +209,29 @@ export interface AnalyticsAgentsResponse {
   questionSeries: Array<{ date: string; count: number }>;
   /** Model calls by `ai_usage.operation`. */
   operations: AnalyticsOperationRow[];
+  /** Ticket-context answers (#1195): what agents are handed, and whether they use it. */
+  context: AnalyticsContextResponse;
+}
+
+/** How long after a ticket-context answer opening one of its pages counts as following it up (#1195). */
+export const CONTEXT_FOLLOW_UP_HOURS = 2;
+
+export interface AnalyticsContextRow {
+  injections: number;
+  /** Null with no injection that recorded a size. */
+  medianTokens: number | null;
+  /** Share of injections that answered nothing relevant; null with none. */
+  emptyRate: number | null;
+  /**
+   * Share of injected pages the same key (or reader) opened over the same channel within
+   * {@link CONTEXT_FOLLOW_UP_HOURS}; null when no page was injected.
+   */
+  followUpRate: number | null;
+}
+
+export interface AnalyticsContextResponse extends AnalyticsContextRow {
+  /** Per UTC day and channel; days without an injection are absent. */
+  days: Array<AnalyticsContextRow & { date: string; channel: string }>;
 }
 
 /** The tables the dashboard can download: `GET /v1/analytics/export.csv?report=`. */

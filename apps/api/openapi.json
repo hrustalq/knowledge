@@ -14598,6 +14598,72 @@
         ]
       }
     },
+    "/v1/context": {
+      "post": {
+        "operationId": "ContextController_run",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContextDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "What the workspace already knows about a ticket: pages, glossary terms and project memory as pointers, within a token budget",
+        "tags": [
+          "search"
+        ]
+      }
+    },
     "/v1/graph/query": {
       "post": {
         "operationId": "GraphQueryController_run",
@@ -44684,7 +44750,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.54.1",
+    "version": "0.55.1",
     "contact": {}
   },
   "tags": [],
@@ -47304,6 +47370,46 @@
           },
           "filters": {
             "$ref": "#/components/schemas/SearchFiltersDto"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "query"
+        ]
+      },
+      "ContextDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "query": {
+            "type": "string",
+            "description": "A condensed query: the ticket's title and key terms, not the raw ticket"
+          },
+          "repo": {
+            "type": "string",
+            "description": "The repo's git remote (git@host:org/repo.git, https://host/org/repo); memory comes from the projects whose code or docs connector reads it"
+          },
+          "projectIds": {
+            "description": "Projects to read memory from, beside what repo resolves to",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "exclude": {
+            "description": "Page, term or memory ids an earlier call already showed",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "budget": {
+            "type": "number",
+            "description": "Tokens for the answer; 600 when omitted, clamped to 200–2000"
           }
         },
         "required": [
@@ -55962,6 +56068,9 @@
             "items": {
               "$ref": "#/components/schemas/AnalyticsOperationRow"
             }
+          },
+          "context": {
+            "$ref": "#/components/schemas/AnalyticsContextResponse"
           }
         },
         "required": [
@@ -55972,7 +56081,72 @@
           "keys",
           "assistantQuestions",
           "questionSeries",
-          "operations"
+          "operations",
+          "context"
+        ]
+      },
+      "AnalyticsContextResponse": {
+        "type": "object",
+        "properties": {
+          "injections": {
+            "type": "number"
+          },
+          "medianTokens": {
+            "type": "number",
+            "nullable": true
+          },
+          "emptyRate": {
+            "type": "number",
+            "nullable": true
+          },
+          "followUpRate": {
+            "type": "number",
+            "nullable": true
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "type": "string"
+                },
+                "channel": {
+                  "type": "string"
+                },
+                "injections": {
+                  "type": "number"
+                },
+                "medianTokens": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "emptyRate": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "followUpRate": {
+                  "type": "number",
+                  "nullable": true
+                }
+              },
+              "required": [
+                "channel",
+                "date",
+                "emptyRate",
+                "followUpRate",
+                "injections",
+                "medianTokens"
+              ]
+            }
+          }
+        },
+        "required": [
+          "days",
+          "emptyRate",
+          "followUpRate",
+          "injections",
+          "medianTokens"
         ]
       },
       "AnalyticsDayPoint": {
@@ -62515,6 +62689,136 @@
           "closed",
           "merged",
           "draft"
+        ]
+      },
+      "ContextMemory": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "unverified"
+            ]
+          },
+          "bankId": {
+            "type": "string"
+          },
+          "occurredAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "bankId",
+          "occurredAt",
+          "text"
+        ]
+      },
+      "ContextPage": {
+        "type": "object",
+        "properties": {
+          "documentId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SourceVerificationState"
+          },
+          "match": {
+            "type": "string"
+          },
+          "excerpt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "documentId",
+          "title",
+          "status",
+          "excerpt"
+        ]
+      },
+      "ContextResponse": {
+        "type": "object",
+        "properties": {
+          "pages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContextPage"
+            }
+          },
+          "memories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContextMemory"
+            }
+          },
+          "terms": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContextTerm"
+            }
+          },
+          "projectIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tokens": {
+            "type": "number"
+          },
+          "empty": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "nothing-relevant"
+            ]
+          }
+        },
+        "required": [
+          "pages",
+          "memories",
+          "terms",
+          "projectIds",
+          "tokens",
+          "empty"
+        ]
+      },
+      "ContextTerm": {
+        "type": "object",
+        "properties": {
+          "termId": {
+            "type": "string"
+          },
+          "term": {
+            "type": "string"
+          },
+          "definition": {
+            "type": "string"
+          },
+          "documentId": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "termId",
+          "term",
+          "definition",
+          "documentId"
         ]
       },
       "CostAmount": {

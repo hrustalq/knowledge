@@ -10,6 +10,7 @@ import { DocumentsCoreModule } from '../documents/documents-core.module.js';
 import { MergeRequestsCoreModule } from '../documents/merge-requests-core.module.js';
 import { MergeRequestThreadsCoreModule } from '../documents/merge-request-threads-core.module.js';
 import { SearchCoreModule } from '../search/search-core.module.js';
+import { ContextCoreModule } from '../context/context-core.module.js';
 import { EntitiesCoreModule } from '../entities/entities-core.module.js';
 import { ProjectsCoreModule } from '../projects/projects-core.module.js';
 import { ProjectScaffoldCoreModule } from '../projects/project-scaffold-core.module.js';
@@ -68,6 +69,7 @@ import { McpService } from './mcp.service.js';
     MergeRequestsCoreModule,
     MergeRequestThreadsCoreModule,
     SearchCoreModule,
+    ContextCoreModule,
     EntitiesCoreModule,
     ProjectsCoreModule,
     ProjectScaffoldCoreModule,

@@ -4809,7 +4809,13 @@
       "footnote": "Kit v{version}. Run the command again to update it, or after you join a workspace.",
       "review": "Review captures",
       "refused": "This key is offered no capture tools, so there is no kit to install with it. Create a “Read and propose” or read-write key in step 1.",
-      "loadFailed": "Could not load the capture kit."
+      "loadFailed": "Could not load the capture kit.",
+      "ticket": {
+        "title": "Context when a ticket starts",
+        "hint": "With the kit installed, {client} is nudged once per ticket it reads to call knowledge_context: a few pages, glossary terms and project memory as pointers inside a small token budget. The hook still holds no key. Clients without hooks, Codex and Kimi among them, follow the same step from the skill.",
+        "cursor": " Cursor hooks cannot add context to a prompt, so a ticket pasted as a message is left to the skill too.",
+        "label": "The skill’s step"
+      }
     },
     "llms": {
       "title": "llms.txt and markdown",
@@ -7388,7 +7394,31 @@
       "questionsPoint": "{date}: {n} questions",
       "noQuestions": "Nobody asked the assistant anything in this range.",
       "operations": "Model calls",
-      "operationsHint": "Every AI call in the workspace, by what it was for."
+      "operationsHint": "Every AI call in the workspace, by what it was for.",
+      "context": "Ticket context",
+      "contextHint": "What knowledge_context handed agents starting on a ticket, and whether they opened it.",
+      "contextChartLabel": "Ticket-context injections per day over {n} days",
+      "contextPoint": "{date}: {n} injections",
+      "noContext": "No agent asked for ticket context in this range.",
+      "contextMetrics": {
+        "injections": {
+          "label": "Injections",
+          "hint": "knowledge_context calls"
+        },
+        "medianTokens": {
+          "label": "Median size",
+          "hint": "Tokens per answer, half above and half below"
+        },
+        "emptyRate": {
+          "label": "Nothing relevant",
+          "hint": "Share of answers with nothing to hand over"
+        },
+        "followUpRate": {
+          "label": "Pages opened",
+          "hint": "Share of handed-over pages the same key opened within {hours} h"
+        }
+      },
+      "tokensValue": "{n} tokens"
     },
     "settings": {
       "title": "Recording and retention",

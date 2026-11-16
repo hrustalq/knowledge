@@ -289,6 +289,12 @@ watch(
   { immediate: true },
 )
 const kitName = (id: CaptureKitClient) => clients.value.find((c) => c.captureKit === id)?.name ?? id
+/**
+ * The skill's "Starting a ticket" step (#1197), cut from the SKILL.md this
+ * page already fetched: the text an agent reads, never a second copy of it.
+ * Absent when the credential is not offered knowledge_context.
+ */
+const ticketStep = computed(() => /^### Starting a ticket\n[\s\S]*?(?=\n#{2,3} |$(?![\s\S]))/m.exec(skill.value ?? '')?.[0].trim() ?? null)
 
 const kitUrl = computed(() => (connection.value ? `${connection.value.url}/capture-kit` : ''))
 const kit = ref<CaptureKitResponse | null>(null)
@@ -756,6 +762,16 @@ const canManageFeatures = computed(() => auth.role === 'admin')
               <RouterLink to="/captures" class="ml-1 text-primary underline underline-offset-2">{{ t('connect.capture.review') }}</RouterLink>
             </p>
           </template>
+
+          <!-- Ticket context (#1197): the kit's nudge, and the skill step every other client follows. -->
+          <div v-if="ticketStep" class="grid min-w-0 gap-2 border-t pt-3">
+            <h3 class="text-xs font-medium">{{ t('connect.capture.ticket.title') }}</h3>
+            <p class="max-w-3xl text-xs text-muted-foreground">
+              {{ t('connect.capture.ticket.hint', { client: kitName(kitPick) }) }}
+              <template v-if="kitPick === 'cursor'">{{ t('connect.capture.ticket.cursor') }}</template>
+            </p>
+            <CopyBlock :code="ticketStep" :label="t('connect.capture.ticket.label')" />
+          </div>
         </div>
       </section>
 

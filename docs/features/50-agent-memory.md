@@ -273,10 +273,10 @@ read-only key, gets 403 `capture-not-offered`, which is the same predicate the
 skill uses. Other clients get 400. Their guidance is the generated skill's
 "Capture memory" section, with no reminder.
 
-| Client      | Files                                                                                                                                                                                                                              |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Claude Code | `.claude/skills/knowledge-capture/SKILL.md`, `.claude/hooks/knowledge-capture.sh`, and hook entries merged into `.claude/settings.json`: `PostToolUse` on `Edit\|Write\|MultiEdit\|NotebookEdit` runs `edited`, `Stop` runs `stop` |
-| Cursor      | `.cursor/rules/knowledge-capture.mdc` (agent-requested: `alwaysApply: false`, no globs), `.cursor/hooks/knowledge-capture.sh`, and `.cursor/hooks.json` with `afterFileEdit` → `edited`, `stop` → `stop`                           |
+| Client      | Files |
+| ----------- | ----- |
+| Claude Code | `.claude/skills/knowledge-capture/SKILL.md`, `.claude/hooks/knowledge-capture.sh`, and hook entries merged into `.claude/settings.json`: `PostToolUse` on `Edit\|Write\|MultiEdit\|NotebookEdit` runs `edited`, `PostToolUse` on `TICKET_TOOL_MATCHER` (Bash and tracker MCP tools) runs `ticket`, `UserPromptSubmit` runs `ticket-prompt`, `Stop` runs `stop` |
+| Cursor      | `.cursor/rules/knowledge-capture.mdc` (agent-requested: `alwaysApply: false`, no globs), `.cursor/hooks/knowledge-capture.sh`, and `.cursor/hooks.json` with `afterFileEdit` → `edited`, `postToolUse` → `ticket`, `stop` → `stop` |
 
 The hook does exactly this:
 
@@ -307,6 +307,23 @@ The hook does exactly this:
   matched against a closed alphabet first.
 - "The session made edits" comes from the marker alone. The transcript is not
   parsed.
+- **`ticket` / `ticket-prompt`** (kit v3, #1196) nudge the model to call
+  `knowledge_context` ([81](81-ticket-context.md)) once per ticket per
+  session. `ticket` fires after a shell `gh|glab|jira issue view …` or a
+  tracker MCP tool (name mentions Jira, Linear, Atlassian, issue or ticket)
+  and reads the ticket from the tool's **input** only — its output can name any
+  number of other tickets. `ticket-prompt` (Claude Code only) reads the
+  prompt. A ticket is a tracker URL (`/issues/N`, `/browse/KEY`,
+  `/issue/KEY`), `owner/repo#N`, a `KEY-123` that is not a standard
+  (`UTF-8`, `ISO-8601`), or the number after `issue view`. The first read of
+  a ticket creates `<id>.ticket.<key>` with `mkdir`; every later read of it
+  is silent. The nudge is about 40 tokens: call `knowledge_context` with the
+  ticket's title and key terms, the repo remote, and the ids already shown.
+  Claude Code receives it as `additionalContext` on `PostToolUse` /
+  `UserPromptSubmit`, Cursor as `additional_context` on `postToolUse`.
+  Cursor's `beforeSubmitPrompt` cannot add context, so a ticket pasted into a
+  Cursor prompt gets no nudge (the installer says so); the generated skill's
+  "Starting a ticket" step covers it, as it covers Codex and Kimi.
 
 The installer refuses to run outside a git repository and installs at its
 root. It overwrites the skill or rule and the script. It **never overwrites**
@@ -316,7 +333,7 @@ kit's entries in, first dropping any earlier entry whose JSON mentions
 `jq`, it prints the entries for the person to add. The kit's own skill lists
 the workspaces and projects the caller may capture into, with the key's pin
 applied, and names no person, so a team can commit it. `CAPTURE_KIT_VERSION`
-(currently 1) is printed in every installed script. Bump it when a vendor
+(currently 3) is printed in every installed script. Bump it when a vendor
 changes its hook contract; re-fetching is how a kit updates.
 
 `knowledge_whoami` returns `apiKey.projectIds`, and the generated skill's key

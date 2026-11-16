@@ -25,9 +25,10 @@ describe('background agent memory', () => {
       chat: vi.fn(),
     };
     const memory = {
-      ground: vi.fn(
-        async () => '<memories tool="agent-memory">Use pnpm.</memories>',
-      ),
+      ground: vi.fn(async () => ({
+        text: '<memories tool="agent-memory">Use pnpm.</memories>',
+        personal: false,
+      })),
       remember: vi.fn(async () => undefined),
     };
     const prisma = {
@@ -97,6 +98,8 @@ describe('background agent memory', () => {
         agentKey: key,
         projectId: PROJECT,
         userId: USER,
+        query: 'Extra instructions: Check constraints\n\n',
+        audience: { kind: 'workspace' },
       }),
     );
     expect(memory.remember).toHaveBeenCalledWith(
@@ -104,13 +107,15 @@ describe('background agent memory', () => {
         sourceId: 'run-memory',
         sourceKind: 'agent-run',
         answer: 'Requirements checked.',
+        audience: { kind: 'workspace' },
+        shareWithProject: true,
       }),
     );
   });
 
   it('does not retain a failed run', async () => {
     const memory = {
-      ground: vi.fn(async () => ''),
+      ground: vi.fn(async () => ({ text: '', personal: false })),
       remember: vi.fn(async () => undefined),
     };
     const prisma = {
@@ -157,5 +162,68 @@ describe('background agent memory', () => {
       else AGENT_RUNNERS.delete(key);
     }
     expect(memory.remember).not.toHaveBeenCalled();
+  });
+
+  /** Runs `runner` as a one-off agent and reports what memory was asked. */
+  async function runWith(
+    runner: Parameters<typeof AGENT_RUNNERS.set>[1]['run'],
+    over: { input?: unknown; subjectKey?: string | null; remember?: () => Promise<void> } = {},
+  ) {
+    const memory = {
+      ground: vi.fn(async () => ({ text: 'memo', personal: false })),
+      remember: vi.fn(over.remember ?? (async () => undefined)),
+    };
+    const client = {
+      runWithTools: vi.fn(async () => ({ content: '{}', trace: [], usage: {} })),
+      chat: vi.fn(async () => '{}'),
+    };
+    const args = Array.from({ length: 28 }, () => ({}) as never);
+    args[0] = { agentRun: { updateMany: vi.fn(async () => ({ count: 1 })) } } as never;
+    args[3] = client as never;
+    args[27] = memory as never;
+    const executor = new AgentExecutor(...(args as []));
+    const key = 'memory-lazy-test' as BuiltInAgentKey;
+    AGENT_RUNNERS.set(key, { key, run: runner });
+    try {
+      const result = await executor.run(
+        { id: 'run-lazy', workspaceId: WS, projectId: PROJECT, subjectKey: over.subjectKey ?? null, input: over.input ?? { note: 'Check' }, status: 'running' } as unknown as AgentRun,
+        { key, name: 'Lazy', description: 'A constant description', instructions: '', config: { enabled: true }, missing: [] } as never,
+        { ...DEV_PRINCIPAL, userId: USER, locale: 'en' },
+        vi.fn(),
+      );
+      return { memory, client, result };
+    } finally {
+      AGENT_RUNNERS.delete(key);
+    }
+  }
+  const viaCallModel: Parameters<typeof AGENT_RUNNERS.set>[1]['run'] = async (svc) => {
+    await svc.callModel({ config: { enabled: true } as never, userId: USER, operation: 'chat', locale: 'en' }, { missing: [], config: {} } as never, [{ role: 'user', content: 'x' }], vi.fn(), []);
+    await svc.callModel({ config: { enabled: true } as never, userId: USER, operation: 'chat', locale: 'en' }, { missing: [], config: {} } as never, [{ role: 'user', content: 'y' }], vi.fn(), []);
+    return { summary: 'done', findings: [] };
+  };
+
+  it('recalls once, and only for a runner that goes through callModel', async () => {
+    expect((await runWith(viaCallModel)).memory.ground).toHaveBeenCalledOnce();
+    const direct = await runWith(async (svc) => {
+      await svc.client.chat({} as never, [{ role: 'user', content: 'x' }], { json: true });
+      return { summary: 'done', findings: [] };
+    });
+    expect(direct.memory.ground).not.toHaveBeenCalled();
+    expect(direct.memory.remember).toHaveBeenCalledOnce();
+  });
+
+  it('does not recall on a constant when the run has no brief', async () => {
+    const { memory } = await runWith(viaCallModel, { input: {}, subjectKey: 'doc:x' });
+    expect(memory.ground).not.toHaveBeenCalled();
+    expect(memory.remember).toHaveBeenCalledWith(expect.objectContaining({ question: 'doc:x' }));
+  });
+
+  it('settles the run without waiting on retention, and never shares a private run with the project', async () => {
+    const { result, memory } = await runWith(viaCallModel, {
+      subjectKey: 'memo:m1',
+      remember: () => new Promise<void>(() => undefined),
+    });
+    expect(result.summary).toBe('done');
+    expect(memory.remember).toHaveBeenCalledWith(expect.objectContaining({ shareWithProject: false }));
   });
 });

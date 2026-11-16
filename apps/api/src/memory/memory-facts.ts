@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { wrapUntrusted } from '../common/untrusted.js';
 import { t } from '../i18n/t.js';
 import { FILE_DOCUMENT_PREFIX } from './memory-files.js';
+import { globMatch } from './memory-observations.js';
 
 /**
  * The pure half of retain (#986): reading a request into items, building the
@@ -82,8 +83,7 @@ export function resolveObservationScopes(tags: string[], requested?: Observation
     scopes = spec.flatMap((patterns) => {
       const matches = patterns.map((pattern) => {
         if (!pattern.includes('*')) return [pattern];
-        const re = new RegExp(`^${pattern.split('*').map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`);
-        return own.filter((tag) => re.test(tag));
+        return own.filter((tag) => globMatch(pattern, tag));
       });
       if (matches.some((m) => !m.length)) return [];
       return matches.reduce<string[][]>((sets, tagsForPattern) => {
@@ -92,6 +92,8 @@ export function resolveObservationScopes(tags: string[], requested?: Observation
       }, [[]]);
     });
   }
+  // An untagged memory has no tag to split by: it joins the untagged scope, as `combined` would, rather than none.
+  if (!own.length && (spec === 'per_tag' || spec === 'all_combinations')) scopes = [[]];
   const unique = [...new Map(scopes.map((scope) => [JSON.stringify(cleanTags(scope)), cleanTags(scope)])).values()];
   if (unique.length > MAX_OBSERVATION_SCOPES) throw new BadRequestException(t('error.memory.configValueInvalid', { key: 'observation_scopes', type: `at most ${MAX_OBSERVATION_SCOPES} resolved scopes` }));
   return unique;
@@ -114,6 +116,8 @@ export function assertRetainCeilings(items: ReadonlyArray<{ content?: unknown }>
 
 /** Document ids only a wire writes: graph observations (`memory-graph.ts`) and a file's recall chunks (`FILE_DOCUMENT_PREFIX`). */
 const RESERVED_DOCUMENT_PREFIXES = ['graph:', FILE_DOCUMENT_PREFIX] as const;
+/** A document the graph or files wire owns: never retained, edited, deleted or transferred through the Hindsight document routes. */
+export const isWireDocumentId = (documentId: string): boolean => RESERVED_DOCUMENT_PREFIXES.some((p) => documentId.startsWith(p));
 
 /**
  * A retain body's items, as this server stores them. The global pipe checked

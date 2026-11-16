@@ -243,3 +243,31 @@ describe('memory error body (#986)', () => {
     });
   });
 });
+
+describe('withinProjectAudience (doc 80: copying a turn into a project bank)', () => {
+  const DOC = '55555555-5555-4555-8555-555555555555';
+  const audience = (nodes: { projects: string[]; docs: string[] }) =>
+    new MemoryAccessService(
+      {
+        project: { findMany: vi.fn(async () => nodes.projects.map((id) => ({ id }))) },
+        document: { findMany: vi.fn(async () => nodes.docs.map((id) => ({ id }))) },
+      } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+  it('passes only when every restricted node besides the project is already denied', async () => {
+    // Nothing restricted: anyone's turn fits any project.
+    expect(await audience({ projects: [], docs: [] }).withinProjectAudience(scope({ bypass: true }), PROJECT)).toBe(true);
+    // The project itself restricted: its own members are its audience.
+    expect(await audience({ projects: [PROJECT], docs: [] }).withinProjectAudience(scope(), PROJECT)).toBe(true);
+    // A restricted page the asker can open: their turn may carry it, so it stays out.
+    expect(await audience({ projects: [PROJECT], docs: [DOC] }).withinProjectAudience(scope(), PROJECT)).toBe(false);
+    expect(await audience({ projects: [OTHER], docs: [] }).withinProjectAudience(scope(), PROJECT)).toBe(false);
+    // …unless it is denied to them.
+    expect(await audience({ projects: [OTHER], docs: [DOC] }).withinProjectAudience(scope({ denied: new Set([OTHER, DOC]) }), PROJECT)).toBe(true);
+    // An admin sees everything restricted, so never passes while anything else is.
+    expect(await audience({ projects: [], docs: [DOC] }).withinProjectAudience(scope({ bypass: true, denied: new Set([DOC]) }), PROJECT)).toBe(false);
+  });
+});

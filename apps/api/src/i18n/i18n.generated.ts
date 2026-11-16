@@ -928,6 +928,7 @@ export type I18nTranslations = {
             "bankNotFound": string;
             "profileNotFound": string;
             "bankIdInvalid": string;
+            "bankIdReserved": string;
             "contentNotText": string;
             "documentIdReserved": string;
             "itemsRequired": string;
@@ -966,6 +967,8 @@ export type I18nTranslations = {
             "aliasNotFound": string;
             "auditLogNotFound": string;
             "operationNotTerminal": string;
+            "operationNotFound": string;
+            "uploadTooLarge": string;
             "fileUploadInvalid": string;
             "fileUploadRequestInvalid": string;
             "fileTypeUnsupported": string;

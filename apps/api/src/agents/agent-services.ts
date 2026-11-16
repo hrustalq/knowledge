@@ -157,7 +157,8 @@ export class AgentServices {
   readonly logger = new Logger('AgentExecutor');
   /** In-flight runs' ledgers, by run id. A run's entry lives from its first prompt to its stamp. */
   private readonly ledgers = new Map<string, RunLedger>();
-  private readonly memoryGroundings = new Map<string, string>();
+  /** In-flight runs' memory recall, by run id: asked on a run's first `callModel`, so a runner that never calls it never recalls. */
+  private readonly memoryGroundings = new Map<string, () => Promise<string>>();
 
   constructor(
     readonly prisma: PrismaService,
@@ -331,19 +332,22 @@ export class AgentServices {
    * last round — `json: true` sets response_format, which suppresses tool
    * calls. `tools` defaults to the read tools, read only on the tool path.
    */
-  setMemoryGrounding(runId: string, text: string): void {
-    if (text) this.memoryGroundings.set(runId, text);
+  /** `recall` runs at most once per run, on the first `callModel`; a failure grounds nothing. */
+  setMemoryGrounding(runId: string, recall: () => Promise<string>): void {
+    let once: Promise<string> | undefined;
+    this.memoryGroundings.set(runId, () => (once ??= recall().catch(() => '')));
   }
 
   clearMemoryGrounding(runId: string): void {
     this.memoryGroundings.delete(runId);
   }
 
-  private withMemoryGrounding(
+  private async withMemoryGrounding(
     messages: ChatCompletionMessageParam[],
-  ): ChatCompletionMessageParam[] {
+  ): Promise<ChatCompletionMessageParam[]> {
     const runId = currentAgentRun()?.agentRunId;
-    const memory = runId ? this.memoryGroundings.get(runId) : undefined;
+    const recall = runId ? this.memoryGroundings.get(runId) : undefined;
+    const memory = recall ? await recall() : '';
     if (!memory) return messages;
     const last = messages.at(-1);
     if (last?.role === 'user' && typeof last.content === 'string') {
@@ -362,7 +366,7 @@ export class AgentServices {
     execute: ToolExecutor,
     tools?: ChatCompletionFunctionTool[],
   ): Promise<string> {
-    const grounded = this.withMemoryGrounding(messages);
+    const grounded = await this.withMemoryGrounding(messages);
     if (agent.missing.includes('tools'))
       return this.client.chat(call, grounded, { json: true });
     return (

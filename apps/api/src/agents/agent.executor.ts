@@ -3,7 +3,9 @@ import type { AgentRun } from '@prisma/client';
 import { t } from '../i18n/t.js';
 import { withAgentRun } from '../ai/agent-run-context.js';
 import { projectOfRun } from '../ai/run-project.js';
+import { isPrivateRun } from '../ai/run-privacy.js';
 import type { Principal } from '../auth/principal.js';
+import { WORKSPACE_AUDIENCE } from '../permissions/access-scope.js';
 import type { ResolvedAgent } from './agent-registry.service.js';
 import {
   AgentServices,
@@ -49,36 +51,55 @@ export class AgentExecutor extends AgentServices {
       { agentKey: agent.key, agentRunId: run.id, projectId },
       async () => {
         try {
-          const question =
-            runBrief(run.input) ||
-            run.subjectKey ||
-            agent.description ||
-            agent.name;
-          const grounding = await this.memory?.ground({
-            principal,
-            workspaceId: run.workspaceId,
-            agentKey: agent.key,
-            projectId,
-            userId: principal.userId,
-            query: question,
-          });
-          this.setMemoryGrounding(run.id, grounding ?? '');
+          // Memory recall needs a real request to search on: a run with no brief
+          // (no note, no webhook body) would only recall on its description.
+          const brief = runBrief(run.input);
+          const memory = this.memory;
+          if (brief && memory)
+            this.setMemoryGrounding(run.id, async () => {
+              // A run's summary and findings are listed to the workspace, so it
+              // recalls only project banks every member could read — never the
+              // owner's personal bank, never a restricted project's.
+              const grounding = await memory.ground({
+                principal,
+                workspaceId: run.workspaceId,
+                agentKey: agent.key,
+                projectId,
+                userId: principal.userId,
+                query: brief,
+                audience: WORKSPACE_AUDIENCE,
+              });
+              return grounding.text;
+            });
           const result = await this.dispatch(run, agent, principal, report);
-          await this.memory?.remember({
-            principal,
-            workspaceId: run.workspaceId,
-            agentKey: agent.key,
-            projectId,
-            userId: principal.userId,
-            locale: principal.locale,
-            sourceId: run.id,
-            sourceKind: 'agent-run',
-            question,
-            answer: [
-              result.summary,
-              ...result.findings.map((finding) => JSON.stringify(finding)),
-            ].join('\n\n'),
-          });
+          // Fire-and-forget, like an assistant turn: retention never fails or
+          // delays a run that finished. Same audience as the recall; a private
+          // run (a memo's, a restricted project's drift check) is its owner's
+          // alone, so it is not copied into a shared bank.
+          void memory
+            ?.remember({
+              principal,
+              workspaceId: run.workspaceId,
+              agentKey: agent.key,
+              projectId,
+              userId: principal.userId,
+              locale: principal.locale,
+              sourceId: run.id,
+              sourceKind: 'agent-run',
+              question:
+                brief || run.subjectKey || agent.description || agent.name,
+              answer: [
+                result.summary,
+                ...result.findings.map((finding) => JSON.stringify(finding)),
+              ].join('\n\n'),
+              audience: WORKSPACE_AUDIENCE,
+              shareWithProject: !isPrivateRun(run),
+            })
+            .catch((error: unknown) =>
+              this.logger.warn(
+                `Agent run ${run.id} memory retention failed: ${String(error)}`,
+              ),
+            );
           return result;
         } finally {
           this.clearMemoryGrounding(run.id);

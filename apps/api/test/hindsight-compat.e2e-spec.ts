@@ -213,7 +213,8 @@ describe('Hindsight compatibility (e2e, #986)', () => {
         file_upload_api: true,
         document_export_api: true,
         document_import_api: true,
-        audit_log: true,
+        // Only bank creation and deletion are audited, so the flag does not claim an audit trail of every write.
+        audit_log: false,
         llm_trace: false,
         bank_config_api: true,
         observations: true,
@@ -3427,6 +3428,87 @@ describe('Hindsight compatibility (e2e, #986)', () => {
       }
     });
 
+    /** A multipart POST as the official client sends one: `fetch` declares its length. */
+    const upload = (key: string, path: string, field: 'files' | 'file') => {
+      const body = new FormData();
+      body.append(field, new Blob(['refused upload'], { type: 'text/plain' }), 'refused.txt');
+      if (field === 'files') body.append('request', '{}');
+      return fetch(`${baseUrl}${path}`, { method: 'POST', headers: { Authorization: `Bearer ${key}` }, body });
+    };
+    /** One write per phase-6 family, as a [method, path, body?] row; uploads are sent multipart. */
+    const writes = (bankId: string) => [
+      ['PATCH', `/v1/default/banks/${bankId}/documents/management-doc`, { add_tags: ['refused'] }],
+      ['DELETE', `/v1/default/banks/${bankId}/documents/management-doc`],
+      ['DELETE', `/v1/default/banks/${bankId}/observations`],
+      ['DELETE', `/v1/default/banks/${bankId}/memories/${randomUUID()}/observations`],
+      ['POST', `/v1/default/banks/${bankId}/aliases`, { alias: `refused-${nonce}` }],
+      ['PATCH', `/v1/default/banks/${bankId}/aliases/refused-${nonce}`, { primary: true }],
+      ['DELETE', `/v1/default/banks/${bankId}/aliases/refused-${nonce}`],
+      ['POST', `/v1/default/banks/${bankId}/import`, { version: '1' }],
+      ['POST', `/v1/default/banks/${bankId}/files/retain`, 'files'],
+      ['POST', `/v1/default/banks/${bankId}/document-transfer/export`],
+      ['POST', `/v1/default/banks/${bankId}/transfer/export`],
+      ['POST', `/v1/default/banks/${bankId}/document-transfer`, 'file'],
+      ['POST', `/v1/default/banks/${bankId}/transfer/import?target_bank_id=refused-${nonce}`, 'file'],
+      ['POST', `/v1/default/banks/${bankId}/clone?target_bank_id=refused-${nonce}`],
+      ['DELETE', `/v1/default/banks/${bankId}/config`],
+      ['DELETE', `/v1/default/banks/${bankId}/operations/${randomUUID()}/delete`],
+    ] as const;
+    const send = (key: string, [method, path, body]: readonly [string, string, unknown?]) =>
+      body === 'files' || body === 'file' ? upload(key, path, body) : call(key, method, path, body);
+
+    it('refuses every phase-6 write to a viewer and to a read-only key, uploads before the body is read', async () => {
+      const viewer = await person('viewer', WS_A, 'viewer');
+      const readOnly = await mintKey(people.alice.id, { workspaceId: WS_A, scope: 'read' });
+      const before = await prisma.memoryUnit.count({ where: { bank: { workspaceId: WS_A, bankId: management } } });
+      for (const key of [viewer.key, readOnly]) {
+        for (const row of writes(management)) expect((await send(key, row)).status, `${key === readOnly ? 'read-only key' : 'viewer'} ${row[0]} ${row[1]}`).toBe(403);
+      }
+      // Still readable by the viewer: the refusals are the role, not the bank.
+      expect((await call(viewer.key, 'GET', `/v1/default/banks/${management}/documents`)).status).toBe(200);
+      expect(await prisma.memoryUnit.count({ where: { bank: { workspaceId: WS_A, bankId: management } } })).toBe(before);
+      expect(await prisma.memoryBank.count({ where: { workspaceId: WS_A, bankId: `refused-${nonce}` } })).toBe(0);
+    });
+
+    it('keeps chunks, archives, aliases and audit logs inside their workspace', async () => {
+      const managementRow = await prisma.memoryBank.findUniqueOrThrow({ where: { workspaceId_bankId: { workspaceId: WS_A, bankId: management } } });
+      const unit = await prisma.memoryUnit.findFirstOrThrow({ where: { bankId: managementRow.id, factType: { not: 'observation' } } });
+      expect((await call(people.alice.key, 'GET', `/v1/default/chunks/${unit.id}`)).status).toBe(200);
+      expect((await call(people.carol.key, 'GET', `/v1/default/chunks/${unit.id}`)).status).toBe(404);
+
+      const archiveId = randomUUID();
+      await prisma.memoryTransferArchive.create({ data: { id: archiveId, workspaceId: WS_A, bankId: managementRow.id, operationId: randomUUID(), filename: 'isolated.zip', data: Buffer.from('isolated') } });
+      expect((await call(people.alice.key, 'GET', `/v1/default/files/download/${archiveId}`)).status).toBe(200);
+      expect((await call(people.carol.key, 'GET', `/v1/default/files/download/${archiveId}`)).status).toBe(404);
+
+      // Carol holds a bank of the same name in her own workspace: her calls reach that one, never A's.
+      const alias = `isolated-alias-${nonce}`;
+      await sdk.createBankAlias({ client: raw(people.alice.key), path: { bank_id: management }, body: { alias } });
+      await client(people.carol.key).createBank(management);
+      expect((await call(people.carol.key, 'PATCH', `/v1/default/banks/${management}/aliases/${alias}`, { primary: true })).status).toBe(404);
+      expect((await call(people.carol.key, 'DELETE', `/v1/default/banks/${management}/aliases/${alias}`)).status).toBe(404);
+      expect((await call(people.carol.key, 'PATCH', `/v1/default/banks/${alias}/aliases/${alias}`, { primary: true })).status).toBe(404);
+      expect((await sdk.listBankAliases({ client: raw(people.alice.key), path: { bank_id: management } })).data!.aliases).toEqual([{ alias, primary: false }]);
+      await sdk.deleteBankAlias({ client: raw(people.alice.key), path: { bank_id: management, alias } });
+
+      const audited = `audit-${nonce}`;
+      const log = await prisma.auditLog.findFirstOrThrow({ where: { workspaceId: WS_A, target: audited } });
+      await client(people.carol.key).createBank(audited);
+      expect((await call(people.carol.key, 'GET', `/v1/default/banks/${audited}/audit-logs/${log.id}`)).status).toBe(404);
+      const carolLogs = (await (await call(people.carol.key, 'GET', `/v1/default/banks/${audited}/audit-logs`)).json()) as { items: Array<{ id: string }> };
+      expect(carolLogs.items.map((row) => row.id)).not.toContain(log.id);
+    });
+
+    it('refuses reserved bank ids and the graph and files wires\' documents, and 404s an unknown operation', async () => {
+      expect((await call(people.alice.key, 'POST', `/v1/default/banks/${management}/aliases`, { alias: `project:${randomUUID()}` })).status).toBe(400);
+      expect((await call(people.alice.key, 'POST', `/v1/default/banks/${management}/clone?target_bank_id=${encodeURIComponent(`agent:assistant:user:${people.bob.id}`)}`)).status).toBe(400);
+      for (const id of ['file:/notes.md', 'graph:entity:1']) {
+        expect((await call(people.alice.key, 'DELETE', `/v1/default/banks/${management}/documents/${encodeURIComponent(id)}`)).status, id).toBe(400);
+        expect((await call(people.alice.key, 'PATCH', `/v1/default/banks/${management}/documents/${encodeURIComponent(id)}`, { add_tags: ['x'] })).status, id).toBe(400);
+      }
+      expect((await call(people.alice.key, 'DELETE', `/v1/default/banks/${management}/operations/${randomUUID()}/delete`)).status).toBe(404);
+    });
+
     it('keeps intentional non-goals explicit as 404s', async () => {
       const unsupported = [
         ['GET', `/v1/default/banks/${management}/graph`],
@@ -3449,6 +3531,30 @@ describe('Hindsight compatibility (e2e, #986)', () => {
         ['GET', `/v1/default/banks/${management}/webhooks`],
         ['GET', `/v1/default/banks/${management}/llm-requests`],
         ['GET', `/v1/default/banks/${management}/llm-requests/stats`],
+        ['GET', '/health/ready'],
+        ['GET', '/health/live'],
+        ['GET', '/metrics'],
+        ['GET', `/v1/default/banks/${management}/entities/graph`],
+        ['GET', `/v1/default/banks/${management}/entities/${randomUUID()}`],
+        ['POST', `/v1/default/banks/${management}/entities/${randomUUID()}/regenerate`],
+        ['POST', `/v1/default/banks/${management}/mental-models/never-${nonce}/dry-run-refresh`],
+        ['POST', `/v1/default/banks/${management}/webhooks`],
+        ['PATCH', `/v1/default/banks/${management}/webhooks/${randomUUID()}`],
+        ['DELETE', `/v1/default/banks/${management}/webhooks/${randomUUID()}`],
+        ['POST', `/v1/default/banks/${management}/knowledge-base/folders`],
+        ['POST', `/v1/default/banks/${management}/pages/folders`],
+        ['POST', `/v1/default/banks/${management}/knowledge-base/pages`],
+        ['POST', `/v1/default/banks/${management}/pages`],
+        ['GET', `/v1/default/banks/${management}/knowledge-base/export`],
+        ['GET', `/v1/default/banks/${management}/pages/export`],
+        ['GET', `/v1/default/banks/${management}/knowledge-base/search`],
+        ['GET', `/v1/default/banks/${management}/pages/search`],
+        ['GET', `/v1/default/banks/${management}/knowledge-base/pages/${randomUUID()}`],
+        ['GET', `/v1/default/banks/${management}/pages/${randomUUID()}`],
+        ['PATCH', `/v1/default/banks/${management}/knowledge-base/nodes/${randomUUID()}`],
+        ['DELETE', `/v1/default/banks/${management}/knowledge-base/nodes/${randomUUID()}`],
+        ['PATCH', `/v1/default/banks/${management}/pages/nodes/${randomUUID()}`],
+        ['DELETE', `/v1/default/banks/${management}/pages/nodes/${randomUUID()}`],
       ] as const;
       for (const [method, path] of unsupported) expect((await call(people.alice.key, method, path)).status, `${method} ${path}`).toBe(404);
     });

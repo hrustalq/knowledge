@@ -346,6 +346,11 @@ interface PreparedTurn {
   projectId: string | null;
   /** False when the answer is visible to a whole chat, whose audience personal and project memories must not enter. */
   memoryEnabled: boolean;
+  /**
+   * Whether this turn may be copied into the project's shared bank: it recalled nothing from the
+   * asker's personal bank and carried no draft or attachment. The runtime adds the audience test.
+   */
+  shareWithProject: boolean;
 }
 
 /**
@@ -1198,6 +1203,7 @@ export class AssistantService {
           sourceKind: 'assistant-turn',
           question: turn.question,
           answer: settled.text,
+          shareWithProject: turn.shareWithProject,
         })
         .catch((error: unknown) =>
           this.logger.warn({
@@ -1743,8 +1749,8 @@ export class AssistantService {
           userId: principal.userId,
           query: dto.content,
         })
-      : '';
-    if (agentMemory) grounding.push(agentMemory);
+      : undefined;
+    if (agentMemory?.text) grounding.push(agentMemory.text);
 
     // Which repositories the model may read (docs/features/31): those in
     // projects the asker can open, the grounding page's project first (#553).
@@ -1883,6 +1889,8 @@ export class AssistantService {
       question: dto.content,
       projectId,
       memoryEnabled,
+      shareWithProject:
+        !agentMemory?.personal && !draft && attachments.length === 0,
     };
   }
 

@@ -4,6 +4,7 @@ import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { AccessService } from '../auth/access.service.js';
 import { FeaturesService } from '../auth/features.service.js';
 import type { Principal } from '../auth/principal.js';
+import type { Audience } from '../permissions/access-scope.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import {
   MemoryAccessService,
@@ -37,6 +38,18 @@ export interface AgentMemoryInput {
   workspaceId: string;
   agentKey: string;
   projectId?: string | null;
+  /**
+   * Set when the output is read by more people than the principal — a background run's summary
+   * and findings are listed to the workspace. Personal memory is then neither recalled nor retained,
+   * and project banks are only those visible under the scope clamped to this audience.
+   */
+  audience?: Audience;
+}
+
+/** What a recall handed the model, and whether any of it came from the person's own bank. */
+export interface MemoryGrounding {
+  text: string;
+  personal: boolean;
 }
 
 const PERSONAL_RECALL_TOKENS = 1024;
@@ -90,17 +103,17 @@ export class MemoryRuntimeService {
   /** Recall both scopes as untrusted grounding. Empty means memory is off, empty, or unavailable; the agent run still proceeds. */
   async ground(
     input: AgentMemoryInput & { query: string; userId: string },
-  ): Promise<string> {
+  ): Promise<MemoryGrounding> {
+    const none: MemoryGrounding = { text: '', personal: false };
     try {
       const caller = await this.caller(input, 'viewer');
-      if (!caller || !input.query.trim()) return '';
-      const targets = memoryTargets(input);
-      const visible = await this.access.visible(caller.scope, targets);
+      if (!caller || !input.query.trim()) return none;
+      const visible = await this.access.visible(caller.scope, this.targetsFor(input));
       const blocks = await Promise.all(
         visible.map(async (target) => {
           try {
-            const bank = await this.access.find(caller, target.bankId);
-            if (!bank) return '';
+            const bank = await this.banks.runtimeBank(caller, target, { create: false });
+            if (!bank) return null;
             const { text, results } = await this.recall.recallForModel(
               bank,
               {
@@ -114,12 +127,12 @@ export class MemoryRuntimeService {
               },
               'agent-memory',
             );
-            if (!results.length) return '';
+            if (!results.length) return null;
             const label =
               target.kind === 'personal'
                 ? 'Your earlier work with this user:'
                 : 'Earlier agent work in this project:';
-            return `${label}\n${text}`;
+            return { kind: target.kind, text: `${label}\n${text}` };
           } catch (error) {
             this.logger.warn({
               msg: 'agent memory recall skipped',
@@ -127,22 +140,31 @@ export class MemoryRuntimeService {
               bankId: target.bankId,
               error: String(error),
             });
-            return '';
+            return null;
           }
         }),
       );
-      return blocks.filter(Boolean).join('\n\n');
+      const recalled = blocks.filter((b) => b !== null);
+      return {
+        text: recalled.map((b) => b.text).join('\n\n'),
+        personal: recalled.some((b) => b.kind === 'personal'),
+      };
     } catch (error) {
       this.logger.warn({
         msg: 'agent memory grounding skipped',
         workspaceId: input.workspaceId,
         error: String(error),
       });
-      return '';
+      return none;
     }
   }
 
-  /** Retain one turn/run independently in each scope. The source id makes a retry replace its own facts instead of duplicating them. */
+  /**
+   * Retain one turn/run independently in each scope. The source id makes a retry replace its own facts instead of duplicating them.
+   * The project bank gets a copy only when `shareWithProject` (the caller vouches the turn used no private input of its own:
+   * no personal memory, draft or attachment) and the scope it ran under could read nothing that project's readers cannot.
+   * Never throws: a turn or run that finished is never failed or held by its memory.
+   */
   async remember(
     input: AgentMemoryInput & {
       userId: string;
@@ -151,67 +173,92 @@ export class MemoryRuntimeService {
       sourceKind: 'assistant-turn' | 'agent-run';
       question: string;
       answer: string;
+      shareWithProject: boolean;
     },
   ): Promise<void> {
-    const caller = await this.caller(input, 'editor');
-    if (!caller) return;
-    const question = input.question.trim().slice(0, INPUT_CHARS);
-    const answer = input.answer.trim().slice(0, INPUT_CHARS);
-    if (!question || !answer) return;
-    const agent = await this.agents.resolve(input.workspaceId, input.agentKey).catch((error: unknown) => {
-      this.logger.warn({
-        msg: 'agent memory policy unavailable',
-        workspaceId: input.workspaceId,
-        agentKey: input.agentKey,
-        error: String(error),
-      });
-      return null;
-    });
-    if (!agent) return;
-    const eligible = memoryTargets(input).filter((target) => agent.memoryPolicy[target.kind] !== 'off');
-    if (!eligible.length) return;
-    const targets = await this.access.visible(caller.scope, eligible);
-    for (const target of targets) {
-      try {
-        const bank = await this.banks.ensure(caller, target.bankId, target);
-        const item: RetainItem = {
-          content: `Request:\n${question}\n\nOutcome:\n${answer}`,
-          context:
-            target.kind === 'personal'
-              ? `Agent ${input.agentKey} working with this user`
-              : `Agent ${input.agentKey} working in this project`,
-          timestamp: new Date().toISOString(),
-          metadata: {
-            agent_key: input.agentKey,
-            source_kind: input.sourceKind,
-            memory_scope: target.kind,
-          },
-          documentId: `${input.sourceKind}:${input.sourceId}`,
-          entities: [],
-          tags: [
-            `agent:${input.agentKey}`,
-            `runtime:${input.sourceKind}`,
-            `scope:${target.kind}`,
-          ],
-          append: false,
-        };
-        await this.retain.retain({
-          workspaceId: input.workspaceId,
-          bank,
-          userId: input.userId,
-          locale: input.locale,
-          items: [item],
-          durableOnly: agent.memoryPolicy[target.kind] === 'durable',
-        });
-      } catch (error) {
+    try {
+      const caller = await this.caller(input, 'editor');
+      if (!caller) return;
+      const question = input.question.trim().slice(0, INPUT_CHARS);
+      const answer = input.answer.trim().slice(0, INPUT_CHARS);
+      if (!question || !answer) return;
+      const agent = await this.agents.resolve(input.workspaceId, input.agentKey).catch((error: unknown) => {
         this.logger.warn({
-          msg: 'agent memory retain skipped',
+          msg: 'agent memory policy unavailable',
           workspaceId: input.workspaceId,
-          bankId: target.bankId,
+          agentKey: input.agentKey,
           error: String(error),
         });
+        return null;
+      });
+      if (!agent) return;
+      const shared =
+        input.shareWithProject &&
+        !!input.projectId &&
+        (await this.access.withinProjectAudience(caller.scope, input.projectId));
+      const eligible = this.targetsFor(input).filter(
+        (target) => agent.memoryPolicy[target.kind] !== 'off' && (target.kind === 'personal' || shared),
+      );
+      if (!eligible.length) return;
+      const targets = await this.access.visible(caller.scope, eligible);
+      for (const target of targets) {
+        try {
+          const bank = await this.banks.runtimeBank(caller, target, { create: true });
+          if (!bank) {
+            this.logger.warn({ msg: 'agent memory bank id held by another bank', workspaceId: input.workspaceId, bankId: target.bankId });
+            continue;
+          }
+          const item: RetainItem = {
+            content: `Request:\n${question}\n\nOutcome:\n${answer}`,
+            context:
+              target.kind === 'personal'
+                ? `Agent ${input.agentKey} working with this user`
+                : `Agent ${input.agentKey} working in this project`,
+            timestamp: new Date().toISOString(),
+            metadata: {
+              agent_key: input.agentKey,
+              source_kind: input.sourceKind,
+              memory_scope: target.kind,
+            },
+            documentId: `${input.sourceKind}:${input.sourceId}`,
+            entities: [],
+            tags: [
+              `agent:${input.agentKey}`,
+              `runtime:${input.sourceKind}`,
+              `scope:${target.kind}`,
+            ],
+            append: false,
+          };
+          await this.retain.retain({
+            workspaceId: input.workspaceId,
+            bank,
+            userId: input.userId,
+            locale: input.locale,
+            items: [item],
+            durableOnly: agent.memoryPolicy[target.kind] === 'durable',
+          });
+        } catch (error) {
+          this.logger.warn({
+            msg: 'agent memory retain skipped',
+            workspaceId: input.workspaceId,
+            bankId: target.bankId,
+            error: String(error),
+          });
+        }
       }
+    } catch (error) {
+      this.logger.warn({
+        msg: 'agent memory retention skipped',
+        workspaceId: input.workspaceId,
+        error: String(error),
+      });
     }
+  }
+
+  /** The banks this call may touch: both, or — for output an audience reads — the project's alone. */
+  private targetsFor(input: AgentMemoryInput & { userId: string }): MemoryTarget[] {
+    const targets = memoryTargets(input);
+    return input.audience ? targets.filter((target) => target.kind === 'project') : targets;
   }
 
   /** Runtime memory is best-effort. In particular a viewer recalls but does not retain, matching the public memory API. */
@@ -223,13 +270,11 @@ export class MemoryRuntimeService {
       if (this.features.unavailable().includes('memory')) return null;
       await this.auth.requireRole(input.principal, input.workspaceId, role);
       await this.features.require(input.workspaceId, 'memory');
+      const scope = await this.permissions.scopeFor(input.principal, input.workspaceId);
       return {
         principal: input.principal,
         workspaceId: input.workspaceId,
-        scope: await this.permissions.scopeFor(
-          input.principal,
-          input.workspaceId,
-        ),
+        scope: input.audience ? await this.permissions.audienceScope(scope, input.audience) : scope,
       };
     } catch (error) {
       this.logger.debug({

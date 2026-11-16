@@ -11,20 +11,39 @@ export interface MemoryRerankerProvider {
 const MAX_QUERY_CHARS = 4000;
 const MAX_DOCUMENT_CHARS = 12_000;
 const MAX_TOTAL_DOCUMENT_CHARS = 200_000;
+/** After a failed call the reranker is skipped this long, so an outage costs one timeout, not one per recall. */
+export const RERANKER_COOLDOWN_MS = 30_000;
 
-/** An operator-configured `/rerank` endpoint, fetched plainly like EMBEDDING_*. Scores are model logits, normalized with a sigmoid. */
+/** How `/rerank` scores read: raw model logits (sigmoid-normalized here) or already in 0–1 (Cohere, Jina, LiteLLM, Infinity). */
+export type MemoryRerankerScore = 'logit' | 'normalized';
+
+/** An operator-configured `/rerank` endpoint, fetched plainly like EMBEDDING_*. Scores end in 0–1 per `MEMORY_RERANKER_SCORE`. */
 export class OpenAICompatibleMemoryReranker implements MemoryRerankerProvider {
+  /** In-process circuit breaker: until this instant every call fails at once, and recall falls back to RRF. */
+  private skipUntil = 0;
+
   constructor(
     private readonly baseUrl: string,
     private readonly model: string,
     private readonly apiKey: string,
     private readonly timeoutMs: number,
     readonly candidateCap: number,
+    private readonly score: MemoryRerankerScore = 'logit',
   ) {}
 
   async rerank(query: string, documents: string[]): Promise<number[]> {
     const selected = documents.slice(0, this.candidateCap);
     if (!selected.length) return [];
+    if (Date.now() < this.skipUntil) throw new Error('Memory reranker skipped: cooling down after a failure');
+    try {
+      return await this.call(query, selected);
+    } catch (error) {
+      this.skipUntil = Date.now() + RERANKER_COOLDOWN_MS;
+      throw error;
+    }
+  }
+
+  private async call(query: string, selected: string[]): Promise<number[]> {
     const documentCap = Math.min(
       MAX_DOCUMENT_CHARS,
       Math.floor(MAX_TOTAL_DOCUMENT_CHARS / selected.length),
@@ -68,7 +87,9 @@ export class OpenAICompatibleMemoryReranker implements MemoryRerankerProvider {
         throw new Error('Memory reranker returned an invalid result');
       }
       scores[Number(result.index)] =
-        1 / (1 + Math.exp(-result.relevance_score));
+        this.score === 'logit'
+          ? 1 / (1 + Math.exp(-result.relevance_score))
+          : Math.min(1, Math.max(0, result.relevance_score));
     }
     return selected.map((_, index) => {
       const score = scores[index];
@@ -96,5 +117,6 @@ export function createMemoryReranker(
     config.get('MEMORY_RERANKER_API_KEY', { infer: true }),
     config.get('MEMORY_RERANKER_TIMEOUT_MS', { infer: true }),
     config.get('MEMORY_RERANKER_CANDIDATE_CAP', { infer: true }),
+    config.get('MEMORY_RERANKER_SCORE', { infer: true }),
   );
 }

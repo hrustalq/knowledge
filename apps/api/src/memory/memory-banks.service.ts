@@ -7,6 +7,7 @@ import {
   MemoryAccessService,
   type MemoryCaller,
 } from './memory-access.service.js';
+import { isReservedBankId } from './memory-reserved.js';
 import { MemoryUnitsService } from './memory-units.service.js';
 import type { BankBodyDto, DispositionDto } from './memory.dto.js';
 import {
@@ -83,9 +84,15 @@ export function bankConfig(row: MemoryBank): BankConfigResponse {
   };
 }
 
+/** Caps on `consolidation_strategies`: every retain matches its tags against each pattern, so the list is bounded. */
+const MAX_STRATEGIES = 20;
+const MAX_SCOPE_RULES = 20;
+const MAX_RULE_TAGS = 20;
+const MAX_TAG_PATTERN = 100;
+
 function readStrategies(value: unknown): Prisma.InputJsonValue {
-  const invalid = () => new BadRequestException(t('error.memory.configValueInvalid', { key: 'consolidation_strategies', type: 'an array of valid strategy objects or null' }));
-  if (!Array.isArray(value)) throw invalid();
+  const invalid = () => new BadRequestException(t('error.memory.configValueInvalid', { key: 'consolidation_strategies', type: `an array of at most ${MAX_STRATEGIES} valid strategy objects (each at most ${MAX_SCOPE_RULES} scopes of at most ${MAX_RULE_TAGS} tags of at most ${MAX_TAG_PATTERN} characters) or null` }));
+  if (!Array.isArray(value) || value.length > MAX_STRATEGIES) throw invalid();
   const strategyKeys = new Set(['scopes', 'observations_mission', ...Object.keys(BUDGET_OF)]);
   const ruleKeys = new Set(['tags', 'tags_match']);
   for (const strategy of value) {
@@ -93,10 +100,10 @@ function readStrategies(value: unknown): Prisma.InputJsonValue {
     const row = strategy as Record<string, unknown>;
     if (row.observations_mission != null && (typeof row.observations_mission !== 'string' || row.observations_mission.length > 4000)) throw invalid();
     for (const key of Object.keys(BUDGET_OF)) if (row[key] != null && (typeof row[key] !== 'number' || !Number.isInteger(row[key]) || (row[key] as number) < -1 || row[key] === 0)) throw invalid();
-    if (row.scopes != null && (!Array.isArray(row.scopes) || row.scopes.some((rule) => {
+    if (row.scopes != null && (!Array.isArray(row.scopes) || row.scopes.length > MAX_SCOPE_RULES || row.scopes.some((rule) => {
       if (!rule || typeof rule !== 'object' || Array.isArray(rule) || Object.keys(rule).some((key) => !ruleKeys.has(key))) return true;
       const r = rule as Record<string, unknown>;
-      return (r.tags != null && (!Array.isArray(r.tags) || r.tags.some((tag) => typeof tag !== 'string'))) || (r.tags_match != null && r.tags_match !== 'all' && r.tags_match !== 'exact');
+      return (r.tags != null && (!Array.isArray(r.tags) || r.tags.length > MAX_RULE_TAGS || r.tags.some((tag) => typeof tag !== 'string' || tag.length > MAX_TAG_PATTERN))) || (r.tags_match != null && r.tags_match !== 'all' && r.tags_match !== 'exact');
     }))) throw invalid();
   }
   return value as Prisma.InputJsonValue;
@@ -162,6 +169,14 @@ function changesOf(
   };
 }
 
+/** Who a runtime bank belongs to: an agent and a person (personal), or a project. */
+export type RuntimeBankIdentity = Pick<MemoryBank, 'projectId' | 'agentKey' | 'ownerId'>;
+
+/** Whether `row` is exactly the runtime bank `target` names: same owner, agent and project, nothing more or less. */
+export function holdsRuntimeIdentity(row: RuntimeBankIdentity, target: RuntimeBankIdentity): boolean {
+  return row.ownerId === target.ownerId && row.agentKey === target.agentKey && row.projectId === target.projectId;
+}
+
 /** Banks (#986 phase 0). Every method takes the caller `MemoryAccessService` resolved. */
 @Injectable()
 export class MemoryBanksService {
@@ -217,19 +232,48 @@ export class MemoryBanksService {
     };
   }
 
-  /** The bank, created with defaults when the workspace has none by that id. A race on the unique key resolves to the row that won. */
-  async ensure(
-    caller: MemoryCaller,
-    bankId: string,
-    defaults: Partial<
-      Pick<
-        MemoryBank,
-        'projectId' | 'agentKey' | 'ownerId' | 'name' | 'mission'
-      >
-    > = {},
-  ): Promise<MemoryBank> {
+  /**
+   * The bank, created with defaults when the workspace has none by that id. A race on the unique key resolves to the row that won.
+   * A reserved id (`isReservedBankId`) is never created here: only `runtimeBank` makes the runtime's own banks.
+   */
+  async ensure(caller: MemoryCaller, bankId: string): Promise<MemoryBank> {
     const existing = await this.access.find(caller, bankId);
     if (existing) return existing;
+    if (isReservedBankId(bankId)) throw new BadRequestException(t('error.memory.bankIdReserved', { bankId }));
+    return this.create(caller, bankId, {});
+  }
+
+  /**
+   * The runtime's own bank (`agent:<key>:user:<id>`, `project:<id>`), by its id and never an alias,
+   * and only while the row still holds the identity the runtime gives it — a row someone else
+   * created under that name (before ids were reserved) or rebound since is not it, and reads as null.
+   * `create: true` is the one door that creates a reserved id.
+   */
+  async runtimeBank(
+    caller: MemoryCaller,
+    target: RuntimeBankIdentity & Pick<MemoryBank, 'bankId' | 'name' | 'mission'>,
+    opts: { create: boolean },
+  ): Promise<MemoryBank | null> {
+    const where = { workspaceId_bankId: { workspaceId: caller.workspaceId, bankId: target.bankId } };
+    const row =
+      (await this.prisma.memoryBank.findUnique({ where })) ??
+      (opts.create
+        ? await this.create(caller, target.bankId, {
+            projectId: target.projectId,
+            agentKey: target.agentKey,
+            ownerId: target.ownerId,
+            name: target.name,
+            mission: target.mission,
+          })
+        : null);
+    return row && holdsRuntimeIdentity(row, target) ? row : null;
+  }
+
+  private async create(
+    caller: MemoryCaller,
+    bankId: string,
+    defaults: Partial<Pick<MemoryBank, 'projectId' | 'agentKey' | 'ownerId' | 'name' | 'mission'>>,
+  ): Promise<MemoryBank> {
     try {
       const row = await this.prisma.memoryBank.create({
         data: {

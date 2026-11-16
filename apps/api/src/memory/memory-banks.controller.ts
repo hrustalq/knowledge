@@ -105,7 +105,8 @@ export class MemoryProbeController {
         file_upload_api: true,
         document_export_api: true,
         document_import_api: true,
-        audit_log: true,
+        // The audit-log routes answer, but only bank creation and deletion are recorded: not an audit trail of every write.
+        audit_log: false,
         llm_trace: false,
         store_document_text: true,
       },

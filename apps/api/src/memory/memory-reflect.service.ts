@@ -49,6 +49,8 @@ export interface ReflectQuery extends Pick<
   written?: { before: Date; after?: Date };
   /** Internal delta refresh: emit operations against these stable ids. */
   deltaDocument?: MentalModelDocument;
+  /** Internal mental model refresh: usage is recorded as `memory-mental-model`. */
+  mentalModelRefresh?: boolean;
 }
 
 const TRAIT = {
@@ -311,7 +313,8 @@ export class MemoryReflectService {
     const tools = q.excludeMentalModels ? [RECALL_TOOL] : [SEARCH_MODELS_TOOL, READ_MODELS_TOOL, RECALL_TOOL];
     const context = [
       ...(initialModels.length ? [modelsForModel(initialModels)] : []),
-      q.deltaDocument ? `Existing document with stable ids:\n${JSON.stringify(q.deltaDocument)}` : '',
+      // The document was generated from memories, so it is untrusted like them.
+      q.deltaDocument ? `Existing document with stable ids:\n${wrapUntrusted(JSON.stringify(q.deltaDocument), 'reflect', 'memory')}` : '',
       memoriesForModel(initial.results, 0),
     ].filter(Boolean).join('\n\n');
     const { content, trace, usage } = await this.client
@@ -319,7 +322,7 @@ export class MemoryReflectService {
         {
           config,
           userId: q.userId,
-          operation: q.deltaDocument ? 'memory-mental-model' : 'memory-reflect',
+          operation: q.deltaDocument || q.mentalModelRefresh ? 'memory-mental-model' : 'memory-reflect',
           locale: q.locale,
         },
         passageMessages(system, context, q.query),
@@ -443,7 +446,8 @@ export class MemoryReflectService {
   }
 
   private async readModels(bank: MemoryBank, q: ReflectQuery, ids: string[]): Promise<ReflectMentalModel[]> {
-    const rows = await this.prisma.memoryMentalModel.findMany({ where: { ...this.modelWhere(bank, q), id: { in: ids } }, orderBy: { createdAt: 'asc' } });
+    // AND keeps the excluded ids excluded: a spread `id` would replace modelWhere's notIn.
+    const rows = await this.prisma.memoryMentalModel.findMany({ where: { AND: [this.modelWhere(bank, q), { id: { in: ids } }] }, orderBy: { createdAt: 'asc' } });
     return rows.map((row) => this.modelResult(row));
   }
 

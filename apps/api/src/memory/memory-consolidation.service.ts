@@ -46,7 +46,8 @@ export interface PassResult {
 }
 
 type Fact = MemoryUnit & { entities: Array<{ entityKey: string; name: string }> };
-type Claimed = { scopeId: string; tags: string[]; facts: Fact[] };
+/** `claimedAt` is the stamp this run wrote: a write or a release touches only memberships still carrying it. */
+type Claimed = { scopeId: string; tags: string[]; facts: Fact[]; claimedAt: Date };
 
 const pendingMember = (alias: string, stale: Date) =>
   Prisma.sql`${Prisma.raw(alias)}.consolidated_at IS NULL
@@ -130,15 +131,20 @@ export class MemoryConsolidationService {
           return i === 0 || used <= settings.sourceFactsMaxTokens;
         });
         const kept = new Set(facts.map((f) => f.id));
-        await this.release(claimed.scopeId, claimed.facts.filter((f) => !kept.has(f.id)).map((f) => f.id));
+        await this.release(claimed, claimed.facts.filter((f) => !kept.has(f.id)).map((f) => f.id));
       }
-      const done = await this.batch(bank, claimed.scopeId, claimed.tags, facts, agent, route, now, settings).catch(async (e: Error) => {
+      const done = await this.batch(bank, claimed, facts, agent, route, now, settings).catch(async (e: Error) => {
         this.logger.warn({ msg: 'memory consolidation batch failed', bankId: bank.id, error: e.message });
         return 'failed' as const;
       });
       if (typeof done === 'string') {
-        await this.release(claimed.scopeId, facts.map((f) => f.id));
+        await this.release(claimed, facts.map((f) => f.id));
         return { ...result, stopped: done };
+      }
+      if (!done) {
+        // The batch changed under the model (claim retaken, a fact moved or was reset): nothing written, read again next time.
+        await this.release(claimed, facts.map((f) => f.id));
+        continue;
       }
       result.facts += facts.length;
       result.created += done.created;
@@ -146,6 +152,50 @@ export class MemoryConsolidationService {
     }
     if (result.facts) await this.mentalModels.afterConsolidation(bank).catch((error: Error) => this.logger.warn(`Mental models not queued after consolidation: ${error.message}`));
     return result;
+  }
+
+  /**
+   * Rows the image before observation scopes (#1157) wrote, brought into
+   * scopes — whether during a rolling deploy, after a rollback, or before the
+   * scopes migration's backfill. That image files every fact under its exact
+   * tags (`combined`) and knows no membership, so: a fact with no membership
+   * and no retain-time scopes joins its exact-tag scope; an observation with
+   * no scope joins its exact-tag scope; and a source that image consolidated
+   * (`memory_units.consolidated_at` set while its exact-tag membership is
+   * pending — this image never leaves that state at a commit) is marked read
+   * there, so it is not consolidated into a duplicate. Idempotent and
+   * expand-only: each statement matches nothing once applied. A fact this
+   * image retained always has a membership unless its scopes resolved to
+   * none, and then `observation_scopes` is set, so nothing here touches it.
+   */
+  async repairLegacyRows(): Promise<number> {
+    const legacyFact = Prisma.sql`u.fact_type <> 'observation'
+      AND (u.observation_scopes IS NULL OR u.observation_scopes = 'null'::jsonb)
+      AND NOT EXISTS (SELECT 1 FROM memory_observation_scope_members m WHERE m.unit_id = u.id)`;
+    const scopes = await this.prisma.$executeRaw`
+      INSERT INTO memory_observation_scopes (id, workspace_id, bank_id, tags)
+      SELECT gen_random_uuid(), workspace_id, bank_id, tags FROM (
+        SELECT DISTINCT u.workspace_id, u.bank_id, u.tags FROM memory_units u
+         WHERE (u.fact_type = 'observation' AND u.observation_scope_id IS NULL) OR (${legacyFact})
+      ) legacy
+      ON CONFLICT DO NOTHING`;
+    const members = await this.prisma.$executeRaw`
+      INSERT INTO memory_observation_scope_members (id, workspace_id, bank_id, scope_id, unit_id, consolidated_at, claimed_at)
+      SELECT gen_random_uuid(), u.workspace_id, u.bank_id, s.id, u.id, u.consolidated_at, u.consolidation_claimed_at
+        FROM memory_units u JOIN memory_observation_scopes s ON s.bank_id = u.bank_id AND s.tags = u.tags
+       WHERE ${legacyFact}
+      ON CONFLICT DO NOTHING`;
+    const observations = await this.prisma.$executeRaw`
+      UPDATE memory_units u SET observation_scope_id = s.id
+        FROM memory_observation_scopes s
+       WHERE u.fact_type = 'observation' AND u.observation_scope_id IS NULL
+         AND s.bank_id = u.bank_id AND s.tags = u.tags`;
+    const read = await this.prisma.$executeRaw`
+      UPDATE memory_observation_scope_members m SET consolidated_at = u.consolidated_at, claimed_at = NULL
+        FROM memory_units u, memory_observation_scopes s
+       WHERE m.unit_id = u.id AND s.id = m.scope_id AND s.tags = u.tags
+         AND m.consolidated_at IS NULL AND u.consolidated_at IS NOT NULL`;
+    return scopes + members + observations + read;
   }
 
   /** The consolidator, when a model is routed to it and it is on; else null. */
@@ -157,6 +207,8 @@ export class MemoryConsolidationService {
   /** The oldest pending membership's scope, up to a batch of it, claimed with SKIP LOCKED. Targets match the source fact's full tags. */
   private async claim(bankId: string, now: number, observationScopes?: string[][] | null): Promise<Claimed | null> {
     const stale = new Date(now - CLAIM_STALE_MS);
+    // Wall time, not the pass's `now`: a long pass must not stamp late claims as already old.
+    const claimedAt = new Date(Math.max(now, Date.now()));
     const selected = observationScopes ? Prisma.sql`AND (${Prisma.join(observationScopes.map((tags) => Prisma.sql`u.tags @> ${tags}::text[]`), ' OR ')})` : Prisma.empty;
     const rows = await this.prisma.$queryRaw<Array<{ scope_id: string; unit_id: string }>>`
       WITH scope AS (
@@ -172,7 +224,7 @@ export class MemoryConsolidationService {
          LIMIT ${BATCH_FACTS}
          FOR UPDATE OF m SKIP LOCKED
       )
-      UPDATE memory_observation_scope_members m SET claimed_at = ${new Date(now)}
+      UPDATE memory_observation_scope_members m SET claimed_at = ${claimedAt}
        FROM picked WHERE m.scope_id = picked.scope_id AND m.unit_id = picked.unit_id
       RETURNING m.scope_id, m.unit_id`;
     if (!rows.length) return null;
@@ -183,11 +235,12 @@ export class MemoryConsolidationService {
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       include: { entities: { select: { entityKey: true, name: true } } },
     });
-    return { scopeId: scope.id, tags: scope.tags, facts };
+    return { scopeId: scope.id, tags: scope.tags, facts, claimedAt };
   }
 
-  private async release(scopeId: string, ids: string[]): Promise<void> {
-    if (ids.length) await this.prisma.memoryObservationScopeMember.updateMany({ where: { scopeId, unitId: { in: ids }, consolidatedAt: null }, data: { claimedAt: null } });
+  /** Lets go of this run's claims only: a membership another worker has since retaken keeps its claim. */
+  private async release(claim: Pick<Claimed, 'scopeId' | 'claimedAt'>, ids: string[]): Promise<void> {
+    if (ids.length) await this.prisma.memoryObservationScopeMember.updateMany({ where: { scopeId: claim.scopeId, unitId: { in: ids }, consolidatedAt: null, claimedAt: claim.claimedAt }, data: { claimedAt: null } });
   }
 
   /** One call of the bank's daily cap, taken in one guarded statement: true when there was one left. */
@@ -201,8 +254,8 @@ export class MemoryConsolidationService {
     return taken > 0;
   }
 
-  private async batch(bank: MemoryBank, scopeId: string, tags: string[], facts: Fact[], agent: ResolvedAgent, route: DecisionRoute | null, now: number, settings: ReturnType<typeof observationSettings>): Promise<{ created: number; refined: number } | ConsolidationStop> {
-    let candidates = await this.candidates(bank, scopeId, facts);
+  private async batch(bank: MemoryBank, claim: Pick<Claimed, 'scopeId' | 'tags' | 'claimedAt'>, facts: Fact[], agent: ResolvedAgent, route: DecisionRoute | null, now: number, settings: ReturnType<typeof observationSettings>): Promise<{ created: number; refined: number } | ConsolidationStop | null> {
+    let candidates = await this.candidates(bank, claim.scopeId, facts);
     if (route && candidates.length) candidates = await this.screen(route, facts, candidates);
     try {
       await this.usage.assertWithinBudget(bank.workspaceId, AUTHOR_ID_STUB);
@@ -218,7 +271,7 @@ export class MemoryConsolidationService {
       ],
       { json: true },
     );
-    return this.write(bank, scopeId, tags, facts, candidates, readConsolidation(parseModelJson(content), facts, candidates), now, settings);
+    return this.write(bank, claim, facts, candidates, readConsolidation(parseModelJson(content), facts, candidates), now, settings);
   }
 
   /** The scope's observations nearest to any of the facts, best first. PG has the final say on scope and type. */
@@ -263,19 +316,34 @@ export class MemoryConsolidationService {
    * the batch's facts marked read — under the bank's lock, in one
    * transaction. A new observation's vector goes first (an orphan is reaped);
    * a refined one's after the commit.
+   *
+   * Null, writing nothing, when the batch is no longer this run's whole: a
+   * membership whose claim was retaken (a batch slower than CLAIM_STALE_MS),
+   * reset (`invalidateFacts`, clear) or removed (a scope change). The model saw
+   * every fact, so no entry of its answer is safe to keep.
    */
-  private async write(bank: MemoryBank, scopeId: string, tags: string[], facts: Fact[], candidates: MemoryUnit[], entries: ConsolidationEntry[], now: number, settings: ReturnType<typeof observationSettings>): Promise<{ created: number; refined: number }> {
+  private async write(bank: MemoryBank, claim: Pick<Claimed, 'scopeId' | 'tags' | 'claimedAt'>, facts: Fact[], candidates: MemoryUnit[], entries: ConsolidationEntry[], now: number, settings: ReturnType<typeof observationSettings>): Promise<{ created: number; refined: number } | null> {
+    const { scopeId, tags, claimedAt } = claim;
     const creates = entries.filter((e) => e.target === null).map((e) => ({ id: randomUUID(), entry: e }));
     const refines = entries.filter((e) => e.target !== null).map((e) => ({ id: candidates[e.target!]!.id, entry: e }));
     const reworded = refines.filter((r) => r.entry.text !== null);
     const vectors = await this.embeddings.embedBatch([...creates, ...reworded].map((x) => x.entry.text!));
     await this.graph.upsertMemoryUnits(bank.workspaceId, bank.id, creates.map((c, i) => ({ unitId: c.id, embedding: vectors[i]! })), now);
 
-    let written: { created: number; refined: number; reworded: Set<string> };
+    let written: { created: number; refined: number; reworded: Set<string> } | null;
     try {
       written = await withSubjectLock(this.prisma, `memory-bank:${bank.id}`, async () => {
-        // A scope change while the model was thinking removes the membership, so the old scope cannot gain evidence.
-        const alive = new Set((await this.prisma.memoryObservationScopeMember.findMany({ where: { scopeId, unitId: { in: facts.map((f) => f.id) } }, select: { unitId: true } })).map((r) => r.unitId));
+        // Still claimed by this run and unread, locked so no claim can retake them before the commit.
+        const alive = new Set(
+          (
+            await this.prisma.$queryRaw<Array<{ unit_id: string }>>`
+              SELECT unit_id FROM memory_observation_scope_members
+               WHERE scope_id = ${scopeId}::uuid AND unit_id IN (${Prisma.join(facts.map((f) => Prisma.sql`${f.id}::uuid`))})
+                 AND consolidated_at IS NULL AND claimed_at = ${claimedAt}
+               FOR UPDATE`
+          ).map((r) => r.unit_id),
+        );
+        if (alive.size < facts.length) return null;
         const evidenceOf = (e: ConsolidationEntry) => {
           const kept: ConsolidationEntry['evidence'] = [];
           let used = 0;
@@ -343,7 +411,7 @@ export class MemoryConsolidationService {
           refined++;
         }
         if (alive.size) {
-          await this.prisma.memoryObservationScopeMember.updateMany({ where: { scopeId, unitId: { in: [...alive] } }, data: { consolidatedAt: new Date(now), claimedAt: null } });
+          await this.prisma.memoryObservationScopeMember.updateMany({ where: { scopeId, unitId: { in: [...alive] }, consolidatedAt: null, claimedAt }, data: { consolidatedAt: new Date(now), claimedAt: null } });
           await this.prisma.$executeRaw`
             UPDATE memory_units u SET consolidated_at = ${new Date(now)}, consolidation_claimed_at = NULL
             WHERE u.id IN (${Prisma.join([...alive].map((id) => Prisma.sql`${id}::uuid`))})
@@ -354,6 +422,10 @@ export class MemoryConsolidationService {
     } catch (e) {
       await this.graph.deleteMemoryUnits(bank.workspaceId, creates.map((c) => c.id)).catch(() => undefined);
       throw e;
+    }
+    if (!written) {
+      await this.graph.deleteMemoryUnits(bank.workspaceId, creates.map((c) => c.id)).catch(() => undefined);
+      return null;
     }
     const refreshed = reworded.flatMap((r, i) => (written.reworded.has(r.id) ? [{ unitId: r.id, embedding: vectors[creates.length + i]! }] : []));
     if (refreshed.length) {

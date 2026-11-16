@@ -11,6 +11,7 @@ import {
   Query,
   UploadedFile,
   UploadedFiles,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { AnyFilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
@@ -33,6 +34,7 @@ import { recallQuery, reflectQuery } from './memory-queries.js';
 import { MemoryRecallService } from './memory-recall.service.js';
 import { MemoryReflectService } from './memory-reflect.service.js';
 import { MemoryUnitsService } from './memory-units.service.js';
+import { MemoryUploadGuard } from './memory-upload.guard.js';
 import {
   AuditLogStatsQueryDto,
   ClearMemoriesQueryDto,
@@ -533,6 +535,7 @@ export class MemoryUnitsController {
 
   @Post('files/retain')
   @HttpCode(200)
+  @UseGuards(MemoryUploadGuard)
   @UseInterceptors(AnyFilesInterceptor({ limits: { files: 100, fileSize: 16 * 1024 * 1024 } }))
   async retainFiles(
     @CurrentPrincipal() principal: Principal,
@@ -569,6 +572,7 @@ export class MemoryUnitsController {
   }
 
   @Post('document-transfer')
+  @UseGuards(MemoryUploadGuard)
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 64 * 1024 * 1024 } }))
   async importDocuments(
     @CurrentPrincipal() principal: Principal,
@@ -581,6 +585,7 @@ export class MemoryUnitsController {
   }
 
   @Post('transfer/import')
+  @UseGuards(MemoryUploadGuard)
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 64 * 1024 * 1024 } }))
   async importBank(
     @CurrentPrincipal() principal: Principal,

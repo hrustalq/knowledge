@@ -32,9 +32,19 @@ in the pull request that introduces them — see
 - The official Hindsight client can now manage documents, chunks, tags, observation lifecycle, aliases, bank templates,
   asynchronous file retain, transfer archives and bank audit logs. Unsupported routes have explicit documented 404
   behavior, and all new paths retain personal-owner, project-ACL and workspace isolation. (#1161)
+- Agent memory keeps to its audience: background runs no longer recall or retain personal memory, an assistant answer
+  is copied to a project's memory only when every reader of that project could have seen what it drew on, and the bank
+  ids the runtime uses (`agent:…:user:…`, `project:…`) can no longer be created or aliased through the memory API.
+  Uploaded files are masked before they are stored, and memory uploads are refused before the body is read unless the
+  caller may write. (#1155)
+- Mental-model ids are unique per bank instead of across the whole installation. (#1155)
 
 ### Operations
 
+- `MEMORY_RERANKER_SCORE` (`logit` default, or `normalized` for endpoints that already return 0–1 scores) is new and
+  optional. The mental-model key migration is a primary-key swap on a small table; a code rollback past it needs the
+  previous key restored by hand. A bank created through the memory API under a reserved runtime id before this release
+  is ignored by the runtime until it is deleted. (#1155)
 - The management-API migration adds alias/archive tables and nullable operation results only; it is expand-only and safe
   for a code rollback. Transfer downloads use the existing memory worker and database, with no new service or env var. (#1161)
 - The mental-model migration is expand-only and safe for a code rollback. Automatic refresh spacing defaults to no floor;

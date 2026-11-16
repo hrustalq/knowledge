@@ -103,10 +103,53 @@ export function cronMatches(expression: string, at: Date): boolean {
   return fields[0]!.has(values[0]!) && fields[1]!.has(values[1]!) && fields[3]!.has(values[3]!) && daysMatch;
 }
 
+const DAY = 86_400_000;
+/** Four years back, so a 29 February schedule still finds its last firing. */
+const CRON_LOOKBACK_DAYS = 1462;
+
+/** The latest minute at or before `now` the expression fires, or null within the lookback. */
+export function previousCronFire(expression: string, now: number): number | null {
+  const fields = parseCron(expression);
+  if (!fields) return null;
+  const raw = expression.trim().split(/\s+/);
+  const either = raw[2] !== '*' && raw[4] !== '*';
+  const hours = [...fields[1]!].sort((a, b) => b - a);
+  const minutes = [...fields[0]!].sort((a, b) => b - a);
+  const today = Math.floor(now / DAY) * DAY;
+  for (let i = 0; i <= CRON_LOOKBACK_DAYS; i++) {
+    const day = new Date(today - i * DAY);
+    const dow = day.getUTCDay();
+    const dayOfWeek = fields[4]!.has(dow) || (dow === 0 && fields[4]!.has(7));
+    const dayOfMonth = fields[2]!.has(day.getUTCDate());
+    if (!fields[3]!.has(day.getUTCMonth() + 1) || !(either ? dayOfMonth || dayOfWeek : dayOfMonth && dayOfWeek)) continue;
+    for (const hour of hours) for (const minute of minutes) {
+      const at = day.getTime() + hour * 3_600_000 + minute * 60_000;
+      if (at <= now) return at;
+    }
+  }
+  return null;
+}
+
+/**
+ * Due when the expression fired anywhere in (last, now] — a sweep that misses
+ * the exact minute still runs it. With no last run, only the current minute counts.
+ */
 export function cronDue(expression: string | null | undefined, now: number, last: Date | null): boolean {
-  if (!expression || !cronMatches(expression, new Date(now))) return false;
-  const minute = Math.floor(now / 60_000) * 60_000;
-  return !last || last.getTime() < minute;
+  if (!expression) return false;
+  const fired = previousCronFire(expression, now);
+  if (fired === null) return false;
+  return last ? fired > last.getTime() : fired === Math.floor(now / 60_000) * 60_000;
+}
+
+/** What a model's content is built from besides its query; a change makes it stale and the next refresh full. */
+export function mentalModelScope(model: { tags: string[]; trigger: unknown }): string {
+  const trigger = mentalModelTriggerOutput(model.trigger);
+  const tags = [...new Set(model.tags)].sort();
+  return JSON.stringify({
+    tags,
+    tags_match: trigger.tags_match ?? (tags.length ? 'all_strict' : 'any'),
+    fact_types: trigger.fact_types?.length ? [...new Set(trigger.fact_types)].sort() : null,
+  });
 }
 
 export interface MentalModelBlock {

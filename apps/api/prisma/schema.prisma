@@ -4918,7 +4918,8 @@ model MemoryDirective {
 /// a memory unit. The trigger holds Hindsight's refresh and scope settings;
 /// structured_doc gives delta refreshes stable section and block identities.
 model MemoryMentalModel {
-  id                   String    @id
+  /// Client-chosen, unique per bank only: every lookup carries the bank.
+  id                   String
   workspaceId          String    @map("workspace_id") @db.Uuid
   bankId               String    @map("bank_id") @db.Uuid
   bank                 MemoryBank @relation(fields: [bankId], references: [id], onDelete: Cascade)
@@ -4931,6 +4932,8 @@ model MemoryMentalModel {
   reflectResponse      Json?     @map("reflect_response")
   structuredDoc        Json?     @map("structured_doc")
   refreshedSourceQuery String?   @map("refreshed_source_query")
+  /// Fingerprint of tags / tags_match / fact_types the content was built from; a mismatch is stale and refreshes full.
+  refreshedScope       String?   @map("refreshed_scope")
   lastRefreshedAt      DateTime? @map("last_refreshed_at") @db.Timestamptz
   lastMemorySeenAt     DateTime? @map("last_memory_seen_at") @db.Timestamptz
   lastRefreshFailedAt  DateTime? @map("last_refresh_failed_at") @db.Timestamptz
@@ -4940,6 +4943,7 @@ model MemoryMentalModel {
 
   history MemoryMentalModelHistory[]
 
+  @@id([bankId, id])
   @@index([workspaceId])
   @@index([bankId, createdAt])
   @@map("memory_mental_models")
@@ -4951,7 +4955,7 @@ model MemoryMentalModelHistory {
   workspaceId     String           @map("workspace_id") @db.Uuid
   bankId          String           @map("bank_id") @db.Uuid
   modelId         String           @map("model_id")
-  model           MemoryMentalModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  model           MemoryMentalModel @relation(fields: [bankId, modelId], references: [bankId, id], onDelete: Cascade)
   previousContent String?          @map("previous_content")
   kind            String?
   outcome         String?
@@ -4960,7 +4964,7 @@ model MemoryMentalModelHistory {
   changedAt       DateTime         @default(now()) @map("changed_at") @db.Timestamptz
 
   @@index([workspaceId])
-  @@index([modelId, changedAt])
+  @@index([bankId, modelId, changedAt])
   @@map("memory_mental_model_history")
 }
 

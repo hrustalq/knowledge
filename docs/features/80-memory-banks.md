@@ -27,7 +27,8 @@ With `MEMORY_ENABLED` and the workspace `memory` section on, the assistant and b
 use memory automatically, not only through the external API. Before a turn or run, recall grounds
 the model in two separate contexts; after a successful one, its request and outcome are eligible for
 retention under an idempotent `assistant-turn:<message id>` or `agent-run:<run id>` document id.
-Recall and retain failures leave the turn or run itself untouched.
+Retention is fire-and-forget and never throws: a finished turn or run is never failed or delayed by
+its memory, and a recall failure leaves it ungrounded.
 
 - **Personal:** `agent:<agent key>:user:<user id>` holds that agent's working context for that
   user. `agent_key` + `owner_id` describe it, and only the owner can read it — an admin bypass
@@ -43,11 +44,35 @@ scope the policy enables. A chat answer visible to a whole group does not recall
 scope, since its readers may include people outside the owner or project audience. The worker and
 API use the same `MemoryRuntimeService`; no Hindsight sidecar is involved.
 
+Where the two scopes meet a wider audience, the narrower one wins, and the rule is enforced where
+the bank is read or written, never in a prompt:
+
+- **Runtime bank ids are reserved.** No wire creates a bank, an alias or a transfer target named
+  `agent:<key>:user:<id>` or `project:<id>` (400); only `MemoryBanksService.runtimeBank` does. The
+  runtime reads its banks by direct id, never through an alias, and uses a row only while its owner,
+  agent and project equal the ones the runtime would give it (`holdsRuntimeIdentity`). A row that
+  fails the check is skipped with a warning, so that scope has no runtime memory until the row is
+  deleted.
+- **A background run never touches a personal bank.** Its summary and findings are listed to every
+  member, so it recalls and retains only project banks visible under `WORKSPACE_AUDIENCE`. A private
+  run (a memo's, a restricted project's check) retains nothing.
+- **A background run recalls at most once**, on its first `callModel`, and only when it has a brief
+  (a note or a webhook body). Runners that call the model client directly — linter, atlas, auditor,
+  arbiter, reviewer, archaeologist, tester, glossarist, the sentinel's code-reading loop — do not
+  recall; they still retain their outcome.
+- **An assistant turn reaches the project bank only when its readers could have seen all of it:**
+  the turn recalled nothing from the asker's personal bank, carried no draft or attachment, and the
+  asker's scope reads nothing the project's readers cannot (`withinProjectAudience`). Otherwise it
+  is retained to the personal bank only. Known gap: an earlier answer in the same thread that
+  repeated personal memory is part of a later turn's prompt and is not tracked.
+- Agent mention replies, workflows, the one-shot review / suggest / ask calls, public Ask and the
+  Knowledge MCP tools use neither recall nor retention.
+
 Each agent's `memoryPolicy` controls retention only, with `mode: all | durable | off` and optional
 `personal` and `project` overrides. Missing policy is `all`, exactly the previous behavior; `off`
-skips bank creation and writes without disabling recall. In `durable`, the memorist retains only
-durable preferences, requirements, decisions and lessons: an explicitly empty fact list stores
-nothing. A missing extraction route, spent budget, failed call or unreadable answer still stores
+skips bank creation and writes without disabling recall. In `durable`, an item for which the memorist returns an explicitly empty fact list stores
+nothing. The filter is per item, not per fact: an item the memorist keeps is stored with every fact
+it extracted. A missing extraction route, spent budget, failed call or unreadable answer still stores
 the masked request/outcome verbatim, so durable filtering is not claimed when extraction could not
 run. The same source id replaces earlier facts on retry, including replacing them with none.
 
@@ -288,7 +313,7 @@ only inside `wrapUntrusted`. With no model configured reflect answers 409 and bi
 
 **Scoped directives** (#1159) are named, prioritized sets of hard rules managed through
 `/directives` with the official client. Untagged directives are global; tagged ones match the reflect
-scope with the recall tag semantics, and `apply_all_directives: true` selects every active directive in
+scope by tags (a tagged directive applies when the request carries every one of its tags; with no request tags only untagged directives apply), at most 24,000 characters of name plus content per reflect, highest priority first, and `apply_all_directives: true` selects every active directive in
 the already ACL-resolved bank. Inactive directives never apply. The selected content is a trusted system
 instruction, separate from and taking precedence over untrusted memory text, but is never evidence:
 an empty bank still has no factual answer merely because a directive exists. `include.facts` returns
@@ -643,12 +668,19 @@ This matrix is generated from the routes in `@vectorize-io/hindsight-client` **1
 | `GET`, `POST`, `PATCH`, `DELETE …/webhooks…` | Non-goal | outbound per-bank webhooks are not selected |
 | `DELETE …/memories`, `POST …/memories` | Compatible | phase-1 retain/clear tests |
 | `POST …/files/retain` | Compatible | phase-6 official multipart upload and worker parse test |
-| `GET …/audit-logs`, `GET …/audit-logs/stats`, `GET …/audit-logs/{id}` | Compatible | phase-6 audit list/read/stats test over `audit_logs` |
+| `GET …/audit-logs`, `GET …/audit-logs/stats`, `GET …/audit-logs/{id}` | Compatible, partial | phase-6 audit list/read/stats test over `audit_logs`; only bank creation and deletion are audited, so `/version` reports `audit_log: false` |
 | `GET …/llm-requests`, `GET …/llm-requests/stats` | Non-goal | `ai_usage` has no reliable bank identity; returning it as bank traces would leak or misattribute calls |
 
-Documents and chunks are projections of `memory_units`: document text is the masked `source_text`, and a chunk is one distinct retained source item. Updates replace or increment tags on every source fact and invalidate only memberships whose resolved scopes moved. Transfers zip a versioned `transfer.json` carrying source facts, entity names and optional bank configuration; imports re-embed through the normal retain store without an extraction model. A mental-model id in an archive that another bank already holds is imported under a fresh id; an import never updates a row outside its target bank. Derived observations are rebuilt, so `include_observations=true` is a 400 rather than a false claim. Audit and LLM history are likewise not transferable. Archives are bank-owned byte rows and disappear with their operation, bank or workspace.
+Documents and chunks are projections of `memory_units`: document text is the masked `source_text`, and a chunk is one distinct retained source item. Updates replace or increment tags on every source fact and invalidate only memberships whose resolved scopes moved. Transfers zip a versioned `transfer.json` carrying source facts, entity names and optional bank configuration; imports re-embed through the normal retain store without an extraction model. Transfers leave out `file:*` and `graph:*` documents, which belong to their own wires (`documents_skipped_reserved` in the result), and the document routes refuse those ids (400). An archive is validated whole before anything is written, and a failed restore or clone removes the bank it created. Only a mental model's definition is imported (empty content until a refresh; archive-supplied content and evidence are ignored), into the target bank only. A null item timestamp imports as timeless. Derived observations are rebuilt, so `include_observations=true` is a 400 rather than a false claim. Audit and LLM history are likewise not transferable. Archives are bank-owned byte rows and disappear with their operation, bank or workspace.
 
-File retain uses the existing parser registry (plain text/Markdown, PDF, DOCX, PPTX, HTML, tabular formats and configured OCR), always asynchronously. The multipart ceiling is 100 files of at most 16 MiB each; transfer archives are at most 64 MiB compressed or inflated. Personal-bank ownership and project visibility apply to source, target and download alike; restore and clone inherit the source bank's owner/project binding rather than trusting archive metadata.
+A multipart upload is checked for the editor role before any byte is read, must send `Content-Length` and is at most 65 MiB in all (413 otherwise). Parsed file text is masked like any retain, and a file longer than `MEMORY_RETAIN_MAX_CHARS` is split on paragraph boundaries into several items under one `document_id`. Upload bytes still travel in the operation row until the worker settles it; moving them to object storage is not built. File retain uses the existing parser registry (plain text/Markdown, PDF, DOCX, PPTX, HTML, tabular formats and configured OCR), always asynchronously. The multipart ceiling is 100 files of at most 16 MiB each; transfer archives are at most 64 MiB compressed or inflated. Personal-bank ownership and project visibility apply to source, target and download alike; restore and clone inherit the source bank's owner/project binding rather than trusting archive metadata.
+
+## Hardening after review (#1155)
+
+- **Mental models.** Ids are unique per bank (`(bank_id, id)`), so two banks can each hold `user-profile`. Changing a model's tags, `trigger.tags_match` or `trigger.fact_types` marks it stale and makes the next refresh full. A full refresh that finds nothing left in scope empties the model (history keeps the old content); `based_on.memories` lists only memories that still exist, newest 200. A cron trigger is due once the schedule has fired since the last refresh, not only on the exact minute. Deleting a model cancels its queued and running refreshes, and a running one never writes into a model deleted or re-created meanwhile. Every refresh is billed as `memory-mental-model`. A deletion alone does not mark a model stale.
+- **Observation scopes.** Glob patterns match in linear time (`*` = any run of characters, case-sensitive, anchored); `exact` pairs each pattern with its own tag. `consolidation_strategies` is capped at 20 strategies × 20 scopes × 20 tags, each pattern at most 100 characters. An untagged memory retained with `per_tag` or `all_combinations` joins the untagged scope. Consolidation writes only while it still holds its claim on every fact of the batch; a batch retaken, reset or moved mid-flight writes nothing and is read again. The worker files rows written by a pre-scope image (rolling deploy, rollback) into their exact-tag scope on its first tick and hourly.
+- **Reranker.** `MEMORY_RERANKER_SCORE` (`logit` default | `normalized`) says whether the endpoint returns raw logits or 0–1 scores (Cohere, Jina, LiteLLM, Infinity), so `min_scores.reranker` keeps its meaning. After a failure recall skips the reranker for 30 s and uses RRF.
+- **Operations.** Deleting an unknown operation is 404; a non-terminal one is 409. An archive download is confined to the caller's workspace.
 
 ## Not built
 

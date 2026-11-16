@@ -40,12 +40,47 @@ export interface ObservationBankDefaults {
   consolidationStrategies: unknown;
 }
 
-const globMatch = (pattern: string, tag: string): boolean =>
-  new RegExp(`^${pattern.split('*').map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`).test(tag);
+/**
+ * A tag glob: `*` matches any run of characters, everything else itself,
+ * case-sensitive and anchored at both ends. Linear in the value: the first and
+ * last segments are anchored, the middle ones found leftmost in order — never
+ * a regex, which a pattern like `*a*a*a*b` backtracks exponentially.
+ */
+export function globMatch(pattern: string, value: string): boolean {
+  const parts = pattern.split('*');
+  if (parts.length === 1) return pattern === value;
+  const first = parts[0]!;
+  const last = parts.at(-1)!;
+  if (value.length < first.length + last.length || !value.startsWith(first) || !value.endsWith(last)) return false;
+  let at = first.length;
+  const end = value.length - last.length;
+  for (const part of parts.slice(1, -1)) {
+    if (!part) continue;
+    const found = value.indexOf(part, at);
+    if (found < 0 || found + part.length > end) return false;
+    at = found + part.length;
+  }
+  return true;
+}
+
+/** Kuhn's augmenting paths: whether each pattern can take a tag of its own (`exact` is a one-to-one pairing). */
+function pairsOneToOne(patterns: string[], tags: string[]): boolean {
+  const owner: Array<number | undefined> = [];
+  const take = (p: number, seen: Set<number>): boolean =>
+    tags.some((tag, t) => {
+      if (seen.has(t) || !globMatch(patterns[p]!, tag)) return false;
+      seen.add(t);
+      if (owner[t] !== undefined && !take(owner[t]!, seen)) return false;
+      owner[t] = p;
+      return true;
+    });
+  return patterns.every((_, p) => take(p, new Set()));
+}
 
 export function scopeMatches(tags: string[], rule: { tags?: string[]; tags_match?: string | null }): boolean {
   const patterns = rule.tags ?? [];
-  if (!tags.length || !patterns.length || (rule.tags_match === 'exact' && patterns.length !== tags.length)) return false;
+  if (!tags.length || !patterns.length) return false;
+  if (rule.tags_match === 'exact') return patterns.length === tags.length && pairsOneToOne(patterns, tags);
   return patterns.every((pattern) => tags.some((tag) => globMatch(pattern, tag)));
 }
 

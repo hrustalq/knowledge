@@ -6,10 +6,12 @@ import { withSubjectLock } from '../common/subject-lock.js';
 import { GraphService } from '../graph/graph.service.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { MEMORY_TIME_FIELDS, cleanTags, readObservationScopes, resolveObservationScopes, tagsWhere, type MemoryTimeField, type ObservationScopes, type TagsMatch } from './memory-facts.js';
+import { MEMORY_TIME_FIELDS, cleanTags, isWireDocumentId, readObservationScopes, resolveObservationScopes, tagsWhere, type MemoryTimeField, type ObservationScopes, type TagsMatch } from './memory-facts.js';
 import { FILE_DOCUMENT_PREFIX } from './memory-files.js';
+import { globMatch } from './memory-observations.js';
 import type { BankStatsResponse, DeleteResponse, ListMemoryUnitsResponse, MemoryUnitItem } from './memory-wire.js';
 
+export { isWireDocumentId };
 
 export interface ListMemoriesQuery {
   type?: string;
@@ -242,6 +244,7 @@ export class MemoryUnitsService {
   }
 
   async deleteDocument(bank: MemoryBank, documentId: string) {
+    if (isWireDocumentId(documentId)) throw new BadRequestException(t('error.memory.documentIdReserved'));
     const done = await this.deleteWhere(bank, { documentId, factType: { not: 'observation' } });
     if (!done.matched) throw new NotFoundException(t('error.memory.memoryNotFound', { id: documentId }));
     return { success: true, message: `Document '${documentId}' deleted`, document_id: documentId, memory_units_deleted: done.matched };
@@ -249,6 +252,7 @@ export class MemoryUnitsService {
 
   /** Replace or increment tags and move observation scopes, rebuilding only changed memberships. */
   async updateDocument(bank: MemoryBank, documentId: string, dto: import('./memory.dto.js').UpdateDocumentDto): Promise<{ success: true }> {
+    if (isWireDocumentId(documentId)) throw new BadRequestException(t('error.memory.documentIdReserved'));
     if (Array.isArray(dto.tags) && (Array.isArray(dto.add_tags) || Array.isArray(dto.remove_tags))) throw new BadRequestException(t('error.memory.configValueInvalid', { key: 'tags', type: 'tags cannot be combined with add_tags or remove_tags' }));
     if (!Array.isArray(dto.tags) && !Array.isArray(dto.add_tags) && !Array.isArray(dto.remove_tags) && dto.observation_scopes === undefined) throw new BadRequestException(t('error.memory.configValueInvalid', { key: 'document', type: 'at least one mutable field' }));
     const requestedScopes = dto.observation_scopes === undefined ? undefined : readObservationScopes(dto.observation_scopes) ?? 'combined';
@@ -298,7 +302,7 @@ export class MemoryUnitsService {
   }
 
   async observationHistory(bank: MemoryBank, memoryId: string) {
-    const observation = await this.prisma.memoryUnit.findFirst({ where: { id: memoryId, bankId: bank.id, factType: 'observation' }, include: { evidence: { include: { fact: { select: { id: true, text: true } } } }, history: { orderBy: { createdAt: 'desc' } } } });
+    const observation = UUID_RE.test(memoryId) && await this.prisma.memoryUnit.findFirst({ where: { id: memoryId, bankId: bank.id, factType: 'observation' }, include: { evidence: { include: { fact: { select: { id: true, text: true } } } }, history: { orderBy: { createdAt: 'desc' } } } });
     if (!observation) throw new NotFoundException(t('error.memory.memoryNotFound', { id: memoryId }));
     const source_facts = observation.evidence.map((row) => ({ id: row.fact.id, text: row.fact.text, quote: row.quote }));
     return [{ text: observation.text, created_at: observation.createdAt.toISOString(), source_facts }, ...observation.history.map((row) => ({ text: row.text, created_at: row.createdAt.toISOString(), source_facts: [] }))];
@@ -310,9 +314,8 @@ export class MemoryUnitsService {
       : await this.prisma.memoryUnit.findMany({ where: { bankId: bank.id }, select: { tags: true } });
     const counts = new Map<string, number>();
     for (const tag of rows.flatMap((row) => row.tags)) counts.set(tag, (counts.get(tag) ?? 0) + 1);
-    const pattern = query.q?.toLowerCase().split('*').map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*');
-    const match = pattern ? new RegExp(`^${pattern}$`) : null;
-    const tags = [...counts].map(([tag, count]) => ({ tag, count })).filter((row) => !match || match.test(row.tag.toLowerCase())).sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+    const pattern = query.q?.toLowerCase();
+    const tags = [...counts].map(([tag, count]) => ({ tag, count })).filter((row) => !pattern || globMatch(pattern, row.tag.toLowerCase())).sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
     const limit = query.limit ?? 100;
     const offset = query.offset ?? 0;
     return { items: tags.slice(offset, offset + limit), total: tags.length, limit, offset };

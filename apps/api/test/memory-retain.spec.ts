@@ -59,6 +59,17 @@ describe('observation scopes (#1157)', () => {
     expect(resolveObservationScopes(tags, [['missing:*']])).toEqual([]);
   });
 
+  it('files an untagged memory under per_tag or all_combinations in the untagged scope, never in none', () => {
+    expect(resolveObservationScopes([], 'per_tag')).toEqual([[]]);
+    expect(resolveObservationScopes([], 'all_combinations')).toEqual([[]]);
+  });
+
+  it('matches a custom glob in linear time, with no regex to backtrack', () => {
+    const started = Date.now();
+    expect(resolveObservationScopes(['a'.repeat(100)], [['*a*a*a*a*a*a*a*a*b']])).toEqual([]);
+    expect(Date.now() - started).toBeLessThan(100);
+  });
+
   it('keeps the retain-time value and rejects a malformed one before extraction', () => {
     expect(readRetainItems([{ content: 'a', observation_scopes: 'shared' }], null, LIMITS)[0]!.observationScopes).toBe('shared');
     expect(readRetainItems([{ content: 'a', observation_scopes: [['b', 'a', 'a']] }], null, LIMITS)[0]!.observationScopes).toEqual([['a', 'b']]);

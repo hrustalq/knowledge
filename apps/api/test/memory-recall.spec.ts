@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { BadRequestException } from '@nestjs/common';
 import { BUDGET_FETCH, MemoryRecallService, cutToTokens, fuseLegs } from '../src/memory/memory-recall.service.js';
-import { OpenAICompatibleMemoryReranker } from '../src/memory/memory-reranker.js';
+import { OpenAICompatibleMemoryReranker, RERANKER_COOLDOWN_MS } from '../src/memory/memory-reranker.js';
 
 const bank = { id: 'bank-1', workspaceId: 'ws-1', bankId: 'agent' } as never;
 const unit = (id: string, text = id) => ({ id, text, factType: 'world', context: null, tags: [], metadata: {}, documentId: 'd', occurredStart: null, occurredEnd: null, mentionedAt: null, entities: [], evidence: [] });
@@ -173,6 +173,35 @@ describe('OpenAICompatibleMemoryReranker (#1158)', () => {
       await expect(provider.rerank('q', ['a'])).rejects.toThrow('provider timeout');
     } finally {
       vi.unstubAllGlobals();
+    }
+  });
+
+  it('takes an already-normalized score as it is, so a floor keeps its meaning', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ results: [{ index: 0, relevance_score: 0.12 }, { index: 1, relevance_score: 0.97 }] }) })));
+    try {
+      const provider = new OpenAICompatibleMemoryReranker('http://reranker.test/v1', 'rerank-v3', '', 1000, 2, 'normalized');
+      expect(await provider.rerank('q', ['a', 'b'])).toEqual([0.12, 0.97]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('after a failure skips the endpoint for a cool-down, then tries it again', async () => {
+    vi.useFakeTimers();
+    const request = vi.fn(async () => ({ ok: false, status: 503, text: async () => 'down' }));
+    vi.stubGlobal('fetch', request);
+    try {
+      const provider = new OpenAICompatibleMemoryReranker('http://reranker.test/v1', 'cross-encoder', '', 1000, 2);
+      await expect(provider.rerank('q', ['a'])).rejects.toThrow('503');
+      await expect(provider.rerank('q', ['a'])).rejects.toThrow('cooling down');
+      expect(request).toHaveBeenCalledOnce();
+      vi.advanceTimersByTime(RERANKER_COOLDOWN_MS + 1);
+      request.mockImplementation(async () => ({ ok: true, json: async () => ({ results: [{ index: 0, relevance_score: 0 }] }) }) as never);
+      expect(await provider.rerank('q', ['a'])).toEqual([0.5]);
+      expect(request).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
     }
   });
 });

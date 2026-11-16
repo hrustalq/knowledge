@@ -32,6 +32,10 @@ function service(
     recallError?: boolean;
     memoryPolicy?: Partial<AgentMemoryPolicy>;
     policyError?: boolean;
+    /** What `runtimeBank` finds: `squatted` = a row under that id that is not the runtime's. */
+    bank?: 'ok' | 'squatted';
+    withinProjectAudience?: boolean;
+    visibleError?: boolean;
   } = {},
 ) {
   const auth = {
@@ -46,14 +50,16 @@ function service(
     unavailable: () => [],
     require: vi.fn(async () => undefined),
   };
-  const permissions = { scopeFor: vi.fn(async () => ({ userId: USER })) };
+  const permissions = {
+    scopeFor: vi.fn(async () => ({ userId: USER })),
+    audienceScope: vi.fn(async (scope: object) => ({ ...scope, clamped: true })),
+  };
   const access = {
-    visible: vi.fn(async (_scope: unknown, rows: unknown[]) => rows),
-    find: vi.fn(async (_caller: unknown, bankId: string) => ({
-      id: `row-${bankId}`,
-      bankId,
-      mission: '',
-    })),
+    visible: vi.fn(async (_scope: unknown, rows: unknown[]) => {
+      if (opts.visibleError) throw new Error('db down');
+      return rows;
+    }),
+    withinProjectAudience: vi.fn(async () => opts.withinProjectAudience ?? true),
   };
   const agents = {
     resolve: vi.fn(async () => {
@@ -62,12 +68,9 @@ function service(
     }),
   };
   const banks = {
-    ensure: vi.fn(
-      async (_caller: unknown, bankId: string, defaults: unknown) => ({
-        id: `row-${bankId}`,
-        bankId,
-        ...defaults,
-      }),
+    runtimeBank: vi.fn(
+      async (_caller: unknown, target: { bankId: string }) =>
+        opts.bank === 'squatted' ? null : { id: `row-${target.bankId}`, ...target },
     ),
   };
   const recall = {
@@ -90,7 +93,7 @@ function service(
     recall as never,
     retain as never,
   );
-  return { svc, auth, access, agents, banks, recall, retain };
+  return { svc, auth, permissions, access, agents, banks, recall, retain };
 }
 
 describe('memory runtime targets', () => {
@@ -148,10 +151,11 @@ describe('agent memory policy', () => {
 describe('MemoryRuntimeService', () => {
   it('recalls personal and project banks independently as untrusted grounding', async () => {
     const { svc, recall } = service();
-    const text = await svc.ground({
+    const { text, personal } = await svc.ground({
       ...input,
       query: 'What are our constraints?',
     });
+    expect(personal).toBe(true);
     expect(text).toContain('Your earlier work with this user:');
     expect(text).toContain('Earlier agent work in this project:');
     expect(recall.recallForModel).toHaveBeenCalledTimes(2);
@@ -167,18 +171,20 @@ describe('MemoryRuntimeService', () => {
       locale: 'en' as const,
       sourceId: 'turn-1',
       sourceKind: 'assistant-turn' as const,
+      shareWithProject: true,
       question: 'Use pnpm',
       answer: 'I will use pnpm.',
     };
     await svc.remember(turn);
     await svc.remember(turn);
-    expect(banks.ensure).toHaveBeenCalledTimes(4);
-    expect(banks.ensure.mock.calls[0]![2]).toMatchObject({
+    expect(banks.runtimeBank).toHaveBeenCalledTimes(4);
+    expect(banks.runtimeBank.mock.calls[0]![2]).toEqual({ create: true });
+    expect(banks.runtimeBank.mock.calls[0]![1]).toMatchObject({
       agentKey: 'researcher',
       ownerId: USER,
       projectId: null,
     });
-    expect(banks.ensure.mock.calls[1]![2]).toMatchObject({
+    expect(banks.runtimeBank.mock.calls[1]![1]).toMatchObject({
       agentKey: null,
       ownerId: null,
       projectId: PROJECT,
@@ -205,6 +211,7 @@ describe('MemoryRuntimeService', () => {
       locale: 'en',
       sourceId: 'turn-2',
       sourceKind: 'assistant-turn',
+      shareWithProject: true,
       question: 'Thanks',
       answer: 'You are welcome.',
     });
@@ -223,10 +230,11 @@ describe('MemoryRuntimeService', () => {
       locale: 'en',
       sourceId: 'turn-3',
       sourceKind: 'assistant-turn',
+      shareWithProject: true,
       question: 'Remember this',
       answer: 'Done.',
     });
-    expect(banks.ensure).not.toHaveBeenCalled();
+    expect(banks.runtimeBank).not.toHaveBeenCalled();
     expect(retain.retain).not.toHaveBeenCalled();
     await svc.ground({ ...input, query: 'What do you remember?' });
     expect(recall.recallForModel).toHaveBeenCalledTimes(2);
@@ -241,6 +249,7 @@ describe('MemoryRuntimeService', () => {
       locale: 'en',
       sourceId: 'turn-4',
       sourceKind: 'assistant-turn',
+      shareWithProject: true,
       question: 'I prefer pnpm',
       answer: 'I will use pnpm.',
     });
@@ -258,6 +267,7 @@ describe('MemoryRuntimeService', () => {
       locale: 'en',
       sourceId: 'run-4',
       sourceKind: 'agent-run',
+      shareWithProject: true,
       question: 'Check requirements',
       answer: 'Deployments require review.',
     });
@@ -278,14 +288,15 @@ describe('MemoryRuntimeService', () => {
       locale: 'en',
       sourceId: 'turn-1',
       sourceKind: 'assistant-turn',
+      shareWithProject: true,
       question: 'q',
       answer: 'a',
     });
-    expect(viewer.banks.ensure).not.toHaveBeenCalled();
+    expect(viewer.banks.runtimeBank).not.toHaveBeenCalled();
     expect(viewer.retain.retain).not.toHaveBeenCalled();
     await expect(
       service({ recallError: true }).svc.ground({ ...input, query: 'q' }),
-    ).resolves.toBe('');
+    ).resolves.toEqual({ text: '', personal: false });
   });
 
   it('a policy lookup failure skips retention without failing the run', async () => {
@@ -296,11 +307,67 @@ describe('MemoryRuntimeService', () => {
         locale: 'en',
         sourceId: 'run-5',
         sourceKind: 'agent-run',
+        shareWithProject: true,
         question: 'q',
         answer: 'a',
       }),
     ).resolves.toBeUndefined();
-    expect(banks.ensure).not.toHaveBeenCalled();
+    expect(banks.runtimeBank).not.toHaveBeenCalled();
+    expect(retain.retain).not.toHaveBeenCalled();
+  });
+
+  const turn = {
+    ...input,
+    locale: 'en' as const,
+    sourceId: 'turn-9',
+    sourceKind: 'assistant-turn' as const,
+    shareWithProject: true,
+    question: 'q',
+    answer: 'a',
+  };
+  const scopes = (retain: { retain: { mock: { calls: Array<[{ items: Array<{ metadata: { memory_scope: string } }> }]> } } }) =>
+    retain.retain.mock.calls.map(([call]) => call.items[0]!.metadata.memory_scope);
+
+  it('neither recalls from nor writes to a bank whose id is held by a row that is not the runtime’s', async () => {
+    const { svc, recall, retain } = service({ bank: 'squatted' });
+    await expect(svc.ground({ ...input, query: 'q' })).resolves.toEqual({ text: '', personal: false });
+    expect(recall.recallForModel).not.toHaveBeenCalled();
+    await svc.remember(turn);
+    expect(retain.retain).not.toHaveBeenCalled();
+  });
+
+  it('for output an audience reads: no personal bank, and project banks under the clamped scope', async () => {
+    const { svc, recall, retain, banks, access, permissions } = service();
+    const audience = { kind: 'workspace' as const };
+    const grounding = await svc.ground({ ...input, query: 'q', audience });
+    expect(grounding.personal).toBe(false);
+    expect(grounding.text).not.toContain('Your earlier work with this user:');
+    expect(recall.recallForModel).toHaveBeenCalledOnce();
+    expect(permissions.audienceScope).toHaveBeenCalledWith({ userId: USER }, audience);
+    expect(access.visible.mock.calls[0]![0]).toMatchObject({ clamped: true });
+    await svc.remember({ ...turn, sourceKind: 'agent-run', audience });
+    expect(banks.runtimeBank.mock.calls.map((call) => (call[1] as { kind: string }).kind)).toEqual(['project', 'project']);
+    expect(scopes(retain as never)).toEqual(['project']);
+  });
+
+  it('copies a turn into the project bank only when the caller vouches for it and the scope fits the project audience', async () => {
+    const unvouched = service();
+    await unvouched.svc.remember({ ...turn, shareWithProject: false });
+    expect(scopes(unvouched.retain as never)).toEqual(['personal']);
+
+    const wider = service({ withinProjectAudience: false });
+    await wider.svc.remember(turn);
+    expect(wider.access.withinProjectAudience).toHaveBeenCalledWith({ userId: USER }, PROJECT);
+    expect(scopes(wider.retain as never)).toEqual(['personal']);
+
+    const fits = service();
+    await fits.svc.remember(turn);
+    expect(scopes(fits.retain as never)).toEqual(['personal', 'project']);
+  });
+
+  it('never throws, whatever fails inside it', async () => {
+    const { svc, retain } = service({ visibleError: true });
+    await expect(svc.remember(turn)).resolves.toBeUndefined();
     expect(retain.retain).not.toHaveBeenCalled();
   });
 });

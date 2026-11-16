@@ -47,6 +47,24 @@ export function directiveResponse(
   };
 }
 
+/**
+ * Characters of directive name + content one reflect applies. One directive
+ * (20 000 content + 200 name) always fits; past the budget, lower priorities drop.
+ */
+export const DIRECTIVE_CHAR_BUDGET = 24_000;
+
+/** The highest-priority prefix of `rows` (already ordered) that fits the budget. */
+export function withinDirectiveBudget<T extends Pick<MemoryDirective, 'name' | 'content'>>(rows: T[], budget = DIRECTIVE_CHAR_BUDGET): T[] {
+  const kept: T[] = [];
+  let used = 0;
+  for (const row of rows) {
+    used += row.name.length + row.content.length;
+    if (used > budget) break;
+    kept.push(row);
+  }
+  return kept;
+}
+
 const ORDER: Prisma.MemoryDirectiveOrderByWithRelationInput[] = [
   { priority: 'desc' },
   { createdAt: 'asc' },
@@ -144,7 +162,7 @@ export class MemoryDirectivesService {
     return { success: true, message: null, deleted_count: deleted.count };
   }
 
-  /** Active rules in this already ACL-resolved bank, highest priority first. */
+  /** Active rules in this already ACL-resolved bank, highest priority first, within `DIRECTIVE_CHAR_BUDGET`. */
   async forReflect(
     bank: MemoryBank,
     query: {
@@ -161,11 +179,13 @@ export class MemoryDirectivesService {
       },
       orderBy: ORDER,
     });
-    return query.applyAllDirectives
-      ? rows
-      : rows.filter((row) =>
-          directiveMatches(row.tags, query.tags, query.tagsMatch),
-        );
+    return withinDirectiveBudget(
+      query.applyAllDirectives
+        ? rows
+        : rows.filter((row) =>
+            directiveMatches(row.tags, query.tags, query.tagsMatch),
+          ),
+    );
   }
 
   private async one(bank: MemoryBank, id: string): Promise<MemoryDirective> {

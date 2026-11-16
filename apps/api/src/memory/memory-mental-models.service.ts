@@ -14,6 +14,7 @@ import { cleanTags, tagsWhere } from './memory-facts.js';
 import {
   applyMentalModelDelta,
   cronDue,
+  mentalModelScope,
   mentalModelTrigger,
   mentalModelTriggerOutput,
   parseCron,
@@ -45,7 +46,10 @@ class RefreshFailure extends Error {
   }
 }
 
-const modelLock = (id: string) => `memory-mental-model:${id}`;
+/** How many evidence memories a model keeps in `based_on.memories`; the newest win. */
+const MAX_EVIDENCE = 200;
+const modelLock = (bankId: string, id: string) => `memory-mental-model:${bankId}:${id}`;
+const modelKey = (model: Pick<MemoryMentalModel, 'bankId' | 'id'>) => ({ bankId_id: { bankId: model.bankId, id: model.id } });
 const payloadOf = (row: Pick<MemoryOperation, 'payload'>): RefreshPayload | null => {
   const payload = row.payload as unknown as Partial<RefreshPayload>;
   return typeof payload?.mental_model_id === 'string' ? payload as RefreshPayload : null;
@@ -77,7 +81,7 @@ export class MemoryMentalModelsService {
     const trigger = this.validateDefinition({ ...dto, id });
     const operationId = randomUUID();
     try {
-      await withSubjectLock(this.prisma, modelLock(id), async () => {
+      await withSubjectLock(this.prisma, modelLock(bank.id, id), async () => {
         await this.prisma.memoryMentalModel.create({
           data: {
             id,
@@ -137,7 +141,7 @@ export class MemoryMentalModelsService {
     const current = await this.one(bank, id);
     const trigger = dto.trigger === undefined ? mentalModelTrigger(current.trigger) : this.validatedTrigger(dto.trigger ?? {}, mentalModelTrigger(current.trigger));
     const row = await this.prisma.memoryMentalModel.update({
-      where: { id: current.id, workspaceId: bank.workspaceId, bankId: bank.id },
+      where: { ...modelKey(current), workspaceId: bank.workspaceId },
       data: {
         ...(typeof dto.name === 'string' ? { name: dto.name.trim() } : {}),
         ...(typeof dto.source_query === 'string' ? { sourceQuery: dto.source_query.trim() } : {}),
@@ -151,19 +155,20 @@ export class MemoryMentalModelsService {
 
   async delete(bank: MemoryBank, id: string): Promise<void> {
     const row = await this.one(bank, id);
-    await withSubjectLock(this.prisma, modelLock(row.id), async () => {
-      const waiting = await this.prisma.memoryOperation.findMany({ where: { bankId: bank.id, type: { in: [...REFRESH_TYPES] }, status: 'queued' }, select: { id: true, payload: true } });
-      const ids = waiting.filter((operation) => payloadOf(operation)?.mental_model_id === row.id).map((operation) => operation.id);
-      if (ids.length) await this.prisma.memoryOperation.updateMany({ where: { id: { in: ids } }, data: { status: 'cancelled', completedAt: new Date(), payload: [] } });
-      await this.prisma.memoryMentalModel.delete({ where: { id: row.id } });
+    await withSubjectLock(this.prisma, modelLock(bank.id, row.id), async () => {
+      // A running refresh is cancelled too: its final write finds the model gone and settles without writing.
+      const pending = await this.prisma.memoryOperation.findMany({ where: { bankId: bank.id, type: { in: [...REFRESH_TYPES] }, status: { in: ['queued', 'running'] } }, select: { id: true, payload: true } });
+      const ids = pending.filter((operation) => payloadOf(operation)?.mental_model_id === row.id).map((operation) => operation.id);
+      if (ids.length) await this.prisma.memoryOperation.updateMany({ where: { id: { in: ids }, status: { in: ['queued', 'running'] } }, data: { status: 'cancelled', completedAt: new Date(), payload: [] } });
+      await this.prisma.memoryMentalModel.delete({ where: modelKey(row) });
     });
   }
 
   async clear(bank: MemoryBank, id: string): Promise<MentalModelResponse> {
     const current = await this.one(bank, id);
-    const row = await withSubjectLock(this.prisma, modelLock(id), async () => {
+    const row = await withSubjectLock(this.prisma, modelLock(bank.id, current.id), async () => {
       const updated = await this.prisma.memoryMentalModel.update({
-        where: { id, workspaceId: bank.workspaceId, bankId: bank.id },
+        where: { ...modelKey(current), workspaceId: bank.workspaceId },
         data: {
           content: '',
           structuredDoc: Prisma.DbNull,
@@ -203,7 +208,7 @@ export class MemoryMentalModelsService {
     const trigger = mentalModelTriggerOutput(model.trigger);
     const interval = trigger.min_refresh_interval_seconds ?? this.defaultInterval;
     const notBefore = refresh.automatic && model.lastRefreshedAt && interval > 0 ? new Date(model.lastRefreshedAt.getTime() + interval * 1000) : null;
-    const id = await withSubjectLock(this.prisma, modelLock(model.id), async () => {
+    const id = await withSubjectLock(this.prisma, modelLock(model.bankId, model.id), async () => {
       const waiting = await this.prisma.memoryOperation.findMany({ where: { bankId: model.bankId, type: { in: [...REFRESH_TYPES] }, status: 'queued' }, orderBy: { createdAt: 'asc' } });
       const held = waiting.find((operation) => payloadOf(operation)?.mental_model_id === model.id);
       if (held) {
@@ -243,12 +248,12 @@ export class MemoryMentalModelsService {
     if (!payload) return;
     let claimed = false;
     try {
-      claimed = await withSubjectLock(this.prisma, modelLock(payload.mental_model_id), async () => {
-        const running = await this.prisma.memoryOperation.findFirst({
+      claimed = await withSubjectLock(this.prisma, modelLock(operation.bankId, payload.mental_model_id), async () => {
+        const running = await this.prisma.memoryOperation.findMany({
           where: { bankId: operation.bankId, type: { in: [...REFRESH_TYPES] }, status: 'running', id: { not: operation.id } },
           select: { id: true, payload: true },
         });
-        if (running && payloadOf(running)?.mental_model_id === payload.mental_model_id) return false;
+        if (running.some((other) => payloadOf(other)?.mental_model_id === payload.mental_model_id)) return false;
         const result = await this.prisma.memoryOperation.updateMany({
           where: { id: operation.id, status: 'queued', OR: [{ notBefore: null }, { notBefore: { lte: new Date() } }] },
           data: { status: 'running', startedAt: new Date(), attempts: { increment: 1 }, notBefore: null },
@@ -258,29 +263,33 @@ export class MemoryMentalModelsService {
       if (!claimed) return;
       const model = await this.prisma.memoryMentalModel.findFirst({ where: { id: payload.mental_model_id, bankId: operation.bankId } });
       if (!model) throw new RefreshFailure('unexpected_error', 'refresh_failed_error', 'The mental model no longer exists.');
-      await this.runRefresh(operation, model, payload.mode);
-      await this.prisma.memoryOperation.updateMany({ where: { id: operation.id, status: 'running' }, data: { status: 'completed', completedAt: new Date(), error: null, payload: [] } });
+      const written = await this.runRefresh(operation, model, payload.mode);
+      await this.prisma.memoryOperation.updateMany({
+        where: { id: operation.id, status: 'running' },
+        data: written ? { status: 'completed', completedAt: new Date(), error: null, payload: [] } : { status: 'cancelled', completedAt: new Date(), payload: [] },
+      });
     } catch (error) {
       if (!claimed) throw error;
       const failure = error instanceof RefreshFailure ? error : new RefreshFailure('unexpected_error', 'refresh_failed_error', (error as Error).message);
       this.logger.warn(`Mental model operation ${operation.id} failed: ${failure.message}`);
-      await this.recordFailure(operation.bankId, payload, failure);
-      await this.prisma.memoryOperation.updateMany({ where: { id: operation.id, status: 'running' }, data: { status: 'failed', completedAt: new Date(), error: failure.message.slice(0, 1000), payload: [] } });
+      // Only a refresh still running records against the model: a delete cancels it first.
+      await this.failStale({ id: operation.id, status: 'running' }, { bankId: operation.bankId, payload: operation.payload }, failure.message.slice(0, 1000), failure);
     } finally {
       if (claimed) await this.enqueueNext(operation.bankId, payload.mental_model_id);
     }
   }
 
-  async failStale(where: Prisma.MemoryOperationWhereInput, row: Pick<MemoryOperation, 'bankId' | 'payload'>, message: string): Promise<{ count: number }> {
+  async failStale(where: Prisma.MemoryOperationWhereInput, row: Pick<MemoryOperation, 'bankId' | 'payload'>, message: string, failure = new RefreshFailure('unexpected_error', 'refresh_failed_error', message)): Promise<{ count: number }> {
     const done = await this.prisma.memoryOperation.updateMany({ where, data: { status: 'failed', completedAt: new Date(), error: message, payload: [] } });
-    if (done.count) await this.recordFailure(row.bankId, payloadOf(row)!, new RefreshFailure('unexpected_error', 'refresh_failed_error', message));
+    const payload = payloadOf(row);
+    if (done.count && payload) await this.recordFailure(row.bankId, payload, failure);
     return done;
   }
 
   private async recordFailure(bankId: string, payload: RefreshPayload, failure: RefreshFailure): Promise<void> {
     const model = await this.prisma.memoryMentalModel.findFirst({ where: { id: payload.mental_model_id, bankId } });
     if (!model) return;
-    await this.prisma.memoryMentalModel.update({ where: { id: model.id }, data: { lastRefreshFailedAt: new Date() } });
+    await this.prisma.memoryMentalModel.updateMany({ where: { bankId, id: model.id }, data: { lastRefreshFailedAt: new Date() } });
     await this.prisma.memoryMentalModelHistory.create({
       data: {
         workspaceId: model.workspaceId,
@@ -293,27 +302,47 @@ export class MemoryMentalModelsService {
         errorMessage: failure.message.slice(0, 1000),
       },
     });
-    await this.trimHistory(model.id, 'refresh_failed');
+    await this.trimHistory(model, 'refresh_failed');
   }
 
-  private async runRefresh(operation: RefreshOperation, model: MemoryMentalModel, requestedMode?: 'full' | null): Promise<void> {
+  /** False when the model was deleted (or deleted and re-created) while the refresh ran: nothing was written. */
+  private async runRefresh(operation: RefreshOperation, model: MemoryMentalModel, requestedMode?: 'full' | null): Promise<boolean> {
     const trigger = mentalModelTriggerOutput(model.trigger);
     const mode = requestedMode ?? trigger.mode;
-    const delta = mode === 'delta' && model.content && model.refreshedSourceQuery === model.sourceQuery;
+    const scopeKey = mentalModelScope(model);
+    // A changed query or scope invalidates the document a delta would edit: refresh full.
+    const delta = Boolean(mode === 'delta' && model.content && model.refreshedSourceQuery === model.sourceQuery && model.refreshedScope === scopeKey);
     const structured = delta ? readMentalModelDocument(model.structuredDoc) : null;
-    if (mode === 'delta' && model.content && model.refreshedSourceQuery === model.sourceQuery && !structured) {
+    if (delta && !structured) {
       throw new RefreshFailure('structured_doc_unreadable', 'refresh_failed_delta_not_applied', 'The stored delta document cannot be read.');
     }
     const [snapshot] = await this.prisma.$queryRaw<Array<{ now: Date }>>`SELECT now() AS now`;
     const before = snapshot?.now ?? new Date();
     const scope = this.scopeWhere(model, { before, after: delta ? model.lastMemorySeenAt : null });
     const latest = await this.prisma.memoryUnit.findFirst({ where: scope, orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }], select: { updatedAt: true } });
-    if (!latest) {
-      await this.prisma.memoryMentalModel.update({
-        where: { id: model.id },
-        data: { lastRefreshedAt: new Date(), lastRefreshFailedAt: null, ...(mode === 'full' ? { lastFullRefreshedAt: new Date() } : {}) },
+    if (!latest && delta) {
+      // Nothing new since the last refresh; still drop evidence that was deleted since.
+      const previous = model.reflectResponse as ReflectResponse | null;
+      const evidence = previous?.based_on ? { ...previous, based_on: { ...previous.based_on, memories: await this.liveEvidence(model.bankId, previous.based_on.memories) } } : previous;
+      return this.write(model, null, {
+        lastRefreshedAt: new Date(),
+        lastRefreshFailedAt: null,
+        ...(evidence ? { reflectResponse: evidence as unknown as Prisma.InputJsonObject } : {}),
       });
-      return;
+    }
+    if (!latest) {
+      // A full refresh over an empty scope: the old content describes memories that are gone.
+      return this.write(model, '', {
+        content: '',
+        structuredDoc: Prisma.DbNull,
+        reflectResponse: Prisma.DbNull,
+        refreshedSourceQuery: model.sourceQuery,
+        refreshedScope: scopeKey,
+        lastRefreshedAt: new Date(),
+        lastMemorySeenAt: null,
+        lastRefreshFailedAt: null,
+        lastFullRefreshedAt: new Date(),
+      });
     }
     const tagsMatch = trigger.tags_match ?? (model.tags.length ? 'all_strict' : 'any');
     const excluded = new Set([model.id, ...(trigger.exclude_mental_model_ids ?? [])]);
@@ -332,6 +361,7 @@ export class MemoryMentalModelsService {
       excludeMentalModelIds: [...excluded],
       written: { before, after: delta ? model.lastMemorySeenAt ?? undefined : undefined },
       deltaDocument: delta ? structured! : undefined,
+      mentalModelRefresh: true,
     });
     let content = answer.text;
     let response: ReflectResponse = answer;
@@ -349,7 +379,7 @@ export class MemoryMentalModelsService {
         ...answer,
         text: content,
         based_on: {
-          memories: [...memories.values()],
+          memories: await this.liveEvidence(model.bankId, [...memories.values()]),
           mental_models: answer.based_on?.mental_models ?? [],
           directives: answer.based_on?.directives ?? [],
         },
@@ -371,27 +401,45 @@ export class MemoryMentalModelsService {
       if (trigger.response_schema && (answer.structured_output_error || !answer.structured_output)) {
         throw new RefreshFailure('structured_output_failed', 'refresh_failed_structured_output', answer.structured_output_error ?? 'Structured output extraction failed.');
       }
+      if (answer.based_on) response = { ...answer, based_on: { ...answer.based_on, memories: await this.liveEvidence(model.bankId, answer.based_on.memories) } };
     }
     if (!trigger.keep_trace) delete response.trace;
     const document = parseMentalModelDocument(content);
-    await withSubjectLock(this.prisma, modelLock(model.id), async () => {
-      const current = await this.prisma.memoryMentalModel.findUnique({ where: { id: model.id } });
-      if (!current) throw new RefreshFailure('unexpected_error', 'refresh_failed_error', 'The mental model no longer exists.');
-      if (current.content !== content) await this.history(current, current.content);
-      await this.prisma.memoryMentalModel.update({
-        where: { id: model.id },
-        data: {
-          content,
-          structuredDoc: document as unknown as Prisma.InputJsonObject,
-          reflectResponse: response as unknown as Prisma.InputJsonObject,
-          refreshedSourceQuery: model.sourceQuery,
-          lastRefreshedAt: new Date(),
-          lastMemorySeenAt: latest.updatedAt,
-          lastRefreshFailedAt: null,
-          ...(mode === 'full' || !delta ? { lastFullRefreshedAt: new Date() } : {}),
-        },
-      });
+    return this.write(model, content, {
+      content,
+      structuredDoc: document as unknown as Prisma.InputJsonObject,
+      reflectResponse: response as unknown as Prisma.InputJsonObject,
+      refreshedSourceQuery: model.sourceQuery,
+      refreshedScope: scopeKey,
+      lastRefreshedAt: new Date(),
+      lastMemorySeenAt: latest.updatedAt,
+      lastRefreshFailedAt: null,
+      ...(mode === 'full' || !delta ? { lastFullRefreshedAt: new Date() } : {}),
     });
+  }
+
+  /**
+   * The refresh's one write, under the model lock, to the very row it read: a
+   * model deleted (or deleted and re-created under the same id) since is left
+   * alone. `content` non-null keeps the replaced content in history.
+   */
+  private async write(model: MemoryMentalModel, content: string | null, data: Prisma.MemoryMentalModelUpdateManyMutationInput): Promise<boolean> {
+    return withSubjectLock(this.prisma, modelLock(model.bankId, model.id), async () => {
+      const where = { bankId: model.bankId, id: model.id, createdAt: model.createdAt };
+      const current = await this.prisma.memoryMentalModel.findFirst({ where });
+      if (!current) return false;
+      if (content !== null && current.content !== content) await this.history(current, current.content);
+      const done = await this.prisma.memoryMentalModel.updateMany({ where, data });
+      return done.count > 0;
+    });
+  }
+
+  /** Evidence ids still in the bank, newest kept when over the cap. */
+  private async liveEvidence<T extends { id: string }>(bankId: string, memories: T[]): Promise<T[]> {
+    if (!memories.length) return memories;
+    const live = await this.prisma.memoryUnit.findMany({ where: { bankId, id: { in: memories.map((memory) => memory.id) } }, select: { id: true } });
+    const ids = new Set(live.map((row) => row.id));
+    return memories.filter((memory) => ids.has(memory.id)).slice(-MAX_EVIDENCE);
   }
 
   private scopeWhere(model: MemoryMentalModel, window?: { before: Date; after?: Date | null }): Prisma.MemoryUnitWhereInput {
@@ -411,6 +459,11 @@ export class MemoryMentalModelsService {
   private async staleness(models: MemoryMentalModel[]): Promise<Map<string, boolean>> {
     const out = new Map<string, boolean>();
     for (const model of models) {
+      // Content built from another tag or fact-type scope than the model now names is stale whatever the memories say.
+      if (model.refreshedScope && model.refreshedScope !== mentalModelScope(model)) {
+        out.set(model.id, true);
+        continue;
+      }
       const trigger = mentalModelTriggerOutput(model.trigger);
       const match = trigger.tags_match ?? (model.tags.length ? 'all_strict' : 'any');
       const scope = model.tags.length && !match.endsWith('_strict') && match !== 'exact'
@@ -429,25 +482,29 @@ export class MemoryMentalModelsService {
   }
 
   async afterConsolidation(bank: MemoryBank): Promise<void> {
-    const models = await this.prisma.memoryMentalModel.findMany({ where: { bankId: bank.id, lastRefreshFailedAt: null } });
+    const rows = await this.prisma.memoryMentalModel.findMany({ where: { bankId: bank.id, lastRefreshFailedAt: null } });
+    const models = rows.filter((model) => mentalModelTriggerOutput(model.trigger).refresh_after_consolidation);
     const stale = await this.staleness(models);
-    for (const model of models) {
-      if (!mentalModelTriggerOutput(model.trigger).refresh_after_consolidation || !stale.get(model.id)) continue;
-      await this.queue(model, { automatic: true }, AUTHOR_ID_STUB, 'en');
-    }
+    for (const model of models) if (stale.get(model.id)) await this.queue(model, { automatic: true }, AUTHOR_ID_STUB, 'en');
   }
 
   async sweep(now = Date.now()): Promise<void> {
     if (this.features.unavailable().includes('memory')) return;
-    const rows = await this.prisma.memoryMentalModel.findMany({ where: { lastRefreshFailedAt: null }, include: { bank: true } });
-    const models = [];
-    for (const model of rows) if (!(await this.features.disabled(model.workspaceId)).includes('memory')) models.push(model);
-    const stale = await this.staleness(models);
-    for (const model of models) {
+    const rows = await this.prisma.memoryMentalModel.findMany({ where: { lastRefreshFailedAt: null } });
+    const off = new Map<string, boolean>();
+    for (const model of rows) {
       const trigger = mentalModelTriggerOutput(model.trigger);
-      const full = trigger.mode === 'delta' && model.lastRefreshedAt && (!model.lastFullRefreshedAt || model.lastRefreshedAt > model.lastFullRefreshedAt) && cronDue(trigger.full_refresh_cron, now, model.lastFullRefreshedAt);
-      const regular = cronDue(trigger.refresh_cron, now, model.lastRefreshedAt) && stale.get(model.id);
-      if (full || regular) await this.queue(model, { mode: full ? 'full' : null, automatic: true }, AUTHOR_ID_STUB, 'en');
+      if (!trigger.refresh_cron && !trigger.full_refresh_cron) continue;
+      try {
+        if (!off.has(model.workspaceId)) off.set(model.workspaceId, (await this.features.disabled(model.workspaceId)).includes('memory'));
+        if (off.get(model.workspaceId)) continue;
+        // A firing missed by the tick still counts: due when the schedule fired since the last run.
+        const full = Boolean(trigger.mode === 'delta' && model.lastRefreshedAt && (!model.lastFullRefreshedAt || model.lastRefreshedAt > model.lastFullRefreshedAt) && cronDue(trigger.full_refresh_cron, now, model.lastFullRefreshedAt ?? model.createdAt));
+        const regular = !full && cronDue(trigger.refresh_cron, now, model.lastRefreshedAt ?? model.createdAt) && (await this.staleness([model])).get(model.id);
+        if (full || regular) await this.queue(model, { mode: full ? 'full' : null, automatic: true }, AUTHOR_ID_STUB, 'en');
+      } catch (error) {
+        this.logger.warn(`Mental model ${model.bankId}/${model.id} not scheduled: ${(error as Error).message}`);
+      }
     }
     const due = await this.prisma.memoryOperation.findMany({ where: { status: 'queued', notBefore: { lte: new Date(now) }, type: { in: [...REFRESH_TYPES] } }, select: { id: true } });
     for (const operation of due) await this.enqueue(operation.id);
@@ -495,11 +552,11 @@ export class MemoryMentalModelsService {
 
   private async history(model: MemoryMentalModel, previousContent: string): Promise<void> {
     await this.prisma.memoryMentalModelHistory.create({ data: { workspaceId: model.workspaceId, bankId: model.bankId, modelId: model.id, previousContent } });
-    await this.trimHistory(model.id, null);
+    await this.trimHistory(model, null);
   }
 
-  private async trimHistory(modelId: string, kind: string | null): Promise<void> {
-    const old = await this.prisma.memoryMentalModelHistory.findMany({ where: { modelId, kind }, orderBy: [{ changedAt: 'desc' }, { id: 'desc' }], skip: 50, select: { id: true } });
+  private async trimHistory(model: Pick<MemoryMentalModel, 'bankId' | 'id'>, kind: string | null): Promise<void> {
+    const old = await this.prisma.memoryMentalModelHistory.findMany({ where: { bankId: model.bankId, modelId: model.id, kind }, orderBy: [{ changedAt: 'desc' }, { id: 'desc' }], skip: 50, select: { id: true } });
     if (old.length) await this.prisma.memoryMentalModelHistory.deleteMany({ where: { id: { in: old.map((row) => row.id) } } });
   }
 

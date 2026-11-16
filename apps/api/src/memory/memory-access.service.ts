@@ -13,6 +13,7 @@ import {
   canSeeProject,
   type AccessScope,
 } from '../permissions/access-scope.js';
+import { restrictedNodeIds } from '../permissions/acl-read.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
@@ -139,6 +140,17 @@ export class MemoryAccessService {
             restricted: restricted.has(b.projectId),
           })),
     );
+  }
+
+  /**
+   * Whether whatever `scope` could read may also be read by everyone who reads project
+   * `projectId`'s bank: every restricted node of the workspace other than that project is
+   * already denied to it. A bypassing scope passes only where nothing else is restricted.
+   * The test before a turn is copied into a shared project bank (doc 80).
+   */
+  async withinProjectAudience(scope: AccessScope, projectId: string): Promise<boolean> {
+    const restricted = await restrictedNodeIds(this.prisma, scope.workspaceId);
+    return restricted.every((id) => id === projectId || (!scope.bypass && scope.denied.has(id)));
   }
 
   private workspaceOf(

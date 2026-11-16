@@ -1,6 +1,7 @@
-import { consolidationDay, consolidationPrompt, observationSettings, readConsolidation, refinement, scopeMatches } from '../src/memory/memory-observations.js';
+import { consolidationDay, consolidationPrompt, globMatch, observationSettings, readConsolidation, refinement, scopeMatches } from '../src/memory/memory-observations.js';
 import { preferObservations } from '../src/memory/memory-recall.service.js';
 import { MemoryConsolidationService } from '../src/memory/memory-consolidation.service.js';
+import { MemoryConsolidationSweeper } from '../src/memory/memory-consolidation.sweeper.js';
 import { withLocaleDirective } from '../src/assistant/assistant.client.js';
 
 /**
@@ -131,6 +132,38 @@ describe('consolidation strategies (#1157)', () => {
     expect(scopeMatches(['company:a'], { tags: ['company:*'], tags_match: 'exact' })).toBe(true);
     expect(scopeMatches([], { tags: ['*'] })).toBe(false);
   });
+
+  it('pairs exact patterns one to one: two patterns may not share a tag', () => {
+    expect(scopeMatches(['user:a', 'x'], { tags: ['user:*', 'user:*'], tags_match: 'exact' })).toBe(false);
+    expect(scopeMatches(['user:a', 'user:b'], { tags: ['user:*', 'user:*'], tags_match: 'exact' })).toBe(true);
+    // a* can only take ab, so * must move off it to ac.
+    expect(scopeMatches(['ab', 'ac'], { tags: ['*', 'ab'], tags_match: 'exact' })).toBe(true);
+    expect(scopeMatches(['a1', 'b', 'c'], { tags: ['a*', 'a*', '*'], tags_match: 'exact' })).toBe(false);
+  });
+});
+
+describe('globMatch', () => {
+  it('anchors both ends, is case-sensitive, and treats only * as special', () => {
+    expect(globMatch('company:*', 'company:acme')).toBe(true);
+    expect(globMatch('company:*', 'Company:acme')).toBe(false);
+    expect(globMatch('*', '')).toBe(true);
+    expect(globMatch('a*b*c', 'abc')).toBe(true);
+    expect(globMatch('a*b*c', 'acb')).toBe(false);
+    expect(globMatch('ab*ba', 'aba')).toBe(false);
+    expect(globMatch('*.x', 'a.x')).toBe(true);
+    expect(globMatch('*.x', 'abx')).toBe(false);
+    expect(globMatch('a?c', 'abc')).toBe(false);
+    expect(globMatch('user:a', 'user:a')).toBe(true);
+    expect(globMatch('*mid*', 'xxmidyy')).toBe(true);
+    expect(globMatch('**', 'anything')).toBe(true);
+  });
+
+  it('answers a pathological pattern in milliseconds', () => {
+    const started = Date.now();
+    expect(globMatch('*a*a*a*a*a*a*a*a*b', 'a'.repeat(100))).toBe(false);
+    expect(globMatch('*a*a*a*a*a*a*a*a*b', `${'a'.repeat(100_000)}b`)).toBe(true);
+    expect(Date.now() - started).toBeLessThan(100);
+  });
 });
 
 describe('memory content keeps its own language (#1022)', () => {
@@ -144,7 +177,7 @@ describe('memory content keeps its own language (#1022)', () => {
       write: vi.fn(async () => ({ created: 0, refined: 0 })),
     };
     const batch = (MemoryConsolidationService.prototype as unknown as { batch: (...a: unknown[]) => Promise<unknown> }).batch;
-    await batch.call(self, { id: 'b', workspaceId: 'ws', mission: '' }, 'scope-1', [], [{ text: 'Алиса руководит биллингом.', tags: [] }], { config: {}, instructions: 'tidy' }, null, Date.now(), { mission: '', maxObservations: -1, sourceFactsMaxTokens: -1, sourceFactsMaxTokensPerObservation: -1 });
+    await batch.call(self, { id: 'b', workspaceId: 'ws', mission: '' }, { scopeId: 'scope-1', tags: [], claimedAt: new Date() }, [{ text: 'Алиса руководит биллингом.', tags: [] }], { config: {}, instructions: 'tidy' }, null, Date.now(), { mission: '', maxObservations: -1, sourceFactsMaxTokens: -1, sourceFactsMaxTokensPerObservation: -1 });
     const [[ctx]] = chatWithUsage.mock.calls as unknown as [[{ locale: string; operation: string }]];
     expect(ctx).toMatchObject({ operation: 'memory-consolidate', locale: 'source' });
   });
@@ -156,5 +189,81 @@ describe('memory content keeps its own language (#1022)', () => {
     expect(ru[0]!.content).toContain('tidy');
     expect(ru[0]!.content).not.toBe('tidy');
     expect(messages[0]!.content).toBe('tidy');
+  });
+});
+
+describe('MemoryConsolidationService.write guards its claim (#1157)', () => {
+  const settings = { mission: '', maxObservations: -1, sourceFactsMaxTokens: -1, sourceFactsMaxTokensPerObservation: -1 };
+  const claimedAt = new Date('2026-11-16T10:00:00.000Z');
+  const fact = (id: string, text: string) => ({ id, text, entities: [], occurredStart: null, occurredEnd: null, mentionedAt: null });
+  const facts = [fact('f1', 'Alice owns billing.'), fact('f2', 'Bob owns search.')];
+  const entries = [{ target: null, text: 'Alice owns billing.', evidence: [{ fact: 0, quote: 'Alice owns billing' }] }];
+
+  function harness(aliveIds: string[]) {
+    const prisma = {
+      withTransaction: async (fn: () => Promise<unknown>) => fn(),
+      $executeRaw: vi.fn(async () => 1),
+      $queryRaw: vi.fn(async () => aliveIds.map((unit_id) => ({ unit_id }))),
+      memoryUnit: { count: vi.fn(async () => 0), create: vi.fn(async () => ({})), findMany: vi.fn(async () => []), update: vi.fn() },
+      memoryObservationEvidence: { createMany: vi.fn(async () => ({ count: 1 })) },
+      memoryUnitEntity: { createMany: vi.fn(async () => ({ count: 0 })) },
+      memoryObservationHistory: { create: vi.fn() },
+      memoryObservationScopeMember: { updateMany: vi.fn(async () => ({ count: 2 })) },
+    };
+    const graph = { upsertMemoryUnits: vi.fn(async () => undefined), deleteMemoryUnits: vi.fn(async () => undefined) };
+    const self = { prisma, graph, embeddings: { embedBatch: async (texts: string[]) => texts.map(() => [0]) }, logger: { warn: vi.fn() } };
+    const write = (MemoryConsolidationService.prototype as unknown as { write: (...a: unknown[]) => Promise<unknown> }).write;
+    const run = () => write.call(self, { id: 'b', workspaceId: 'ws' }, { scopeId: 'scope-1', tags: [], claimedAt }, facts, [], entries, claimedAt.getTime(), settings);
+    return { prisma, graph, run };
+  }
+
+  it('writes nothing, and drops the new vector, when a fact is no longer claimed by this run', async () => {
+    // f2 was retaken by a second worker, reset by invalidateFacts, or left the scope: the model saw it, so nothing of the answer is kept.
+    const h = harness(['f1']);
+    await expect(h.run()).resolves.toBeNull();
+    expect(h.prisma.memoryUnit.create).not.toHaveBeenCalled();
+    expect(h.prisma.memoryObservationScopeMember.updateMany).not.toHaveBeenCalled();
+    expect(h.graph.deleteMemoryUnits).toHaveBeenCalledOnce();
+    const [sql, ...values] = h.prisma.$queryRaw.mock.calls[0] as unknown as [TemplateStringsArray, ...unknown[]];
+    expect(sql.join('?')).toMatch(/consolidated_at IS NULL AND claimed_at = \?\s+FOR UPDATE/);
+    expect(values).toContain(claimedAt);
+  });
+
+  it('marks the batch read only under the same claim it holds', async () => {
+    const h = harness(['f1', 'f2']);
+    await expect(h.run()).resolves.toEqual({ created: 1, refined: 0 });
+    expect(h.prisma.memoryObservationScopeMember.updateMany).toHaveBeenCalledWith({
+      where: { scopeId: 'scope-1', unitId: { in: ['f1', 'f2'] }, consolidatedAt: null, claimedAt },
+      data: { consolidatedAt: claimedAt, claimedAt: null },
+    });
+  });
+});
+
+describe('rows an older image wrote are repaired into scopes (#1157)', () => {
+  it('runs four idempotent statements that only match legacy rows', async () => {
+    const $executeRaw = vi.fn(async () => 1);
+    const repair = (MemoryConsolidationService.prototype as unknown as { repairLegacyRows: () => Promise<number> }).repairLegacyRows;
+    await expect(repair.call({ prisma: { $executeRaw } })).resolves.toBe(4);
+    const sql = ($executeRaw.mock.calls as unknown as Array<[{ strings: string[] } | TemplateStringsArray]>).map(([q]) => (Array.isArray(q) ? q.join('?') : JSON.stringify(q)));
+    expect(sql[0]).toMatch(/INSERT INTO memory_observation_scopes[\s\S]*ON CONFLICT DO NOTHING/);
+    expect(sql[1]).toMatch(/INSERT INTO memory_observation_scope_members[\s\S]*ON CONFLICT DO NOTHING/);
+    expect(sql[2]).toMatch(/SET observation_scope_id = s\.id[\s\S]*observation_scope_id IS NULL/);
+    expect(sql[3]).toMatch(/m\.consolidated_at IS NULL AND u\.consolidated_at IS NOT NULL/);
+    // A fact is legacy only with no membership and no retain-time scopes: this image's zero-scope facts carry observation_scopes.
+    const legacy = ($executeRaw.mock.calls[1] as unknown as [TemplateStringsArray, ...Array<{ strings?: string[] }>]).slice(1).map((v) => v.strings?.join('?') ?? '').join(' ');
+    expect(legacy).toMatch(/observation_scopes IS NULL[\s\S]*NOT EXISTS \(SELECT 1 FROM memory_observation_scope_members m WHERE m\.unit_id = u\.id\)/);
+  });
+
+  it('the sweeper repairs on its first tick and then hourly', async () => {
+    const consolidation = { repairLegacyRows: vi.fn(async () => 0), pass: vi.fn() };
+    const prisma = { $queryRaw: vi.fn(async () => []) };
+    const features = { unavailable: () => [] };
+    const sweeper = new MemoryConsolidationSweeper(prisma as never, features as never, consolidation as never);
+    const t0 = Date.parse('2026-11-16T10:00:00Z');
+    await sweeper.sweep(t0);
+    await sweeper.sweep(t0 + 60_000);
+    expect(consolidation.repairLegacyRows).toHaveBeenCalledOnce();
+    await sweeper.sweep(t0 + 60 * 60_000);
+    expect(consolidation.repairLegacyRows).toHaveBeenCalledTimes(2);
   });
 });

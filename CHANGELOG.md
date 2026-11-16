@@ -37,6 +37,8 @@ in the pull request that introduces them — see
   close button has a 44px touch target. Desktop is unchanged. (#1037)
 - A long URL or unbroken token in a comment wraps inside its thread card instead of being cut off at the edge.
   (#1038)
+- Pages → Tree view on a phone: titles from the third level down no longer shrink to nothing; the creation date and
+  the draft badge's word give up their room below 640px. (#1039)
 
 ## [0.56.0] — 2026-11-16
 

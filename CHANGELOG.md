@@ -21,6 +21,9 @@ in the pull request that introduces them — see
   page could not be moved from the tree by touch. It is now always shown where there is no hover, with a 44px touch
   target, in both the navigation drawer and the Pages tree view; a swipe that starts on a row now scrolls the tree
   instead of starting (and cancelling) a drag. Desktop is unchanged. (#1031)
+- On a phone or tablet the "+" that starts a comment on a line of a merge request's Changes diff was invisible (it
+  appeared only on hover) and 20×16px. It is now always shown where there is no hover, 24px square on touch, and
+  screen readers announce which line it comments on. Desktop is unchanged. (#1032)
 
 ## [0.56.0] — 2026-11-16
 

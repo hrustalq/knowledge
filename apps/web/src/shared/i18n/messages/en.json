@@ -1990,6 +1990,7 @@
   "review": {
     "noLineChanges": "No line changes.",
     "commentOnLine": "Comment on this line",
+    "commentOnLineN": "Comment on line {n}",
     "commentOnBlock": "Comment on this block",
     "writeComment": "Write a comment…",
     "comment": "Comment",

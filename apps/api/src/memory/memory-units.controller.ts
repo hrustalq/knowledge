@@ -544,7 +544,10 @@ export class MemoryUnitsController {
     @UploadedFiles() files: Array<{ originalname: string; mimetype: string; buffer: Buffer; size: number }>,
     @Body('request') request: string,
   ) {
-    return this.management.submitFiles(await this.access.caller(principal, ws, 'editor'), bankId, files ?? [], request);
+    const caller = await this.access.caller(principal, ws, 'editor');
+    // Here, not in the service: the limiter is the API's, and the worker loads the management service too.
+    await this.rate.check('retain', principal);
+    return this.management.submitFiles(caller, bankId, files ?? [], request);
   }
 
   @Post('document-transfer/export')

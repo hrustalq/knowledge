@@ -18,7 +18,6 @@ import { MemoryManagementService } from './memory-management.service.js';
 import { MemoryMentalModelsService } from './memory-mental-models.service.js';
 import { MemoryOperationsService } from './memory-operations.service.js';
 import { MemoryQueueModule } from './memory-queue.module.js';
-import { MemoryRateService } from './memory-rate.service.js';
 import { MEMORY_RERANKER_PROVIDER, createMemoryReranker } from './memory-reranker.js';
 import { MemoryRecallService } from './memory-recall.service.js';
 import { MemoryReflectService } from './memory-reflect.service.js';
@@ -54,7 +53,6 @@ import { MemoryUnitsService } from './memory-units.service.js';
     MemoryManagementService,
     MemoryMentalModelsService,
     MemoryOperationsService,
-    MemoryRateService,
     MemoryRecallService,
     MemoryReflectService,
     MemoryRuntimeService,
@@ -69,7 +67,6 @@ import { MemoryUnitsService } from './memory-units.service.js';
     MemoryManagementService,
     MemoryMentalModelsService,
     MemoryOperationsService,
-    MemoryRateService,
     MemoryRecallService,
     MemoryReflectService,
     MemoryRuntimeService,

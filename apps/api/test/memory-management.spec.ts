@@ -33,7 +33,6 @@ function service(deps: Deps = {}) {
     (deps.units ?? none) as never,
     (deps.parsers ?? none) as never,
     (deps.producer ?? none) as never,
-    none,
     config as never,
   );
 }

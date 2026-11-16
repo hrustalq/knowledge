@@ -15,7 +15,6 @@ import { bankConfig, MemoryBanksService, readConfigUpdates } from './memory-bank
 import { MemoryDirectivesService } from './memory-directives.service.js';
 import { cleanTags, readRetainItems, type RetainItem } from './memory-facts.js';
 import { MemoryMentalModelsService } from './memory-mental-models.service.js';
-import { MemoryRateService } from './memory-rate.service.js';
 import { isReservedBankId } from './memory-reserved.js';
 import { maskItems, MemoryRetainService } from './memory-retain.service.js';
 import { isWireDocumentId, MemoryUnitsService } from './memory-units.service.js';
@@ -139,7 +138,6 @@ export class MemoryManagementService {
     private readonly units: MemoryUnitsService,
     private readonly parsers: ParserRegistry,
     private readonly producer: MemoryProducer,
-    private readonly rate: MemoryRateService,
     config: ConfigService<Env, true>,
   ) {
     this.limits = { maxItems: config.get('MEMORY_RETAIN_MAX_ITEMS', { infer: true }), maxChars: config.get('MEMORY_RETAIN_MAX_CHARS', { infer: true }) };
@@ -278,7 +276,6 @@ export class MemoryManagementService {
   }
 
   async submitFiles(caller: MemoryCaller, bankId: string, files: Array<{ originalname: string; mimetype: string; buffer: Buffer; size: number }>, rawRequest: string) {
-    await this.rate.check('retain', caller.principal);
     if (!files.length || files.length > this.limits.maxItems || files.some((file) => file.size > MAX_FILE_BYTES)) throw new BadRequestException(t('error.memory.fileUploadInvalid', { maxItems: this.limits.maxItems, maxBytes: MAX_FILE_BYTES }));
     let request: { files_metadata?: Array<{ context?: string; document_id?: string; tags?: string[]; metadata?: Record<string, string> }> };
     try {

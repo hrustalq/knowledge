@@ -26,7 +26,7 @@ function service(existing: Partial<MemoryBank> | null) {
     },
   };
   const access = { find: vi.fn(async () => null), bank: vi.fn() };
-  const svc = new MemoryBanksService(prisma as never, access as never, { record: vi.fn(async () => undefined) } as never, {} as never);
+  const svc = new MemoryBanksService(prisma as never, access as never, { record: vi.fn(async () => undefined) } as never, {} as never, {} as never);
   return { svc, prisma, access };
 }
 

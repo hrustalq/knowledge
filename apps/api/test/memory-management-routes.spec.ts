@@ -22,6 +22,33 @@ describe('memory document routes (#1161)', () => {
     expect(prisma.memoryUnit.findFirst).not.toHaveBeenCalled();
   });
 
+  it('resets only the (source, scope) pairs an invalidated observation stood on (#1166)', async () => {
+    // o1 (scope s1) stood on f1 and f2; o2 (scope s2) on f3. Deleting f1 resets f1+f2 in s1 and f3 in s2 — never f2 in s2.
+    const affected = [
+      { id: 'o1', observationScopeId: 's1', evidence: [{ factId: 'f1' }, { factId: 'f2' }] },
+      { id: 'o2', observationScopeId: 's2', evidence: [{ factId: 'f3' }] },
+    ];
+    const members = { updateMany: vi.fn(async () => ({ count: 0 })) };
+    const prisma = { memoryUnit: { findMany: vi.fn(async () => affected), deleteMany: vi.fn(), updateMany: vi.fn() }, memoryObservationScopeMember: members };
+    expect(await new MemoryUnitsService(prisma as never, {} as never).invalidateFacts('bank-1', ['f1'])).toEqual(['o1', 'o2']);
+    expect(members.updateMany).toHaveBeenCalledWith({
+      where: { OR: [{ unitId: { in: ['f1', 'f2'] }, scopeId: 's1' }, { unitId: { in: ['f3'] }, scopeId: 's2' }] },
+      data: { consolidatedAt: null, claimedAt: null },
+    });
+  });
+
+  it('gives a chunk its source text\'s index, though several units share one text (#1166)', async () => {
+    const unit = (id: string, sourceText: string) => ({ id, documentId: 'd1', sourceText, createdAt: new Date(0) });
+    const siblings = [unit('u1', 'A'), unit('u2', 'B'), unit('u3', 'B')];
+    const prisma = { memoryUnit: { findFirst: vi.fn(async ({ where }: { where: { id: string } }) => siblings.find((u) => u.id === where.id)), findMany: vi.fn(async () => siblings) } };
+    const units = new MemoryUnitsService(prisma as never, {} as never);
+    const id = (n: number) => `00000000-0000-4000-8000-00000000000${n}`;
+    siblings.forEach((u, i) => (u.id = id(i + 1)));
+    expect((await units.chunk(bank, id(2))).chunk_index).toBe(1);
+    expect((await units.chunk(bank, id(3))).chunk_index).toBe(1);
+    expect((await units.chunk(bank, id(1))).chunk_index).toBe(0);
+  });
+
   it('filters tags by a glob pattern', async () => {
     const prisma = { memoryUnit: { findMany: vi.fn(async () => [{ tags: ['user:alice', 'team'] }, { tags: ['User:Bob'] }]) } };
     const page = await new MemoryUnitsService(prisma as never, {} as never).tags(bank, { q: 'user:*' } as never);

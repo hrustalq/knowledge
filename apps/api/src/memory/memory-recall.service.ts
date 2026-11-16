@@ -250,7 +250,8 @@ export class MemoryRecallService {
         .map((r, i) => ({ ...r, scores: { ...r.scores, reranker: scores[i]!, final: scores[i]! } }))
         .filter((r) => (q.minScores?.reranker == null || r.scores.reranker >= q.minScores.reranker) && (q.minScores?.final == null || r.scores.final >= q.minScores.final))
         .sort((a, b) => b.scores.final - a.scores.final);
-      const overflow = ranked.slice(reranker.candidateCap).filter((r) => q.minScores?.reranker == null && (q.minScores?.final == null || r.scores!.final >= q.minScores.final));
+      // Past the cap, `final` is still the RRF score: another scale, so no floor can be read against it (#1166).
+      const overflow = q.minScores?.reranker == null && q.minScores?.final == null ? ranked.slice(reranker.candidateCap) : [];
       return [...rescored, ...overflow];
     } catch (error) {
       this.logger.warn({ msg: 'memory reranker skipped', error: String(error) });

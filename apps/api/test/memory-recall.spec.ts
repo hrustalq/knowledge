@@ -106,6 +106,8 @@ describe('MemoryRecallService (#986)', () => {
     expect(capped.reranker!.rerank).toHaveBeenCalledWith('q', ['a', 'b']);
     expect(res.results[2]!.scores!.reranker).toBeUndefined();
     expect(ids(await capped.svc.recall(bank, { query: 'q', minScores: { reranker: 0 }, userId: 'u1' }))).toEqual(['b', 'a']);
+    // A final floor is a reranker-scale number once a reranker ran: the RRF-scored overflow cannot be read against it (#1166).
+    expect(ids(await capped.svc.recall(bank, { query: 'q', minScores: { final: 0 }, userId: 'u1' }))).toEqual(['b', 'a']);
 
     const budgeted = service({ vector: ['a', 'b'], rows: ['a', 'b'], texts: { a: 'a'.repeat(40), b: 'b' }, rerankerScores: { a: 0.1, b: 0.9 } });
     expect(ids(await budgeted.svc.recall(bank, { query: 'q', maxTokens: 5, userId: 'u1' }))).toEqual(['b']);

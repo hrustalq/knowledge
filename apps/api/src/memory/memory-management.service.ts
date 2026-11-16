@@ -305,7 +305,10 @@ export class MemoryManagementService {
     this.checkTransferFlags(query);
     const bank = await this.access.bank(caller, bankId);
     const targetBankId = documentsOnly ? bank.bankId : query.target_bank_id ?? `${bank.bankId}-restored`;
-    if (!documentsOnly) await this.requireFreshTarget(caller, targetBankId);
+    if (!documentsOnly) {
+      await this.requireFreshTarget(caller, targetBankId);
+      await this.access.requireBindable(caller, bank.projectId);
+    }
     const upload = await this.upload(bank, file.buffer, 'application/zip');
     return this.submitResult(bank, documentsOnly ? 'document_import' : 'bank_import', { object_key: upload.key, target_bank_id: targetBankId, mode: documentsOnly ? 'merge' : 'restore', conflict: query.on_conflict ?? query.document_conflict ?? 'skip', include_data: query.include_data ?? true, include_bank_config: query.include_bank_config ?? true }, caller.principal.userId, caller.principal.locale, upload.id);
   }
@@ -315,6 +318,7 @@ export class MemoryManagementService {
     const bank = await this.access.bank(caller, bankId);
     if (!query.target_bank_id || query.target_bank_id === bank.bankId) throw new BadRequestException(t('error.memory.configValueInvalid', { key: 'target_bank_id', type: 'a new bank id' }));
     await this.requireFreshTarget(caller, query.target_bank_id);
+    await this.access.requireBindable(caller, bank.projectId);
     return this.submitResult(bank, 'bank_clone', { target_bank_id: query.target_bank_id, include_data: query.include_data ?? true, include_bank_config: query.include_bank_config ?? true }, caller.principal.userId, caller.principal.locale);
   }
 

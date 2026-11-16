@@ -338,7 +338,7 @@ Postgres first and handed to every leg. With `MEMORY_RERANKER_PROVIDER=openai-co
 fused rows (after the same workspace, bank, type and tag checks) are scored against the original
 query through the operator's `/rerank` endpoint. Raw logits are sigmoid-normalized to `0`–`1`;
 that value is both `scores.reranker` and the scored row's `scores.final`. The candidate cap is
-bounded, overflow stays in RRF order, and query/document payload sizes and provider latency are
+bounded, overflow stays in RRF order (and is left out under any score floor, since its `final` is still an RRF score, #1166), and query/document payload sizes and provider latency are
 capped. `min_scores.reranker` and `min_scores.final` are inclusive and run before token cutting.
 A provider failure falls back to RRF; an explicit reranker floor instead returns no unverifiable
 rows. With no provider, response shapes and RRF behavior are unchanged and a reranker floor is a
@@ -355,7 +355,7 @@ only inside `wrapUntrusted`. With no model configured reflect answers 409 and bi
 
 **Scoped directives** (#1159) are named, prioritized sets of hard rules managed through
 `/directives` with the official client. Untagged directives are global; tagged ones match the reflect
-scope by tags (a tagged directive applies when the request carries every one of its tags; with no request tags only untagged directives apply), at most 24,000 characters of name plus content per reflect, highest priority first, and `apply_all_directives: true` selects every active directive in
+scope by tags exactly as the reference server's `list_directives` filters them (#1166): the request's tags filter the directive's as recall filters a memory's — `all` needs the directive to carry every requested tag, `any` one of them, `exact` the same set — and with no request tags only untagged directives apply, at most 24,000 characters of name plus content per reflect, highest priority first, and `apply_all_directives: true` selects every active directive in
 the already ACL-resolved bank. Inactive directives never apply. The selected content is a trusted system
 instruction, separate from and taking precedence over untrusted memory text, but is never evidence:
 an empty bank still has no factual answer merely because a directive exists. `include.facts` returns
@@ -641,7 +641,7 @@ reaches `apps/api/src/captures/`.
 | `MEMORY_REFLECT_RATE_PER_MIN` | `30` | reflect requests a key may send a minute; refused when the limiter is unreachable |
 | `MEMORY_OPERATION_TIMEOUT_MS` | `600000` | how long a claimed operation may go without a heartbeat (every third of this) before it counts as lost |
 | `MEMORY_OPERATION_RETENTION_DAYS` | `7` | how long a finished operation's row is kept |
-| `MEMORY_MENTAL_MODEL_MIN_REFRESH_INTERVAL_SECONDS` | `0` | default floor between automatic refreshes of one model; a model may override it |
+| `MEMORY_MENTAL_MODEL_MIN_REFRESH_INTERVAL_SECONDS` | `300` | default floor between automatic refreshes of one model; a model may override it. Automatic refreshes spend the bank creator's budget (#1166) |
 | `MEMORY_CONSOLIDATION_DAILY_CALLS` | `20` | consolidation calls one bank may make a UTC day; `0` turns observations off for the server |
 | `MEMORY_GRAPH_READ_MAX_ENTITIES` | `500` | entities one `read_graph` or `search_nodes` returns before it says it cut |
 
@@ -719,7 +719,7 @@ A multipart upload is checked for the editor role before any byte is read, must 
 
 ## Hardening after review (#1155)
 
-- **Mental models.** Ids are unique per bank (`(bank_id, id)`), so two banks can each hold `user-profile`. Changing a model's tags, `trigger.tags_match` or `trigger.fact_types` marks it stale and makes the next refresh full. A full refresh that finds nothing left in scope empties the model (history keeps the old content); `based_on.memories` lists only memories that still exist, newest 200. A cron trigger is due once the schedule has fired since the last refresh, not only on the exact minute. Deleting a model cancels its queued and running refreshes, and a running one never writes into a model deleted or re-created meanwhile. Every refresh is billed as `memory-mental-model`. A deletion alone does not mark a model stale.
+- **Mental models.** Ids are unique per bank (`(bank_id, id)`), so two banks can each hold `user-profile`. Changing a model's tags, `trigger.tags_match` or `trigger.fact_types` marks it stale and makes the next refresh full. A full refresh that finds nothing left in scope empties the model (history keeps the old content); `based_on.memories` lists only memories that still exist, newest 200. A cron trigger is due once the schedule has fired since the last refresh, not only on the exact minute. Deleting a model cancels its queued and running refreshes, and a running one never writes into a model deleted or re-created meanwhile. Every refresh is billed as `memory-mental-model`; an automatic one (cron or after consolidation) spends the bank creator's budget. Any memory deleted from the bank after a model's last refresh marks it stale (`memory_banks.memories_deleted_at`, stamped by `MemoryUnitsService.deleteWhere`, #1166), whatever its scope.
 - **Observation scopes.** Glob patterns match in linear time (`*` = any run of characters, case-sensitive, anchored); `exact` pairs each pattern with its own tag. `consolidation_strategies` is capped at 20 strategies × 20 scopes × 20 tags, each pattern at most 100 characters. An untagged memory retained with `per_tag` or `all_combinations` joins the untagged scope. Consolidation writes only while it still holds its claim on every fact of the batch; a batch retaken, reset or moved mid-flight writes nothing and is read again. The worker files rows written by a pre-scope image (rolling deploy, rollback) into their exact-tag scope on its first tick and hourly.
 - **Reranker.** `MEMORY_RERANKER_SCORE` (`logit` default | `normalized`) says whether the endpoint returns raw logits or 0–1 scores (Cohere, Jina, LiteLLM, Infinity), so `min_scores.reranker` keeps its meaning. After a failure recall skips the reranker for 30 s and uses RRF.
 - **Operations.** Deleting an unknown operation is 404; a non-terminal one is 409. An archive download is confined to the caller's workspace.

@@ -26,6 +26,10 @@ in the pull request that introduces them — see
   earlier call showed. No model call. (#1194)
 - Usage analytics → Agents shows ticket context: injections per day, median answer size in tokens, how often nothing
   relevant was found, and the share of handed-over pages the same key opened within two hours. (#1195)
+- The capture kit (v3) also nudges the agent to call `knowledge_context` once per ticket: in Claude Code when it reads a
+  ticket (`gh|glab|jira issue view`, a Jira/Linear/GitHub issue MCP tool) or is given a ticket key or URL in a prompt,
+  and in Cursor when it reads one through a tool. The hook still holds no key and makes no network call. Re-run the
+  installer to update an installed kit; it keeps your own hook entries. (#1196)
 
 ### Changed
 

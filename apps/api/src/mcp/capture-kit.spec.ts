@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync }
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CaptureKitClient } from '@knowledge/contracts';
-import { CAPTURE_KIT_VERSION, renderCaptureKit, renderCaptureKitInstaller, type CaptureKitInput } from './capture-kit.js';
+import { CAPTURE_KIT_VERSION, TICKET_TOOL_MATCHER, renderCaptureKit, renderCaptureKitInstaller, type CaptureKitInput } from './capture-kit.js';
 
 const WS = '11111111-1111-4111-8111-111111111111';
 const PROJECT = '22222222-2222-4222-8222-222222222222';
@@ -45,14 +45,30 @@ describe('renderCaptureKit', () => {
     const claude = JSON.parse(fileOf('claude-code', 'settings.json').content);
     expect(claude.hooks.Stop[0].hooks[0].command).toBe('"$CLAUDE_PROJECT_DIR"/.claude/hooks/knowledge-capture.sh stop');
     expect(claude.hooks.PostToolUse[0].matcher).toBe('Edit|Write|MultiEdit|NotebookEdit');
+    expect(claude.hooks.PostToolUse[1].hooks[0].command).toBe('"$CLAUDE_PROJECT_DIR"/.claude/hooks/knowledge-capture.sh ticket');
+    expect(claude.hooks.UserPromptSubmit[0].hooks[0].command).toBe('"$CLAUDE_PROJECT_DIR"/.claude/hooks/knowledge-capture.sh ticket-prompt');
     const cursor = JSON.parse(fileOf('cursor', 'hooks.json').content);
     expect(cursor).toEqual({
       version: 1,
       hooks: {
         afterFileEdit: [{ command: '.cursor/hooks/knowledge-capture.sh edited' }],
+        postToolUse: [{ command: '.cursor/hooks/knowledge-capture.sh ticket' }],
         stop: [{ command: '.cursor/hooks/knowledge-capture.sh stop' }],
       },
     });
+  });
+
+  it('matches the tools that read tickets, not the ones that edit code', () => {
+    const re = new RegExp(`^(?:${TICKET_TOOL_MATCHER})$`);
+    for (const tool of ['Bash', 'mcp__atlassian__getJiraIssue', 'mcp__linear__get_issue', 'mcp__github__issue_read']) expect(re.test(tool)).toBe(true);
+    for (const tool of ['Edit', 'Read', 'mcp__knowledge__knowledge_search']) expect(re.test(tool)).toBe(false);
+  });
+
+  it('holds no key and makes no network call', () => {
+    for (const client of ['claude-code', 'cursor'] as const) {
+      const script = fileOf(client, 'knowledge-capture.sh').content;
+      expect(script).not.toMatch(/\b(curl|wget|nc)\b|Authorization|kn_/);
+    }
   });
 });
 
@@ -104,6 +120,50 @@ describe('the hook script', () => {
     expect(run('stop', 'not json')).toBe('');
   });
 
+  const nudged = (out: string) => (out ? (JSON.parse(out).hookSpecificOutput?.additionalContext ?? JSON.parse(out).additional_context) : '');
+  const bash = (session: string, command: string, response = '') => ({ session_id: session, tool_name: 'Bash', tool_input: { command }, tool_response: { stdout: response } });
+
+  it('nudges knowledge_context once per ticket a Claude Code session reads', () => {
+    install('claude-code');
+    const first = JSON.parse(run('ticket', bash('s-1', 'gh issue view 123 --repo org/repo')));
+    expect(first.hookSpecificOutput.hookEventName).toBe('PostToolUse');
+    expect(first.hookSpecificOutput.additionalContext).toMatch(/^Ticket 123: .*knowledge_context/);
+    expect(run('ticket', bash('s-1', 'gh issue view 123'))).toBe('');
+    expect(nudged(run('ticket', bash('s-1', 'gh issue view https://github.com/org/repo/issues/124')))).toContain('Ticket 124');
+    expect(run('ticket', bash('s-1', 'ls -la', 'see ABC-1 and https://x.atlassian.net/browse/ABC-2'))).toBe('');
+    // Another session starts its own count.
+    expect(nudged(run('ticket', bash('s-2', 'gh issue view 123')))).toContain('Ticket 123');
+  });
+
+  it('reads a tracker MCP tool’s input, never its output', () => {
+    install('claude-code');
+    const call = { session_id: 's-1', tool_name: 'mcp__atlassian__getJiraIssue', tool_response: { text: 'blocks OTHER-9' }, tool_input: { issueIdOrKey: 'PROJ-7' } };
+    expect(nudged(run('ticket', call))).toContain('Ticket PROJ-7');
+    const github = { session_id: 's-1', tool_name: 'mcp__github__issue_read', tool_input: { owner: 'o', repo: 'r', issue_number: 42 } };
+    expect(nudged(run('ticket', github))).toContain('Ticket 42');
+    expect(run('ticket', { session_id: 's-1', tool_name: 'mcp__atlassian__search', tool_response: { text: 'ABC-1' } })).toBe('');
+  });
+
+  it('nudges for a prompt that names a ticket, and not for one that names a standard', () => {
+    install('claude-code');
+    const prompt = (text: string) => ({ session_id: 's-1', cwd: '/work/ZZZ-9-branch', hook_event_name: 'UserPromptSubmit', prompt: text });
+    expect(run('ticket-prompt', prompt('make the parser UTF-8 and ISO-8601 safe'))).toBe('');
+    const out = JSON.parse(run('ticket-prompt', prompt('pick up https://acme.atlassian.net/browse/PAY-311 please')));
+    expect(out.hookSpecificOutput.hookEventName).toBe('UserPromptSubmit');
+    expect(out.hookSpecificOutput.additionalContext).toContain('Ticket PAY-311');
+    // The same ticket read later through a tool is already handled.
+    expect(run('ticket', bash('s-1', 'jira issue view PAY-311'))).toBe('');
+    expect(nudged(run('ticket-prompt', prompt('and org/repo#77 too')))).toContain('Ticket 77');
+  });
+
+  it('nudges a Cursor agent after a ticket read, as additional context', () => {
+    install('cursor');
+    const shell = { conversation_id: 'c-1', tool_name: 'Shell', tool_input: { command: 'gh issue view https://github.com/o/r/issues/5' }, tool_output: '{"stdout":"LIN-3"}' };
+    expect(JSON.parse(run('ticket', shell)).additional_context).toContain('Ticket 5');
+    expect(run('ticket', shell)).toBe('');
+    expect(run('ticket', { conversation_id: 'c-1', tool_name: 'Read', tool_input: { path: 'ENG-1.md' } })).toBe('');
+  });
+
   it('follows up a completed Cursor turn once, and never an aborted one', () => {
     install('cursor');
     run('edited', { conversation_id: 'c-1', file_path: '/repo/a.ts' });
@@ -150,7 +210,8 @@ describe('renderCaptureKitInstaller', () => {
       'say done',
       '"$CLAUDE_PROJECT_DIR"/.claude/hooks/knowledge-capture.sh stop',
     ]);
-    expect(merged.hooks.PostToolUse).toHaveLength(1);
+    expect(merged.hooks.PostToolUse.map((e: { hooks: { command: string }[] }) => e.hooks[0].command.split(' ').pop())).toEqual(['edited', 'ticket']);
+    expect(merged.hooks.UserPromptSubmit).toHaveLength(1);
   });
 
   it.runIf(hasJq)('merges Cursor hooks and keeps the file’s version', () => {
@@ -164,6 +225,12 @@ describe('renderCaptureKitInstaller', () => {
       '.cursor/hooks/knowledge-capture.sh edited',
     ]);
     expect(merged.hooks.stop).toHaveLength(1);
+    expect(merged.hooks.postToolUse).toHaveLength(1);
+  });
+
+  it('tells a Cursor user what the hook cannot cover', () => {
+    expect(installer('cursor')).toContain('cannot add context to a prompt');
+    expect(installer('claude-code')).not.toContain('cannot add context');
   });
 
   it('refuses to run outside a git repository', () => {

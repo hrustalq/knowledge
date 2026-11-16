@@ -272,6 +272,7 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 ## Gotchas
 
 - `apps/api` is **ESM** (`"type": "module"`, NodeNext): relative imports need the `.js` suffix (`./app.module.js`), including from `.ts` sources. There is no `__dirname` — use `import.meta.dirname`.
+- An `@Optional()` constructor dependency Nest cannot resolve is injected as `undefined`, silently — an `import type` of its class emits `Object` and does exactly that (#1164 shipped background runs with no memory). `test/optional-deps.spec.ts` resolves every entrypoint's module graph in `preview` and fails on an unresolved class-typed one; a symbol-token seam needs a `??` fallback.
 - class-validator `@IsUUID()` rejects nil-style UUIDs (the version digit must be 1–5). The demo workspace is `11111111-1111-4111-8111-111111111111` (`DEMO_WORKSPACE_ID` in `apps/web/src/shared/api/api.ts`).
 - `openapi-typescript` promotes any property declaring a `default:` in its Swagger decorator to **required** in the generated client. Describe the default in `description:` instead.
 - A nullable DTO field needs an explicit `type:` in its Swagger decorator — `@ApiPropertyOptional({ nullable: true })` alone emits a typeless schema that becomes `Record<string, never>` and silently breaks the web typecheck at every call site.

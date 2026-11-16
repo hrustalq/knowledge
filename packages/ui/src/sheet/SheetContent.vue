@@ -54,8 +54,10 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
     >
       <slot />
 
+      <!-- On a touch pointer the close is a 28px box (as DialogContent's) inside a
+           44px hit layer (#1037); a mouse keeps the 16px icon it always had. -->
       <DialogClose
-        class="ring-offset-background focus:ring-ring data-[state=open]:bg-secondary absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none"
+        class="ring-offset-background focus:ring-ring data-[state=open]:bg-secondary absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none kn-hit pointer-coarse:grid pointer-coarse:size-7 pointer-coarse:place-items-center"
       >
         <X class="size-4" />
         <span class="sr-only">{{ t('ui.common.close') }}</span>

@@ -47,20 +47,34 @@ watch(
   },
 )
 
+/** `.kn-cmd` is 19rem (editor.css); the clamp needs the number, not the CSS. */
+const MENU_WIDTH = 304
+
 /**
- * Flip above the caret when the menu would run past the viewport. Measured
- * against the real menu height rather than a guess, so a short filtered list
- * does not flip when it still fits.
+ * Placed inside the visual viewport, so an open keyboard (#1035) shrinks the
+ * room instead of hiding the menu behind it. Flips above the caret only when
+ * the space below is short and the space above is larger; the list then takes
+ * whatever the chosen side leaves, so a short screen scrolls it.
  */
-const position = computed(() => {
-  if (!props.rect) return { display: 'none' }
+const placement = computed(() => {
+  if (!props.rect || typeof window === 'undefined') return { style: { display: 'none' }, list: {} }
+  const vv = window.visualViewport
+  const top = vv?.offsetTop ?? 0
+  const viewH = vv?.height ?? window.innerHeight
+  const viewW = vv?.width ?? window.innerWidth
   const height = Math.min(360, 44 + props.items.length * 34)
-  const below = typeof window !== 'undefined' ? window.innerHeight - props.rect.bottom : 400
-  const flip = below < height + 16
+  const below = top + viewH - props.rect.bottom - 14
+  const above = props.rect.top - top - 14
+  const flip = below < height + 16 && above > below
+  const room = flip ? above : below
+  const left = Math.max(8, Math.min(props.rect.left, viewW - MENU_WIDTH - 8))
   return {
-    left: `${props.rect.left}px`,
-    top: flip ? 'auto' : `${props.rect.bottom + 6}px`,
-    bottom: flip && typeof window !== 'undefined' ? `${window.innerHeight - props.rect.top + 6}px` : 'auto',
+    style: {
+      left: `${left}px`,
+      top: flip ? 'auto' : `${props.rect.bottom + 6}px`,
+      bottom: flip ? `${window.innerHeight - props.rect.top + 6}px` : 'auto',
+    },
+    list: { maxHeight: `${Math.max(96, room - 12)}px` },
   }
 })
 
@@ -109,11 +123,11 @@ defineExpose({ onKeyDown })
   <div
     class="kn-cmd"
     data-kn-editor-ui
-    :style="position"
+    :style="placement.style"
     role="listbox"
     :aria-label="t('toolbar.insertMenu')"
   >
-    <div ref="listEl" class="kn-cmd-scroll quiet-scroll">
+    <div ref="listEl" class="kn-cmd-scroll quiet-scroll" :style="placement.list">
       <template v-for="group in groups" :key="group.name">
         <div class="kn-cmd-group">{{ group.name }}</div>
         <button

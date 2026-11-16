@@ -27,6 +27,28 @@ in the pull request that introduces them — see
 - On a phone the activity feed (Settings → Activity, and the activity widgets on pages and projects) drew a row's page
   title over the next row when its action was long, most often in Russian. The action now shortens with an ellipsis
   beside the time, so every row keeps to two lines. Desktop is unchanged. (#1033)
+- In the editor on a phone or tablet, the panel colour switcher and the two/three-column switcher were hidden until
+  hover, so touch users could not change them. They are now always shown there with 24px targets; the panel swatches
+  sit on their own row at the panel's foot. Desktop is unchanged. (#1034)
+- The editor's slash (/) and @-mention menu could open past the right edge of a phone, or behind the on-screen
+  keyboard. It now stays inside the visible screen and scrolls when the room is short. (#1035)
+- Import → Review: on a phone the action row no longer cuts Discard off the right edge; the buttons wrap. (#1036)
+- Side sheets (page preview in Knowledge health, search, connector runs and others) can be closed by touch: the
+  close button has a 44px touch target. Desktop is unchanged. (#1037)
+- A long URL or unbroken token in a comment wraps inside its thread card instead of being cut off at the edge.
+  (#1038)
+- Pages → Tree view on a phone: titles from the third level down no longer shrink to nothing; the creation date and
+  the draft badge's word give up their room below 640px. (#1039)
+- A profile's activity list no longer pushes the page sideways on a phone: each row is two lines, the action beside
+  the time and the page title under it. (#1042)
+- Knowledge health on a phone: the page title column stays pinned while the table scrolls sideways, so each state
+  can be matched to its page. (#1043)
+- A page mention with a long title in an assistant answer wraps on a phone instead of pushing the conversation
+  sideways. (#1044)
+- Settings on a phone: the section strip scrolls the current section into view instead of always starting at
+  Profile. (#1045)
+- Notifications: the header buttons wrap on a phone instead of scrolling the page sideways (most visible in
+  Russian). (#1050)
 
 ## [0.56.0] — 2026-11-16
 

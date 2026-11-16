@@ -46,11 +46,15 @@ export class MemoryIntakeService {
     const items = readRetainItems(request.items, request.document_tags, this.limits);
     const bank = await this.banks.ensure(caller, bankId);
     const done = { success: true, bank_id: bank.bankId, items_count: items.length };
+    // The audit row for the REST route and the MCP tools alike (#1168).
+    const audit = (async: boolean) => this.banks.recordWrite(caller.workspaceId, principal.userId, bank.bankId, { action: 'memory.retained', params: { items: items.length, async } });
     if (request.async === true) {
       const operation_id = await this.operations.submit(bank, { items, userId: principal.userId, locale: principal.locale, operationId: request.operation_id });
+      audit(true);
       return { ...done, async: true, operation_id };
     }
     const { usage } = await this.retainer.retain({ workspaceId: caller.workspaceId, bank, userId: principal.userId, locale: principal.locale, items });
+    audit(false);
     return { ...done, async: false, ...(usage ? { usage } : {}) };
   }
 

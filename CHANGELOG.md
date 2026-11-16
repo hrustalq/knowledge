@@ -37,6 +37,11 @@ in the pull request that introduces them — see
   ids the runtime uses (`agent:…:user:…`, `project:…`) can no longer be created or aliased through the memory API.
   Uploaded files are masked before they are stored, and memory uploads are refused before the body is read unless the
   caller may write. (#1155)
+- Every write to a memory bank is now on the audit trail — retain, settings, aliases, documents, observations,
+  mental models, directives, templates, transfers, file uploads, memory-tool and graph edits, and the bank page's
+  deletes and promotions — by REST and MCP alike, so the Hindsight `/version` reports `audit_log: true`. Each row names
+  the bank, the actor and the ids involved, never memory text. Recall, reflect and the agents' own per-turn retention are
+  not audited. (#1168)
 - Mental-model ids are unique per bank instead of across the whole installation. (#1155)
 - Every background agent now draws on project memory, including the ones that call the model directly (linter,
   atlas, auditor, arbiter, reviewer, archaeologist, tester and the sentinel's code reading). A run with no note recalls

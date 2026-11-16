@@ -461,7 +461,10 @@ export class MemoryManagementService {
 
   private async createTarget(row: ManagementOperation, bankId: string, transfer: Transfer): Promise<MemoryBank> {
     try {
-      return await this.prisma.memoryBank.create({ data: { workspaceId: row.workspaceId, bankId, name: transfer.bank.name || bankId, mission: transfer.bank.mission, projectId: row.bank.projectId, agentKey: row.bank.agentKey, ownerId: row.bank.ownerId, createdBy: row.createdBy } });
+      const bank = await this.prisma.memoryBank.create({ data: { workspaceId: row.workspaceId, bankId, name: transfer.bank.name || bankId, mission: transfer.bank.mission, projectId: row.bank.projectId, agentKey: row.bank.agentKey, ownerId: row.bank.ownerId, createdBy: row.createdBy } });
+      // Made by the worker, so audited under whoever submitted the operation (#1168).
+      this.banks.recordWrite(row.workspaceId, row.createdBy, bankId, { action: 'memory.bank_created', params: { from: row.bank.bankId, operation: row.type } });
+      return bank;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') throw new ConflictException(t('error.memory.aliasTaken', { alias: bankId }));
       throw error;

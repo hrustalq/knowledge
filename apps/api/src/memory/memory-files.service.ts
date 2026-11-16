@@ -112,20 +112,27 @@ export class MemoryFilesService {
         case 'view':
           return ok(await this.view(caller, bankId, command.path, command.view_range));
         case 'create':
-          return ok(await this.create(caller, bankId, command.path, command.file_text, callerFor));
+          return this.wrote(caller, bankId, command.command, await this.create(caller, bankId, command.path, command.file_text, callerFor));
         case 'str_replace':
-          return ok(await this.edit(caller, bankId, command.path, (content) => replaceOnce(command.path, content, command.old_str, command.new_str), editedSnippet));
+          return this.wrote(caller, bankId, command.command, await this.edit(caller, bankId, command.path, (content) => replaceOnce(command.path, content, command.old_str, command.new_str), editedSnippet));
         case 'insert':
-          return ok(await this.edit(caller, bankId, command.path, (content) => ({ content: insertAt(content, command.insert_line, command.insert_text), line: 0 }), () => `The file ${command.path} has been edited.`));
+          return this.wrote(caller, bankId, command.command, await this.edit(caller, bankId, command.path, (content) => ({ content: insertAt(content, command.insert_line, command.insert_text), line: 0 }), () => `The file ${command.path} has been edited.`));
         case 'delete':
-          return ok(await this.delete(caller, bankId, command.path));
+          return this.wrote(caller, bankId, command.command, await this.delete(caller, bankId, command.path));
         case 'rename':
-          return ok(await this.rename(caller, bankId, command.old_path, command.new_path));
+          return this.wrote(caller, bankId, command.command, await this.rename(caller, bankId, command.old_path, command.new_path));
       }
     } catch (e) {
       if (e instanceof MemoryToolError) return { content: `Error: ${e.message}`, is_error: true };
       throw e;
     }
+  }
+
+  /** A write that succeeded, audited for the REST route and the MCP tool alike (#1168): the command, never a path or text. */
+  private async wrote(caller: MemoryCaller, bankId: string, command: string, text: string): Promise<MemoryToolResult> {
+    const bank = await this.access.named(caller.workspaceId, bankId);
+    if (bank) this.banks.recordWrite(caller.workspaceId, caller.principal.userId, bank.bankId, { action: 'memory.file_changed', params: { command } });
+    return ok(text);
   }
 
   // --- commands ----------------------------------------------------------

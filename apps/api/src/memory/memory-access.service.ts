@@ -99,19 +99,22 @@ export class MemoryAccessService {
   async find(caller: MemoryCaller, bankId: string): Promise<MemoryBank | null> {
     if (!BANK_ID_RE.test(bankId))
       throw new BadRequestException(t('error.memory.bankIdInvalid'));
-    const direct = await this.prisma.memoryBank.findUnique({
-      where: {
-        workspaceId_bankId: { workspaceId: caller.workspaceId, bankId },
-      },
-    });
-    const row = direct ?? (await this.prisma.memoryBankAlias.findUnique({
-      where: { workspaceId_alias: { workspaceId: caller.workspaceId, alias: bankId } },
-      include: { bank: true },
-    }))?.bank ?? null;
+    const row = await this.named(caller.workspaceId, bankId);
     if (!row) return null;
     if (!(await this.visible(caller.scope, [row])).length)
       throw new NotFoundException(t('error.memory.bankNotFound', { bankId }));
     return row;
+  }
+
+  /** The bank a path names in a workspace, by its id or an alias. No visibility test: `find` adds it. */
+  async named(workspaceId: string, bankId: string): Promise<MemoryBank | null> {
+    const direct = await this.prisma.memoryBank.findUnique({
+      where: { workspaceId_bankId: { workspaceId, bankId } },
+    });
+    return direct ?? (await this.prisma.memoryBankAlias.findUnique({
+      where: { workspaceId_alias: { workspaceId, alias: bankId } },
+      include: { bank: true },
+    }))?.bank ?? null;
   }
 
   /** Personal banks are owner-only; project banks follow `canSeeProject`. An admin bypass never opens somebody else's personal memory. */
@@ -153,7 +156,8 @@ export class MemoryAccessService {
     return restricted.every((id) => id === projectId || (!scope.bypass && scope.denied.has(id)));
   }
 
-  private workspaceOf(
+  /** Step 2 of the rule above: the workspace a memory request names, before any role is checked. */
+  workspaceOf(
     principal: Principal,
     header: string | undefined,
   ): string {

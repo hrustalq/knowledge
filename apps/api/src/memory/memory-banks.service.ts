@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma, type MemoryBank } from '@prisma/client';
+import type { AuditAction } from '@knowledge/contracts';
 import { AuditService } from '../auth/audit.service.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -187,6 +188,19 @@ export class MemoryBanksService {
     private readonly units: MemoryUnitsService,
   ) {}
 
+  /**
+   * One audit row for a write to a bank (#1168), under the bank's own id: the `target` its `…/audit-logs` reads.
+   * `params` holds the ids the request named and the operation, never memory text. Never throws, never awaited.
+   */
+  recordWrite(
+    workspaceId: string,
+    actor: string,
+    bankId: string,
+    entry: { action: AuditAction; params?: Record<string, unknown> },
+  ): void {
+    void this.audit.record({ workspaceId, actor, action: entry.action, params: entry.params ?? {}, target: bankId, ok: true });
+  }
+
   async list(
     caller: MemoryCaller,
     query: { q?: string; limit?: number; offset?: number },
@@ -309,7 +323,11 @@ export class MemoryBanksService {
     bankId: string,
     dto: BankBodyDto,
   ): Promise<BankProfileResponse> {
-    return this.update(await this.ensure(caller, bankId), dto);
+    const existing = await this.access.find(caller, bankId);
+    const out = await this.update(existing ?? (await this.ensure(caller, bankId)), dto);
+    // A PUT that made the bank is audited as its creation alone (#1168).
+    if (existing) this.recordWrite(caller.workspaceId, caller.principal.userId, existing.bankId, { action: 'memory.bank_updated', params: { op: 'put' } });
+    return out;
   }
 
   /** PATCH: update a bank that exists. */

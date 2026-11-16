@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, UseInterceptors } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type {
   CaptureResult,
@@ -13,6 +14,7 @@ import { Access, CurrentPrincipal, Feature } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { Returns } from '../common/returns.decorator.js';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
+import { MemoryAudit, MemoryAuditInterceptor } from './memory-audit.js';
 import { MemoryWebService } from './memory-web.service.js';
 import { BindMemoryBankDto, DeleteMemoryBankQueryDto, MemoryBanksQueryDto, MemoryPageQueryDto, MemoryUnitsQueryDto, PromoteMemoryDto } from './memory-web.dto.js';
 
@@ -28,6 +30,7 @@ import { BindMemoryBankDto, DeleteMemoryBankQueryDto, MemoryBanksQueryDto, Memor
  */
 @ApiTags('memory')
 @Feature('memory')
+@UseInterceptors(MemoryAuditInterceptor)
 @Controller('v1/memory')
 export class MemoryWebController {
   constructor(private readonly web: MemoryWebService) {}
@@ -56,6 +59,7 @@ export class MemoryWebController {
     return this.web.entities(principal, id, query);
   }
 
+  @MemoryAudit({ action: 'memory.graph_changed', op: 'delete_entity' })
   @Delete('banks/:id/entities/:entityId')
   @HttpCode(204)
   @Access('editor', 'memory-bank')
@@ -64,6 +68,7 @@ export class MemoryWebController {
     await this.web.deleteEntity(principal, id, entityId);
   }
 
+  @MemoryAudit({ action: 'memory.graph_changed', op: 'delete_relation' })
   @Delete('banks/:id/relations/:relationId')
   @HttpCode(204)
   @Access('editor', 'memory-bank')
@@ -88,6 +93,7 @@ export class MemoryWebController {
     return this.web.file(principal, id, fileId);
   }
 
+  @MemoryAudit({ action: 'memory.file_changed', op: 'delete' })
   @Delete('banks/:id/files/:fileId')
   @HttpCode(204)
   @Access('editor', 'memory-bank')
@@ -96,6 +102,7 @@ export class MemoryWebController {
     await this.web.deleteFile(principal, id, fileId);
   }
 
+  @MemoryAudit({ action: 'memory.bank_updated', op: 'bind' })
   @Patch('banks/:id')
   @Returns('MemoryBankSummary')
   @Access('editor', 'memory-bank')
@@ -112,6 +119,7 @@ export class MemoryWebController {
     await this.web.deleteBank(principal, id, query.confirm);
   }
 
+  @MemoryAudit({ action: 'memory.memories_deleted' })
   @Delete('banks/:id/memories/:memoryId')
   @HttpCode(204)
   @Access('editor', 'memory-bank')
@@ -120,6 +128,7 @@ export class MemoryWebController {
     await this.web.deleteUnit(principal, id, memoryId);
   }
 
+  @MemoryAudit({ action: 'memory.promoted' })
   @Post('banks/:id/memories/:memoryId/promote')
   @Returns('CaptureResult')
   @Access('editor', 'memory-bank')

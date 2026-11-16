@@ -72,6 +72,8 @@ in the pull request that introduces them — see
 - The navigation drawer on a phone uses most of the screen width instead of the desktop rail's 256px, so deep page
   titles have room. (#1074)
 - At tablet widths the breadcrumb keeps the current page's name visible instead of collapsing it to nothing. (#1075)
+- Analytics lists and merge request cards show titles on up to two lines on a phone instead of cutting them to a few
+  words. (#1077)
 
 ## [0.56.0] — 2026-11-16
 

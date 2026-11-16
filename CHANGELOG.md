@@ -65,6 +65,7 @@ in the pull request that introduces them — see
   selected. (#1064)
 - AI → Web access on a phone: the "Try a URL" field takes a full row at a readable size, like the Add domain field
   (#1081). (#1068)
+- AI → Usage on a phone: the range and group-by buttons wrap instead of pushing the page sideways (Russian). (#1069)
 
 ## [0.56.0] — 2026-11-16
 

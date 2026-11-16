@@ -39,6 +39,8 @@ in the pull request that introduces them — see
   (#1038)
 - Pages → Tree view on a phone: titles from the third level down no longer shrink to nothing; the creation date and
   the draft badge's word give up their room below 640px. (#1039)
+- A profile's activity list no longer pushes the page sideways on a phone: each row is two lines, the action beside
+  the time and the page title under it. (#1042)
 
 ## [0.56.0] — 2026-11-16
 

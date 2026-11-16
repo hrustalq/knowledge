@@ -178,7 +178,7 @@ function title(entry: ActivityEntry): string {
           <li
             v-for="entry in day.entries"
             :key="entry.id"
-            class="group flex items-baseline gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted/50"
+            class="group flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted/50 sm:flex-nowrap"
           >
             <component
               :is="activityKindStyle(activityKindFor(entry.action)).icon"
@@ -186,13 +186,16 @@ function title(entry: ActivityEntry): string {
               :style="{ color: activityKindStyle(activityKindFor(entry.action)).color }"
               aria-hidden="true"
             />
-            <span class="shrink-0 text-muted-foreground">{{ label(entry) }}</span>
+            <!-- On a phone the row is two lines (#1042): the label, from a zero
+                 basis so it truncates rather than wraps, beside the time; then
+                 the title under the label. -->
+            <span class="min-w-0 flex-1 truncate text-muted-foreground sm:flex-none sm:overflow-visible">{{ label(entry) }}</span>
             <RouterLink
               v-if="entry.documentId"
               :to="`/documents/${entry.documentId}`"
-              class="min-w-0 truncate font-medium text-primary hover:underline"
+              class="order-last min-w-0 basis-full truncate pl-6 font-medium text-primary hover:underline sm:order-none sm:basis-auto sm:pl-0"
             >{{ title(entry) || entry.documentId.slice(0, 8) }}</RouterLink>
-            <span v-else-if="title(entry)" class="min-w-0 truncate font-medium">{{ title(entry) }}</span>
+            <span v-else-if="title(entry)" class="order-last min-w-0 basis-full truncate pl-6 font-medium sm:order-none sm:basis-auto sm:pl-0">{{ title(entry) }}</span>
             <time
               class="ml-auto shrink-0 text-xs text-muted-foreground tabular-nums"
               :datetime="entry.createdAt"

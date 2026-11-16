@@ -13,6 +13,29 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.55.1] — 2026-11-16
+
+### Fixed
+
+- Touch text selection now offers Comment and Copy link on page and merge-request review canvases, so phone and tablet readers can start anchored threads without mouse events. (#1030)
+- Tall dialogs and confirmation alerts now stay within a phone's dynamic viewport and scroll internally, keeping their titles, close controls and actions reachable. (#1181)
+- The new workflow wizard opens again instead of failing during page rendering. (#1182)
+- Model replies now come in the language the request names (`?lang=`, the `kn_lang` cookie or `Accept-Language`), the
+  same language as API errors. They used to follow only the account's saved language, so a client asking in English got
+  English errors but Russian answers from the assistant, agent runs, memory reflect and mental models. A request that
+  names no language still gets the saved one; the web app is unchanged. (#1185)
+- In Ask mode, a message that asks a question and also asks for a change now gets the answer as well as the Agent-mode
+  button; the reply used to describe only the button. (#1186)
+- Assistant turns now write to project memory for people who already have personal agent memory. Any personal memory
+  used to count as recalled, so every turn of theirs stayed personal-only; now only a memory relevant to the question
+  does. Agents are also no longer handed unrelated memories as context. (#1187)
+
+### Operations
+
+- New optional env `MEMORY_RUNTIME_MIN_SEMANTIC` (default `0.4`, measured on bge-m3): the cosine a memory needs before
+  an assistant turn or agent run is handed it. Deployments on another embedding model may need their own value; `0`
+  restores the previous behaviour. No migration. (#1187)
+
 ## [0.55.0] — 2026-11-16
 
 ### Added
@@ -7391,7 +7414,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.55.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.55.1...HEAD
+[0.55.1]: https://github.com/hrustalq/knowledge/compare/v0.55.0...v0.55.1
 [0.55.0]: https://github.com/hrustalq/knowledge/compare/v0.54.1...v0.55.0
 [0.54.1]: https://github.com/hrustalq/knowledge/compare/v0.54.0...v0.54.1
 [0.54.0]: https://github.com/hrustalq/knowledge/compare/v0.53.2...v0.54.0

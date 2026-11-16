@@ -1,8 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { AccessService } from '../auth/access.service.js';
 import { FeaturesService } from '../auth/features.service.js';
 import type { Principal } from '../auth/principal.js';
+import type { Env } from '../config/env.js';
 import type { Audience } from '../permissions/access-scope.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import {
@@ -97,7 +99,17 @@ export class MemoryRuntimeService {
     private readonly banks: MemoryBanksService,
     private readonly recall: MemoryRecallService,
     private readonly retain: MemoryRetainService,
-  ) {}
+    config: ConfigService<Env, true>,
+  ) {
+    this.minSemantic = config.get('MEMORY_RUNTIME_MIN_SEMANTIC', { infer: true });
+  }
+
+  /**
+   * Cosine below which a recalled memory is not relevant to the turn (#1187). Without it the vector leg hands back the
+   * bank's nearest rows for any question, so a non-empty personal bank marked every turn personal and kept the thread
+   * out of project memory. Keyword matches are kept: a shared word is relevance the floor cannot see.
+   */
+  private readonly minSemantic: number;
 
   /** Recall both scopes as untrusted grounding. Empty means memory is off, empty, or unavailable; the agent run still proceeds. */
   async ground(
@@ -123,6 +135,7 @@ export class MemoryRuntimeService {
                     : PROJECT_RECALL_TOKENS,
                 preferObservations: true,
                 userId: input.userId,
+                minScores: { semantic: this.minSemantic },
               },
               'agent-memory',
             );

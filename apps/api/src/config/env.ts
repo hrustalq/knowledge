@@ -841,6 +841,12 @@ export const envSchema = z.object({
   MEMORY_RERANKER_CANDIDATE_CAP: z.coerce.number().int().min(1).max(100).default(50),
   /** How the endpoint's `relevance_score` reads: `logit` (raw cross-encoder output, sigmoid-normalized) or `normalized` (already 0–1: Cohere, Jina, LiteLLM, Infinity). */
   MEMORY_RERANKER_SCORE: z.enum(['logit', 'normalized']).default('logit'),
+  /**
+   * Runtime recall (#1187): the cosine a memory needs before an assistant turn or agent run is handed it. Below it a
+   * memory is unrelated, so it neither grounds the turn nor marks it personal. 0.4 separates related from unrelated
+   * questions with bge-m3 (related ≥ 0.42, unrelated ≤ 0.34 on production banks); 0 hands back every row, as before.
+   */
+  MEMORY_RUNTIME_MIN_SEMANTIC: z.coerce.number().min(0).max(1).default(0.4),
   /** Reflect requests one API key (or person) may send a minute. Each is a model call. */
   MEMORY_REFLECT_RATE_PER_MIN: z.coerce.number().int().min(1).default(30),
   /** How long an async retain may stay claimed before the sweeper takes it for a dead worker's. */

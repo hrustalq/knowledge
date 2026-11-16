@@ -62,7 +62,7 @@ export class MeController {
     const next: Principal = {
       ...principal,
       ...(displayName ? { displayName } : {}),
-      ...(dto.locale ? { locale: dto.locale } : {}),
+      ...(dto.locale ? { locale: dto.locale, savedLocale: dto.locale } : {}),
     };
 
     // The dev principal has no users row to write to. Answering with the

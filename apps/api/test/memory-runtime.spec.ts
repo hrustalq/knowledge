@@ -92,6 +92,7 @@ function service(
     banks as never,
     recall as never,
     retain as never,
+    { get: () => 0.4 } as never,
   );
   return { svc, auth, permissions, access, agents, banks, recall, retain };
 }
@@ -162,6 +163,11 @@ describe('MemoryRuntimeService', () => {
     expect(
       recall.recallForModel.mock.calls.map((call) => call[1].maxTokens),
     ).toEqual([1024, 2048]);
+    // An unrelated memory is no grounding and must not mark the turn personal (#1187).
+    expect(recall.recallForModel.mock.calls.map((call) => call[1].minScores)).toEqual([
+      { semantic: 0.4 },
+      { semantic: 0.4 },
+    ]);
   });
 
   it('retains one idempotent source in each bank with the right ownership and scope', async () => {

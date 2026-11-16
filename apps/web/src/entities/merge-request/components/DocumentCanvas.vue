@@ -53,7 +53,7 @@ import { getGlossaryLinks, setGlossaryLinks } from '@/shared/api/api'
 import { api, fetchApi } from '@/shared/api/queries'
 import { GLOSSARY_AT_ATTR, GLOSSARY_ATTR, pageTerms } from '@/entities/document'
 import { GlossaryCard } from '@/entities/document'
-import { useMediaQuery } from '@vueuse/core'
+import { useDebounceFn, useMediaQuery } from '@vueuse/core'
 import { formatPageRef, splitTitleHeading, type LineSpan } from '@knowledge/editor-schema/markdown'
 
 const { t } = useI18n()
@@ -577,6 +577,17 @@ function selectedLines(range: Range): LineSpan | null {
     return null
   }
 }
+
+const coarsePointer = useMediaQuery('(any-pointer: coarse)')
+const readTouchSelection = useDebounceFn(readSelection, 100)
+function onDocumentSelectionChange() {
+  if (coarsePointer.value) void readTouchSelection()
+}
+onMounted(() => document.addEventListener('selectionchange', onDocumentSelectionChange))
+onBeforeUnmount(() => {
+  document.removeEventListener('selectionchange', onDocumentSelectionChange)
+  readTouchSelection.cancel()
+})
 
 /* ------------------------------------------------------- passage links */
 

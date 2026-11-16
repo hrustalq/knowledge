@@ -197,9 +197,9 @@ export function useCrumbs(): ComputedRef<Crumb[]> {
         if (label) list.push({ label: t(label) })
         return list
       }
-      // The workflow builder is the third pane of the settings shell, so it takes
-      // the same three-step trail as a project. `/new` is the wizard, which is
-      // `meta.bare` and never reaches here.
+      // The wizard is bare and has no `:id`, so it stays trail-less. The builder
+      // is the third pane of the settings shell and takes the same trail as a project.
+      if (path === '/settings/workflows/new') return []
       if (path.startsWith('/settings/workflows/')) {
         const id = route.params.id as string
         const name = workflows.byId(id)?.name ?? id.slice(0, 8)

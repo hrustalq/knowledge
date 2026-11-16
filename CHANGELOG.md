@@ -18,6 +18,7 @@ in the pull request that introduces them — see
 ### Fixed
 
 - Tall dialogs and confirmation alerts now stay within a phone's dynamic viewport and scroll internally, keeping their titles, close controls and actions reachable. (#1181)
+- The new workflow wizard opens again instead of failing during page rendering. (#1182)
 
 ## [0.55.0] — 2026-11-16
 

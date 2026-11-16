@@ -50,17 +50,24 @@ function commentOn(line: { new?: number; text: string }) {
       </p>
       <template v-for="(line, li) in hunk.lines" :key="li">
         <div
-          class="group flex"
+          class="group flex pointer-coarse:leading-6"
           :class="line.kind === 'added' ? 'bg-panel-tip/10 text-panel-tip-ink' : line.kind === 'deleted' ? 'bg-panel-caution/10 text-panel-caution-ink' : ''"
         >
+          <!-- Hidden until hover only where there is hover; on touch it is
+               always drawn, and 24px square on a coarse pointer, where the
+               row's line height makes it 24px tall and keeps the + level with
+               the text (#1032). Not
+               kn-hit: a 44px layer would reach the lines above and below, and
+               a tap would comment on the wrong one. -->
           <button
             v-if="canComment && line.kind !== 'deleted' && line.new !== undefined"
             type="button"
-            class="w-5 shrink-0 text-center text-muted-foreground opacity-0 hover:text-primary group-hover:opacity-100"
+            class="w-5 shrink-0 text-center text-muted-foreground hover:text-primary group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:w-6 [@media(hover:hover)]:opacity-0"
             :title="t('review.commentOnLine')"
+            :aria-label="t('review.commentOnLineN', { n: line.new })"
             @click="commentOn(line)"
           >+</button>
-          <span v-else class="w-5 shrink-0" />
+          <span v-else class="w-5 shrink-0 pointer-coarse:w-6" />
           <pre class="flex-1 whitespace-pre-wrap px-1">{{ line.kind === 'added' ? '+' : line.kind === 'deleted' ? '-' : ' ' }}{{ line.text }}</pre>
         </div>
         <div

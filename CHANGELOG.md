@@ -33,6 +33,8 @@ in the pull request that introduces them — see
 - The editor's slash (/) and @-mention menu could open past the right edge of a phone, or behind the on-screen
   keyboard. It now stays inside the visible screen and scrolls when the room is short. (#1035)
 - Import → Review: on a phone the action row no longer cuts Discard off the right edge; the buttons wrap. (#1036)
+- Side sheets (page preview in Knowledge health, search, connector runs and others) can be closed by touch: the
+  close button has a 44px touch target. Desktop is unchanged. (#1037)
 
 ## [0.56.0] — 2026-11-16
 

@@ -115,6 +115,9 @@ describe('Hindsight compatibility (e2e, #986)', () => {
     return { id: user.id, key: await mintKey(user.id, { workspaceId }) };
   }
 
+  // #1162: every page the suite leaves behind must be a promotion behind a merge request.
+  const suiteStart = new Date(Date.now() - 1_000);
+
   beforeAll(async () => {
     process.env.AUTH_MODE = 'api-key';
     process.env.MEMORY_ENABLED = 'true';
@@ -3612,5 +3615,16 @@ describe('Hindsight compatibility (e2e, #986)', () => {
       ] as const;
       for (const [method, path] of unsupported) expect((await call(people.alice.key, method, path)).status, `${method} ${path}`).toBe(404);
     });
+  });
+
+  // Last, after every retain, consolidation, reflect, mental-model refresh and transfer above (#1162).
+  it('never writes an authoritative page: the only pages the suite made are promotions waiting on a merge request', async () => {
+    const pages = await prisma.document.findMany({ where: { workspaceId: { in: WORKSPACES }, createdAt: { gte: suiteStart } }, select: { id: true, pendingMergeRequestId: true } });
+    // Promote ran (a person's act through capture), so there is something to check.
+    expect(pages.length).toBeGreaterThan(0);
+    expect(pages.filter((page) => !page.pendingMergeRequestId)).toEqual([]);
+    const revisions = await prisma.documentRevision.findMany({ where: { createdAt: { gte: suiteStart }, document: { workspaceId: { in: WORKSPACES } } }, select: { documentId: true } });
+    const promoted = new Set(pages.map((page) => page.id));
+    expect(revisions.filter((revision) => !promoted.has(revision.documentId))).toEqual([]);
   });
 });

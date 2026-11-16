@@ -263,6 +263,19 @@ describe('agent memory runtime (e2e, #1167)', () => {
     expect(await units(`project:${projectId}`, `assistant-turn:${second}`)).toEqual([]);
   });
 
+  it('shares a turn with the project bank when the personal bank holds nothing relevant to it (#1187)', async () => {
+    const personalBank = `agent:researcher:user:${alice.id}`;
+    // The personal bank is not empty: the previous turns left the retry fact in it.
+    expect(await prisma.memoryUnit.count({ where: { bank: { workspaceId: WS, bankId: personalBank } } })).toBeGreaterThan(0);
+    const thread = (await as(http().post('/v1/assistant/threads')).send({ workspaceId: WS, documentId }).expect(201)).body.thread.id as string;
+    const from = seen.length;
+    // No word shared with anything retained, so the stub vector is near orthogonal: under the floor, and no keyword hit.
+    const messageId = await ask('Which sourdough starter ferments quickest overnight?', thread);
+    expect(seen.slice(from).some((req) => lastUser(req).includes('Your earlier work with this user:'))).toBe(false);
+    await waitForUnits(`project:${projectId}`, `assistant-turn:${messageId}`);
+    expect((await prisma.assistantThread.findUniqueOrThrow({ where: { id: thread } })).privateContextAt).toBeNull();
+  });
+
   it('grounds a direct-call background run on its subject title, and retains its outcome to the project bank only', async () => {
     const [{ AgentExecutor }, { AgentRegistryService }, { AccessService }] = await Promise.all([
       import('../src/agents/agent.executor.js'),

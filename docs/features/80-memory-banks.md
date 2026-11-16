@@ -623,6 +623,29 @@ with `provenance: 'captured'`. The origin is server-set, never a request field:
 request and the Captures inbox name the bank. The memory stays in the bank. API-only: the worker never
 reaches `apps/api/src/captures/`.
 
+## Generated pages stay outside authoritative knowledge (#1162)
+
+A memory bank is the agent's own notebook; a Knowledge page is what the team stands behind. The two
+never meet by side effect.
+
+- **No memory path writes a page.** Retain, consolidation, reflect, mental-model refresh, transfers
+  and the runtime's per-turn retention write `memory_*` rows and vectors only — never a `Document`, a
+  revision or a merge request. Promote (above) is the one road out: a person's act on the bank page,
+  through capture, landing as a merge request someone reviews. `test/memory-boundary.spec.ts` pins
+  it by source (a memory file that writes a page, imports the documents or merge-request modules, or
+  reaches capture anywhere but the bank page's service fails), and the last case of
+  `hindsight-compat.e2e-spec.ts` pins it live: every page the whole suite left behind is a promotion
+  waiting on its merge request.
+- **Hindsight's generated pages are not built.** Its `…/knowledge-base/*` and `…/pages/*` routes are
+  living markdown documents backed by mental models; here they answer 404 (the matrix below) rather
+  than being aliased to Knowledge documents, which would let memory output skip merge review.
+- **If page-wire compatibility is ever proposed**, it is a separate design and a separate product
+  decision, and it must hold all of this: the pages are a bank-local tree of artifacts built from that
+  bank's observations and mental models only (never from sibling generated pages); they are never
+  `Document` rows, never in page search, `llms.txt` or the relation graph, and follow the bank's own
+  access rule (owner-only or project), not page permissions; and export to Knowledge is an explicit
+  person's act through capture → merge request, never a background write.
+
 ## Environment
 
 | Variable | Default | |
@@ -670,14 +693,14 @@ This matrix is generated from the routes in `@vectorize-io/hindsight-client` **1
 | `GET`, `PATCH`, `DELETE …/mental-models/{id}` | Compatible | phase-5 lifecycle tests |
 | `GET …/mental-models/{id}/history`, `POST …/refresh`, `POST …/clear` | Compatible | phase-5 refresh/history/clear tests |
 | `POST …/mental-models/{id}/dry-run-refresh` | Non-goal | no refresh-preview surface |
-| `GET …/knowledge-base/tree`, `GET …/pages/tree` | Non-goal | generated pages are phase 7, #1162 |
-| `POST …/knowledge-base/folders`, `POST …/pages/folders` | Non-goal | phase 7, #1162 |
-| `POST …/knowledge-base/pages`, `POST …/pages` | Non-goal | phase 7, #1162 |
-| `GET …/knowledge-base/export`, `GET …/pages/export` | Non-goal | phase 7, #1162 |
-| `GET …/knowledge-base/search`, `GET …/pages/search` | Non-goal | phase 7, #1162 |
-| `GET …/knowledge-base/pages/{id}`, `GET …/pages/{id}` | Non-goal | phase 7, #1162 |
-| `DELETE`, `PATCH …/knowledge-base/nodes/{id}` | Non-goal | phase 7, #1162 |
-| `DELETE`, `PATCH …/pages/nodes/{id}` | Non-goal | phase 7, #1162 |
+| `GET …/knowledge-base/tree`, `GET …/pages/tree` | Non-goal | bank-local generated pages are not built; never aliased to Knowledge documents ([#1162](#generated-pages-stay-outside-authoritative-knowledge-1162)) |
+| `POST …/knowledge-base/folders`, `POST …/pages/folders` | Non-goal | see the row above (#1162) |
+| `POST …/knowledge-base/pages`, `POST …/pages` | Non-goal | see the row above (#1162) |
+| `GET …/knowledge-base/export`, `GET …/pages/export` | Non-goal | see the row above (#1162) |
+| `GET …/knowledge-base/search`, `GET …/pages/search` | Non-goal | see the row above (#1162) |
+| `GET …/knowledge-base/pages/{id}`, `GET …/pages/{id}` | Non-goal | see the row above (#1162) |
+| `DELETE`, `PATCH …/knowledge-base/nodes/{id}` | Non-goal | see the row above (#1162) |
+| `DELETE`, `PATCH …/pages/nodes/{id}` | Non-goal | see the row above (#1162) |
 | `GET`, `POST …/directives` | Compatible | phase-4 list/create tests |
 | `GET`, `PATCH`, `DELETE …/directives/{id}` | Compatible | phase-4 lifecycle tests |
 | `GET …/documents` | Compatible | phase-6 document list test |

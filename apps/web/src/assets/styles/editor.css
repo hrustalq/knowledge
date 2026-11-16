@@ -834,6 +834,18 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
 }
 .kn-layout-switch button { padding: 0.25rem; border-radius: 5px; color: var(--muted-foreground); }
 .kn-layout-switch button[aria-pressed='true'] { background: var(--accent); color: var(--accent-foreground); }
+/* Touch has no hover to reveal the switchers (they sit at opacity 0 in the templates),
+   so show them outright and grow the targets to 24px (#1034). Unlayered, so it beats
+   the opacity-0 utility. At 24px the panel's five swatches are ~140px, which would
+   cover a long first line on a phone, so there they take their own row at the
+   panel's foot instead of floating over its corner. */
+@media (hover: none) {
+  .kn-panel-switch,
+  .kn-layout-switch { opacity: 1; }
+  .kn-panel-switch { position: static; grid-column: 1 / -1; justify-self: end; }
+  .kn-panel-swatch { width: 1.5rem; height: 1.5rem; }
+  .kn-layout-switch button { padding: 0.3125rem; }
+}
 
 /* Inline chips ------------------------------------------------------------ */
 

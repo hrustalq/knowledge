@@ -27,6 +27,9 @@ in the pull request that introduces them — see
 - On a phone the activity feed (Settings → Activity, and the activity widgets on pages and projects) drew a row's page
   title over the next row when its action was long, most often in Russian. The action now shortens with an ellipsis
   beside the time, so every row keeps to two lines. Desktop is unchanged. (#1033)
+- In the editor on a phone or tablet, the panel colour switcher and the two/three-column switcher were hidden until
+  hover, so touch users could not change them. They are now always shown there with 24px targets; the panel swatches
+  sit on their own row at the panel's foot. Desktop is unchanged. (#1034)
 
 ## [0.56.0] — 2026-11-16
 

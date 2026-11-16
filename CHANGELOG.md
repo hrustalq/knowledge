@@ -24,6 +24,9 @@ in the pull request that introduces them — see
 - On a phone or tablet the "+" that starts a comment on a line of a merge request's Changes diff was invisible (it
   appeared only on hover) and 20×16px. It is now always shown where there is no hover, 24px square on touch, and
   screen readers announce which line it comments on. Desktop is unchanged. (#1032)
+- On a phone the activity feed (Settings → Activity, and the activity widgets on pages and projects) drew a row's page
+  title over the next row when its action was long, most often in Russian. The action now shortens with an ellipsis
+  beside the time, so every row keeps to two lines. Desktop is unchanged. (#1033)
 
 ## [0.56.0] — 2026-11-16
 

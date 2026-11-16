@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { BadRequestException, ServiceUnavailableException } from '@nestjs/common';
-import { extractionBatches, extractionPrompt, readFacts, readRetainItems, tagsWhere, type RetainItem } from '../src/memory/memory-facts.js';
+import { extractionBatches, extractionPrompt, readFacts, readRetainItems, resolveObservationScopes, tagsWhere, type RetainItem } from '../src/memory/memory-facts.js';
 import { MemoryIntakeService } from '../src/memory/memory-intake.service.js';
 import { MemoryRetainService } from '../src/memory/memory-retain.service.js';
 
@@ -48,6 +48,37 @@ describe('retain items (#986)', () => {
   });
 });
 
+describe('observation scopes (#1157)', () => {
+  it('resolves combined, shared, per-tag, all combinations and custom glob scopes canonically', () => {
+    const tags = ['session:2', 'user:a', 'team:eng'];
+    expect(resolveObservationScopes(tags)).toEqual([['session:2', 'team:eng', 'user:a']]);
+    expect(resolveObservationScopes(tags, 'shared')).toEqual([[]]);
+    expect(resolveObservationScopes(tags, 'per_tag')).toEqual([['session:2'], ['team:eng'], ['user:a']]);
+    expect(resolveObservationScopes(['b', 'a'], 'all_combinations')).toEqual([['a'], ['b'], ['a', 'b']]);
+    expect(resolveObservationScopes(tags, [['user:*', 'team:*'], ['session:2'], ['user:a']])).toEqual([['team:eng', 'user:a'], ['session:2'], ['user:a']]);
+    expect(resolveObservationScopes(tags, [['missing:*']])).toEqual([]);
+  });
+
+  it('files an untagged memory under per_tag or all_combinations in the untagged scope, never in none', () => {
+    expect(resolveObservationScopes([], 'per_tag')).toEqual([[]]);
+    expect(resolveObservationScopes([], 'all_combinations')).toEqual([[]]);
+  });
+
+  it('matches a custom glob in linear time, with no regex to backtrack', () => {
+    const started = Date.now();
+    expect(resolveObservationScopes(['a'.repeat(100)], [['*a*a*a*a*a*a*a*a*b']])).toEqual([]);
+    expect(Date.now() - started).toBeLessThan(100);
+  });
+
+  it('keeps the retain-time value and rejects a malformed one before extraction', () => {
+    expect(readRetainItems([{ content: 'a', observation_scopes: 'shared' }], null, LIMITS)[0]!.observationScopes).toBe('shared');
+    expect(readRetainItems([{ content: 'a', observation_scopes: [['b', 'a', 'a']] }], null, LIMITS)[0]!.observationScopes).toEqual([['a', 'b']]);
+    for (const observation_scopes of ['everywhere', [true], [['a', 2]]]) {
+      expect(() => readRetainItems([{ content: 'a', observation_scopes }], null, LIMITS)).toThrow(BadRequestException);
+    }
+  });
+});
+
 describe('fact extraction, the pure half (#986)', () => {
   it('fills each call up to the character budget', () => {
     const sizes = extractionBatches([10, 10, 10, 25, 5].map((n) => ({ content: 'x'.repeat(n) })), 25).map((b) => b.map((i) => i.content.length));
@@ -68,12 +99,12 @@ describe('fact extraction, the pure half (#986)', () => {
           { item: 'I2', facts: [{ text: 'Typed oddly.', type: 'opinion' }] },
           { item: 'I9', facts: [{ text: 'Never handed out.' }] },
           { item: 'I1', facts: [{ text: 'A second answer for I1.' }] },
-          { item: 'I3', facts: 'nope' },
+          { item: 'I3', facts: [] },
         ],
       },
       3,
     );
-    expect([...facts.keys()]).toEqual([0, 1]);
+    expect([...facts.keys()]).toEqual([0, 1, 2]);
     expect(facts.get(0)).toEqual([{ text: 'Alice owns billing.', type: 'experience', entities: ['Alice'], occurredStart: new Date('2026-11-10'), occurredEnd: null }]);
     expect(facts.get(1)![0]!.type).toBe('world');
     for (const junk of [null, 'text', {}, { items: {} }]) expect(readFacts(junk, 3).size).toBe(0);
@@ -113,9 +144,9 @@ describe('MemoryRetainService (#986)', () => {
         return { content: opts.answer ?? '{}', tokens: { promptTokens: 10, completionTokens: 5, totalTokens: 15, estimated: false } };
       }),
     };
-    const units = { deleteBareObservations: vi.fn(async () => [] as string[]) };
+    const units = { deleteBareObservations: vi.fn(async () => [] as string[]), invalidateFacts: vi.fn(async () => [] as string[]), addScopeMemberships: vi.fn(async () => undefined) };
     const svc = new MemoryRetainService(prisma as never, graph as never, aliases as never, embeddings as never, agents as never, usage as never, client as never, units as never);
-    const retain = (items: RetainItem[], extra: { verbatim?: boolean; consolidated?: boolean; guard?: () => Promise<boolean> } = {}) => svc.retain({ workspaceId: WS, bank: { id: 'bank-1', mission: '' }, userId: 'u1', locale: 'en', items, ...extra });
+    const retain = (items: RetainItem[], extra: { verbatim?: boolean; durableOnly?: boolean; consolidated?: boolean; guard?: () => Promise<boolean> } = {}) => svc.retain({ workspaceId: WS, bank: { id: 'bank-1', mission: '' }, userId: 'u1', locale: 'en', items, ...extra });
     return { svc, retain, created, prisma, graph, client, embeddings };
   }
 
@@ -161,14 +192,43 @@ describe('MemoryRetainService (#986)', () => {
   });
 
   it('never fails for want of a model: a spent budget, a failed call and an unreadable answer all store verbatim', async () => {
-    for (const opts of [{ budget: new Error('budget') }, { answer: new Error('upstream 500') }, { answer: 'not json' }]) {
-      const { retain, created } = service({ routed: true, ...opts });
-      expect((await retain([item()])).units).toBe(1);
-      expect(created.units[0]!.text).toBe('Alice owns billing.');
+    for (const durableOnly of [false, true]) {
+      for (const opts of [{ budget: new Error('budget') }, { answer: new Error('upstream 500') }, { answer: 'not json' }]) {
+        const { retain, created } = service({ routed: true, ...opts });
+        expect((await retain([item()], { durableOnly })).units).toBe(1);
+        expect(created.units[0]!.text).toBe('Alice owns billing.');
+      }
     }
     const spent = service({ routed: true, budget: new Error('budget') });
     await spent.retain([item()]);
     expect(spent.client.chatWithUsage).not.toHaveBeenCalled();
+  });
+
+  it('durable skips an intentional empty extraction but keeps durable preferences', async () => {
+    const empty = JSON.stringify({ items: [{ item: 'I1', facts: [] }] });
+    const chatter = service({ routed: true, answer: empty });
+    const out = await chatter.retain([item({ content: 'Request: Thanks\n\nOutcome: You are welcome.' })], { durableOnly: true });
+    expect(out).toEqual({ units: 0, usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 } });
+    expect(chatter.created.units).toEqual([]);
+    expect(chatter.embeddings.embedBatch).not.toHaveBeenCalled();
+    expect(chatter.prisma.memoryUnit.deleteMany).toHaveBeenCalled();
+    expect(chatter.graph.deleteMemoryUnits).toHaveBeenCalledWith(WS, ['old-1']);
+
+    const preference = JSON.stringify({ items: [{ item: 'I1', facts: [{ text: 'Alice prefers pnpm.', type: 'experience' }] }] });
+    const durable = service({ routed: true, answer: preference });
+    expect((await durable.retain([item()], { durableOnly: true })).units).toBe(1);
+    expect(durable.created.units[0]!.text).toBe('Alice prefers pnpm.');
+
+    const ordinary = service({ routed: true, answer: empty });
+    expect((await ordinary.retain([item({ content: 'Thanks.' })])).units).toBe(1);
+    expect(ordinary.created.units[0]!.text).toBe('Thanks.');
+  });
+
+  it('durable without an extraction model keeps the verbatim fallback', async () => {
+    const { retain, created, client } = service();
+    expect((await retain([item()], { durableOnly: true })).units).toBe(1);
+    expect(client.chatWithUsage).not.toHaveBeenCalled();
+    expect(created.units[0]!.text).toBe('Alice owns billing.');
   });
 
   it('a verbatim retain calls no routed model and stores each item as one masked unit (#1007)', async () => {

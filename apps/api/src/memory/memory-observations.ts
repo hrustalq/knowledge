@@ -23,6 +23,82 @@ export interface ConsolidationEntry {
 const MAX_OBSERVATION_CHARS = 2000;
 const MAX_QUOTE_CHARS = 1000;
 
+export interface ConsolidationStrategy {
+  scopes?: Array<{ tags?: string[]; tags_match?: string | null }>;
+  observations_mission?: string | null;
+  max_observations_per_scope?: number | null;
+  consolidation_source_facts_max_tokens?: number | null;
+  consolidation_source_facts_max_tokens_per_observation?: number | null;
+}
+
+export interface ObservationBankDefaults {
+  mission: string;
+  observationsMission: string | null;
+  maxObservationsPerScope: number | null;
+  consolidationSourceFactsMaxTokens: number | null;
+  consolidationSourceFactsMaxTokensPerObservation: number | null;
+  consolidationStrategies: unknown;
+}
+
+/**
+ * A tag glob: `*` matches any run of characters, everything else itself,
+ * case-sensitive and anchored at both ends. Linear in the value: the first and
+ * last segments are anchored, the middle ones found leftmost in order — never
+ * a regex, which a pattern like `*a*a*a*b` backtracks exponentially.
+ */
+export function globMatch(pattern: string, value: string): boolean {
+  const parts = pattern.split('*');
+  if (parts.length === 1) return pattern === value;
+  const first = parts[0]!;
+  const last = parts.at(-1)!;
+  if (value.length < first.length + last.length || !value.startsWith(first) || !value.endsWith(last)) return false;
+  let at = first.length;
+  const end = value.length - last.length;
+  for (const part of parts.slice(1, -1)) {
+    if (!part) continue;
+    const found = value.indexOf(part, at);
+    if (found < 0 || found + part.length > end) return false;
+    at = found + part.length;
+  }
+  return true;
+}
+
+/** Kuhn's augmenting paths: whether each pattern can take a tag of its own (`exact` is a one-to-one pairing). */
+function pairsOneToOne(patterns: string[], tags: string[]): boolean {
+  const owner: Array<number | undefined> = [];
+  const take = (p: number, seen: Set<number>): boolean =>
+    tags.some((tag, t) => {
+      if (seen.has(t) || !globMatch(patterns[p]!, tag)) return false;
+      seen.add(t);
+      if (owner[t] !== undefined && !take(owner[t]!, seen)) return false;
+      owner[t] = p;
+      return true;
+    });
+  return patterns.every((_, p) => take(p, new Set()));
+}
+
+export function scopeMatches(tags: string[], rule: { tags?: string[]; tags_match?: string | null }): boolean {
+  const patterns = rule.tags ?? [];
+  if (!tags.length || !patterns.length) return false;
+  if (rule.tags_match === 'exact') return patterns.length === tags.length && pairsOneToOne(patterns, tags);
+  return patterns.every((pattern) => tags.some((tag) => globMatch(pattern, tag)));
+}
+
+/** First matching, non-empty strategy wins whole; each unset field inherits the bank default. */
+export function observationSettings(bank: ObservationBankDefaults, tags: string[]) {
+  const strategies = Array.isArray(bank.consolidationStrategies) ? (bank.consolidationStrategies as ConsolidationStrategy[]) : [];
+  const strategy = strategies.find((s) =>
+    ['observations_mission', 'max_observations_per_scope', 'consolidation_source_facts_max_tokens', 'consolidation_source_facts_max_tokens_per_observation'].some((key) => s[key as keyof ConsolidationStrategy] != null) &&
+    (s.scopes ?? []).some((rule) => scopeMatches(tags, rule)),
+  );
+  return {
+    mission: strategy?.observations_mission ?? bank.observationsMission ?? bank.mission,
+    maxObservations: strategy?.max_observations_per_scope ?? bank.maxObservationsPerScope ?? -1,
+    sourceFactsMaxTokens: strategy?.consolidation_source_facts_max_tokens ?? bank.consolidationSourceFactsMaxTokens ?? -1,
+    sourceFactsMaxTokensPerObservation: strategy?.consolidation_source_facts_max_tokens_per_observation ?? bank.consolidationSourceFactsMaxTokensPerObservation ?? -1,
+  };
+}
+
 /** The user message of one consolidation call: the facts and the observations, each under its label, wrapped untrusted. */
 export function consolidationPrompt(facts: Shown[], observations: Shown[], mission: string): string {
   const list = (items: Shown[], prefix: string) => items.map((x, i) => `${prefix}${i + 1}: ${x.text}`).join('\n');

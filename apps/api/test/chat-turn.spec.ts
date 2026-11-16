@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ASSISTANT_WRITE_TOOL_NAMES } from '@knowledge/contracts';
 import { AssistantService } from '../src/assistant/assistant.service.js';
 import { AssistantToolsService } from '../src/assistant/assistant.tools.js';
-import { systemScope } from '../src/permissions/access-scope.js';
+import { systemScope, WORKSPACE_AUDIENCE } from '../src/permissions/access-scope.js';
 import type { PermissionService } from '../src/permissions/permission.service.js';
 import { AssistantReadToolsService } from '../src/assistant/assistant-read-tools.service.js';
 import type { AccessService } from '../src/auth/access.service.js';
@@ -109,6 +109,18 @@ describe('AssistantService.runChatTurn', () => {
     );
     expect(h.offered()).toContain('search_knowledge');
     for (const name of [...ASSISTANT_WRITE_TOOL_NAMES, ...PANE_TOOLS]) expect(h.offered()).not.toContain(name);
+  });
+
+  it('keeps personal and project memory out of a group answer', async () => {
+    const h = harness();
+    await h.svc.runChatTurn('t-1', { content: 'how do we deploy?', audience: WORKSPACE_AUDIENCE }, DEV_PRINCIPAL);
+    expect(h.openTurn).toHaveBeenCalledWith(
+      't-1',
+      { content: 'how do we deploy?', mode: 'ask' },
+      DEV_PRINCIPAL,
+      null,
+      false,
+    );
   });
 
   // #1105: a group or private chat turn never offers MCP plugin tools.

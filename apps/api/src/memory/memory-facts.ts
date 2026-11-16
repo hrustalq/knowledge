@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { wrapUntrusted } from '../common/untrusted.js';
 import { t } from '../i18n/t.js';
 import { FILE_DOCUMENT_PREFIX } from './memory-files.js';
+import { globMatch } from './memory-observations.js';
 
 /**
  * The pure half of retain (#986): reading a request into items, building the
@@ -29,6 +30,8 @@ export interface RetainItem {
   /** Entities the client supplied: the name as written, and the key to fold — `type:name` when it gave a type. */
   entities: Array<{ name: string; key: string }>;
   tags: string[];
+  /** The retain-time Hindsight observation_scopes value; undefined is combined. */
+  observationScopes?: ObservationScopes;
   append: boolean;
 }
 
@@ -45,10 +48,56 @@ const MAX_FACT_CHARS = 2000;
 const MAX_ENTITIES = 20;
 const MAX_ENTITY_CHARS = 120;
 const MAX_TAGS = 50;
+const MAX_OBSERVATION_SCOPES = 100;
+const OBSERVATION_SCOPE_MODES = ['combined', 'shared', 'per_tag', 'all_combinations'] as const;
+export type ObservationScopes = (typeof OBSERVATION_SCOPE_MODES)[number] | string[][];
 
 /** Sorted and deduplicated, so two orders of one set are stored — and compared — as one array. */
 export const cleanTags = (tags: unknown): string[] =>
   Array.isArray(tags) ? [...new Set(tags.filter((x): x is string => typeof x === 'string' && x.trim().length > 0).map((x) => x.trim().slice(0, 100)))].sort().slice(0, MAX_TAGS) : [];
+
+export function readObservationScopes(value: unknown): ObservationScopes | undefined {
+  if (value == null) return undefined;
+  if (typeof value === 'string' && (OBSERVATION_SCOPE_MODES as readonly string[]).includes(value)) return value as ObservationScopes;
+  if (Array.isArray(value) && value.every((scope) => Array.isArray(scope) && scope.every((tag) => typeof tag === 'string'))) {
+    return value.map((scope) => cleanTags(scope));
+  }
+  throw new BadRequestException(t('error.memory.configValueInvalid', { key: 'observation_scopes', type: 'combined, shared, per_tag, all_combinations, or a list of string tag lists' }));
+}
+
+/** Exact, canonical tag sets a memory joins. Custom entries may use `*` against the memory's own tags. */
+export function resolveObservationScopes(tags: string[], requested?: ObservationScopes): string[][] {
+  const own = cleanTags(tags);
+  const spec = requested ?? 'combined';
+  let scopes: string[][];
+  if (spec === 'combined') scopes = [own];
+  else if (spec === 'shared') scopes = [[]];
+  else if (spec === 'per_tag') scopes = own.map((tag) => [tag]);
+  else if (spec === 'all_combinations') {
+    scopes = [];
+    for (let mask = 1; mask < 2 ** own.length; mask++) {
+      scopes.push(own.filter((_, i) => mask & (1 << i)));
+      if (scopes.length > MAX_OBSERVATION_SCOPES) throw new BadRequestException(t('error.memory.configValueInvalid', { key: 'observation_scopes', type: `at most ${MAX_OBSERVATION_SCOPES} resolved scopes` }));
+    }
+  } else {
+    scopes = spec.flatMap((patterns) => {
+      const matches = patterns.map((pattern) => {
+        if (!pattern.includes('*')) return [pattern];
+        return own.filter((tag) => globMatch(pattern, tag));
+      });
+      if (matches.some((m) => !m.length)) return [];
+      return matches.reduce<string[][]>((sets, tagsForPattern) => {
+        if (sets.length * tagsForPattern.length > MAX_OBSERVATION_SCOPES) throw new BadRequestException(t('error.memory.configValueInvalid', { key: 'observation_scopes', type: `at most ${MAX_OBSERVATION_SCOPES} resolved scopes` }));
+        return sets.flatMap((set) => tagsForPattern.map((tag) => [...set, tag]));
+      }, [[]]);
+    });
+  }
+  // An untagged memory has no tag to split by: it joins the untagged scope, as `combined` would, rather than none.
+  if (!own.length && (spec === 'per_tag' || spec === 'all_combinations')) scopes = [[]];
+  const unique = [...new Map(scopes.map((scope) => [JSON.stringify(cleanTags(scope)), cleanTags(scope)])).values()];
+  if (unique.length > MAX_OBSERVATION_SCOPES) throw new BadRequestException(t('error.memory.configValueInvalid', { key: 'observation_scopes', type: `at most ${MAX_OBSERVATION_SCOPES} resolved scopes` }));
+  return unique;
+}
 
 const cleanNames = (names: unknown[]): string[] =>
   [...new Set(names.filter((x): x is string => typeof x === 'string').map((x) => x.trim().slice(0, MAX_ENTITY_CHARS)).filter(Boolean))].slice(0, MAX_ENTITIES);
@@ -67,6 +116,8 @@ export function assertRetainCeilings(items: ReadonlyArray<{ content?: unknown }>
 
 /** Document ids only a wire writes: graph observations (`memory-graph.ts`) and a file's recall chunks (`FILE_DOCUMENT_PREFIX`). */
 const RESERVED_DOCUMENT_PREFIXES = ['graph:', FILE_DOCUMENT_PREFIX] as const;
+/** A document the graph or files wire owns: never retained, edited, deleted or transferred through the Hindsight document routes. */
+export const isWireDocumentId = (documentId: string): boolean => RESERVED_DOCUMENT_PREFIXES.some((p) => documentId.startsWith(p));
 
 /**
  * A retain body's items, as this server stores them. The global pipe checked
@@ -100,6 +151,9 @@ export function readRetainItems(
     }
     const metadata = item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata) ? item.metadata : {};
     const entities = Array.isArray(item.entities) ? item.entities : [];
+    const tags = cleanTags([...(Array.isArray(item.tags) ? item.tags : []), ...extraTags]);
+    const observationScopes = readObservationScopes(item.observation_scopes);
+    resolveObservationScopes(tags, observationScopes);
     return {
       content: item.content,
       context: typeof item.context === 'string' && item.context.trim() ? item.context.slice(0, 2000) : null,
@@ -111,7 +165,8 @@ export function readRetainItems(
         if (!name) return [];
         return [{ name, key: typeof e?.type === 'string' && e.type.trim() ? `${e.type.trim().slice(0, 40)}:${name}` : name }];
       }),
-      tags: cleanTags([...(Array.isArray(item.tags) ? item.tags : []), ...extraTags]),
+      tags,
+      observationScopes,
       append: item.update_mode === 'append',
     };
   });
@@ -143,7 +198,8 @@ export function extractionPrompt(items: ReadonlyArray<{ content: string; context
 /**
  * The model's answer, reduced to what it may say: facts under a label that was
  * handed out, each a non-empty sentence of a known type. Anything else is
- * dropped, and an item left with no fact is the caller's to store verbatim.
+ * dropped. An explicit empty list means intentional no-facts; an item absent
+ * from the map is an extraction failure the caller stores verbatim.
  */
 export function readFacts(raw: unknown, count: number): Map<number, Fact[]> {
   const out = new Map<number, Fact[]>();
@@ -165,7 +221,7 @@ export function readFacts(raw: unknown, count: number): Map<number, Fact[]> {
         occurredEnd: dateOf(f?.occurred_end),
       });
     }
-    if (facts.length) out.set(index, facts);
+    if (facts.length || entry.facts.length === 0) out.set(index, facts);
   }
   return out;
 }

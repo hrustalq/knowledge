@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { MemoryOperationsService } from '../src/memory/memory-operations.service.js';
 import type { RetainItem } from '../src/memory/memory-facts.js';
@@ -18,6 +18,8 @@ function service(opts: { held?: { bankId: string }; claim?: number; row?: Record
         created.push(data);
       }),
       findUnique: vi.fn(async () => opts.held ?? opts.row ?? null),
+      findFirst: vi.fn(async () => opts.row ?? null),
+      delete: vi.fn(async () => ({})),
       findMany: vi.fn(async () => []),
       updateMany: vi.fn(async (args: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
         updates.push(args);
@@ -30,7 +32,7 @@ function service(opts: { held?: { bankId: string }; claim?: number; row?: Record
   const retainer = { retain: vi.fn(async () => { if (opts.retain) throw opts.retain; return { units: 1, usage: null }; }) };
   const producer = { enqueue: vi.fn(async () => undefined) };
   const config = { get: (key: string) => (key === 'MEMORY_OPERATION_TIMEOUT_MS' ? 600_000 : 7) };
-  return { svc: new MemoryOperationsService(prisma as never, retainer as never, {} as never, producer as never, config as never), prisma, retainer, producer, created, updates };
+  return { svc: new MemoryOperationsService(prisma as never, retainer as never, {} as never, {} as never, { deleteArchives: vi.fn() } as never, producer as never, config as never), prisma, retainer, producer, created, updates };
 }
 
 describe('MemoryOperationsService (#986)', () => {
@@ -58,7 +60,7 @@ describe('MemoryOperationsService (#986)', () => {
   });
 
   it('claims with one guarded statement, retains as the operation, and settles', async () => {
-    const row = { id: OP, workspaceId: 'ws-1', bank, createdBy: 'u1', locale: 'ru', payload: [item] };
+    const row = { id: OP, status: 'queued', type: 'retain', workspaceId: 'ws-1', bank, createdBy: 'u1', locale: 'ru', payload: [item] };
     const { svc, retainer, updates } = service({ row });
     await svc.run(OP);
     expect(updates[0]).toMatchObject({ where: { id: OP, status: 'queued' }, data: { status: 'running', attempts: { increment: 1 } } });
@@ -79,5 +81,25 @@ describe('MemoryOperationsService (#986)', () => {
     await svc.cancel(bank, OP);
     expect(updates[0]!.where).toEqual({ id: OP, bankId: 'bank-1', status: 'queued' });
     await expect(svc.cancel(bank, 'not-a-uuid')).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('deletes only a finished operation: 404 for one this bank does not hold, 409 for one still running', async () => {
+    await expect(service().svc.delete(bank, OP)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service().svc.delete(bank, 'not-a-uuid')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service({ row: { id: OP, status: 'running' } }).svc.delete(bank, OP)).rejects.toBeInstanceOf(ConflictException);
+    const done = service({ row: { id: OP, status: 'completed' } });
+    await expect(done.svc.delete(bank, OP)).resolves.toMatchObject({ success: true });
+    expect(done.prisma.memoryOperation.delete).toHaveBeenCalledWith({ where: { id: OP } });
+  });
+
+  it('never loads an operation payload outside the worker run: list, status, delete and the stale sweep', async () => {
+    const { svc, prisma } = service({ row: { id: OP, status: 'completed', type: 'file_convert_retain', itemsCount: 0, attempts: 1, createdAt: new Date(), updatedAt: new Date(), result: null, error: null, notBefore: null, completedAt: null } });
+    await svc.list(bank, {});
+    await svc.status(bank, OP);
+    await svc.delete(bank, OP);
+    await svc.sweep();
+    const reads = [...prisma.memoryOperation.findMany.mock.calls, ...prisma.memoryOperation.findFirst.mock.calls] as unknown as Array<[{ select?: Record<string, boolean>; omit?: Record<string, boolean> }]>;
+    expect(reads.length).toBeGreaterThan(0);
+    for (const [args] of reads) expect(args.omit?.payload === true || (args.select !== undefined && !args.select.payload)).toBe(true);
   });
 });

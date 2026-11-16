@@ -24,6 +24,7 @@ import {
   AGENT_LEARNING_MAX_CHARS,
   AGENT_LEARNING_PERSON_SOURCES,
   AGENT_LEARNING_STATUSES,
+  AGENT_MEMORY_MODES,
   AGENT_RUN_MAX_DOCUMENTS,
   AGENT_SCHEDULE_KINDS,
   AGENT_SCHEDULE_TIME_PATTERN,
@@ -41,6 +42,7 @@ import {
   type AgentCapability,
   type AgentLearningPersonSource,
   type AgentLearningStatus,
+  type AgentMemoryPolicy,
   type AgentScheduleKind,
   type AgentTriggerEvent,
   type AgentSurface,
@@ -889,6 +891,23 @@ export class SetAiBudgetDto {
 
 // ---- Agents (docs/features/20) ---------------------------------------------
 
+export class AgentMemoryPolicyDto {
+  @ApiPropertyOptional({ enum: AGENT_MEMORY_MODES, description: 'Default retention mode; personal and project override it.' })
+  @IsOptional()
+  @IsIn(AGENT_MEMORY_MODES as unknown as string[], { message: vmsg('isIn') })
+  mode?: AgentMemoryPolicy['mode'];
+
+  @ApiPropertyOptional({ enum: AGENT_MEMORY_MODES })
+  @IsOptional()
+  @IsIn(AGENT_MEMORY_MODES as unknown as string[], { message: vmsg('isIn') })
+  personal?: AgentMemoryPolicy['personal'];
+
+  @ApiPropertyOptional({ enum: AGENT_MEMORY_MODES })
+  @IsOptional()
+  @IsIn(AGENT_MEMORY_MODES as unknown as string[], { message: vmsg('isIn') })
+  project?: AgentMemoryPolicy['project'];
+}
+
 /**
  * Every field is an override: absent leaves it alone, `null` clears it back to
  * the built-in's code default. That is why each one is @NULLABLE rather than
@@ -938,6 +957,13 @@ export class UpdateAiAgentDto {
   @ArrayMaxSize(10, { message: vmsg('arrayMaxSize') })
   @IsUUID('4', { each: true })
   skillIds?: string[] | null;
+
+  @ApiPropertyOptional({ type: AgentMemoryPolicyDto, nullable: true, description: 'Retention policy. Null restores all.' })
+  @IsOptional()
+  @NULLABLE<UpdateAiAgentDto>('memoryPolicy')
+  @ValidateNested()
+  @Type(() => AgentMemoryPolicyDto)
+  memoryPolicy?: AgentMemoryPolicy | null;
 
   @ApiPropertyOptional({ type: String, nullable: true, format: 'uuid', description: 'The model it runs on. Null follows the workspace route.' })
   @IsOptional()
@@ -1082,6 +1108,12 @@ export class CreateAiAgentDto {
   @ArrayMaxSize(10, { message: vmsg('arrayMaxSize') })
   @IsUUID('4', { each: true })
   skillIds?: string[];
+
+  @ApiPropertyOptional({ type: AgentMemoryPolicyDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AgentMemoryPolicyDto)
+  memoryPolicy?: AgentMemoryPolicy;
 
   @ApiPropertyOptional({ type: String, nullable: true, format: 'uuid' })
   @IsOptional()

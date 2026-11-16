@@ -16,8 +16,8 @@ import { XlsxParser } from './xlsx.parser.js';
  * The parsing half of the import feature. Nothing in the API process should
  * ever start a parse. The connector adapters import this module too, for the
  * Google Drive adapter (#338), so its providers exist in the API process — but
- * the one caller there, Test connection, never fetches a file; parsing happens
- * only in a sync run, in the worker.
+ * the one caller there, Test connection, never fetches a file. Imports and
+ * Hindsight file-retain operations parse in the worker, never in the API request.
  *
  * AiCoreModule and AgentCoreModule are imported for the OCR parser alone, and
  * are the worker-safe slices of the AI layer — the same ones `ExtractorFactory`

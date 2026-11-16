@@ -15,10 +15,48 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Added
+
+- Agents can now retain all successful outcomes, only durable knowledge, or nothing, with independent personal and
+  project memory policies. Recall remains available when retention is off. (#1156)
+- Memory banks now support shared, per-tag, combined and custom observation scopes, targeted consolidation, document
+  scope updates, and ordered per-scope consolidation strategies through the unmodified Hindsight client. (#1157)
+- Memory recall can now rerank fused candidates with an optional cross-encoder, return normalized reranker/final scores,
+  and filter them inclusively with `min_scores`; deployments without a reranker keep the existing RRF behavior. (#1158)
+- Memory banks now support named global or tag-scoped reflect directives through the unmodified Hindsight client. Editors
+  can manage and activate them; reflections report exactly which rules were applied without exposing personal or restricted
+  project banks. (#1159)
+- Memory banks now store refreshable mental models: curated, evidence-backed answers with official-client CRUD, history,
+  structured output, full/delta refresh, scoped schedules, and reflection provenance. Failed refreshes preserve the last
+  good answer, and models never become Knowledge pages automatically. (#1160)
+- The official Hindsight client can now manage documents, chunks, tags, observation lifecycle, aliases, bank templates,
+  asynchronous file retain, transfer archives and bank audit logs. Unsupported routes have explicit documented 404
+  behavior, and all new paths retain personal-owner, project-ACL and workspace isolation. (#1161)
+- Agent memory keeps to its audience: background runs no longer recall or retain personal memory, an assistant answer
+  is copied to a project's memory only when every reader of that project could have seen what it drew on, and the bank
+  ids the runtime uses (`agent:…:user:…`, `project:…`) can no longer be created or aliased through the memory API.
+  Uploaded files are masked before they are stored, and memory uploads are refused before the body is read unless the
+  caller may write. (#1155)
+- Mental-model ids are unique per bank instead of across the whole installation. (#1155)
+
 ### Fixed
 
 - Chat harvests now keep glossary terms in the thread’s spelling when decisions and answers are written in the
   asker’s language, instead of dropping the terms as ungrounded. (#1163)
+
+### Operations
+
+- `MEMORY_RERANKER_SCORE` (`logit` default, or `normalized` for endpoints that already return 0–1 scores) is new and
+  optional. The mental-model key migration is a primary-key swap on a small table; a code rollback past it needs the
+  previous key restored by hand. A bank created through the memory API under a reserved runtime id before this release
+  is ignored by the runtime until it is deleted. (#1155)
+- The management-API migration adds alias/archive tables and nullable operation results only; it is expand-only and safe
+  for a code rollback. Transfer downloads use the existing memory worker and database, with no new service or env var. (#1161)
+- The mental-model migration is expand-only and safe for a code rollback. Automatic refresh spacing defaults to no floor;
+  set `MEMORY_MENTAL_MODEL_MIN_REFRESH_INTERVAL_SECONDS` or a model's `min_refresh_interval_seconds` to limit it. (#1160)
+- Optional memory reranking is configured with `MEMORY_RERANKER_PROVIDER=openai-compatible`, `MEMORY_RERANKER_BASE_URL`,
+  `MEMORY_RERANKER_MODEL` and optionally `MEMORY_RERANKER_API_KEY`; timeout and candidate caps default to 5000 ms and 50.
+  The base URL includes `/v1`, and the API appends `/rerank`. No reranker is required by default. (#1158)
 
 ## [0.54.1] — 2026-11-14
 

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { AiAgent } from '@prisma/client';
-import type { AgentCapability, AgentSurface, AiPurpose } from '@knowledge/contracts';
+import { resolveAgentMemoryPolicy, type AgentCapability, type AgentMemoryPolicy, type AgentSurface, type AiPurpose } from '@knowledge/contracts';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AiConfigService, type ResolvedAiConfig } from '../ai/ai-config.service.js';
@@ -17,6 +17,7 @@ export interface ResolvedAgent {
   instructions: string;
   tools: string[];
   skillIds: string[];
+  memoryPolicy: AgentMemoryPolicy;
   purpose: AiPurpose;
   surfaces: AgentSurface[];
   requires: AgentCapability[];
@@ -133,6 +134,7 @@ export class AgentRegistryService {
       instructions: row?.instructions ?? base?.instructions ?? '',
       tools: readStrings(row?.tools) ?? base?.tools ?? [],
       skillIds: readStrings(row?.skillIds) ?? base?.skillIds ?? [],
+      memoryPolicy: resolveAgentMemoryPolicy(row?.memoryPolicy),
       purpose,
       surfaces: base?.surfaces ?? ['interactive'],
       requires,

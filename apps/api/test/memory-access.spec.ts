@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
-import { isMemoryPath, memoryErrorBody } from '../src/common/memory-error-body.js';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
+import {
+  isMemoryPath,
+  memoryErrorBody,
+} from '../src/common/memory-error-body.js';
 import { AccessService } from '../src/auth/access.service.js';
 import { DEV_PRINCIPAL, type Principal } from '../src/auth/principal.js';
 import { MemoryAccessService } from '../src/memory/memory-access.service.js';
@@ -10,7 +17,9 @@ const WS = '11111111-1111-4111-8111-111111111111';
 const OTHER = '22222222-2222-4222-8222-222222222222';
 const PROJECT = '33333333-3333-4333-8333-333333333333';
 
-const keyed = (apiKey: Partial<NonNullable<Principal['apiKey']>>): Principal => ({
+const keyed = (
+  apiKey: Partial<NonNullable<Principal['apiKey']>>,
+): Principal => ({
   ...DEV_PRINCIPAL,
   mode: 'api-key',
   isAdmin: false,
@@ -31,15 +40,37 @@ const scope = (over: Partial<AccessScope> = {}): AccessScope => ({
   ...over,
 });
 
-function service(opts: { off?: 'server' | 'workspace'; bank?: { projectId: string | null } | null; restricted?: boolean; scope?: AccessScope } = {}) {
+function service(
+  opts: {
+    off?: 'server' | 'workspace';
+    bank?: { projectId: string | null; ownerId?: string | null } | null;
+    restricted?: boolean;
+    scope?: AccessScope;
+  } = {},
+) {
   const prisma = {
     workspace: { findUnique: vi.fn(async () => ({ id: WS, deletedAt: null })) },
-    workspaceMember: { findUnique: vi.fn(async () => ({ role: 'editor', trustedOperator: false })) },
-    memoryBank: { findUnique: vi.fn(async () => (opts.bank ? { id: 'b1', bankId: 'agent', ...opts.bank } : null)) },
-    project: { findMany: vi.fn(async () => (opts.restricted ? [{ id: PROJECT }] : [])) },
+    workspaceMember: {
+      findUnique: vi.fn(async () => ({
+        role: 'editor',
+        trustedOperator: false,
+      })),
+    },
+    memoryBank: {
+      findUnique: vi.fn(async () =>
+        opts.bank ? { id: 'b1', bankId: 'agent', ...opts.bank } : null,
+      ),
+    },
+    memoryBankAlias: { findUnique: vi.fn(async () => null) },
+    project: {
+      findMany: vi.fn(async () => (opts.restricted ? [{ id: PROJECT }] : [])),
+    },
   };
   // The real key rule and role ladder, over a fake roster: the resolver must ask them, not restate them.
-  const access = new AccessService(prisma as never, { enforce: vi.fn() } as never);
+  const access = new AccessService(
+    prisma as never,
+    { enforce: vi.fn() } as never,
+  );
   const features = {
     unavailable: () => (opts.off === 'server' ? ['memory'] : []),
     require: vi.fn(async () => {
@@ -47,61 +78,196 @@ function service(opts: { off?: 'server' | 'workspace'; bank?: { projectId: strin
     }),
   };
   const permissions = { scopeFor: vi.fn(async () => opts.scope ?? scope()) };
-  return { prisma, features, svc: new MemoryAccessService(prisma as never, access, features as never, permissions as never) };
+  return {
+    prisma,
+    features,
+    svc: new MemoryAccessService(
+      prisma as never,
+      access,
+      features as never,
+      permissions as never,
+    ),
+  };
 }
 
 describe('memory request resolver (#986)', () => {
   it('means the key’s pinned workspace by `default`, and refuses a key or session with none', async () => {
-    expect((await service().svc.caller(keyed({}), undefined, 'viewer')).workspaceId).toBe(WS);
-    await expect(service().svc.caller(keyed({ workspaceId: null }), undefined, 'viewer')).rejects.toBeInstanceOf(BadRequestException);
-    await expect(service().svc.caller({ ...keyed({}), apiKey: undefined, mode: 'session' }, WS, 'viewer')).rejects.toBeInstanceOf(BadRequestException);
+    expect(
+      (await service().svc.caller(keyed({}), undefined, 'viewer')).workspaceId,
+    ).toBe(WS);
+    await expect(
+      service().svc.caller(keyed({ workspaceId: null }), undefined, 'viewer'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service().svc.caller(
+        { ...keyed({}), apiKey: undefined, mode: 'session' },
+        WS,
+        'viewer',
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('never reads a workspace header from a key, and needs one under AUTH_MODE=none', async () => {
-    expect((await service().svc.caller(keyed({}), OTHER, 'viewer')).workspaceId).toBe(WS);
-    expect((await service().svc.caller(DEV_PRINCIPAL, OTHER, 'editor')).workspaceId).toBe(OTHER);
-    await expect(service().svc.caller(DEV_PRINCIPAL, undefined, 'viewer')).rejects.toBeInstanceOf(BadRequestException);
-    await expect(service().svc.caller(DEV_PRINCIPAL, 'not-a-uuid', 'viewer')).rejects.toBeInstanceOf(BadRequestException);
+    expect(
+      (await service().svc.caller(keyed({}), OTHER, 'viewer')).workspaceId,
+    ).toBe(WS);
+    expect(
+      (await service().svc.caller(DEV_PRINCIPAL, OTHER, 'editor')).workspaceId,
+    ).toBe(OTHER);
+    await expect(
+      service().svc.caller(DEV_PRINCIPAL, undefined, 'viewer'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service().svc.caller(DEV_PRINCIPAL, 'not-a-uuid', 'viewer'),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('lets a write key retain, a capture key only where the route says so, a read key never', async () => {
-    await expect(service().svc.caller(keyed({}), undefined, 'editor')).resolves.toBeTruthy();
-    await expect(service().svc.caller(keyed({ scope: 'capture' }), undefined, 'editor', { capture: true })).resolves.toBeTruthy();
-    await expect(service().svc.caller(keyed({ scope: 'capture' }), undefined, 'editor')).rejects.toBeInstanceOf(ForbiddenException);
-    await expect(service().svc.caller(keyed({ scope: 'read' }), undefined, 'editor', { capture: true })).rejects.toBeInstanceOf(ForbiddenException);
-    await expect(service().svc.caller(keyed({ scope: 'read' }), undefined, 'viewer')).resolves.toBeTruthy();
+    await expect(
+      service().svc.caller(keyed({}), undefined, 'editor'),
+    ).resolves.toBeTruthy();
+    await expect(
+      service().svc.caller(keyed({ scope: 'capture' }), undefined, 'editor', {
+        capture: true,
+      }),
+    ).resolves.toBeTruthy();
+    await expect(
+      service().svc.caller(keyed({ scope: 'capture' }), undefined, 'editor'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(
+      service().svc.caller(keyed({ scope: 'read' }), undefined, 'editor', {
+        capture: true,
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(
+      service().svc.caller(keyed({ scope: 'read' }), undefined, 'viewer'),
+    ).resolves.toBeTruthy();
   });
 
   it('answers 404 with the server ceiling off before reading anything, and with the section off', async () => {
     const off = service({ off: 'server' });
-    await expect(off.svc.caller(keyed({ workspaceId: null }), undefined, 'viewer')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(
+      off.svc.caller(keyed({ workspaceId: null }), undefined, 'viewer'),
+    ).rejects.toBeInstanceOf(NotFoundException);
     expect(off.prisma.workspace.findUnique).not.toHaveBeenCalled();
-    await expect(service({ off: 'workspace' }).svc.caller(keyed({}), undefined, 'viewer')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(
+      service({ off: 'workspace' }).svc.caller(keyed({}), undefined, 'viewer'),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('hides a bank bound to a restricted project from a scope the project denies', async () => {
-    const caller = (s: AccessScope) => ({ principal: keyed({}), workspaceId: WS, scope: s });
+    const caller = (s: AccessScope) => ({
+      principal: keyed({}),
+      workspaceId: WS,
+      scope: s,
+    });
     const bound = { bank: { projectId: PROJECT }, restricted: true };
-    await expect(service(bound).svc.bank(caller(scope({ denied: new Set([PROJECT]) })), 'agent')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(
+      service(bound).svc.bank(
+        caller(scope({ denied: new Set([PROJECT]) })),
+        'agent',
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
     // Hidden is not absent: `find` must not report it as free to create.
-    await expect(service(bound).svc.find(caller(scope({ denied: new Set([PROJECT]) })), 'agent')).rejects.toBeInstanceOf(NotFoundException);
-    await expect(service(bound).svc.bank(caller(scope()), 'agent')).resolves.toMatchObject({ bankId: 'agent' });
-    await expect(service({ bank: null }).svc.find(caller(scope()), 'agent')).resolves.toBeNull();
-    await expect(service().svc.find(caller(scope()), 'bad\nid')).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service(bound).svc.find(
+        caller(scope({ denied: new Set([PROJECT]) })),
+        'agent',
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    await expect(
+      service(bound).svc.bank(caller(scope()), 'agent'),
+    ).resolves.toMatchObject({ bankId: 'agent' });
+    await expect(
+      service({ bank: null }).svc.find(caller(scope()), 'agent'),
+    ).resolves.toBeNull();
+    await expect(
+      service().svc.find(caller(scope()), 'bad\nid'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('keeps a personal bank owner-only even for an admin scope', async () => {
+    const caller = (s: AccessScope) => ({
+      principal: keyed({}),
+      workspaceId: WS,
+      scope: s,
+    });
+    const personal = { bank: { projectId: null, ownerId: 'somebody-else' } };
+    await expect(
+      service(personal).svc.bank(caller(scope({ bypass: true })), 'agent'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    await expect(
+      service(personal).svc.bank(
+        caller(scope({ userId: 'somebody-else' })),
+        'agent',
+      ),
+    ).resolves.toMatchObject({ bankId: 'agent' });
   });
 });
 
 describe('memory error body (#986)', () => {
   it('recognises the Hindsight paths and nothing of ours', () => {
-    for (const url of ['/v1/default/banks', '/v1/default/banks/x/memories/recall?a=1', '/mcp/agent/', '/mcp', '/mcp?x=1', '/version', '/health?x=1']) expect(isMemoryPath(url)).toBe(true);
-    for (const url of ['/v1/documents', '/v1/mcp', '/v1/mcp/skill', '/v1/defaults', '/versions', '/mcps', '/']) expect(isMemoryPath(url)).toBe(false);
+    for (const url of [
+      '/v1/default/banks',
+      '/v1/default/banks/x/memories/recall?a=1',
+      '/mcp/agent/',
+      '/mcp',
+      '/mcp?x=1',
+      '/version',
+      '/health?x=1',
+      '/v1/bank-template-schema',
+    ])
+      expect(isMemoryPath(url)).toBe(true);
+    for (const url of [
+      '/v1/documents',
+      '/v1/mcp',
+      '/v1/mcp/skill',
+      '/v1/defaults',
+      '/versions',
+      '/mcps',
+      '/',
+    ])
+      expect(isMemoryPath(url)).toBe(false);
   });
 
   it('carries a message as `detail`, and a failed validation as FastAPI’s 422 list', () => {
-    expect(memoryErrorBody(404, 'gone')).toEqual({ status: 404, body: { detail: 'gone' } });
+    expect(memoryErrorBody(404, 'gone')).toEqual({
+      status: 404,
+      body: { detail: 'gone' },
+    });
     expect(memoryErrorBody(400, 'Validation failed', ['a must be x'])).toEqual({
       status: 422,
-      body: { detail: [{ loc: ['body'], msg: 'a must be x', type: 'value_error' }] },
+      body: {
+        detail: [{ loc: ['body'], msg: 'a must be x', type: 'value_error' }],
+      },
     });
+  });
+});
+
+describe('withinProjectAudience (doc 80: copying a turn into a project bank)', () => {
+  const DOC = '55555555-5555-4555-8555-555555555555';
+  const audience = (nodes: { projects: string[]; docs: string[] }) =>
+    new MemoryAccessService(
+      {
+        project: { findMany: vi.fn(async () => nodes.projects.map((id) => ({ id }))) },
+        document: { findMany: vi.fn(async () => nodes.docs.map((id) => ({ id }))) },
+      } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+  it('passes only when every restricted node besides the project is already denied', async () => {
+    // Nothing restricted: anyone's turn fits any project.
+    expect(await audience({ projects: [], docs: [] }).withinProjectAudience(scope({ bypass: true }), PROJECT)).toBe(true);
+    // The project itself restricted: its own members are its audience.
+    expect(await audience({ projects: [PROJECT], docs: [] }).withinProjectAudience(scope(), PROJECT)).toBe(true);
+    // A restricted page the asker can open: their turn may carry it, so it stays out.
+    expect(await audience({ projects: [PROJECT], docs: [DOC] }).withinProjectAudience(scope(), PROJECT)).toBe(false);
+    expect(await audience({ projects: [OTHER], docs: [] }).withinProjectAudience(scope(), PROJECT)).toBe(false);
+    // …unless it is denied to them.
+    expect(await audience({ projects: [OTHER], docs: [DOC] }).withinProjectAudience(scope({ denied: new Set([OTHER, DOC]) }), PROJECT)).toBe(true);
+    // An admin sees everything restricted, so never passes while anything else is.
+    expect(await audience({ projects: [], docs: [DOC] }).withinProjectAudience(scope({ bypass: true, denied: new Set([DOC]) }), PROJECT)).toBe(false);
   });
 });

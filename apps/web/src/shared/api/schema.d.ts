@@ -9868,6 +9868,17 @@ export interface components {
             /** @description Skip classification and report this agent instead. */
             agentKey?: string;
         };
+        AgentMemoryPolicyDto: {
+            /**
+             * @description Default retention mode; personal and project override it.
+             * @enum {string}
+             */
+            mode?: "all" | "durable" | "off";
+            /** @enum {string} */
+            personal?: "all" | "durable" | "off";
+            /** @enum {string} */
+            project?: "all" | "durable" | "off";
+        };
         CreateAiAgentDto: {
             /** Format: uuid */
             workspaceId: string;
@@ -9883,6 +9894,7 @@ export interface components {
             instructions: string;
             tools?: string[];
             skillIds?: string[];
+            memoryPolicy?: components["schemas"]["AgentMemoryPolicyDto"];
             /** Format: uuid */
             modelId?: string | null;
         };
@@ -9898,6 +9910,8 @@ export interface components {
             tools?: string[] | null;
             /** @description Skills always attached to this agent. */
             skillIds?: string[] | null;
+            /** @description Retention policy. Null restores all. */
+            memoryPolicy?: components["schemas"]["AgentMemoryPolicyDto"] | null;
             /**
              * Format: uuid
              * @description The model it runs on. Null follows the workspace route.
@@ -11756,6 +11770,13 @@ export interface components {
             createdAt: string;
             updatedAt: string;
         };
+        /** @enum {string} */
+        AgentMemoryMode: "all" | "durable" | "off";
+        AgentMemoryPolicy: {
+            mode: components["schemas"]["AgentMemoryMode"];
+            personal: components["schemas"]["AgentMemoryMode"];
+            project: components["schemas"]["AgentMemoryMode"];
+        };
         AgentOutcomeGroup: {
             source: components["schemas"]["AgentOutcomeSource"];
             agentKey: string | null;
@@ -11939,6 +11960,7 @@ export interface components {
             instructions: string;
             tools: string[];
             skillIds: string[];
+            memoryPolicy: components["schemas"]["AgentMemoryPolicy"];
             modelId: string | null;
             model: string;
             providerName: string | null;
@@ -12183,7 +12205,7 @@ export interface components {
             createdAt: string;
         };
         /** @enum {string} */
-        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "memory-extract" | "memory-recall" | "memory-reflect" | "memory-consolidate" | "memory-consolidate-screen" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "memo-triage" | "source-recipe" | "source-judge" | "blueprint-derive" | "blueprint-generate" | "blueprint-interview" | "purpose-interview";
+        AiUsageOperation: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "import" | "workflow" | "route" | "agent" | "connector" | "codebase" | "wiki" | "changelog" | "chat-capture" | "component-draft" | "lint" | "audit" | "contradiction" | "community" | "harvest" | "citation_check" | "coach" | "memory-extract" | "memory-recall" | "memory-reflect" | "memory-mental-model" | "memory-consolidate" | "memory-consolidate-screen" | "extraction" | "public_ask" | "test-suite" | "test-fixture-ranking" | "transcription" | "memo" | "memo-triage" | "source-recipe" | "source-judge" | "blueprint-derive" | "blueprint-generate" | "blueprint-interview" | "purpose-interview";
         AiUsageResponse: {
             from: string;
             to: string;

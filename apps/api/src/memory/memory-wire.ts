@@ -1,3 +1,6 @@
+import type { AssistantToolCall } from '@knowledge/contracts';
+import type { MentalModelTrigger } from './memory-mental-models.js';
+
 /**
  * Response bodies in Hindsight's wire shape (OpenAPI v1.2.1), written by hand
  * for the routes this server answers (#986). Not in `@knowledge/contracts`:
@@ -10,7 +13,11 @@ export interface Disposition {
   empathy: number;
 }
 
-export const DEFAULT_DISPOSITION: Disposition = { skepticism: 3, literalism: 3, empathy: 3 };
+export const DEFAULT_DISPOSITION: Disposition = {
+  skepticism: 3,
+  literalism: 3,
+  empathy: 3,
+};
 
 export interface BankProfileResponse {
   bank_id: string;
@@ -28,6 +35,8 @@ export interface BankListItem {
   created_at: string | null;
   updated_at: string | null;
   fact_count: number;
+  display_alias?: string | null;
+  matched_aliases?: string[];
 }
 
 export interface BankListResponse {
@@ -41,6 +50,25 @@ export interface DeleteResponse {
   success: boolean;
   message: string | null;
   deleted_count: number | null;
+}
+
+export interface DirectiveResponse {
+  id: string;
+  bank_id: string;
+  name: string;
+  content: string;
+  priority: number;
+  is_active: boolean;
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DirectiveListResponse {
+  items: DirectiveResponse[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 /** The Hindsight API version these shapes follow. */
@@ -124,6 +152,7 @@ export interface BankStatsResponse {
   pending_consolidation: number;
   failed_consolidation: number;
   total_observations: number;
+  paused_mental_models: number;
 }
 
 export interface RecallResult {
@@ -141,12 +170,19 @@ export interface RecallResult {
   tags: string[];
   source_fact_ids: string[];
   /** What was computed for this result; a leg that did not surface it is left out. Absent on a source fact. */
-  scores?: { final: number; semantic?: number; keyword?: number };
+  scores?: { final: number; reranker?: number; semantic?: number; keyword?: number };
 }
 
 export interface RecallResponse {
   results: RecallResult[];
-  entities?: Record<string, { entity_id: string; canonical_name: string; observations: Array<{ text: string; mentioned_at?: string | null }> }>;
+  entities?: Record<
+    string,
+    {
+      entity_id: string;
+      canonical_name: string;
+      observations: Array<{ text: string; mentioned_at?: string | null }>;
+    }
+  >;
   chunks?: Record<string, never>;
   /** `include.source_facts`: the facts the returned observations stand on, by id, within their token budget. */
   source_facts?: Record<string, RecallResult>;
@@ -168,7 +204,8 @@ export interface BankConfigResponse {
   overrides: Record<string, unknown>;
 }
 
-export type OperationWireStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'not_found';
+export type OperationWireStatus =
+  'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'not_found';
 
 export interface OperationResponse {
   id: string;
@@ -182,6 +219,7 @@ export interface OperationResponse {
   status: OperationWireStatus;
   error_message: string | null;
   retry_count: number;
+  next_retry_at?: string | null;
 }
 
 export interface OperationsListResponse {
@@ -203,6 +241,7 @@ export interface OperationStatusResponse {
   completed_at?: string | null;
   error_message?: string | null;
   retry_count?: number;
+  result_metadata?: Record<string, unknown> | null;
 }
 
 export interface CancelOperationResponse {
@@ -211,11 +250,68 @@ export interface CancelOperationResponse {
   operation_id: string;
 }
 
+export interface CreateMentalModelResponse {
+  mental_model_id: string;
+  operation_id: string;
+}
+
+export interface MentalModelResponse {
+  id: string;
+  bank_id: string;
+  name: string;
+  source_query?: string | null;
+  content?: string | null;
+  tags: string[];
+  max_tokens?: number | null;
+  trigger?: Required<MentalModelTrigger> | null;
+  last_refreshed_at: string | null;
+  last_memory_seen_at: string | null;
+  last_refresh_failed_at: string | null;
+  last_full_refreshed_at: string | null;
+  created_at: string;
+  is_page: false;
+  is_knowledge_page: false;
+  reflect_response?: Record<string, unknown> | null;
+  is_stale: boolean;
+}
+
+export interface MentalModelListResponse {
+  items: MentalModelResponse[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface MentalModelHistoryResponse {
+  previous_content: string | null;
+  changed_at: string;
+  kind?: string;
+  outcome?: string;
+  failure_reason?: string;
+  error_message?: string;
+}
+
+export interface ReflectMentalModel {
+  id: string;
+  text: string;
+  context?: string | null;
+}
+
 export interface ReflectResponse {
   /** The answer, as markdown. */
   text: string;
-  based_on?: { memories: Array<Omit<RecallResult, 'entities' | 'source_fact_ids' | 'scores'>>; mental_models: never[]; directives: never[] };
+  based_on?: {
+    memories: Array<
+      Omit<RecallResult, 'entities' | 'source_fact_ids' | 'scores'>
+    >;
+    mental_models: ReflectMentalModel[];
+    directives: Array<Pick<DirectiveResponse, 'id' | 'name' | 'content'>>;
+  };
   structured_output?: Record<string, unknown> | null;
   structured_output_error?: string | null;
   usage?: TokenUsage;
+  /** Additional recall calls the reflector made after the mandatory initial retrieval. */
+  trace?: AssistantToolCall[];
+  /** Internal refresh channel: parsed operations against deltaDocument. */
+  delta_operations?: unknown[];
 }

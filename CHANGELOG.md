@@ -45,6 +45,8 @@ in the pull request that introduces them — see
   can be matched to its page. (#1043)
 - A page mention with a long title in an assistant answer wraps on a phone instead of pushing the conversation
   sideways. (#1044)
+- Settings on a phone: the section strip scrolls the current section into view instead of always starting at
+  Profile. (#1045)
 
 ## [0.56.0] — 2026-11-16
 

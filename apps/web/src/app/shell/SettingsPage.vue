@@ -2,7 +2,7 @@
 // Settings shell: nested pages (projects / access / activity / …) rendered in
 // the content column, with their own nav rail flush against the left edge.
 import { useI18n } from 'vue-i18n'
-import { computed, type Component } from 'vue'
+import { computed, nextTick, onMounted, ref, watch, type Component } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import {
   Activity,
@@ -94,6 +94,21 @@ const links = computed<SettingsLink[]>(() => [
 function isActive(to: string): boolean {
   return route.path === to || route.path.startsWith(`${to}/`)
 }
+
+// In the phone strip the current section can sit well off-screen (#1045): centre
+// it on load and on each navigation. A no-op at `lg`, where the list does not
+// scroll sideways. `.router-link-active` rather than `aria-current`, which
+// RouterLink sets only on an exact match, so a nested page would find nothing.
+const strip = ref<HTMLElement | null>(null)
+async function revealCurrent() {
+  await nextTick()
+  const el = strip.value
+  const link = el?.querySelector<HTMLElement>('.router-link-active')
+  if (!el || !link || el.scrollWidth <= el.clientWidth) return
+  el.scrollLeft = link.offsetLeft - (el.clientWidth - link.offsetWidth) / 2
+}
+onMounted(revealCurrent)
+watch(() => route.path, revealCurrent)
 </script>
 
 <template>
@@ -110,7 +125,7 @@ function isActive(to: string): boolean {
   <PageLayout variant="list" data-kn-pane="2">
     <template #sub-rail>
       <PageSubRail :label="t('nav.settings')" permanent>
-        <ul class="flex gap-1 overflow-x-auto px-2 py-2 max-lg:kn-scroll-strip lg:block lg:space-y-px lg:overflow-visible lg:p-0">
+        <ul ref="strip" class="flex gap-1 overflow-x-auto px-2 py-2 max-lg:relative max-lg:kn-scroll-strip lg:block lg:space-y-px lg:overflow-visible lg:p-0">
           <li v-for="l in links" :key="l.to">
             <RouterLink
               :to="l.to"

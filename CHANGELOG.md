@@ -13,6 +13,12 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Fixed
+
+- Tall dialogs and confirmation alerts now stay within a phone's dynamic viewport and scroll internally, keeping their titles, close controls and actions reachable. (#1181)
+
 ## [0.55.0] — 2026-11-16
 
 ### Added

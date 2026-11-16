@@ -50,7 +50,7 @@ services:
       mc version enable local/knowledge"
 
   redis:
-    image: redis:7-alpine@sha256:7f7d30b7fdd09467bac58198a1f166dd69789d348d4fe859cccb20e0cf287fbe
+    image: redis:8-alpine@sha256:7958cfbb9d152f87dadfbc89f1b0b15938f0b81ff8982feb327476f4911935c3
     ports: ["127.0.0.1:6379:6379"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -65,7 +65,7 @@ services:
     # `latest` is a nightly snapshot, so a query feature cannot float with it.
     # A volume written by 26.9.1-SNAPSHOT or 26.11.1-SNAPSHOT opens on it.
     # Keep docker-compose.prod.yml in step.
-    image: arcadedata/arcadedb:26.10.2@sha256:7a498ebbbb9a5f02f7d43487c13b6632f83eb7fff345968baf220ac9266fd791
+    image: arcadedata/arcadedb:26.11.1@sha256:22a049898f34f01c256b56a1ba95fb01d32e5e14755d3c4367415c8e55ae5035
     ports: ["127.0.0.1:2480:2480", "127.0.0.1:2424:2424"]
     environment:
       JAVA_OPTS: >-
@@ -134,7 +134,7 @@ services:
   # message lands in the inbox at http://localhost:8025 instead. Loopback only:
   # it relays nothing, but its UI shows every reset link it has ever caught.
   mailpit:
-    image: axllent/mailpit:v1.31@sha256:23fe39e81bde596a918000b3135c0f85dc8bb4c9ea6be274b051143f3e300387
+    image: axllent/mailpit:v1.33@sha256:aef2aacc11f075ec0fb6874275ee4a421e688e11a96ebb296134d1735c7761ce
     profiles: ["mailpit"]
     ports: ["127.0.0.1:1025:1025", "127.0.0.1:8025:8025"]
 
@@ -159,7 +159,7 @@ services:
   # keycloak/realm-knowledge.json seeds test users ada/ada (verified) and
   # eve/eve (unverified address). Admin console: admin/admin. Loopback only.
   keycloak:
-    image: quay.io/keycloak/keycloak:26.4@sha256:9409c59bdfb65dbffa20b11e6f18b8abb9281d480c7ca402f51ed3d5977e6007
+    image: quay.io/keycloak/keycloak:26.8@sha256:c68e286cacd87b942ac1939a0a1481461109d6acd3a57dc496969a319a76bbf0
     profiles: ["keycloak"]
     command: ["start-dev", "--import-realm", "--http-port=8180"]
     ports: ["127.0.0.1:8180:8180"]

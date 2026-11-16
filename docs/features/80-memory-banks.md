@@ -82,6 +82,13 @@ the bank is read or written, never in a prompt:
   repeat what an earlier one was told; the migration marks every thread that existed before it,
   since whether those turns carried a draft or an attachment was never stored. A re-sent question is
   a new turn with its own message id, so it is retained as one, not as a retry.
+- **Only a relevant memory counts as recalled** (#1187). Runtime recall drops vector hits below
+  `MEMORY_RUNTIME_MIN_SEMANTIC` (cosine, default 0.4) in both banks, so an unrelated personal memory
+  neither grounds the turn nor marks it personal. Without the floor the vector leg returns the
+  bank's nearest rows for any question, and every turn of anyone with a personal bank stayed out of
+  project memory. A keyword match is kept whatever its cosine. 0.4 was measured on bge-m3: related
+  questions scored 0.42–0.55 against production banks, unrelated ones at most 0.34; another
+  embedding model may need its own value, and 0 restores the old behaviour.
 - **Workflows use neither** (a deliberate non-goal): a step's items and drafts become pages and
   merge requests, and rerunning a step on the same page should give the same result rather than one
   that drifts with whatever the bank learned since. Neither do the one-shot review / suggest / ask

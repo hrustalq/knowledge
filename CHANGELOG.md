@@ -22,6 +22,15 @@ in the pull request that introduces them — see
 - The new workflow wizard opens again instead of failing during page rendering. (#1182)
 - In Ask mode, a message that asks a question and also asks for a change now gets the answer as well as the Agent-mode
   button; the reply used to describe only the button. (#1186)
+- Assistant turns now write to project memory for people who already have personal agent memory. Any personal memory
+  used to count as recalled, so every turn of theirs stayed personal-only; now only a memory relevant to the question
+  does. Agents are also no longer handed unrelated memories as context. (#1187)
+
+### Operations
+
+- New optional env `MEMORY_RUNTIME_MIN_SEMANTIC` (default `0.4`, measured on bge-m3): the cosine a memory needs before
+  an assistant turn or agent run is handed it. Deployments on another embedding model may need their own value; `0`
+  restores the previous behaviour. No migration. (#1187)
 
 ## [0.55.0] — 2026-11-16
 

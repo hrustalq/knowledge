@@ -6937,7 +6937,26 @@
         "workspace_renamed": "Workspace renamed",
         "workspace_editing_policy_updated": "Editing policy changed",
         "memory_bank_created": "Memory bank created",
-        "memory_bank_deleted": "Memory bank deleted"
+        "memory_bank_deleted": "Memory bank deleted",
+        "memory_bank_updated": "Memory bank settings changed",
+        "memory_retained": "Memories retained",
+        "memory_files_uploaded": "Files uploaded to memory",
+        "memory_file_changed": "Memory file changed",
+        "memory_graph_changed": "Memory graph changed",
+        "memory_memories_deleted": "Memories deleted",
+        "memory_document_updated": "Memory document updated",
+        "memory_document_deleted": "Memory document deleted",
+        "memory_observations_cleared": "Memory observations cleared",
+        "memory_consolidation_requested": "Memory consolidation requested",
+        "memory_alias_changed": "Memory bank alias changed",
+        "memory_template_imported": "Memory bank template imported",
+        "memory_exported": "Memory exported",
+        "memory_imported": "Memory imported",
+        "memory_cloned": "Memory bank cloned",
+        "memory_mental_model_changed": "Mental model changed",
+        "memory_directive_changed": "Memory directive changed",
+        "memory_operation_cancelled": "Memory operation cancelled or removed",
+        "memory_promoted": "Memory proposed as a page"
       }
     },
     "tabs": {

@@ -6937,7 +6937,26 @@
         "workspace_renamed": "Рабочее пространство переименовано",
         "workspace_editing_policy_updated": "Правила редактирования изменены",
         "memory_bank_created": "Банк памяти создан",
-        "memory_bank_deleted": "Банк памяти удалён"
+        "memory_bank_deleted": "Банк памяти удалён",
+        "memory_bank_updated": "Настройки банка памяти изменены",
+        "memory_retained": "Воспоминания сохранены",
+        "memory_files_uploaded": "Файлы загружены в память",
+        "memory_file_changed": "Файл памяти изменён",
+        "memory_graph_changed": "Граф памяти изменён",
+        "memory_memories_deleted": "Воспоминания удалены",
+        "memory_document_updated": "Документ памяти обновлён",
+        "memory_document_deleted": "Документ памяти удалён",
+        "memory_observations_cleared": "Наблюдения памяти очищены",
+        "memory_consolidation_requested": "Запрошена консолидация памяти",
+        "memory_alias_changed": "Псевдоним банка памяти изменён",
+        "memory_template_imported": "Шаблон банка памяти импортирован",
+        "memory_exported": "Память экспортирована",
+        "memory_imported": "Память импортирована",
+        "memory_cloned": "Банк памяти клонирован",
+        "memory_mental_model_changed": "Ментальная модель изменена",
+        "memory_directive_changed": "Директива памяти изменена",
+        "memory_operation_cancelled": "Операция памяти отменена или удалена",
+        "memory_promoted": "Воспоминание предложено как страница"
       }
     },
     "tabs": {

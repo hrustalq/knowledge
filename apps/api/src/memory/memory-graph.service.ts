@@ -23,6 +23,7 @@ import {
   type GraphRelation,
   type ReadGraph,
 } from './memory-graph.js';
+import { MemoryBanksService } from './memory-banks.service.js';
 import { MemoryIntakeService } from './memory-intake.service.js';
 import { MemoryRateService } from './memory-rate.service.js';
 import { MemoryUnitsService } from './memory-units.service.js';
@@ -68,6 +69,7 @@ export class MemoryGraphService {
     private readonly intake: MemoryIntakeService,
     private readonly units: MemoryUnitsService,
     private readonly rate: MemoryRateService,
+    private readonly banks: MemoryBanksService,
     config: ConfigService<Env, true>,
   ) {
     this.maxEntities = config.get('MEMORY_GRAPH_READ_MAX_ENTITIES', { infer: true });
@@ -159,6 +161,7 @@ export class MemoryGraphService {
       throw e;
     }
     const kept = new Set(created.map((p) => p.source));
+    this.wrote(caller, bank, 'create_entities');
     return { created: created.map((p) => p.entity), skipped: entities.filter((e) => !kept.has(e)).map((e) => e.name) };
   }
 
@@ -183,6 +186,7 @@ export class MemoryGraphService {
       data: fresh.map((r) => ({ ...ids(r), workspaceId: caller.workspaceId, bankId: bank.id, createdBy: caller.principal.userId })),
       skipDuplicates: true,
     });
+    this.wrote(caller, bank, 'create_relations');
     return fresh.map((r) => ({ from: r.from, to: r.to, relationType: r.relationType }));
   }
 
@@ -223,6 +227,7 @@ export class MemoryGraphService {
       for (const a of added) if (a.entity.id === entityId) for (const content of a.fresh) items.push(observationItem(mask, entity, content, observationDocumentId(entityId, ++seq)));
     }
     await this.intake.store(caller, admitted, items, { verbatim: true });
+    this.wrote(caller, admitted, 'add_observations');
     return added.map((a, i) => ({ entityName: groups[i]!.entityName, addedObservations: a.fresh }));
   }
 
@@ -232,6 +237,7 @@ export class MemoryGraphService {
     const rows = [...(await this.entitiesNamed(bank, names)).values()];
     const present = new Set(rows.map((r) => r.name));
     if (bank && rows.length) await this.removeEntities(bank, rows.map((r) => r.id));
+    this.wrote(caller, bank, 'delete_entities');
     return deleteEntitiesMessage(names.length, names.filter((n) => present.has(n)).length, names.filter((n) => !present.has(n)));
   }
 
@@ -246,6 +252,7 @@ export class MemoryGraphService {
       return entity && d.observations.length ? [{ documentId: { startsWith: observationPrefix(entity.id) }, text: { in: d.observations } }] : [];
     });
     const deleted = bank && match.length ? (await this.units.deleteWhere(bank, { ...FACTS, OR: match })).matched : 0;
+    this.wrote(caller, bank, 'delete_observations');
     return deleteObservationsMessage(requested, deleted, missing);
   }
 
@@ -260,6 +267,7 @@ export class MemoryGraphService {
                AND (f.name, t.name, r.relation_type) IN (
                  SELECT * FROM unnest(${relations.map((r) => r.from)}::text[], ${relations.map((r) => r.to)}::text[], ${relations.map((r) => r.relationType)}::text[]))`
         : 0;
+    this.wrote(caller, bank, 'delete_relations');
     return deleteRelationsMessage(relations.length, deleted);
   }
 
@@ -287,6 +295,11 @@ export class MemoryGraphService {
   }
 
   /** A delete's bank: never created, since there is nothing in a missing one to delete. */
+  /** One of the six graph writes succeeded (#1168): the tool's name, never an entity or an observation. */
+  private wrote(caller: MemoryCaller, bank: MemoryBank | null, tool: string): void {
+    if (bank) this.banks.recordWrite(caller.workspaceId, caller.principal.userId, bank.bankId, { action: 'memory.graph_changed', params: { tool } });
+  }
+
   private async writable(caller: MemoryCaller, bankId: string): Promise<MemoryBank | null> {
     const bank = await this.access.find(caller, bankId);
     await this.rate.check('retain', caller.principal);

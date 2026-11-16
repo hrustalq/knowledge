@@ -20,6 +20,7 @@ import { CurrentPrincipal, ReadKeyOk } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { CachePolicy } from '../common/http-cache.js';
 import { MemoryAccessService } from './memory-access.service.js';
+import { MemoryAudit, MemoryAuditInterceptor } from './memory-audit.js';
 import { MemoryDirectivesService } from './memory-directives.service.js';
 import {
   MemoryFilesService,
@@ -89,6 +90,7 @@ import type {
 @ApiExcludeController()
 @CachePolicy('no-store')
 @ReadKeyOk()
+@UseInterceptors(MemoryAuditInterceptor)
 @Controller('v1/default/banks/:bankId')
 export class MemoryUnitsController {
   constructor(
@@ -190,6 +192,7 @@ export class MemoryUnitsController {
     return this.mentalModels.list(await this.access.bank(caller, bankId), query);
   }
 
+  @MemoryAudit({ action: 'memory.mental_model_changed', op: 'create' })
   @Post('mental-models')
   @HttpCode(200)
   async createMentalModel(
@@ -213,6 +216,7 @@ export class MemoryUnitsController {
     return this.mentalModels.historyList(await this.access.bank(caller, bankId), id);
   }
 
+  @MemoryAudit({ action: 'memory.mental_model_changed', op: 'refresh' })
   @Post('mental-models/:mentalModelId/refresh')
   @HttpCode(200)
   async refreshMentalModel(
@@ -226,6 +230,7 @@ export class MemoryUnitsController {
     return this.mentalModels.refresh(await this.access.bank(caller, bankId), id, dto, principal.userId, principal.locale);
   }
 
+  @MemoryAudit({ action: 'memory.mental_model_changed', op: 'clear' })
   @Post('mental-models/:mentalModelId/clear')
   @HttpCode(200)
   async clearMentalModel(
@@ -250,6 +255,7 @@ export class MemoryUnitsController {
     return this.mentalModels.get(await this.access.bank(caller, bankId), id, query.detail);
   }
 
+  @MemoryAudit({ action: 'memory.mental_model_changed', op: 'update' })
   @Patch('mental-models/:mentalModelId')
   async updateMentalModel(
     @CurrentPrincipal() principal: Principal,
@@ -262,6 +268,7 @@ export class MemoryUnitsController {
     return this.mentalModels.update(await this.access.bank(caller, bankId), id, dto);
   }
 
+  @MemoryAudit({ action: 'memory.mental_model_changed', op: 'delete' })
   @Delete('mental-models/:mentalModelId')
   async deleteMentalModel(
     @CurrentPrincipal() principal: Principal,
@@ -284,6 +291,7 @@ export class MemoryUnitsController {
     return this.directives.list(await this.access.bank(caller, bankId), query);
   }
 
+  @MemoryAudit({ action: 'memory.directive_changed', op: 'create' })
   @Post('directives')
   @HttpCode(200)
   async createDirective(
@@ -310,6 +318,7 @@ export class MemoryUnitsController {
     );
   }
 
+  @MemoryAudit({ action: 'memory.directive_changed', op: 'update' })
   @Patch('directives/:directiveId')
   async updateDirective(
     @CurrentPrincipal() principal: Principal,
@@ -326,6 +335,7 @@ export class MemoryUnitsController {
     );
   }
 
+  @MemoryAudit({ action: 'memory.directive_changed', op: 'delete' })
   @Delete('directives/:directiveId')
   async deleteDirective(
     @CurrentPrincipal() principal: Principal,
@@ -341,6 +351,7 @@ export class MemoryUnitsController {
   }
 
   /** One consolidation pass, optionally only for memories matching a requested tag scope. */
+  @MemoryAudit({ action: 'memory.consolidation_requested' })
   @Post('consolidate')
   @HttpCode(200)
   async consolidate(
@@ -402,6 +413,7 @@ export class MemoryUnitsController {
     return this.units.document(await this.access.bank(caller, bankId), documentId);
   }
 
+  @MemoryAudit({ action: 'memory.document_updated' })
   @Patch('documents/:documentId')
   async updateDocument(
     @CurrentPrincipal() principal: Principal,
@@ -414,6 +426,7 @@ export class MemoryUnitsController {
     return this.units.updateDocument(await this.access.bank(caller, bankId), documentId, dto);
   }
 
+  @MemoryAudit({ action: 'memory.document_deleted' })
   @Delete('documents/:documentId')
   async deleteDocument(
     @CurrentPrincipal() principal: Principal,
@@ -436,6 +449,7 @@ export class MemoryUnitsController {
     return this.units.tags(await this.access.bank(caller, bankId), query);
   }
 
+  @MemoryAudit({ action: 'memory.observations_cleared' })
   @Delete('observations')
   async clearObservations(
     @CurrentPrincipal() principal: Principal,
@@ -446,6 +460,7 @@ export class MemoryUnitsController {
     return this.units.clearObservations(await this.access.bank(caller, bankId));
   }
 
+  @MemoryAudit({ action: 'memory.observations_cleared' })
   @Delete('memories/:memoryId/observations')
   async clearMemoryObservations(
     @CurrentPrincipal() principal: Principal,
@@ -478,6 +493,7 @@ export class MemoryUnitsController {
     return this.management.aliases(await this.access.bank(caller, bankId));
   }
 
+  @MemoryAudit({ action: 'memory.alias_changed', op: 'create' })
   @Post('aliases')
   async createAlias(
     @CurrentPrincipal() principal: Principal,
@@ -488,6 +504,7 @@ export class MemoryUnitsController {
     return this.management.createAlias(await this.access.caller(principal, ws, 'editor'), bankId, dto);
   }
 
+  @MemoryAudit({ action: 'memory.alias_changed', op: 'delete' })
   @Delete('aliases/:alias')
   async deleteAlias(
     @CurrentPrincipal() principal: Principal,
@@ -499,6 +516,7 @@ export class MemoryUnitsController {
     return this.management.deleteAlias(await this.access.bank(caller, bankId), alias);
   }
 
+  @MemoryAudit({ action: 'memory.alias_changed', op: 'primary' })
   @Patch('aliases/:alias')
   async setAliasPrimary(
     @CurrentPrincipal() principal: Principal,
@@ -521,6 +539,7 @@ export class MemoryUnitsController {
     return this.management.exportTemplate(await this.access.bank(caller, bankId));
   }
 
+  @MemoryAudit({ action: 'memory.template_imported' })
   @Post('import')
   @HttpCode(200)
   async importTemplate(
@@ -533,6 +552,7 @@ export class MemoryUnitsController {
     return this.management.importTemplate(await this.access.caller(principal, ws, 'editor'), bankId, dto, dryRun === 'true');
   }
 
+  @MemoryAudit({ action: 'memory.files_uploaded' })
   @Post('files/retain')
   @HttpCode(200)
   @UseGuards(MemoryUploadGuard)
@@ -550,6 +570,7 @@ export class MemoryUnitsController {
     return this.management.submitFiles(caller, bankId, files ?? [], request);
   }
 
+  @MemoryAudit({ action: 'memory.exported', op: 'documents' })
   @Post('document-transfer/export')
   @HttpCode(202)
   async exportDocuments(
@@ -562,6 +583,7 @@ export class MemoryUnitsController {
     return this.management.submitExport(await this.access.bank(caller, bankId), query, false, principal.userId, principal.locale);
   }
 
+  @MemoryAudit({ action: 'memory.exported', op: 'bank' })
   @Post('transfer/export')
   @HttpCode(202)
   async exportBank(
@@ -574,6 +596,7 @@ export class MemoryUnitsController {
     return this.management.submitExport(await this.access.bank(caller, bankId), query, true, principal.userId, principal.locale);
   }
 
+  @MemoryAudit({ action: 'memory.imported', op: 'documents' })
   @Post('document-transfer')
   @UseGuards(MemoryUploadGuard)
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 64 * 1024 * 1024 } }))
@@ -587,6 +610,7 @@ export class MemoryUnitsController {
     return this.management.submitImport(await this.access.caller(principal, ws, 'editor'), bankId, file, query, true);
   }
 
+  @MemoryAudit({ action: 'memory.imported', op: 'restore' })
   @Post('transfer/import')
   @UseGuards(MemoryUploadGuard)
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 64 * 1024 * 1024 } }))
@@ -600,6 +624,7 @@ export class MemoryUnitsController {
     return this.management.submitImport(await this.access.caller(principal, ws, 'editor'), bankId, file, query, false);
   }
 
+  @MemoryAudit({ action: 'memory.cloned' })
   @Post('clone')
   @HttpCode(200)
   async cloneBank(
@@ -666,6 +691,7 @@ export class MemoryUnitsController {
     return this.units.get(await this.access.bank(caller, bankId), memoryId);
   }
 
+  @MemoryAudit({ action: 'memory.memories_deleted' })
   @Delete('memories')
   async clear(
     @CurrentPrincipal() principal: Principal,
@@ -722,6 +748,7 @@ export class MemoryUnitsController {
   }
 
   /** Cancel a pending operation. A write key's call: a `capture` key retains and nothing more. */
+  @MemoryAudit({ action: 'memory.operation_cancelled', op: 'cancel' })
   @Delete('operations/:operationId')
   async cancelOperation(
     @CurrentPrincipal() principal: Principal,
@@ -736,6 +763,7 @@ export class MemoryUnitsController {
     );
   }
 
+  @MemoryAudit({ action: 'memory.operation_cancelled', op: 'delete' })
   @Delete('operations/:operationId/delete')
   async deleteOperation(
     @CurrentPrincipal() principal: Principal,

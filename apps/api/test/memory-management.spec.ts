@@ -26,7 +26,7 @@ function service(deps: Deps = {}) {
   return new MemoryManagementService(
     (deps.prisma ?? {}) as never,
     (deps.access ?? none) as never,
-    none,
+    { recordWrite: () => undefined } as never,
     (deps.directives ?? none) as never,
     (deps.mentalModels ?? { validateDefinition: (dto: { trigger?: unknown }) => dto.trigger ?? {} }) as never,
     (deps.retainer ?? none) as never,

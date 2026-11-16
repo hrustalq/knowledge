@@ -256,6 +256,20 @@ Errors under these paths leave as `{"detail": …}`, FastAPI's shape, including 
 route and a body-parser error; a failed validation is a 422 with one entry per violation.
 None of these routes is in `openapi.json`, the generated web client or the docs reference.
 
+**Every write is audited** (#1168), so `/version` reports `audit_log: true`. Each successful write
+records one `audit_logs` row: `target` is the bank's own `bank_id` (a request through an alias
+files under the bank it names), `actor` the caller, `params` the ids the request named and the
+operation, never memory text, a path, a query or tags. The action is one of the `memory.*` values
+of `AUDIT_ACTIONS`. A write reachable by REST only records through `@MemoryAudit` on its route
+(`MemoryAuditInterceptor`, after the handler resolved, so a refused or failed write records
+nothing). A write MCP reaches too records at its shared door: retain in `MemoryIntakeService.retain`,
+the memory tool's five write commands in `MemoryFilesService.execute`, the graph's six writes in
+`MemoryGraphService`. A bank the worker makes (restore, clone) is `memory.bank_created` under the
+operation's author, and a `PUT` that creates a bank is its creation alone. **Not audited:** recall
+and reflect (reads, and the busiest calls), and the runtime's own per-turn retention, which follows
+every assistant turn and agent run and is visible in the bank instead. The rows sit on the
+workspace's audit trail too, which is admin-only; the bank route serves them without the IP.
+
 ## How a request is resolved
 
 `MemoryAccessService` (`apps/api/src/memory/`) is the one place a memory request becomes a
@@ -694,7 +708,7 @@ This matrix is generated from the routes in `@vectorize-io/hindsight-client` **1
 | `GET`, `POST`, `PATCH`, `DELETE …/webhooks…` | Non-goal | outbound per-bank webhooks are not selected |
 | `DELETE …/memories`, `POST …/memories` | Compatible | phase-1 retain/clear tests |
 | `POST …/files/retain` | Compatible | phase-6 official multipart upload and worker parse test |
-| `GET …/audit-logs`, `GET …/audit-logs/stats`, `GET …/audit-logs/{id}` | Compatible, partial | phase-6 audit list/read/stats test over `audit_logs`; only bank creation and deletion are audited, so `/version` reports `audit_log: false` |
+| `GET …/audit-logs`, `GET …/audit-logs/stats`, `GET …/audit-logs/{id}` | Compatible | phase-6 audit list/read/stats test over `audit_logs`, and a test that retain, alias, document delete, export and clone each record their row (#1168); `request`/`response` bodies are null, and `transport` is always `http` |
 | `GET …/llm-requests`, `GET …/llm-requests/stats` | Non-goal | `ai_usage` has no reliable bank identity; returning it as bank traces would leak or misattribute calls |
 
 Documents and chunks are projections of `memory_units`: document text is the masked `source_text`, and a chunk is one distinct retained source item. Updates replace or increment tags on every source fact and invalidate only memberships whose resolved scopes moved. Transfers zip a versioned `transfer.json` carrying source facts, entity names and optional bank configuration; imports re-embed through the normal retain store without an extraction model. Transfers leave out `file:*` and `graph:*` documents, which belong to their own wires (`documents_skipped_reserved` in the result), and the document routes refuse those ids (400). An archive is validated whole before anything is written, and a failed restore or clone removes the bank it created. Only a mental model's definition is imported (empty content until a refresh; archive-supplied content and evidence are ignored), into the target bank only. A null item timestamp imports as timeless. Derived observations are rebuilt, so `include_observations=true` is a 400 rather than a false claim. Audit and LLM history are likewise not transferable. Archives are bank-owned byte rows and disappear with their operation, bank or workspace.

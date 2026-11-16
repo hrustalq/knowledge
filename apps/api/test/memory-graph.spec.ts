@@ -82,7 +82,7 @@ describe('MemoryGraphService (#1008)', () => {
     const units = { deleteWhere: vi.fn(async (_b: unknown, _w: unknown, alongside?: () => Promise<unknown>) => (await alongside?.(), { matched: 1, ids: ['u1'] })) };
     const rate = { check: vi.fn(async (verb: string) => void calls.push(`rate:${verb}`)) };
     const config = { get: () => opts.max ?? 500 };
-    return { svc: new MemoryGraphService(prisma as never, access as never, intake as never, units as never, rate as never, config as never), calls, prisma, intake, units, rate };
+    return { svc: new MemoryGraphService(prisma as never, access as never, intake as never, units as never, rate as never, { recordWrite: () => undefined } as never, config as never), calls, prisma, intake, units, rate };
   }
 
   it('admits before it writes, writes entity rows before their observations, and takes the rows back when the store fails', async () => {

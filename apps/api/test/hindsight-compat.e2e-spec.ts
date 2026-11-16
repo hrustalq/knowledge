@@ -213,8 +213,8 @@ describe('Hindsight compatibility (e2e, #986)', () => {
         file_upload_api: true,
         document_export_api: true,
         document_import_api: true,
-        // Only bank creation and deletion are audited, so the flag does not claim an audit trail of every write.
-        audit_log: false,
+        // Every write route is audited (#1168).
+        audit_log: true,
         llm_trace: false,
         bank_config_api: true,
         observations: true,
@@ -470,9 +470,11 @@ describe('Hindsight compatibility (e2e, #986)', () => {
         where: { workspaceId: WS_A, target: bank },
         select: { action: true },
       });
-      expect(audit.map((a) => a.action).sort()).toEqual([
+      // The phase-0 tests above changed its settings: each of those writes is audited too (#1168).
+      expect([...new Set(audit.map((a) => a.action))].sort()).toEqual([
         'memory.bank_created',
         'memory.bank_deleted',
+        'memory.bank_updated',
       ]);
     });
   });
@@ -3368,6 +3370,43 @@ describe('Hindsight compatibility (e2e, #986)', () => {
       const id = listed.data!.items[0]!.id;
       expect((await sdk.getAuditLog({ client: raw(people.alice.key), path: { bank_id: audited, log_id: id } })).data).toMatchObject({ id, request: null, response: null });
       expect((await sdk.auditLogStats({ client: raw(people.alice.key), path: { bank_id: audited }, query: { period: '1d' } })).data!.buckets[0]).toMatchObject({ actions: { 'memory.bank_created': 1 }, total: 1 });
+    });
+
+    it('records one audit row per write, with its actor and no memory text (#1168)', async () => {
+      const hs = client(people.alice.key);
+      const audited = `audit-writes-${nonce}`;
+      const actions = async (bankId: string, expected: string[]) => {
+        // The rows are written after the response: poll until they land.
+        for (let i = 0; i < 50; i++) {
+          const rows = await prisma.auditLog.findMany({ where: { workspaceId: WS_A, target: bankId }, orderBy: { createdAt: 'asc' } });
+          if (expected.every((a) => rows.some((r) => r.action === a))) return rows;
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+        throw new Error(`audit rows for ${bankId} never held ${expected.join(', ')}`);
+      };
+      await hs.retain(audited, 'Dana owns the secret audit runbook.', { documentId: 'audited-doc' });
+      const alias = `audit-alias-${nonce}`;
+      await sdk.createBankAlias({ client: raw(people.alice.key), path: { bank_id: audited }, body: { alias, primary: false } });
+      // Through the alias: filed under the bank's own id, where its audit log reads.
+      expect((await call(people.alice.key, 'DELETE', `/v1/default/banks/${alias}/documents/audited-doc`)).status).toBe(200);
+      await hs.exportDocuments(audited, { pollIntervalMs: 50, timeoutMs: 10_000 });
+      const clone = `audit-clone-${nonce}`;
+      await hs.retain(audited, 'Erin keeps the second runbook.', { documentId: 'kept-doc' });
+      expect(await settle(audited, await hs.cloneBank(audited, clone))).toMatchObject({ status: 'completed' });
+
+      const rows = await actions(audited, ['memory.bank_created', 'memory.retained', 'memory.alias_changed', 'memory.document_deleted', 'memory.exported', 'memory.cloned']);
+      expect(rows.every((r) => r.actor === people.alice.id && r.ok)).toBe(true);
+      expect(rows.find((r) => r.action === 'memory.document_deleted')!.params).toEqual({ documentId: 'audited-doc' });
+      expect(rows.find((r) => r.action === 'memory.alias_changed')!.params).toEqual({ op: 'create' });
+      expect(rows.filter((r) => r.action === 'memory.retained')).toHaveLength(2);
+      expect(JSON.stringify(rows.map((r) => r.params))).not.toContain('runbook');
+      // The clone's bank is made by the worker, under the operation's author.
+      const [created] = await actions(clone, ['memory.bank_created']);
+      expect(created).toMatchObject({ actor: people.alice.id, params: { from: audited, operation: 'bank_clone' } });
+      // A refused write records nothing.
+      expect((await call(people.carol.key, 'DELETE', `/v1/default/banks/${audited}/documents/kept-doc`)).status).toBe(404);
+      const listed = await sdk.listAuditLogs({ client: raw(people.alice.key), path: { bank_id: audited } });
+      expect(listed.data!.total).toBe(rows.length);
     });
 
     it('clears observations globally or for one source fact and reads their history', async () => {

@@ -15,19 +15,26 @@ import type {
   DirectiveResponse,
 } from './memory-wire.js';
 
-/** Directive tags select a reflect scope. Untagged directives are global. */
+/**
+ * Directive tags select a reflect scope, matched as the reference server matches them (#1166,
+ * `list_directives` in Hindsight's memory engine): an untagged directive always applies; a tagged
+ * one never applies to an untagged reflect, and otherwise its tags are filtered by the request's
+ * tags exactly as a memory's are — `all` wants the directive to carry every requested tag (`@>`),
+ * `any` one of them (`&&`), `exact` the same set.
+ */
 export function directiveMatches(
   directiveTags: string[],
   reflectTags: string[] | undefined,
   match: TagsMatch = 'any',
 ): boolean {
-  const wanted = cleanTags(directiveTags);
-  if (!wanted.length) return true;
-  const scope = cleanTags(reflectTags);
-  if (match === 'exact') return JSON.stringify(wanted) === JSON.stringify(scope);
+  const own = cleanTags(directiveTags);
+  if (!own.length) return true;
+  const requested = cleanTags(reflectTags);
+  if (!requested.length) return false;
+  if (match === 'exact') return JSON.stringify(own) === JSON.stringify(requested);
   return match.startsWith('all')
-    ? wanted.every((tag) => scope.includes(tag))
-    : wanted.some((tag) => scope.includes(tag));
+    ? requested.every((tag) => own.includes(tag))
+    : requested.some((tag) => own.includes(tag));
 }
 
 export function directiveResponse(

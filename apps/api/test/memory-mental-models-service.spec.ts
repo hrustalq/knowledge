@@ -73,6 +73,7 @@ function fixture(options: { latest?: boolean; delta?: boolean; reply?: Error; go
     $executeRaw: vi.fn(async () => 1),
     $queryRaw: vi.fn(async () => [{ now: new Date('2026-02-01T00:00:00Z') }]),
     memoryOperation: operationDelegate,
+    memoryBank: { findMany: vi.fn(async () => [] as Array<{ id: string; memoriesDeletedAt: Date | null }>) },
     memoryMentalModel: {
       // The refresh's final write re-reads by (bank, id, createdAt); `gone` = deleted (or re-created) meanwhile.
       findFirst: vi.fn(async (args: { where: Record<string, unknown> }) => options.gone && 'createdAt' in args.where ? null : model),
@@ -207,14 +208,25 @@ describe('MemoryMentalModelsService refresh (#1160)', () => {
 
   it('schedules a missed cron firing, skips untriggered models and survives a failing row', async () => {
     const run = fixture();
-    const due = { ...run.model, id: 'due', trigger: { refresh_cron: '0 3 * * *' }, lastRefreshedAt: new Date('2026-11-14T03:00:00Z') };
+    const due = { ...run.model, id: 'due', trigger: { refresh_cron: '0 3 * * *' }, lastRefreshedAt: new Date('2026-11-14T03:00:00Z'), bank: { createdBy: 'bank-author' } };
     const broken = { ...due, id: 'broken', workspaceId: 'ws-broken' };
     const idle = { ...run.model, id: 'idle', trigger: {} };
     run.prisma.memoryMentalModel.findMany.mockResolvedValue([broken, idle, due] as never);
     run.features.disabled.mockImplementation((async (ws: string) => { if (ws === 'ws-broken') throw new Error('boom'); return []; }) as never);
     await run.svc.sweep(Date.parse('2026-11-16T03:04:00Z'));
     expect(run.prisma.memoryUnit.findFirst).toHaveBeenCalledTimes(1);
-    expect(run.operationDelegate.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ payload: { mental_model_id: 'due', mode: null, automatic: true } }) }));
+    // Spent from the bank creator's budget, not a pseudo-user every bank shares (#1166).
+    expect(run.operationDelegate.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ createdBy: 'bank-author', payload: { mental_model_id: 'due', mode: null, automatic: true } }) }));
+  });
+
+  it('reads a model as stale once a memory was deleted from its bank after its last refresh (#1166)', async () => {
+    const run = fixture();
+    const refreshed = { ...run.model, refreshedScope: null, lastRefreshedAt: new Date('2026-11-10T00:00:00Z'), lastMemorySeenAt: new Date('2026-11-10T00:00:00Z') };
+    run.prisma.memoryMentalModel.findFirst.mockResolvedValue(refreshed as never);
+    run.prisma.memoryUnit.findFirst.mockResolvedValue(null as never);
+    expect((await run.svc.get(bank as never, 'model-1')).is_stale).toBe(false);
+    run.prisma.memoryBank.findMany.mockResolvedValue([{ id: 'bank-1', memoriesDeletedAt: new Date('2026-11-12T00:00:00Z') }]);
+    expect((await run.svc.get(bank as never, 'model-1')).is_stale).toBe(true);
   });
 
   it('preserves the previous document and watermark when every delta operation is rejected', async () => {

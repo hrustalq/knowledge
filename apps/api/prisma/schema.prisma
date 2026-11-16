@@ -4843,6 +4843,9 @@ model MemoryBank {
   /// UPDATE (`MemoryConsolidationService.takeCall`), so two workers never pass it.
   consolidationDay   DateTime? @map("consolidation_day") @db.Date
   consolidationCalls Int       @default(0) @map("consolidation_calls")
+  /// #1166 — the last time a memory was deleted from the bank: a deletion leaves no
+  /// newer row behind, so a mental model built before it reads as stale.
+  memoriesDeletedAt  DateTime? @map("memories_deleted_at") @db.Timestamptz
   createdBy   String  @map("created_by") @db.Uuid
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
@@ -5123,7 +5126,8 @@ model MemoryObservationScope {
   members      MemoryObservationScopeMember[]
   observations MemoryUnit[]
 
-  @@unique([bankId, tags])
+  // Unique per (bank, hash of the canonical tag set) in SQL only (#1166): an index on the array itself
+  // exceeds the btree row limit for a large set. Inserts rely on ON CONFLICT DO NOTHING, which it serves.
   @@index([workspaceId])
   @@map("memory_observation_scopes")
 }

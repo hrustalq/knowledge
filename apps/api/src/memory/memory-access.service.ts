@@ -106,6 +106,14 @@ export class MemoryAccessService {
     return row;
   }
 
+  /**
+   * A bank made bound to project `projectId` (a restore or clone of a project bank) binds it as the bank
+   * page's `PATCH` would, so it asks the same: `requireProjectManage`, not the editor role alone (#1166).
+   */
+  async requireBindable(caller: MemoryCaller, projectId: string | null): Promise<void> {
+    if (projectId) await this.permissions.requireProjectManage(caller.principal, projectId);
+  }
+
   /** The bank a path names in a workspace, by its id or an alias. No visibility test: `find` adds it. */
   async named(workspaceId: string, bankId: string): Promise<MemoryBank | null> {
     const direct = await this.prisma.memoryBank.findUnique({

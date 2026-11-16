@@ -7,24 +7,19 @@ describe('scoped reflect directives (#1159)', () => {
     expect(directiveMatches([], [], 'exact')).toBe(true);
     expect(directiveMatches(['user:a'], undefined)).toBe(false);
     expect(directiveMatches(['user:a'], ['user:a', 'team:x'])).toBe(true);
-    expect(directiveMatches(['user:a', 'team:x'], ['user:a'], 'all')).toBe(false);
-    expect(
-      directiveMatches(['team:x', 'user:a'], ['user:a', 'team:x'], 'all_strict'),
-    ).toBe(true);
-    expect(
-      directiveMatches(['team:x', 'user:a'], ['user:a', 'team:x'], 'exact'),
-    ).toBe(true);
-    expect(directiveMatches(['user:a'], ['user:a', 'team:x'], 'exact')).toBe(
-      false,
-    );
+    expect(directiveMatches(['team:x', 'user:a'], ['user:a', 'team:x'], 'all_strict')).toBe(true);
+    expect(directiveMatches(['team:x', 'user:a'], ['user:a', 'team:x'], 'exact')).toBe(true);
+    expect(directiveMatches(['user:a'], ['user:a', 'team:x'], 'exact')).toBe(false);
     expect(directiveMatches([' user:a ', 'user:a'], ['user:a'])).toBe(true);
   });
 
-  it("pins 'all' to the request holding every directive tag, and an untagged request to global directives only", () => {
-    // The reference documents directives as "scoped like memories" but its directive loader was not
-    // verified; this server keeps: a directive applies when the request carries all of its tags.
-    expect(directiveMatches(['user:a'], ['user:a', 'team:x'], 'all')).toBe(true);
-    expect(directiveMatches(['user:a', 'team:x'], ['user:a'], 'all_strict')).toBe(false);
+  it("pins 'all' as the reference server filters directives: the directive carries every requested tag (#1166)", () => {
+    // Hindsight's `list_directives` applies the request's tag filter to the directive's tags as recall
+    // does to a memory's (`directive.tags @> request` for `all`), and isolation mode leaves a tagged
+    // directive out of an untagged reflect.
+    expect(directiveMatches(['user:a', 'team:x'], ['user:a'], 'all')).toBe(true);
+    expect(directiveMatches(['user:a'], ['user:a', 'team:x'], 'all')).toBe(false);
+    expect(directiveMatches(['user:a'], ['user:a', 'team:x'], 'all_strict')).toBe(false);
     expect(directiveMatches(['user:a'], [], 'all')).toBe(false);
     expect(directiveMatches(['user:a'], [], 'any')).toBe(false);
   });

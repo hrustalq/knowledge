@@ -3,7 +3,6 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma, type MemoryBank, type MemoryMentalModel, type MemoryOperation } from '@prisma/client';
 import type { Locale } from '@knowledge/contracts';
 import { randomUUID } from 'node:crypto';
-import { AUTHOR_ID_STUB } from '../activity/actor.js';
 import { withSubjectLock } from '../common/subject-lock.js';
 import type { Env } from '../config/env.js';
 import { FeaturesService } from '../auth/features.service.js';
@@ -458,9 +457,20 @@ export class MemoryMentalModelsService {
 
   private async staleness(models: MemoryMentalModel[]): Promise<Map<string, boolean>> {
     const out = new Map<string, boolean>();
+    const deletedAt = new Map(
+      models.length
+        ? (await this.prisma.memoryBank.findMany({ where: { id: { in: [...new Set(models.map((m) => m.bankId))] } }, select: { id: true, memoriesDeletedAt: true } })).map((b) => [b.id, b.memoriesDeletedAt])
+        : [],
+    );
     for (const model of models) {
       // Content built from another tag or fact-type scope than the model now names is stale whatever the memories say.
       if (model.refreshedScope && model.refreshedScope !== mentalModelScope(model)) {
+        out.set(model.id, true);
+        continue;
+      }
+      // A memory deleted since the last refresh may be in its content (#1166); any deletion in the bank counts.
+      const deleted = deletedAt.get(model.bankId);
+      if (deleted && model.lastRefreshedAt && deleted > model.lastRefreshedAt) {
         out.set(model.id, true);
         continue;
       }
@@ -485,12 +495,13 @@ export class MemoryMentalModelsService {
     const rows = await this.prisma.memoryMentalModel.findMany({ where: { bankId: bank.id, lastRefreshFailedAt: null } });
     const models = rows.filter((model) => mentalModelTriggerOutput(model.trigger).refresh_after_consolidation);
     const stale = await this.staleness(models);
-    for (const model of models) if (stale.get(model.id)) await this.queue(model, { automatic: true }, AUTHOR_ID_STUB, 'en');
+    // An automatic refresh spends the bank creator's budget (#1166), not one pseudo-user shared by every bank.
+    for (const model of models) if (stale.get(model.id)) await this.queue(model, { automatic: true }, bank.createdBy, 'en');
   }
 
   async sweep(now = Date.now()): Promise<void> {
     if (this.features.unavailable().includes('memory')) return;
-    const rows = await this.prisma.memoryMentalModel.findMany({ where: { lastRefreshFailedAt: null } });
+    const rows = await this.prisma.memoryMentalModel.findMany({ where: { lastRefreshFailedAt: null }, include: { bank: { select: { createdBy: true } } } });
     const off = new Map<string, boolean>();
     for (const model of rows) {
       const trigger = mentalModelTriggerOutput(model.trigger);
@@ -501,7 +512,7 @@ export class MemoryMentalModelsService {
         // A firing missed by the tick still counts: due when the schedule fired since the last run.
         const full = Boolean(trigger.mode === 'delta' && model.lastRefreshedAt && (!model.lastFullRefreshedAt || model.lastRefreshedAt > model.lastFullRefreshedAt) && cronDue(trigger.full_refresh_cron, now, model.lastFullRefreshedAt ?? model.createdAt));
         const regular = !full && cronDue(trigger.refresh_cron, now, model.lastRefreshedAt ?? model.createdAt) && (await this.staleness([model])).get(model.id);
-        if (full || regular) await this.queue(model, { mode: full ? 'full' : null, automatic: true }, AUTHOR_ID_STUB, 'en');
+        if (full || regular) await this.queue(model, { mode: full ? 'full' : null, automatic: true }, model.bank.createdBy, 'en');
       } catch (error) {
         this.logger.warn(`Mental model ${model.bankId}/${model.id} not scheduled: ${(error as Error).message}`);
       }

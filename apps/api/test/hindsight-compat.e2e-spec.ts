@@ -3423,6 +3423,34 @@ describe('Hindsight compatibility (e2e, #986)', () => {
       expect(listed.data!.total).toBe(rows.length);
     });
 
+    it('keeps the review findings fixed (#1166): large tag sets, no-op updates, whole documents, project-bound clones', async () => {
+      const hs = client(people.alice.key);
+      const findings = `findings-${nonce}`;
+      // 50 tags of 100 characters, scoped per tag and combined: past the btree row limit as an array key.
+      const tags = Array.from({ length: 50 }, (_, i) => `${String(i).padStart(2, '0')}-${'t'.repeat(97)}`);
+      await sdk.retainMemories({ client: raw(people.alice.key), path: { bank_id: findings }, body: { items: [{ content: 'Fiona owns the tag-heavy runbook.', document_id: 'tagged-doc', tags, observation_scopes: 'combined' }] } }).then((r) => expect(r.response.status).toBe(200));
+
+      // A tag filter chooses documents and keeps them whole: the listing agrees with the document read.
+      await hs.retain(findings, 'First paragraph.', { documentId: 'multi-doc', tags: ['a'] });
+      await sdk.retainMemories({ client: raw(people.alice.key), path: { bank_id: findings }, body: { items: [{ content: 'Second paragraph.', document_id: 'multi-doc', tags: ['b'], update_mode: 'append' }] } });
+      const whole = await hs.getDocument(findings, 'multi-doc');
+      const filtered = (await sdk.listDocuments({ client: raw(people.alice.key), path: { bank_id: findings }, query: { tags: ['a'] } })).data!.items.find((d) => d.id === 'multi-doc')!;
+      expect(filtered).toMatchObject({ memory_unit_count: whole!.memory_unit_count, content_hash: whole!.content_hash });
+
+      // A PATCH that changes nothing writes nothing.
+      const bankRow = await prisma.memoryBank.findUniqueOrThrow({ where: { workspaceId_bankId: { workspaceId: WS_A, bankId: findings } } });
+      const before = await prisma.memoryUnit.findMany({ where: { bankId: bankRow.id, documentId: 'multi-doc' }, select: { id: true, updatedAt: true } });
+      await sdk.updateDocument({ client: raw(people.alice.key), path: { bank_id: findings, document_id: 'multi-doc' }, body: { add_tags: [] } });
+      const after = await prisma.memoryUnit.findMany({ where: { bankId: bankRow.id, documentId: 'multi-doc' }, select: { id: true, updatedAt: true } });
+      expect(after.map((u) => u.updatedAt.getTime()).sort()).toEqual(before.map((u) => u.updatedAt.getTime()).sort());
+
+      // A clone of a project bank binds a new bank to that project: an editor without manage on it is refused.
+      const project = await prisma.project.create({ data: { workspaceId: WS_A, name: `Findings ${nonce}` } });
+      await prisma.memoryBank.update({ where: { id: bankRow.id }, data: { projectId: project.id } });
+      expect((await call(people.alice.key, 'POST', `/v1/default/banks/${findings}/clone?target_bank_id=findings-clone-${nonce}`, {})).status).toBe(403);
+      expect(await prisma.memoryOperation.count({ where: { bankId: bankRow.id, type: 'bank_clone' } })).toBe(0);
+    });
+
     it('clears observations globally or for one source fact and reads their history', async () => {
       const hs = client(people.alice.key);
       const observations = `observation-management-${nonce}`;

@@ -144,11 +144,18 @@ export class MemoryUnitsService {
     });
     if (!affected.length) return [];
     const observationIds = affected.map((o) => o.id);
-    const scopeIds = [...new Set(affected.flatMap((o) => o.observationScopeId ?? []))];
     const sourceIds = [...new Set(affected.flatMap((o) => o.evidence.map((e) => e.factId)))];
+    // Only the (source, scope) pairs an observation actually stood on (#1166): a co-source keeps its other scopes'
+    // consolidation. An observation with no scope (written before scopes) resets its sources in every scope.
+    const pairs = new Map<string | null, Set<string>>();
+    for (const o of affected) {
+      const sources = pairs.get(o.observationScopeId) ?? new Set<string>();
+      for (const e of o.evidence) sources.add(e.factId);
+      pairs.set(o.observationScopeId, sources);
+    }
     await this.prisma.memoryUnit.deleteMany({ where: { id: { in: observationIds } } });
     await this.prisma.memoryObservationScopeMember.updateMany({
-      where: { unitId: { in: sourceIds }, ...(scopeIds.length ? { scopeId: { in: scopeIds } } : {}) },
+      where: { OR: [...pairs].map(([scopeId, sources]) => ({ unitId: { in: [...sources] }, ...(scopeId ? { scopeId } : {}) })) },
       data: { consolidatedAt: null, claimedAt: null },
     });
     await this.prisma.memoryUnit.updateMany({ where: { id: { in: sourceIds } }, data: { consolidatedAt: null, consolidationClaimedAt: null } });
@@ -159,16 +166,25 @@ export class MemoryUnitsService {
   async documents(bank: MemoryBank, query: import('./memory.dto.js').ListDocumentsQueryDto) {
     const field = query.time_field === 'created_at' ? 'createdAt' : 'updatedAt';
     const q = query.q?.trim();
+    const filtered = Boolean(q || query.tags?.length || query.start_date || query.end_date);
+    // The filters choose documents; each document is then built from all its units, as `document()` builds it (#1166).
+    const matching = filtered
+      ? await this.prisma.memoryUnit.findMany({
+          where: {
+            bankId: bank.id,
+            factType: { not: 'observation' },
+            ...(q ? { OR: [{ documentId: { contains: q, mode: 'insensitive' } }, { sourceText: { contains: q, mode: 'insensitive' } }] } : {}),
+            AND: [
+              tagsWhere(query.tags, query.tags_match),
+              ...(query.start_date || query.end_date ? [{ [field]: { ...(query.start_date ? { gte: new Date(query.start_date) } : {}), ...(query.end_date ? { lt: new Date(query.end_date) } : {}) } }] : []),
+            ],
+          },
+          select: { documentId: true },
+          distinct: ['documentId'],
+        })
+      : null;
     const rows = await this.prisma.memoryUnit.findMany({
-      where: {
-        bankId: bank.id,
-        factType: { not: 'observation' },
-        ...(q ? { OR: [{ documentId: { contains: q, mode: 'insensitive' } }, { sourceText: { contains: q, mode: 'insensitive' } }] } : {}),
-        AND: [
-          tagsWhere(query.tags, query.tags_match),
-          ...(query.start_date || query.end_date ? [{ [field]: { ...(query.start_date ? { gte: new Date(query.start_date) } : {}), ...(query.end_date ? { lt: new Date(query.end_date) } : {}) } }] : []),
-        ],
-      },
+      where: { bankId: bank.id, factType: { not: 'observation' }, ...(matching ? { documentId: { in: matching.map((m) => m.documentId) } } : {}) },
       orderBy: [{ [field]: 'desc' }, { id: 'asc' }],
     });
     // ponytail: documents are grouped in memory from source rows; move this projection to SQL if banks routinely hold millions of units.
@@ -239,7 +255,8 @@ export class MemoryUnitsService {
     const unit = UUID_RE.test(chunkId) ? await this.prisma.memoryUnit.findFirst({ where: { id: chunkId, bankId: bank.id, factType: { not: 'observation' } } }) : null;
     if (!unit) throw new NotFoundException(t('error.memory.memoryNotFound', { id: chunkId }));
     const siblings = await this.documentUnits(bank, unit.documentId);
-    const chunkIndex = [...new Map(siblings.map((row) => [row.sourceText, row])).values()].findIndex((row) => row.id === unit.id);
+    // A chunk is a distinct source text, so its index is its text's place: several units can share one (#1166).
+    const chunkIndex = [...new Set(siblings.map((row) => row.sourceText))].indexOf(unit.sourceText);
     return { chunk_id: unit.id, document_id: unit.documentId, bank_id: bank.bankId, chunk_index: Math.max(0, chunkIndex), chunk_text: unit.sourceText, created_at: unit.createdAt.toISOString() };
   }
 
@@ -267,7 +284,8 @@ export class MemoryUnitsService {
         const observationScopes = requestedScopes ?? unit.observationScopes as ObservationScopes | undefined;
         const before = unit.scopeMembers.map((m) => JSON.stringify(m.scope.tags)).sort();
         const after = resolveObservationScopes(tags, observationScopes).map((s) => JSON.stringify(s)).sort();
-        return { unit, tags, observationScopes, changed: JSON.stringify(unit.tags) !== JSON.stringify(tags) || JSON.stringify(before) !== JSON.stringify(after) };
+        const dirty = JSON.stringify(unit.tags) !== JSON.stringify(tags) || JSON.stringify(unit.observationScopes ?? null) !== JSON.stringify(observationScopes ?? null);
+        return { unit, tags, observationScopes, dirty, changed: JSON.stringify(unit.tags) !== JSON.stringify(tags) || JSON.stringify(before) !== JSON.stringify(after) };
       });
       const moved = changed.filter((row) => row.changed);
       const removed = await this.invalidateFacts(bank.id, moved.map((row) => row.unit.id));
@@ -276,7 +294,8 @@ export class MemoryUnitsService {
         await this.addScopeMemberships(bank, moved.map((row) => ({ id: row.unit.id, tags: row.tags, observationScopes: row.observationScopes })), false);
         await this.prisma.memoryUnit.updateMany({ where: { id: { in: moved.map((row) => row.unit.id) } }, data: { consolidatedAt: null, consolidationClaimedAt: null } });
       }
-      for (const row of changed) await this.prisma.memoryUnit.update({ where: { id: row.unit.id }, data: { tags: row.tags, observationScopes: row.observationScopes } });
+      // A unit the request leaves as it was is not written (#1166): its `updated_at` is what stales a mental model.
+      for (const row of changed) if (row.dirty) await this.prisma.memoryUnit.update({ where: { id: row.unit.id }, data: { tags: row.tags, observationScopes: row.observationScopes } });
       return removed;
     });
     await this.dropVectors(bank.workspaceId, invalidated);
@@ -343,7 +362,11 @@ export class MemoryUnitsService {
     const done = await withSubjectLock(this.prisma, `memory-bank:${bank.id}`, async () => {
       const ids = (await this.prisma.memoryUnit.findMany({ where: { AND: [where, { bankId: bank.id }] }, select: { id: true } })).map((r) => r.id);
       const observations = await this.invalidateFacts(bank.id, ids);
-      if (ids.length) await this.prisma.memoryUnit.deleteMany({ where: { id: { in: ids } } });
+      if (ids.length) {
+        await this.prisma.memoryUnit.deleteMany({ where: { id: { in: ids } } });
+        // A deletion leaves no newer row behind: the bank's stamp is what stales a mental model built before it (#1166).
+        await this.prisma.memoryBank.update({ where: { id: bank.id }, data: { memoriesDeletedAt: new Date() } });
+      }
       await alongside?.();
       return { matched: ids.length, ids: ids.length ? [...ids, ...observations, ...(await this.deleteBareObservations(bank.id))] : observations };
     });

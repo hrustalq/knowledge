@@ -51,6 +51,8 @@ in the pull request that introduces them — see
   Russian). (#1050)
 - On a phone, "Open in a larger view" on a page's rail widget opens full screen, rail widgets no longer squeeze
   their content into a short inner scroll, and the revision list hides its hash, message and parents columns. (#1054)
+- API reference on a phone: an operation's entity key truncates inside its card instead of overflowing it and hiding
+  the copy button. (#1055)
 
 ## [0.56.0] — 2026-11-16
 

@@ -24,17 +24,17 @@ describe('connect plan', () => {
   })
 
   it('shows only the steps that apply', () => {
-    const claude = { skillDir: '.claude/skills', captureKit: 'claude-code' }
-    const desktop = { skillDir: null, captureKit: null }
+    const claude = { stackable: true, captureKit: 'claude-code' }
+    const desktop = { stackable: false, captureKit: null }
     expect(stepsFor({ needsKey: true, client: claude, workflows: ['ask'] })).toEqual([
       'role', 'client', 'workflow', 'key', 'preferences', 'configure', 'skill', 'verify',
     ])
-    // Dev mode has no key; a client with no skill dir and no kit has nothing to prefer.
+    // Dev mode has no key; a client with no skill stack and no kit has nothing to prefer.
     expect(stepsFor({ needsKey: false, client: desktop, workflows: ['ask', 'capture'] })).toEqual([
       'role', 'client', 'workflow', 'configure', 'skill', 'verify',
     ])
     // A kit alone is a preference, but only once capturing was chosen.
-    const kitOnly = { skillDir: null, captureKit: 'cursor' }
+    const kitOnly = { stackable: false, captureKit: 'cursor' }
     expect(stepsFor({ needsKey: true, client: kitOnly, workflows: ['capture'] })).toContain('preferences')
     expect(stepsFor({ needsKey: true, client: kitOnly, workflows: ['ask'] })).not.toContain('preferences')
     // Before a client is chosen the list does not shrink under the person.

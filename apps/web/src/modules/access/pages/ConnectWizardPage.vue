@@ -30,6 +30,7 @@ import {
   KEY_ENV,
   mcpClients,
   scopeFor,
+  skillStackInstallCommand,
   stepsFor,
   toolsetsFor,
   workflowsFor,
@@ -39,6 +40,7 @@ import {
 } from '@/entities/access'
 import { useWorkspacesStore } from '@/stores/workspaces'
 import ChoiceCards from '../components/connect/ChoiceCards.vue'
+import ClientCards from '../components/connect/ClientCards.vue'
 import ConfigPane from '../components/connect/ConfigPane.vue'
 import KeyStep from '../components/connect/KeyStep.vue'
 import SkillStep from '../components/connect/SkillStep.vue'
@@ -104,7 +106,17 @@ const check = computed(() => {
 
 /* -------------------------------------------------------------------- steps */
 
-const steps = computed(() => stepsFor({ needsKey: needsKey.value, client: client.value, workflows: workflows.value }))
+/** A skill directory the server can install the stack into (the claude and agents dirs); others take one SKILL.md. */
+const stackable = computed(
+  () => !!(connection.value && client.value?.skillDir && skillStackInstallCommand(connection.value.url, client.value.skillDir, false)),
+)
+const steps = computed(() =>
+  stepsFor({
+    needsKey: needsKey.value,
+    client: client.value && { stackable: stackable.value, captureKit: client.value.captureKit },
+    workflows: workflows.value,
+  }),
+)
 const index = ref(0)
 const step = computed<ConnectStep>(() => steps.value[Math.min(index.value, steps.value.length - 1)]!)
 
@@ -170,7 +182,6 @@ const titles = computed<Record<ConnectStep, string>>(() => {
 const roleOptions = computed(() =>
   CONNECT_ROLES.map((r) => ({ value: r, label: t(`connect.wizard.role.options.${r}.label`), hint: t(`connect.wizard.role.options.${r}.hint`) })),
 )
-const clientOptions = computed(() => clients.value.map((c) => ({ value: c.id, label: c.name })))
 const workflowOptions = computed(() =>
   CONNECT_WORKFLOWS.map((w) => ({
     value: w,
@@ -199,7 +210,7 @@ const answers = computed<Partial<Record<ConnectStep, string>>>(() => ({
   client: client.value?.name,
   workflow: workflows.value.map((w) => t(`connect.wizard.workflow.options.${w}.label`)).join(', '),
   key: fresh.value?.key.name ?? (keyMode.value === 'existing' ? t('connect.wizard.key.have') : undefined),
-  preferences: client.value?.skillDir ? t(`connect.wizard.preferences.skill.${skillFormat.value}.label`) : undefined,
+  preferences: stackable.value ? t(`connect.wizard.preferences.skill.${skillFormat.value}.label`) : undefined,
 }))
 
 type HelpItem = { q: string; a: string }
@@ -235,7 +246,7 @@ const help = computed(() => [
     </Button>
   </header>
 
-  <div v-if="loading" class="grid flex-1 gap-6 p-6 lg:grid-cols-[14rem_minmax(0,1fr)_minmax(0,1fr)]">
+  <div v-if="loading" class="grid flex-1 gap-6 p-6 lg:grid-cols-[14rem_minmax(0,1fr)_minmax(19rem,26rem)]">
     <Skeleton class="hidden h-72 rounded-lg lg:block" />
     <Skeleton class="h-96 rounded-xl" />
     <Skeleton class="h-96 rounded-xl" />
@@ -243,7 +254,7 @@ const help = computed(() => [
 
   <p v-else-if="!connection" class="m-auto px-4 text-sm text-muted-foreground">{{ t('connect.loadFailed') }}</p>
 
-  <div v-else class="min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-cols-[14rem_minmax(0,1fr)_minmax(0,1fr)] lg:overflow-hidden">
+  <div v-else class="min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-cols-[14rem_minmax(0,1fr)_minmax(19rem,26rem)] lg:overflow-hidden">
     <!-- The steps ---------------------------------------------------------- -->
     <nav :aria-label="t('connect.wizard.stepsLabel')" class="hidden overflow-y-auto border-r bg-sidebar px-3 py-6 lg:block">
       <ol class="grid gap-0.5">
@@ -270,7 +281,7 @@ const help = computed(() => [
     </nav>
 
     <!-- The question ------------------------------------------------------- -->
-    <main ref="main" class="min-w-0 px-4 py-6 lg:overflow-y-auto lg:px-10 lg:py-10" @keydown.enter="onEnter">
+    <main ref="main" class="min-w-0 px-4 pt-6 lg:overflow-y-auto lg:px-10 lg:pt-10" @keydown.enter="onEnter">
       <div class="grid gap-6">
         <header class="grid gap-1.5">
           <p class="text-caption text-muted-foreground lg:hidden">{{ t('connect.wizard.stepOf', { n: index + 1, m: steps.length }) }}</p>
@@ -288,7 +299,7 @@ const help = computed(() => [
           <ChoiceCards v-model="role" name="kn-wiz-role" quiet-legend :legend="t('connect.wizard.steps.role')" :options="roleOptions" />
         </div>
         <div v-show="step === 'client'">
-          <ChoiceCards v-model="clientId" name="kn-wiz-client" quiet-legend compact :legend="t('connect.wizard.steps.client')" :options="clientOptions" />
+          <ClientCards v-model="clientId" :clients="clients" :legend="t('connect.wizard.steps.client')" />
         </div>
         <div v-show="step === 'workflow'">
           <ChoiceCards
@@ -312,7 +323,7 @@ const help = computed(() => [
           />
         </div>
         <div v-show="step === 'preferences'" class="grid gap-6">
-          <ChoiceCards v-if="client?.skillDir" v-model="skillFormat" name="kn-wiz-skill" :legend="t('connect.wizard.preferences.skill.legend')" :options="skillOptions" />
+          <ChoiceCards v-if="stackable" v-model="skillFormat" name="kn-wiz-skill" :legend="t('connect.wizard.preferences.skill.legend')" :options="skillOptions" />
           <ChoiceCards
             v-if="client?.captureKit && workflows.includes('capture')"
             v-model="kit"
@@ -348,7 +359,10 @@ const help = computed(() => [
 
         <StepHelp :key="step" :items="help" />
 
-        <footer class="flex flex-wrap items-center gap-3 border-t pt-5">
+        <!-- Pinned to the bottom of whatever scrolls, so a long step never hides its way on. -->
+        <footer
+          class="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center gap-3 border-t bg-background/90 px-4 py-3 backdrop-blur lg:-mx-10 lg:px-10 lg:py-4"
+        >
           <Button v-if="index > 0" variant="ghost" class="gap-1.5" @click="go(index - 1)">
             <ArrowLeft class="size-4" />{{ t('connect.wizard.back') }}
           </Button>

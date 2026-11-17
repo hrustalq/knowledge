@@ -24,7 +24,8 @@ in the pull request that introduces them — see
   `/help`. (#1223)
 - Connecting an AI client is now a full-screen guided setup at `/setup/connect` (**Settings → AI → Connect AI →
   Connect a client**). It asks what you do, which tool connects (Claude Code, Codex, Gemini CLI, Cursor, VS Code,
-  Claude Desktop, Windsurf, opencode, Zed or any MCP client) and what the agent will do, then suggests the narrowest key
+  Claude Desktop, Windsurf, opencode, Zed, and now Qwen Code, Kimi Code, DeepSeek Harness, pi, Oh My Pi and Hermes
+  Agent, or any MCP client) and what the agent will do, then suggests the narrowest key
   that covers it. The tool's exact command and config file stay on screen and update as you answer, with the new key
   already in them. The setup installs the skill (and the capture hook for Claude Code and Cursor) and ends by waiting
   for the client's first call, showing **Connected** when it arrives. If no call arrives, it gives a terminal check

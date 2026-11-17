@@ -11,6 +11,7 @@ export {
   skillStackInstallCommand,
   type McpClientGuide,
 } from './model/mcp-clients'
+export { clientMark } from './model/client-logos'
 export {
   CONNECT_ROLES,
   CONNECT_WORKFLOWS,

@@ -7,8 +7,9 @@ platform»
 
 ## What
 
-Any MCP client — Claude Code, Codex, Gemini CLI, Cursor, VS Code, Claude
-Desktop, Windsurf, opencode, Zed — can connect to a deployment of this platform
+Any MCP client — Claude Code, Codex, Gemini CLI, Qwen Code, Kimi Code, DeepSeek
+Harness, pi, Oh My Pi, Hermes Agent, Cursor, VS Code, Claude Desktop, Windsurf,
+opencode, Zed — can connect to a deployment of this platform
 and work in its knowledge base **as the person who connected it**:
 
 - **`POST /v1/mcp`** serves the MCP tool set over Streamable HTTP inside the API
@@ -175,7 +176,14 @@ the env-var syntax differs in every client (`${VAR}`, `${env:VAR}`,
 Claude Code reads a `url` without `type` as stdio; Gemini reads `url` as SSE;
 opencode tries OAuth unless told not to; Claude Desktop's config runs only local
 servers (hence `mcp-remote`); VS Code currently sends `${env:}` in headers
-literally (hence a prompted input); Zed has no env expansion at all.
+literally (hence a prompted input); Zed has no env expansion at all. Added with
+#1225: Qwen Code is a Gemini fork (`httpUrl`, `$VAR`); Kimi Code and pi name the
+variable instead of expanding it (`bearerTokenEnvVar`, `--bearer-token-env-var`);
+Oh My Pi wants `type: "http"` and the `~/.omp/agent/` path, not the older
+`~/.omp/mcp.json`; Hermes Agent is YAML under `mcp_servers`; DeepSeek Harness is a
+`@deepseek-ai/dsh-mcp-client` row in a Cordis patch layer whose header reads the
+key through `!!js`. Their marks come from simple-icons (CC0) and are bundled in
+`client-logos.ts`, so no reader's browser ever asks a vendor for a logo.
 
 **The wizard asks, the plan decides** (#1225). Role → default workflows → the
 narrowest key scope that does them all, and the toolsets they use: that mapping and

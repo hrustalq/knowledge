@@ -41,7 +41,7 @@ export interface McpClientGuide {
   name: string
   /** Shell one-liner that registers the server, when the client has one. */
   command: string | null
-  config: { path: string; lang: 'json' | 'toml'; code: string }
+  config: { path: string; lang: 'json' | 'toml' | 'yaml'; code: string }
   /** Where the client reads skills from — the SKILL.md goes in `<dir>/knowledge-platform/`. */
   skillDir: string | null
   /** Reads the key from KNOWLEDGE_API_KEY, so the page shows the `export` line. */
@@ -111,6 +111,116 @@ export function mcpClients(input: McpClientInput): McpClientGuide[] {
       captureKit: null,
       note: 'gemini',
       docs: 'https://geminicli.com/docs/tools/mcp-server/',
+    },
+    {
+      // A Gemini CLI fork: `httpUrl` is Streamable HTTP, `$VAR` expands in headers.
+      id: 'qwen',
+      name: 'Qwen Code',
+      command: `qwen mcp add --scope user --transport http${
+        auth ? ` --header "Authorization: Bearer \\$${KEY_ENV}"` : ''
+      } ${name} ${url}`,
+      config: {
+        path: '~/.qwen/settings.json',
+        lang: 'json',
+        code: json({ mcpServers: { [name]: { httpUrl: url, ...header(`$${KEY_ENV}`) } } }),
+      },
+      skillDir: '~/.qwen/skills',
+      usesEnv: auth,
+      captureKit: null,
+      note: 'qwen',
+      docs: 'https://qwenlm.github.io/qwen-code-docs/en/users/features/mcp/',
+    },
+    {
+      // A `url` without `transport` is HTTP; the key is read from the named variable.
+      id: 'kimi',
+      name: 'Kimi Code',
+      command: null,
+      config: {
+        path: '~/.kimi-code/mcp.json  ·  .kimi-code/mcp.json',
+        lang: 'json',
+        code: json({ mcpServers: { [name]: { url, ...(auth ? { bearerTokenEnvVar: KEY_ENV } : {}) } } }),
+      },
+      skillDir: SKILL_DIRS.agents,
+      usesEnv: auth,
+      captureKit: null,
+      note: 'kimi',
+      docs: 'https://www.kimi.com/code/docs/en/kimi-code-cli/customization/mcp.html',
+    },
+    {
+      // One dsh-mcp-client row in a Cordis patch layer; `!!js` reads the key from the environment.
+      id: 'deepseek',
+      name: 'DeepSeek Harness',
+      command: null,
+      config: {
+        path: '$DSH_HOME/cordis.patch.yml',
+        lang: 'yaml',
+        code: [
+          '- insert:',
+          `    - id: mcp-${name}`,
+          "      name: '@deepseek-ai/dsh-mcp-client'",
+          '      config:',
+          `        serverName: ${name}`,
+          '        transport: streamable-http',
+          `        url: ${url}`,
+          ...(auth ? ['        headers:', `          Authorization: !!js '\`Bearer \${process.env.${KEY_ENV}}\`'`] : []),
+        ].join('\n'),
+      },
+      skillDir: null,
+      usesEnv: auth,
+      captureKit: null,
+      note: 'deepseek',
+      docs: 'https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/mcp/mcp-client/README.md',
+    },
+    {
+      id: 'pi',
+      name: 'pi',
+      command: `pi mcp add ${name} --url ${url}${auth ? ` --bearer-token-env-var ${KEY_ENV}` : ''}`,
+      config: {
+        path: '~/.pi/agent/mcp.json',
+        lang: 'json',
+        code: json({ mcpServers: { [name]: { url, ...header(`\${${KEY_ENV}}`) } } }),
+      },
+      skillDir: SKILL_DIRS.agents,
+      usesEnv: auth,
+      captureKit: null,
+      note: 'pi',
+      docs: 'https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/mcp.md',
+    },
+    {
+      id: 'omp',
+      name: 'Oh My Pi',
+      command: null,
+      config: {
+        path: '~/.omp/agent/mcp.json',
+        lang: 'json',
+        code: json({ mcpServers: { [name]: { type: 'http', url, ...header(`\${${KEY_ENV}}`) } } }),
+      },
+      skillDir: SKILL_DIRS.agents,
+      usesEnv: auth,
+      captureKit: null,
+      note: 'omp',
+      docs: 'https://github.com/can1357/oh-my-pi/blob/main/docs/mcp-config.md',
+    },
+    {
+      // `${VAR}` expands from the environment or ~/.hermes/.env.
+      id: 'hermes',
+      name: 'Hermes Agent',
+      command: null,
+      config: {
+        path: '~/.hermes/config.yaml',
+        lang: 'yaml',
+        code: [
+          'mcp_servers:',
+          `  ${name}:`,
+          `    url: "${url}"`,
+          ...(auth ? ['    headers:', `      Authorization: "Bearer \${${KEY_ENV}}"`] : []),
+        ].join('\n'),
+      },
+      skillDir: '~/.hermes/skills',
+      usesEnv: auth,
+      captureKit: null,
+      note: 'hermes',
+      docs: 'https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp',
     },
     {
       id: 'cursor',

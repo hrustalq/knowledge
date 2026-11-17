@@ -86,6 +86,8 @@ in the pull request that introduces them — see
   tree and revision pickers, activity-heatmap days (24px; the year scrolls), and the editor toolbar, selection bubble,
   resize handles and task checkboxes. The workflow builder shows its disconnect control without hover. Desktop is
   unchanged. (#1049)
+- Opening an address that does not exist shows a "Nothing lives at this address" page with a link back to the pages,
+  instead of an empty screen. (#1051)
 
 ## [0.56.0] — 2026-11-16
 

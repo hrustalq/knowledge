@@ -96,6 +96,8 @@ in the pull request that introduces them — see
   placeholders before. (#1066)
 - Assistant on a phone (keyboard open, or in landscape): the breadcrumb row that only repeated "Assistant" is gone
   below 1024px, giving the conversation that height back. (#1067)
+- The Pages graph on a phone: the controls start as one Filters button and the graph uses the whole canvas, instead
+  of most of it sitting under the controls panel. (#1052)
 
 ## [0.56.0] — 2026-11-16
 

@@ -100,6 +100,9 @@ in the pull request that introduces them — see
   of most of it sitting under the controls panel. (#1052)
 - Editing on a phone or tablet: the page can no longer slide sideways under the closed assistant panel, which cut
   off the toolbar, title and text on the left with no way to swipe back. (#1058)
+- Settings pages with a list and a detail (projects, docs, templates, blueprints, workflows) on a phone: the list
+  takes at most 40% of the screen, and picking an item scrolls its details into view instead of changing nothing
+  visible. (#1071)
 
 ## [0.56.0] — 2026-11-16
 

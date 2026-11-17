@@ -88,6 +88,8 @@ in the pull request that introduces them — see
   unchanged. (#1049)
 - Opening an address that does not exist shows a "Nothing lives at this address" page with a link back to the pages,
   instead of an empty screen. (#1051)
+- Knowledge health on a phone: the preset filters are one scrolling row and the owner and sort pickers share a line,
+  so the page list is on screen when the page opens instead of below the fold. (#1065)
 
 ## [0.56.0] — 2026-11-16
 

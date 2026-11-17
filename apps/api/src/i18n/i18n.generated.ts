@@ -1360,6 +1360,8 @@ export type I18nTranslations = {
             "alreadyCustomized": string;
             "contentRequired": string;
             "generateEmpty": string;
+            "inUse": string;
+            "unknownSection": string;
         };
         "share": {
             "notFound": string;

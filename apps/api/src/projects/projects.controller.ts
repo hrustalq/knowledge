@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
 } from '@nestjs/common';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
@@ -14,7 +15,9 @@ import type {
   CreateProjectResponse,
   DeleteProjectResponse,
   ListProjectsResponse,
+  MethodologyPreviewResponse,
   ProjectDeletionPreview,
+  ProjectMethodologyResponse,
   ProjectGitResponse,
   ProjectOverviewResponse,
   ProjectSettingOverridesResponse,
@@ -31,11 +34,14 @@ import {
   DeleteProjectQueryDto,
   DeletionPreviewQueryDto,
   ListProjectsQueryDto,
+  MethodologyPreviewQueryDto,
   ProjectSettingOverridesQueryDto,
   ScaffoldProjectDto,
+  SetProjectMethodologyDto,
   UpdateProjectDto,
 } from './projects.dto.js';
 import { ProjectScaffoldService } from './project-scaffold.service.js';
+import { ProjectMethodologyService } from './project-methodology.service.js';
 import { ProjectsService } from './projects.service.js';
 import { AccessService } from '../auth/access.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
@@ -56,6 +62,7 @@ export class ProjectsController {
     private readonly overviewService: ProjectOverviewService,
     private readonly cascadeService: ProjectCascadeService,
     private readonly scaffolder: ProjectScaffoldService,
+    private readonly methodology: ProjectMethodologyService,
     private readonly permissions: PermissionService,
     private readonly access: AccessService,
     private readonly config: ConfigService<Env, true>,
@@ -99,8 +106,10 @@ export class ProjectsController {
   @ApiOperation({ summary: 'Create a project from a blueprint: pages, styleguide, templates and glossary in one go' })
   async scaffold(@Body() dto: ScaffoldProjectDto, @CurrentPrincipal() principal: Principal): Promise<ScaffoldProjectResponse> {
     const blueprint = await this.scaffolder.resolve(dto);
-    if (blueprint.conventions?.styleguide && !dto.parentId) await this.access.requireRole(principal, dto.workspaceId, 'admin');
-    return this.scaffolder.scaffold(dto, blueprint, principal);
+    const methodology = await this.scaffolder.methodologyFor(dto);
+    // A linked project copies no styleguide, so only a copy needs the admin.
+    if (!methodology && blueprint.conventions?.styleguide && !dto.parentId) await this.access.requireRole(principal, dto.workspaceId, 'admin');
+    return this.scaffolder.scaffold(dto, blueprint, principal, methodology);
   }
 
   // A literal segment, so before `:id`.
@@ -138,6 +147,48 @@ export class ProjectsController {
    * Declared after `:id` but on a longer path, so Nest's declaration-order
    * matching is not a hazard here the way it is for a bare literal segment.
    */
+  @Get(':id/methodology')
+  @Returns('ProjectMethodologyResponse')
+  @Access('viewer', 'project')
+  @ApiOperation({ summary: "The project's methodology (#1121): the blueprint it links, live, and its levels; null when none" })
+  getMethodology(@Param('id', ParseUUIDPipe) id: string): Promise<ProjectMethodologyResponse> {
+    return this.methodology.get(id);
+  }
+
+  @Get(':id/methodology/preview')
+  @Returns('MethodologyPreviewResponse')
+  @Access('editor', 'project')
+  @ApiOperation({
+    summary:
+      'What linking a methodology would do: the sections of its tree the project lacks (by title, top level and one down) and how ' +
+      "many pages each of its levels would count. Writes nothing. Workspace admin or the project's maintainer.",
+  })
+  async previewMethodology(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: MethodologyPreviewQueryDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<MethodologyPreviewResponse> {
+    await this.permissions.requireProjectManage(principal, id);
+    return this.methodology.preview(id, query.blueprint, principal, query.locale);
+  }
+
+  @Put(':id/methodology')
+  @Returns('ProjectMethodologyResponse')
+  @Access('editor', 'project')
+  @ApiOperation({
+    summary:
+      'Link, switch or unlink (null) the project\'s methodology, and create the confirmed sections. Its templates, workflows, ' +
+      "styleguide and glossary are read live; no page is deleted, moved or edited. Workspace admin or the project's maintainer.",
+  })
+  async setMethodology(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SetProjectMethodologyDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<ProjectMethodologyResponse> {
+    await this.permissions.requireProjectManage(principal, id);
+    return this.methodology.set(id, dto, principal);
+  }
+
   @Get(':id/overview')
   @Returns('ProjectOverviewResponse')
   @Access('viewer', 'project')

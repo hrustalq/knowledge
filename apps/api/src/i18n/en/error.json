@@ -643,7 +643,9 @@
     "limitReached": "A workspace can hold at most {max} blueprints",
     "alreadyCustomized": "This built-in blueprint is already customised in this workspace",
     "contentRequired": "A saved blueprint needs its content",
-    "generateEmpty": "The assistant returned no usable outline. Try describing the project in more detail."
+    "generateEmpty": "The assistant returned no usable outline. Try describing the project in more detail.",
+    "inUse": "This blueprint is the methodology of {count} project(s). Unlink it from them, or archive it instead.",
+    "unknownSection": "The methodology has no section \"{id}\" to create here"
   },
   "share": {
     "notFound": "This link does not exist, has expired or was revoked",

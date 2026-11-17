@@ -259,16 +259,20 @@ describe('POST /v1/projects/scaffold', () => {
     const scaffolder = {
       resolve: vi.fn((dto: { blueprint?: Blueprint }) => dto.blueprint ?? { name: { en: 'B' }, tree: [] }),
       scaffold: vi.fn(async () => ({})),
+      methodologyFor: vi.fn(async (dto: { methodologyKey?: string }) => dto.methodologyKey ?? null),
     };
     const access = { requireRole: vi.fn(async () => undefined) };
     const s = {} as never;
-    const controller = new ProjectsController(s, s, s, scaffolder as never, s, access as never, s);
+    const controller = new ProjectsController(s, s, s, scaffolder as never, s, s, access as never, s);
     const principal = { userId: 'u1' } as never;
     const base = { workspaceId: 'ws', name: 'P', locale: 'en' as const };
 
     await controller.scaffold({ ...base, blueprintKey: 'code-product' }, principal);
     await controller.scaffold({ ...base, blueprint: { name: { en: 'B' }, tree: [], conventions: { styleguide } } as never, parentId: 'x' }, principal);
+    // Linked to a methodology (#1125): its styleguide is read live, never copied, so no admin.
+    await controller.scaffold({ ...base, blueprint: { name: { en: 'B' }, tree: [], conventions: { styleguide } } as never, methodologyKey: 'kdc' }, principal);
     expect(access.requireRole).not.toHaveBeenCalled();
+    expect(scaffolder.scaffold).toHaveBeenLastCalledWith(expect.anything(), expect.anything(), principal, 'kdc');
 
     await controller.scaffold({ ...base, blueprint: { name: { en: 'B' }, tree: [], conventions: { styleguide } } as never }, principal);
     expect(access.requireRole).toHaveBeenCalledWith(principal, 'ws', 'admin');

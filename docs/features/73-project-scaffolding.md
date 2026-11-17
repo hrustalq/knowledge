@@ -172,8 +172,15 @@ follows the template model:
 - A row without one is a **saved** blueprint, listed after the built-ins,
   newest first. Its key is its id.
 - A content change appends a version; `enabled` does not.
-- Nothing pins a blueprint. A scaffold copies it, so a saved one is deleted
-  outright, in one guarded statement (a second delete is a 404).
+- A project may link a blueprint as its methodology (#1121,
+  `projects.blueprint_id`): linked, a blueprint cannot be deleted (409 naming
+  how many projects use it), only archived — `enabled = false`, hidden from
+  pickers, still read by the projects that link it. An unlinked saved one is
+  deleted outright, in one guarded statement (a second delete is a 404).
+- Linking an untouched built-in creates its override row with
+  `current_version = 0`, which serves the code, so the project has a row id
+  to link. Scaffolding from a methodology (`isMethodology`) links the new
+  project instead of copying the conventions into it.
 
 `resolve(workspaceId, key)` is what scaffold calls: a built-in key with its
 override applied, or a saved id. A hidden or unknown key is a 404, since a key

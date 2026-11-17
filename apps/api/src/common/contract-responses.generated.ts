@@ -263,6 +263,7 @@ import type {
   MergeRequestConflictsResponse,
   MergeRequestDiffResponse,
   MergeRequestThreadResponse,
+  MethodologyPreviewResponse,
   MyDraftBranchResponse,
   MyLiveDraftResponse,
   NotificationPreferences,
@@ -278,6 +279,7 @@ import type {
   ProjectCaptureParentSettings,
   ProjectDeletionPreview,
   ProjectGitResponse,
+  ProjectMethodologyResponse,
   ProjectOverviewResponse,
   ProjectSettingOverridesResponse,
   ProjectSettingsAccess,
@@ -644,6 +646,7 @@ export interface ContractResponses {
   MergeRequestConflictsResponse: MergeRequestConflictsResponse;
   MergeRequestDiffResponse: MergeRequestDiffResponse;
   MergeRequestThreadResponse: MergeRequestThreadResponse;
+  MethodologyPreviewResponse: MethodologyPreviewResponse;
   MyDraftBranchResponse: MyDraftBranchResponse;
   MyLiveDraftResponse: MyLiveDraftResponse;
   NotificationPreferences: NotificationPreferences;
@@ -659,6 +662,7 @@ export interface ContractResponses {
   ProjectCaptureParentSettings: ProjectCaptureParentSettings;
   ProjectDeletionPreview: ProjectDeletionPreview;
   ProjectGitResponse: ProjectGitResponse;
+  ProjectMethodologyResponse: ProjectMethodologyResponse;
   ProjectOverviewResponse: ProjectOverviewResponse;
   ProjectSettingOverridesResponse: ProjectSettingOverridesResponse;
   ProjectSettingsAccess: ProjectSettingsAccess;

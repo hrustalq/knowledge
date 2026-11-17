@@ -8,6 +8,7 @@ import { PermissionsCoreModule } from '../permissions/permissions-core.module.js
 import { TemplatesCoreModule } from '../templates/templates-core.module.js';
 import { ProjectsCoreModule } from './projects-core.module.js';
 import { ProjectScaffoldService } from './project-scaffold.service.js';
+import { ProjectMethodologyService } from './project-methodology.service.js';
 
 /**
  * Blueprints and the scaffold write (#716), controller-free: they back
@@ -16,7 +17,7 @@ import { ProjectScaffoldService } from './project-scaffold.service.js';
  */
 @Module({
   imports: [ProjectsCoreModule, DocumentsCoreModule, TemplatesCoreModule, AiCoreModule, PermissionsCoreModule, WorkflowCoreModule],
-  providers: [BlueprintsService, MethodologyMaterializerService, ProjectScaffoldService],
-  exports: [BlueprintsService, MethodologyMaterializerService, ProjectScaffoldService],
+  providers: [BlueprintsService, MethodologyMaterializerService, ProjectScaffoldService, ProjectMethodologyService],
+  exports: [BlueprintsService, MethodologyMaterializerService, ProjectScaffoldService, ProjectMethodologyService],
 })
 export class ProjectScaffoldCoreModule {}

@@ -107,8 +107,8 @@ describe('BlueprintsService (#716, phase 4)', () => {
       { id: SAVED_ID, workspaceId: 'ws', builtInKey: null, enabled: true, currentVersion: 1, versions: [{ version: 1, blueprint: saved }] },
     ]);
     const { blueprints } = await service.list('ws');
-    expect(blueprints.map((b) => b.key)).toEqual(['code-product', 'service-docs', 'blank', SAVED_ID]);
-    expect(blueprints[2]).toMatchObject({ builtIn: true, id: 'o2', version: 2, blueprint: saved });
+    expect(blueprints.map((b) => b.key)).toEqual(['construction', 'code-product', 'service-docs', 'blank', SAVED_ID]);
+    expect(blueprints[3]).toMatchObject({ builtIn: true, id: 'o2', version: 2, blueprint: saved });
     expect((await service.list('ws', true)).blueprints[0]).toMatchObject({ key: 'discovery', enabled: false });
 
     await expect(service.resolve('ws', 'discovery')).rejects.toThrow(/notFound/);

@@ -143,7 +143,7 @@ export function levelOf(templateRef: string | null | undefined, levels: readonly
   return levels?.find((level) => level.templateRefs.includes(templateRef)) ?? null;
 }
 
-export const BUILT_IN_BLUEPRINT_KEYS = ['discovery', 'code-product', 'service-docs', 'blank'] as const;
+export const BUILT_IN_BLUEPRINT_KEYS = ['discovery', 'construction', 'code-product', 'service-docs', 'blank'] as const;
 export type BuiltInBlueprintKey = (typeof BUILT_IN_BLUEPRINT_KEYS)[number];
 
 export function isBuiltInBlueprintKey(value: unknown): value is BuiltInBlueprintKey {

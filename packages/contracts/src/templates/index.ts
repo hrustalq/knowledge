@@ -41,6 +41,11 @@ export const BUILT_IN_TEMPLATE_KEYS = [
   'test-data',
   'bug-report',
   'research-question',
+  // Knowledge-Driven Construction's levels (#1129).
+  'intent',
+  'rule',
+  'quality-scenario',
+  'work-unit',
 ] as const;
 export type BuiltInTemplateKey = (typeof BUILT_IN_TEMPLATE_KEYS)[number];
 

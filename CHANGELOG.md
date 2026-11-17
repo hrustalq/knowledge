@@ -120,6 +120,13 @@ in the pull request that introduces them — see
 - Language and theme moved from the top bar to Profile settings, and both follow your device unless you choose:
   Language has Automatic (your browser's language), Theme has System, Light and Dark, and System switches with the
   device. The top bar keeps every control on screen at large text sizes. (#1040)
+- Editing on a phone or tablet: the toolbar's ⋯ menu has Move block up, Move block down, Duplicate block and Delete
+  block for the block you are typing in. The block handle that showed up off-screen on touch is gone. (#1063)
+- Workflow builder on a phone or tablet: while editing, the workflow list steps aside and the canvas fills the
+  screen, so the page no longer scrolls under a canvas that swallows the swipe. The breadcrumb leads back to the list.
+  (#1061)
+- Revisions on a phone: each revision is a compact two-line row that fits the panel, and a person's working branch
+  shows as "Draft" with their avatar instead of a long draft/… identifier (also in the desktop table). (#1054)
 
 ## [0.56.0] — 2026-11-16
 

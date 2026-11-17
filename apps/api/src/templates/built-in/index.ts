@@ -13,6 +13,10 @@ import { TEST_CASE_TEMPLATE } from './test-case.js';
 import { TEST_DATA_TEMPLATE } from './test-data.js';
 import { BUG_REPORT_TEMPLATE } from './bug-report.js';
 import { RESEARCH_QUESTION_TEMPLATE } from './research-question.js';
+import { INTENT_TEMPLATE } from './intent.js';
+import { RULE_TEMPLATE } from './rule.js';
+import { QUALITY_SCENARIO_TEMPLATE } from './quality-scenario.js';
+import { WORK_UNIT_TEMPLATE } from './work-unit.js';
 
 export type { BuiltInTemplate, BuiltInTemplateText } from './types.js';
 
@@ -35,4 +39,8 @@ export const BUILT_IN_TEMPLATES: Readonly<Record<BuiltInTemplateKey, BuiltInTemp
   'test-data': TEST_DATA_TEMPLATE,
   'bug-report': BUG_REPORT_TEMPLATE,
   'research-question': RESEARCH_QUESTION_TEMPLATE,
+  intent: INTENT_TEMPLATE,
+  rule: RULE_TEMPLATE,
+  'quality-scenario': QUALITY_SCENARIO_TEMPLATE,
+  'work-unit': WORK_UNIT_TEMPLATE,
 };

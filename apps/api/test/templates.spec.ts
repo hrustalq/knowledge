@@ -274,6 +274,7 @@ interface TemplateRow {
   id: string;
   workspaceId: string;
   projectId: string | null;
+  blueprintId: string | null;
   builtInKey: string | null;
   name: string;
   description: string | null;
@@ -336,6 +337,7 @@ function fakePrisma() {
         const row: TemplateRow = {
           id: randomUUID(),
           projectId: null,
+          blueprintId: null,
           builtInKey: null,
           description: null,
           icon: null,
@@ -466,6 +468,31 @@ describe('TemplatesService', () => {
     const { service } = makeService();
     const bad = '---\nrelations:\n  - { type: LIKES, target: "x" }\n---\nx';
     await expect(service.create({ workspaceId: WS, name: 'Bad', source: bad })).rejects.toThrow(/source\.invalidRelation/);
+  });
+
+  it('lists a methodology’s templates only in projects linked to it, a project’s own name first (#1123)', async () => {
+    const { service, prisma } = makeService();
+    const linked = { blueprintId: null as string | null };
+    Object.assign(prisma, { project: { findUnique: async () => ({ ...linked }) } });
+    const own = await service.create({ workspaceId: WS, projectId: PROJECT, name: 'Rule', source: CUSTOM });
+    const shared = await service.create({ workspaceId: WS, name: 'Intent', source: CUSTOM });
+    const owned = (name: string) => service.create({ workspaceId: WS, name, source: CUSTOM }).then((t) => {
+      Object.assign(prisma.templates.find((r) => r.id === t.id)!, { blueprintId: 'bp-1' });
+      return t.id;
+    });
+    const [ruleOwned, intentOwned, scenario] = [await owned('rule-m'), await owned('intent-m'), await owned('Scenario')];
+    Object.assign(prisma.templates.find((r) => r.id === ruleOwned)!, { name: 'rule' });
+    Object.assign(prisma.templates.find((r) => r.id === intentOwned)!, { name: 'Intent' });
+    const ids = async (projectId?: string) =>
+      (await service.list({ workspaceId: WS, ...(projectId ? { projectId } : {}) })).templates.filter((t) => t.id).map((t) => t.id);
+
+    // Unlinked, and workspace-wide: never a methodology's row.
+    expect(await ids(PROJECT)).toEqual([own.id, shared.id]);
+    expect(await ids()).toEqual([own.id, shared.id]);
+    // Linked: its rows join; the project's own `Rule` hides the methodology's `rule`,
+    // and the methodology's `Intent` hides the workspace's.
+    linked.blueprintId = 'bp-1';
+    expect(new Set(await ids(PROJECT))).toEqual(new Set([own.id, intentOwned, scenario]));
   });
 
   it('hides a built-in with an override row, and deleting the row restores it', async () => {

@@ -162,6 +162,7 @@ function harness() {
           id: `row-${++seq}`,
           kind: 'skill',
           projectId: null,
+          blueprintId: null,
           rules: null,
           description: '',
           triggers: [],
@@ -186,6 +187,7 @@ function harness() {
       findFirst: vi.fn(async ({ where }: { where: { id: string; workspaceId: string } }) =>
         [PROJECT, OTHER_PROJECT].includes(where.id) && where.workspaceId === WS ? { id: where.id } : null,
       ),
+      findUnique: vi.fn(async () => ({ blueprintId: null })),
     },
     connector: { findMany: vi.fn(async () => []) },
   };

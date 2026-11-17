@@ -45,8 +45,10 @@ The vocabulary (blueprint, collection, scaffold stub) is in
 Taken with the user before building (2026-11-02):
 
 - **A blueprint is a tree plus conventions.** Conventions are the styleguide,
-  project templates and glossary seed terms. Connectors, agents, triggers and
-  sites are not part of one.
+  project templates and glossary seed terms. Connectors, triggers and sites are
+  not part of one. *Amended by [82](82-methodologies.md) (#1121):* a blueprint
+  may also declare levels, workflows and agents, which makes it a methodology,
+  and a project can link one live instead of copying it.
 - **Three sources besides the built-ins:** a saved blueprint, one derived from
   an existing project, and one the `scaffolder` drafts from a description.
   Saved ones follow the template model ([42](42-page-templates.md)): built-ins
@@ -135,14 +137,20 @@ path, with up to 20 zod issues in `details.issues`.
 ### Built-ins
 
 Code in `apps/api/src/blueprints/built-in/`, keyed by
-`BUILT_IN_BLUEPRINT_KEYS` (`discovery`, `code-product`, `service-docs`,
-`blank`). Every page has en and ru titles and guidance (`page(en, ru, …)` in
+`BUILT_IN_BLUEPRINT_KEYS` (`discovery`, `construction`, `code-product`,
+`service-docs`, `blank`). Every page has en and ru titles and guidance (`page(en, ru, …)` in
 `built-in/page.ts`).
 
 - **Discovery-first** (`discovery`): 00 — Decision summary; 01 — Goals and MVP
   scope, 02 — Architecture, 03 — Risks and threat model and 04 — Economics, each
   a collection of `builtin:research-question` pages; 05 — Pilot (Pilot design,
-  Test scenarios, Metrics).
+  Test scenarios, Metrics). Since #1129 a methodology: levels question,
+  options, findings, decision and an `investigator` agent
+  ([82](82-methodologies.md#the-built-ins)).
+- **Knowledge-Driven Construction** (`construction`, #1129): a section per
+  level from L0 Intent to L7 Code plus a Glossary page, a styleguide, glossary
+  terms, four agents and one workflow. A methodology
+  ([82](82-methodologies.md#the-built-ins)).
 - **Code product** (`code-product`): Product (Vision and audience, Brief, MVP
   scope, Business model, Delivery plan); Domain (Domain model, Glossary);
   Discovery (collection, `{{date}} session`); Architecture (System overview +
@@ -157,7 +165,8 @@ Code in `apps/api/src/blueprints/built-in/`, keyed by
 
 Phase 1 also added the built-in page template `research-question` (en/ru:
 Question, Options, Criteria, Findings, Decision, Open questions) beside the
-others in `apps/api/src/templates/built-in/`.
+others in `apps/api/src/templates/built-in/`. #1129 added `intent`, `rule`,
+`quality-scenario` and `work-unit` there for Knowledge-Driven Construction.
 
 ### Saved blueprints
 
@@ -172,8 +181,15 @@ follows the template model:
 - A row without one is a **saved** blueprint, listed after the built-ins,
   newest first. Its key is its id.
 - A content change appends a version; `enabled` does not.
-- Nothing pins a blueprint. A scaffold copies it, so a saved one is deleted
-  outright, in one guarded statement (a second delete is a 404).
+- A project may link a blueprint as its methodology (#1121,
+  `projects.blueprint_id`): linked, a blueprint cannot be deleted (409 naming
+  how many projects use it), only archived — `enabled = false`, hidden from
+  pickers, still read by the projects that link it. An unlinked saved one is
+  deleted outright, in one guarded statement (a second delete is a 404).
+- Linking an untouched built-in creates its override row with
+  `current_version = 0`, which serves the code, so the project has a row id
+  to link. Scaffolding from a methodology (`isMethodology`) links the new
+  project instead of copying the conventions into it.
 
 `resolve(workspaceId, key)` is what scaffold calls: a built-in key with its
 override applied, or a saved id. A hidden or unknown key is a 404, since a key
@@ -511,7 +527,7 @@ from a blueprint*, in the write flows only. Derive and generate are not tools.
 | `POST /v1/blueprints/generate` `{ workspaceId, brief, blueprint?, rounds?, draft? }` | editor, `assistant` on | A blueprint the scaffolder drafted (`done`), or the next interview round (`asking`) |
 | `POST /v1/blueprints` | admin | Save a blueprint, or override or hide a built-in (`builtInKey`) |
 | `PATCH /v1/blueprints/:id` | admin | Change content (appends a version) or `enabled` |
-| `DELETE /v1/blueprints/:id` | admin | Delete a saved blueprint, or reset a built-in |
+| `DELETE /v1/blueprints/:id` | admin | Delete a saved blueprint, or reset a built-in; 409 while a project links it (switch it off instead) |
 | `POST /v1/projects/scaffold` | editor; admin with a styleguide | Create the project, conventions and pages in one transaction |
 
 ## Limits

@@ -115,6 +115,11 @@ export class AiAgentsService {
     const isBuiltIn = (BUILT_IN_AGENT_KEYS as readonly string[]).includes(key);
     const existing = await this.prisma.aiAgent.findUnique({ where: { workspaceId_key: { workspaceId, key } } });
     if (!isBuiltIn && !existing) throw new NotFoundException(t('error.ai.agentNotFound', { key }));
+    // A methodology's agent (#1127) is its methodology's text: here, only the
+    // switch and the model pin, the overrides an admin keeps on top of it.
+    if (existing?.blueprintId && Object.keys(dto).some((field) => !METHODOLOGY_AGENT_FIELDS.has(field))) {
+      throw new BadRequestException(t('error.ai.agentFromMethodology', { key }));
+    }
 
     await this.validate(workspaceId, dto.tools ?? undefined, dto.skillIds ?? undefined, dto.modelId ?? undefined);
 
@@ -229,6 +234,10 @@ export class AiAgentsService {
     if ((BUILT_IN_AGENT_KEYS as readonly string[]).includes(key)) {
       throw new BadRequestException(t('error.ai.agentIsBuiltInDelete', { key }));
     }
+    // A methodology's agent goes when the methodology stops declaring it (switched off), never here.
+    if (await this.prisma.aiAgent.count({ where: { workspaceId, key, blueprintId: { not: null } } })) {
+      throw new BadRequestException(t('error.ai.agentFromMethodology', { key }));
+    }
     const deleted = await this.prisma.aiAgent.deleteMany({ where: { workspaceId, key } });
     if (deleted.count === 0) throw new NotFoundException(t('error.ai.agentNotFound', { key }));
     this.registry.invalidate(workspaceId);
@@ -297,11 +306,16 @@ export class AiAgentsService {
   }
 }
 
+/** What an admin may change on a methodology's agent: its switch and its model pin. */
+const METHODOLOGY_AGENT_FIELDS = new Set(['enabled', 'modelId']);
+
 function toSummary(agent: ResolvedAgent, row: AiAgent | null): AiAgentSummary {
   return {
     id: row?.id ?? null,
     key: agent.key,
     builtIn: agent.builtIn,
+    blueprintId: agent.blueprintId,
+    minTier: agent.minTier,
     name: agent.name,
     description: agent.description,
     instructions: agent.instructions,

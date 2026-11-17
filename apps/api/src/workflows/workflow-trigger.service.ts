@@ -12,6 +12,7 @@ import { asLocale } from '../i18n/locale.js';
 import { WorkflowProducer } from './workflow.producer.js';
 import { workflowRunLockKey } from './workflow.constants.js';
 import { withSubjectLock } from '../common/subject-lock.js';
+import { projectScope, scopeWhere, shadowByScope } from '../projects/methodology-scope.js';
 
 /**
  * Starts runs from document events (docs/features/17).
@@ -76,13 +77,11 @@ export class WorkflowTriggerService implements OnModuleInit {
     });
     if (!document || document.workspaceId !== event.workspaceId) return;
 
-    const definitions = await this.prisma.workflowDefinition.findMany({
-      where: {
-        workspaceId: document.workspaceId,
-        enabled: true,
-        OR: [{ projectId: document.projectId }, { projectId: null }],
-      },
-    });
+    const definitions = shadowByScope(
+      await this.prisma.workflowDefinition.findMany({
+        where: { workspaceId: document.workspaceId, enabled: true, ...scopeWhere(await projectScope(this.prisma, document.projectId)) },
+      }),
+    );
 
     for (const definition of definitions) {
       const trigger = (definition.trigger ?? {}) as Partial<WorkflowTrigger>;

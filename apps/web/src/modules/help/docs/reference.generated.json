@@ -4952,6 +4952,46 @@
     },
     {
       "method": "GET",
+      "path": "/v1/projects/{id}/levels",
+      "tag": "projects",
+      "summary": "The project's methodology levels in order (#1121), each with how many pages the caller can see at it. A page's level is derived from the template it was made from, never stored. Empty when the project has no methodology.",
+      "role": "viewer",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{id}/methodology",
+      "tag": "projects",
+      "summary": "The project's methodology (#1121): the blueprint it links, live, and its levels; null when none",
+      "role": "viewer",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/projects/{id}/methodology",
+      "tag": "projects",
+      "summary": "Link, switch or unlink (null) the project's methodology, and create the confirmed sections. Its templates, workflows, styleguide and glossary are read live; no page is deleted, moved or edited. Workspace admin or the project's maintainer.",
+      "role": "editor",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{id}/methodology/preview",
+      "tag": "projects",
+      "summary": "What linking a methodology would do: the sections of its tree the project lacks (by title, top level and one down) and how many pages each of its levels would count. Writes nothing. Workspace admin or the project's maintainer.",
+      "role": "editor",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/projects/{id}/overview",
       "tag": "projects",
       "summary": "Project overview: counts, contributors, recent pages",

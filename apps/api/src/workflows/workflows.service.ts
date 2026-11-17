@@ -49,6 +49,7 @@ import type {
 } from './workflows.dto.js';
 import { currentLocale, t } from '../i18n/t.js';
 import { localizeIssues, localizeTransition } from '../i18n/workflow-messages.js';
+import { projectScope, scopeWhere, shadowByScope } from '../projects/methodology-scope.js';
 
 const DEFAULT_TRIGGER: WorkflowTrigger = {
   manual: true,
@@ -87,20 +88,21 @@ export class WorkflowsService {
     const rows = await this.prisma.workflowDefinition.findMany({
       where: {
         workspaceId: query.workspaceId,
-        // A project-scoped listing still includes workspace-wide definitions:
-        // they are offered everywhere by construction.
-        ...(query.projectId ? { OR: [{ projectId: query.projectId }, { projectId: null }] } : {}),
+        // A project-scoped listing still includes workspace-wide definitions
+        // (offered everywhere by construction) and its methodology's (#1121).
+        ...scopeWhere(query.projectId ? await projectScope(this.prisma, query.projectId) : null),
       },
       orderBy: [{ name: 'asc' }],
     });
-    return { workflows: rows.map((row) => this.toDefinitionInfo(row)) };
+    return { workflows: shadowByScope(rows).map((row) => this.toDefinitionInfo(row)) };
   }
 
   async get(id: string): Promise<WorkflowDefinitionInfo> {
     return this.toDefinitionInfo(await this.requireDefinition(id));
   }
 
-  async create(dto: CreateWorkflowDto, userId?: string): Promise<WorkflowDefinitionInfo> {
+  /** `blueprintId`: a methodology's own workflow (#1121), from its materializer only — never in the DTO. */
+  async create(dto: CreateWorkflowDto & { blueprintId?: string }, userId?: string): Promise<WorkflowDefinitionInfo> {
     if (dto.projectId) await this.projects.requireProjectInWorkspace(dto.projectId, dto.workspaceId);
     await this.assertValid(dto.workspaceId, dto.graph);
 
@@ -109,6 +111,7 @@ export class WorkflowsService {
         data: {
           workspaceId: dto.workspaceId,
           projectId: dto.projectId ?? null,
+          blueprintId: dto.blueprintId ?? null,
           name: dto.name.trim(),
           description: dto.description ?? null,
           enabled: dto.enabled ?? true,
@@ -235,6 +238,9 @@ export class WorkflowsService {
       throw new NotFoundException(t('error.document.notFound', { id: input.rootDocumentId }));
     }
     if (definition.projectId && definition.projectId !== document.projectId) {
+      throw new BadRequestException(t('error.workflow.differentProject'));
+    }
+    if (definition.blueprintId && (await projectScope(this.prisma, document.projectId)).blueprintId !== definition.blueprintId) {
       throw new BadRequestException(t('error.workflow.differentProject'));
     }
 
@@ -628,15 +634,13 @@ export class WorkflowsService {
       take: 10,
       include: { definition: { select: { name: true } } },
     });
-    const available = await this.prisma.workflowDefinition.findMany({
-      where: {
-        workspaceId: document.workspaceId,
-        enabled: true,
-        OR: [{ projectId: document.projectId }, { projectId: null }],
-      },
-      select: { id: true, name: true },
-      orderBy: { name: 'asc' },
-    });
+    const available = shadowByScope(
+      await this.prisma.workflowDefinition.findMany({
+        where: { workspaceId: document.workspaceId, enabled: true, ...scopeWhere(await projectScope(this.prisma, document.projectId)) },
+        select: { id: true, name: true, projectId: true, blueprintId: true },
+        orderBy: { name: 'asc' },
+      }),
+    ).map(({ id, name }) => ({ id, name }));
 
     const stats = await this.statsFor(rows.map((r) => r.id));
     return {

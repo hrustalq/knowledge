@@ -25,7 +25,6 @@ import { toast } from 'vue-sonner'
 import { AtSign, Library, ShieldCheck, UserPlus, Wrench } from 'lucide-vue-next'
 import { WORKSPACE_ROLES } from '@knowledge/contracts'
 import type {
-  DeleteWorkspaceResponse,
   ListWorkspaceMembersResponse,
   MemberCapability,
   WorkspaceCandidate,
@@ -37,8 +36,6 @@ import { useQueryClient } from '@tanstack/vue-query'
 import { api, fetchApi } from '@/shared/api/queries'
 import { getWorkspaceId } from '@/shared/api/api'
 import { useAuthStore } from '@/stores/auth'
-import { useWorkspacesStore } from '@/stores/workspaces'
-import DeleteWorkspaceDialog from '@/modules/access/components/DeleteWorkspaceDialog.vue'
 import { Autocomplete, type AutocompleteOption } from '@knowledge/ui/autocomplete'
 import { Badge } from '@knowledge/ui/badge'
 import { UserChip } from '@/entities/person'
@@ -60,7 +57,6 @@ import {
   type FilterAccessors,
   type FilterField,
 } from '@knowledge/ui/filter-bar'
-import { Input } from '@knowledge/ui/input'
 import { Label } from '@knowledge/ui/label'
 import {
   Select,
@@ -234,47 +230,6 @@ async function loadWorkspaces() {
   } catch (e) {
     toast.error((e as Error).message)
   }
-}
-
-/* ------------------------------------------------- renaming the workspace */
-
-/** Seeded from the selected workspace, and re-seeded when the selection or its name changes. */
-const nameDraft = ref('')
-const renaming = ref(false)
-watch(() => selectedWorkspace.value?.name, (name) => (nameDraft.value = name ?? ''), { immediate: true })
-const nameChanged = computed(() => {
-  const next = nameDraft.value.trim()
-  return next !== '' && next !== selectedWorkspace.value?.name
-})
-
-async function renameWorkspace() {
-  const ws = selectedWorkspace.value
-  if (!ws || !nameChanged.value) return
-  renaming.value = true
-  try {
-    const res = await api.patch('/v1/workspaces/{id}', {
-      path: { id: ws.workspaceId },
-      body: { name: nameDraft.value.trim() },
-    })
-    ws.name = res.name
-    useWorkspacesStore().rename(res.workspaceId, res.name)
-    toast.success(t('access.renameWorkspace.renamed', { name: res.name }))
-  } catch (e) {
-    toast.error((e as Error).message)
-  } finally {
-    renaming.value = false
-  }
-}
-
-/* ------------------------------------------------- deleting the workspace */
-
-const deleteOpen = ref(false)
-
-async function onWorkspaceDeleted(res: DeleteWorkspaceResponse) {
-  toast.success(t('access.deleteWorkspace.deleted', { name: selectedWorkspace.value?.name ?? '' }))
-  // Leaves the page with a full reload when it was the active workspace.
-  await useWorkspacesStore().forget(res.workspaceId)
-  await loadWorkspaces()
 }
 
 async function loadMembers() {
@@ -526,41 +481,6 @@ const tab = usePageTabs(tabs, 'members')
         </TableBody>
         </Table>
 
-        <!-- The workspace itself (#478): its name, then the last act on it (#479). -->
-        <section
-          v-if="canManage && selectedWorkspace"
-          aria-labelledby="rename-workspace-heading"
-          class="mt-8 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-t pt-4"
-        >
-          <div class="min-w-0 flex-1 space-y-0.5">
-            <h2 id="rename-workspace-heading" class="text-sm font-medium">
-              <label for="workspace-name">{{ t('access.renameWorkspace.title') }}</label>
-            </h2>
-            <p class="text-muted-foreground max-w-prose text-xs">{{ t('access.renameWorkspace.body') }}</p>
-          </div>
-          <form class="flex w-full gap-2 sm:w-auto" @submit.prevent="renameWorkspace">
-            <Input id="workspace-name" v-model="nameDraft" maxlength="120" required class="h-8 sm:w-64" />
-            <Button type="submit" size="sm" variant="outline" :disabled="!nameChanged || renaming">
-              {{ t('access.renameWorkspace.save') }}
-            </Button>
-          </form>
-        </section>
-
-        <section
-          v-if="canManage && selectedWorkspace"
-          aria-labelledby="delete-workspace-heading"
-          class="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-t pt-4"
-        >
-          <div class="min-w-0 flex-1 space-y-0.5">
-            <h2 id="delete-workspace-heading" class="text-sm font-medium">{{ t('access.deleteWorkspace.zoneTitle') }}</h2>
-            <p class="text-muted-foreground max-w-prose text-xs break-words">
-              {{ t('access.deleteWorkspace.zoneBody', { name: selectedWorkspace.name }) }}
-            </p>
-          </div>
-          <Button size="sm" variant="outline" class="text-destructive hover:text-destructive" @click="deleteOpen = true">
-            {{ t('access.deleteWorkspace.open') }}
-          </Button>
-        </section>
       </template>
 
       <!-- Roles: the same roster, read as a ladder of what each rung grants. -->
@@ -591,13 +511,6 @@ const tab = usePageTabs(tabs, 'members')
       <!-- Accounts: the platform layer. Only rendered where it can be used. -->
       <AccessAccounts v-else-if="tab === 'accounts' && canSeeAccounts" />
     </div>
-
-    <DeleteWorkspaceDialog
-      v-if="selectedWorkspace"
-      v-model:open="deleteOpen"
-      :workspace="selectedWorkspace"
-      @deleted="onWorkspaceDeleted"
-    />
 
     <Dialog v-model:open="addOpen">
       <DialogContent class="sm:max-w-md">

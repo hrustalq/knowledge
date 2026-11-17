@@ -104,6 +104,11 @@ export interface GlossaryTerm {
    * word — see {@link effectiveGlossary}.
    */
   projectId: string | null;
+  /**
+   * The methodology that owns the term (#1121), whose linked projects inherit
+   * it ahead of workspace terms; project id is then null. Null otherwise.
+   */
+  blueprintId: string | null;
   term: string;
   /** Alternative spellings, abbreviations and inflections that link to this entry. */
   aliases: string[];
@@ -144,21 +149,30 @@ export function glossaryTermKeys(term: string, aliases: readonly string[] = []):
 }
 
 /**
- * The vocabulary of one project's pages (#926): the project's own terms, plus
- * every workspace term none of them replaces. A project term replaces a
- * workspace term that shares a folded name or alias with it — whole, not
- * spelling by spelling, and whether or not the project's term is enabled: the
- * project has said what the word means there. With no workspace terms this is
- * the project's own roster, exactly as before.
+ * The vocabulary of one project's pages (#926): the project's own terms, then
+ * its methodology's (#1121), then every workspace term none of them replaces.
+ * A nearer term replaces a farther one that shares a folded name or alias with
+ * it — whole, not spelling by spelling, and whether or not the nearer term is
+ * enabled: that level has said what the word means there. With no workspace
+ * or methodology terms this is the project's own roster, exactly as before.
+ *
+ * `terms` is what the project was handed (`GET /v1/glossary?projectId=`):
+ * methodology terms other than its own never reach it.
  */
-export function effectiveGlossary<T extends { projectId: string | null; term: string; aliases: readonly string[] }>(
+export function effectiveGlossary<T extends { projectId: string | null; blueprintId?: string | null; term: string; aliases: readonly string[] }>(
   terms: readonly T[],
   projectId: string,
 ): T[] {
-  const own = terms.filter((t) => t.projectId === projectId);
-  const taken = new Set(own.flatMap((t) => [...glossaryTermKeys(t.term, t.aliases)]));
-  const inherited = terms.filter((t) => t.projectId === null && ![...glossaryTermKeys(t.term, t.aliases)].some((key) => taken.has(key)));
-  return [...own, ...inherited];
+  const taken = new Set<string>();
+  const level = (pick: (t: T) => boolean) => {
+    const kept = terms.filter((t) => pick(t) && ![...glossaryTermKeys(t.term, t.aliases)].some((key) => taken.has(key)));
+    for (const t of kept) for (const key of glossaryTermKeys(t.term, t.aliases)) taken.add(key);
+    return kept;
+  };
+  const own = level((t) => t.projectId === projectId);
+  const methodology = level((t) => t.projectId === null && !!t.blueprintId);
+  const workspace = level((t) => t.projectId === null && !t.blueprintId);
+  return [...own, ...methodology, ...workspace];
 }
 
 // POST /v1/glossary/:id/promote

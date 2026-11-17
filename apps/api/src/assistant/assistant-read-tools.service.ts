@@ -404,6 +404,7 @@ export class AssistantReadToolsService {
         mode: 'hybrid',
         limit,
         ...(ctx.projectId ? { filters: { projectIds: [ctx.projectId] } } : {}),
+        ...(ctx.level ? { level: ctx.level } : {}),
       },
       scope,
       this.callerOf(ctx),

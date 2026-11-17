@@ -369,6 +369,7 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
   // After flows: fixtures, testSuites, testRuns, embeds and memos (unused here), then the blueprint pair (#716).
   const blueprints = { list: vi.fn(async () => ({ blueprints: [] })) };
   const scaffolds = {
+    methodologyFor: vi.fn(async () => null),
     resolve: vi.fn(async (dto: { blueprint?: unknown }) => (dto.blueprint ?? { name: { en: 'Blank' }, tree: [] }) as never),
     scaffold: vi.fn(async () => ({ project: { projectId: 'p-1' }, pageCount: 3 })),
   };
@@ -651,7 +652,7 @@ describe('McpService over a principal', () => {
     const res = await writer.callTool({ name: 'knowledge_scaffold_project', arguments: args });
     expect(res.isError).toBeFalsy();
     expect(editor.scaffolds.resolve).toHaveBeenCalledWith(expect.objectContaining({ blueprintKey: 'discovery' }));
-    expect(editor.scaffolds.scaffold).toHaveBeenCalledWith(expect.objectContaining(args), expect.anything(), principal);
+    expect(editor.scaffolds.scaffold).toHaveBeenCalledWith(expect.objectContaining(args), expect.anything(), principal, null);
 
     const styled = { workspaceId: WS_A, name: 'Payments', locale: 'en', blueprint: { name: { en: 'X' }, tree: [], conventions: { styleguide: { rules: [] } } } };
     const refused = await writer.callTool({ name: 'knowledge_scaffold_project', arguments: styled });

@@ -256,6 +256,19 @@ export class PostAssistantMessageDto {
   agentKey?: string;
 
   @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description:
+      "The methodology level to work at (#1121), a key GET /v1/projects/{id}/levels lists for the grounding page's project. " +
+      "Kept on the thread; null clears it, omitted keeps the thread's. Its agent is the default when `agentKey` names none, " +
+      'and its guidance joins the prompt. A key the grounding page\'s methodology does not declare, or no grounding page, is a 400.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(60, { message: vmsg('maxLength') })
+  level?: string | null;
+
+  @ApiPropertyOptional({
     type: [ChatAttachmentDto],
     description: 'Ephemeral file content for this turn only — not persisted verbatim into thread history',
   })

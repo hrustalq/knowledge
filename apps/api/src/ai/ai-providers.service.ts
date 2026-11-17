@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AiProvider } from '@prisma/client';
 import type { AiProviderSummary, AiProviderKind } from '@knowledge/contracts';
@@ -71,7 +71,13 @@ export class AiProvidersService {
     };
   }
 
-  async create(workspaceId: string, input: UpsertProviderInput, actorId?: string): Promise<AiProviderSummary> {
+  async create(
+    workspaceId: string,
+    input: UpsertProviderInput & { model?: string; makeDefault?: boolean },
+    actorId?: string,
+  ): Promise<AiProviderSummary> {
+    const model = input.model?.trim();
+    if (input.makeDefault && !model) throw new BadRequestException(t('error.ai.modelRequired'));
     const clash = await this.prisma.aiProvider.findUnique({
       where: { workspaceId_name: { workspaceId, name: input.name } },
     });
@@ -79,21 +85,34 @@ export class AiProvidersService {
     await assertSafeBaseUrl(input.baseUrl, this.allowPrivate);
 
     const id = randomUUID();
-    const row = await this.prisma.aiProvider.create({
-      data: {
-        id,
-        workspaceId,
-        name: input.name,
-        provider: input.provider,
-        baseUrl: input.baseUrl ?? null,
-        apiKeyCipher: this.encrypt(input.apiKey, { id, workspaceId }),
-        temperature: input.temperature ?? null,
-        maxToolCalls: input.maxToolCalls ?? null,
-        timeoutMs: input.timeoutMs ?? null,
-        enabled: input.enabled ?? true,
-        createdBy: actorId ?? null,
-      },
+    const row = await this.prisma.$transaction(async (tx) => {
+      const provider = await tx.aiProvider.create({
+        data: {
+          id,
+          workspaceId,
+          name: input.name,
+          provider: input.provider,
+          baseUrl: input.baseUrl ?? null,
+          apiKeyCipher: this.encrypt(input.apiKey, { id, workspaceId }),
+          temperature: input.temperature ?? null,
+          maxToolCalls: input.maxToolCalls ?? null,
+          timeoutMs: input.timeoutMs ?? null,
+          enabled: input.enabled ?? true,
+          createdBy: actorId ?? null,
+        },
+      });
+      if (model) {
+        const created = await tx.aiModel.create({
+          data: { workspaceId, providerId: id, code: model, source: 'manual', createdBy: actorId ?? null },
+        });
+        if (input.makeDefault) {
+          const routes = { chatModelId: created.id, reviewModelId: created.id, extractionModelId: created.id, updatedBy: actorId ?? null };
+          await tx.aiSettings.upsert({ where: { workspaceId }, create: { workspaceId, ...routes }, update: routes });
+        }
+      }
+      return provider;
     });
+    if (model) this.models.invalidate(workspaceId);
     return this.toSummary(row);
   }
 

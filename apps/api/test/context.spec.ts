@@ -144,6 +144,7 @@ describe('ContextService', () => {
         ]),
       },
       project: {
+        findUnique: vi.fn(async () => ({ blueprintId: null })),
         findMany: vi.fn(async (q: { where: { id: { in: string[] } } }) =>
           [{ id: OPEN, restricted: false }, { id: SECRET, restricted: true }].filter((p) => q.where.id.in.includes(p.id)),
         ),

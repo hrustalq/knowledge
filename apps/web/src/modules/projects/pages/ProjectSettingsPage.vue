@@ -47,6 +47,7 @@ import { Button } from '@knowledge/ui/button'
 import { Input } from '@knowledge/ui/input'
 import { PageState } from '@knowledge/ui/layout'
 import ProjectSettingRow from '@/modules/projects/components/ProjectSettingRow.vue'
+import ProjectMethodologySection from '@/modules/projects/components/ProjectMethodologySection.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -237,6 +238,8 @@ const links = computed(() => [
         <RouterLink :to="`/settings/projects/${projectId}`" class="text-primary hover:underline">{{ t('projectSettings.back') }}</RouterLink>
       </p>
     </header>
+
+    <ProjectMethodologySection :project-id="projectId" :can-write="canWrite" />
 
     <section v-if="verification" class="space-y-2" aria-labelledby="ps-verification">
       <div>

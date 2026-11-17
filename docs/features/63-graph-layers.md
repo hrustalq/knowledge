@@ -39,6 +39,13 @@ the service.
   - Every result says where it sits: `layer` and `communityPath`.
 - `global_overview` and `knowledge_global_overview` take an optional `level`.
 
+**Not the same thing as methodology levels** ([82](82-methodologies.md#levels)). These layers describe
+the graph: they are derived from an entity's key and say what kind of thing it is. A methodology's
+levels (L0 Intent to L7 Code, or question to decision) describe how a team works: they are derived
+from the template a page was made from and say what stage of the work the page holds. The two are
+separate axes. Levels neither replace nor rename layers, and the `level` a community hierarchy takes
+is unrelated to a page's methodology level.
+
 ## Entity layers
 
 One classifier in `@knowledge/contracts` (`entityLayerFor(key)`), read

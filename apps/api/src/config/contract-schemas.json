@@ -1680,6 +1680,18 @@
       "builtIn": {
         "type": "boolean"
       },
+      "blueprintId": {
+        "type": "string",
+        "nullable": true
+      },
+      "minTier": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ModelTier"
+          }
+        ],
+        "nullable": true
+      },
       "name": {
         "type": "string"
       },
@@ -1811,6 +1823,8 @@
       "id",
       "key",
       "builtIn",
+      "blueprintId",
+      "minTier",
       "name",
       "description",
       "instructions",
@@ -1991,6 +2005,14 @@
           }
         ],
         "nullable": true
+      },
+      "tier": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ModelTier"
+          }
+        ],
+        "nullable": true
       }
     },
     "required": [
@@ -2003,7 +2025,8 @@
       "inChat",
       "available",
       "kind",
-      "capabilities"
+      "capabilities",
+      "tier"
     ]
   },
   "AiMyUsageResponse": {
@@ -5660,6 +5683,7 @@
                 "type": "string",
                 "enum": [
                   "project",
+                  "methodology",
                   "workspace"
                 ]
               }
@@ -6025,6 +6049,10 @@
         "type": "string",
         "nullable": true
       },
+      "level": {
+        "type": "string",
+        "nullable": true
+      },
       "createdBy": {
         "type": "string"
       },
@@ -6044,6 +6072,7 @@
       "documentId",
       "title",
       "modelId",
+      "level",
       "createdBy",
       "createdAt",
       "updatedAt"
@@ -6299,11 +6328,60 @@
       },
       "conventions": {
         "$ref": "#/components/schemas/BlueprintConventions"
+      },
+      "levels": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/BlueprintLevel"
+        }
+      },
+      "workflows": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/BlueprintWorkflow"
+        }
+      },
+      "agents": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/BlueprintAgent"
+        }
       }
     },
     "required": [
       "name",
       "tree"
+    ]
+  },
+  "BlueprintAgent": {
+    "type": "object",
+    "properties": {
+      "key": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "description": {
+        "type": "string"
+      },
+      "instructions": {
+        "type": "string"
+      },
+      "tools": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "minTier": {
+        "$ref": "#/components/schemas/ModelTier"
+      }
+    },
+    "required": [
+      "key",
+      "name",
+      "instructions"
     ]
   },
   "BlueprintCollection": {
@@ -6407,6 +6485,37 @@
   "BlueprintInterviewRound": {
     "$ref": "#/components/schemas/InterviewRound"
   },
+  "BlueprintLevel": {
+    "type": "object",
+    "properties": {
+      "key": {
+        "type": "string"
+      },
+      "name": {
+        "$ref": "#/components/schemas/BlueprintText"
+      },
+      "description": {
+        "$ref": "#/components/schemas/BlueprintText"
+      },
+      "templateRefs": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/TemplateRef"
+        }
+      },
+      "agentKey": {
+        "type": "string"
+      },
+      "guidance": {
+        "$ref": "#/components/schemas/BlueprintText"
+      }
+    },
+    "required": [
+      "key",
+      "name",
+      "templateRefs"
+    ]
+  },
   "BlueprintNode": {
     "type": "object",
     "properties": {
@@ -6470,6 +6579,27 @@
         "type": "string"
       }
     }
+  },
+  "BlueprintWorkflow": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "description": {
+        "type": "string"
+      },
+      "graph": {
+        "$ref": "#/components/schemas/WorkflowGraph"
+      },
+      "trigger": {
+        "$ref": "#/components/schemas/WorkflowTrigger"
+      }
+    },
+    "required": [
+      "name",
+      "graph"
+    ]
   },
   "BranchAccessResponse": {
     "type": "object",
@@ -6558,7 +6688,11 @@
       "test-case",
       "test-data",
       "bug-report",
-      "research-question"
+      "research-question",
+      "intent",
+      "rule",
+      "quality-scenario",
+      "work-unit"
     ]
   },
   "BulkRejectCapturesResponse": {
@@ -11311,6 +11445,9 @@
       },
       "hidden": {
         "type": "boolean"
+      },
+      "level": {
+        "$ref": "#/components/schemas/PageLevel"
       }
     },
     "required": [
@@ -11547,6 +11684,9 @@
       },
       "hidden": {
         "type": "boolean"
+      },
+      "level": {
+        "$ref": "#/components/schemas/PageLevel"
       },
       "children": {
         "type": "array",
@@ -13082,6 +13222,7 @@
         "type": "string",
         "enum": [
           "project",
+          "methodology",
           "workspace",
           null
         ],
@@ -13492,6 +13633,10 @@
         "type": "string",
         "nullable": true
       },
+      "blueprintId": {
+        "type": "string",
+        "nullable": true
+      },
       "term": {
         "type": "string"
       },
@@ -13543,6 +13688,7 @@
       "termId",
       "workspaceId",
       "projectId",
+      "blueprintId",
       "term",
       "aliases",
       "definition",
@@ -18544,6 +18690,79 @@
       "squash"
     ]
   },
+  "MethodologyPreviewResponse": {
+    "type": "object",
+    "properties": {
+      "blueprintKey": {
+        "type": "string"
+      },
+      "sections": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/MethodologyPreviewSection"
+        }
+      },
+      "levels": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "pages": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "key",
+            "name",
+            "pages"
+          ]
+        }
+      }
+    },
+    "required": [
+      "blueprintKey",
+      "sections",
+      "levels"
+    ]
+  },
+  "MethodologyPreviewSection": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string"
+      },
+      "parentTitle": {
+        "type": "string",
+        "nullable": true
+      },
+      "pages": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "id",
+      "title",
+      "parentTitle",
+      "pages"
+    ]
+  },
+  "ModelTier": {
+    "type": "string",
+    "enum": [
+      "small",
+      "medium",
+      "large"
+    ]
+  },
   "MyDraftBranchResponse": {
     "type": "object",
     "properties": {
@@ -18953,6 +19172,21 @@
       "to",
       "uniqueReaders",
       "views"
+    ]
+  },
+  "PageLevel": {
+    "type": "object",
+    "properties": {
+      "key": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "key",
+      "name"
     ]
   },
   "PlaudAuthorizeResponse": {
@@ -19583,6 +19817,102 @@
     },
     "required": [
       "url"
+    ]
+  },
+  "ProjectLevelsResponse": {
+    "type": "object",
+    "properties": {
+      "projectId": {
+        "type": "string"
+      },
+      "levels": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string",
+              "nullable": true
+            },
+            "agentKey": {
+              "type": "string",
+              "nullable": true
+            },
+            "pages": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "key",
+            "name",
+            "description",
+            "agentKey",
+            "pages"
+          ]
+        }
+      }
+    },
+    "required": [
+      "projectId",
+      "levels"
+    ]
+  },
+  "ProjectMethodologyResponse": {
+    "type": "object",
+    "properties": {
+      "projectId": {
+        "type": "string"
+      },
+      "methodology": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "name": {
+                "$ref": "#/components/schemas/BlueprintText"
+              },
+              "icon": {
+                "type": "string",
+                "nullable": true
+              },
+              "builtIn": {
+                "type": "boolean"
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "levels": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/BlueprintLevel"
+                }
+              }
+            },
+            "required": [
+              "key",
+              "name",
+              "icon",
+              "builtIn",
+              "enabled",
+              "levels"
+            ]
+          }
+        ],
+        "nullable": true
+      }
+    },
+    "required": [
+      "projectId",
+      "methodology"
     ]
   },
   "ProjectOverviewResponse": {
@@ -23048,6 +23378,9 @@
       },
       "layer": {
         "$ref": "#/components/schemas/EntityLayer"
+      },
+      "level": {
+        "$ref": "#/components/schemas/PageLevel"
       },
       "communityPath": {
         "type": "array",

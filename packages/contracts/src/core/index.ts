@@ -67,6 +67,17 @@ export type ApiDocumentKind = (typeof API_DOCUMENT_KINDS)[number];
 export const DOCUMENT_VISIBILITIES = ['private', 'workspace'] as const;
 export type DocumentVisibility = (typeof DOCUMENT_VISIBILITIES)[number];
 
+/**
+ * The level of the work a page sits at in its project's methodology (#1121):
+ * derived from the template it was made from (`levelOf`), never stored, so a
+ * methodology switch re-levels pages without a write. `name` is in the
+ * reader's language.
+ */
+export interface PageLevel {
+  key: string;
+  name: string;
+}
+
 export interface DocumentSummary {
   documentId: string;
   workspaceId: string;
@@ -159,6 +170,8 @@ export interface DocumentSummary {
    * who can read a page can read everything above it.
    */
   hidden?: boolean;
+  /** Absent unless the project has a methodology and the page's template is in one of its levels. */
+  level?: PageLevel;
 }
 
 export interface RevisionInfo {

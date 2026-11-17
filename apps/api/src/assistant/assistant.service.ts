@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   Logger,
@@ -22,9 +23,11 @@ import type {
   AssistantSuggestResponse,
   AssistantToolCall,
   AssistantUiBlock,
+  BlueprintLevel,
   DraftEditOp,
   FlowAnswers,
   FlowKey,
+  Locale,
   PostAssistantMessageResponse,
 } from '@knowledge/contracts';
 import {
@@ -32,8 +35,10 @@ import {
   DRAFT_EDIT_OPS,
   assessAnswer,
   assistantSourceKey,
+  blueprintText,
   draftEditNeedsAnchor,
   isPageSource,
+  ownedAgentKey,
 } from '@knowledge/contracts';
 import { ConfigService } from '@nestjs/config';
 import type { AssistantThread } from '@prisma/client';
@@ -41,6 +46,7 @@ import type { ChatCompletionMessageParam } from 'openai/resources/chat/completio
 import { PrismaService } from '../prisma/prisma.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
+import { projectLevel } from '../projects/methodology-scope.js';
 import {
   canSee,
   type AccessScope,
@@ -303,6 +309,15 @@ function flowClause(flow: FlowKey): string {
   );
 }
 
+/** A turn's methodology level (#1128) and the methodology declaring it, for its owned agent key. */
+type TurnLevel = NonNullable<Awaited<ReturnType<typeof projectLevel>>>;
+
+/** The system clause a level adds: its name, then its guidance — admin-written, trusted text. */
+function levelClause(level: BlueprintLevel, locale: Locale): string {
+  const guidance = blueprintText(level.guidance, locale).trim();
+  return `\n\nThis conversation works at the level "${blueprintText(level.name, locale)}" of the project's methodology.` + (guidance ? `\n${guidance}` : '');
+}
+
 interface PreparedTurn {
   mode: AssistantChatMode;
   /** The agent this turn runs as — its config carries any provider it pins. */
@@ -344,6 +359,8 @@ interface PreparedTurn {
   question: string;
   /** The project whose shared agent memory this turn reads and writes, if it has one. */
   projectId: string | null;
+  /** The methodology level the turn works at (#1128): its searches lean towards pages at it. */
+  level?: string;
   /** False when the answer is visible to a whole chat, whose audience personal and project memories must not enter. */
   memoryEnabled: boolean;
   /**
@@ -1061,6 +1078,8 @@ export class AssistantService {
         answers: { ...open.answers, [dto.answer.questionId]: dto.answer.value },
       };
     }
+    // Refused before the message is stored: a 400 must not leave a turn behind.
+    const level = await this.turnLevel(thread, dto, principal);
     const userMessage = await this.threads.appendMessage(
       threadId,
       'user',
@@ -1092,7 +1111,7 @@ export class AssistantService {
     // check reads the config the call will actually use. For chat that is the
     // same resolution the purpose-based one performed (same 'chat' purpose,
     // same thread pin) — it is simply no longer done twice.
-    const agent = await this.resolveTurnAgent(thread, dto, mode);
+    const agent = await this.resolveTurnAgent(thread, dto, mode, level);
     // Deliberately `config.enabled` and not `agent.enabled`: this is the
     // provider check `openAskCall` makes, and it is the one this message describes.
     // A *disabled agent* reaching here can only be the mode's fallback, which
@@ -1144,6 +1163,7 @@ export class AssistantService {
       principal,
       projectId,
       memoryEnabled,
+      level,
     );
     if (flow) {
       turn.flow = flow;
@@ -1401,6 +1421,7 @@ export class AssistantService {
       ...(ctx.audience ? { audience: ctx.audience } : {}),
       ...(ctx.channel ? { channel: ctx.channel } : {}),
       ...(turn.flow ? { flow: turn.flow } : {}),
+      ...(turn.level ? { level: turn.level } : {}),
     });
     if (!result.ok) turn.toolErrors++;
     for (const source of result.sources) {
@@ -1553,6 +1574,38 @@ export class AssistantService {
   }
 
   /**
+   * The level this turn works at (#1128): the one the message names, else the
+   * thread's. A named level must be declared by the methodology of the
+   * grounding page's project, or the turn is a 400; a remembered one that no
+   * longer is (the page moved, the methodology changed) is quietly dropped.
+   * A named level is kept on the thread, `null` clears it.
+   */
+  private async turnLevel(
+    thread: AssistantThread,
+    dto: PostAssistantMessageDto,
+    principal: Principal,
+  ): Promise<TurnLevel | null> {
+    if (dto.level === null) {
+      if (thread.level) await this.prisma.assistantThread.update({ where: { id: thread.id }, data: { level: null } });
+      return null;
+    }
+    const key = dto.level ?? thread.level;
+    if (!key) return null;
+    const pageId = dto.documentId ?? thread.documentId;
+    const page = pageId
+      ? await this.readablePage(await this.permissions.scopeFor(principal, thread.workspaceId), thread.workspaceId, pageId)
+      : null;
+    const found = page ? await projectLevel(this.prisma, page.projectId, key) : null;
+    if (!found) {
+      if (dto.level === undefined) return null;
+      throw new BadRequestException({ statusCode: 400, message: t('error.assistant.levelUnavailable'), reason: 'level-unavailable' });
+    }
+    if (dto.level !== undefined && dto.level !== thread.level)
+      await this.prisma.assistantThread.update({ where: { id: thread.id }, data: { level: dto.level } });
+    return found;
+  }
+
+  /**
    * Which agent runs this turn (docs/features/20).
    *
    * The mode toggle stays the ceiling in every branch: offered tools are
@@ -1571,9 +1624,19 @@ export class AssistantService {
     thread: AssistantThread,
     dto: PostAssistantMessageDto,
     mode: AssistantChatMode,
+    level: TurnLevel | null = null,
   ): Promise<ResolvedAgent> {
     const fallbackKey = mode === 'agent' ? 'author' : 'researcher';
     const pin = await this.aiConfig.chatPin(thread.workspaceId, thread.modelId);
+
+    // The level's agent is a default (#1128): any pick, `auto` included, beats it,
+    // and an agent that does not fit the mode falls through to the mode's own.
+    if (!dto.agentKey && level?.level.agentKey) {
+      const levelAgent = await this.agents
+        .resolve(thread.workspaceId, ownedAgentKey(level.level.agentKey, level.blueprintId), pin)
+        .catch(() => null);
+      if (levelAgent && conversational(levelAgent, mode)) return levelAgent;
+    }
 
     if (dto.agentKey && dto.agentKey !== 'auto') {
       const picked = await this.agents
@@ -1619,6 +1682,7 @@ export class AssistantService {
     principal: Principal,
     requestedProjectId?: string | null,
     memoryEnabled = true,
+    level: TurnLevel | null = null,
   ): Promise<PreparedTurn> {
     const threadId = thread.id;
     const attachments = (dto.attachments ?? []).slice(0, 3);
@@ -1779,6 +1843,9 @@ export class AssistantService {
     // here: the agent describes the role, the call site supplies the material.
     const system =
       agent.instructions +
+      // The level's guidance (#1128) qualifies the role, so it sits right after it.
+      // Without a level the prompt is byte-identical to before.
+      (level ? levelClause(level.level, principal.locale) : '') +
       // The web clause is appended here, not baked into the agent's
       // instructions, because whether the web exists at all is a per-workspace
       // fact and the instructions are a static default (docs/features/25). A
@@ -1898,6 +1965,7 @@ export class AssistantService {
       toolErrors: 0,
       question: dto.content,
       projectId,
+      ...(level ? { level: level.level.key } : {}),
       memoryEnabled,
       shareWithProject: !privateInput && !thread.privateContextAt,
     };

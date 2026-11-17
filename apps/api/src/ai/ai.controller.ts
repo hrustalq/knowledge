@@ -213,6 +213,7 @@ export class AiController {
   ): Promise<AiProviderSummary> {
     const { workspaceId, ...input } = dto;
     const provider = await this.providers.create(workspaceId, input, principal?.userId);
+    if (dto.makeDefault) this.aiConfig.invalidate(workspaceId);
     await this.activity.record({
       workspaceId,
       actor: principal?.userId,

@@ -31,6 +31,8 @@ export interface AssistantThreadSummary {
   title: string | null;
   /** The model pinned to this thread, when the member picked one. */
   modelId: string | null;
+  /** The methodology level the thread works at (#1121), a key from GET /v1/projects/{id}/levels. */
+  level: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -1058,6 +1060,8 @@ export interface AiModelSummary extends Required<ConfiguredPrice> {
   kind: AiProvider;
   /** Admin-declared capabilities, overriding the model table. Null = use the table. */
   capabilities: AgentCapability[] | null;
+  /** Its class (#1121), set by an admin; null = unknown, never picked for an agent's minimum tier. */
+  tier: ModelTier | null;
 }
 // GET /v1/ai/models?workspaceId=
 export interface ListAiModelsResponse {
@@ -1190,12 +1194,12 @@ export interface StyleguideSummary {
  * GET /v1/ai/styleguides?workspaceId=&projectId=
  *
  * `styleguide` is the one that applies to a page of that project: the project's
- * own when it has one, else the workspace's. `scope` says which it was, so the
+ * own when it has one, else its methodology's (#1121), else the workspace's. `scope` says which it was, so the
  * editor can show "inherited" rather than pretend the project wrote it.
  */
 export interface GetStyleguideResponse {
   styleguide: StyleguideSummary | null;
-  scope: 'project' | 'workspace' | null;
+  scope: 'project' | 'methodology' | 'workspace' | null;
   /** STYLEGUIDE_MAX_RULES — the form's limit, and the PUT's. */
   maxRules: number;
 }
@@ -1216,7 +1220,7 @@ export interface AssistantLintResponse {
   /** False when no model is configured for the linter, or the linter agent is disabled. */
   enabled: boolean;
   /** The styleguide the text was checked against; null when none applies (no model call then). */
-  styleguide: { id: string; name: string; scope: 'project' | 'workspace' } | null;
+  styleguide: { id: string; name: string; scope: 'project' | 'methodology' | 'workspace' } | null;
   violations: LintViolation[];
   /**
    * Violations the model reported but the harness refused: an unknown or
@@ -1615,6 +1619,23 @@ export const BUILT_IN_AGENT_KEYS = [
   'consolidator',
 ] as const;
 export type BuiltInAgentKey = (typeof BUILT_IN_AGENT_KEYS)[number];
+
+/**
+ * A class of model, smallest first (#1121). An admin assigns one to a model; a
+ * methodology's agent asks for a minimum instead of naming a model it cannot
+ * know the workspace has. Order matters: "at least `medium`" reads this list.
+ */
+export const MODEL_TIERS = ['small', 'medium', 'large'] as const;
+export type ModelTier = (typeof MODEL_TIERS)[number];
+
+export function isModelTier(value: unknown): value is ModelTier {
+  return (MODEL_TIERS as readonly unknown[]).includes(value);
+}
+
+/** Whether `tier` is at least `min`. An unknown tier meets no minimum. */
+export function meetsTier(tier: unknown, min: ModelTier): boolean {
+  return isModelTier(tier) && MODEL_TIERS.indexOf(tier) >= MODEL_TIERS.indexOf(min);
+}
 
 /**
  * Agents whose run is scoped to one repository connector (docs/features/31).
@@ -2045,6 +2066,13 @@ export interface AiAgentSummary {
   id: string | null;
   key: string;
   builtIn: boolean;
+  /**
+   * The methodology that owns it (#1121): its text comes from there and an admin
+   * may only switch it and pin a model. Null for every other agent.
+   */
+  blueprintId: string | null;
+  /** The weakest model class it asks for; with no model pinned it runs on one at least this strong. */
+  minTier: ModelTier | null;
   name: string;
   description: string;
   instructions: string;

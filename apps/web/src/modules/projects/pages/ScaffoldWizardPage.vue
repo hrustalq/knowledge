@@ -233,13 +233,15 @@ interface StartCard {
 
 const cards = computed<StartCard[]>(() => [
   ...(blueprints.value ?? []).map((entry) => {
-    const { tree } = entry.blueprint
+    const { tree, levels = [] } = entry.blueprint
     const pages = countPages(tree)
+    const size = tree.length ? t('scaffold.start.pages', { count: pages }, pages) : t('scaffold.start.noPages')
     return {
       key: entry.key,
       icon: entry.blueprint.icon ?? FilePlus,
       name: blueprintText(entry.blueprint.name, lang.value),
-      meta: tree.length ? t('scaffold.start.pages', { count: pages }, pages) : t('scaffold.start.noPages'),
+      // A methodology (#1129) says so by its levels: the project follows it rather than copying it.
+      meta: levels.length ? `${t('projectSettings.methodology.levelCount', { n: levels.length }, levels.length)} · ${size}` : size,
       description: blueprintText(entry.blueprint.description, lang.value),
       entry,
     }
@@ -411,6 +413,8 @@ async function create() {
         locale: lang.value,
         // The DTO cannot name the contracts type; the server parses it with the one schema.
         blueprint: cloneJson(body) as unknown as Record<string, unknown>,
+        // Started from a methodology (#1125): the server links the project to it instead of copying its conventions.
+        ...(origin.value?.kind === 'blueprint' ? { methodologyKey: origin.value.key } : {}),
         ...(context.value.restricted ? { restricted: true } : {}),
         ...(context.value.avatarEmoji ? { avatarEmoji: context.value.avatarEmoji } : {}),
       },
@@ -539,7 +543,7 @@ function leave() {
                       </span>
                       <span class="min-w-0 flex-1">
                         <span class="flex min-w-0 items-baseline gap-2">
-                          <span class="min-w-0 truncate text-sm font-medium">{{ card.name }}</span>
+                          <span class="min-w-0 line-clamp-2 text-sm font-medium">{{ card.name }}</span>
                           <span class="text-muted-foreground ml-auto shrink-0 text-caption tabular-nums">{{ card.meta }}</span>
                         </span>
                         <span class="text-muted-foreground mt-0.5 line-clamp-3 text-ui leading-snug lg:line-clamp-2">{{ card.description }}</span>

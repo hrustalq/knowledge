@@ -31,6 +31,7 @@ import { t } from '../i18n/t.js';
 import { parseModelJson } from '../common/model-json.js';
 import { wrapUntrusted } from '../common/untrusted.js';
 import { withSubjectLock } from '../common/subject-lock.js';
+import { projectScope, scopeWhere } from '../projects/methodology-scope.js';
 
 /** How much of a page the extractor sees — the same ceiling `review` uses. */
 const MAX_SOURCE_CHARS = 60_000;
@@ -82,9 +83,10 @@ export class GlossaryService {
       where: {
         workspaceId: query.workspaceId,
         // Absent projectId means the whole workspace — the roster page's view,
-        // and the same convention as GET /v1/documents. With one, the project's
-        // terms and the workspace's own (#926): what its pages may link.
-        ...(query.projectId ? { OR: [{ projectId: query.projectId }, { projectId: null }] } : {}),
+        // and the same convention as GET /v1/documents — minus methodology
+        // terms (#1121). With one, the project's terms, its methodology's and
+        // the workspace's own (#926): what its pages may link.
+        ...scopeWhere(query.projectId ? await projectScope(this.prisma, query.projectId) : null),
         ...(search
           ? {
               AND: [
@@ -255,7 +257,7 @@ export class GlossaryService {
 
     const row = await withSubjectLock(this.prisma, nameLock(current.workspaceId, null), async () => {
       const clash = await this.prisma.glossaryTerm.findFirst({
-        where: { workspaceId: current.workspaceId, projectId: null, term: { equals: current.term, mode: 'insensitive' } },
+        where: { workspaceId: current.workspaceId, projectId: null, blueprintId: null, term: { equals: current.term, mode: 'insensitive' } },
         select: { id: true },
       });
       if (clash && onClash !== 'replace') {
@@ -311,7 +313,7 @@ export class GlossaryService {
     // in, not about the workspace: the same word may be defined next door and
     // still be missing here. A workspace term (#926) is defined everywhere.
     const existing = await this.prisma.glossaryTerm.findMany({
-      where: projectId ? { workspaceId: dto.workspaceId, OR: [{ projectId }, { projectId: null }] } : { workspaceId: dto.workspaceId },
+      where: { workspaceId: dto.workspaceId, ...(projectId ? scopeWhere(await projectScope(this.prisma, projectId)) : {}) },
       select: { id: true, term: true, aliases: true },
     });
     const known = new Map<string, string>();
@@ -398,10 +400,10 @@ export class GlossaryService {
     }
   }
 
-  /** One name per level: within a project, or among the workspace's own terms. Called under `nameLock`. */
+  /** One name per level: within a project, or among the workspace's own terms (never a methodology's). Called under `nameLock`. */
   private async assertNameFree(workspaceId: string, projectId: string | null, term: string): Promise<void> {
     const clash = await this.prisma.glossaryTerm.findFirst({
-      where: { workspaceId, projectId, term: { equals: term, mode: 'insensitive' } },
+      where: { workspaceId, projectId, ...(projectId ? {} : { blueprintId: null }), term: { equals: term, mode: 'insensitive' } },
       select: { id: true },
     });
     if (clash) throw new ConflictException(t('error.glossary.duplicate', { term }));
@@ -502,6 +504,7 @@ export class GlossaryService {
       termId: row.id,
       workspaceId: row.workspaceId,
       projectId: row.projectId,
+      blueprintId: row.blueprintId,
       term: row.term,
       aliases: readAliases(row.aliases),
       definition: row.definition,

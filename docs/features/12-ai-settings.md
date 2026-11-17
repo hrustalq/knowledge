@@ -43,7 +43,9 @@ the SDK and adds only what is ticked, since an aggregator answers with hundreds.
 OpenAI-compatible servers have no list, so a refusal is an ordinary result: the
 upstream message comes back verbatim and the page offers typing a code name. A fetch
 never removes a model, and a repeat never duplicates or resets one: `createMany` with
-`skipDuplicates` over a `NULLS NOT DISTINCT` unique index.
+`skipDuplicates` over a `NULLS NOT DISTINCT` unique index. The add-provider dialog can
+also create a first model and route chat, review and extraction to it in one transaction;
+**Make default** on any existing model row sets those same three routes in one save.
 
 **Everything pins a model.** Purpose routes (chat and agent turns, background review
 and suggestion, the worker's relation extraction, decisions), agents and threads hold

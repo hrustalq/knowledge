@@ -91,8 +91,11 @@ describe('BlueprintsService (#716, phase 4)', () => {
           return { ...row, ...data, versions: data.versions ? [data.versions.create] : row.versions };
         }),
       },
+      project: { count: vi.fn(async () => 0) },
+      withTransaction: async <T>(fn: () => Promise<T>) => fn(),
     };
-    return { service: new BlueprintsService(prisma as never), prisma };
+    const materializer = { materialize: vi.fn(async () => 0) };
+    return { service: new BlueprintsService(prisma as never, materializer as never), prisma, materializer };
   }
   const saved = { name: { en: 'Ours' }, tree: [{ title: { en: 'Home' } }] };
   const SAVED_ID = '6f1c1e0a-1111-4111-8111-111111111111';
@@ -104,8 +107,8 @@ describe('BlueprintsService (#716, phase 4)', () => {
       { id: SAVED_ID, workspaceId: 'ws', builtInKey: null, enabled: true, currentVersion: 1, versions: [{ version: 1, blueprint: saved }] },
     ]);
     const { blueprints } = await service.list('ws');
-    expect(blueprints.map((b) => b.key)).toEqual(['code-product', 'service-docs', 'blank', SAVED_ID]);
-    expect(blueprints[2]).toMatchObject({ builtIn: true, id: 'o2', version: 2, blueprint: saved });
+    expect(blueprints.map((b) => b.key)).toEqual(['construction', 'code-product', 'service-docs', 'blank', SAVED_ID]);
+    expect(blueprints[3]).toMatchObject({ builtIn: true, id: 'o2', version: 2, blueprint: saved });
     expect((await service.list('ws', true)).blueprints[0]).toMatchObject({ key: 'discovery', enabled: false });
 
     await expect(service.resolve('ws', 'discovery')).rejects.toThrow(/notFound/);
@@ -124,6 +127,23 @@ describe('BlueprintsService (#716, phase 4)', () => {
     expect(prisma.projectBlueprint.update.mock.calls[0]![0].data).toEqual({ enabled: false });
     await service.update(SAVED_ID, { blueprint: { ...saved, tree: [] } }, 'u1');
     expect(prisma.projectBlueprint.update.mock.calls[1]![0].data).toMatchObject({ currentVersion: 2, versions: { create: { version: 2 } } });
+  });
+
+  it('materializes a saved methodology, or a blueprint a project links, in the same save (#1124)', async () => {
+    const row = { id: SAVED_ID, workspaceId: 'ws', builtInKey: null, enabled: true, currentVersion: 1, versions: [{ version: 1, blueprint: saved }] };
+    const plain = setup([{ ...row }]);
+    await plain.service.update(SAVED_ID, { blueprint: { ...saved, tree: [] } }, 'u1');
+    expect(plain.materializer.materialize).not.toHaveBeenCalled();
+
+    const method = { ...saved, levels: [{ key: 'one', name: { en: 'One' }, templateRefs: [] }] };
+    const withLevels = setup([{ ...row }]);
+    await withLevels.service.update(SAVED_ID, { blueprint: method }, 'u1');
+    expect(withLevels.materializer.materialize).toHaveBeenCalledWith('ws', SAVED_ID, method, 'u1');
+
+    const linked = setup([{ ...row }]);
+    linked.prisma.project.count.mockResolvedValue(1);
+    await linked.service.update(SAVED_ID, { blueprint: { ...saved, tree: [] } }, 'u1');
+    expect(linked.materializer.materialize).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -377,5 +397,43 @@ describe('describe it (#716, phase 5)', () => {
       expect(res.status).toBe('done');
       expect(ops(client)).toEqual(['blueprint-generate']);
     }
+  });
+});
+
+describe('methodology shape (#1122)', () => {
+  const step = (id: string, next: string[] = []) => ({ id, kind: 'review', title: id, next, fanOut: false, autoApprove: false });
+  const methodology = {
+    name: { en: 'Method' },
+    tree: [{ title: { en: 'Rules' }, templateRef: 'builtin:adr' }],
+    levels: [
+      { key: 'l0-intent', name: { en: 'Intent' }, templateRefs: ['builtin:adr'], agentKey: 'modeller', guidance: { en: 'State the goal.' } },
+      { key: 'l1-rules', name: { en: 'Rules' }, templateRefs: [], agentKey: 'researcher' },
+    ],
+    workflows: [{ name: 'Draft rules', graph: { steps: [step('check')] }, trigger: { manual: true, autoStart: false, events: [], categories: [] } }],
+    agents: [{ key: 'modeller', name: 'Modeller', instructions: 'Model the domain.', tools: ['search_knowledge'], minTier: 'large' }],
+  };
+  const issue = (raw: unknown) => {
+    try {
+      parseBlueprint(raw);
+    } catch (e) {
+      const { issues } = (e as { getResponse(): { issues: { path: (string | number)[]; message: string }[] } }).getResponse();
+      return issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
+    }
+    throw new Error('expected a 400');
+  };
+
+  it('accepts levels, workflows and agents and reads them back as written', () => {
+    expect(parseBlueprint(JSON.parse(JSON.stringify(methodology)))).toEqual(methodology);
+  });
+
+  it('refuses each bad part by its path', () => {
+    expect(issue({ ...methodology, levels: [methodology.levels[0], methodology.levels[0]] })).toContain('duplicate level key');
+    expect(issue({ ...methodology, levels: [{ ...methodology.levels[1], agentKey: 'nobody' }] })).toContain('levels.0.agentKey');
+    expect(issue({ ...methodology, workflows: [{ name: 'Loop', graph: { steps: [step('a', ['a'])] } }] })).toContain('workflows.0.graph');
+    expect(issue({ ...methodology, levels: [{ ...methodology.levels[1], guidance: { en: 'x'.repeat(4_001) } }] })).toContain('levels.0.guidance.en');
+    expect(issue({ ...methodology, agents: [{ ...methodology.agents[0], key: 'reviewer' }] })).toContain('agents.0.key');
+    expect(issue({ ...methodology, agents: [{ ...methodology.agents[0], minTier: 'huge' }] })).toContain('agents.0.minTier');
+    // Built-in tools only (#1127): a methodology cannot know a workspace's plugins.
+    expect(issue({ ...methodology, agents: [{ ...methodology.agents[0], tools: ['web_search_pro'] }] })).toContain('agents.0.tools.0');
   });
 });

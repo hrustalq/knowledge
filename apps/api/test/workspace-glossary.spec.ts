@@ -45,7 +45,7 @@ describe('effectiveGlossary', () => {
 });
 
 function harness(seed: Array<Record<string, unknown>>) {
-  const rows = seed.map((r) => ({ workspaceId: WS, aliases: [], definition: 'd', documentId: null, source: 'manual', createdAt: new Date(), updatedAt: new Date(), ...r }));
+  const rows = seed.map((r) => ({ workspaceId: WS, blueprintId: null, aliases: [], definition: 'd', documentId: null, source: 'manual', createdAt: new Date(), updatedAt: new Date(), ...r }));
   const find = (where: Record<string, unknown>) =>
     rows.filter((r) => {
       const { term: name, ...rest } = where as { term?: { equals: string } };

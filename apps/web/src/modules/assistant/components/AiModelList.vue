@@ -32,6 +32,7 @@ const invalidates = () => [['/v1/ai/models'], ['/v1/ai/models/choices'], ['/v1/a
 const add = useApiMutation('post', '/v1/ai/models', { invalidates })
 const update = useApiMutation('patch', '/v1/ai/models/{id}', { invalidates })
 const remove = useApiMutation('delete', '/v1/ai/models/{id}', { invalidates })
+const saveSettings = useApiMutation('patch', '/v1/ai/settings', { invalidates })
 
 /** Above this the list starts closed: it is a reference, and the page is a list of providers. */
 const OPEN_UP_TO = 5
@@ -58,6 +59,16 @@ async function addCode() {
 async function setInChat(model: AiModelSummary, inChat: boolean) {
   try {
     await update.mutateAsync({ path: { id: model.id }, body: { inChat } })
+  } catch (e) {
+    toast.error(errorMessage(e, t))
+  }
+}
+
+async function makeDefault(model: AiModelSummary) {
+  try {
+    await saveSettings.mutateAsync({
+      body: { workspaceId, chatModelId: model.id, reviewModelId: model.id, extractionModelId: model.id },
+    })
   } catch (e) {
     toast.error(errorMessage(e, t))
   }
@@ -133,7 +144,17 @@ async function removeModel(row: ModelRow) {
             {{ t('ai.models.inChat') }}
           </label>
 
-          <span v-if="canManage" class="flex items-center gap-0.5">
+          <span v-if="canManage" class="flex flex-wrap items-center gap-0.5">
+            <Button
+              v-if="m.model"
+              type="button"
+              variant="ghost"
+              size="sm"
+              :disabled="saveSettings.isPending.value"
+              @click="makeDefault(m.model!)"
+            >
+              {{ t('ai.models.makeDefault') }}
+            </Button>
             <Button
               type="button"
               variant="ghost"
@@ -158,16 +179,17 @@ async function removeModel(row: ModelRow) {
       </li>
     </ul>
 
-    <form v-if="canManage" class="mt-2 flex flex-wrap items-center gap-2" @submit.prevent="addCode">
+    <div v-if="canManage" class="mt-2 flex flex-wrap items-center gap-2">
       <Input
         v-model="code"
         class="h-8 min-w-0 flex-1 basis-48 font-mono text-xs"
         :placeholder="t('ai.models.codePlaceholder')"
         :aria-label="t('ai.models.addByCode')"
+        @keydown.enter.prevent="addCode"
       />
-      <Button type="submit" variant="outline" size="sm" :disabled="!code.trim() || add.isPending.value">{{ t('common.add') }}</Button>
+      <Button type="button" variant="outline" size="sm" :disabled="!code.trim() || add.isPending.value" @click="addCode">{{ t('common.add') }}</Button>
       <Button type="button" variant="ghost" size="sm" @click="fetchOpen = true">{{ t('ai.models.fetch') }}</Button>
-    </form>
+    </div>
 
     <AiModelDialog v-model:open="editOpen" :model="editing" />
     <AiModelFetchDialog v-model:open="fetchOpen" :provider-id="providerId" :title="title" :existing="existing" />

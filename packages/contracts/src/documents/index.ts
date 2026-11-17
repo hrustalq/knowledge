@@ -5,6 +5,7 @@ import type {
   RevisionInfo,
   RevisionStatus,
   SourceVerificationState,
+  PageLevel,
 } from '@knowledge/contracts/core';
 import type { ApiSpecDiff } from '@knowledge/contracts/api/diff';
 import type { AuthorableRelationType, EntityLayer, FactExtractor, ResolvedAsOf } from '@knowledge/contracts/graph';
@@ -110,6 +111,11 @@ export interface SearchRequest {
   groupBy?: 'page';
   /** Search the text as it stood then (#81): an ISO date, `rev:<id>` or `tag:<name>`. */
   asOf?: string;
+  /**
+   * Boost pages at this level of their project's methodology (#1121): a
+   * prior, never a filter. Pages in projects without that level rank as before.
+   */
+  level?: string;
   /** What was believed at this ISO date (#81); only the graph expansion reads it. */
   knownAt?: string;
   /**
@@ -171,6 +177,8 @@ export interface SearchResult {
    * are on (`pageLayerOf`). Absent for a page that names no entity.
    */
   layer?: EntityLayer;
+  /** The page's methodology level (#1121); absent when its project has none or its template is in no level. */
+  level?: PageLevel;
   /**
    * Titles of the communities containing the page that the reader may see
    * whole, coarsest first (#475). Absent when there are none, and under

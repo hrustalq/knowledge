@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   blueprintText,
+  isMethodology,
   nextChildTitle,
   type Blueprint,
   type BlueprintCollection,
@@ -20,13 +21,14 @@ import { composeFrontmatter } from '../common/frontmatter.js';
 import { SCAFFOLD_ORIGIN } from '../common/scaffold-stub.js';
 import { parseBlueprint } from '../blueprints/blueprint.schema.js';
 import { BlueprintsService } from '../blueprints/blueprints.service.js';
+import { MethodologyMaterializerService } from '../blueprints/methodology-materializer.service.js';
 import type { Principal } from '../auth/principal.js';
 import type { ScaffoldProjectDto } from './projects.dto.js';
 import { ProjectsService } from './projects.service.js';
 import { t, withLocale } from '../i18n/t.js';
 
 /** Where the pages go, and in which language they are written. */
-interface Target {
+export interface Target {
   workspaceId: string;
   projectId: string;
   locale: Locale;
@@ -60,7 +62,20 @@ export class ProjectScaffoldService {
     private readonly permissions: PermissionService,
     private readonly aclEvents: AclEventsService,
     private readonly blueprints: BlueprintsService,
+    private readonly materializer: MethodologyMaterializerService,
   ) {}
+
+  /**
+   * The methodology a new project should link instead of copying conventions
+   * (#1121): `methodologyKey` (the entry the wizard started from, whose tree
+   * it edited inline), else `blueprintKey` — when that blueprint is a
+   * methodology. Adding pages under an existing page links nothing.
+   */
+  async methodologyFor(dto: Pick<ScaffoldProjectDto, 'workspaceId' | 'blueprintKey' | 'methodologyKey' | 'parentId'>): Promise<string | null> {
+    const key = dto.methodologyKey ?? dto.blueprintKey;
+    if (dto.parentId || !key) return null;
+    return isMethodology(await this.blueprints.resolve(dto.workspaceId, key)) ? key : null;
+  }
 
   /** The blueprint a request names: a built-in or saved one by key, or an inline one parsed by the one schema. */
   async resolve(dto: Pick<ScaffoldProjectDto, 'workspaceId' | 'blueprintKey' | 'blueprint'>): Promise<Blueprint> {
@@ -68,9 +83,11 @@ export class ProjectScaffoldService {
     return dto.blueprint ? parseBlueprint(dto.blueprint) : this.blueprints.resolve(dto.workspaceId, dto.blueprintKey!);
   }
 
-  async scaffold(dto: ScaffoldProjectDto, blueprint: Blueprint, principal: Principal): Promise<ScaffoldProjectResponse> {
+  /** `methodologyKey` from `methodologyFor`: link the new project to it, and write its conventions nowhere. */
+  async scaffold(dto: ScaffoldProjectDto, blueprint: Blueprint, principal: Principal, methodologyKey: string | null = null): Promise<ScaffoldProjectResponse> {
     const { workspaceId, locale } = dto;
     const authorId = principal.userId;
+    const link = methodologyKey ? await this.blueprints.rowFor(workspaceId, methodologyKey, authorId) : null;
     const scope = await this.permissions.scopeFor(principal, workspaceId);
 
     let parent: { id: string; projectId: string } | null = null;
@@ -94,7 +111,11 @@ export class ProjectScaffoldService {
               .projectId;
           const target: Target = { workspaceId, projectId, locale, authorId };
           if (!parent) await this.applyFace(projectId, dto, authorId);
-          if (!parent && blueprint.conventions) await this.writeConventions(target, blueprint.conventions, dto.name!);
+          if (link) {
+            // Linked, the methodology's conventions are read live; a copy would shadow every later edit of them.
+            await this.materializer.materialize(workspaceId, link.id, link.blueprint, authorId);
+            await this.prisma.project.update({ where: { id: projectId }, data: { blueprintId: link.id } });
+          } else if (!parent && blueprint.conventions) await this.writeConventions(target, blueprint.conventions, dto.name!);
           const pageCount = await this.writeTree(target, blueprint.tree, parent?.id ?? null, undefined);
           return { projectId, pageCount };
         },
@@ -136,6 +157,20 @@ export class ProjectScaffoldService {
       },
     });
     this.prisma.onCommit(() => this.aclEvents.changed(dto.workspaceId, authorId));
+  }
+
+  /**
+   * Methodology sections a person confirmed (#1125): each node and its subtree
+   * under `parentId` (null = top level), through the scaffold's own writer.
+   * Joins the caller's transaction. Returns pages written.
+   */
+  async writeSections(
+    target: Target,
+    sections: { node: BlueprintNode; parentId: string | null; rule?: BlueprintCollection }[],
+  ): Promise<number> {
+    let written = 0;
+    for (const s of sections) written += await withLocale(target.locale, () => this.writeTree(target, [s.node], s.parentId, s.rule));
+    return written;
   }
 
   /** Depth-first, so a page's parent always exists when it is written. Returns pages written. */

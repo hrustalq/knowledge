@@ -39,6 +39,7 @@ before this feature; every column below is nullable and no migration fills one i
 | Style lint gate (#74) | `lint_policy` | `LintChecksService.policyFor` | admin |
 | Tracker handoff rules | `work_item_issues`, `work_item_conflicts`, `work_item_verification` | the candidate SQL of `WorkItemRulesService` | admin or maintainer |
 | Capture parent page | `capture_parent_document_id` | `CaptureService.captureParent` | admin or maintainer |
+| Methodology ([82](82-methodologies.md)) | `blueprint_id` | `projectScope` + `scopeWhere` / `shadowByScope` (`projects/methodology-scope.ts`) | admin or maintainer |
 
 Two things moved the other way or sideways:
 
@@ -47,6 +48,12 @@ Two things moved the other way or sideways:
   replaces it on that project's pages.
 - **A test environment may belong to one project** ([62](62-qa-fixtures-runs.md)):
   `api_test_environments.project_id`, null meaning shared.
+
+The methodology is the one setting that is not a single value: it adds a middle scope. A
+project's templates, workflows, styleguide and glossary terms resolve project → methodology →
+workspace, and a project without one (`blueprint_id` null) sees the workspace's, as before. It
+is set under **Policies → Methodology** through `PUT /v1/projects/:id/methodology`
+([82](82-methodologies.md#the-live-link)).
 
 And two tables only gained attribution: `agent_runs.project_id` and `ai_usage.project_id`
 ([12](12-ai-settings.md)), so usage can be read per project. Budgets stay per workspace.

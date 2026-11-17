@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { effectiveModelPrice, PROVIDER_DEFAULTS, type CostAmount, type CostCurrency } from '@knowledge/contracts';
+import { effectiveModelPrice, meetsTier, PROVIDER_DEFAULTS, type CostAmount, type CostCurrency, type ModelTier } from '@knowledge/contracts';
 import type {
   AiPurpose,
   AiSettingsSourceMap,
@@ -270,6 +270,29 @@ export class AiConfigService {
       if (config) return config;
     }
     return base;
+  }
+
+  /**
+   * A model of at least `min` tier for `purpose` (#1127): the purpose's route
+   * when its model meets the tier, else the cheapest available model that does
+   * (prompt + completion price; unpriced last, then by code). Null when none
+   * qualifies — the caller falls back to `resolveFor`, and says so.
+   */
+  async resolveAtLeast(workspaceId: string, purpose: AiPurpose, min: ModelTier): Promise<ResolvedAiConfig | null> {
+    const [{ config: base, routes }, models] = await Promise.all([this.settings(workspaceId), this.availableModels(workspaceId)]);
+    const qualifying = models.filter((m) => meetsTier(m.tier, min));
+    const routed = qualifying.find((m) => m.id === routes[purpose]);
+    // ponytail: prices compared as plain numbers, whatever their currency; convert when one tier mixes USD and RUB models.
+    const price = (m: AiModelRow) => {
+      const p = modelPrices(m);
+      return p.pricePromptPerMTok === null || p.priceCompletionPerMTok === null ? Infinity : p.pricePromptPerMTok + p.priceCompletionPerMTok;
+    };
+    const ordered = routed ? [routed] : [...qualifying].sort((a, b) => price(a) - price(b) || a.code.localeCompare(b.code));
+    for (const model of ordered) {
+      const config = await this.forModel(base, model.id);
+      if (config) return config;
+    }
+    return null;
   }
 
   private async forModel(base: ResolvedAiConfig, id: string): Promise<ResolvedAiConfig | null> {

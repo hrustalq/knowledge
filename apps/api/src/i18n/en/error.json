@@ -318,6 +318,7 @@
     "modelNotFound": "Model {id} not found",
     "modelUnavailable": "Model {id} cannot be picked for a chat in this workspace",
     "modelUnknown": "Unknown model.",
+    "modelRequired": "Choose a model to use for all work.",
     "providerNoModels": "This provider has no models yet. Add one to test it.",
     "encryptionKeyMissing": "SETTINGS_ENCRYPTION_KEY is not configured, so API keys cannot be stored. Set it (openssl rand -base64 32) and restart the API, or configure the provider through ASSISTANT_API_KEY.",
     "captureParentNotInWorkspace": "The capture parent page {id} is not a page of this workspace.",
@@ -333,6 +334,7 @@
     "baseUrlPrivate": "The provider base URL resolves to a private address ({address}). Set AI_PROVIDERS_ALLOW_PRIVATE_URLS=true for a self-hosted model server.",
     "providerNone": "Provider is set to none for this workspace",
     "decisionNeedsGenApi": "The decision route needs a gen-api profile of this workspace: Jev is reached only through gen-api.",
+    "agentFromMethodology": "Agent \"{key}\" comes from a methodology: change it there. Here you can only switch it and pin a model.",
     "agentNotFound": "Unknown agent \"{key}\"",
     "agentScheduleNeedsOwner": "A scheduled agent needs an owner to run as.",
     "agentScheduleNeedsInterval": "A scheduled agent needs an interval in minutes.",
@@ -404,6 +406,7 @@
     "upstreamStatus": "The AI provider responded with an error ({status})",
     "upstreamError": "The AI provider responded with an error",
     "flowAnswerStale": "That question has already been answered or is no longer open. Answer the newest question instead.",
+    "levelUnavailable": "That level is not available here: levels come from the methodology of the project of the page this chat is about.",
     "upstreamNoCredit": "The AI provider refused the request: its account is out of credit (402). Top up the balance with the provider.",
     "upstreamAuth": "The AI provider rejected the credentials ({status}). Check the API key in AI settings.",
     "unreachable": "The AI provider is unreachable",
@@ -643,7 +646,9 @@
     "limitReached": "A workspace can hold at most {max} blueprints",
     "alreadyCustomized": "This built-in blueprint is already customised in this workspace",
     "contentRequired": "A saved blueprint needs its content",
-    "generateEmpty": "The assistant returned no usable outline. Try describing the project in more detail."
+    "generateEmpty": "The assistant returned no usable outline. Try describing the project in more detail.",
+    "inUse": "This blueprint is the methodology of {count} project(s). Unlink it from them, or archive it instead.",
+    "unknownSection": "The methodology has no section \"{id}\" to create here"
   },
   "share": {
     "notFound": "This link does not exist, has expired or was revoked",

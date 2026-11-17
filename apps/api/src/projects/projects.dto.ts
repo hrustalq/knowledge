@@ -1,4 +1,6 @@
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsIn,
   IsInt,
@@ -113,6 +115,18 @@ export class ScaffoldProjectDto {
   @IsString()
   @MaxLength(100)
   blueprintKey?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description:
+      'Link the new project to this methodology (#1121) — a key as `GET /v1/blueprints` lists it — instead of copying its ' +
+      'conventions into the project. The wizard sends the entry it started from with the edited tree inline. Ignored unless ' +
+      'that blueprint is a methodology (declares levels, workflows or agents); defaults to blueprintKey.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  methodologyKey?: string;
 
   @ApiPropertyOptional({
     type: 'object',
@@ -231,4 +245,43 @@ export class DeleteProjectQueryDto {
   @IsOptional()
   @IsString()
   confirm?: string;
+}
+
+/** PUT /v1/projects/:id/methodology (#1125). */
+export class SetProjectMethodologyDto {
+  @ApiProperty({ type: String, nullable: true, description: 'A blueprint key as `GET /v1/blueprints` lists it; null unlinks.' })
+  @ValidateIf((_o, v) => v !== null)
+  @IsString()
+  @MaxLength(100)
+  blueprintKey!: string | null;
+
+  @ApiPropertyOptional({
+    type: String,
+    isArray: true,
+    description: 'Sections from the preview to create (their `id`s). Nothing else is written; no page is deleted, moved or edited.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(200)
+  @IsString({ each: true })
+  @MaxLength(20, { each: true })
+  sections?: string[];
+
+  @ApiPropertyOptional({ enum: SUPPORTED_LOCALES, description: 'The language new sections are titled in; the caller’s by default' })
+  @IsOptional()
+  @IsIn(SUPPORTED_LOCALES)
+  locale?: Locale;
+}
+
+/** GET /v1/projects/:id/methodology/preview (#1125). */
+export class MethodologyPreviewQueryDto {
+  @ApiProperty({ description: 'The blueprint key to preview' })
+  @IsString()
+  @MaxLength(100)
+  blueprint!: string;
+
+  @ApiPropertyOptional({ enum: SUPPORTED_LOCALES, description: 'The language section titles are matched in; the caller’s by default' })
+  @IsOptional()
+  @IsIn(SUPPORTED_LOCALES)
+  locale?: Locale;
 }

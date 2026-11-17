@@ -13,6 +13,80 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.58.0] — 2026-11-17
+
+### Added
+
+- A project can follow a **methodology**: a saved blueprint (or a built-in) linked live from **Project settings →
+  Policies → Methodology**. The methodology's templates, workflows, styleguide and glossary terms appear in the
+  project without being copied into it, so editing the methodology changes every project that follows it. A
+  project's own template, styleguide or glossary term with the same name still wins, and the workspace's apply
+  where neither defines one. Before linking or switching, a preview lists the sections of the methodology's page
+  tree the project is missing (by title, top level and one level down) and how many pages each of its levels
+  would count. Only the sections you tick are created. No page is ever deleted, moved or edited, and unlinking
+  returns the project to exactly what it had. Changing the methodology needs a workspace admin or the project's
+  maintainer. (#1121)
+- Scaffolding a project from a methodology (a blueprint that declares levels, workflows or agents) links the new
+  project to it instead of copying its conventions. (#1125)
+- Pages in a project that follows a methodology carry their **level**: the level whose templates include the one
+  the page was made from. It is derived on read and never stored, so switching the project's methodology re-levels
+  its pages without touching them. The level appears on the page (`GET /v1/documents/:id`) and on search results.
+  `GET /v1/projects/:id/levels` lists the project's levels in order with the pages at each. A search may name a
+  `level` to rank pages at that level higher; nothing is filtered out. (#1126)
+- Models can be given a **tier** (small, medium or large) in **Settings → AI → Models**. A methodology's agent may
+  ask for a minimum tier. With no model pinned, it runs on the purpose's routed model when that is strong enough,
+  otherwise on the cheapest available model that is. If none qualifies it falls back to the usual model, and the
+  run records a warning. Agents that ask for no tier resolve exactly as before. (#1127)
+- A methodology can bring its own agents. They are listed in **Settings → AI → Agents** marked *Methodology*, under
+  keys that never collide with a workspace agent. Their name, instructions and tools come from the methodology, and
+  saving it updates them on the next turn. An admin can switch one off or pin a model, but cannot edit or delete
+  it. (#1127)
+- In a chat about a page whose project follows a methodology with levels, the composer shows a **Level** picker.
+  Picking a level makes that level's agent the default for the turn (picking an agent yourself still wins) and adds
+  the level's guidance to the instructions. The turn's searches also rank pages at that level higher. The Ask/Agent
+  toggle still decides what the turn may do: a level's agent that has write tools is not used in Ask mode. The
+  level is remembered by the chat from the next message on. Without a grounding page, or in a project with no
+  levels, there is no picker, and the API refuses a `level` with a 400 (`level-unavailable`). Chats without a level
+  send the same instructions as before. (#1128)
+- Two built-in methodologies. **Knowledge-Driven Construction** works top-down through eight levels, from L0 Intent
+  to L7 Code. It brings a section per level, a glossary page, a styleguide, five glossary terms, an agent per level
+  group (a large-tier modeller and system designer, a medium-tier contract writer, a small-tier unit writer) and a
+  workflow that drafts rule pages from an entity page. **Discovery-first** now has levels too (question, options,
+  findings, decision) and a discovery researcher agent; its page tree is unchanged. Research-question pages sit at
+  the question level. Projects already scaffolded from Discovery-first are not linked to it. The scaffold wizard
+  shows how many levels a methodology has. (#1129)
+- Four built-in page templates, in English and Russian: **Intent** (problem, measurable goals, scope, constraints),
+  **Business rule** (one invariant with a stable id and Given/When/Then examples), **Quality scenario** (stimulus,
+  response, measure, threshold) and **Unit of work** (objective, invariants, contracts, acceptance checks,
+  obligations, out of scope). (#1129)
+- Methodologies are documented in `docs/features/82-methodologies.md`: how a project's templates, workflows,
+  styleguide, glossary and agents resolve through its methodology, how levels are derived, model tiers, the chat
+  level picker and the two built-ins. Docs 63, 73 and 76 and the glossary now describe linked blueprints. (#1130)
+
+### Changed
+
+- A blueprint that a project follows can no longer be deleted. The delete is refused with the number of projects
+  using it; switch it off (archive) instead, which hides it from pickers while the projects that follow it keep
+  reading it. (#1125)
+- Workspace rename and delete now live under **Settings → General**, first in the settings navigation, instead of at the foot of **Access → Members**. Existing member-tab links still open Members, and only workspace and platform admins see the controls. (#1257)
+
+### Fixed
+
+- A new AI provider can create its first model and make it the chat, review and extraction default in one save.
+  Existing models have a **Make default** action, so getting a provider to do the work no longer requires three
+  separate setup steps. (#1258)
+
+### Operations
+
+- Two migrations, `20270203100000_methodology_scope` and `20270203110000_methodology_conventions`, add nullable
+  `blueprint_id` columns to `projects`, `page_templates`, `workflow_definitions`, `ai_skills` and `glossary_terms`,
+  and re-create the `ai_skills_one_styleguide_per_scope` unique index to include `blueprint_id`. The new index
+  accepts exactly the rows the old one did. `20270203120000_methodology_agents` adds nullable `ai_models.tier`,
+  `ai_agents.blueprint_id` and `ai_agents.min_tier`. The previous release runs against the migrated schema, so
+  code rolls back by retag. (#1121)
+- Migration `20270204100000_assistant_thread_level` adds a nullable `assistant_threads.level` column. The previous
+  release runs against it, so code rolls back by retag. (#1128)
+
 ## [0.57.0] — 2026-11-17
 
 ### Added
@@ -7624,7 +7698,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.57.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.58.0...HEAD
+[0.58.0]: https://github.com/hrustalq/knowledge/compare/v0.57.0...v0.58.0
 [0.57.0]: https://github.com/hrustalq/knowledge/compare/v0.56.0...v0.57.0
 [0.56.0]: https://github.com/hrustalq/knowledge/compare/v0.55.2...v0.56.0
 [0.55.2]: https://github.com/hrustalq/knowledge/compare/v0.55.1...v0.55.2

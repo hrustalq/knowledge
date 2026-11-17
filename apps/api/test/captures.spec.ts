@@ -100,6 +100,7 @@ function harness(opts: {
     withTransaction: vi.fn(async (fn: () => Promise<unknown>) => fn()),
     project: {
       findFirst: vi.fn(async ({ where }: { where: { id: string } }) => ([PROJECT, OTHER_PROJECT].includes(where.id) ? { id: where.id } : null)),
+      findUnique: vi.fn(async () => ({ blueprintId: null })),
     },
     document: {
       findMany: vi.fn(async ({ where }: { where: { id: { in: string[] } } }) =>

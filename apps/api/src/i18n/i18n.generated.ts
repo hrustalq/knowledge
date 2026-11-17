@@ -207,6 +207,7 @@ export type I18nTranslations = {
             "summary": string;
         };
         "warning": {
+            "tierUnmet": string;
             "fileNotRead": string;
             "graphUnreadableOrphans": string;
             "graphUnreadableModelOnly": string;
@@ -1032,6 +1033,7 @@ export type I18nTranslations = {
             "modelNotFound": string;
             "modelUnavailable": string;
             "modelUnknown": string;
+            "modelRequired": string;
             "providerNoModels": string;
             "encryptionKeyMissing": string;
             "captureParentNotInWorkspace": string;
@@ -1047,6 +1049,7 @@ export type I18nTranslations = {
             "baseUrlPrivate": string;
             "providerNone": string;
             "decisionNeedsGenApi": string;
+            "agentFromMethodology": string;
             "agentNotFound": string;
             "agentScheduleNeedsOwner": string;
             "agentScheduleNeedsInterval": string;
@@ -1118,6 +1121,7 @@ export type I18nTranslations = {
             "upstreamStatus": string;
             "upstreamError": string;
             "flowAnswerStale": string;
+            "levelUnavailable": string;
             "upstreamNoCredit": string;
             "upstreamAuth": string;
             "unreachable": string;
@@ -1360,6 +1364,8 @@ export type I18nTranslations = {
             "alreadyCustomized": string;
             "contentRequired": string;
             "generateEmpty": string;
+            "inUse": string;
+            "unknownSection": string;
         };
         "share": {
             "notFound": string;

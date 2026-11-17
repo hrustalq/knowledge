@@ -38,6 +38,7 @@ import { canSeeProject, visibilityWhere, type AccessScope } from '../permissions
 import { BUILT_IN_TEMPLATES, type BuiltInTemplate } from './built-in/index.js';
 import { parseStoredTemplateSource, parseTemplateSource, TemplateSourceError, type ParsedTemplateSource } from './template-source.js';
 import { TEMPLATE_MAX_VALUE_CHARS, TEMPLATES_MAX_PER_WORKSPACE } from './templates.constants.js';
+import { projectScope, scopeWhere, shadowByScope } from '../projects/methodology-scope.js';
 
 /** A template pinned to one version, parsed — what rendering and provenance need. */
 export interface ResolvedTemplate {
@@ -55,6 +56,8 @@ export interface ResolvedTemplate {
 export interface CreateTemplateInput {
   workspaceId: string;
   projectId?: string | null;
+  /** A methodology's own template (#1121), written only by its materializer; project id is then null. */
+  blueprintId?: string | null;
   builtInKey?: string;
   name?: string;
   description?: string | null;
@@ -146,7 +149,9 @@ export class TemplatesService {
   /**
    * The gallery: rows (project ones first, then workspace-wide), then the
    * built-ins in their fixed order with any override applied. A project
-   * filter returns workspace-wide rows plus that project's. Archived rows
+   * filter returns workspace-wide rows plus that project's and its
+   * methodology's (`scopeWhere`, #1121); without one, a methodology's rows
+   * are left out. Archived rows
    * and hidden built-ins only with `includeArchived` — the settings page needs
    * them to bring one back.
    */
@@ -155,14 +160,13 @@ export class TemplatesService {
     const rows: RowWithCount[] = await this.prisma.pageTemplate.findMany({
       where: {
         workspaceId: query.workspaceId,
-        ...(query.projectId ? { OR: [{ projectId: query.projectId }, { projectId: null }] } : {}),
+        ...scopeWhere(query.projectId ? await projectScope(this.prisma, query.projectId) : null),
       },
       include: { _count: { select: { versions: true } } },
       orderBy: [{ name: 'asc' }],
     });
 
-    const custom = rows
-      .filter((row) => !row.builtInKey && (query.includeArchived || !row.archivedAt))
+    const custom = shadowByScope(rows.filter((row) => !row.builtInKey && (query.includeArchived || !row.archivedAt)))
       .map((row) => this.customSummary(row))
       .sort((a, b) => Number(b.scope === 'project') - Number(a.scope === 'project'));
 
@@ -413,7 +417,7 @@ export class TemplatesService {
       if (!name) throw new BadRequestException(t('error.template.nameRequired'));
       if (!input.source) throw new BadRequestException(t('error.template.sourceRequired'));
       const parsed = this.parseOrThrow(input.source);
-      await this.assertNameFree(input.workspaceId, input.projectId ?? null, name);
+      await this.assertNameFree(input.workspaceId, input.projectId ?? null, name, undefined, input.blueprintId ?? null);
 
       // `withTransaction`, not `$transaction`: a scaffold (#716) creates the
       // project's templates inside its own boundary, and must be able to roll them back.
@@ -422,6 +426,7 @@ export class TemplatesService {
           data: {
             workspaceId: input.workspaceId,
             projectId: input.projectId ?? null,
+            blueprintId: input.blueprintId ?? null,
             name,
             description: input.description ?? parsed.meta.description ?? null,
             icon: input.icon ?? null,
@@ -455,7 +460,7 @@ export class TemplatesService {
       const row = await this.requireRow(id);
       const name = input.name?.trim();
       if (input.name !== undefined && !name && !row.builtInKey) throw new BadRequestException(t('error.template.nameRequired'));
-      if (name && name !== row.name && !row.builtInKey) await this.assertNameFree(row.workspaceId, row.projectId, name, row.id);
+      if (name && name !== row.name && !row.builtInKey) await this.assertNameFree(row.workspaceId, row.projectId, name, row.id, row.blueprintId);
 
       let nextVersion: { version: number; source: string; meta: TemplateMeta } | null = null;
       if (input.source !== undefined) {
@@ -590,12 +595,19 @@ export class TemplatesService {
     return row.builtInKey && isBuiltInTemplateKey(row.builtInKey) ? BUILT_IN_TEMPLATES[row.builtInKey].version : 0;
   }
 
-  /** Names are unique per (workspace, project) among custom templates, archived ones included. */
-  private async assertNameFree(workspaceId: string, projectId: string | null, name: string, exceptId?: string): Promise<void> {
+  /** Names are unique per (workspace, project, methodology) among custom templates, archived ones included. */
+  private async assertNameFree(
+    workspaceId: string,
+    projectId: string | null,
+    name: string,
+    exceptId?: string,
+    blueprintId: string | null = null,
+  ): Promise<void> {
     const clash = await this.prisma.pageTemplate.findFirst({
       where: {
         workspaceId,
         projectId,
+        blueprintId,
         builtInKey: null,
         name: { equals: name, mode: 'insensitive' },
         ...(exceptId ? { id: { not: exceptId } } : {}),

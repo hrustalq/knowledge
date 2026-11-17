@@ -21,6 +21,7 @@ export const routes: RouteRecordRaw[] = [
 ]
 
 export const settingsRoutes: RouteRecordRaw[] = [
+  { path: 'general', component: () => import('./pages/GeneralSettingsPage.vue') },
   // Your own account: name, language, password, API key. Open to every
   // role — it takes no user id, so there is nobody else to act on.
   { path: 'profile', component: () => import('./pages/ProfileSettingsPage.vue') },

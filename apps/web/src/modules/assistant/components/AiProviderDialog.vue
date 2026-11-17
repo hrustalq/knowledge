@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * Add or edit one provider's connection: a new one, an existing one, or the default.
- * What it serves is its model list, on the row.
+ * A new provider can create its first model and route all work to it; the row
+ * manages every model after that.
  *
  * One form because they are one thing to the reader, with the default's differences
  * kept honest. It has no name and no off switch (its off is provider `none`), it
@@ -22,6 +23,7 @@ import { useApiMutation } from '@/shared/api/queries'
 import { errorMessage } from '@/shared/api/errors'
 import { getWorkspaceId } from '@/shared/api/api'
 import { Button } from '@knowledge/ui/button'
+import { Checkbox } from '@knowledge/ui/checkbox'
 import { confirm } from '@knowledge/ui/confirm'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@knowledge/ui/dialog'
 import { Input } from '@knowledge/ui/input'
@@ -36,7 +38,7 @@ const open = defineModel<boolean>('open', { required: true })
 const { t } = useI18n()
 const workspaceId = getWorkspaceId()
 
-const invalidates = () => [['/v1/ai/providers'], ['/v1/ai/settings'], ['/v1/ai/providers/choices']]
+const invalidates = () => [['/v1/ai/providers'], ['/v1/ai/settings'], ['/v1/ai/providers/choices'], ['/v1/ai/models'], ['/v1/ai/models/choices']]
 const createProvider = useApiMutation('post', '/v1/ai/providers', { invalidates })
 const updateProvider = useApiMutation('patch', '/v1/ai/providers/{id}', { invalidates })
 const saveSettings = useApiMutation('patch', '/v1/ai/settings', { invalidates })
@@ -50,6 +52,7 @@ const EMPTY_FORM = {
   provider: 'deepseek' as AiProvider,
   baseUrl: '',
   model: '',
+  makeDefault: false,
   apiKey: '',
   clearKey: false,
 }
@@ -160,7 +163,9 @@ async function submit() {
         await updateProvider.mutateAsync({ path: { id: profile.value.id }, body: fields })
         toast.success(t('ai.providerUpdated'))
       } else {
-        await createProvider.mutateAsync({ body: { workspaceId, ...fields } })
+        await createProvider.mutateAsync({
+          body: { workspaceId, ...fields, model: f.model.trim() || undefined, makeDefault: f.makeDefault },
+        })
         toast.success(t('ai.providerAdded'))
       }
     }
@@ -209,7 +214,7 @@ async function useEnvironment() {
         </label>
 
         <div class="grid gap-4 sm:grid-cols-2">
-          <label class="block space-y-1.5" :class="(off || !isDefault) && 'sm:col-span-2'">
+          <label class="block space-y-1.5" :class="(off || target.kind === 'profile') && 'sm:col-span-2'">
             <span class="text-muted-foreground text-xs font-medium">{{ t('ai.provider') }}</span>
             <Select v-model="form.provider">
               <SelectTrigger class="w-full"><SelectValue /></SelectTrigger>
@@ -221,11 +226,27 @@ async function useEnvironment() {
               </SelectContent>
             </Select>
           </label>
-          <label v-if="isDefault && !off" class="block space-y-1.5">
+          <label v-if="(isDefault || target.kind === 'new') && !off" class="block space-y-1.5">
             <span class="text-muted-foreground text-xs font-medium">{{ t('ai.model') }}</span>
-            <Input v-model="form.model" :required="!inheritedModel" :placeholder="inheritedModel ?? t('ai.providerDialog.modelId')" />
+            <Input
+              v-model="form.model"
+              :required="isDefault ? !inheritedModel : form.makeDefault"
+              :placeholder="target.kind === 'new' ? t('ai.providerDialog.modelId') : (inheritedModel ?? t('ai.providerDialog.modelId'))"
+            />
           </label>
         </div>
+
+        <label v-if="target.kind === 'new'" class="flex items-start gap-2.5">
+          <Checkbox
+            class="mt-0.5"
+            :model-value="form.makeDefault"
+            @update:model-value="form.makeDefault = $event === true"
+          />
+          <span class="text-sm leading-snug">
+            {{ t('ai.providerDialog.makeDefault') }}
+            <span class="text-muted-foreground mt-0.5 block text-xs">{{ t('ai.providerDialog.makeDefaultHint') }}</span>
+          </span>
+        </label>
 
         <template v-if="!off">
           <label class="block space-y-1.5">

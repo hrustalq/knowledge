@@ -125,7 +125,7 @@ export class BlueprintDeriveService {
    */
   private async templates(workspaceId: string, projectId: string, sameWorkspace: boolean): Promise<BlueprintTemplate[]> {
     const rows = await this.prisma.pageTemplate.findMany({
-      where: { workspaceId, builtInKey: null, archivedAt: null, OR: [{ projectId }, ...(sameWorkspace ? [] : [{ projectId: null }])] },
+      where: { workspaceId, builtInKey: null, archivedAt: null, OR: [{ projectId }, ...(sameWorkspace ? [] : [{ projectId: null, blueprintId: null }])] },
       include: { versions: { orderBy: { version: 'desc' }, take: 1 } },
       orderBy: { name: 'asc' },
       take: 50,

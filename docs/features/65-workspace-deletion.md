@@ -25,7 +25,7 @@ and BM25 documents.
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
 | `GET /v1/workspaces/:id/deletion-preview`        | `@Access('admin','workspace')`. Counted holdings: projects, pages, revisions, stored files, connectors, chat bindings, live API keys, published sites |
 | `DELETE /v1/workspaces/:id?confirm=<name>`       | `@Access('admin','workspace')`. Anything but the exact name is a 400 that changes nothing        |
-| Settings → Access → **Delete this workspace**    | Shown to workspace admins at the foot of the Members tab: the manifest, then the typed name (`DeleteWorkspaceDialog.vue`) |
+| Settings → General → **Delete this workspace**   | Shown to workspace admins below the workspace-name form: the manifest, then the typed name (`DeleteWorkspaceDialog.vue`) |
 
 There is no MCP tool. Deleting a tenant is not an agent's act.
 

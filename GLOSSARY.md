@@ -59,8 +59,16 @@ _Avoid_: parser, script, scraper
 ## Starting a project
 
 **Blueprint** («Шаблон структуры»):
-A reusable description of a project: a page tree (titles, categories, template or heading skeleton, guidance) plus the conventions it starts with — styleguide, project templates, glossary seed terms. Built-in, saved for a workspace, derived from an existing project, or drafted from a description. Scaffolding copies it; nothing stays linked to it.
+A reusable description of a project: a page tree (titles, categories, template or heading skeleton, guidance) plus the conventions it starts with — styleguide, project templates, glossary seed terms. Built-in, saved for a workspace, derived from an existing project, or drafted from a description. Scaffolding copies a plain blueprint; one that is a methodology is linked instead.
 _Avoid_: template (that is one page), project template, scaffold, preset
+
+**Methodology** («Методология»):
+A blueprint that also declares levels, workflows or agents. A project links at most one, live (`projects.blueprint_id`): its templates, workflows, styleguide, glossary and agents resolve project → methodology → workspace, so editing the methodology changes every project that follows it. Linked, it can be switched off but not deleted. See docs/features/82.
+_Avoid_: framework, process (a process is a page category)
+
+**Level** («Уровень»):
+One ordered stage of a methodology's work: L0 Intent to L7 Code, or question to decision. A page's level is derived from the template it was made from, never stored. In chat, a level picks the default agent and adds its guidance.
+_Avoid_: layer (graph layers, docs/features/63, are a different axis), tier (a model's size class), stage
 
 **Collection** («Коллекция»):
 A page whose future children follow a rule: a child template and a numbered title pattern (`ADR {{n:4}}: `, `{{n:2}} — `), so "New page" under it starts as the next item. Any page can be one; it is not a page kind.

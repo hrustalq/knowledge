@@ -21,6 +21,7 @@ import { repositorySegments } from '../components/component-match.js';
 import { estimateTokens } from '../ai/ai-usage.service.js';
 import { pageText } from '../common/page-text.js';
 import { readAliases } from '../glossary/glossary.service.js';
+import { projectScope } from '../projects/methodology-scope.js';
 
 /** The MCP tool's name: the answer is measured as that tool renders it. */
 export const CONTEXT_TOOL = 'knowledge_context';
@@ -148,14 +149,29 @@ export class ContextService {
 
   /** The vocabulary of those projects (or the workspace's alone), the terms the query names. */
   private async termsFor(workspaceId: string, query: string, projectIds: string[]): Promise<ContextTerm[]> {
+    const scopes = await Promise.all(projectIds.map((p) => projectScope(this.prisma, p)));
+    const blueprintIds = [...new Set(scopes.flatMap((s) => (s.blueprintId ? [s.blueprintId] : [])))];
     const rows = (
       await this.prisma.glossaryTerm.findMany({
-        where: { workspaceId, OR: [{ projectId: null }, ...(projectIds.length ? [{ projectId: { in: projectIds } }] : [])] },
+        where: {
+          workspaceId,
+          OR: [
+            { projectId: null, blueprintId: null },
+            ...(projectIds.length ? [{ projectId: { in: projectIds } }] : []),
+            ...(blueprintIds.length ? [{ projectId: null, blueprintId: { in: blueprintIds } }] : []),
+          ],
+        },
       })
     ).map((r) => ({ ...r, aliases: readAliases(r.aliases) }));
-    // A project term replaces the workspace's, enabled or not; only then do disabled ones drop.
-    const vocabulary = projectIds.length
-      ? [...new Map(projectIds.flatMap((p) => effectiveGlossary(rows, p)).map((t) => [t.id, t])).values()]
+    // A project term replaces its methodology's (#1121), which replaces the
+    // workspace's, enabled or not; only then do disabled ones drop. Each project
+    // sees only its own methodology's terms.
+    const vocabulary = scopes.length
+      ? [
+          ...new Map(
+            scopes.flatMap((s) => effectiveGlossary(rows.filter((r) => !r.blueprintId || r.blueprintId === s.blueprintId), s.projectId)).map((t) => [t.id, t]),
+          ).values(),
+        ]
       : rows;
     return matchTerms(query, vocabulary.filter((t) => t.enabled), CONTEXT_LIMITS.terms).map((t) => ({
       termId: t.id,

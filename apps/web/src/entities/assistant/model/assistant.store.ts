@@ -415,6 +415,8 @@ export const useAssistantStore = defineStore('assistant', {
         documentRefs?: string[]
         skillIds?: string[]
         agentKey?: string
+        /** The methodology level (#1128): a key, null for none, omitted to keep the thread's. */
+        level?: string | null
         /** Set when the message answers a step of a question flow (#425). */
         answer?: AssistantFlowAnswer
       } = {},
@@ -453,8 +455,11 @@ export const useAssistantStore = defineStore('assistant', {
         // '' means "follow the mode" — the server's own default, so it is
         // simply not sent rather than encoded as an empty string.
         ...(opts.agentKey ? { agentKey: opts.agentKey } : {}),
+        ...(opts.level !== undefined ? { level: opts.level } : {}),
         ...(opts.answer ? { answer: opts.answer } : {}),
       }
+      // The server keeps it on the thread; mirror that so a thread switch reopens on it.
+      if (opts.level !== undefined) thread.level = opts.level
 
       const abort = markRaw(new AbortController())
       this.abort = abort

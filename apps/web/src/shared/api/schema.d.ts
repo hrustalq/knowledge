@@ -14302,6 +14302,7 @@ export interface components {
             headRevisionId: string | null;
             headRevisionStatus: components["schemas"]["RevisionStatus"] | null;
             createdAt: string;
+            createdBy?: string | null;
             kind?: components["schemas"]["ApiDocumentKind"];
             sourceBacked?: boolean;
             sourceSync?: {
@@ -14357,6 +14358,7 @@ export interface components {
             headRevisionId: string | null;
             headRevisionStatus: components["schemas"]["RevisionStatus"] | null;
             createdAt: string;
+            createdBy?: string | null;
             kind?: components["schemas"]["ApiDocumentKind"];
             sourceBacked?: boolean;
             sourceSync?: {
@@ -22761,6 +22763,12 @@ export interface operations {
                 tags?: string;
                 /** @description 1 to include archived pages (docs/features/39) */
                 includeArchived?: string;
+                /** @description Sort column; createdAt when omitted (#1256) */
+                sort?: "createdAt" | "lastActivityAt" | "title";
+                /** @description desc when omitted; asc for title */
+                order?: "asc" | "desc";
+                /** @description Pages whose first revision the caller wrote (`me`) or didn't (`others`); everyone when omitted */
+                author?: "me" | "others";
             };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */

@@ -120,6 +120,9 @@
     "notFoundOnDocument": "Revision {revisionId} not found on document {documentId}",
     "notComparable": "Revision {id} is {status} — only finalized revisions can be compared"
   },
+  "listQuery": {
+    "oneOf": "{param} must be one of {allowed}, got \"{value}\""
+  },
   "compare": {
     "badMode": "mode must be \"direct\" or \"merge-base\", got \"{mode}\""
   },

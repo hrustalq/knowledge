@@ -835,6 +835,9 @@ export type I18nTranslations = {
             "notFoundOnDocument": string;
             "notComparable": string;
         };
+        "listQuery": {
+            "oneOf": string;
+        };
         "compare": {
             "badMode": string;
         };

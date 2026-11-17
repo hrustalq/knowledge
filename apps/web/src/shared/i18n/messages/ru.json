@@ -290,6 +290,29 @@
     "viewGraph": "Граф",
     "viewTree": "Дерево",
     "viewList": "Список",
+    "sort": {
+      "title": "Сортировка",
+      "label": "Сортировка: {sort}",
+      "by": {
+        "createdAt": "Дата создания",
+        "lastActivityAt": "Последняя активность",
+        "title": "Название"
+      },
+      "date": {
+        "desc": "Сначала новые",
+        "asc": "Сначала старые"
+      },
+      "alpha": {
+        "asc": "А → Я",
+        "desc": "Я → А"
+      }
+    },
+    "author": {
+      "label": "Автор",
+      "all": "Все",
+      "me": "Я",
+      "others": "Другие"
+    },
     "noPagesForFilters": "Нет страниц, подходящих под фильтры.",
     "topLevel": "Верхний уровень",
     "relationsCount": "Связи",

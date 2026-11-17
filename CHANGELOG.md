@@ -15,6 +15,21 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Added
+
+- The Pages list sorts by created date, last activity or title, either way round. The sort menu sits beside
+  **Filters**, and the order is labelled by column ("Newest first", "A → Z"). The choice is remembered per browser,
+  and the page loads already in that order. The date on each row is the one the list is sorted by. The filters
+  rail gains **Created by: Anyone / Me / Others**, where the creator is the author of the page's first revision.
+  `GET /v1/documents` takes `sort` (`createdAt|lastActivityAt|title`), `order` (`asc|desc`) and `author`
+  (`me|others`). Paging stays stable within any sort, and list rows carry `createdBy`. (#1256)
+
+### Operations
+
+- Migration `20270205100000_document_created_by` adds the nullable `documents.created_by` column, fills it from
+  each page's earliest revision, and indexes `(workspace_id, created_by)` and `(workspace_id, title)`. It only
+  adds, and the previous image never reads the column, so rolling back by retag is safe. (#1256)
+
 ### Changed
 
 - Clicking a page in a graph (the Pages graph, a page's graph widget and its full-screen view) opens the page in a

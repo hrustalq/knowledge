@@ -124,6 +124,16 @@ export function isMethodology(blueprint: Blueprint): boolean {
   return Boolean(blueprint.levels?.length || blueprint.workflows?.length || blueprint.agents?.length);
 }
 
+/**
+ * The level a page made from `templateRef` sits at in a methodology (#1121):
+ * the first level listing that template, or null. Derived, never stored, so
+ * switching a project's methodology re-levels its pages without a write.
+ */
+export function levelOf(templateRef: string | null | undefined, levels: readonly BlueprintLevel[] | undefined): BlueprintLevel | null {
+  if (!templateRef) return null;
+  return levels?.find((level) => level.templateRefs.includes(templateRef)) ?? null;
+}
+
 export const BUILT_IN_BLUEPRINT_KEYS = ['discovery', 'code-product', 'service-docs', 'blank'] as const;
 export type BuiltInBlueprintKey = (typeof BUILT_IN_BLUEPRINT_KEYS)[number];
 
@@ -239,6 +249,47 @@ export type BlueprintInterviewRound = InterviewRound;
 export type GenerateBlueprintResponse =
   | { status: 'done'; blueprint: Blueprint; glossary: BlueprintGlossaryTerm[] }
   | { status: 'asking'; round: BlueprintInterviewRound; outline: BlueprintNode[]; terms: BlueprintGlossaryTerm[] };
+
+// --- /v1/projects/:id/methodology (#1121) ------------------------------------------
+
+/** A project's methodology: the blueprint it links, live. */
+export interface ProjectMethodologyResponse {
+  projectId: string;
+  /** Null: the project has none, and reads only its own and workspace-wide conventions. */
+  methodology: {
+    /** As `GET /v1/blueprints` lists it: a built-in key or a saved blueprint's id. */
+    key: string;
+    name: BlueprintText;
+    icon: string | null;
+    builtIn: boolean;
+    /** False: archived. Hidden from pickers; this project still reads it. */
+    enabled: boolean;
+    levels: BlueprintLevel[];
+  } | null;
+}
+
+/** A section of the methodology's tree the project lacks, matched by title. */
+export interface MethodologyPreviewSection {
+  /** The node's index path in the methodology's tree: `2` (top level) or `2.0` (one level down). */
+  id: string;
+  title: string;
+  /** The existing page it would go under; null for a top-level section. */
+  parentTitle: string | null;
+  /** Pages it writes, itself included. */
+  pages: number;
+}
+
+/**
+ * What linking `blueprintKey` would do (`GET …/methodology/preview`): nothing is
+ * written. Sections are offered for the user to confirm; pages are never
+ * deleted, moved or edited. `levels` counts the project's pages each level of
+ * the new methodology would give a level.
+ */
+export interface MethodologyPreviewResponse {
+  blueprintKey: string;
+  sections: MethodologyPreviewSection[];
+  levels: { key: string; name: string; pages: number }[];
+}
 
 // --- POST /v1/projects/scaffold (the body is ScaffoldProjectDto) ------------------
 

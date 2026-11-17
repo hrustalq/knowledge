@@ -411,6 +411,8 @@ async function create() {
         locale: lang.value,
         // The DTO cannot name the contracts type; the server parses it with the one schema.
         blueprint: cloneJson(body) as unknown as Record<string, unknown>,
+        // Started from a methodology (#1125): the server links the project to it instead of copying its conventions.
+        ...(origin.value?.kind === 'blueprint' ? { methodologyKey: origin.value.key } : {}),
         ...(context.value.restricted ? { restricted: true } : {}),
         ...(context.value.avatarEmoji ? { avatarEmoji: context.value.avatarEmoji } : {}),
       },

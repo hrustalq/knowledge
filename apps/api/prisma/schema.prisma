@@ -3310,8 +3310,11 @@ model PageTemplateVersion {
 /// A workspace's own project blueprint, or its override of a built-in (#716).
 /// Built-ins are code (`apps/api/src/blueprints/built-in/`) and never seeded:
 /// an override row with `enabled = false` hides one, and deleting it resets.
-/// Nothing pins a blueprint (a scaffold copies it), so a custom row is
-/// deleted, never archived. No FK on workspace_id or created_by (house policy).
+/// A project may link one as its methodology (`projects.blueprint_id`, #1121):
+/// a linked row cannot be deleted, only archived (`enabled = false`, hidden
+/// from pickers, still read by its projects). Linking an untouched built-in
+/// creates its override row with `current_version = 0`, which serves the code.
+/// No FK on workspace_id or created_by (house policy).
 model ProjectBlueprint {
   id             String   @id @default(uuid()) @db.Uuid
   workspaceId    String   @map("workspace_id") @db.Uuid

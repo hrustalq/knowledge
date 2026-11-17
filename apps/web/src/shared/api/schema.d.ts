@@ -944,6 +944,41 @@ export interface paths {
         patch: operations["ProjectsController_update"];
         trace?: never;
     };
+    "/v1/projects/{id}/methodology": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The project's methodology (#1121): the blueprint it links, live, and its levels; null when none */
+        get: operations["ProjectsController_getMethodology"];
+        /** Link, switch or unlink (null) the project's methodology, and create the confirmed sections. Its templates, workflows, styleguide and glossary are read live; no page is deleted, moved or edited. Workspace admin or the project's maintainer. */
+        put: operations["ProjectsController_setMethodology"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{id}/methodology/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What linking a methodology would do: the sections of its tree the project lacks (by title, top level and one down) and how many pages each of its levels would count. Writes nothing. Workspace admin or the project's maintainer. */
+        get: operations["ProjectsController_previewMethodology"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/projects/{id}/overview": {
         parameters: {
             query?: never;
@@ -8769,6 +8804,8 @@ export interface components {
             locale: "en" | "ru";
             /** @description A built-in blueprint (discovery, code-product, service-docs, blank) or a saved one's id, as `GET /v1/blueprints` lists it. Exactly one of blueprintKey and blueprint. */
             blueprintKey?: string;
+            /** @description Link the new project to this methodology (#1121) — a key as `GET /v1/blueprints` lists it — instead of copying its conventions into the project. The wizard sends the entry it started from with the edited tree inline. Ignored unless that blueprint is a methodology (declares levels, workflows or agents); defaults to blueprintKey. */
+            methodologyKey?: string;
             /** @description An inline `Blueprint` (@knowledge/contracts), validated server-side. Exactly one of blueprintKey and blueprint. */
             blueprint?: {
                 [key: string]: unknown;
@@ -8784,6 +8821,17 @@ export interface components {
             avatarEmoji?: string;
             /** @description Hex colour behind the emoji, e.g. `#3b82f6`. */
             avatarColor?: string;
+        };
+        SetProjectMethodologyDto: {
+            /** @description A blueprint key as `GET /v1/blueprints` lists it; null unlinks. */
+            blueprintKey: string | null;
+            /** @description Sections from the preview to create (their `id`s). Nothing else is written; no page is deleted, moved or edited. */
+            sections?: string[];
+            /**
+             * @description The language new sections are titled in; the caller’s by default
+             * @enum {string}
+             */
+            locale?: "en" | "ru";
         };
         UpdateProjectDto: {
             name?: string;
@@ -12910,7 +12958,7 @@ export interface components {
                 id: string;
                 name: string;
                 /** @enum {string} */
-                scope: "project" | "workspace";
+                scope: "project" | "methodology" | "workspace";
             } | null;
             violations: components["schemas"]["LintViolation"][];
             dropped: number;
@@ -13059,6 +13107,17 @@ export interface components {
             icon?: string;
             tree: components["schemas"]["BlueprintNode"][];
             conventions?: components["schemas"]["BlueprintConventions"];
+            levels?: components["schemas"]["BlueprintLevel"][];
+            workflows?: components["schemas"]["BlueprintWorkflow"][];
+            agents?: components["schemas"]["BlueprintAgent"][];
+        };
+        BlueprintAgent: {
+            key: string;
+            name: string;
+            description?: string;
+            instructions: string;
+            tools?: string[];
+            minTier?: components["schemas"]["ModelTier"];
         };
         BlueprintCollection: {
             childTemplateRef?: components["schemas"]["TemplateRef"];
@@ -13086,6 +13145,14 @@ export interface components {
             aliases?: string[];
         };
         BlueprintInterviewRound: components["schemas"]["InterviewRound"];
+        BlueprintLevel: {
+            key: string;
+            name: components["schemas"]["BlueprintText"];
+            description?: components["schemas"]["BlueprintText"];
+            templateRefs: components["schemas"]["TemplateRef"][];
+            agentKey?: string;
+            guidance?: components["schemas"]["BlueprintText"];
+        };
         BlueprintNode: {
             title: components["schemas"]["BlueprintText"];
             category?: components["schemas"]["DocumentCategory"];
@@ -13104,6 +13171,12 @@ export interface components {
         BlueprintText: {
             en?: string;
             ru?: string;
+        };
+        BlueprintWorkflow: {
+            name: string;
+            description?: string;
+            graph: components["schemas"]["WorkflowGraph"];
+            trigger?: components["schemas"]["WorkflowTrigger"];
         };
         BranchAccessResponse: {
             branchId: string;
@@ -14617,7 +14690,7 @@ export interface components {
         GetStyleguideResponse: {
             styleguide: components["schemas"]["StyleguideSummary"] | null;
             /** @enum {string|null} */
-            scope: "project" | "workspace" | null;
+            scope: "project" | "methodology" | "workspace" | null;
             maxRules: number;
         };
         /** @enum {string} */
@@ -14711,6 +14784,7 @@ export interface components {
             termId: string;
             workspaceId: string;
             projectId: string | null;
+            blueprintId: string | null;
             term: string;
             aliases: string[];
             definition: string;
@@ -15849,6 +15923,23 @@ export interface components {
         };
         /** @enum {string} */
         MergeStrategy: "merge-commit" | "squash";
+        MethodologyPreviewResponse: {
+            blueprintKey: string;
+            sections: components["schemas"]["MethodologyPreviewSection"][];
+            levels: {
+                key: string;
+                name: string;
+                pages: number;
+            }[];
+        };
+        MethodologyPreviewSection: {
+            id: string;
+            title: string;
+            parentTitle: string | null;
+            pages: number;
+        };
+        /** @enum {string} */
+        ModelTier: "small" | "medium" | "large";
         MyDraftBranchResponse: {
             branch: components["schemas"]["BranchInfo"];
             pages: string[];
@@ -16095,6 +16186,17 @@ export interface components {
         };
         ProjectGitResponse: {
             url: string | null;
+        };
+        ProjectMethodologyResponse: {
+            projectId: string;
+            methodology: {
+                key: string;
+                name: components["schemas"]["BlueprintText"];
+                icon: string | null;
+                builtIn: boolean;
+                enabled: boolean;
+                levels: components["schemas"]["BlueprintLevel"][];
+            } | null;
         };
         ProjectOverviewResponse: {
             project: components["schemas"]["ProjectSummary"];
@@ -21068,6 +21170,141 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectSummary"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ProjectsController_getMethodology: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectMethodologyResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ProjectsController_setMethodology: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetProjectMethodologyDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectMethodologyResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ProjectsController_previewMethodology: {
+        parameters: {
+            query: {
+                /** @description The blueprint key to preview */
+                blueprint: string;
+                /** @description The language section titles are matched in; the caller’s by default */
+                locale?: "en" | "ru";
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MethodologyPreviewResponse"];
                 };
             };
             /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */

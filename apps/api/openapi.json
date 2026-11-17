@@ -4986,6 +4986,228 @@
         ]
       }
     },
+    "/v1/projects/{id}/methodology": {
+      "get": {
+        "operationId": "ProjectsController_getMethodology",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectMethodologyResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The project's methodology (#1121): the blueprint it links, live, and its levels; null when none",
+        "tags": [
+          "projects"
+        ]
+      },
+      "put": {
+        "operationId": "ProjectsController_setMethodology",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetProjectMethodologyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectMethodologyResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Link, switch or unlink (null) the project's methodology, and create the confirmed sections. Its templates, workflows, styleguide and glossary are read live; no page is deleted, moved or edited. Workspace admin or the project's maintainer.",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/v1/projects/{id}/methodology/preview": {
+      "get": {
+        "operationId": "ProjectsController_previewMethodology",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "blueprint",
+            "required": true,
+            "in": "query",
+            "description": "The blueprint key to preview",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "locale",
+            "required": false,
+            "in": "query",
+            "description": "The language section titles are matched in; the caller’s by default",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MethodologyPreviewResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "What linking a methodology would do: the sections of its tree the project lacks (by title, top level and one down) and how many pages each of its levels would count. Writes nothing. Workspace admin or the project's maintainer.",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
     "/v1/projects/{id}/overview": {
       "get": {
         "operationId": "ProjectsController_overview",
@@ -44817,7 +45039,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.56.0",
+    "version": "0.57.0",
     "contact": {}
   },
   "tags": [],
@@ -45772,6 +45994,10 @@
             "type": "string",
             "description": "A built-in blueprint (discovery, code-product, service-docs, blank) or a saved one's id, as `GET /v1/blueprints` lists it. Exactly one of blueprintKey and blueprint."
           },
+          "methodologyKey": {
+            "type": "string",
+            "description": "Link the new project to this methodology (#1121) — a key as `GET /v1/blueprints` lists it — instead of copying its conventions into the project. The wizard sends the entry it started from with the edited tree inline. Ignored unless that blueprint is a methodology (declares levels, workflows or agents); defaults to blueprintKey."
+          },
           "blueprint": {
             "type": "object",
             "additionalProperties": true,
@@ -45798,6 +46024,34 @@
         "required": [
           "workspaceId",
           "locale"
+        ]
+      },
+      "SetProjectMethodologyDto": {
+        "type": "object",
+        "properties": {
+          "blueprintKey": {
+            "type": "string",
+            "nullable": true,
+            "description": "A blueprint key as `GET /v1/blueprints` lists it; null unlinks."
+          },
+          "sections": {
+            "description": "Sections from the preview to create (their `id`s). Nothing else is written; no page is deleted, moved or edited.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "locale": {
+            "type": "string",
+            "enum": [
+              "en",
+              "ru"
+            ],
+            "description": "The language new sections are titled in; the caller’s by default"
+          }
+        },
+        "required": [
+          "blueprintKey"
         ]
       },
       "UpdateProjectDto": {
@@ -58833,6 +59087,7 @@
                     "type": "string",
                     "enum": [
                       "project",
+                      "methodology",
                       "workspace"
                     ]
                   }
@@ -59472,11 +59727,60 @@
           },
           "conventions": {
             "$ref": "#/components/schemas/BlueprintConventions"
+          },
+          "levels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BlueprintLevel"
+            }
+          },
+          "workflows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BlueprintWorkflow"
+            }
+          },
+          "agents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BlueprintAgent"
+            }
           }
         },
         "required": [
           "name",
           "tree"
+        ]
+      },
+      "BlueprintAgent": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "instructions": {
+            "type": "string"
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "minTier": {
+            "$ref": "#/components/schemas/ModelTier"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "instructions"
         ]
       },
       "BlueprintCollection": {
@@ -59580,6 +59884,37 @@
       "BlueprintInterviewRound": {
         "$ref": "#/components/schemas/InterviewRound"
       },
+      "BlueprintLevel": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "$ref": "#/components/schemas/BlueprintText"
+          },
+          "description": {
+            "$ref": "#/components/schemas/BlueprintText"
+          },
+          "templateRefs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TemplateRef"
+            }
+          },
+          "agentKey": {
+            "type": "string"
+          },
+          "guidance": {
+            "$ref": "#/components/schemas/BlueprintText"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "templateRefs"
+        ]
+      },
       "BlueprintNode": {
         "type": "object",
         "properties": {
@@ -59643,6 +59978,27 @@
             "type": "string"
           }
         }
+      },
+      "BlueprintWorkflow": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "graph": {
+            "$ref": "#/components/schemas/WorkflowGraph"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/WorkflowTrigger"
+          }
+        },
+        "required": [
+          "name",
+          "graph"
+        ]
       },
       "BranchAccessResponse": {
         "type": "object",
@@ -66255,6 +66611,7 @@
             "type": "string",
             "enum": [
               "project",
+              "methodology",
               "workspace",
               null
             ],
@@ -66665,6 +67022,10 @@
             "type": "string",
             "nullable": true
           },
+          "blueprintId": {
+            "type": "string",
+            "nullable": true
+          },
           "term": {
             "type": "string"
           },
@@ -66716,6 +67077,7 @@
           "termId",
           "workspaceId",
           "projectId",
+          "blueprintId",
           "term",
           "aliases",
           "definition",
@@ -71717,6 +72079,79 @@
           "squash"
         ]
       },
+      "MethodologyPreviewResponse": {
+        "type": "object",
+        "properties": {
+          "blueprintKey": {
+            "type": "string"
+          },
+          "sections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MethodologyPreviewSection"
+            }
+          },
+          "levels": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "pages": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "key",
+                "name",
+                "pages"
+              ]
+            }
+          }
+        },
+        "required": [
+          "blueprintKey",
+          "sections",
+          "levels"
+        ]
+      },
+      "MethodologyPreviewSection": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "parentTitle": {
+            "type": "string",
+            "nullable": true
+          },
+          "pages": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "parentTitle",
+          "pages"
+        ]
+      },
+      "ModelTier": {
+        "type": "string",
+        "enum": [
+          "small",
+          "medium",
+          "large"
+        ]
+      },
       "MyDraftBranchResponse": {
         "type": "object",
         "properties": {
@@ -72756,6 +73191,58 @@
         },
         "required": [
           "url"
+        ]
+      },
+      "ProjectMethodologyResponse": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string"
+          },
+          "methodology": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "$ref": "#/components/schemas/BlueprintText"
+                  },
+                  "icon": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "builtIn": {
+                    "type": "boolean"
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "levels": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/BlueprintLevel"
+                    }
+                  }
+                },
+                "required": [
+                  "key",
+                  "name",
+                  "icon",
+                  "builtIn",
+                  "enabled",
+                  "levels"
+                ]
+              }
+            ],
+            "nullable": true
+          }
+        },
+        "required": [
+          "projectId",
+          "methodology"
         ]
       },
       "ProjectOverviewResponse": {

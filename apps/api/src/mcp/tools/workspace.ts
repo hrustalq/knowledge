@@ -98,9 +98,10 @@ export function registerWorkspaceTools(ctx: McpToolContext): void {
       await guard.ws(args.workspaceId, 'editor');
       if (!args.name && !args.parentId) throw new Error('Pass name for a new project, or parentId to add under a page.');
       const blueprint = await svc.scaffolds.resolve(args);
-      // The REST route's rule: a styleguide is admin-only trusted prompt text.
-      if (blueprint.conventions?.styleguide && !args.parentId) await guard.ws(args.workspaceId, 'admin');
-      return json(await svc.scaffolds.scaffold(args as ScaffoldProjectDto, blueprint, principal));
+      const methodology = await svc.scaffolds.methodologyFor(args);
+      // The REST route's rule: a styleguide is admin-only trusted prompt text; a linked methodology copies none.
+      if (!methodology && blueprint.conventions?.styleguide && !args.parentId) await guard.ws(args.workspaceId, 'admin');
+      return json(await svc.scaffolds.scaffold(args as ScaffoldProjectDto, blueprint, principal, methodology));
     },
   );
 

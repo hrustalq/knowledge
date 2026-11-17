@@ -13,6 +13,36 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Added
+
+- A project can follow a **methodology**: a saved blueprint (or a built-in) linked live from **Project settings →
+  Policies → Methodology**. The methodology's templates, workflows, styleguide and glossary terms appear in the
+  project without being copied into it, so editing the methodology changes every project that follows it. A
+  project's own template, styleguide or glossary term with the same name still wins, and the workspace's apply
+  where neither defines one. Before linking or switching, a preview lists the sections of the methodology's page
+  tree the project is missing (by title, top level and one level down) and how many pages each of its levels
+  would count. Only the sections you tick are created. No page is ever deleted, moved or edited, and unlinking
+  returns the project to exactly what it had. Changing the methodology needs a workspace admin or the project's
+  maintainer. (#1121)
+- Scaffolding a project from a methodology (a blueprint that declares levels, workflows or agents) links the new
+  project to it instead of copying its conventions. (#1125)
+
+### Changed
+
+- A blueprint that a project follows can no longer be deleted. The delete is refused with the number of projects
+  using it; switch it off (archive) instead, which hides it from pickers while the projects that follow it keep
+  reading it. (#1125)
+
+### Operations
+
+- Two migrations, `20270203100000_methodology_scope` and `20270203110000_methodology_conventions`, add nullable
+  `blueprint_id` columns to `projects`, `page_templates`, `workflow_definitions`, `ai_skills` and `glossary_terms`,
+  and re-create the `ai_skills_one_styleguide_per_scope` unique index to include `blueprint_id`. The new index
+  accepts exactly the rows the old one did. The previous release runs against the migrated schema, so code rolls
+  back by retag. (#1121)
+
 ## [0.57.0] — 2026-11-17
 
 ### Added

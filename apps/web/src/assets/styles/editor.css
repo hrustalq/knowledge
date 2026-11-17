@@ -1477,6 +1477,12 @@ select.kn-api-method:focus-visible { outline: 2px solid var(--ring); outline-off
 .kn-gutter:hover .kn-gutter-btn { opacity: 0.9; }
 .kn-gutter-grip { cursor: grab; }
 .kn-gutter-grip:active { cursor: grabbing; }
+/* #1063: a tap's synthetic mousemove parked the handle off-screen, in the
+ * margin a phone does not have, and a finger never starts its HTML5 drag.
+ * Touch reaches the same actions through the toolbar's More menu. */
+@media (hover: none) {
+  .kn-gutter { display: none; }
+}
 
 /* Bubble + table bars ------------------------------------------------------ */
 

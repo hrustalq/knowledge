@@ -120,6 +120,8 @@ in the pull request that introduces them — see
 - Language and theme moved from the top bar to Profile settings, and both follow your device unless you choose:
   Language has Automatic (your browser's language), Theme has System, Light and Dark, and System switches with the
   device. The top bar keeps every control on screen at large text sizes. (#1040)
+- Editing on a phone or tablet: the toolbar's ⋯ menu has Move block up, Move block down, Duplicate block and Delete
+  block for the block you are typing in. The block handle that showed up off-screen on touch is gone. (#1063)
 
 ## [0.56.0] — 2026-11-16
 

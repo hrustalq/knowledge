@@ -4104,7 +4104,12 @@
     "left": "Left",
     "right": "Right",
     "more": "More formatting",
-    "template": "Template"
+    "template": "Template",
+    "block": "Block",
+    "moveBlockUp": "Move block up",
+    "moveBlockDown": "Move block down",
+    "duplicateBlock": "Duplicate block",
+    "deleteBlock": "Delete block"
   },
   "hints": {
     "noProjects": "No projects in this workspace yet.",

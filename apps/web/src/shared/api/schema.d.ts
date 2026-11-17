@@ -9724,6 +9724,13 @@ export interface components {
             timeoutMs?: number | null;
             /** @description Default: true. */
             enabled?: boolean;
+            /**
+             * @description Create this model with the provider
+             * @example deepseek-chat
+             */
+            model?: string;
+            /** @description Route chat, review and extraction to the new model. Requires model. */
+            makeDefault?: boolean;
         };
         UpdateAiProviderDto: {
             name?: string;

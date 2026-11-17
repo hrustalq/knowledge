@@ -15,10 +15,11 @@
  * against a case that cannot occur.
  */
 import { useI18n } from 'vue-i18n'
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { Search, Sparkles, X } from 'lucide-vue-next'
 import { articles, sections, searchArticles, type DocArticle } from '@/modules/help/docs/registry'
+import { revealPaneBelowLg } from '@/shared/utils/reveal-pane'
 import { Input } from '@knowledge/ui/input'
 
 const { t } = useI18n()
@@ -45,14 +46,23 @@ function isCurrent(article: DocArticle): boolean {
   // No slug is the overview: the first article is what the child renders.
   return slug ? slug === article.slug : article === articles[0]
 }
+/** #1071: below lg the rail stacks above the article, so a pick would otherwise change nothing on screen. */
+const detailEl = ref<HTMLElement | null>(null)
+watch(
+  () => route.params.slug,
+  (slug) => {
+    if (slug) void nextTick(() => revealPaneBelowLg(detailEl.value))
+  },
+)
 </script>
 
 <template>
   <!-- Bleed out the settings column's padding so the rail sits flush against
        the settings nav, exactly as the projects roster does. -->
   <div class="-mx-4 -my-6 flex min-h-0 flex-1 flex-col lg:-mx-8 lg:flex-row">
+    <!-- #1071: cap the stacked rail below lg so the detail stays in view -->
     <div
-      class="flex h-80 shrink-0 flex-col border-b bg-background lg:sticky lg:top-0 lg:h-[calc(100vh-5.75rem)] lg:w-64 lg:self-start lg:border-b-0 lg:border-r"
+      class="flex max-h-[40dvh] shrink-0 flex-col border-b bg-background lg:sticky lg:top-0 lg:max-h-none lg:h-[calc(100vh-5.75rem)] lg:w-64 lg:self-start lg:border-b-0 lg:border-r"
     >
       <div class="border-b p-2">
         <div class="relative">
@@ -157,7 +167,7 @@ function isCurrent(article: DocArticle): boolean {
       </div>
     </div>
 
-    <div data-kn-pane="3" class="flex min-h-0 min-w-0 flex-1 flex-col px-4 py-6 lg:px-8">
+    <div ref="detailEl" data-kn-pane="3" class="flex min-h-0 min-w-0 flex-1 flex-col px-4 py-6 lg:px-8">
       <RouterView />
     </div>
   </div>

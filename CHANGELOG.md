@@ -96,6 +96,17 @@ in the pull request that introduces them — see
   placeholders before. (#1066)
 - Assistant on a phone (keyboard open, or in landscape): the breadcrumb row that only repeated "Assistant" is gone
   below 1024px, giving the conversation that height back. (#1067)
+- The Pages graph on a phone: the controls start as one Filters button and the graph uses the whole canvas, instead
+  of most of it sitting under the controls panel. (#1052)
+- Editing on a phone or tablet: the page can no longer slide sideways under the closed assistant panel, which cut
+  off the toolbar, title and text on the left with no way to swipe back. (#1058)
+- Settings pages with a list and a detail (projects, docs, templates, blueprints, workflows) on a phone: the list
+  takes at most 40% of the screen, and picking an item scrolls its details into view instead of changing nothing
+  visible. (#1071)
+- The navigation drawer in phone landscape (or at large text sizes) scrolls, and the project and page list keeps a
+  usable height instead of a one-row window. (#1041)
+- Choosing another project in the phone navigation drawer keeps the drawer open on that project's pages, instead of
+  closing it. (#1076)
 
 ## [0.56.0] — 2026-11-16
 

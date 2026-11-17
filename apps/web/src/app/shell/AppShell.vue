@@ -22,6 +22,7 @@ import { Button } from '@knowledge/ui/button'
 import { Toaster } from '@knowledge/ui/sonner'
 import { useSidebarStore } from '@/stores/sidebar'
 import { useLayoutStore } from '@/stores/layout'
+import { useSidebarNavStore } from '@/stores/sidebar-nav'
 import { SearchSheet, useSearchUiStore } from '@/modules/documents'
 import { useAuthStore } from '@/stores/auth'
 import { useTemplatesStore } from '@/entities/template'
@@ -129,11 +130,15 @@ function toggleSidebar() {
   }
   sidebar.toggle()
 }
+const sidebarNav = useSidebarNavStore()
 watch(
   () => route.fullPath,
   () => {
-    mobileOpen.value = false
     actionsOpen.value = false
+    // #1076: a project switch in the drawer navigates as a side effect; the
+    // drawer stays open on the pages pane it asked for.
+    if (sidebarNav.holdDrawerFor === route.path) return
+    mobileOpen.value = false
   },
 )
 

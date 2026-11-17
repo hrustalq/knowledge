@@ -259,7 +259,13 @@ function skipToMain() {
            teleport never misses one; each is drawn only while it holds
            something. `id` stays the first attribute: entry-server splices the
            server's teleport buffers in by it. -->
-      <div class="kn-trail" :data-actions-open="actionsOpen || undefined">
+      <!-- `meta.trail: 'lg'`: a surface whose own header already names the
+           place keeps the strip only from lg up, where height is not short (#1067). -->
+      <div
+        class="kn-trail"
+        :data-actions-open="actionsOpen || undefined"
+        :data-trail-lg="route.meta.trail === 'lg' || undefined"
+      >
         <AppBreadcrumbs v-if="showCrumbs" :crumbs="crumbs" />
         <!-- Phones only (the stylesheet shows it while the page has actions):
              the one control the row keeps, opening them as an aside. -->

@@ -192,6 +192,8 @@
     "backToLogin": "Back to log in",
     "forbiddenTitle": "You do not have access to this page",
     "forbiddenBody": "Ask a workspace admin to grant you the required role, or switch to an account that has it.",
+    "notFoundTitle": "Nothing lives at this address",
+    "notFoundBody": "The link may be mistyped, or the page it pointed to has moved.",
     "passwordsDoNotMatch": "Passwords do not match",
     "signUpJoinHint": "Sign up — you'll join the default workspace as a viewer",
     "namePlaceholder": "Ada Lovelace",

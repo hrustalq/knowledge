@@ -58,7 +58,7 @@ function setSort(value: unknown) {
 
 <template>
   <div class="flex flex-wrap items-center gap-2">
-    <label class="relative min-w-0 flex-1 basis-56">
+    <label class="relative min-w-0 flex-1 basis-56 max-sm:basis-full">
       <Search class="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
       <Input
         v-model="draft"
@@ -70,7 +70,7 @@ function setSort(value: unknown) {
     </label>
 
     <Select :model-value="ownerId ?? ANY" @update:model-value="setOwner">
-      <SelectTrigger class="h-9 w-44" :aria-label="t('health.owner.label')">
+      <SelectTrigger class="h-9 max-sm:min-w-0 max-sm:flex-1 sm:w-44" :aria-label="t('health.owner.label')">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -80,7 +80,7 @@ function setSort(value: unknown) {
     </Select>
 
     <Select :model-value="sort" @update:model-value="setSort">
-      <SelectTrigger class="h-9 w-56" :aria-label="t('health.sort.label')">
+      <SelectTrigger class="h-9 max-sm:min-w-0 max-sm:flex-1 sm:w-56" :aria-label="t('health.sort.label')">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

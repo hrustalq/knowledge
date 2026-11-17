@@ -276,6 +276,17 @@
 .kn-shell:has(.kn-trail > nav, .kn-page-actions > *) {
   --kn-trail-h: 2.25rem;
 }
+/* `meta.trail: 'lg'` (#1067): below lg the strip of a surface that names
+   itself (the assistant's chat header) gives its 36px back to the content,
+   unless the page put actions in it. Both halves, so the fill height follows. */
+@media (max-width: 1023.98px) {
+  .kn-trail[data-trail-lg]:not(:has(.kn-page-actions > *)) {
+    display: none;
+  }
+  .kn-shell:has(.kn-trail[data-trail-lg]):not(:has(.kn-page-actions > *)) {
+    --kn-trail-h: 0rem;
+  }
+}
 @media (min-width: 1024px) {
   .kn-trail {
     padding-inline: 2rem;

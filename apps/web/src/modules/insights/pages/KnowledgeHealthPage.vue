@@ -283,12 +283,12 @@ const previewRow = ref<KnowledgeHealthRow | null>(null)
     <div v-if="tab === 'pages'" :id="panelId('pages')" role="tabpanel" :aria-labelledby="tabId('pages')" class="flex min-w-0 flex-col gap-4">
       <!-- The presets. Each is a filter the API knows, with its live count, so
            the strip is the summary and the summary is the strip. -->
-      <div class="flex flex-wrap gap-1.5" role="group" :aria-label="t('health.presets')">
+      <div class="flex gap-1.5 max-sm:flex-nowrap max-sm:-my-1 max-sm:overflow-x-auto max-sm:py-1 max-sm:kn-scroll-strip sm:flex-wrap" role="group" :aria-label="t('health.presets')">
         <button
           v-for="p in HEALTH_PRESETS"
           :key="p"
           type="button"
-          class="inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring"
+          class="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring"
           :class="preset === p
             ? 'border-primary/40 bg-primary/10 text-primary'
             : 'bg-card text-muted-foreground hover:bg-muted hover:text-foreground'"

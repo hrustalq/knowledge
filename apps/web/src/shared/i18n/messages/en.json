@@ -2593,7 +2593,7 @@
     "disabled": "disabled",
     "test": "Test",
     "removeNamed": "Remove {name}",
-    "providerDialogDesc": "A named endpoint and key. Give it a name you will recognise in the usage breakdown; you add its models on its row.",
+    "providerDialogDesc": "A named endpoint and key. Give it a name you will recognise in the usage breakdown, and optionally add its first model.",
     "noEncryptionKey": "SETTINGS_ENCRYPTION_KEY is not set on the server",
     "leaveEmptyToKeep": "Leave empty to keep it.",
     "enabledOfTotal": "{enabled} of {total} enabled",
@@ -3025,7 +3025,7 @@
       "invalid": "A number from 0 to 1",
       "saved": "Decision thresholds saved"
     },
-    "providersDesc": "Everything this workspace can call. The default handles any work not routed elsewhere; add a provider, then the models it serves.",
+    "providersDesc": "Everything this workspace can call. The default handles any work not routed elsewhere; add a provider and the models it serves.",
     "routingDesc": "Which model each kind of work runs on. A thread or an agent can still pin its own.",
     "routeToDefault": "Default — {name}",
     "providerRow": {
@@ -3054,6 +3054,8 @@
       "defaultTitle": "Edit default provider",
       "defaultDesc": "Runs any work not routed at another provider. Empty fields inherit the server's ASSISTANT_* environment values.",
       "modelId": "model id",
+      "makeDefault": "Use for all work",
+      "makeDefaultHint": "Routes chat, review and relation extraction to this model.",
       "keyOptional": "optional — uses the default provider's key",
       "keyClearedEnv": "cleared on save — the environment key applies again",
       "keyClearedDefault": "cleared on save — the default provider's key applies",
@@ -3071,6 +3073,7 @@
     "models": {
       "none": "No models yet: nothing can run on this provider",
       "inChat": "In chat",
+      "makeDefault": "Make default",
       "fetch": "Fetch models",
       "addByCode": "Add a model by its code name",
       "codePlaceholder": "Model code name",

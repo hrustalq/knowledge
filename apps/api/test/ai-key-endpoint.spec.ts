@@ -73,9 +73,19 @@ describe('saving a provider', () => {
   function providers(current: Record<string, unknown>, over: Record<string, unknown> = {}) {
     const update = vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ ...current, ...data, createdAt: new Date(), updatedAt: new Date() }));
     const create = vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'p2', ...data, createdAt: new Date(), updatedAt: new Date() }));
-    const prisma = { aiProvider: { findUnique: vi.fn(async (q: { where: { id?: string } }) => (q.where.id ? current : null)), update, create } };
+    const createModel = vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'm1', ...data }));
+    const upsertSettings = vi.fn(async () => ({}));
+    const transaction = vi.fn(async (fn: (tx: unknown) => unknown) => fn({
+      aiProvider: { create },
+      aiModel: { create: createModel },
+      aiSettings: { upsert: upsertSettings },
+    }));
+    const prisma = {
+      aiProvider: { findUnique: vi.fn(async (q: { where: { id?: string } }) => (q.where.id ? current : null)), update, create },
+      $transaction: transaction,
+    };
     const service = new AiProvidersService(prisma as never, { invalidate: vi.fn() } as never, config(over) as never);
-    return { service, update, create };
+    return { service, update, create, createModel, upsertSettings, transaction };
   }
   const stored = { id: 'p1', workspaceId: WS, name: 'P', provider: 'openai-compatible', baseUrl: 'https://203.0.113.10/v1', apiKeyCipher: encryptSecret('sk-theirs', key, slots.aiProviderKey({ id: 'p1', workspaceId: WS })) };
 
@@ -91,6 +101,27 @@ describe('saving a provider', () => {
     expect(update.mock.calls[0]![0].data).not.toHaveProperty('apiKeyCipher');
     await service.update('p1', { baseUrl: 'https://203.0.113.20/v1', apiKey: 'sk-new' });
     expect(update.mock.calls[1]![0].data.apiKeyCipher).toEqual(expect.any(String));
+  });
+
+  it('creates the first model and all three routes in one transaction', async () => {
+    const { service, createModel, upsertSettings, transaction } = providers(stored);
+    await service.create(
+      WS,
+      { name: 'X', provider: 'openai-compatible', baseUrl: 'https://203.0.113.66/v1', model: ' x ', makeDefault: true },
+      'u1',
+    );
+    expect(transaction).toHaveBeenCalledOnce();
+    expect(createModel).toHaveBeenCalledWith({
+      data: { workspaceId: WS, providerId: expect.any(String), code: 'x', source: 'manual', createdBy: 'u1' },
+    });
+    const routes = { chatModelId: 'm1', reviewModelId: 'm1', extractionModelId: 'm1', updatedBy: 'u1' };
+    expect(upsertSettings).toHaveBeenCalledWith({ where: { workspaceId: WS }, create: { workspaceId: WS, ...routes }, update: routes });
+  });
+
+  it('refuses to make a missing model default before writing anything', async () => {
+    const { service, transaction } = providers(stored);
+    await expect(service.create(WS, { name: 'X', provider: 'deepseek', makeDefault: true })).rejects.toThrow();
+    expect(transaction).not.toHaveBeenCalled();
   });
 
   it('refuses a private-address base URL unless the deployment allows it', async () => {

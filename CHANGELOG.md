@@ -55,6 +55,12 @@ in the pull request that introduces them — see
   using it; switch it off (archive) instead, which hides it from pickers while the projects that follow it keep
   reading it. (#1125)
 
+### Fixed
+
+- A new AI provider can create its first model and make it the chat, review and extraction default in one save.
+  Existing models have a **Make default** action, so getting a provider to do the work no longer requires three
+  separate setup steps. (#1258)
+
 ### Operations
 
 - Two migrations, `20270203100000_methodology_scope` and `20270203110000_methodology_conventions`, add nullable

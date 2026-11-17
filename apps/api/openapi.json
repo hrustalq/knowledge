@@ -48585,6 +48585,15 @@
           "enabled": {
             "type": "boolean",
             "description": "Default: true."
+          },
+          "model": {
+            "type": "string",
+            "example": "deepseek-chat",
+            "description": "Create this model with the provider"
+          },
+          "makeDefault": {
+            "type": "boolean",
+            "description": "Route chat, review and extraction to the new model. Requires model."
           }
         },
         "required": [

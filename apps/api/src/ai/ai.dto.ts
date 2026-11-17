@@ -484,6 +484,18 @@ export class CreateAiProviderDto {
   @IsBoolean()
   enabled?: boolean;
 
+  @ApiPropertyOptional({ type: String, example: 'deepseek-chat', description: 'Create this model with the provider' })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(200, { message: vmsg('maxLength') })
+  model?: string;
+
+  @ApiPropertyOptional({ description: 'Route chat, review and extraction to the new model. Requires model.' })
+  @IsOptional()
+  @IsBoolean()
+  makeDefault?: boolean;
+
 }
 
 export class UpdateAiProviderDto {

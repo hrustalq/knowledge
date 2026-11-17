@@ -1033,6 +1033,7 @@ export type I18nTranslations = {
             "modelNotFound": string;
             "modelUnavailable": string;
             "modelUnknown": string;
+            "modelRequired": string;
             "providerNoModels": string;
             "encryptionKeyMissing": string;
             "captureParentNotInWorkspace": string;

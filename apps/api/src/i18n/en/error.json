@@ -405,6 +405,7 @@
     "upstreamStatus": "The AI provider responded with an error ({status})",
     "upstreamError": "The AI provider responded with an error",
     "flowAnswerStale": "That question has already been answered or is no longer open. Answer the newest question instead.",
+    "levelUnavailable": "That level is not available here: levels come from the methodology of the project of the page this chat is about.",
     "upstreamNoCredit": "The AI provider refused the request: its account is out of credit (402). Top up the balance with the provider.",
     "upstreamAuth": "The AI provider rejected the credentials ({status}). Check the API key in AI settings.",
     "unreachable": "The AI provider is unreachable",

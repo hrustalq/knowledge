@@ -46,6 +46,11 @@ export interface AssistantToolContext {
    */
   projectId?: string;
   /**
+   * The methodology level the turn works at (#1128): `search_knowledge` leans
+   * towards pages at it. Set by the turn, never from tool arguments.
+   */
+  level?: string;
+  /**
    * Who reads what this run writes, when that is not only the caller (#76): a
    * background agent's findings, a bot answer in a group. Every read tool then
    * sees the caller's pages clamped to that audience

@@ -29,7 +29,9 @@ import DocumentPickerWidget, { type AppliedDocRef } from '@/entities/assistant/c
 import SkillPicker from './SkillPicker.vue'
 import AgentPicker from './AgentPicker.vue'
 import ModelPicker from './ModelPicker.vue'
+import LevelPicker from './LevelPicker.vue'
 import { assistantMode } from '../model/use-mode'
+import { useAssistantStore } from '../model/assistant.store'
 
 const { t } = useI18n()
 
@@ -40,6 +42,8 @@ const props = defineProps<{
   history: string[]
   /** Editors can run Agent mode; everyone else is read-only and the toggle says so. */
   canEdit: boolean
+  /** The page the chat is grounded on, which decides whether there are levels to pick (#1128). */
+  documentId?: string
 }>()
 
 const emit = defineEmits<{
@@ -52,6 +56,8 @@ const emit = defineEmits<{
       documentRefs: string[]
       skillIds: string[]
       agentKey: string
+      /** Omitted when there are no levels to pick: the thread's own then holds. */
+      level?: string | null
     },
   ): void
   (e: 'stop'): void
@@ -74,6 +80,17 @@ const appliedDocs = ref<AppliedDocRef[]>([])
 const skillIds = ref<string[]>([])
 // '' = follow the mode; 'auto' = ask the router (docs/features/20).
 const agentKey = ref('')
+// The methodology level (#1128): remembered by the thread, so it opens on the thread's.
+const assistant = useAssistantStore()
+const level = ref<string | null>(null)
+const levelPicker = ref<InstanceType<typeof LevelPicker> | null>(null)
+watch(
+  () => assistant.activeThread?.id,
+  () => {
+    level.value = assistant.activeThread?.level ?? null
+  },
+  { immediate: true },
+)
 const dropZoneEl = ref<HTMLElement | null>(null)
 
 // Autosize: `rows=1` with a max height only ever produced a one-line box that
@@ -247,6 +264,7 @@ function send() {
   // (see onKeydown above), so a disabled button alone would not stop an
   // over-length message from being sent and refused by the server.
   if (!content || !canSend.value) return
+  const turnLevel = levelPicker.value?.turnLevel()
   emit('send', {
     content,
     mode: mode.value,
@@ -254,6 +272,7 @@ function send() {
     documentRefs: appliedDocs.value.map((d) => d.documentId),
     skillIds: skillIds.value,
     agentKey: agentKey.value,
+    ...(turnLevel !== undefined ? { level: turnLevel } : {}),
   })
   draft.value = ''
   attachments.value = []
@@ -361,6 +380,7 @@ function send() {
               <DocumentPickerWidget v-model="appliedDocs" />
 
               <SkillPicker v-model="skillIds" />
+              <LevelPicker ref="levelPicker" v-model="level" :document-id="documentId" />
               <AgentPicker v-model="agentKey" />
 
               <ModelPicker />

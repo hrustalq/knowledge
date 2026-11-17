@@ -1120,6 +1120,7 @@ export type I18nTranslations = {
             "upstreamStatus": string;
             "upstreamError": string;
             "flowAnswerStale": string;
+            "levelUnavailable": string;
             "upstreamNoCredit": string;
             "upstreamAuth": string;
             "unreachable": string;

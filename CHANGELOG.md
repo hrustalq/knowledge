@@ -41,6 +41,13 @@ in the pull request that introduces them — see
   keys that never collide with a workspace agent. Their name, instructions and tools come from the methodology, and
   saving it updates them on the next turn. An admin can switch one off or pin a model, but cannot edit or delete
   it. (#1127)
+- In a chat about a page whose project follows a methodology with levels, the composer shows a **Level** picker.
+  Picking a level makes that level's agent the default for the turn (picking an agent yourself still wins) and adds
+  the level's guidance to the instructions. The turn's searches also rank pages at that level higher. The Ask/Agent
+  toggle still decides what the turn may do: a level's agent that has write tools is not used in Ask mode. The
+  level is remembered by the chat from the next message on. Without a grounding page, or in a project with no
+  levels, there is no picker, and the API refuses a `level` with a 400 (`level-unavailable`). Chats without a level
+  send the same instructions as before. (#1128)
 
 ### Changed
 
@@ -56,6 +63,8 @@ in the pull request that introduces them — see
   accepts exactly the rows the old one did. `20270203120000_methodology_agents` adds nullable `ai_models.tier`,
   `ai_agents.blueprint_id` and `ai_agents.min_tier`. The previous release runs against the migrated schema, so
   code rolls back by retag. (#1121)
+- Migration `20270204100000_assistant_thread_level` adds a nullable `assistant_threads.level` column. The previous
+  release runs against it, so code rolls back by retag. (#1128)
 
 ## [0.57.0] — 2026-11-17
 

@@ -9596,6 +9596,8 @@ export interface components {
             mode?: "ask" | "agent";
             /** @description Agent to run this turn (docs/features/20). 'auto' asks the router to choose. Omitted, the mode picks: researcher for ask, author for agent. The mode is still the ceiling — an agent can never gain write tools in ask mode. */
             agentKey?: string;
+            /** @description The methodology level to work at (#1121), a key GET /v1/projects/{id}/levels lists for the grounding page's project. Kept on the thread; null clears it, omitted keeps the thread's. Its agent is the default when `agentKey` names none, and its guidance joins the prompt. A key the grounding page's methodology does not declare, or no grounding page, is a 400. */
+            level?: string | null;
             /** @description Ephemeral file content for this turn only — not persisted verbatim into thread history */
             attachments?: components["schemas"]["ChatAttachmentDto"][];
             /** @description Existing workspace documents manually picked to ground this turn in ("Apply documents" widget) */
@@ -13062,6 +13064,7 @@ export interface components {
             documentId: string | null;
             title: string | null;
             modelId: string | null;
+            level: string | null;
             createdBy: string;
             createdAt: string;
             updatedAt: string;

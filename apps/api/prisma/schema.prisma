@@ -1111,6 +1111,9 @@ model AssistantThread {
   /// ai_models row pinned to this thread by whoever is chatting. Null = whatever
   /// the workspace routes 'chat' at. No FK, like the routing columns.
   modelId     String?  @map("model_id") @db.Uuid
+  /// The methodology level this thread works at (#1121): a level key of the
+  /// grounding page's project methodology. Null = no level, the prompt as before.
+  level       String?
   /// The first turn that carried private input: the asker's personal memory, a
   /// draft or an attachment (#1169). Later answers can repeat it, so from then
   /// on no turn in the thread is copied to a project memory bank.

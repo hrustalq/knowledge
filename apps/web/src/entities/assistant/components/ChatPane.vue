@@ -80,6 +80,7 @@ async function handleSend(payload: {
   documentRefs: string[]
   skillIds: string[]
   agentKey: string
+  level?: string | null
 }) {
   transcriptEl.value?.scrollToEnd()
   await assistant.sendMessage(payload.content, props.documentId, {
@@ -88,6 +89,7 @@ async function handleSend(payload: {
     documentRefs: payload.documentRefs,
     skillIds: payload.skillIds,
     agentKey: payload.agentKey,
+    level: payload.level,
   })
   void nextTick(() => composerEl.value?.focus())
 }
@@ -277,6 +279,7 @@ function startNewThread() {
       :placeholder="placeholder"
       :history="assistant.sentHistory"
       :can-edit="auth.canEdit"
+      :document-id="documentId ?? assistant.activeThread?.documentId ?? undefined"
       @send="handleSend"
       @stop="assistant.stopStreaming()"
     />

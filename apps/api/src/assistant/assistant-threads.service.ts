@@ -297,6 +297,7 @@ export class AssistantThreadsService {
       documentId: t.documentId,
       title: t.title,
       modelId: t.modelId,
+      level: t.level,
       createdBy: t.createdBy,
       createdAt: t.createdAt.toISOString(),
       updatedAt: t.updatedAt.toISOString(),

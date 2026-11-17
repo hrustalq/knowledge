@@ -88,6 +88,11 @@ const visible = computed(() => {
 function problems(workflow: WorkflowDefinitionInfo): number {
   return validateGraph(workflow.graph).filter((i) => i.severity === 'error').length
 }
+/**
+ * #1061: the builder is a full-screen surface, and below xl the stacked rail
+ * took its height — while editing, the trail is the way back to the list.
+ */
+const editing = computed(() => route.path.endsWith('/edit'))
 /** #1071: below xl (#1046) the rail stacks above the detail, so a pick would otherwise change nothing on screen. */
 const detailEl = ref<HTMLElement | null>(null)
 watch(
@@ -103,6 +108,7 @@ watch(
   <div class="-mx-4 -my-6 flex min-h-0 flex-1 flex-col lg:-mx-8 xl:flex-row">
     <!-- #1071: cap the stacked rail (below xl, #1046) so the detail stays in view -->
     <div
+      :class="{ 'max-xl:hidden': editing }"
       class="flex max-h-[40dvh] shrink-0 flex-col border-b bg-background xl:sticky xl:top-0 xl:max-h-none xl:h-[calc(100vh-5.75rem)] xl:w-64 xl:self-start xl:border-b-0 xl:border-r"
     >
       <div class="flex items-center gap-2 border-b px-3 py-2">

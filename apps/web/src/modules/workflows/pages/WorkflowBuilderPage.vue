@@ -363,8 +363,14 @@ function applyProposal(proposal: { graph: WorkflowGraph; name: string | null; de
     content — and the canvas has none of its own to resolve from. The settings
     nav and the workflow rail already state the same number for the same
     reason: the viewport, less the topbar (h-14) and the breadcrumb strip (h-9).
+
+    #1061: below lg the settings sections stack as a strip above, so that sum
+    is short. The pane is the end of a flex chain that already fills <main>,
+    so the builder grows into it instead — the canvas ends at the screen's
+    edge and nothing scrolls the page. The floor keeps a usable canvas on a
+    phone held sideways, where the page scrolls by the header instead.
   -->
-  <div class="flex h-[32rem] min-h-0 flex-col lg:h-[calc(100vh-5.75rem)]">
+  <div class="flex min-h-[20rem] flex-1 flex-col lg:h-[calc(100vh-5.75rem)] lg:min-h-0 lg:flex-initial">
     <!-- Header: what this is, what state it is in, and the verbs. No back
          arrow — the trail above and the roster beside it are both the way
          back, and a third one inside the pane would only be in the way. -->

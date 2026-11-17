@@ -207,6 +207,7 @@ export type I18nTranslations = {
             "summary": string;
         };
         "warning": {
+            "tierUnmet": string;
             "fileNotRead": string;
             "graphUnreadableOrphans": string;
             "graphUnreadableModelOnly": string;
@@ -1047,6 +1048,7 @@ export type I18nTranslations = {
             "baseUrlPrivate": string;
             "providerNone": string;
             "decisionNeedsGenApi": string;
+            "agentFromMethodology": string;
             "agentNotFound": string;
             "agentScheduleNeedsOwner": string;
             "agentScheduleNeedsInterval": string;

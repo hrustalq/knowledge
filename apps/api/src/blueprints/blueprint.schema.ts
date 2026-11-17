@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { z } from 'zod';
 import { validateGraph } from '@knowledge/workflow';
 import {
+  ASSISTANT_TOOL_NAMES,
   BLUEPRINT_LEVEL_GUIDANCE_MAX,
   BLUEPRINT_MAX_AGENTS,
   BLUEPRINT_MAX_DEPTH,
@@ -106,7 +107,8 @@ const agent = z.strictObject({
   name: z.string().trim().min(1).max(120),
   description: z.string().max(500).optional(),
   instructions: z.string().trim().min(1).max(16_000),
-  tools: z.array(z.string().max(100)).max(50).optional(),
+  // Built-in tools only: a methodology cannot know which MCP plugins a workspace has.
+  tools: z.array(z.enum(ASSISTANT_TOOL_NAMES)).max(50).optional(),
   minTier: z.enum(MODEL_TIERS).optional(),
 });
 

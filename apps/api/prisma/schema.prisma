@@ -1498,6 +1498,9 @@ model AiModel {
   /// code table the router filters on: a code table that will go stale, plus a
   /// per-model escape hatch.
   capabilities Json?
+  /// 'small' | 'medium' | 'large' (MODEL_TIERS, #1121), set by an admin. Null =
+  /// unknown: never picked for an agent that asks for a minimum tier.
+  tier         String?
 
   createdBy String?  @map("created_by") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
@@ -1597,6 +1600,13 @@ model AiAgent {
   skillIds     Json?   @map("skill_ids")
   /// Retention mode plus optional personal/project overrides. Null = all, the pre-policy behavior.
   memoryPolicy Json?   @map("memory_policy")
+
+  /// A custom agent a methodology owns (#1121), written by its materializer under
+  /// a key namespaced by the blueprint. No FK. Admins may only switch it and pin a model.
+  blueprintId  String? @map("blueprint_id") @db.Uuid
+  /// The weakest model class this agent should run on (MODEL_TIERS). Null =
+  /// whatever the chain resolves, exactly as before.
+  minTier      String? @map("min_tier")
 
   /// ai_models row pinned to this agent. Null falls through to the purpose route,
   /// then the inline config, then env (feature 12's chain). No FK, matching the

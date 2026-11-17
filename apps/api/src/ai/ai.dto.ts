@@ -20,6 +20,8 @@ import {
 import { Type } from 'class-transformer';
 import { MAX_DEFINITION_CHARS, MAX_TERM_CHARS } from '../glossary/glossary.dto.js';
 import {
+  MODEL_TIERS,
+  type ModelTier,
   AGENT_CAPABILITIES,
   AGENT_LEARNING_MAX_CHARS,
   AGENT_LEARNING_PERSON_SOURCES,
@@ -626,6 +628,17 @@ export class UpdateAiModelDto {
   @ArrayMaxSize(8, { message: vmsg('arrayMaxSize') })
   @IsIn(AGENT_CAPABILITIES as unknown as string[], { each: true, message: vmsg('isIn') })
   capabilities?: AgentCapability[] | null;
+
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    enum: MODEL_TIERS,
+    description: 'The class of model it is (#1121). An agent asking for a minimum tier only runs on a model at or above it; null = unknown.',
+  })
+  @IsOptional()
+  @NULLABLE<UpdateAiModelDto>('tier')
+  @IsIn(MODEL_TIERS)
+  tier?: ModelTier | null;
 }
 
 // ---- Skills ----------------------------------------------------------------

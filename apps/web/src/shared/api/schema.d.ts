@@ -9780,6 +9780,11 @@ export interface components {
             priceCurrency?: "USD" | "RUB" | null;
             /** @description What this model can do, overriding the built-in model table. Null returns to the table (docs/features/20). */
             capabilities?: ("tools" | "vision" | "json")[] | null;
+            /**
+             * @description The class of model it is (#1121). An agent asking for a minimum tier only runs on a model at or above it; null = unknown.
+             * @enum {string|null}
+             */
+            tier?: "small" | "medium" | "large" | null;
         };
         CreateAiSkillDto: {
             /** Format: uuid */
@@ -12070,6 +12075,8 @@ export interface components {
             id: string | null;
             key: string;
             builtIn: boolean;
+            blueprintId: string | null;
+            minTier: components["schemas"]["ModelTier"] | null;
             name: string;
             description: string;
             instructions: string;
@@ -12138,6 +12145,7 @@ export interface components {
             available: boolean;
             kind: components["schemas"]["AiProvider"];
             capabilities: components["schemas"]["AgentCapability"][] | null;
+            tier: components["schemas"]["ModelTier"] | null;
         };
         AiMyUsageResponse: {
             budget: components["schemas"]["AiBudgetInfo"];

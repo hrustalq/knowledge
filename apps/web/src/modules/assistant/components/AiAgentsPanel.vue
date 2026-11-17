@@ -409,10 +409,16 @@ async function remove(agent: AiAgentSummary) {
             <button class="text-left" :disabled="!canManage" @click="openEdit(agent)">
               <span class="flex flex-wrap items-center gap-1.5">
                 <span class="font-medium" :class="canManage && 'hover:text-primary'">{{ agent.name }}</span>
-                <Badge v-if="!agent.builtIn" variant="secondary" class="font-normal">
+                <Badge v-if="agent.blueprintId" variant="secondary" class="font-normal">
+                  {{ t('ai.agents.methodology') }}
+                </Badge>
+                <Badge v-else-if="!agent.builtIn" variant="secondary" class="font-normal">
                   {{ t('ai.agents.custom') }}
                 </Badge>
-                <Badge v-if="agent.overridden.length" variant="outline" class="font-normal">
+                <Badge v-if="agent.minTier" variant="outline" class="font-normal">
+                  {{ t('ai.agents.minTier', { tier: t(`ai.models.tier.${agent.minTier}`) }) }}
+                </Badge>
+                <Badge v-if="agent.overridden.length && !agent.blueprintId" variant="outline" class="font-normal">
                   {{ t('ai.agents.overridden', { count: agent.overridden.length }) }}
                 </Badge>
                 <!-- The routed model cannot do what this agent needs, so it will
@@ -463,7 +469,7 @@ async function remove(agent: AiAgentSummary) {
               <RotateCcw class="size-3.5" />
             </Button>
             <Button
-              v-else-if="canManage && !agent.builtIn"
+              v-else-if="canManage && !agent.builtIn && !agent.blueprintId"
               variant="ghost"
               size="sm"
               :aria-label="t('ai.agents.delete', { name: agent.name })"
@@ -522,7 +528,8 @@ async function remove(agent: AiAgentSummary) {
       <DialogContent class="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{{ editing ? editing.name : t('ai.agents.newTitle') }}</DialogTitle>
-          <DialogDescription>{{ t('ai.agents.dialogHint') }}</DialogDescription>
+          <!-- A methodology's agent (#1127): its text is the methodology's; here only the model pin and the switch. -->
+          <DialogDescription>{{ editing?.blueprintId ? t('ai.agents.fromMethodology') : t('ai.agents.dialogHint') }}</DialogDescription>
         </DialogHeader>
 
         <form id="agent-form" class="max-h-[60vh] space-y-4 overflow-y-auto" @submit.prevent="submit">
@@ -530,6 +537,7 @@ async function remove(agent: AiAgentSummary) {
             <span class="text-muted-foreground text-xs font-medium">{{ t('ai.agents.key') }}</span>
             <Input v-model="form.key" required placeholder="release-notes" pattern="[a-z0-9][a-z0-9-]*" />
           </label>
+          <fieldset :disabled="!!editing?.blueprintId" class="space-y-4 disabled:opacity-70">
           <label class="block space-y-1">
             <span class="text-muted-foreground text-xs font-medium">{{ t('ai.agents.name') }}</span>
             <Input v-model="form.name" required />
@@ -555,6 +563,7 @@ async function remove(agent: AiAgentSummary) {
               </label>
             </div>
           </div>
+          </fieldset>
 
           <label class="block space-y-1">
             <span class="text-muted-foreground text-xs font-medium">{{ t('ai.agents.model') }}</span>

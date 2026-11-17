@@ -33,6 +33,14 @@ in the pull request that introduces them — see
   its pages without touching them. The level appears on the page (`GET /v1/documents/:id`) and on search results.
   `GET /v1/projects/:id/levels` lists the project's levels in order with the pages at each. A search may name a
   `level` to rank pages at that level higher; nothing is filtered out. (#1126)
+- Models can be given a **tier** (small, medium or large) in **Settings → AI → Models**. A methodology's agent may
+  ask for a minimum tier. With no model pinned, it runs on the purpose's routed model when that is strong enough,
+  otherwise on the cheapest available model that is. If none qualifies it falls back to the usual model, and the
+  run records a warning. Agents that ask for no tier resolve exactly as before. (#1127)
+- A methodology can bring its own agents. They are listed in **Settings → AI → Agents** marked *Methodology*, under
+  keys that never collide with a workspace agent. Their name, instructions and tools come from the methodology, and
+  saving it updates them on the next turn. An admin can switch one off or pin a model, but cannot edit or delete
+  it. (#1127)
 
 ### Changed
 
@@ -45,8 +53,9 @@ in the pull request that introduces them — see
 - Two migrations, `20270203100000_methodology_scope` and `20270203110000_methodology_conventions`, add nullable
   `blueprint_id` columns to `projects`, `page_templates`, `workflow_definitions`, `ai_skills` and `glossary_terms`,
   and re-create the `ai_skills_one_styleguide_per_scope` unique index to include `blueprint_id`. The new index
-  accepts exactly the rows the old one did. The previous release runs against the migrated schema, so code rolls
-  back by retag. (#1121)
+  accepts exactly the rows the old one did. `20270203120000_methodology_agents` adds nullable `ai_models.tier`,
+  `ai_agents.blueprint_id` and `ai_agents.min_tier`. The previous release runs against the migrated schema, so
+  code rolls back by retag. (#1121)
 
 ## [0.57.0] — 2026-11-17
 

@@ -192,6 +192,7 @@
     "summary": "Read {signals} signals ({questions} distinct questions), found {clusters} topics and judged {judged}; proposes {findings} gaps."
   },
   "warning": {
+    "tierUnmet": "No available model is of tier \"{tier}\" or above, so this run used the usual model.",
     "fileNotRead": "{path} could not be read: {error}",
     "graphUnreadableOrphans": "The relation graph could not be read, so the orphan check was skipped.",
     "graphUnreadableModelOnly": "The relation graph could not be read, so only the model half ran.",

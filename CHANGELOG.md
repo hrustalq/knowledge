@@ -23,9 +23,21 @@ in the pull request that introduces them — see
   rail gains **Created by: Anyone / Me / Others**, where the creator is the author of the page's first revision.
   `GET /v1/documents` takes `sort` (`createdAt|lastActivityAt|title`), `order` (`asc|desc`) and `author`
   (`me|others`). Paging stays stable within any sort, and list rows carry `createdBy`. (#1256)
+- Every agent run has its own page at `/agents/runs/:id`: the agent, its status, trigger and subject, the model,
+  timing, and the tokens and cost billed to it. The run's findings appear there with the same actions as the runs
+  list, followed by a step log of each model call, each tool call (its arguments, the pages it returned and the start
+  of what it handed the model) and each warning. While a run is going, steps appear as they happen and nothing is
+  polled. Steps are kept after the run ends. An editor can **Cancel run** from the page: a pending run never starts,
+  and a running one stops before its next step. Agent-run notifications and the runs list now link to the page.
+  `GET /v1/ai/agents/runs/:id/steps` (cursor) and `POST /v1/ai/agents/runs/:id/cancel` are new, `agent.run.step`
+  and `agent.run.cancelled` join the live events, and run summaries carry `model`. A run that is private to its
+  owner (a memo's analysis, a restricted project's check) stays a 404 for everyone else, steps included. (#1247)
 
 ### Operations
 
+- Migration `20270206100000_agent_run_steps` creates `agent_run_steps` (cascading from `agent_runs`) and indexes
+  `ai_usage(agent_run_id)`. It only adds; the previous image never reads the table, so rolling back by retag is safe
+  (runs on the old image simply log no steps). (#1247)
 - Migration `20270205100000_document_created_by` adds the nullable `documents.created_by` column, fills it from
   each page's earliest revision, and indexes `(workspace_id, created_by)` and `(workspace_id, title)`. It only
   adds, and the previous image never reads the column, so rolling back by retag is safe. (#1256)

@@ -3461,6 +3461,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/ai/agents/runs/{id}/steps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One run's step log, oldest first, with its model spend */
+        get: operations["AiController_listAgentRunSteps"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ai/agents/runs/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel a pending or running run */
+        post: operations["AiController_cancelAgentRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/ai/agents/triggers": {
         parameters: {
             query?: never;
@@ -12017,6 +12051,23 @@ export interface components {
         };
         /** @enum {string} */
         AgentRunStatus: "pending" | "running" | "succeeded" | "failed" | "cancelled";
+        AgentRunStep: {
+            id: string;
+            kind: components["schemas"]["AgentRunStepKind"];
+            name: string | null;
+            args: string | null;
+            output: string | null;
+            sources: {
+                documentId: string;
+                title: string;
+            }[];
+            ok: boolean;
+            tokens: number | null;
+            durationMs: number | null;
+            createdAt: string;
+        };
+        /** @enum {string} */
+        AgentRunStepKind: "model" | "tool" | "warning";
         AgentRunSummary: {
             id: string;
             workspaceId: string;
@@ -12039,6 +12090,7 @@ export interface components {
             stage: string | null;
             progress: number | null;
             warnings: string[];
+            model: string | null;
             startedAt: string | null;
             finishedAt: string | null;
             createdAt: string;
@@ -15234,6 +15286,16 @@ export interface components {
         ListAgentLearningsResponse: {
             learnings: components["schemas"]["AgentLearningSummary"][];
             promptLimit: number;
+        };
+        ListAgentRunStepsResponse: {
+            steps: components["schemas"]["AgentRunStep"][];
+            nextCursor: string | null;
+            usage: {
+                calls: number;
+                totalTokens: number;
+                estimated: boolean;
+                costs: components["schemas"]["CostAmount"][];
+            };
         };
         ListAgentRunsResponse: {
             runs: components["schemas"]["AgentRunSummary"][];
@@ -29722,6 +29784,95 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunSummary"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_listAgentRunSteps: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                cursor?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListAgentRunStepsResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_cancelAgentRun: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };

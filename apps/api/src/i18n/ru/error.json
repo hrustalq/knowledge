@@ -355,6 +355,7 @@
     "agentDisabled": "Агент «{key}» отключён.",
     "agentNotBackground": "Агент «{key}» нельзя запустить в фоне.",
     "agentRunNotFound": "Неизвестный запуск {id}",
+    "agentRunNotCancellable": "Запуск {id} уже завершён, отменить его нельзя",
     "agentNoExecutor": "У агента «{key}» нет фонового исполнителя.",
     "findingNotFound": "В запуске {runId} нет замечания с индексом {index}",
     "findingAlreadyProposed": "Это замечание уже оформлено запросом на слияние.",

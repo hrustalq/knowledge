@@ -312,6 +312,16 @@
     },
     {
       "method": "POST",
+      "path": "/v1/ai/agents/runs/{id}/cancel",
+      "tag": "ai",
+      "summary": "Cancel a pending or running run",
+      "role": "editor",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
       "path": "/v1/ai/agents/runs/{id}/findings/{index}/add-term",
       "tag": "ai",
       "summary": "Add the glossary term a finding proposes, optionally edited, as the caller",
@@ -366,6 +376,16 @@
       "tag": "ai",
       "summary": "Open a merge request that addresses one finding",
       "role": "editor",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/ai/agents/runs/{id}/steps",
+      "tag": "ai",
+      "summary": "One run's step log, oldest first, with its model spend",
+      "role": "viewer",
       "source": "query",
       "public": false,
       "platformAdmin": false

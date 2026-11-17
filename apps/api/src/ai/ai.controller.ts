@@ -27,6 +27,7 @@ import type {
   AgentTriggerSummary,
   ListAgentTriggersResponse,
   AiAgentSummary,
+  ListAgentRunStepsResponse,
   ListAgentRunsResponse,
   ListAiAgentChoicesResponse,
   ListAiAgentsResponse,
@@ -572,6 +573,36 @@ export class AiController {
     @CurrentPrincipal() principal: Principal,
   ): Promise<AgentRunSummary> {
     return this.runs.get(workspaceId, id, principal);
+  }
+
+  // The run page's step log (#1247), live over `agent.run.step`.
+  @Get('agents/runs/:id/steps')
+  @Returns('ListAgentRunStepsResponse')
+  @Access('viewer', 'query')
+  @ApiQuery({ name: 'workspaceId', required: true })
+  @ApiQuery({ name: 'cursor', required: false })
+  @ApiOperation({ summary: 'One run\'s step log, oldest first, with its model spend' })
+  listAgentRunSteps(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @CurrentPrincipal() principal: Principal,
+    @Query('cursor') cursor?: string,
+  ): Promise<ListAgentRunStepsResponse> {
+    return this.runs.steps(workspaceId, id, principal, cursor);
+  }
+
+  /** `editor`, the role that starts a run: a pending run never starts, a running one stops before its next step (#1247). */
+  @Post('agents/runs/:id/cancel')
+  @Returns('AgentRunSummary')
+  @Access('editor', 'query')
+  @ApiQuery({ name: 'workspaceId', required: true })
+  @ApiOperation({ summary: 'Cancel a pending or running run' })
+  cancelAgentRun(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<AgentRunSummary> {
+    return this.runs.cancel(workspaceId, id, principal);
   }
 
   // Triggers (#70). Declared before ':key' so "triggers" is not read as an

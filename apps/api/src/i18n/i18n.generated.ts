@@ -1070,6 +1070,7 @@ export type I18nTranslations = {
             "agentDisabled": string;
             "agentNotBackground": string;
             "agentRunNotFound": string;
+            "agentRunNotCancellable": string;
             "agentNoExecutor": string;
             "findingNotFound": string;
             "findingAlreadyProposed": string;

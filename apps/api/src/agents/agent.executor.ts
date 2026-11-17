@@ -12,6 +12,7 @@ import {
   AgentServices,
   runBrief,
   type AgentReporter,
+  type AgentRunLog,
   type AgentRunResult,
 } from './agent-services.js';
 import { AGENT_RUNNERS } from './agent-runners.js';
@@ -44,6 +45,8 @@ export class AgentExecutor extends AgentServices {
     agent: ResolvedAgent,
     principal: Principal,
     report: AgentReporter,
+    /** The step log and stop line (#1247); the processor always passes one, a spec may not. */
+    log?: AgentRunLog,
   ): Promise<AgentRunResult> {
     // Every model call below is billed to this run (#305), and the run is
     // stamped with what produced it whether it succeeds or fails.
@@ -52,6 +55,7 @@ export class AgentExecutor extends AgentServices {
       { agentKey: agent.key, agentRunId: run.id, projectId },
       async () => {
         try {
+          if (log) this.setRunLog(run.id, log);
           const brief = runBrief(run.input);
           const memory = this.memory;
           if (memory)
@@ -106,6 +110,7 @@ export class AgentExecutor extends AgentServices {
           return result;
         } finally {
           this.clearMemoryGrounding(run.id);
+          this.clearRunLog(run.id);
           await this.stamp(run, agent);
         }
       },

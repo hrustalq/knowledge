@@ -1376,6 +1376,81 @@
       "cancelled"
     ]
   },
+  "AgentRunStep": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "kind": {
+        "$ref": "#/components/schemas/AgentRunStepKind"
+      },
+      "name": {
+        "type": "string",
+        "nullable": true
+      },
+      "args": {
+        "type": "string",
+        "nullable": true
+      },
+      "output": {
+        "type": "string",
+        "nullable": true
+      },
+      "sources": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "documentId": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "documentId",
+            "title"
+          ]
+        }
+      },
+      "ok": {
+        "type": "boolean"
+      },
+      "tokens": {
+        "type": "number",
+        "nullable": true
+      },
+      "durationMs": {
+        "type": "number",
+        "nullable": true
+      },
+      "createdAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "kind",
+      "name",
+      "args",
+      "output",
+      "sources",
+      "ok",
+      "tokens",
+      "durationMs",
+      "createdAt"
+    ]
+  },
+  "AgentRunStepKind": {
+    "type": "string",
+    "enum": [
+      "model",
+      "tool",
+      "warning"
+    ]
+  },
   "AgentRunSummary": {
     "type": "object",
     "properties": {
@@ -1467,6 +1542,10 @@
           "type": "string"
         }
       },
+      "model": {
+        "type": "string",
+        "nullable": true
+      },
       "startedAt": {
         "type": "string",
         "nullable": true
@@ -1498,6 +1577,7 @@
       "stage",
       "progress",
       "warnings",
+      "model",
       "startedAt",
       "finishedAt",
       "createdAt"
@@ -15445,6 +15525,52 @@
     "required": [
       "learnings",
       "promptLimit"
+    ]
+  },
+  "ListAgentRunStepsResponse": {
+    "type": "object",
+    "properties": {
+      "steps": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/AgentRunStep"
+        }
+      },
+      "nextCursor": {
+        "type": "string",
+        "nullable": true
+      },
+      "usage": {
+        "type": "object",
+        "properties": {
+          "calls": {
+            "type": "number"
+          },
+          "totalTokens": {
+            "type": "number"
+          },
+          "estimated": {
+            "type": "boolean"
+          },
+          "costs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CostAmount"
+            }
+          }
+        },
+        "required": [
+          "calls",
+          "totalTokens",
+          "estimated",
+          "costs"
+        ]
+      }
+    },
+    "required": [
+      "steps",
+      "nextCursor",
+      "usage"
     ]
   },
   "ListAgentRunsResponse": {

@@ -11,14 +11,19 @@ import {
   type AgentFinding,
   type AgentRunInput,
   type AgentRunStatus,
+  type AgentRunStep,
+  type AgentRunStepKind,
   type AgentRunSummary,
   type AgentRunTrigger,
+  type CostCurrency,
   type AiAgentChoice,
   type AiAgentSummary,
+  type ListAgentRunStepsResponse,
   type ListAgentRunsResponse,
   RUNNABLE_AGENTS,
 } from '@knowledge/contracts';
-import { mayReadRun, privateRunWhere } from './run-privacy.js';
+import { mayReadRun, privateRunWhere, runFrameAddress } from './run-privacy.js';
+import { EventsPublisher } from '../events/events.publisher.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AgentRegistryService, type ResolvedAgent } from '../agents/agent-registry.service.js';
@@ -356,6 +361,8 @@ function toSummary(agent: ResolvedAgent, row: AiAgent | null): AiAgentSummary {
 
 /** Page size for the run list — the merge-request list's cursor convention. */
 const RUNS_PAGE = 25;
+/** Steps per page of a run's log (#1247). */
+const STEPS_PAGE = 200;
 
 /**
  * Starting and reading background runs (docs/features/20).
@@ -372,6 +379,7 @@ export class AgentRunsService {
     private readonly registry: AgentRegistryService,
     private readonly usage: AiUsageService,
     private readonly producer: AgentProducer,
+    private readonly events: EventsPublisher,
   ) {}
 
   async start(
@@ -543,12 +551,80 @@ export class AgentRunsService {
   }
 
   async get(workspaceId: string, id: string, principal: Principal): Promise<AgentRunSummary> {
+    const run = await this.readable(workspaceId, id, principal);
+    const agent = await this.registry.resolve(workspaceId, run.agentKey).catch(() => null);
+    return toRunSummary(run, agent?.name ?? run.agentKey, await this.blockers(workspaceId, [run], principal));
+  }
+
+  /**
+   * A run's step log (#1247), oldest first from `cursor` (the last step id
+   * read), with what its model calls cost so far. Read under the run's own
+   * rule: a private run's steps are as missing as the run.
+   */
+  async steps(workspaceId: string, id: string, principal: Principal, cursor?: string): Promise<ListAgentRunStepsResponse> {
+    await this.readable(workspaceId, id, principal);
+    const after = cursor && /^\d{1,18}$/.test(cursor) ? BigInt(cursor) : null;
+    const [rows, billed] = await Promise.all([
+      this.prisma.agentRunStep.findMany({
+        where: { runId: id, ...(after === null ? {} : { id: { gt: after } }) },
+        orderBy: { id: 'asc' },
+        take: STEPS_PAGE + 1,
+      }),
+      this.prisma.aiUsage.groupBy({
+        by: ['costCurrency', 'estimated'],
+        where: { workspaceId, agentRunId: id },
+        _count: { _all: true },
+        _sum: { totalTokens: true, costMicros: true },
+      }),
+    ]);
+    const page = rows.slice(0, STEPS_PAGE);
+    const costs = new Map<CostCurrency, number>();
+    for (const g of billed) {
+      const currency = g.costCurrency as CostCurrency;
+      if (g._sum.costMicros !== null) costs.set(currency, (costs.get(currency) ?? 0) + g._sum.costMicros);
+    }
+    return {
+      steps: page.map(toStep),
+      nextCursor: rows.length > STEPS_PAGE ? page[page.length - 1].id.toString() : null,
+      usage: {
+        calls: billed.reduce((n, g) => n + g._count._all, 0),
+        totalTokens: billed.reduce((n, g) => n + (g._sum.totalTokens ?? 0), 0),
+        estimated: billed.some((g) => g.estimated),
+        costs: [...costs].map(([currency, micros]) => ({ currency, micros })),
+      },
+    };
+  }
+
+  /**
+   * Cancel a pending or running run (#1247): one guarded write to `cancelled`.
+   * A pending run never starts — the claim takes only `pending` — and a
+   * running one stops before its next step, when the worker's next guarded
+   * write lands nothing. 409 for a run that has already settled.
+   */
+  async cancel(workspaceId: string, id: string, principal: Principal): Promise<AgentRunSummary> {
+    const run = await this.readable(workspaceId, id, principal);
+    const cancelled = await this.prisma.agentRun.updateMany({
+      where: { id, status: { in: ['pending', 'running'] } },
+      data: { status: 'cancelled', stage: null, finishedAt: new Date() },
+    });
+    if (cancelled.count === 0) {
+      throw new ConflictException({
+        statusCode: 409,
+        message: t('error.ai.agentRunNotCancellable', { id }),
+        reason: 'settled',
+      });
+    }
+    await this.events.publish({ type: 'agent.run.cancelled', workspaceId, subjectId: id, ...runFrameAddress(run) });
+    return this.get(workspaceId, id, principal);
+  }
+
+  /** The run, when this person may read it; a run of another workspace or a private one is a 404. */
+  private async readable(workspaceId: string, id: string, principal: Principal): Promise<AgentRun> {
     const run = await this.prisma.agentRun.findUnique({ where: { id } });
     if (!run || run.workspaceId !== workspaceId || !mayReadRun(run, principal)) {
       throw new NotFoundException(t('error.ai.agentRunNotFound', { id }));
     }
-    const agent = await this.registry.resolve(workspaceId, run.agentKey).catch(() => null);
-    return toRunSummary(run, agent?.name ?? run.agentKey, await this.blockers(workspaceId, [run], principal));
+    return run;
   }
 
   /**
@@ -572,6 +648,32 @@ export class AgentRunsService {
     const named = names ?? new Map((await this.registry.list(workspaceId)).map((a) => [a.key, a.name]));
     return new Map(running.map((r) => [r.subjectKey!, { runId: r.id, agentName: named.get(r.agentKey) ?? r.agentKey }]));
   }
+}
+
+function toStep(row: {
+  id: bigint;
+  kind: string;
+  name: string | null;
+  args: string | null;
+  output: string | null;
+  sources: Prisma.JsonValue;
+  ok: boolean;
+  tokens: number | null;
+  durationMs: number | null;
+  createdAt: Date;
+}): AgentRunStep {
+  return {
+    id: row.id.toString(),
+    kind: row.kind as AgentRunStepKind,
+    name: row.name,
+    args: row.args,
+    output: row.output,
+    sources: Array.isArray(row.sources) ? (row.sources as AgentRunStep['sources']) : [],
+    ok: row.ok,
+    tokens: row.tokens,
+    durationMs: row.durationMs,
+    createdAt: row.createdAt.toISOString(),
+  };
 }
 
 function toRunSummary(
@@ -604,6 +706,7 @@ function toRunSummary(
     warnings: Array.isArray(run.warnings)
       ? (run.warnings as unknown[]).filter((w): w is string => typeof w === 'string')
       : [],
+    model: run.model,
     startedAt: run.startedAt?.toISOString() ?? null,
     finishedAt: run.finishedAt?.toISOString() ?? null,
     createdAt: run.createdAt.toISOString(),

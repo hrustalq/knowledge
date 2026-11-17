@@ -18767,6 +18767,158 @@
         ]
       }
     },
+    "/v1/ai/agents/runs/{id}/steps": {
+      "get": {
+        "operationId": "AiController_listAgentRunSteps",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListAgentRunStepsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One run's step log, oldest first, with its model spend",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/agents/runs/{id}/cancel": {
+      "post": {
+        "operationId": "AiController_cancelAgentRun",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRunSummary"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Cancel a pending or running run",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
     "/v1/ai/agents/triggers": {
       "get": {
         "operationId": "AiController_listAgentTriggers",
@@ -54940,6 +55092,81 @@
           "cancelled"
         ]
       },
+      "AgentRunStep": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/AgentRunStepKind"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "args": {
+            "type": "string",
+            "nullable": true
+          },
+          "output": {
+            "type": "string",
+            "nullable": true
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "documentId": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "documentId",
+                "title"
+              ]
+            }
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "tokens": {
+            "type": "number",
+            "nullable": true
+          },
+          "durationMs": {
+            "type": "number",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "args",
+          "output",
+          "sources",
+          "ok",
+          "tokens",
+          "durationMs",
+          "createdAt"
+        ]
+      },
+      "AgentRunStepKind": {
+        "type": "string",
+        "enum": [
+          "model",
+          "tool",
+          "warning"
+        ]
+      },
       "AgentRunSummary": {
         "type": "object",
         "properties": {
@@ -55031,6 +55258,10 @@
               "type": "string"
             }
           },
+          "model": {
+            "type": "string",
+            "nullable": true
+          },
           "startedAt": {
             "type": "string",
             "nullable": true
@@ -55062,6 +55293,7 @@
           "stage",
           "progress",
           "warnings",
+          "model",
           "startedAt",
           "finishedAt",
           "createdAt"
@@ -69009,6 +69241,52 @@
         "required": [
           "learnings",
           "promptLimit"
+        ]
+      },
+      "ListAgentRunStepsResponse": {
+        "type": "object",
+        "properties": {
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentRunStep"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          },
+          "usage": {
+            "type": "object",
+            "properties": {
+              "calls": {
+                "type": "number"
+              },
+              "totalTokens": {
+                "type": "number"
+              },
+              "estimated": {
+                "type": "boolean"
+              },
+              "costs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CostAmount"
+                }
+              }
+            },
+            "required": [
+              "calls",
+              "totalTokens",
+              "estimated",
+              "costs"
+            ]
+          }
+        },
+        "required": [
+          "steps",
+          "nextCursor",
+          "usage"
         ]
       },
       "ListAgentRunsResponse": {

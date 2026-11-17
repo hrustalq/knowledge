@@ -84,7 +84,7 @@ const canHover = useHydratedMediaQuery('(hover: hover)')
     <PopoverTrigger as-child>
       <button
         type="button"
-        class="inline-flex min-w-0 items-center gap-1.5 rounded-sm text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        class="kn-hit inline-flex min-w-0 items-center gap-1.5 rounded-sm text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         :title="label"
       >
         <UserAvatar :user-id="userId" :name="label" :src="avatar" :size="size" />

@@ -225,7 +225,7 @@ const revisionRows = computed(() =>
             <h3 class="text-xs font-medium text-muted-foreground">{{ t('mr.assignee') }}</h3>
             <button
               v-if="!readonly"
-              class="ml-auto text-muted-foreground transition-colors hover:text-foreground"
+              class="kn-hit ml-auto text-muted-foreground transition-colors hover:text-foreground"
               :aria-label="editingAssignee ? t('mr.stopEditingAssignee') : t('mr.editAssignee')"
               @click="editingAssignee = !editingAssignee"
             >
@@ -276,7 +276,7 @@ const revisionRows = computed(() =>
             </h3>
             <button
               v-if="!readonly"
-              class="ml-auto text-muted-foreground transition-colors hover:text-foreground"
+              class="kn-hit ml-auto text-muted-foreground transition-colors hover:text-foreground"
               :aria-label="editingReviewers ? t('mr.stopEditingReviewers') : t('mr.editReviewers')"
               @click="editingReviewers ? cancelReviewers() : (editingReviewers = true)"
             >

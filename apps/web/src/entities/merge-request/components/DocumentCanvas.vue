@@ -918,7 +918,7 @@ function onOutdated(ids: string[]) {
           {{ t('count.threads', { n: openThreads.length }, openThreads.length) }}{{ ' ' }}{{ t('review.onThisPassage') }}
         </p>
         <button
-          class="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
+          class="kn-hit shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
           :aria-label="t('common.close')"
           @click="closePopover"
         >

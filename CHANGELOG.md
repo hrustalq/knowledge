@@ -107,6 +107,9 @@ in the pull request that introduces them — see
   usable height instead of a one-row window. (#1041)
 - Choosing another project in the phone navigation drawer keeps the drawer open on that project's pages, instead of
   closing it. (#1076)
+- Settings at 1024–1279px wide (a tablet in landscape, a small laptop): the AI sections, projects, docs, templates,
+  blueprints and workflows lists sit above the content instead of squeezing it into a narrow column beside three
+  navigation columns. (#1046)
 
 ## [0.56.0] — 2026-11-16
 

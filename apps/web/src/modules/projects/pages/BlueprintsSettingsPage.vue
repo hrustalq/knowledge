@@ -27,7 +27,7 @@ import { Skeleton } from '@knowledge/ui/skeleton'
 import { confirm } from '@knowledge/ui/confirm'
 import BlueprintTreePreview from '@/modules/projects/components/BlueprintTreePreview.vue'
 import { countPages } from '@/modules/projects/model/blueprint-tree'
-import { revealPaneBelowLg } from '@/shared/utils/reveal-pane'
+import { revealStackedPane } from '@/shared/utils/reveal-pane'
 
 const { t, locale: uiLocale } = useI18n()
 const route = useRoute()
@@ -116,23 +116,23 @@ async function remove(entry: BlueprintEntry) {
 }
 
 const wizardLink = (e: BlueprintEntry) => `/projects/new?blueprint=${encodeURIComponent(e.key)}`
-/** #1071: below lg the rail stacks above the detail, so a pick would otherwise change nothing on screen. */
+/** #1071: below xl (#1046) the rail stacks above the detail, so a pick would otherwise change nothing on screen. */
 const detailEl = ref<HTMLElement | null>(null)
 watch(
   () => routeKey.value,
   (key) => {
-    if (key) void nextTick(() => revealPaneBelowLg(detailEl.value))
+    if (key) void nextTick(() => revealStackedPane(detailEl.value))
   },
 )
 </script>
 
 <template>
   <!-- Bleed out of the settings column's padding so the rail sits flush, as /settings/templates does. -->
-  <div class="-mx-4 -my-6 flex min-h-0 flex-1 flex-col lg:-mx-8 lg:flex-row">
+  <div class="-mx-4 -my-6 flex min-h-0 flex-1 flex-col lg:-mx-8 xl:flex-row">
     <h1 class="sr-only">{{ t('nav.blueprints') }}</h1>
-    <!-- #1071: cap the stacked rail below lg so the detail stays in view -->
+    <!-- #1071: cap the stacked rail (below xl, #1046) so the detail stays in view -->
     <div
-      class="flex max-h-[40dvh] shrink-0 flex-col border-b bg-background lg:sticky lg:top-0 lg:max-h-none lg:h-[calc(100vh-5.75rem)] lg:w-72 lg:self-start lg:border-r lg:border-b-0"
+      class="flex max-h-[40dvh] shrink-0 flex-col border-b bg-background xl:sticky xl:top-0 xl:max-h-none xl:h-[calc(100vh-5.75rem)] xl:w-72 xl:self-start xl:border-r xl:border-b-0"
     >
       <div class="border-b p-2">
         <div class="relative">

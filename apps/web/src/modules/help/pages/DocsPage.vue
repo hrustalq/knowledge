@@ -19,7 +19,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { Search, Sparkles, X } from 'lucide-vue-next'
 import { articles, sections, searchArticles, type DocArticle } from '@/modules/help/docs/registry'
-import { revealPaneBelowLg } from '@/shared/utils/reveal-pane'
+import { revealStackedPane } from '@/shared/utils/reveal-pane'
 import { Input } from '@knowledge/ui/input'
 
 const { t } = useI18n()
@@ -46,12 +46,12 @@ function isCurrent(article: DocArticle): boolean {
   // No slug is the overview: the first article is what the child renders.
   return slug ? slug === article.slug : article === articles[0]
 }
-/** #1071: below lg the rail stacks above the article, so a pick would otherwise change nothing on screen. */
+/** #1071: below xl (#1046) the rail stacks above the article, so a pick would otherwise change nothing on screen. */
 const detailEl = ref<HTMLElement | null>(null)
 watch(
   () => route.params.slug,
   (slug) => {
-    if (slug) void nextTick(() => revealPaneBelowLg(detailEl.value))
+    if (slug) void nextTick(() => revealStackedPane(detailEl.value))
   },
 )
 </script>
@@ -59,10 +59,10 @@ watch(
 <template>
   <!-- Bleed out the settings column's padding so the rail sits flush against
        the settings nav, exactly as the projects roster does. -->
-  <div class="-mx-4 -my-6 flex min-h-0 flex-1 flex-col lg:-mx-8 lg:flex-row">
-    <!-- #1071: cap the stacked rail below lg so the detail stays in view -->
+  <div class="-mx-4 -my-6 flex min-h-0 flex-1 flex-col lg:-mx-8 xl:flex-row">
+    <!-- #1071: cap the stacked rail (below xl, #1046) so the detail stays in view -->
     <div
-      class="flex max-h-[40dvh] shrink-0 flex-col border-b bg-background lg:sticky lg:top-0 lg:max-h-none lg:h-[calc(100vh-5.75rem)] lg:w-64 lg:self-start lg:border-b-0 lg:border-r"
+      class="flex max-h-[40dvh] shrink-0 flex-col border-b bg-background xl:sticky xl:top-0 xl:max-h-none xl:h-[calc(100vh-5.75rem)] xl:w-64 xl:self-start xl:border-b-0 xl:border-r"
     >
       <div class="border-b p-2">
         <div class="relative">

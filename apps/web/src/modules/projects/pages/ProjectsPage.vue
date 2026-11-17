@@ -17,7 +17,7 @@ import { getWorkspaceId } from '@/shared/api/api'
 import { errorMessage } from '@/shared/api/errors'
 import { useAuthStore } from '@/stores/auth'
 import { useProjectsStore } from '@/stores/projects'
-import { revealPaneBelowLg } from '@/shared/utils/reveal-pane'
+import { revealStackedPane } from '@/shared/utils/reveal-pane'
 import { Autocomplete, type AutocompleteOption } from '@knowledge/ui/autocomplete'
 import { Button } from '@knowledge/ui/button'
 import { Skeleton } from '@knowledge/ui/skeleton'
@@ -92,22 +92,22 @@ watch(picked, (ids) => {
   void router.push(`/settings/projects/${id}`)
 })
 
-/** #1071: below lg the rail stacks above the detail, so a pick would otherwise change nothing on screen. */
+/** #1071: below xl (#1046) the rail stacks above the detail, so a pick would otherwise change nothing on screen. */
 const detailEl = ref<HTMLElement | null>(null)
 watch(
   () => route.params.id,
   (id) => {
-    if (id) void nextTick(() => revealPaneBelowLg(detailEl.value))
+    if (id) void nextTick(() => revealStackedPane(detailEl.value))
   },
 )
 </script>
 
 <template>
   <!-- Bleed out of the settings column's padding so this rail sits flush too -->
-  <div class="-mx-4 -my-6 flex min-h-0 flex-1 flex-col lg:-mx-8 lg:flex-row">
-    <!-- #1071: cap the stacked rail below lg so the detail stays in view -->
+  <div class="-mx-4 -my-6 flex min-h-0 flex-1 flex-col lg:-mx-8 xl:flex-row">
+    <!-- #1071: cap the stacked rail (below xl, #1046) so the detail stays in view -->
     <div
-      class="flex max-h-[40dvh] shrink-0 flex-col border-b bg-background lg:sticky lg:top-0 lg:max-h-none lg:h-[calc(100vh-5.75rem)] lg:w-64 lg:self-start lg:border-b-0 lg:border-r"
+      class="flex max-h-[40dvh] shrink-0 flex-col border-b bg-background xl:sticky xl:top-0 xl:max-h-none xl:h-[calc(100vh-5.75rem)] xl:w-64 xl:self-start xl:border-b-0 xl:border-r"
     >
       <div class="border-b p-2">
         <Autocomplete

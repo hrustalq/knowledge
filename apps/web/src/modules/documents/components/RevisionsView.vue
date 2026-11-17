@@ -92,6 +92,17 @@ async function runCompare() {
 /** Newest first, and a source-backed page has one branch: the first readable row is the head. */
 const headId = computed(() => revisions.value?.find((r) => r.contentHash)?.revisionId ?? null)
 
+// Working branches are `draft/<userId>` or `draft/<userId>-<n>` (#1054): show the person, not the UUID.
+const DRAFT_BRANCH = /^draft\/([0-9a-f-]{36})(?:-(\d+))?$/i
+function draftBranch(name: string | null | undefined): { userId: string; n: number | null } | null {
+  const m = name ? DRAFT_BRANCH.exec(name) : null
+  return m ? { userId: m[1]!, n: m[2] ? Number(m[2]) : null } : null
+}
+function draftLabel(name: string | null | undefined): string {
+  const d = draftBranch(name)
+  return d?.n ? t('revisions.draftNumbered', { n: d.n }) : t('revisions.draft')
+}
+
 const restoring = ref<string | null>(null)
 async function restore(r: RevisionNode) {
   const ok = await confirm({
@@ -139,65 +150,126 @@ watch(branchFilter, () => void load())
       <Skeleton v-for="i in 3" :key="i" class="h-10 w-full" />
     </div>
 
-    <div v-else class="overflow-x-auto rounded-lg border">
-      <!-- Hash, message and parents give way on a phone (#1054): the row keeps
-           what picks a revision — number, branch, status, date, View. -->
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="border-b text-left text-xs text-muted-foreground">
-            <th class="px-2 py-2">{{ t('revisions.from') }}</th>
-            <th class="px-2 py-2">{{ t('revisions.to') }}</th>
-            <th class="px-3 py-2">#</th>
-            <th class="px-3 py-2 max-sm:hidden">{{ t('revisions.revision') }}</th>
-            <th class="px-3 py-2">{{ t('revisions.branch') }}</th>
-            <th class="px-3 py-2">{{ t('revisions.status') }}</th>
-            <th class="px-3 py-2 max-sm:hidden">{{ t('revisions.message') }}</th>
-            <th class="px-3 py-2 max-sm:hidden">{{ t('revisions.parents') }}</th>
-            <th class="px-3 py-2">{{ t('revisions.created') }}</th>
-            <th class="px-3 py-2"></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="r in revisions" :key="r.revisionId" class="border-b last:border-0 hover:bg-muted/40">
-            <td class="px-2 py-2">
-              <RadioGroup v-if="r.contentHash" v-model="from">
-                <RadioGroupItem
-                  class="relative after:absolute after:-inset-1"
-                  :value="r.revisionId"
-                  :aria-label="t('revisions.compareFrom', { n: r.revisionNumber })"
-                />
-              </RadioGroup>
-            </td>
-            <td class="px-2 py-2">
-              <RadioGroup v-if="r.contentHash" v-model="to">
-                <RadioGroupItem
-                  class="relative after:absolute after:-inset-1"
-                  :value="r.revisionId"
-                  :aria-label="t('revisions.compareTo', { n: r.revisionNumber })"
-                />
-              </RadioGroup>
-            </td>
-            <td class="px-3 py-2">{{ r.revisionNumber }}</td>
-            <td class="px-3 py-2 font-mono text-xs max-sm:hidden">{{ r.revisionId.slice(0, 8) }}</td>
-            <td class="px-3 py-2">{{ r.branch ?? '—' }}</td>
-            <td class="px-3 py-2"><Badge :variant="statusVariant(r.status)">{{ labelFor(t, 'revisionStatus', r.status) }}</Badge></td>
-            <td class="max-w-48 px-3 py-2 text-muted-foreground max-sm:hidden">
-              <span class="block truncate">{{ r.message ?? '—' }}</span>
-              <!-- Published from a shared draft (#80): who wrote in it since the publish before. -->
-              <span
-                v-if="r.coAuthorIds.length"
-                class="kn-collab-presence mt-1"
-                role="group"
-                :aria-label="t('revisions.coAuthors', { n: r.coAuthorIds.length }, r.coAuthorIds.length)"
-              >
-                <UserChip v-for="id in r.coAuthorIds" :key="id" :user-id="id" size="sm" avatar-only />
-              </span>
-            </td>
-            <td class="px-3 py-2 font-mono text-xs text-muted-foreground max-sm:hidden">
-              {{ r.parentRevisionIds.map((p) => p.slice(0, 8)).join(', ') || '—' }}
-            </td>
-            <td class="px-3 py-2 text-xs text-muted-foreground">{{ formatDateTime(r.createdAt) }}</td>
-            <td class="px-3 py-2">
+    <template v-else>
+      <div class="overflow-x-auto rounded-lg border max-sm:hidden">
+        <!-- Hash, message and parents give way on a phone (#1054): the row keeps
+             what picks a revision — number, branch, status, date, View. -->
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b text-left text-xs text-muted-foreground">
+              <th class="px-2 py-2">{{ t('revisions.from') }}</th>
+              <th class="px-2 py-2">{{ t('revisions.to') }}</th>
+              <th class="px-3 py-2">#</th>
+              <th class="px-3 py-2 max-sm:hidden">{{ t('revisions.revision') }}</th>
+              <th class="px-3 py-2">{{ t('revisions.branch') }}</th>
+              <th class="px-3 py-2">{{ t('revisions.status') }}</th>
+              <th class="px-3 py-2 max-sm:hidden">{{ t('revisions.message') }}</th>
+              <th class="px-3 py-2 max-sm:hidden">{{ t('revisions.parents') }}</th>
+              <th class="px-3 py-2">{{ t('revisions.created') }}</th>
+              <th class="px-3 py-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="r in revisions" :key="r.revisionId" class="border-b last:border-0 hover:bg-muted/40">
+              <td class="px-2 py-2">
+                <RadioGroup v-if="r.contentHash" v-model="from">
+                  <RadioGroupItem
+                    class="relative after:absolute after:-inset-1"
+                    :value="r.revisionId"
+                    :aria-label="t('revisions.compareFrom', { n: r.revisionNumber })"
+                  />
+                </RadioGroup>
+              </td>
+              <td class="px-2 py-2">
+                <RadioGroup v-if="r.contentHash" v-model="to">
+                  <RadioGroupItem
+                    class="relative after:absolute after:-inset-1"
+                    :value="r.revisionId"
+                    :aria-label="t('revisions.compareTo', { n: r.revisionNumber })"
+                  />
+                </RadioGroup>
+              </td>
+              <td class="px-3 py-2">{{ r.revisionNumber }}</td>
+              <td class="px-3 py-2 font-mono text-xs max-sm:hidden">{{ r.revisionId.slice(0, 8) }}</td>
+              <td class="px-3 py-2">
+                <span v-if="draftBranch(r.branch)" class="inline-flex min-w-0 items-center gap-1.5" :title="r.branch ?? undefined">
+                  <span class="shrink-0">{{ draftLabel(r.branch) }} ·</span>
+                  <UserChip :user-id="draftBranch(r.branch)?.userId ?? ''" size="sm" />
+                </span>
+                <template v-else>{{ r.branch ?? '—' }}</template>
+              </td>
+              <td class="px-3 py-2"><Badge :variant="statusVariant(r.status)">{{ labelFor(t, 'revisionStatus', r.status) }}</Badge></td>
+              <td class="max-w-48 px-3 py-2 text-muted-foreground max-sm:hidden">
+                <span class="block truncate">{{ r.message ?? '—' }}</span>
+                <!-- Published from a shared draft (#80): who wrote in it since the publish before. -->
+                <span
+                  v-if="r.coAuthorIds.length"
+                  class="kn-collab-presence mt-1"
+                  role="group"
+                  :aria-label="t('revisions.coAuthors', { n: r.coAuthorIds.length }, r.coAuthorIds.length)"
+                >
+                  <UserChip v-for="id in r.coAuthorIds" :key="id" :user-id="id" size="sm" avatar-only />
+                </span>
+              </td>
+              <td class="px-3 py-2 font-mono text-xs text-muted-foreground max-sm:hidden">
+                {{ r.parentRevisionIds.map((p) => p.slice(0, 8)).join(', ') || '—' }}
+              </td>
+              <td class="px-3 py-2 text-xs text-muted-foreground">{{ formatDateTime(r.createdAt) }}</td>
+              <td class="px-3 py-2">
+                <RouterLink
+                  v-if="r.contentHash"
+                  :to="`/documents/${documentId}?tab=revisions&revision=${r.revisionId}`"
+                  class="text-xs hover:underline"
+                >
+                  {{ t('revisions.view') }}
+                </RouterLink>
+                <button
+                  v-if="sourceBacked && r.contentHash && r.revisionId !== headId"
+                  type="button"
+                  class="ml-3 rounded-sm text-xs outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
+                  :disabled="restoring !== null"
+                  @click="restore(r)"
+                >
+                  {{ t('sources.restore.row') }}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- #1054: below sm the table cannot fit a phone panel, so each revision is a
+           two-line row: pick, number, branch and View, then status and date. -->
+      <ul class="divide-y rounded-lg border sm:hidden">
+        <li v-for="r in revisions" :key="r.revisionId" class="space-y-1.5 px-3 py-2">
+          <div class="flex min-w-0 items-center gap-2">
+            <RadioGroup v-if="r.contentHash" v-model="from" class="shrink-0">
+              <RadioGroupItem
+                class="relative after:absolute after:-inset-1"
+                :value="r.revisionId"
+                :aria-label="t('revisions.compareFrom', { n: r.revisionNumber })"
+              />
+            </RadioGroup>
+            <RadioGroup v-if="r.contentHash" v-model="to" class="shrink-0">
+              <RadioGroupItem
+                class="relative after:absolute after:-inset-1"
+                :value="r.revisionId"
+                :aria-label="t('revisions.compareTo', { n: r.revisionNumber })"
+              />
+            </RadioGroup>
+            <span class="shrink-0 text-sm">#{{ r.revisionNumber }}</span>
+            <!-- The owner as an avatar only: their name is in its card, and the
+                 row has no room for it beside the radios and View. -->
+            <span
+              v-if="draftBranch(r.branch)"
+              class="inline-flex min-w-0 items-center gap-1.5 text-sm"
+              :title="r.branch ?? undefined"
+            >
+              <span class="truncate">{{ draftLabel(r.branch) }}</span>
+              <UserChip :user-id="draftBranch(r.branch)?.userId ?? ''" size="sm" avatar-only />
+            </span>
+            <span v-else class="min-w-0 truncate text-sm" :title="r.branch ?? undefined">{{ r.branch ?? '—' }}</span>
+            <span class="ml-auto flex shrink-0 items-center gap-3">
               <RouterLink
                 v-if="r.contentHash"
                 :to="`/documents/${documentId}?tab=revisions&revision=${r.revisionId}`"
@@ -208,17 +280,24 @@ watch(branchFilter, () => void load())
               <button
                 v-if="sourceBacked && r.contentHash && r.revisionId !== headId"
                 type="button"
-                class="ml-3 rounded-sm text-xs outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
+                class="rounded-sm text-xs outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
                 :disabled="restoring !== null"
                 @click="restore(r)"
               >
                 {{ t('sources.restore.row') }}
               </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+            </span>
+          </div>
+          <div class="flex min-w-0 items-center gap-1.5">
+            <!-- The date tells revisions apart, so the badge is what gives way. -->
+            <Badge :variant="statusVariant(r.status)" class="min-w-0 shrink" :title="labelFor(t, 'revisionStatus', r.status)">
+              <span class="truncate">{{ labelFor(t, 'revisionStatus', r.status) }}</span>
+            </Badge>
+            <span class="shrink-0 text-xs text-muted-foreground">{{ formatDateTime(r.createdAt) }}</span>
+          </div>
+        </li>
+      </ul>
+    </template>
 
     <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
 

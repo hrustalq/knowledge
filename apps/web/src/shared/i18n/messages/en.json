@@ -2098,7 +2098,9 @@
     "compareTitle": "Compare {from} → {to}",
     "mergeBaseAt": "merge base {id}",
     "apiChanges": "API changes",
-    "coAuthors": "{n} co-author from a shared draft | {n} co-authors from a shared draft"
+    "coAuthors": "{n} co-author from a shared draft | {n} co-authors from a shared draft",
+    "draft": "Draft",
+    "draftNumbered": "Draft {n}"
   },
   "count": {
     "messages": "{n} message | {n} messages",

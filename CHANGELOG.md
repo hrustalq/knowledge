@@ -125,6 +125,8 @@ in the pull request that introduces them — see
 - Workflow builder on a phone or tablet: while editing, the workflow list steps aside and the canvas fills the
   screen, so the page no longer scrolls under a canvas that swallows the swipe. The breadcrumb leads back to the list.
   (#1061)
+- Revisions on a phone: each revision is a compact two-line row that fits the panel, and a person's working branch
+  shows as "Draft" with their avatar instead of a long draft/… identifier (also in the desktop table). (#1054)
 
 ## [0.56.0] — 2026-11-16
 

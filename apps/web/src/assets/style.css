@@ -82,6 +82,30 @@
 }
 
 /*
+ * iOS Safari zooms the page into any focused field drawn under 16px and never
+ * zooms back (#1048). The kit Input is 16px below md, but call sites shrink
+ * fields with text-xs / text-ui / text-sm, and a phone in landscape is past md.
+ * So on a coarse pointer every field is 16px, whatever its class: unlayered,
+ * so it beats every Tailwind size utility, yet only element-weight, so a
+ * deliberate class rule (the editor title, larger) still wins. The small
+ * fields drawn by a class rule are named, one notch heavier than their own
+ * rule; the Mermaid source sizes its container, so the line gutter keeps pace
+ * with the text.
+ */
+@media (pointer: coarse) {
+  input,
+  textarea,
+  select,
+  [contenteditable="true"],
+  .kn-prose[contenteditable="true"],
+  select.kn-api-method,
+  select.kn-setup-select,
+  .kn-mermaid-code {
+    font-size: 16px;
+  }
+}
+
+/*
  * Scrollbars: one system, three scenarios.
  *
  * The browser's own bar is 15px of grey that belongs to no design system, and

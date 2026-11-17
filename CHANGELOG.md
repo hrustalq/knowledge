@@ -78,6 +78,9 @@ in the pull request that introduces them — see
   there: headings were read before the page body had drawn. The list now shows whenever a page has more than one
   heading, a #section link lands on its heading, and on a phone or tablet the list is offered as a folded "On this
   page" block above the text instead of under it. (#1053)
+- On a phone or tablet, focusing a search box, filter, comment composer, the editor body or a settings field no
+  longer makes iOS Safari zoom the page and leave it scrolled sideways: every text field is 16px on a touch screen.
+  Desktop sizes are unchanged. (#1048)
 
 ## [0.56.0] — 2026-11-16
 

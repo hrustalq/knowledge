@@ -90,6 +90,10 @@ in the pull request that introduces them — see
   instead of an empty screen. (#1051)
 - Knowledge health on a phone: the preset filters are one scrolling row and the owner and sort pickers share a line,
   so the page list is on screen when the page opens instead of below the fold. (#1065)
+- Assistant on a phone or tablet: each chat in the list shows its ⋯ menu (rename, delete), opening the chat list no
+  longer pops the keyboard up over it, and tapping a numbered source under an answer opens its card (with an Open page
+  link) instead of leaving the chat. A chat opened from a link now loads the chat list too, which stayed on
+  placeholders before. (#1066)
 
 ## [0.56.0] — 2026-11-16
 

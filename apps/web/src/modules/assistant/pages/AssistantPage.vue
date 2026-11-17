@@ -33,6 +33,11 @@ const railOpen = ref(false)
 
 const dialogs = ref<InstanceType<typeof ThreadDialogs> | null>(null)
 
+/** Focus stays put on touch, where the first field would raise the keyboard. */
+function onSheetAutoFocus(event: Event) {
+  if (matchMedia('(pointer: coarse)').matches) event.preventDefault()
+}
+
 // `?thread=` is an opening instruction (a chat bot's "open the full answer"
 // link, issue #71), not two-way state: the rail drives selection afterwards.
 const linked = typeof route.query.thread === 'string' ? route.query.thread : null
@@ -40,7 +45,12 @@ const linked = typeof route.query.thread === 'string' ? route.query.thread : nul
 // chat loading instead of an empty "New chat" that is about to be replaced (#931).
 if (!assistant.activeThread) assistant.resuming = true
 onMounted(() => {
-  if (linked) void assistant.openThread(linked)
+  // A linked chat opens by id, which loads no roster: ask for it too, or the
+  // rail waits on skeletons for good.
+  if (linked) {
+    void assistant.openThread(linked)
+    if (!assistant.threadsLoaded) void assistant.fetchThreads()
+  }
   else if (!assistant.activeThread) void assistant.openLatest()
 })
 </script>
@@ -70,11 +80,16 @@ onMounted(() => {
   </PageLayout>
 
   <Sheet v-model:open="railOpen">
-    <SheetContent side="left" class="w-72 p-0">
+    <!-- On touch, opening the list must not raise the keyboard over it: the
+         search field is the first focusable thing in the sheet (#1066). The
+         rail's header steps clear of the sheet's close, which sat on the
+         field's right end. -->
+    <SheetContent side="left" class="w-72 p-0" @open-auto-focus="onSheetAutoFocus">
       <SheetHeader class="sr-only">
         <SheetTitle>{{ t('chat.chats') }}</SheetTitle>
       </SheetHeader>
       <ChatRail
+        in-sheet
         class="flex w-full border-r-0"
         @rename="dialogs?.rename($event)"
         @delete="dialogs?.remove($event)"

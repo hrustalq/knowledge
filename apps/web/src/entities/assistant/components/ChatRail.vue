@@ -57,6 +57,9 @@ function startNewThread() {
 // header offers the same two actions on the open thread — one implementation,
 // one set of wording, whichever control you reached for. `opened` lets the
 // small-screen sheet close itself once a chat has been picked.
+/** In a sheet, whose close sits at the header's right end: leave it room (#1066). */
+defineProps<{ inSheet?: boolean }>()
+
 const emit = defineEmits<{
   rename: [AssistantThreadSummary]
   delete: [AssistantThreadSummary]
@@ -73,7 +76,7 @@ function open(threadId: string) {
   <div class="flex h-full w-64 shrink-0 flex-col border-r bg-background">
     <!-- h-14 so this divider lands on the same line as the chat header's and
          the documents pane's. Three panes, one horizontal rule across them. -->
-    <div class="relative flex h-14 shrink-0 items-center border-b px-2">
+    <div class="relative flex h-14 shrink-0 items-center border-b px-2" :class="inSheet && 'pr-12'">
       <Search class="pointer-events-none absolute left-4 size-3.5 text-muted-foreground" />
       <Input
         v-model="query"
@@ -85,7 +88,8 @@ function open(threadId: string) {
         v-if="query"
         type="button"
         :aria-label="t('chat.clearSearch')"
-        class="absolute right-4 rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+        class="absolute rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+        :class="inSheet ? 'right-14' : 'right-4'"
         @click="query = ''"
       >
         <X class="size-3.5" />
@@ -138,7 +142,7 @@ function open(threadId: string) {
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  class="mr-1 shrink-0 opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
+                  class="mr-1 shrink-0 opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 [@media(hover:none)]:opacity-100"
                   :aria-label="t('chat.actionsFor', { name: threadLabel(thread, t('chat.untitled')) })"
                 >
                   <MoreHorizontal class="size-4" />

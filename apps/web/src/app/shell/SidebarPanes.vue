@@ -51,7 +51,15 @@ async function open(projectId: string) {
   const leavingStaleDoc = route.path.startsWith('/documents/') && !route.path.endsWith('/edit')
 
   await projects.switchProject(projectId)
-  if (leavingStaleDoc) void router.push('/documents')
+  if (!leavingStaleDoc) return
+  // #1076: this navigation is the switch itself, so the phone drawer stays
+  // open on the pages it just pushed to (the shell closes it on any other).
+  nav.holdDrawerFor = '/documents'
+  try {
+    await router.push('/documents')
+  } finally {
+    nav.holdDrawerFor = null
+  }
 }
 
 /** Both panes coexist mid-transition; the departing one must not take focus. */

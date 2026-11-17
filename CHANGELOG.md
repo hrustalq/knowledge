@@ -105,6 +105,8 @@ in the pull request that introduces them — see
   visible. (#1071)
 - The navigation drawer in phone landscape (or at large text sizes) scrolls, and the project and page list keeps a
   usable height instead of a one-row window. (#1041)
+- Choosing another project in the phone navigation drawer keeps the drawer open on that project's pages, instead of
+  closing it. (#1076)
 
 ## [0.56.0] — 2026-11-16
 

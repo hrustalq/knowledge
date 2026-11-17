@@ -20,6 +20,7 @@
     "./notifications": "./src/notifications/index.ts",
     "./ai": "./src/ai/index.ts",
     "./content": "./src/content/index.ts",
+    "./content/term-cases": "./src/content/term-cases.ts",
     "./workflows": "./src/workflows/index.ts",
     "./templates": "./src/templates/index.ts",
     "./publishing": "./src/publishing/index.ts",

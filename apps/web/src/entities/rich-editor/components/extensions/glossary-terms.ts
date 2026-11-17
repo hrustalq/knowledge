@@ -18,7 +18,7 @@ import { Decoration, Extension } from '@tiptap/core'
 import type { GlossaryExclusion, GlossaryTerm } from '@knowledge/contracts'
 import { findAnchor } from '@/core/anchor-match'
 import { projectDoc } from './comment-anchors'
-import { GLOSSARY_AT_ATTR, GLOSSARY_ATTR, buildMatcher, glossaryHref, linkCap, spellingMatches } from '@/entities/document'
+import { GLOSSARY_AT_ATTR, GLOSSARY_ATTR, buildMatcher, candidateFor, glossaryHref, linkCap, spellingMatches } from '@/entities/document'
 
 /**
  * Nodes whose text is not prose, or is already doing another job.
@@ -129,9 +129,8 @@ export const GlossaryTerms = Extension.create<Record<string, never>, GlossaryTer
           const text = node.text ?? ''
           re.lastIndex = 0
           for (let match = re.exec(text); match; match = re.exec(text)) {
-            const spelling = match[1]
-            if (!spelling) continue
-            const candidate = matcher.byPattern.get(spelling.toLowerCase())
+            const spelling = match[0]
+            const candidate = candidateFor(matcher, match)
             if (!candidate) continue
             if (!spellingMatches(candidate, spelling)) continue
             const from = pos + match.index

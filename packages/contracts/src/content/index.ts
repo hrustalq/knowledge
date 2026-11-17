@@ -6,10 +6,12 @@ import { normalizeEntityKey } from '@knowledge/contracts/graph';
 /**
  * Word boundaries for term matching, as lookaround sources.
  *
- * Shared because two implementations must agree: the read-side linker in
- * `apps/web/src/modules/documents/model/glossary.ts` decides what a reader sees, and
+ * Shared because three implementations must agree: the read-side linker in
+ * `apps/web/src/entities/document/model/glossary.ts` decides what a reader sees,
  * `countOccurrences` in the API's glossary service decides which AI proposals
- * are grounded enough to offer. They drifted the moment one was fixed alone.
+ * are grounded enough to offer, and `matchTerms` picks `knowledge_context`'s
+ * terms. They drifted the moment one was fixed alone; {@link termPattern} is
+ * now the whole rule.
  *
  * `\b` is wrong here — the terms most in need of defining are the ones it
  * breaks on (`.env`, `C++`, `@Access`). Underscore counts as a word character
@@ -19,6 +21,72 @@ import { normalizeEntityKey } from '@knowledge/contracts/graph';
  */
 export const GLOSSARY_BOUNDARY_BEFORE = '(?<![\\p{L}\\p{N}_])';
 export const GLOSSARY_BOUNDARY_AFTER = '(?![\\p{L}\\p{N}_])';
+
+/**
+ * Russian case and number endings, nouns and adjectives (#1210). A closed list
+ * rather than "any few letters" because the short words need it: `Вега` must
+ * match `Веги` and `Вегой` but never `Вегас`, and `ас` is not an ending.
+ */
+const RU_ENDINGS = [
+  ...'а я о е ё ы и у ю ь й ой ей ою ею ом ем ём ам ям ами ями ах ях ов ев ёв'.split(' '),
+  ...'ия ии ию ией иям иями иях ие ий ием иев ья ье ьи ью ьей ьём ьям ьями ьях ьев'.split(' '),
+  ...'ый ая яя ое ее ые ого его ому ему ым им ую юю ых их ыми ими'.split(' '),
+].sort((a, b) => b.length - a.length);
+const RU_ENDING = `(?:${RU_ENDINGS.join('|')})?`;
+/** Letters a Russian stem keeps at least; shorter and the word matches only as written. */
+const RU_MIN_STEM = 3;
+
+function escapeRegExp(raw: string): string {
+  return raw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** One word of a term as a pattern: declined when it is a plain Russian or English word, else verbatim. */
+function wordPattern(word: string): string {
+  if (/^\p{Script=Cyrillic}+$/u.test(word)) {
+    const lower = word.toLowerCase();
+    // Every way the word splits into stem + ending, so `Сергей` keeps both
+    // `Серге-` (Сергея, Сергеем) and `Серг-`. Over-generating a non-word is
+    // harmless; missing a real case form is the bug this fixes.
+    const stems = new Set(
+      RU_ENDINGS.filter((e) => lower.endsWith(e) && word.length - e.length >= RU_MIN_STEM).map((e) =>
+        word.slice(0, word.length - e.length),
+      ),
+    );
+    if (stems.size === 0) return word.length >= RU_MIN_STEM ? `${escapeRegExp(word)}${RU_ENDING}` : escapeRegExp(word);
+    return `(?:${[...stems].map(escapeRegExp).join('|')})${RU_ENDING}`;
+  }
+  if (/^\p{Script=Latin}{3,}$/u.test(word)) return `${escapeRegExp(word)}(?:['’]s|e?s)?`;
+  return escapeRegExp(word);
+}
+
+/**
+ * A term spelling as a bounded regex source — the one rule the read-side
+ * linker, `countOccurrences` (grounding for AI proposals) and `knowledge_context`
+ * all match with (#1210). Flags are the caller's (`giu`, or `gu` for a
+ * case-sensitive term).
+ *
+ * Each Russian word matches its case and number forms, each English word its
+ * plural and possessive, and words may be split by spaces or hyphens
+ * (`code freeze` = `code-freeze`). Code-like spellings — case-sensitive, or
+ * holding `.`, `_`, `@`, `+`, `/` or a digit — match exactly as written. The
+ * boundaries are unchanged, so a term still links as one part of a hyphenated
+ * compound (`Вега` in `Вега-сервис`) and never inside a longer word
+ * (`заморозка` in `разморозка`).
+ */
+export function termPattern(spelling: string, opts: { caseSensitive?: boolean } = {}): string {
+  return `${GLOSSARY_BOUNDARY_BEFORE}(?:${termBody(spelling, opts)})${GLOSSARY_BOUNDARY_AFTER}`;
+}
+
+/**
+ * {@link termPattern} without the boundaries, for an alternation of many terms
+ * that puts them once around the whole group — a lookbehind per alternative is
+ * evaluated at every position and made the linker ~30× slower.
+ */
+export function termBody(spelling: string, opts: { caseSensitive?: boolean } = {}): string {
+  const trimmed = spelling.trim();
+  if (opts.caseSensitive || /[._@+/\p{N}]/u.test(trimmed)) return escapeRegExp(trimmed);
+  return trimmed.split(/[\s-]+/).map(wordPattern).join('[\\s-]+');
+}
 
 /**
  * Where a term came from: hand-written, accepted from an AI suggestion, or

@@ -1,8 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { GlossaryTerm as TermRow } from '@prisma/client';
 import {
-  GLOSSARY_BOUNDARY_AFTER,
-  GLOSSARY_BOUNDARY_BEFORE,
   type GlossaryExclusion,
   type GlossaryExclusionAnchor,
   type GlossaryTerm,
@@ -11,6 +9,7 @@ import {
   type ListGlossaryExclusionsResponse,
   type ListGlossaryResponse,
   type SuggestGlossaryTermsResponse,
+  termPattern,
 } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ActivityService } from '../activity/activity.service.js';
@@ -546,13 +545,11 @@ export function normalizeAliases(aliases: string[] | undefined, term: string): s
   return out;
 }
 
-/** Whole-word, case-insensitive count — the same shape the read-side linker matches on. */
+/** Case-insensitive count of the term's mentions, inflected forms included. */
 export function countOccurrences(haystack: string, term: string): number {
-  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  // Shared with the read-side linker: what a reader sees linked and what counts
-  // as grounding for an AI proposal must be the same rule, and once was not.
-  const re = new RegExp(`${GLOSSARY_BOUNDARY_BEFORE}${escaped}${GLOSSARY_BOUNDARY_AFTER}`, 'giu');
-  return (haystack.match(re) ?? []).length;
+  // Shared with the read-side linker (`termPattern`): what a reader sees linked
+  // and what counts as grounding for an AI proposal must be the same rule.
+  return (haystack.match(new RegExp(termPattern(term), 'giu')) ?? []).length;
 }
 
 /** Row -> contract. `anchor` is Json, so it is read defensively. */

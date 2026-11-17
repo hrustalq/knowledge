@@ -381,7 +381,7 @@ function send() {
 
               <SkillPicker v-model="skillIds" />
               <LevelPicker ref="levelPicker" v-model="level" :document-id="documentId" />
-              <AgentPicker v-model="agentKey" />
+              <AgentPicker v-model="agentKey" :level-agent="levelPicker?.levelAgent ?? null" />
 
               <ModelPicker />
 

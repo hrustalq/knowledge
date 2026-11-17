@@ -66,10 +66,11 @@ const shown = computed(() => rows.value.slice(0, props.max))
       :style="{ paddingInlineStart: `${(row.depth - (nested ? 1 : 0)) * 1.125}rem` }"
     >
       <span class="min-w-0 truncate" :class="row.depth ? 'text-muted-foreground' : 'font-medium'">{{ row.title }}</span>
-      <span v-if="row.isCollection" class="text-muted-foreground inline-flex shrink-0 items-center gap-1 text-caption" :title="t('scaffold.shape.collectionChip')">
-        <Layers class="size-3" aria-hidden="true" />
+      <!-- The pattern gives way first, so a narrow outline never loses the page's title (#1266). -->
+      <span v-if="row.isCollection" class="text-muted-foreground inline-flex min-w-0 shrink-[4] items-center gap-1 text-caption" :title="t('scaffold.shape.collectionChip')">
+        <Layers class="size-3 shrink-0" aria-hidden="true" />
         <span class="sr-only">{{ t('scaffold.shape.collection') }}</span>
-        <code v-if="row.pattern" class="font-mono">{{ row.pattern }}…</code>
+        <code v-if="row.pattern" class="min-w-0 truncate font-mono">{{ row.pattern }}…</code>
       </span>
     </li>
     <li v-if="rows.length > shown.length" class="text-muted-foreground py-0.5 text-caption">

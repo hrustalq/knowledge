@@ -83,6 +83,29 @@ describe('ProjectMethodologyService (#1125)', () => {
     expect(res.sections.map((s) => s.id)).toEqual(['0', '1.0', '1.1', '2']);
     expect(res.levels).toEqual([{ key: 'rules', name: 'Rules', pages: 3 }]);
   });
+
+  it('names the agent a turn at each level runs: owned for the methodology’s, itself for a built-in (#1266)', async () => {
+    const { service, prisma } = setup();
+    const rowId = 'be27393b-0000-4000-8000-000000000000';
+    const levels = [
+      { key: 'rules', name: { en: 'Rules' }, templateRefs: ['builtin:adr'], agentKey: 'modeller' },
+      { key: 'ask', name: { en: 'Ask' }, templateRefs: ['builtin:rfc'], agentKey: 'researcher' },
+      { key: 'code', name: { en: 'Code' }, templateRefs: [] },
+    ];
+    Object.assign(prisma.project, {
+      findUnique: vi.fn(async () => ({ workspaceId: 'ws', blueprintId: rowId })),
+      findMany: vi.fn(async () => [{ id: 'p', blueprintId: rowId }]),
+    });
+    Object.assign(prisma, {
+      projectBlueprint: { findMany: vi.fn(async () => [{ id: rowId, builtInKey: null, versions: [{ blueprint: { ...METHOD, levels } }] }]) },
+    });
+    const res = await service.levels('p', principal, 'en');
+    expect(res.levels.map((l) => [l.agentKey, l.agent])).toEqual([
+      ['modeller', 'modeller-be27393b'],
+      ['researcher', 'researcher'],
+      [null, null],
+    ]);
+  });
 });
 
 describe('a linked blueprint (#1125)', () => {

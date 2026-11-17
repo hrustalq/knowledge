@@ -22,6 +22,7 @@ import {
   type ListBlueprintsResponse,
   type Locale,
   type MethodologyPreviewResponse,
+  type ProjectLevelsResponse,
   type ProjectMethodologyResponse,
 } from '@knowledge/contracts'
 import { api, apiQueryOptions } from '@/shared/api/queries'
@@ -58,6 +59,15 @@ const choices = computed(() => {
   )
   return [...all.filter((b) => isMethodology(b.blueprint)), ...all.filter((b) => !isMethodology(b.blueprint))]
 })
+// Today's levels (#1266), so a switch can say how many pages sit at a level before and after.
+const todayQuery = useQuery(
+  computed(() => ({ ...apiQueryOptions('/v1/projects/{id}/levels', path.value), enabled: open.value && !!methodology.value })),
+)
+const pagesAt = (levels: { pages: number }[] | undefined) => (levels ?? []).reduce((n, l) => n + l.pages, 0)
+const levelledToday = computed(() => pagesAt((todayQuery.data.value as ProjectLevelsResponse | undefined)?.levels))
+const levelledAfter = computed(() => pagesAt(preview.value?.levels))
+const pickedName = computed(() => blueprintText(choices.value.find((c) => c.key === picked.value)?.blueprint.name, locale.value))
+
 const picked = ref<string>('')
 const preview = ref<MethodologyPreviewResponse | null>(null)
 const previewError = ref<string | null>(null)
@@ -81,7 +91,8 @@ watch(picked, async (key) => {
     const res = await api.get('/v1/projects/{id}/methodology/preview', { ...path.value, query: { blueprint: key, locale: locale.value } })
     if (picked.value !== key) return
     preview.value = res
-    ticked.value = res.sections.map((s) => s.id)
+    // A first link usually wants the structure; a switch usually means the project already has its own tree.
+    ticked.value = methodology.value ? [] : res.sections.map((s) => s.id)
   } catch (e) {
     if (picked.value === key) previewError.value = errorMessage(e, t)
   } finally {
@@ -173,6 +184,9 @@ const nameOf = (b: BlueprintEntry) => blueprintText(b.blueprint.name, locale.val
         <div v-if="blueprintsQuery.isPending.value" class="space-y-2">
           <Skeleton v-for="i in 3" :key="i" class="h-12 w-full" />
         </div>
+        <p v-else-if="blueprintsQuery.isError.value" class="text-sm text-destructive" role="alert">
+          {{ errorMessage(blueprintsQuery.error.value, t) }}
+        </p>
         <RadioGroup v-else v-model="picked" class="gap-0 divide-y rounded-md border" :aria-label="t('projectSettings.methodology.title')">
           <label
             v-for="b in choices"
@@ -200,8 +214,15 @@ const nameOf = (b: BlueprintEntry) => blueprintText(b.blueprint.name, locale.val
           <Loader2 class="size-4 animate-spin" aria-hidden="true" /> {{ t('projectSettings.methodology.previewing') }}
         </div>
         <div v-else-if="preview" class="space-y-4">
+          <p v-if="methodology" class="kn-measure text-sm">
+            {{ t('projectSettings.methodology.switchEffect', { from: blueprintText(methodology.name, locale), to: pickedName }) }}
+            <span class="text-muted-foreground tabular-nums">
+              {{ t('projectSettings.methodology.levelShift', { before: levelledToday, after: levelledAfter }) }}
+            </span>
+          </p>
           <div class="space-y-2">
             <h3 class="text-sm font-semibold">{{ t('projectSettings.methodology.sections') }}</h3>
+            <p v-if="preview.sections.length" class="text-xs text-muted-foreground">{{ t('projectSettings.methodology.sectionsHint') }}</p>
             <p v-if="!preview.sections.length" class="text-sm text-muted-foreground">{{ t('projectSettings.methodology.noSections') }}</p>
             <ul v-else class="space-y-1.5">
               <li v-for="s in preview.sections" :key="s.id">
@@ -230,11 +251,15 @@ const nameOf = (b: BlueprintEntry) => blueprintText(b.blueprint.name, locale.val
         </div>
         <p v-if="previewError" class="text-sm text-destructive" role="alert">{{ previewError }}</p>
 
-        <DialogFooter>
+        <DialogFooter class="bg-card sticky -bottom-6 -mx-6 -mb-6 rounded-b-xl border-t px-6 py-4">
           <Button type="button" variant="ghost" @click="open = false">{{ t('common.cancel') }}</Button>
           <Button type="button" :disabled="!preview || saving" @click="link">
             <Loader2 v-if="saving" class="size-4 animate-spin" aria-hidden="true" />
-            {{ methodology ? t('projectSettings.methodology.switch') : t('projectSettings.methodology.link') }}
+            {{
+              methodology
+                ? t('projectSettings.methodology.switchAdding', { n: ticked.length }, ticked.length)
+                : t('projectSettings.methodology.linkAdding', { n: ticked.length }, ticked.length)
+            }}
           </Button>
         </DialogFooter>
       </DialogContent>

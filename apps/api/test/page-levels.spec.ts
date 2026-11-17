@@ -83,7 +83,7 @@ describe('GET /v1/projects/:id/levels (#1126)', () => {
     const linked = { blueprintId: 'b1' as string | null };
     const prisma = {
       project: {
-        findUnique: vi.fn(async () => ({ workspaceId: 'ws' })),
+        findUnique: vi.fn(async () => ({ workspaceId: 'ws', blueprintId: linked.blueprintId })),
         findMany: vi.fn(async () => (linked.blueprintId ? [{ id: 'p', blueprintId: linked.blueprintId }] : [])),
       },
       projectBlueprint: { findMany: vi.fn(async () => [{ id: 'b1', builtInKey: null, versions: [{ blueprint: { levels: LEVELS } }] }]) },
@@ -94,8 +94,8 @@ describe('GET /v1/projects/:id/levels (#1126)', () => {
     expect(await service.levels('p', { userId: 'u' } as never, 'en')).toEqual({
       projectId: 'p',
       levels: [
-        { key: 'intent', name: 'Intent', description: null, agentKey: null, pages: 0 },
-        { key: 'rules', name: 'Rules', description: 'One invariant a page', agentKey: 'reviewer', pages: 3 },
+        { key: 'intent', name: 'Intent', description: null, agentKey: null, agent: null, pages: 0 },
+        { key: 'rules', name: 'Rules', description: 'One invariant a page', agentKey: 'reviewer', agent: 'reviewer', pages: 3 },
       ],
     });
     linked.blueprintId = null;

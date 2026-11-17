@@ -285,8 +285,10 @@ export interface ProjectLevelsResponse {
     /** In the reader's language. */
     name: string;
     description: string | null;
-    /** The level's default agent, if it names one. */
+    /** The level's default agent as the methodology declares it, if it names one. */
     agentKey: string | null;
+    /** The key of the agent a turn at this level runs (`ownedAgentKey`): what `GET /v1/ai/agents` lists. */
+    agent: string | null;
     /** Pages the reader can see at this level. */
     pages: number;
   }[];

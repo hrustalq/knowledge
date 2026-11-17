@@ -54,6 +54,7 @@ export function searchViewOf(res: SearchResponse): SearchView {
       snippet: r.snippetParts ?? [{ text: `${r.snippet}…`, hit: false }],
       trust: r.trust?.status,
       badges: (r.entities ?? []).map((e) => ({ key: e.key, label: e.name })),
+      ...(r.level ? { level: r.level.name } : {}),
       ...(r.validTo ? { supersededAt: r.validTo } : {}),
     })),
     related: (res.related ?? []).map((r) => ({

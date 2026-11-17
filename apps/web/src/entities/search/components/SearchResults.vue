@@ -6,7 +6,7 @@
 // app and by plain href in the reader, which has no router.
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
-import { History, SearchX } from 'lucide-vue-next'
+import { History, Layers, SearchX } from 'lucide-vue-next'
 import { Badge } from '@knowledge/ui/badge'
 import { Skeleton } from '@knowledge/ui/skeleton'
 import { formatDate, formatDateTime } from '@/shared/utils/format'
@@ -122,6 +122,10 @@ const emit = defineEmits<{ navigate: []; 'clear-filters': [] }>()
                   :state="r.trust"
                   size="xs"
                 />
+                <Badge v-if="r.level" variant="outline" class="shrink-0 gap-1 text-caption font-normal text-muted-foreground">
+                  <Layers class="size-3" aria-hidden="true" />
+                  <span class="sr-only">{{ t('documents.levelLabel') }}: </span>{{ r.level }}
+                </Badge>
                 <!-- #81: on an as-of search, text the page has since replaced.
                      Outline and muted: it is a date, not a warning. -->
                 <Badge

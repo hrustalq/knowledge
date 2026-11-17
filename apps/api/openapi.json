@@ -45103,7 +45103,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.57.0",
+    "version": "0.58.0",
     "contact": {}
   },
   "tags": [],
@@ -73368,6 +73368,10 @@
                   "type": "string",
                   "nullable": true
                 },
+                "agent": {
+                  "type": "string",
+                  "nullable": true
+                },
                 "pages": {
                   "type": "number"
                 }
@@ -73377,6 +73381,7 @@
                 "name",
                 "description",
                 "agentKey",
+                "agent",
                 "pages"
               ]
             }

@@ -1190,12 +1190,12 @@ export interface StyleguideSummary {
  * GET /v1/ai/styleguides?workspaceId=&projectId=
  *
  * `styleguide` is the one that applies to a page of that project: the project's
- * own when it has one, else the workspace's. `scope` says which it was, so the
+ * own when it has one, else its methodology's (#1121), else the workspace's. `scope` says which it was, so the
  * editor can show "inherited" rather than pretend the project wrote it.
  */
 export interface GetStyleguideResponse {
   styleguide: StyleguideSummary | null;
-  scope: 'project' | 'workspace' | null;
+  scope: 'project' | 'methodology' | 'workspace' | null;
   /** STYLEGUIDE_MAX_RULES — the form's limit, and the PUT's. */
   maxRules: number;
 }
@@ -1216,7 +1216,7 @@ export interface AssistantLintResponse {
   /** False when no model is configured for the linter, or the linter agent is disabled. */
   enabled: boolean;
   /** The styleguide the text was checked against; null when none applies (no model call then). */
-  styleguide: { id: string; name: string; scope: 'project' | 'workspace' } | null;
+  styleguide: { id: string; name: string; scope: 'project' | 'methodology' | 'workspace' } | null;
   violations: LintViolation[];
   /**
    * Violations the model reported but the harness refused: an unknown or

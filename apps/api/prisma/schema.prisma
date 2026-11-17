@@ -1553,14 +1553,18 @@ model AiSkill {
   /// Styleguide scope: null = workspace-wide; set = replaces it for one project.
   /// No FK (house style).
   projectId           String?   @map("project_id") @db.Uuid
+  /// A styleguide a methodology owns (#1121): used by its linked projects that
+  /// have none of their own. Project id is then null. No FK.
+  blueprintId         String?   @map("blueprint_id") @db.Uuid
   /// StyleRule[] — only for kind='styleguide'. Json, not an array (the `triggers` precedent).
   rules               Json?
 
   @@unique([workspaceId, name])
   /// One skill per guidance file. NULLs are distinct in PG, so manual rows never collide.
   @@unique([workspaceId, sourceConnectorId, sourcePath])
-  /// One styleguide per (workspace, project) is a raw partial unique index in
-  /// the migration (ai_skills_one_styleguide_per_scope), not expressible here.
+  /// One styleguide per (workspace, project, methodology) is a raw partial
+  /// unique index in the migration (ai_skills_one_styleguide_per_scope), not
+  /// expressible here.
   @@index([workspaceId, kind, projectId])
   @@index([workspaceId, createdAt])
   @@map("ai_skills")
@@ -1985,6 +1989,10 @@ model GlossaryTerm {
   /// name — `@@unique([projectId, term])` cannot say so for nulls, so the
   /// writer checks under a lock (`GlossaryService.assertNameFree`).
   projectId   String? @map("project_id") @db.Uuid
+  /// A term a methodology owns (#1121): linked on its projects' pages unless
+  /// the project defines the word; it replaces a workspace term. Project id is
+  /// then null. No FK.
+  blueprintId String? @map("blueprint_id") @db.Uuid
   term        String
   /// string[] — abbreviations and inflections that link to this entry. Json,
   /// not text[]: the schema uses no Postgres arrays (AiSkill.triggers precedent).
@@ -2022,6 +2030,7 @@ model GlossaryTerm {
   @@unique([projectId, term])
   @@index([workspaceId, enabled])
   @@index([projectId, enabled])
+  @@index([workspaceId, blueprintId])
   @@map("glossary_terms")
 }
 

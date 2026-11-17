@@ -2955,6 +2955,7 @@
       "deleteBody": "Text will no longer be checked against these rules anywhere in the workspace, except in projects with a styleguide of their own.",
       "deleteProjectBody": "This project goes back to following the workspace styleguide, if there is one.",
       "inherits": "This project has no styleguide of its own. It follows the workspace one, \"{name}\".",
+      "inheritsMethodology": "This project has no styleguide of its own. It follows its methodology's, \"{name}\".",
       "override": "Write one for this project",
       "emptyTitle": "No styleguide yet",
       "emptyBody": "Write down the rules your team agreed on, in plain words, each with a severity. The linter checks text against these rules and nothing else, and every violation it reports quotes the passage that breaks one.",

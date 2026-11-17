@@ -146,7 +146,7 @@ describe('ProjectScaffoldService', () => {
       skills as never,
       permissions as never,
       { changed: vi.fn() } as never,
-      new BlueprintsService({ projectBlueprint: { findFirst: vi.fn(async () => null) } } as never),
+      new BlueprintsService({ projectBlueprint: { findFirst: vi.fn(async () => null) } } as never, {} as never),
     );
     return { service, prisma, documents, projects, templates, skills, created };
   }

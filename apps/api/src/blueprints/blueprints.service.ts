@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import {
   BUILT_IN_BLUEPRINT_KEYS,
   isBuiltInBlueprintKey,
+  isMethodology,
   type Blueprint,
   type BlueprintEntry,
   type ListBlueprintsResponse,
@@ -11,6 +12,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { t } from '../i18n/t.js';
 import { parseBlueprint } from './blueprint.schema.js';
 import { BUILT_IN_BLUEPRINTS } from './built-in/index.js';
+import { canonical, MethodologyMaterializerService } from './methodology-materializer.service.js';
 import { UUID_RE } from '@knowledge/contracts';
 
 const BLUEPRINTS_MAX_PER_WORKSPACE = 100;
@@ -27,7 +29,10 @@ type Row = Prisma.ProjectBlueprintGetPayload<{ include: typeof withCurrent }>;
  */
 @Injectable()
 export class BlueprintsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly materializer: MethodologyMaterializerService,
+  ) {}
 
   async list(workspaceId: string, includeDisabled = false): Promise<ListBlueprintsResponse> {
     const rows = await this.prisma.projectBlueprint.findMany({
@@ -85,16 +90,20 @@ export class BlueprintsService {
     }
     const blueprint = input.blueprint === undefined ? null : parseBlueprint(input.blueprint);
     if (!blueprint && input.builtInKey === undefined) throw new BadRequestException(t('error.blueprint.contentRequired'));
-    const row = await this.prisma.projectBlueprint.create({
-      data: {
-        workspaceId,
-        builtInKey: input.builtInKey ?? null,
-        currentVersion: blueprint ? 1 : 0,
-        enabled: input.enabled ?? true,
-        createdBy: userId,
-        ...(blueprint ? { versions: { create: { version: 1, blueprint: json(blueprint), createdBy: userId } } } : {}),
-      },
-      include: withCurrent,
+    const row = await this.prisma.withTransaction(async () => {
+      const created = await this.prisma.projectBlueprint.create({
+        data: {
+          workspaceId,
+          builtInKey: input.builtInKey ?? null,
+          currentVersion: blueprint ? 1 : 0,
+          enabled: input.enabled ?? true,
+          createdBy: userId,
+          ...(blueprint ? { versions: { create: { version: 1, blueprint: json(blueprint), createdBy: userId } } } : {}),
+        },
+        include: withCurrent,
+      });
+      if (blueprint) await this.materializeIfNeeded(created.id, workspaceId, blueprint, userId);
+      return created;
     });
     return this.entryOf(row);
   }
@@ -106,15 +115,31 @@ export class BlueprintsService {
     // jsonb stores keys in its own order, so compare a key-sorted form.
     const changed = blueprint && canonical(blueprint) !== canonical(row.versions[0]?.blueprint ?? null);
     const version = row.currentVersion + 1;
-    const updated = await this.prisma.projectBlueprint.update({
-      where: { id },
-      data: {
-        ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
-        ...(changed ? { currentVersion: version, versions: { create: { version, blueprint: json(blueprint), createdBy: userId } } } : {}),
-      },
-      include: withCurrent,
+    const updated = await this.prisma.withTransaction(async () => {
+      const saved = await this.prisma.projectBlueprint.update({
+        where: { id },
+        data: {
+          ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
+          ...(changed ? { currentVersion: version, versions: { create: { version, blueprint: json(blueprint), createdBy: userId } } } : {}),
+        },
+        include: withCurrent,
+      });
+      if (changed) await this.materializeIfNeeded(id, row.workspaceId, blueprint, userId);
+      return saved;
     });
     return this.entryOf(updated);
+  }
+
+  /**
+   * A saved version writes the rows its methodology owns (#1121), in the
+   * save's transaction. Only a methodology, or a blueprint a project already
+   * links: a plain saved blueprint is copied at scaffold, and owning hidden
+   * copies of its templates would only spend the workspace's template cap.
+   * Linking one materializes it then (phase 3).
+   */
+  private async materializeIfNeeded(id: string, workspaceId: string, blueprint: Blueprint, userId: string): Promise<void> {
+    if (!isMethodology(blueprint) && !(await this.prisma.project.count({ where: { blueprintId: id } }))) return;
+    await this.materializer.materialize(workspaceId, id, blueprint, userId);
   }
 
   /** One guarded statement: a second delete (or a race) is a 404, not a 500. */
@@ -157,8 +182,4 @@ export class BlueprintsService {
   }
 }
 
-const canonical = (value: unknown) =>
-  JSON.stringify(value, (_key, v: unknown) =>
-    v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : 1))) : v,
-  );
 const json = (blueprint: Blueprint) => blueprint as unknown as Prisma.InputJsonValue;

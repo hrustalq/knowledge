@@ -83,7 +83,7 @@ const own = computed(() => {
   return (projectId.value ? d.scope === 'project' : d.scope === 'workspace') ? d.styleguide : null
 })
 /** A project with no styleguide of its own, reading the workspace's. */
-const inherited = computed(() => (projectId.value && data.value?.scope === 'workspace' ? data.value.styleguide : null))
+const inherited = computed(() => (projectId.value && data.value?.scope && data.value.scope !== 'project' ? data.value.styleguide : null))
 const maxRules = computed(() => data.value?.maxRules ?? 50)
 
 const invalidates = () => [['/v1/ai/styleguides']]
@@ -427,10 +427,10 @@ const readOnlyRules = computed(() => own.value?.rules ?? inherited.value?.rules 
       </div>
     </form>
 
-    <!-- A project reading the workspace's styleguide. -->
+    <!-- A project reading its methodology's styleguide, or the workspace's. -->
     <div v-else-if="inherited" class="space-y-3">
       <div class="bg-muted/40 flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-3 text-sm">
-        <p>{{ t('ai.styleguide.inherits', { name: inherited.name }) }}</p>
+        <p>{{ t(data?.scope === 'methodology' ? 'ai.styleguide.inheritsMethodology' : 'ai.styleguide.inherits', { name: inherited.name }) }}</p>
         <Button v-if="canManage" size="sm" variant="outline" @click="start(inherited)">
           {{ t('ai.styleguide.override') }}
         </Button>

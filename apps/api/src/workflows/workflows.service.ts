@@ -101,7 +101,8 @@ export class WorkflowsService {
     return this.toDefinitionInfo(await this.requireDefinition(id));
   }
 
-  async create(dto: CreateWorkflowDto, userId?: string): Promise<WorkflowDefinitionInfo> {
+  /** `blueprintId`: a methodology's own workflow (#1121), from its materializer only — never in the DTO. */
+  async create(dto: CreateWorkflowDto & { blueprintId?: string }, userId?: string): Promise<WorkflowDefinitionInfo> {
     if (dto.projectId) await this.projects.requireProjectInWorkspace(dto.projectId, dto.workspaceId);
     await this.assertValid(dto.workspaceId, dto.graph);
 
@@ -110,6 +111,7 @@ export class WorkflowsService {
         data: {
           workspaceId: dto.workspaceId,
           projectId: dto.projectId ?? null,
+          blueprintId: dto.blueprintId ?? null,
           name: dto.name.trim(),
           description: dto.description ?? null,
           enabled: dto.enabled ?? true,

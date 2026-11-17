@@ -91,8 +91,11 @@ describe('BlueprintsService (#716, phase 4)', () => {
           return { ...row, ...data, versions: data.versions ? [data.versions.create] : row.versions };
         }),
       },
+      project: { count: vi.fn(async () => 0) },
+      withTransaction: async <T>(fn: () => Promise<T>) => fn(),
     };
-    return { service: new BlueprintsService(prisma as never), prisma };
+    const materializer = { materialize: vi.fn(async () => 0) };
+    return { service: new BlueprintsService(prisma as never, materializer as never), prisma, materializer };
   }
   const saved = { name: { en: 'Ours' }, tree: [{ title: { en: 'Home' } }] };
   const SAVED_ID = '6f1c1e0a-1111-4111-8111-111111111111';
@@ -124,6 +127,23 @@ describe('BlueprintsService (#716, phase 4)', () => {
     expect(prisma.projectBlueprint.update.mock.calls[0]![0].data).toEqual({ enabled: false });
     await service.update(SAVED_ID, { blueprint: { ...saved, tree: [] } }, 'u1');
     expect(prisma.projectBlueprint.update.mock.calls[1]![0].data).toMatchObject({ currentVersion: 2, versions: { create: { version: 2 } } });
+  });
+
+  it('materializes a saved methodology, or a blueprint a project links, in the same save (#1124)', async () => {
+    const row = { id: SAVED_ID, workspaceId: 'ws', builtInKey: null, enabled: true, currentVersion: 1, versions: [{ version: 1, blueprint: saved }] };
+    const plain = setup([{ ...row }]);
+    await plain.service.update(SAVED_ID, { blueprint: { ...saved, tree: [] } }, 'u1');
+    expect(plain.materializer.materialize).not.toHaveBeenCalled();
+
+    const method = { ...saved, levels: [{ key: 'one', name: { en: 'One' }, templateRefs: [] }] };
+    const withLevels = setup([{ ...row }]);
+    await withLevels.service.update(SAVED_ID, { blueprint: method }, 'u1');
+    expect(withLevels.materializer.materialize).toHaveBeenCalledWith('ws', SAVED_ID, method, 'u1');
+
+    const linked = setup([{ ...row }]);
+    linked.prisma.project.count.mockResolvedValue(1);
+    await linked.service.update(SAVED_ID, { blueprint: { ...saved, tree: [] } }, 'u1');
+    expect(linked.materializer.materialize).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { projectScope, scopeWhere } from '../projects/methodology-scope.js';
 import { ConfigService } from '@nestjs/config';
 import type { AiSkill } from '@prisma/client';
 import {
@@ -24,6 +25,8 @@ const CACHE_TTL_MS = 30_000;
 export interface UpsertStyleguideInput {
   /** Null = the workspace's styleguide. */
   projectId: string | null;
+  /** A methodology's own styleguide (#1121), written only by its materializer. */
+  blueprintId?: string | null;
   name: string;
   description: string;
   rules: StyleRule[];
@@ -33,7 +36,7 @@ export interface UpsertStyleguideInput {
 export interface EffectiveStyleguide {
   row: AiSkill;
   rules: StyleRule[];
-  scope: 'project' | 'workspace';
+  scope: 'project' | 'methodology' | 'workspace';
 }
 
 export interface UpsertSkillInput {
@@ -174,17 +177,15 @@ export class AiSkillsService {
    * Both reads carry `workspaceId`, so a foreign project id finds nothing.
    */
   async effectiveStyleguide(workspaceId: string, projectId?: string | null): Promise<EffectiveStyleguide | null> {
-    const rows = await this.prisma.aiSkill.findMany({
-      where: {
-        workspaceId,
-        kind: 'styleguide',
-        OR: [{ projectId: null }, ...(projectId ? [{ projectId }] : [])],
-      },
-    });
+    // Project, then its methodology's (#1121, enabled only: a methodology that
+    // dropped its styleguide disables it), then the workspace's.
+    const scope = projectId ? await projectScope(this.prisma, projectId) : null;
+    const rows = await this.prisma.aiSkill.findMany({ where: { workspaceId, kind: 'styleguide', ...scopeWhere(scope) } });
     const own = projectId ? rows.find((r) => r.projectId === projectId) : undefined;
-    const row = own ?? rows.find((r) => r.projectId === null);
+    const methodology = scope?.blueprintId ? rows.find((r) => r.blueprintId === scope.blueprintId && r.enabled) : undefined;
+    const row = own ?? methodology ?? rows.find((r) => r.projectId === null && r.blueprintId === null);
     if (!row) return null;
-    return { row, rules: readStyleRules(row.rules), scope: own ? 'project' : 'workspace' };
+    return { row, rules: readStyleRules(row.rules), scope: own ? 'project' : methodology ? 'methodology' : 'workspace' };
   }
 
   async getStyleguide(workspaceId: string, projectId?: string | null): Promise<GetStyleguideResponse> {
@@ -217,12 +218,12 @@ export class AiSkillsService {
       if (!project) throw new NotFoundException(t('error.project.notInWorkspace', { id: input.projectId }));
     }
 
-    const scope = { workspaceId, kind: 'styleguide', projectId: input.projectId };
+    const scope = { workspaceId, kind: 'styleguide', projectId: input.projectId, blueprintId: input.blueprintId ?? null };
     // A name is unique per workspace across skills and styleguides alike.
     const clash = await this.prisma.aiSkill.findUnique({
       where: { workspaceId_name: { workspaceId, name: input.name } },
     });
-    if (clash && !(clash.kind === 'styleguide' && clash.projectId === input.projectId)) {
+    if (clash && !(clash.kind === 'styleguide' && clash.projectId === scope.projectId && clash.blueprintId === scope.blueprintId)) {
       throw new ConflictException(t('error.ai.skillNameTaken', { name: input.name }));
     }
 

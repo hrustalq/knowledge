@@ -452,7 +452,7 @@ const tab = usePageTabs(tabs, 'members')
           {{ t('access.noMembersMatch') }}
         </p>
 
-        <Table v-else>
+        <Table v-else sticky-first>
         <TableHeader>
           <TableRow>
             <TableHead>{{ t('access.member') }}</TableHead>

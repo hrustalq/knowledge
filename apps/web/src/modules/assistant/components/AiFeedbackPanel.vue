@@ -192,7 +192,7 @@ function kindOf(e: AnswerFeedbackListEntry): string {
 
     <template v-else>
       <div class="overflow-x-auto">
-        <Table>
+        <Table sticky-first>
           <TableHeader>
             <TableRow>
               <TableHead>{{ t('ai.when') }}</TableHead>

@@ -210,7 +210,7 @@ function setPassword(user: UserSummary) {
       {{ t('users.noneMatch') }}
     </p>
 
-    <Table v-else>
+    <Table v-else sticky-first>
       <TableHeader>
         <TableRow>
           <TableHead>{{ t('users.user') }}</TableHead>

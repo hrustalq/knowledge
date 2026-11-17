@@ -113,6 +113,8 @@ in the pull request that introduces them — see
 - Reading a page, a merge request or a project at 1024–1279px wide: the side panel moves under the content instead
   of leaving the text a column narrower than on a phone, and the editor's assistant opens over the page there rather
   than squeezing the text. (#1047)
+- Wide settings tables on a phone (members, accounts, AI feedback) keep the person's name (or the time) in view
+  while you scroll to the row's actions, so Disable or Revoke admin is never tapped on an unnamed row. (#1070)
 
 ## [0.56.0] — 2026-11-16
 

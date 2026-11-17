@@ -74,6 +74,10 @@ in the pull request that introduces them — see
 - At tablet widths the breadcrumb keeps the current page's name visible instead of collapsing it to nothing. (#1075)
 - Analytics lists and merge request cards show titles on up to two lines on a phone instead of cutting them to a few
   words. (#1077)
+- A page's "On this page" contents list never appeared, and a link to one of its sections (#heading) did not jump
+  there: headings were read before the page body had drawn. The list now shows whenever a page has more than one
+  heading, a #section link lands on its heading, and on a phone or tablet the list is offered as a folded "On this
+  page" block above the text instead of under it. (#1053)
 
 ## [0.56.0] — 2026-11-16
 

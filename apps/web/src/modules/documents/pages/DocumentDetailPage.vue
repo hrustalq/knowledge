@@ -1174,7 +1174,7 @@ watch(
           <!-- Above the stack and outside it: the contents belong to the page
                being read, not to the facts about it. -->
           <template #before>
-            <TocRail v-if="!isSpec && !isFixture && headings.length > 1" :headings="headings" />
+            <TocRail v-if="!isSpec && !isFixture && headings.length > 1" class="hidden lg:block" :headings="headings" />
           </template>
 
           <!-- Hidden while reading an old revision: the stamp is about the head. -->
@@ -1380,6 +1380,15 @@ watch(
         </p>
         <!-- About the head, like the verification stamp. -->
         <ComponentDeclarationNotice v-if="!viewingRevision" :document-id="documentId" />
+        <!-- Below lg the rail sits under the whole body, after the text its
+             contents list navigates: offer the list first, folded (#1053). -->
+        <details
+          v-if="content && !isSpec && !isFixture && !contentError && headings.length > 1"
+          class="rounded-md border px-3 py-2 text-sm lg:hidden"
+        >
+          <summary class="cursor-pointer font-medium">{{ t('tree.onThisPage') }}</summary>
+          <TocRail bare class="mt-2" :headings="headings" />
+        </details>
         <ApiReferenceView v-if="isSpec" :state="apiRef" :workspace-id="detail.document.workspaceId" />
         <TestFixtureView v-else-if="isFixture" :document-id="documentId" :revision-id="viewingRevision" />
         <PageState v-else-if="contentError" state="error" :description="contentError" />

@@ -6,7 +6,8 @@ import { onBeforeUnmount, ref, watch } from 'vue'
 const { t } = useI18n()
 
 interface Heading { id: string; text: string; level: number }
-const props = defineProps<{ headings: Heading[] }>()
+/** `bare`: inside a disclosure whose summary already names it. */
+const props = defineProps<{ headings: Heading[]; bare?: boolean }>()
 
 const active = ref<string | null>(null)
 let observer: IntersectionObserver | null = null
@@ -42,7 +43,7 @@ function go(id: string) {
 
 <template>
   <nav :aria-label="t('tree.onThisPage')" class="text-sm">
-    <p class="mb-2 text-caption font-semibold uppercase tracking-wider text-muted-foreground">{{ t('tree.onThisPage') }}</p>
+    <p v-if="!bare" class="mb-2 text-caption font-semibold uppercase tracking-wider text-muted-foreground">{{ t('tree.onThisPage') }}</p>
     <ul class="space-y-0.5 border-l">
       <li v-for="h in headings" :key="h.id">
         <button

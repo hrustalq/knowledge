@@ -27,6 +27,7 @@ import { clientIp, PublicRateLimiter, RateLimitedException } from './public-rate
 import { ShareUnlockService } from './share-unlock.service.js';
 import { hashToken } from '../auth/auth-tokens.js';
 import { publicEmbedUrl } from '../embeds/embed-access.js';
+import { ImageSigner } from './image-signer.js';
 
 /** `kp_` + 32 bytes base64url. Anything else is a 404 before the database is asked. */
 const TOKEN_RE = /^kp_[A-Za-z0-9_-]{43}$/;
@@ -83,6 +84,7 @@ export class PublicSharesService {
     private readonly exports: ExportService,
     private readonly embeds: EmbedsService,
     config: ConfigService<Env, true>,
+    private readonly images: ImageSigner,
   ) {
     this.unlockAttempts = config.get('PUBLIC_UNLOCK_ATTEMPTS_PER_15MIN', { infer: true });
     this.exportsPerIp = config.get('PUBLIC_EXPORTS_PER_HOUR_PER_IP', { infer: true });
@@ -119,10 +121,12 @@ export class PublicSharesService {
     });
     // Never a Figma link on a public page (#470); snapshots only when the workspace allows them.
     const { allowPublicEmbeds } = await this.settings.effective(live.root.workspaceId);
+    const markdown = await this.embeds.publicMarkdown(content.markdown, content.revisionId, allowPublicEmbeds);
     return {
       documentId: doc.id,
       title: doc.title,
-      markdown: await this.embeds.publicMarkdown(content.markdown, content.revisionId, allowPublicEmbeds),
+      markdown,
+      imageProxy: this.images.signAll(markdown),
       updatedAt: revision?.finalizedAt?.toISOString() ?? null,
     };
   }

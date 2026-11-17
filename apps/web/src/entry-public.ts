@@ -12,6 +12,8 @@ import {
 import {
   SITE_VISITOR_TOKEN_PARAM,
   SITE_WIDGET_PATH,
+  imageProxyKey,
+  publicImagePath,
   publicShareAttachmentPath,
   publicSiteAttachmentPath,
   publicSiteSessionPath,
@@ -97,6 +99,14 @@ const apiInternal = () => process.env.API_URL_INTERNAL ?? 'http://localhost:3000
 // What the *browser* calls: the same base the app uses (Caddy and the Vite
 // proxy both strip `/api`).
 const apiPublic = import.meta.env.VITE_API_URL ?? '/api'
+/** An external image through the signed proxy (#1146); null when the API signed no such URL. */
+const signedImageSrc =
+  (signatures: Record<string, string> | undefined) =>
+  (src: string): string | null => {
+    const key = imageProxyKey(src)
+    const sig = key ? signatures?.[key] : undefined
+    return key && sig ? `${apiPublic}${publicImagePath(key, sig)}` : null
+  }
 /** The app's own origin: a link on it that is not a page in scope is unlinked (#705). */
 const appOrigin = () => process.env.WEB_BASE_URL || null
 
@@ -174,6 +184,7 @@ async function resolveShareView(url: string, ctx: PublicRenderContext): Promise<
       appOrigin: appOrigin(),
       attachmentHref: (id, download) => `${apiPublic}${publicShareAttachmentPath(token, id)}${download ? '?download=1' : ''}`,
       embedSrc: (id) => `${apiPublic}/v1/public/shares/${enc}/embeds/${encodeURIComponent(id)}`,
+      externalImageSrc: signedImageSrc(page.imageProxy),
       labels: labelsFor(ctx.locale),
     })
     return {
@@ -315,6 +326,7 @@ async function resolveSiteView(url: string, ctx: PublicRenderContext): Promise<S
     attachmentHref: (id, download) =>
       `${apiPublic}${publicSiteAttachmentPath(site.id, version.id, id)}${download ? '?download=1' : ''}`,
     embedSrc: (id) => `${apiPublic}/v1/public/sites/${site.id}/versions/${version.id}/embeds/${encodeURIComponent(id)}`,
+    externalImageSrc: signedImageSrc(res.page.imageProxy),
     labels: labelsFor(ctx.locale),
   })
 

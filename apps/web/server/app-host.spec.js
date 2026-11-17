@@ -99,7 +99,8 @@ describe('publicResponseHeaders', () => {
     expect(d['form-action']).toEqual(["'self'"])
     expect(d['object-src']).toEqual(["'self'"])
     expect(d['frame-ancestors']).toEqual(["'none'"])
-    expect(d['img-src']).toBeUndefined()
+    // #1146: external page images come through the signed image proxy on this origin.
+    expect(d['img-src']).toEqual(["'self'", 'data:', 'blob:'])
   })
 
   it("keeps the widget's frame-ancestors and adds the rest", () => {
@@ -110,6 +111,8 @@ describe('publicResponseHeaders', () => {
     expect(d['frame-ancestors']).toEqual(["'self'", 'https://example.com'])
     expect(d['base-uri']).toEqual(["'none'"])
     expect(d['object-src']).toEqual(["'self'", 'http://localhost:9000'])
+    // Attachments, embed snapshots and the logo redirect to presigned storage there.
+    expect(d['img-src']).toEqual(["'self'", 'data:', 'blob:', 'http://localhost:9000'])
   })
 
   it('works with no render headers at all', () => {

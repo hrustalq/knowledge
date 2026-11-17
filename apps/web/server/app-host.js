@@ -89,8 +89,10 @@ function baseDirectives(assetOrigins) {
  * A share link's or published site's response headers (#1142): the render's
  * own, plus `nosniff` and the app's three directives. The frame policy is the
  * render's when it states one — the Ask widget lists who may frame it — and
- * `'none'` otherwise. No `img-src`: the image proxy needs a session, which a
- * share link's or site's reader does not have (#1133).
+ * `'none'` otherwise. Images load from this origin and the asset origins only:
+ * a page's external images come through the API's signed image proxy (#1146),
+ * attachments, embed snapshots and the logo through the public API's redirects
+ * to presigned storage. No third-party list: the public pages draw none.
  *
  * @param {string[]} assetOrigins
  * @param {Record<string, string> | undefined} renderHeaders
@@ -101,7 +103,7 @@ export function publicResponseHeaders(assetOrigins, renderHeaders) {
   return {
     ...renderHeaders,
     'X-Content-Type-Options': 'nosniff',
-    'Content-Security-Policy': [...baseDirectives(assetOrigins), frame].join('; '),
+    'Content-Security-Policy': [...baseDirectives(assetOrigins), ["img-src 'self' data: blob:", ...assetOrigins].join(' '), frame].join('; '),
   }
 }
 

@@ -76,6 +76,12 @@ export interface PublicRenderOptions {
    */
   embedSrc?: (itemId: string) => string | null
   /**
+   * The signed proxy URL of an external image (#1146), or null to drop one the
+   * API did not sign: a share's or site's policy loads images from its own
+   * origin only. Absent (an export) leaves external images as written.
+   */
+  externalImageSrc?: (src: string) => string | null
+  /**
    * Prefixed to every heading id and in-page `#anchor`, so pages printed one
    * after another in one document (an export) keep their anchors apart.
    */
@@ -220,11 +226,18 @@ function onOrigin(href: string, origin: string | null | undefined): boolean {
 }
 
 function rewriteImages(root: HTMLElement, options: PublicRenderOptions) {
+  // A srcset candidate would load from its own host, past the proxy; the src beside it stays.
+  if (options.externalImageSrc) for (const el of root.querySelectorAll('[srcset]')) el.removeAttribute('srcset')
   for (const img of root.querySelectorAll<HTMLImageElement>('img[src]')) {
     const src = img.getAttribute('src') ?? ''
     const attachment = parseAttachmentPath(src)
-    const target = attachment ? options.attachmentHref(attachment.attachmentId, false) : null
-    if (attachment && !target) {
+    const external = !attachment && options.externalImageSrc && /^(https?:)?\/\//i.test(src)
+    const target = attachment
+      ? options.attachmentHref(attachment.attachmentId, false)
+      : external
+        ? options.externalImageSrc!(src)
+        : null
+    if ((attachment || external) && !target) {
       img.remove()
       continue
     }

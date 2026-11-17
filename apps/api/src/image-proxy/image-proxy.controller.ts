@@ -34,7 +34,6 @@ const TIMEOUT_MS = 10_000;
 const RESPONSE_HEADERS = {
   'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
   'Cross-Origin-Resource-Policy': 'same-origin',
-  'Cache-Control': 'private, max-age=86400',
 };
 
 /**
@@ -46,7 +45,8 @@ const RESPONSE_HEADERS = {
  * ask (the session cookie rides an `<img>`), and the upstream request carries
  * none of theirs — no cookie, no referrer, a fixed user agent. `safeFetch`
  * refuses a private address on every hop, inside the socket's own lookup.
- * Share links and published sites do not use it: their readers have no session.
+ * Share links and published sites reach the same fetch through
+ * `GET /v1/public/images`, which takes a URL the API signed instead (#1146).
  */
 @ApiTags('image-proxy')
 @Controller('v1/image-proxy')
@@ -57,36 +57,45 @@ export class ImageProxyController {
   @ApiOperation({ summary: 'An external image from a page, fetched through the API (member app only)' })
   @ApiQuery({ name: 'url', type: String, description: 'The http(s) address of the image' })
   async image(@Query('url') raw: string | undefined, @Res() res: ExpressResponse): Promise<void> {
-    let url: URL;
-    try {
-      url = new URL(raw ?? '');
-    } catch {
-      throw new BadRequestException(t('error.imageProxy.invalid'));
-    }
-    if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new BadRequestException(t('error.imageProxy.invalid'));
-
-    let upstream: Response;
-    try {
-      upstream = await safeFetch(
-        url,
-        { signal: AbortSignal.timeout(TIMEOUT_MS), headers: { accept: 'image/*', 'user-agent': 'knowledge-image-proxy' } },
-        this.config.get('IMAGE_PROXY_ALLOW_PRIVATE_URLS', { infer: true }),
-      );
-    } catch (err) {
-      if ((err as { cause?: { code?: string } }).cause?.code === 'EBLOCKEDADDRESS') {
-        throw new ForbiddenException(t('error.imageProxy.blocked'));
-      }
-      throw new BadGatewayException(t('error.imageProxy.unavailable'));
-    }
-
-    const type = (upstream.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
-    if (!upstream.ok || !IMAGE_TYPES.has(type)) {
-      await upstream.body?.cancel().catch(() => {});
-      throw new BadGatewayException(t('error.imageProxy.unavailable'));
-    }
-    const { bytes, whole } = await readCapped(upstream, MAX_BYTES);
-    if (!whole) throw new BadGatewayException(t('error.imageProxy.unavailable'));
-
-    res.set({ ...RESPONSE_HEADERS, 'Content-Type': type }).send(Buffer.from(bytes));
+    await sendImage(raw, res, this.config.get('IMAGE_PROXY_ALLOW_PRIVATE_URLS', { infer: true }), 'private, max-age=86400');
   }
+}
+
+/**
+ * Fetch `raw` and answer with it as an inert image, or throw. Shared with the
+ * signed public route (`PublicImagesController`, #1146), which differs only in
+ * who may ask and in a `public` cache.
+ */
+export async function sendImage(raw: string | undefined, res: ExpressResponse, allowPrivate: boolean, cacheControl: string): Promise<void> {
+  let url: URL;
+  try {
+    url = new URL(raw ?? '');
+  } catch {
+    throw new BadRequestException(t('error.imageProxy.invalid'));
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new BadRequestException(t('error.imageProxy.invalid'));
+
+  let upstream: Response;
+  try {
+    upstream = await safeFetch(
+      url,
+      { signal: AbortSignal.timeout(TIMEOUT_MS), headers: { accept: 'image/*', 'user-agent': 'knowledge-image-proxy' } },
+      allowPrivate,
+    );
+  } catch (err) {
+    if ((err as { cause?: { code?: string } }).cause?.code === 'EBLOCKEDADDRESS') {
+      throw new ForbiddenException(t('error.imageProxy.blocked'));
+    }
+    throw new BadGatewayException(t('error.imageProxy.unavailable'));
+  }
+
+  const type = (upstream.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
+  if (!upstream.ok || !IMAGE_TYPES.has(type)) {
+    await upstream.body?.cancel().catch(() => {});
+    throw new BadGatewayException(t('error.imageProxy.unavailable'));
+  }
+  const { bytes, whole } = await readCapped(upstream, MAX_BYTES);
+  if (!whole) throw new BadGatewayException(t('error.imageProxy.unavailable'));
+
+  res.set({ ...RESPONSE_HEADERS, 'Cache-Control': cacheControl, 'Content-Type': type }).send(Buffer.from(bytes));
 }

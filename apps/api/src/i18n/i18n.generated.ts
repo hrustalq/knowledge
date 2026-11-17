@@ -1267,6 +1267,7 @@ export type I18nTranslations = {
             "invalid": string;
             "blocked": string;
             "unavailable": string;
+            "unsigned": string;
         };
         "notification": {
             "subjectNotInWorkspace": string;

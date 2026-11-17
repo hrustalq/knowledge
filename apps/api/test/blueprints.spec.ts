@@ -379,3 +379,39 @@ describe('describe it (#716, phase 5)', () => {
     }
   });
 });
+
+describe('methodology shape (#1122)', () => {
+  const step = (id: string, next: string[] = []) => ({ id, kind: 'review', title: id, next, fanOut: false, autoApprove: false });
+  const methodology = {
+    name: { en: 'Method' },
+    tree: [{ title: { en: 'Rules' }, templateRef: 'builtin:adr' }],
+    levels: [
+      { key: 'l0-intent', name: { en: 'Intent' }, templateRefs: ['builtin:adr'], agentKey: 'modeller', guidance: { en: 'State the goal.' } },
+      { key: 'l1-rules', name: { en: 'Rules' }, templateRefs: [], agentKey: 'researcher' },
+    ],
+    workflows: [{ name: 'Draft rules', graph: { steps: [step('check')] }, trigger: { manual: true, autoStart: false, events: [], categories: [] } }],
+    agents: [{ key: 'modeller', name: 'Modeller', instructions: 'Model the domain.', tools: ['search'], minTier: 'large' }],
+  };
+  const issue = (raw: unknown) => {
+    try {
+      parseBlueprint(raw);
+    } catch (e) {
+      const { issues } = (e as { getResponse(): { issues: { path: (string | number)[]; message: string }[] } }).getResponse();
+      return issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
+    }
+    throw new Error('expected a 400');
+  };
+
+  it('accepts levels, workflows and agents and reads them back as written', () => {
+    expect(parseBlueprint(JSON.parse(JSON.stringify(methodology)))).toEqual(methodology);
+  });
+
+  it('refuses each bad part by its path', () => {
+    expect(issue({ ...methodology, levels: [methodology.levels[0], methodology.levels[0]] })).toContain('duplicate level key');
+    expect(issue({ ...methodology, levels: [{ ...methodology.levels[1], agentKey: 'nobody' }] })).toContain('levels.0.agentKey');
+    expect(issue({ ...methodology, workflows: [{ name: 'Loop', graph: { steps: [step('a', ['a'])] } }] })).toContain('workflows.0.graph');
+    expect(issue({ ...methodology, levels: [{ ...methodology.levels[1], guidance: { en: 'x'.repeat(4_001) } }] })).toContain('levels.0.guidance.en');
+    expect(issue({ ...methodology, agents: [{ ...methodology.agents[0], key: 'reviewer' }] })).toContain('agents.0.key');
+    expect(issue({ ...methodology, agents: [{ ...methodology.agents[0], minTier: 'huge' }] })).toContain('agents.0.minTier');
+  });
+});

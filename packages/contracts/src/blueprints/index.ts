@@ -2,7 +2,8 @@ import type { Locale } from '@knowledge/contracts/core';
 import type { DocumentCategory } from '@knowledge/contracts/documents';
 import type { TemplateRef } from '@knowledge/contracts/templates';
 import { INTERVIEW_MAX_OPTIONS, INTERVIEW_MAX_QUESTIONS, INTERVIEW_MAX_ROUNDS } from '@knowledge/contracts/ai';
-import type { InterviewAnswer, InterviewRound, StyleRule } from '@knowledge/contracts/ai';
+import type { InterviewAnswer, InterviewRound, ModelTier, StyleRule } from '@knowledge/contracts/ai';
+import type { WorkflowGraph, WorkflowTrigger } from '@knowledge/contracts/workflows';
 import type { ProjectSummary } from '@knowledge/contracts/identity';
 
 // ---------------------------------------------------------------------------
@@ -67,6 +68,44 @@ export interface BlueprintConventions {
   glossary?: BlueprintGlossaryTerm[];
 }
 
+/**
+ * One level of a methodology's work (#1121), in order: intent before rules,
+ * question before decision. A page's level is derived from its template, never
+ * stored.
+ */
+export interface BlueprintLevel {
+  /** Slug, unique within the blueprint. */
+  key: string;
+  name: BlueprintText;
+  description?: BlueprintText;
+  /** Pages made from these templates sit at this level. */
+  templateRefs: TemplateRef[];
+  /** The default agent at this level: a built-in key or one of the blueprint's `agents`. */
+  agentKey?: string;
+  /** Added to the chat prompt at this level. Trusted prompt text, so only a workspace admin may write it. */
+  guidance?: BlueprintText;
+}
+
+export interface BlueprintWorkflow {
+  name: string;
+  description?: string;
+  graph: WorkflowGraph;
+  trigger?: WorkflowTrigger;
+}
+
+/** An agent a methodology brings, as a custom agent it owns. */
+export interface BlueprintAgent {
+  /** Slug; never a built-in agent's key. */
+  key: string;
+  name: string;
+  description?: string;
+  instructions: string;
+  /** Tool names from the assistant registry. */
+  tools?: string[];
+  /** The weakest model class it should run on; unset = whatever the purpose routes. */
+  minTier?: ModelTier;
+}
+
 export interface Blueprint {
   name: BlueprintText;
   description?: BlueprintText;
@@ -74,6 +113,10 @@ export interface Blueprint {
   icon?: string;
   tree: BlueprintNode[];
   conventions?: BlueprintConventions;
+  /** A blueprint with levels, workflows or agents is a methodology (#1121). */
+  levels?: BlueprintLevel[];
+  workflows?: BlueprintWorkflow[];
+  agents?: BlueprintAgent[];
 }
 
 export const BUILT_IN_BLUEPRINT_KEYS = ['discovery', 'code-product', 'service-docs', 'blank'] as const;
@@ -86,6 +129,12 @@ export function isBuiltInBlueprintKey(value: unknown): value is BuiltInBlueprint
 /** Pages one scaffold may write; the tree depth it may nest. */
 export const BLUEPRINT_MAX_PAGES = 200;
 export const BLUEPRINT_MAX_DEPTH = 5;
+/** A methodology's levels, workflows and agents (#1121). */
+export const BLUEPRINT_MAX_LEVELS = 20;
+export const BLUEPRINT_MAX_WORKFLOWS = 20;
+export const BLUEPRINT_MAX_AGENTS = 20;
+/** Per language, for a level's guidance. */
+export const BLUEPRINT_LEVEL_GUIDANCE_MAX = 4_000;
 
 /** `text` in `locale`, else any language it has, else ''. As written: a title pattern's trailing space matters. */
 export function blueprintText(text: BlueprintText | undefined, locale: Locale): string {

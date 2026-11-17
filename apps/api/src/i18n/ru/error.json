@@ -120,6 +120,9 @@
     "notFoundOnDocument": "Ревизия {revisionId} не найдена в документе {documentId}",
     "notComparable": "Ревизия {id} — {status}; сравнивать можно только финализированные ревизии"
   },
+  "listQuery": {
+    "oneOf": "{param} должен быть одним из {allowed}, получено «{value}»"
+  },
   "compare": {
     "badMode": "mode должен быть «direct» или «merge-base», получено «{mode}»"
   },

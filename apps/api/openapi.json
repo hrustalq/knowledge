@@ -7502,6 +7502,46 @@
             }
           },
           {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "Sort column; createdAt when omitted (#1256)",
+            "schema": {
+              "enum": [
+                "createdAt",
+                "lastActivityAt",
+                "title"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "desc when omitted; asc for title",
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "author",
+            "required": false,
+            "in": "query",
+            "description": "Pages whose first revision the caller wrote (`me`) or didn't (`others`); everyone when omitted",
+            "schema": {
+              "enum": [
+                "me",
+                "others"
+              ],
+              "type": "string"
+            }
+          },
+          {
             "name": "Accept-Language",
             "in": "header",
             "required": false,
@@ -45103,7 +45143,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.58.0",
+    "version": "0.59.0",
     "contact": {}
   },
   "tags": [],
@@ -64856,6 +64896,10 @@
           "createdAt": {
             "type": "string"
           },
+          "createdBy": {
+            "type": "string",
+            "nullable": true
+          },
           "kind": {
             "$ref": "#/components/schemas/ApiDocumentKind"
           },
@@ -65094,6 +65138,10 @@
           },
           "createdAt": {
             "type": "string"
+          },
+          "createdBy": {
+            "type": "string",
+            "nullable": true
           },
           "kind": {
             "$ref": "#/components/schemas/ApiDocumentKind"

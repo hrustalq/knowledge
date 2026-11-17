@@ -1,4 +1,4 @@
-import { DEFAULT_LOCALE, isLocale, type Locale } from '@knowledge/contracts'
+import { DEFAULT_LOCALE, DOCUMENT_SORTS, SORT_ORDERS, isLocale, type DocumentSort, type Locale, type SortOrder } from '@knowledge/contracts'
 import { formatRelative } from '../utils/format'
 
 /** Fallback workspace when the caller has no memberships (AUTH_MODE=none demo flow). */
@@ -26,6 +26,8 @@ const MEASURE_KEY = 'kn_measure'
  * is the navigation rail's width.
  */
 const PAGE_RAIL_KEY = 'kn_pagerail'
+/** How the document list is sorted (#1256), as `<sort>:<order>`. */
+const DOC_SORT_KEY = 'kn_docsort'
 /** Which branches of the sidebar page tree are open. */
 const TREE_OPEN_KEY = 'kn_tree'
 /**
@@ -56,6 +58,7 @@ interface SsrRequestContext {
   aiPanel: string | null
   measure: string | null
   pageRail: string | null
+  docSort: string | null
   treeOpen: string | null
   locale: Locale | null
   traceId: string | null
@@ -98,6 +101,7 @@ let clientGlossary: string | null = null
 let clientAiPanel: string | null = null
 let clientMeasure: string | null = null
 let clientPageRail: string | null = null
+let clientDocSort: string | null = null
 let clientTreeOpen: string | null = null
 let clientLocale: Locale | null = null
 if (!import.meta.env.SSR) {
@@ -117,6 +121,7 @@ if (!import.meta.env.SSR) {
     clientAiPanel = localStorage.getItem(AI_PANEL_KEY)
     clientMeasure = localStorage.getItem(MEASURE_KEY)
     clientPageRail = localStorage.getItem(PAGE_RAIL_KEY)
+    clientDocSort = localStorage.getItem(DOC_SORT_KEY)
     clientTreeOpen = localStorage.getItem(TREE_OPEN_KEY)
     const storedLocale = localStorage.getItem(LANG_KEY)
     if (isLocale(storedLocale)) {
@@ -339,6 +344,31 @@ export function setFullWidth(full: boolean): void {
 export function getPageRail(): boolean | null {
   const raw = import.meta.env.SSR ? ssrContext()?.pageRail : clientPageRail
   return raw === '1' ? true : raw === '0' ? false : null
+}
+
+/**
+ * The document list's sort (#1256). Server-read because the server prefetches
+ * the list's first batch: fetched in another order, the client would swap every
+ * row after hydration. Unset, or a value an older build wrote, is newest first.
+ */
+export function getDocumentSort(): { sort: DocumentSort; order: SortOrder } {
+  const raw = (import.meta.env.SSR ? ssrContext()?.docSort : clientDocSort) ?? ''
+  const [sort, order] = raw.split(':')
+  return (DOCUMENT_SORTS as readonly string[]).includes(sort!) && (SORT_ORDERS as readonly string[]).includes(order!)
+    ? { sort: sort as DocumentSort, order: order as SortOrder }
+    : { sort: 'createdAt', order: 'desc' }
+}
+
+export function setDocumentSort(sort: DocumentSort, order: SortOrder): void {
+  if (import.meta.env.SSR) return
+  const value = `${sort}:${order}`
+  clientDocSort = value
+  try {
+    localStorage.setItem(DOC_SORT_KEY, value)
+    document.cookie = `${DOC_SORT_KEY}=${value}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`
+  } catch {
+    /* ignore */
+  }
 }
 
 export function setPageRail(open: boolean): void {

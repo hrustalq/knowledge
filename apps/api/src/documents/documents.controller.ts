@@ -14,6 +14,7 @@ import {
   Res,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { DOCUMENT_AUTHOR_FILTERS, DOCUMENT_SORTS, SORT_ORDERS } from '@knowledge/contracts';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiHeader, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type {
@@ -102,6 +103,13 @@ function csv(value?: string, single?: string): string[] {
   return [...new Set(parts)];
 }
 
+/** A closed-vocabulary query param: absent is undefined, anything off the list a 400. */
+function oneOf<T extends string>(param: string, allowed: readonly T[], value?: string): T | undefined {
+  if (value === undefined || value === '') return undefined;
+  if ((allowed as readonly string[]).includes(value)) return value as T;
+  throw new BadRequestException(t('error.listQuery.oneOf', { param, allowed: allowed.join('|'), value }));
+}
+
 /** Query ceilings (#1109): one page of a list, and how many tree levels one call loads. */
 const MAX_LIST_LIMIT = 200;
 const MAX_TREE_DEPTH = 10;
@@ -159,6 +167,14 @@ export class DocumentsController {
     description: 'Comma-separated frontmatter tags; bare name or `tag:` entity key',
   })
   @ApiQuery({ name: 'includeArchived', required: false, description: '1 to include archived pages (docs/features/39)' })
+  @ApiQuery({ name: 'sort', required: false, enum: DOCUMENT_SORTS, description: 'Sort column; createdAt when omitted (#1256)' })
+  @ApiQuery({ name: 'order', required: false, enum: SORT_ORDERS, description: 'desc when omitted; asc for title' })
+  @ApiQuery({
+    name: 'author',
+    required: false,
+    enum: DOCUMENT_AUTHOR_FILTERS,
+    description: "Pages whose first revision the caller wrote (`me`) or didn't (`others`); everyone when omitted",
+  })
   async list(
     @CurrentPrincipal() principal: Principal,
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
@@ -170,6 +186,9 @@ export class DocumentsController {
     @Query('projectIds') projectIds?: string,
     @Query('tags') tags?: string,
     @Query('includeArchived') includeArchived?: string,
+    @Query('sort') sort?: string,
+    @Query('order') order?: string,
+    @Query('author') author?: string,
   ): Promise<ListDocumentsResponse> {
     // The singular params predate the facets and still work; each is folded
     // into its plural so callers never have to know which one won.
@@ -179,6 +198,9 @@ export class DocumentsController {
       projectIds: csv(projectIds, projectId),
       tags: csv(tags),
       includeArchived: flag(includeArchived),
+      sort: oneOf('sort', DOCUMENT_SORTS, sort),
+      order: oneOf('order', SORT_ORDERS, order),
+      author: oneOf('author', DOCUMENT_AUTHOR_FILTERS, author),
     });
   }
 

@@ -290,6 +290,29 @@
     "viewGraph": "Graph",
     "viewTree": "Tree",
     "viewList": "List",
+    "sort": {
+      "title": "Sort by",
+      "label": "Sort: {sort}",
+      "by": {
+        "createdAt": "Created",
+        "lastActivityAt": "Last activity",
+        "title": "Title"
+      },
+      "date": {
+        "desc": "Newest first",
+        "asc": "Oldest first"
+      },
+      "alpha": {
+        "asc": "A → Z",
+        "desc": "Z → A"
+      }
+    },
+    "author": {
+      "label": "Created by",
+      "all": "Anyone",
+      "me": "Me",
+      "others": "Others"
+    },
     "noPagesForFilters": "No pages match these filters.",
     "topLevel": "Top level",
     "relationsCount": "Relations",

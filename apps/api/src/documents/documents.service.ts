@@ -18,10 +18,12 @@ import type {
   DocumentGraphEdge,
   DocumentGraphNode,
   DocumentGraphResponse,
+  DocumentSort,
   DocumentSummary,
   DocumentTreeNode,
   DocumentTreeResponse,
   DocumentAncestorsResponse,
+  DocumentAuthorFilter,
   DocumentBacklinksResponse,
   FinalizeRevisionResponse,
   ListBranchesResponse,
@@ -30,6 +32,7 @@ import type {
   ListRevisionsResponse,
   RevisionInfo,
   RevisionStatus,
+  SortOrder,
   WorkspaceGraphNode,
   WorkspaceGraphResponse,
 } from '@knowledge/contracts';
@@ -235,6 +238,8 @@ export class DocumentsService {
           position,
           templateRef: template?.ref ?? null,
           templateVersion: template?.version ?? null,
+          // #1256: the first revision's author, head-less pages included.
+          createdBy: authorId,
           // #474: a private draft is an ordinary restricted page whose author
           // manages it, so every reader that honours restrictions hides it
           // with no code of its own. The marker tells it apart from a page
@@ -747,12 +752,22 @@ export class DocumentsService {
     scope: AccessScope,
     limit = 20,
     cursor?: string,
-    filters: { categories?: string[]; projectIds?: string[]; tags?: string[]; includeArchived?: boolean } = {},
+    filters: {
+      categories?: string[];
+      projectIds?: string[];
+      tags?: string[];
+      includeArchived?: boolean;
+      sort?: DocumentSort;
+      order?: SortOrder;
+      author?: DocumentAuthorFilter;
+    } = {},
   ): Promise<ListDocumentsResponse> {
     const { workspaceId } = scope;
     const categories = filters.categories?.filter(Boolean) ?? [];
     const projectIds = filters.projectIds?.filter(Boolean) ?? [];
     const tags = filters.tags?.filter(Boolean) ?? [];
+    const sort = filters.sort ?? 'createdAt';
+    const order = filters.order ?? (sort === 'title' ? 'asc' : 'desc');
 
     let taggedIds: string[] | null = null;
     if (tags.length) {
@@ -776,9 +791,16 @@ export class DocumentsService {
         // Pages the caller may not open are not in the list at all (#76), nor
         // a page that is still only a merge request (#73).
         ...LISTED_PAGE,
-        AND: [visibilityWhere(scope)],
+        AND: [
+          visibilityWhere(scope),
+          // "Others" keeps the null rows: a page with no revision has no author to be.
+          ...(filters.author === 'me' ? [{ createdBy: scope.userId }] : []),
+          ...(filters.author === 'others' ? [{ OR: [{ createdBy: { not: scope.userId } }, { createdBy: null }] }] : []),
+        ],
       },
-      orderBy: { createdAt: 'desc' },
+      // Id breaks ties, so the cursor (an id) names one position in the order:
+      // Prisma pages from that row's (sort, id) pair, whatever the column (#1256).
+      orderBy: [{ [sort]: order }, { id: order }],
       take: limit + 1,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       include: { branches: true },
@@ -852,6 +874,7 @@ export class DocumentsService {
     | 'childTitlePattern'
     | 'restricted'
     | 'draftOwnerId'
+    | 'createdBy'
   > {
     return {
       verifiedAt: d.verifiedAt?.toISOString() ?? null,
@@ -876,6 +899,7 @@ export class DocumentsService {
       childTitlePattern: d.childTitlePattern,
       restricted: d.restrictedBy.length > 0,
       draftOwnerId: d.draftOwnerId,
+      createdBy: d.createdBy,
     };
   }
 

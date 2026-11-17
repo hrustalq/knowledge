@@ -78,6 +78,15 @@ export interface PageLevel {
   name: string;
 }
 
+/** What the document list sorts by (#1256); every sort pages by that column, then id. */
+export const DOCUMENT_SORTS = ['createdAt', 'lastActivityAt', 'title'] as const;
+export type DocumentSort = (typeof DOCUMENT_SORTS)[number];
+export const SORT_ORDERS = ['asc', 'desc'] as const;
+export type SortOrder = (typeof SORT_ORDERS)[number];
+/** "Created by" relative to the caller (#1256); absent = everyone. */
+export const DOCUMENT_AUTHOR_FILTERS = ['me', 'others'] as const;
+export type DocumentAuthorFilter = (typeof DOCUMENT_AUTHOR_FILTERS)[number];
+
 export interface DocumentSummary {
   documentId: string;
   workspaceId: string;
@@ -92,6 +101,11 @@ export interface DocumentSummary {
   headRevisionId: string | null;
   headRevisionStatus: RevisionStatus | null;
   createdAt: string;
+  /**
+   * Who created the page (#1256): its first revision's author. Null only for a
+   * page that never had a revision. Absent where a summary is not a page row.
+   */
+  createdBy?: string | null;
   /**
    * What the body is (#78): `page`, or an API spec. Filled in by the detail
    * route, which decides between the page canvas and the API reference;

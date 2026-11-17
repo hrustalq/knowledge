@@ -11332,6 +11332,10 @@
       "createdAt": {
         "type": "string"
       },
+      "createdBy": {
+        "type": "string",
+        "nullable": true
+      },
       "kind": {
         "$ref": "#/components/schemas/ApiDocumentKind"
       },
@@ -11570,6 +11574,10 @@
       },
       "createdAt": {
         "type": "string"
+      },
+      "createdBy": {
+        "type": "string",
+        "nullable": true
       },
       "kind": {
         "$ref": "#/components/schemas/ApiDocumentKind"

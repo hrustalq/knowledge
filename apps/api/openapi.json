@@ -5122,6 +5122,70 @@
         ]
       }
     },
+    "/v1/projects/{id}/levels": {
+      "get": {
+        "operationId": "ProjectsController_levels",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectLevelsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The project's methodology levels in order (#1121), each with how many pages the caller can see at it. A page's level is derived from the template it was made from, never stored. Empty when the project has no methodology.",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
     "/v1/projects/{id}/methodology/preview": {
       "get": {
         "operationId": "ProjectsController_previewMethodology",
@@ -47682,6 +47746,10 @@
             "type": "string",
             "description": "Read as of a point in time (#81): an ISO date, `rev:<revisionId>` (that revision’s finalize time) or `tag:<name>` (a release tag). A future date reads as now. Omitted: the current graph."
           },
+          "level": {
+            "type": "string",
+            "description": "Boost pages at this level of their project's methodology (#1121), a level key as GET /v1/projects/{id}/levels lists it. A prior, never a filter: pages elsewhere stay in the results."
+          },
           "knownAt": {
             "type": "string",
             "description": "What was believed at this ISO date (system time): facts retracted later still show, facts written later do not. Omitted: now."
@@ -64840,6 +64908,9 @@
           },
           "hidden": {
             "type": "boolean"
+          },
+          "level": {
+            "$ref": "#/components/schemas/PageLevel"
           }
         },
         "required": [
@@ -65076,6 +65147,9 @@
           },
           "hidden": {
             "type": "boolean"
+          },
+          "level": {
+            "$ref": "#/components/schemas/PageLevel"
           },
           "children": {
             "type": "array",
@@ -72563,6 +72637,21 @@
           "views"
         ]
       },
+      "PageLevel": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name"
+        ]
+      },
       "PlaudAuthorizeResponse": {
         "type": "object",
         "properties": {
@@ -73191,6 +73280,50 @@
         },
         "required": [
           "url"
+        ]
+      },
+      "ProjectLevelsResponse": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string"
+          },
+          "levels": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "agentKey": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "pages": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "key",
+                "name",
+                "description",
+                "agentKey",
+                "pages"
+              ]
+            }
+          }
+        },
+        "required": [
+          "projectId",
+          "levels"
         ]
       },
       "ProjectMethodologyResponse": {
@@ -76708,6 +76841,9 @@
           },
           "layer": {
             "$ref": "#/components/schemas/EntityLayer"
+          },
+          "level": {
+            "$ref": "#/components/schemas/PageLevel"
           },
           "communityPath": {
             "type": "array",

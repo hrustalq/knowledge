@@ -41,6 +41,7 @@ function build(fulltext: { enabled: boolean; search: (...a: unknown[]) => Promis
   const docs = [doc('vec'), doc('kw')];
   const prisma = {
     connectorLink: { findMany: vi.fn(async () => []) }, // no source-backed pages (#674)
+    project: { findMany: async () => [] }, // no methodology: no levels (#1126)
     document: {
       findMany: vi.fn(async ({ where }: { where: { id: { in: string[] } } }) => docs.filter((d) => where.id.in.includes(d.id))),
     },
@@ -160,6 +161,7 @@ describe('StaleSweeper.repairFulltext (#173)', () => {
         updateMany: vi.fn(async () => ({ count: 1 })),
       },
       // #81: the re-mirrored revision is stamped again from PG.
+      project: { findMany: async () => [] }, // no methodology: no levels (#1126)
       document: {
         findUnique: vi.fn(async () => ({
           defaultBranch: 'main',

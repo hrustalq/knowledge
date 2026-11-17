@@ -279,6 +279,7 @@ import type {
   ProjectCaptureParentSettings,
   ProjectDeletionPreview,
   ProjectGitResponse,
+  ProjectLevelsResponse,
   ProjectMethodologyResponse,
   ProjectOverviewResponse,
   ProjectSettingOverridesResponse,
@@ -662,6 +663,7 @@ export interface ContractResponses {
   ProjectCaptureParentSettings: ProjectCaptureParentSettings;
   ProjectDeletionPreview: ProjectDeletionPreview;
   ProjectGitResponse: ProjectGitResponse;
+  ProjectLevelsResponse: ProjectLevelsResponse;
   ProjectMethodologyResponse: ProjectMethodologyResponse;
   ProjectOverviewResponse: ProjectOverviewResponse;
   ProjectSettingOverridesResponse: ProjectSettingOverridesResponse;

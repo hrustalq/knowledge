@@ -28,10 +28,12 @@ import { AnalyticsRecorder, type AnalyticsCaller } from '../analytics/analytics.
 import { CommunitiesService } from '../communities/communities.service.js';
 import { layerParents } from '../graph/layers.js';
 import type { SearchDto } from './search.dto.js';
-import { communityPrior, firstPerPage, floorTextHits, floorVectorHits, fuseHits, rerankScorer, type PriorCommunity, type SearchPool } from './ranking.js';
+import { communityPrior, firstPerPage, floorTextHits, floorVectorHits, fuseHits, levelBoost, rerankScorer, type PriorCommunity, type SearchPool } from './ranking.js';
+import { pageLevel, projectLevels } from '../projects/methodology-scope.js';
 import { flatFollow, layeredFollow, walkRelated } from './expansion.js';
 import { snippetPartsOf } from './snippet.js';
 import { sourceSyncOf } from '../documents/source-backed.js';
+import { currentLocale } from '../i18n/t.js';
 
 @Injectable()
 export class SearchService {
@@ -113,7 +115,7 @@ export class SearchService {
     // hidden pages — over-fetch for that as for any other filter.
     const aclPostOnly = acl.kind !== 'all' && !acl.pushdown;
     const aclOverfetch = aclPostOnly ? this.config.get('SEARCH_ACL_OVERFETCH', { infer: true }) : 1;
-    let fetchK = Math.max(filtered ? k * 5 : k, trustOn || priorOn ? k * 2 : k, k * aclOverfetch, byPage ? k * 3 : k);
+    let fetchK = Math.max(filtered ? k * 5 : k, trustOn || priorOn || dto.level ? k * 2 : k, k * aclOverfetch, byPage ? k * 3 : k);
 
     // Phase 5 BM25 layer (plan.md §11): when a fulltext provider is
     // configured, 'hybrid' fuses vector + BM25 rankings (RRF) and 'keyword'
@@ -295,6 +297,15 @@ export class SearchService {
 
     const readable = await communitiesRead;
     const prior = priorOn ? communityPrior(readable, settings) : new Map<string, number>();
+    // Each page's methodology level (#1126): on every result, and the level prior when the search names one.
+    const levelsByProject = await projectLevels(this.prisma, [...docById.values()].map((d) => d.projectId));
+    const locale = currentLocale();
+    const levelOfPage = new Map(
+      [...docById.values()].flatMap((d) => {
+        const level = pageLevel(d.templateRef, levelsByProject.get(d.projectId), locale);
+        return level ? [[d.id, level] as const] : [];
+      }),
+    );
 
     // The multiplicative weight, a re-sort, and only then the cut to k — the
     // weight is the point of the over-fetch above.
@@ -302,7 +313,8 @@ export class SearchService {
     const weighted = hits.map((h) => {
       const trust = trustOf.get(h.documentId);
       const weight = trustOn && trust ? trustWeight(trust.status, trust.inactive, settings.trustWeights) : 1;
-      return { hit: h, documentId: h.documentId, score: scoreOf(h, weight, prior.get(h.documentId) ?? 1), trust };
+      const boost = (prior.get(h.documentId) ?? 1) * levelBoost(levelOfPage.get(h.documentId)?.key, dto.level);
+      return { hit: h, documentId: h.documentId, score: scoreOf(h, weight, boost), trust };
     });
     weighted.sort((a, b) => b.score - a.score);
 
@@ -319,6 +331,7 @@ export class SearchService {
       ...(h.vectorScore !== undefined ? { vectorScore: Number(h.vectorScore.toFixed(4)) } : {}),
       headingPath: h.headingPath ?? [],
       ...(trust ? { trust } : {}),
+      ...(levelOfPage.has(h.documentId) ? { level: levelOfPage.get(h.documentId)! } : {}),
     }));
     await Promise.all([at ? this.attachValidity(results) : undefined, this.attachPlacement(dto.workspaceId, results, readable, acl, at)]);
 
@@ -335,6 +348,7 @@ export class SearchService {
         trustOn,
         pages: new Map([...docById.values()].map((d) => [d.id, { ...trustOf.get(d.id)!, archived: d.archivedAt !== null }])),
         communities: readable,
+        ...(dto.level ? { level: dto.level, levels: new Map([...levelOfPage].map(([id, l]) => [id, l.key])) } : {}),
       });
     }
 
@@ -460,6 +474,7 @@ export class SearchService {
         ownerId: true,
         lastActivityAt: true,
         archivedAt: true,
+        templateRef: true,
         branches: { select: { name: true, headRevisionId: true } },
         // At most one row: only a scaffold writes an origin, and only revision 1.
         revisions: { where: { origin: SCAFFOLD_ORIGIN }, select: { id: true, origin: true } },

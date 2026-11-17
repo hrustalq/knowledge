@@ -268,6 +268,21 @@ export interface ProjectMethodologyResponse {
   } | null;
 }
 
+/** `GET /v1/projects/:id/levels` (#1126): the project's methodology levels in order, with the pages at each. Empty without one. */
+export interface ProjectLevelsResponse {
+  projectId: string;
+  levels: {
+    key: string;
+    /** In the reader's language. */
+    name: string;
+    description: string | null;
+    /** The level's default agent, if it names one. */
+    agentKey: string | null;
+    /** Pages the reader can see at this level. */
+    pages: number;
+  }[];
+}
+
 /** A section of the methodology's tree the project lacks, matched by title. */
 export interface MethodologyPreviewSection {
   /** The node's index path in the methodology's tree: `2` (top level) or `2.0` (one level down). */

@@ -17,6 +17,7 @@ import type {
   ListProjectsResponse,
   MethodologyPreviewResponse,
   ProjectDeletionPreview,
+  ProjectLevelsResponse,
   ProjectMethodologyResponse,
   ProjectGitResponse,
   ProjectOverviewResponse,
@@ -153,6 +154,18 @@ export class ProjectsController {
   @ApiOperation({ summary: "The project's methodology (#1121): the blueprint it links, live, and its levels; null when none" })
   getMethodology(@Param('id', ParseUUIDPipe) id: string): Promise<ProjectMethodologyResponse> {
     return this.methodology.get(id);
+  }
+
+  @Get(':id/levels')
+  @Returns('ProjectLevelsResponse')
+  @Access('viewer', 'project')
+  @ApiOperation({
+    summary:
+      "The project's methodology levels in order (#1121), each with how many pages the caller can see at it. A page's level " +
+      'is derived from the template it was made from, never stored. Empty when the project has no methodology.',
+  })
+  async levels(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<ProjectLevelsResponse> {
+    return this.methodology.levels(id, principal);
   }
 
   @Get(':id/methodology/preview')

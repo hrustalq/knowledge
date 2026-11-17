@@ -11413,6 +11413,9 @@
       },
       "hidden": {
         "type": "boolean"
+      },
+      "level": {
+        "$ref": "#/components/schemas/PageLevel"
       }
     },
     "required": [
@@ -11649,6 +11652,9 @@
       },
       "hidden": {
         "type": "boolean"
+      },
+      "level": {
+        "$ref": "#/components/schemas/PageLevel"
       },
       "children": {
         "type": "array",
@@ -19136,6 +19142,21 @@
       "views"
     ]
   },
+  "PageLevel": {
+    "type": "object",
+    "properties": {
+      "key": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "key",
+      "name"
+    ]
+  },
   "PlaudAuthorizeResponse": {
     "type": "object",
     "properties": {
@@ -19764,6 +19785,50 @@
     },
     "required": [
       "url"
+    ]
+  },
+  "ProjectLevelsResponse": {
+    "type": "object",
+    "properties": {
+      "projectId": {
+        "type": "string"
+      },
+      "levels": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string",
+              "nullable": true
+            },
+            "agentKey": {
+              "type": "string",
+              "nullable": true
+            },
+            "pages": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "key",
+            "name",
+            "description",
+            "agentKey",
+            "pages"
+          ]
+        }
+      }
+    },
+    "required": [
+      "projectId",
+      "levels"
     ]
   },
   "ProjectMethodologyResponse": {
@@ -23281,6 +23346,9 @@
       },
       "layer": {
         "$ref": "#/components/schemas/EntityLayer"
+      },
+      "level": {
+        "$ref": "#/components/schemas/PageLevel"
       },
       "communityPath": {
         "type": "array",

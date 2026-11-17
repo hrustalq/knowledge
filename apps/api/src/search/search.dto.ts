@@ -117,6 +117,16 @@ export class SearchDto {
   @IsString()
   asOf?: string;
 
+  @ApiPropertyOptional({
+    description:
+      "Boost pages at this level of their project's methodology (#1121), a level key as GET /v1/projects/{id}/levels lists it. " +
+      'A prior, never a filter: pages elsewhere stay in the results.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  level?: string;
+
   @ApiPropertyOptional({ description: KNOWN_AT_DESCRIPTION })
   @IsOptional()
   @IsString()

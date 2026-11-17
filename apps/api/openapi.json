@@ -47476,7 +47476,7 @@
           },
           "budget": {
             "type": "number",
-            "description": "Tokens for the answer; 600 when omitted, clamped to 200–2000"
+            "description": "Tokens for the answer; 1200 when omitted, clamped to 600–4000"
           }
         },
         "required": [

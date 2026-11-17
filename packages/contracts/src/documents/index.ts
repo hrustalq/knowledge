@@ -220,8 +220,15 @@ export interface RelatedDocumentResult {
 // Ticket context (#1193): pointers, not documents
 // ---------------------------------------------------------------------------
 
-/** The answer's token budget: the default, and the clamp a caller's `budget` is held to. */
-export const CONTEXT_BUDGET = { default: 600, min: 200, max: 2000 } as const;
+/**
+ * The answer's token budget: the default, and the clamp a caller's `budget` is
+ * held to (#1211). The minimum fits the `<documents>` wrapper and all four pages
+ * with full excerpts (~500 tokens at worst); the default fits a full answer
+ * (4 pages, 3 memories, 3 terms: ~900 typical, ~1070 at worst), so on today's
+ * limits the budget never drops an item that passed its floor.
+ * `context.spec.ts` pins both with worst-case items.
+ */
+export const CONTEXT_BUDGET = { default: 1200, min: 600, max: 4000 } as const;
 /** At most this many of each section, whatever the budget leaves room for. */
 export const CONTEXT_LIMITS = { pages: 4, memories: 3, terms: 3 } as const;
 /** One excerpt per page (and per memory), never more of its text than this. */
